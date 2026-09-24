@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { Context } from "./context.js";
-import { getTenantDb, type TenantDatabase, controlDb, businesses, tenantMembers } from "@hisaabo/db";
+import { getTenantDb, type TenantDatabase, controlDb, businesses, businessMembers, tenantMembers } from "@hisaabo/db";
 import { eq, and } from "drizzle-orm";
 import { defineAbilityFor, mapDbRole, type AppAbility } from "./lib/permissions.js";
 import { getMaintenanceStatus } from "./lib/maintenance-cache.js";
@@ -154,20 +154,34 @@ const hasBusinessAccess = t.middleware(async ({ ctx, next }) => {
     throw new TRPCError({ code: "FORBIDDEN", message: "Business not found" });
   }
 
-  // In self-hosted mode all businesses live in the same DB. Verify the business
-  // creator is a member of the caller's tenant to prevent cross-tenant access.
-  const [creatorMembership] = await controlDb
-    .select({ userId: tenantMembers.userId })
-    .from(tenantMembers)
+  // Verify that the current user is assigned to this business.
+  // business_members lives in the tenant DB, while users live in the
+  // control DB, so userId is stored as a plain UUID.
+  const [businessMembership] = await (ctx as unknown as TenantCtx).db
+    .select({
+      userId: businessMembers.userId,
+      role: businessMembers.role,
+    })
+    .from(businessMembers)
     .where(and(
-      eq(tenantMembers.tenantId, ctx.tenantId as string),
-      eq(tenantMembers.userId, biz.createdByUserId),
+      eq(businessMembers.businessId, ctx.businessId),
+      eq(businessMembers.userId, ctx.user?.id as string),
     ))
     .limit(1);
 
-  if (!creatorMembership) {
-    if (process.env.NODE_ENV === "development") console.log("[hasBusinessAccess] FAIL: creator not a tenant member. businessId:", ctx.businessId, "createdByUserId:", biz.createdByUserId, "tenantId:", ctx.tenantId);
-    throw new TRPCError({ code: "FORBIDDEN", message: "Business not found" });
+  if (!businessMembership) {
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        "[hasBusinessAccess] FAIL: user is not a member of business.",
+        "businessId:", ctx.businessId,
+        "userId:", ctx.user?.id,
+      );
+    }
+
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You do not have access to this business",
+    });
   }
 
   return next({
@@ -183,29 +197,47 @@ export const tenantProcedure = baseProcedure.use(isAuthenticated).use(hasTenantA
 export const businessProcedure = baseProcedure.use(isAuthenticated).use(hasTenantAccess).use(hasBusinessAccess);
 
 // ── CASL-based permission middleware ──────────────────────────────────────────
-// Looks up the caller's membership role, maps it to the new permission role,
-// builds a CASL ability object and attaches it (plus the resolved role) to ctx.
+// Resolves permissions from the user's role inside the selected business.
+// Tenant membership proves the user belongs to the tenant;
+// business_members determines what they can do inside the selected business.
 function withPermissions() {
   return t.middleware(async ({ ctx, next }) => {
     const user = ctx.user as NonNullable<Context["user"]>;
     const tenantId = ctx.tenantId as string;
     const businessId = ctx.businessId as string;
 
-    const [membership] = await controlDb
-      .select({ role: tenantMembers.role })
-      .from(tenantMembers)
+    // The business membership was already validated by hasBusinessAccess.
+    // Resolve the user's business-level role here for CASL.
+    const [businessMembership] = await (ctx as unknown as TenantCtx).db
+      .select({
+        role: businessMembers.role,
+      })
+      .from(businessMembers)
       .where(and(
-        eq(tenantMembers.tenantId, tenantId),
-        eq(tenantMembers.userId, user.id),
+        eq(businessMembers.businessId, businessId),
+        eq(businessMembers.userId, user.id),
       ))
       .limit(1);
 
-    if (!membership) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "No membership found" });
+    if (!businessMembership) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "No business membership found",
+      });
     }
 
-    const permissionRole = mapDbRole(membership.role);
-    const ability = defineAbilityFor({ userId: user.id, role: permissionRole });
+    // Business roles are currently:
+    //   admin  -> full business access
+    //   member -> seller-level access
+    //
+    // Keep the mapping centralized through mapDbRole so CASL remains
+    // responsible for the actual permission definitions.
+    const permissionRole = mapDbRole(businessMembership.role);
+
+    const ability = defineAbilityFor({
+      userId: user.id,
+      role: permissionRole,
+    });
 
     return next({
       ctx: {

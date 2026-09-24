@@ -1,6 +1,18 @@
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { invoices, invoiceItems, items, itemVariants, businesses, parties, shipments, itcLedgerEntries, eInvoiceConfigs } from "@hisaabo/db";
+import { getDefaultWarehouse, recordStockMovement } from "../lib/inventory-service.js";
+import {
+  invoices,
+  invoiceItems,
+  items,
+  itemVariants,
+  businesses,
+  parties,
+  shipments,
+  itcLedgerEntries,
+  eInvoiceConfigs,
+  stockMovements,
+} from "@hisaabo/db";
 import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, calcLineItem, calcInvoiceTotals, money } from "@hisaabo/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
@@ -264,6 +276,56 @@ export const invoiceRouter = router({
         }
       }
 
+      const variantItemMap = new Map<string, string>();
+
+      // Security: validate variantIds belong to items in this business.
+      if (input.lineItems) {
+        const variantIds = input.lineItems
+          .map((li) => li.variantId)
+          .filter((id): id is string => Boolean(id));
+
+        if (variantIds.length > 0) {
+          const ownedVariants = await tx
+            .select({
+              id: itemVariants.id,
+              itemId: itemVariants.itemId,
+            })
+            .from(itemVariants)
+            .innerJoin(items, eq(items.id, itemVariants.itemId))
+            .where(
+              and(
+                inArray(itemVariants.id, variantIds),
+                eq(items.businessId, ctx.businessId),
+              ),
+            );
+
+          if (ownedVariants.length !== new Set(variantIds).size) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "One or more variants do not belong to this business",
+            });
+          }
+
+          // A variant must always be linked to its parent item.
+          for (const variant of ownedVariants) {
+            variantItemMap.set(variant.id, variant.itemId);
+          }
+
+          for (const li of input.lineItems) {
+            if (li.variantId && !li.itemId) {
+              const parentItemId = variantItemMap.get(li.variantId);
+
+              if (!parentItemId) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: "Variant parent item could not be resolved",
+                });
+              }
+            }
+          }
+        }
+      }
+
       // Get and increment invoice number atomically
       const [biz] = await tx.select({
         prefix: businesses.invoicePrefix,
@@ -352,32 +414,58 @@ export const invoiceRouter = router({
         );
       }
 
-      // Update stock quantities for sale/purchase invoices.
+      // Record inventory movement for sale/purchase invoices.
       // Skip when skipStockAdjustment is set — used when converting from
       // delivery_challan (which already decremented stock) to avoid double-counting.
-      // Separate tracking for items (with conversion factor) and variants (no conversion)
-      // Update stock per line item using PostgreSQL NUMERIC arithmetic to avoid
-      // JS floating-point drift. One UPDATE per line item is safe within the
-      // transaction and avoids intermediate JS accumulation.
-      if (!input.skipStockAdjustment) for (const li of input.lineItems) {
-        if (li.variantId) {
-          await tx.update(itemVariants).set({
-            stockQuantity: input.type === "sale"
-              ? sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`
-              : sql`${itemVariants.stockQuantity}::numeric + ${li.quantity}::numeric`,
-            updatedAt: new Date(),
-          }).where(and(
-            eq(itemVariants.id, li.variantId),
-            sql`EXISTS (SELECT 1 FROM items WHERE items.id = item_variants.item_id AND items.business_id = ${ctx.businessId})`
-          ));
-        } else if (li.itemId) {
+      if (!input.skipStockAdjustment) {
+        const operation = input.type === "sale" ? "sale" : "purchase";
+        const movementType = input.type === "sale" ? "SALE" : "PURCHASE";
+
+        const warehouse = await getDefaultWarehouse(tx, {
+          businessId: ctx.businessId,
+          operation,
+        });
+
+        for (const li of input.lineItems) {
+          if (!li.itemId && !li.variantId) {
+            continue;
+          }
+
+          const itemId =
+            li.itemId ||
+            (li.variantId ? variantItemMap.get(li.variantId) : null);
+
+          if (!itemId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Inventory item could not be resolved for invoice line",
+            });
+          }
+
           const cf = li.conversionFactor || "1";
-          await tx.update(items).set({
-            stockQuantity: input.type === "sale"
-              ? sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`
-              : sql`${items.stockQuantity}::numeric + (${li.quantity}::numeric * ${cf}::numeric)`,
-            updatedAt: new Date(),
-          }).where(eq(items.id, li.itemId));
+
+          const signedQuantity = li.variantId
+            ? input.type === "sale"
+              ? `-${li.quantity}`
+              : li.quantity
+            : sql<string>`
+              (
+                ${input.type === "sale" ? sql`-` : sql``}
+                ${li.quantity}::numeric * ${cf}::numeric
+              )
+            `;
+
+          await recordStockMovement(tx, {
+            businessId: ctx.businessId,
+            warehouseId: warehouse.id,
+            itemId,
+            variantId: li.variantId || null,
+            referenceType: "INVOICE",
+            referenceId: invoice.id,
+            movementType,
+            quantity: signedQuantity,
+            actorUserId: ctx.user!.id,
+          });
         }
       }
 
@@ -619,7 +707,7 @@ export const invoiceRouter = router({
               updatedAt: new Date(),
             })
             .where(eq(invoices.id, invoiceId))
-            .catch(() => {/* swallow DB errors in background task */});
+            .catch(() => {/* swallow DB errors in background task */ });
         }
       }, 0);
     }
@@ -791,27 +879,37 @@ export const invoiceRouter = router({
             variantId: invoiceItems.variantId,
           }).from(invoiceItems).where(eq(invoiceItems.invoiceId, input.id));
 
-          // Step 2: Reverse old stock adjustments using PostgreSQL NUMERIC arithmetic
-          for (const li of oldLineItems) {
-            if (li.variantId) {
-              await tx.update(itemVariants).set({
-                stockQuantity: existing.type === "sale"
-                  ? sql`${itemVariants.stockQuantity}::numeric + ${li.quantity}::numeric`
-                  : sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`,
-                updatedAt: new Date(),
-              }).where(and(
-                eq(itemVariants.id, li.variantId),
-                sql`EXISTS (SELECT 1 FROM items WHERE items.id = item_variants.item_id AND items.business_id = ${ctx.businessId})`
-              ));
-            } else if (li.itemId) {
-              const cf = li.conversionFactor || "1";
-              await tx.update(items).set({
-                stockQuantity: existing.type === "sale"
-                  ? sql`${items.stockQuantity}::numeric + (${li.quantity}::numeric * ${cf}::numeric)`
-                  : sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`,
-                updatedAt: new Date(),
-              }).where(eq(items.id, li.itemId));
-            }
+          // Step 2: Reverse all inventory movements previously recorded for this invoice.
+          // This makes repeated invoice updates safe: every previous inventory effect
+          // belonging to this invoice is fully reversed before applying the new lines.
+          const previousMovements = await tx
+            .select({
+              warehouseId: stockMovements.warehouseId,
+              itemId: stockMovements.itemId,
+              variantId: stockMovements.variantId,
+              quantity: stockMovements.quantity,
+              movementType: stockMovements.movementType,
+            })
+            .from(stockMovements).where(and(
+              eq(stockMovements.businessId, ctx.businessId),
+              eq(stockMovements.referenceId, input.id),
+              sql`${stockMovements.referenceType} IN ('INVOICE', 'INVOICE_UPDATE')`,
+            ));
+
+          for (const movement of previousMovements) {
+            await recordStockMovement(tx, {
+              businessId: ctx.businessId,
+              warehouseId: movement.warehouseId,
+              itemId: movement.itemId,
+              variantId: movement.variantId,
+              referenceType: "INVOICE_UPDATE_REVERSAL",
+              referenceId: input.id,
+              movementType: movement.movementType === "SALE"
+                ? "SALE_REVERSAL"
+                : "PURCHASE_REVERSAL",
+              quantity: sql<string>`-${movement.quantity}::numeric`,
+              actorUserId: ctx.user!.id,
+            });
           }
 
           // Step 3: Delete existing line items
@@ -847,28 +945,54 @@ export const invoiceRouter = router({
             await tx.insert(invoiceItems).values(processedItems);
           }
 
-          // Step 5: Apply new stock adjustments using PostgreSQL NUMERIC arithmetic
+          // Step 5: Record new inventory movements.
+          const operation = existing.type === "sale" ? "sale" : "purchase";
+          const movementType = existing.type === "sale" ? "SALE" : "PURCHASE";
+
+          const warehouse = await getDefaultWarehouse(tx, {
+            businessId: ctx.businessId,
+            operation,
+          });
+
           for (const li of input.lineItems) {
-            if (li.variantId) {
-              await tx.update(itemVariants).set({
-                stockQuantity: existing.type === "sale"
-                  ? sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`
-                  : sql`${itemVariants.stockQuantity}::numeric + ${li.quantity}::numeric`,
-                updatedAt: new Date(),
-              }).where(and(
-                eq(itemVariants.id, li.variantId),
-                sql`EXISTS (SELECT 1 FROM items WHERE items.id = item_variants.item_id AND items.business_id = ${ctx.businessId})`
-              ));
-            } else if (li.itemId) {
-              const cf = li.conversionFactor || "1";
-              await tx.update(items).set({
-                stockQuantity: existing.type === "sale"
-                  ? sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`
-                  : sql`${items.stockQuantity}::numeric + (${li.quantity}::numeric * ${cf}::numeric)`,
-                updatedAt: new Date(),
-              }).where(eq(items.id, li.itemId));
+            if (!li.itemId && !li.variantId) continue;
+
+            const itemId = li.itemId;
+
+            if (!itemId) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Inventory item could not be resolved for invoice line",
+              });
             }
+
+            const cf = li.conversionFactor || "1";
+
+            const signedQuantity = li.variantId
+              ? existing.type === "sale"
+                ? `-${li.quantity}`
+                : li.quantity
+              : sql<string>`
+        (
+          ${existing.type === "sale" ? sql`-` : sql``}
+          ${li.quantity}::numeric * ${cf}::numeric
+        )
+      `;
+
+            await recordStockMovement(tx, {
+              businessId: ctx.businessId,
+              warehouseId: warehouse.id,
+              itemId,
+              variantId: li.variantId || null,
+              referenceType: "INVOICE_UPDATE",
+              referenceId: input.id,
+              movementType,
+              quantity: signedQuantity,
+              actorUserId: ctx.user!.id,
+            });
           }
+
+
 
           // Recalculate totals using fixed-point arithmetic.
           // Use merged charges (updates.charges) if charges were modified; otherwise
@@ -898,10 +1022,9 @@ export const invoiceRouter = router({
         }
 
         // 5. Apply update
-        const [result] = await tx.update(invoices)
-          .set(updates)
-          .where(eq(invoices.id, input.id))
-          .returning();
+        const [result] = await tx.update(invoices).set(updates).where(eq(invoices.id, input.id)).returning();
+
+
 
         return result;
       });
@@ -944,32 +1067,47 @@ export const invoiceRouter = router({
       }
 
       await ctx.db.transaction(async (tx) => {
-        // Reverse stock adjustments made at creation
-        const lineItemRows = await tx.select()
+        const lineItemRows = await tx
+          .select()
           .from(invoiceItems)
           .where(eq(invoiceItems.invoiceId, input.id));
 
-        // Reverse stock per line item using PostgreSQL NUMERIC arithmetic
-        for (const li of lineItemRows) {
-          if (li.variantId) {
-            await tx.update(itemVariants).set({
-              stockQuantity: inv.type === "sale"
-                ? sql`${itemVariants.stockQuantity}::numeric + ${li.quantity}::numeric`
-                : sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`,
-              updatedAt: new Date(),
-            }).where(and(
-              eq(itemVariants.id, li.variantId),
-              sql`EXISTS (SELECT 1 FROM items WHERE items.id = item_variants.item_id AND items.business_id = ${ctx.businessId})`
-            ));
-          } else if (li.itemId) {
-            const cf = li.conversionFactor ?? "1";
-            await tx.update(items).set({
-              stockQuantity: inv.type === "sale"
-                ? sql`${items.stockQuantity}::numeric + (${li.quantity}::numeric * ${cf}::numeric)`
-                : sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`,
-              updatedAt: new Date(),
-            }).where(eq(items.id, li.itemId));
-          }
+        const invoiceMovements = await tx
+          .select({
+            warehouseId: stockMovements.warehouseId,
+            itemId: stockMovements.itemId,
+            variantId: stockMovements.variantId,
+            quantity: sql<string>`SUM(${stockMovements.quantity}::numeric)`,
+          })
+          .from(stockMovements)
+          .where(
+            and(
+              eq(stockMovements.businessId, ctx.businessId),
+              eq(stockMovements.referenceId, input.id),
+              sql`${stockMovements.referenceType} IN ('INVOICE', 'INVOICE_UPDATE', 'INVOICE_UPDATE_REVERSAL')`,
+            ),
+          )
+          .groupBy(
+            stockMovements.warehouseId,
+            stockMovements.itemId,
+            stockMovements.variantId,
+          );
+
+        for (const movement of invoiceMovements) {
+          if (movement.quantity === "0") continue;
+
+          await recordStockMovement(tx, {
+            businessId: ctx.businessId,
+            warehouseId: movement.warehouseId,
+            itemId: movement.itemId,
+            variantId: movement.variantId,
+            referenceType: "INVOICE_DELETE_REVERSAL",
+            referenceId: input.id,
+            movementType:
+              inv.type === "sale" ? "SALE_REVERSAL" : "PURCHASE_REVERSAL",
+            quantity: sql<string>`-(${movement.quantity})::numeric`,
+            actorUserId: ctx.user!.id,
+          });
         }
 
         // Auto-reverse ITC when a purchase invoice is deleted

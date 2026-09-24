@@ -1,0 +1,22 @@
+[1mdiff --git a/Dockerfile b/Dockerfile[m
+[1mindex 03f301b..f2a3f1e 100644[m
+[1m--- a/Dockerfile[m
+[1m+++ b/Dockerfile[m
+[36m@@ -13,7 +13,7 @@[m [mCOPY packages/shared/package.json packages/shared/[m
+ [m
+ # Install ALL deps (need devDependencies for build)[m
+ # Mount pnpm store cache to avoid re-downloading packages across builds[m
+[31m-RUN --mount=type=cache,target=/root/.local/share/pnpm/store \[m
+[32m+[m[32mRUN --mount=type=cache,id=s/0f05d75b-399b-48ea-b2c4-bb88b6255a91-/root/.local/share/pnpm/store,target=/root/.local/share/pnpm/store \[m
+     pnpm install --frozen-lockfile[m
+ [m
+ # Copy source code for backend packages only[m
+[36m@@ -61,7 +61,7 @@[m [mCOPY packages/shared/package.json packages/shared/[m
+ [m
+ # Install production deps only — keeps the image lean (no tsup, vitest, etc.)[m
+ # argon2 needs a rebuild on alpine (native addon).[m
+[31m-RUN --mount=type=cache,target=/root/.local/share/pnpm/store \[m
+[32m+[m[32mRUN --mount=type=cache,id=s/0f05d75b-399b-48ea-b2c4-bb88b6255a91-/root/.local/share/pnpm/store,target=/root/.local/share/pnpm/s[m
+     pnpm install --frozen-lockfile --prod[m
+ [m
+ # ── Smoke test: catch module resolution errors at build time ──[m

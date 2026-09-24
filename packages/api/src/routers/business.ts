@@ -1,7 +1,22 @@
 import { eq, and, sql, desc, gte, lte, inArray, count, getTableColumns } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { businesses, bankAccounts, controlDb, tenants, tenantMembers, auditLog, parties, items, invoices, invoiceItems, payments, expenses, users } from "@hisaabo/db";
+import {
+  businesses,
+  businessMembers,
+  bankAccounts,
+  controlDb,
+  tenants,
+  tenantMembers,
+  auditLog,
+  parties,
+  items,
+  invoices,
+  invoiceItems,
+  payments,
+  expenses,
+  users,
+} from "@hisaabo/db";
 import { createBusinessSchema, updateBusinessSchema, updateSequenceNumberSchema, uploadBusinessLogoSchema } from "@hisaabo/shared";
 import { router, tenantProcedure, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -10,6 +25,7 @@ import { validateLogoDataUrl } from "../lib/validate-logo.js";
 import { enforceBusinessLimit, enforceDataExport, getLimits } from "../lib/plan-limits.js";
 import { seedChartOfAccounts } from "../lib/coa-seed.js";
 import { encryptCarrierCredentials, decryptCarrierCredentials } from "../lib/field-encryption.js";
+
 
 async function requireTenantAdmin(userId: string, tenantId: string) {
   const [membership] = await controlDb
@@ -27,21 +43,195 @@ async function requireTenantAdmin(userId: string, tenantId: string) {
 
 export const businessRouter = router({
   list: tenantProcedure.query(async ({ ctx }) => {
-    // Security: ctx.db is already scoped to the caller's tenant DB, so this
-    // returns only businesses within the caller's tenant — no cross-tenant
-    // access is possible. All businesses within a tenant are visible to every
-    // tenant member so that they can switch between businesses.
-    //
-    // `logoData` is intentionally excluded — sending logo bytes over tRPC on
-    // every list call is wasteful. Consumers fetch the logo via the dedicated
-    // HTTP endpoint using logoUpdatedAt as a cache-bust key.
     const { logoData: _logoData, ...cols } = getTableColumns(businesses);
-    const rows = await ctx.db.select(cols).from(businesses);
+
+    const rows = await ctx.db
+      .select(cols)
+      .from(businesses)
+      .innerJoin(
+        businessMembers,
+        eq(businessMembers.businessId, businesses.id),
+      )
+      .where(eq(businessMembers.userId, ctx.user.id));
+
     return rows.map((biz) => ({
       ...biz,
       carrierCredentials: decryptCarrierCredentials(biz.carrierCredentials),
     }));
   }),
+
+  members: tenantProcedure
+    .input(z.object({ businessId: z.string().uuid() }))
+    .query(async ({ input, ctx }) => {
+      await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+
+      const rows = await ctx.db
+        .select({
+          id: businessMembers.id,
+          userId: businessMembers.userId,
+          role: businessMembers.role,
+          createdAt: businessMembers.createdAt,
+          name: users.name,
+          email: users.email,
+        })
+        .from(businessMembers)
+        .innerJoin(
+          users,
+          eq(businessMembers.userId, users.id),
+        )
+        .where(eq(businessMembers.businessId, input.businessId));
+
+      return rows;
+    }),
+
+  addMember: tenantProcedure
+    .input(z.object({
+      businessId: z.string().uuid(),
+      userId: z.string().uuid(),
+      role: z.enum(["admin", "member"]).default("member"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+
+      // Verify the business exists in this tenant.
+      const [business] = await ctx.db
+        .select({ id: businesses.id })
+        .from(businesses)
+        .where(eq(businesses.id, input.businessId))
+        .limit(1);
+
+      if (!business) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Business not found",
+        });
+      }
+
+      // User must already belong to the tenant.
+      const [tenantMembership] = await controlDb
+        .select({ id: tenantMembers.id })
+        .from(tenantMembers)
+        .where(and(
+          eq(tenantMembers.tenantId, ctx.tenantId!),
+          eq(tenantMembers.userId, input.userId),
+        ))
+        .limit(1);
+
+      if (!tenantMembership) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "User is not a member of this tenant",
+        });
+      }
+
+      // Don't create duplicate company membership.
+      const [existing] = await ctx.db
+        .select({ id: businessMembers.id })
+        .from(businessMembers)
+        .where(and(
+          eq(businessMembers.businessId, input.businessId),
+          eq(businessMembers.userId, input.userId),
+        ))
+        .limit(1);
+
+      if (existing) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "User is already a member of this business",
+        });
+      }
+
+      const [membership] = await ctx.db
+        .insert(businessMembers)
+        .values({
+          businessId: input.businessId,
+          userId: input.userId,
+          role: input.role,
+        })
+        .returning();
+
+      return membership;
+    }),
+
+  updateMemberRole: tenantProcedure
+    .input(z.object({
+      businessId: z.string().uuid(),
+      userId: z.string().uuid(),
+      role: z.enum(["admin", "member"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+
+      const [membership] = await ctx.db
+        .update(businessMembers)
+        .set({ role: input.role })
+        .where(and(
+          eq(businessMembers.businessId, input.businessId),
+          eq(businessMembers.userId, input.userId),
+        ))
+        .returning();
+
+      if (!membership) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Business membership not found",
+        });
+      }
+
+      return membership;
+    }),
+
+  removeMember: tenantProcedure
+    .input(z.object({
+      businessId: z.string().uuid(),
+      userId: z.string().uuid(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+
+      // Prevent removing the last company admin.
+      const [target] = await ctx.db
+        .select({
+          id: businessMembers.id,
+          role: businessMembers.role,
+        })
+        .from(businessMembers)
+        .where(and(
+          eq(businessMembers.businessId, input.businessId),
+          eq(businessMembers.userId, input.userId),
+        ))
+        .limit(1);
+
+      if (!target) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Business membership not found",
+        });
+      }
+
+      if (target.role === "admin") {
+        const [{ adminCount }] = await ctx.db
+          .select({ adminCount: count() })
+          .from(businessMembers)
+          .where(and(
+            eq(businessMembers.businessId, input.businessId),
+            eq(businessMembers.role, "admin"),
+          ));
+
+        if (adminCount <= 1) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Cannot remove the last business admin",
+          });
+        }
+      }
+
+      await ctx.db
+        .delete(businessMembers)
+        .where(eq(businessMembers.id, target.id));
+
+      return { success: true };
+    }),
 
   // Check if more businesses can be created in this tenant (plan limit).
   canCreate: tenantProcedure.query(async ({ ctx }) => {
@@ -55,18 +245,34 @@ export const businessRouter = router({
   getById: tenantProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
-      // Security: ctx.db is scoped to the caller's tenant. The WHERE on
-      // businesses.id is sufficient because the DB itself is tenant-isolated.
-      //
-      // logoData excluded — fetched via dedicated /api/businesses/:id/logo.
+      const [membership] = await ctx.db
+        .select({ userId: businessMembers.userId })
+        .from(businessMembers)
+        .where(
+          and(
+            eq(businessMembers.businessId, input.id),
+            eq(businessMembers.userId, ctx.user.id),
+          ),
+        )
+        .limit(1);
+
+      if (!membership) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not have access to this business",
+        });
+      }
+
       const { logoData: _logoData, ...cols } = getTableColumns(businesses);
+
       const [biz] = await ctx.db
         .select(cols)
         .from(businesses)
         .where(eq(businesses.id, input.id))
         .limit(1);
+
       if (!biz) return null;
-      // Decrypt carrier credentials if present
+
       return {
         ...biz,
         carrierCredentials: decryptCarrierCredentials(biz.carrierCredentials),
@@ -81,6 +287,13 @@ export const businessRouter = router({
         ...input,
         createdByUserId: ctx.user.id,
       }).returning();
+
+      // Automatically assign the creator as an admin of the new business.
+      await tx.insert(businessMembers).values({
+        businessId: biz.id,
+        userId: ctx.user.id,
+        role: "admin",
+      });
 
       // Auto-create a Cash account for every new business — must be atomic with
       // business creation so a failed account insert never leaves a business
@@ -385,9 +598,9 @@ export const businessRouter = router({
       const userIds = [...new Set(data.map((e) => e.userId))];
       const userRows = userIds.length > 0
         ? await controlDb
-            .select({ id: users.id, name: users.name, email: users.email })
-            .from(users)
-            .where(inArray(users.id, userIds))
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .where(inArray(users.id, userIds))
         : [];
       const userMap = new Map(userRows.map((u) => [u.id, u.name || u.email]));
 

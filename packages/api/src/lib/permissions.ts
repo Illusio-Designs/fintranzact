@@ -95,6 +95,8 @@ export function defineAbilityFor(ctx: PermissionContext): AppAbility {
       can("read", "SalesTarget");
       // Recurring invoices: read only
       can("read", "RecurringInvoice");
+      // Reports
+      can("read", "Report");
       break;
 
     case "accountant":

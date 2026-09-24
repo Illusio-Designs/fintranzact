@@ -106,6 +106,118 @@ export const businesses = pgTable("businesses", {
   uniqueIndex("businesses_store_slug_idx").on(t.storeSlug),
 ]);
 
+// ── Business Members ──────────────────────────────────────────
+// Controls which tenant users can access which business.
+// userId is a plain UUID because users live in the control DB.
+
+export const businessMemberRoleEnum = pgEnum("business_member_role", [
+  "admin",
+  "member",
+]);
+
+export const businessMembers = pgTable("business_members", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+
+  // No FK to users — users live in the control DB.
+  userId: uuid("user_id").notNull(),
+
+  role: businessMemberRoleEnum("role").default("member").notNull(),
+
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+}, (t) => [
+  uniqueIndex("business_members_business_user_idx").on(
+    t.businessId,
+    t.userId,
+  ),
+  index("business_members_user_idx").on(t.userId),
+]);
+
+// ── Inventory Settings ─────────────────────────────────────────
+
+export const inventorySettings = pgTable("inventory_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+
+  salesWarehouseId: uuid("sales_warehouse_id")
+    .references(() => warehouses.id, { onDelete: "set null" }),
+
+  purchaseWarehouseId: uuid("purchase_warehouse_id")
+    .references(() => warehouses.id, { onDelete: "set null" }),
+
+  salesReturnWarehouseId: uuid("sales_return_warehouse_id")
+    .references(() => warehouses.id, { onDelete: "set null" }),
+
+  purchaseReturnWarehouseId: uuid("purchase_return_warehouse_id")
+    .references(() => warehouses.id, { onDelete: "set null" }),
+
+  productionWarehouseId: uuid("production_warehouse_id")
+    .references(() => warehouses.id, { onDelete: "set null" }),
+
+  stockAdjustmentWarehouseId: uuid("stock_adjustment_warehouse_id")
+    .references(() => warehouses.id, { onDelete: "set null" }),
+
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+}, (t) => [
+  uniqueIndex("inventory_settings_business_idx").on(t.businessId),
+  index("inventory_settings_sales_wh_idx").on(t.salesWarehouseId),
+  index("inventory_settings_purchase_wh_idx").on(t.purchaseWarehouseId),
+]);
+
+// ── Warehouse Permissions ──────────────────────────────────────
+
+export const warehousePermissions = pgTable("warehouse_permissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+
+  businessMemberId: uuid("business_member_id")
+    .notNull()
+    .references(() => businessMembers.id, { onDelete: "cascade" }),
+
+  warehouseId: uuid("warehouse_id")
+    .notNull()
+    .references(() => warehouses.id, { onDelete: "cascade" }),
+
+  canView: boolean("can_view").default(true).notNull(),
+  canReceive: boolean("can_receive").default(false).notNull(),
+  canIssue: boolean("can_issue").default(false).notNull(),
+  canTransfer: boolean("can_transfer").default(false).notNull(),
+  canAdjust: boolean("can_adjust").default(false).notNull(),
+
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+}, (t) => [
+  uniqueIndex("warehouse_permissions_member_wh_idx").on(
+    t.businessMemberId,
+    t.warehouseId,
+  ),
+  index("warehouse_permissions_business_idx").on(t.businessId),
+  index("warehouse_permissions_member_idx").on(t.businessMemberId),
+  index("warehouse_permissions_warehouse_idx").on(t.warehouseId),
+]);
+
 // ── Parties (Customers / Suppliers) ────────────────────────────
 
 export const parties = pgTable("parties", {
@@ -139,6 +251,107 @@ export const parties = pgTable("parties", {
   index("parties_business_idx").on(t.businessId),
   index("parties_type_idx").on(t.businessId, t.type),
   index("parties_name_idx").on(t.businessId, t.name),
+]);
+
+// ── Premises ───────────────────────────────────────────────────
+
+export const premises = pgTable("premises", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+
+  name: text("name").notNull(),
+  code: text("code").notNull(),
+
+  address: text("address"),
+  state: text("state"),
+  city: text("city"),
+
+  status: text("status").default("active").notNull(),
+
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+  }).defaultNow().notNull(),
+
+  updatedAt: timestamp("updated_at", {
+    withTimezone: true,
+  }).defaultNow().notNull(),
+}, (t) => [
+  index("premises_business_idx").on(t.businessId),
+  uniqueIndex("premises_business_code_idx").on(t.businessId, t.code),
+]);
+
+
+// ── Warehouses ─────────────────────────────────────────────────
+
+export const warehouses = pgTable("warehouses", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+
+  premiseId: uuid("premise_id")
+    .notNull()
+    .references(() => premises.id, { onDelete: "restrict" }),
+
+  name: text("name").notNull(),
+  code: text("code").notNull(),
+
+  warehouseType: text("warehouse_type").notNull(),
+
+  address: text("address"),
+
+  status: text("status").default("active").notNull(),
+
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+  }).defaultNow().notNull(),
+
+  updatedAt: timestamp("updated_at", {
+    withTimezone: true,
+  }).defaultNow().notNull(),
+}, (t) => [
+  index("warehouses_business_idx").on(t.businessId),
+  index("warehouses_premise_idx").on(t.premiseId),
+  uniqueIndex("warehouses_business_code_idx").on(t.businessId, t.code),
+]);
+
+
+// ── Warehouse Locations ────────────────────────────────────────
+
+export const warehouseLocations = pgTable("warehouse_locations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  warehouseId: uuid("warehouse_id")
+    .notNull()
+    .references(() => warehouses.id, { onDelete: "cascade" }),
+
+  parentId: uuid("parent_id"),
+
+  locationType: text("location_type").notNull(),
+
+  name: text("name").notNull(),
+  code: text("code").notNull(),
+
+  status: text("status").default("active").notNull(),
+
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+  }).defaultNow().notNull(),
+
+  updatedAt: timestamp("updated_at", {
+    withTimezone: true,
+  }).defaultNow().notNull(),
+}, (t) => [
+  index("warehouse_locations_warehouse_idx").on(t.warehouseId),
+  index("warehouse_locations_parent_idx").on(t.parentId),
+  uniqueIndex("warehouse_locations_code_idx").on(
+    t.warehouseId,
+    t.code,
+  ),
 ]);
 
 // ── Items / Products ───────────────────────────────────────────
@@ -467,6 +680,191 @@ export const stockAdjustments = pgTable("stock_adjustments", {
   index("stock_adj_item_idx").on(t.itemId),
   index("stock_adj_variant_idx").on(t.variantId),
   index("stock_adj_date_idx").on(t.businessId, t.adjustmentDate),
+]);
+
+// ── Stock Balances ────────────────────────────────────────────
+// Current stock state per business, warehouse, location and item/variant.
+// This table stores the latest inventory balance, not the movement history.
+
+export const stockBalances = pgTable("stock_balances", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+
+  warehouseId: uuid("warehouse_id")
+    .notNull()
+    .references(() => warehouses.id, { onDelete: "cascade" }),
+
+  locationId: uuid("location_id")
+    .references(() => warehouseLocations.id, { onDelete: "set null" }),
+
+  itemId: uuid("item_id")
+    .notNull()
+    .references(() => items.id, { onDelete: "cascade" }),
+
+  // Null when the item is a simple item.
+  // Set when the item uses variants.
+  variantId: uuid("variant_id")
+    .references(() => itemVariants.id, { onDelete: "cascade" }),
+
+  // Physical quantity currently held at this warehouse/location.
+  quantity: numeric("quantity", {
+    precision: 15,
+    scale: 3,
+  }).default("0").notNull(),
+
+  // Quantity reserved for orders/documents but not yet consumed.
+  reservedQuantity: numeric("reserved_quantity", {
+    precision: 15,
+    scale: 3,
+  }).default("0").notNull(),
+
+  // Quantity physically present but marked damaged.
+  damagedQuantity: numeric("damaged_quantity", {
+    precision: 15,
+    scale: 3,
+  }).default("0").notNull(),
+
+  // Quantity physically present but blocked from normal use.
+  blockedQuantity: numeric("blocked_quantity", {
+    precision: 15,
+    scale: 3,
+  }).default("0").notNull(),
+
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+  }).defaultNow().notNull(),
+
+  updatedAt: timestamp("updated_at", {
+    withTimezone: true,
+  }).defaultNow().notNull(),
+}, (t) => [
+  index("stock_balances_business_idx").on(t.businessId),
+  index("stock_balances_warehouse_idx").on(t.warehouseId),
+  index("stock_balances_location_idx").on(t.locationId),
+  index("stock_balances_item_idx").on(t.itemId),
+  index("stock_balances_variant_idx").on(t.variantId),
+
+  // Simple item balance: no location, no variant.
+  uniqueIndex("stock_balances_base_unique_idx")
+    .on(
+      t.businessId,
+      t.warehouseId,
+      t.itemId,
+    )
+    .where(sql`${t.locationId} is null and ${t.variantId} is null`),
+
+  // Location-specific balance for a simple item.
+  uniqueIndex("stock_balances_location_unique_idx")
+    .on(
+      t.businessId,
+      t.warehouseId,
+      t.locationId,
+      t.itemId,
+    )
+    .where(sql`${t.locationId} is not null and ${t.variantId} is null`),
+
+  // Variant balance without a specific location.
+  uniqueIndex("stock_balances_variant_unique_idx")
+    .on(
+      t.businessId,
+      t.warehouseId,
+      t.itemId,
+      t.variantId,
+    )
+    .where(sql`${t.locationId} is null and ${t.variantId} is not null`),
+
+  // Variant balance at a specific location.
+  uniqueIndex("stock_balances_location_variant_unique_idx")
+    .on(
+      t.businessId,
+      t.warehouseId,
+      t.locationId,
+      t.itemId,
+      t.variantId,
+    )
+    .where(
+      sql`${t.locationId} is not null and ${t.variantId} is not null`,
+    ),
+]);
+
+export const stockMovements = pgTable("stock_movements", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+
+  warehouseId: uuid("warehouse_id")
+    .notNull()
+    .references(() => warehouses.id, { onDelete: "cascade" }),
+
+  sourceWarehouseId: uuid("source_warehouse_id")
+    .references(() => warehouses.id, { onDelete: "set null" }),
+
+  destinationWarehouseId: uuid("destination_warehouse_id")
+    .references(() => warehouses.id, { onDelete: "set null" }),
+
+  locationId: uuid("location_id")
+    .references(() => warehouseLocations.id, { onDelete: "set null" }),
+
+  itemId: uuid("item_id")
+    .notNull()
+    .references(() => items.id, { onDelete: "cascade" }),
+
+  variantId: uuid("variant_id")
+    .references(() => itemVariants.id, { onDelete: "cascade" }),
+
+  batchId: uuid("batch_id"),
+
+  serialId: uuid("serial_id"),
+
+  referenceType: text("reference_type").notNull(),
+
+  referenceId: uuid("reference_id"),
+
+  movementType: text("movement_type").notNull(),
+
+  quantity: numeric("quantity", {
+    precision: 15,
+    scale: 3,
+  }).notNull(),
+
+  unitCost: numeric("unit_cost", {
+    precision: 15,
+    scale: 2,
+  }),
+
+  movementDate: timestamp("movement_date", {
+    withTimezone: true,
+  })
+    .defaultNow()
+    .notNull(),
+
+  actorUserId: uuid("actor_user_id"),
+
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+  })
+    .defaultNow()
+    .notNull(),
+}, (t) => [
+  index("stock_movements_business_idx").on(t.businessId),
+  index("stock_movements_warehouse_idx").on(t.warehouseId),
+  index("stock_movements_source_warehouse_idx").on(t.sourceWarehouseId),
+  index("stock_movements_destination_warehouse_idx").on(t.destinationWarehouseId),
+  index("stock_movements_location_idx").on(t.locationId),
+  index("stock_movements_item_idx").on(t.itemId),
+  index("stock_movements_variant_idx").on(t.variantId),
+  index("stock_movements_batch_idx").on(t.batchId),
+  index("stock_movements_serial_idx").on(t.serialId),
+  index("stock_movements_reference_idx").on(
+    t.referenceType,
+    t.referenceId,
+  ),
+  index("stock_movements_date_idx").on(t.movementDate),
 ]);
 
 // ── Sales Targets ─────────────────────────────────────────────
@@ -1062,7 +1460,7 @@ export const gstr2bRecords = pgTable("gstr2b_records", {
 
 // ── Relations ──────────────────────────────────────────────────
 
-export const businessesRelations = relations(businesses, ({ many }) => ({
+export const businessesRelations = relations(businesses, ({ one, many }) => ({
   parties: many(parties),
   items: many(items),
   invoices: many(invoices),
@@ -1072,7 +1470,46 @@ export const businessesRelations = relations(businesses, ({ many }) => ({
   storeOrders: many(storeOrders),
   salesTargets: many(salesTargets),
   recurringInvoiceTemplates: many(recurringInvoiceTemplates),
+  premises: many(premises),
+  warehouses: many(warehouses),
+  inventorySettings: one(inventorySettings),
+  warehousePermissions: many(warehousePermissions),
 }));
+
+export const premisesRelations = relations(premises, ({ one, many }) => ({
+  business: one(businesses, {
+    fields: [premises.businessId],
+    references: [businesses.id],
+  }),
+
+  warehouses: many(warehouses),
+}));
+
+export const warehousesRelations = relations(warehouses, ({ one, many }) => ({
+  business: one(businesses, {
+    fields: [warehouses.businessId],
+    references: [businesses.id],
+  }),
+
+  premise: one(premises, {
+    fields: [warehouses.premiseId],
+    references: [premises.id],
+  }),
+
+  locations: many(warehouseLocations),
+
+  warehousePermissions: many(warehousePermissions),
+}));
+
+export const warehouseLocationsRelations = relations(
+  warehouseLocations,
+  ({ one }) => ({
+    warehouse: one(warehouses, {
+      fields: [warehouseLocations.warehouseId],
+      references: [warehouses.id],
+    }),
+  }),
+);
 
 export const partiesRelations = relations(parties, ({ one, many }) => ({
   business: one(businesses, { fields: [parties.businessId], references: [businesses.id] }),
@@ -1173,6 +1610,58 @@ export const journalEntryLinesRelations = relations(journalEntryLines, ({ one })
   journalEntry: one(journalEntries, { fields: [journalEntryLines.journalEntryId], references: [journalEntries.id] }),
   account: one(chartOfAccounts, { fields: [journalEntryLines.accountId], references: [chartOfAccounts.id] }),
 }));
+
+export const inventorySettingsRelations = relations(
+  inventorySettings,
+  ({ one }) => ({
+    business: one(businesses, {
+      fields: [inventorySettings.businessId],
+      references: [businesses.id],
+    }),
+    salesWarehouse: one(warehouses, {
+      fields: [inventorySettings.salesWarehouseId],
+      references: [warehouses.id],
+    }),
+    purchaseWarehouse: one(warehouses, {
+      fields: [inventorySettings.purchaseWarehouseId],
+      references: [warehouses.id],
+    }),
+    salesReturnWarehouse: one(warehouses, {
+      fields: [inventorySettings.salesReturnWarehouseId],
+      references: [warehouses.id],
+    }),
+    purchaseReturnWarehouse: one(warehouses, {
+      fields: [inventorySettings.purchaseReturnWarehouseId],
+      references: [warehouses.id],
+    }),
+    productionWarehouse: one(warehouses, {
+      fields: [inventorySettings.productionWarehouseId],
+      references: [warehouses.id],
+    }),
+    stockAdjustmentWarehouse: one(warehouses, {
+      fields: [inventorySettings.stockAdjustmentWarehouseId],
+      references: [warehouses.id],
+    }),
+  }),
+);
+
+export const warehousePermissionsRelations = relations(
+  warehousePermissions,
+  ({ one }) => ({
+    business: one(businesses, {
+      fields: [warehousePermissions.businessId],
+      references: [businesses.id],
+    }),
+    businessMember: one(businessMembers, {
+      fields: [warehousePermissions.businessMemberId],
+      references: [businessMembers.id],
+    }),
+    warehouse: one(warehouses, {
+      fields: [warehousePermissions.warehouseId],
+      references: [warehouses.id],
+    }),
+  }),
+);
 
 // ── Business-date column registry ─────────────────────────────────
 // The canonical user-entered business date for each document table.

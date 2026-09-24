@@ -1,0 +1,5 @@
+DROP INDEX "stock_balances_unique_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "stock_balances_base_unique_idx" ON "stock_balances" USING btree ("business_id","warehouse_id","item_id") WHERE "stock_balances"."location_id" is null and "stock_balances"."variant_id" is null;--> statement-breakpoint
+CREATE UNIQUE INDEX "stock_balances_location_unique_idx" ON "stock_balances" USING btree ("business_id","warehouse_id","location_id","item_id") WHERE "stock_balances"."location_id" is not null and "stock_balances"."variant_id" is null;--> statement-breakpoint
+CREATE UNIQUE INDEX "stock_balances_variant_unique_idx" ON "stock_balances" USING btree ("business_id","warehouse_id","item_id","variant_id") WHERE "stock_balances"."location_id" is null and "stock_balances"."variant_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "stock_balances_location_variant_unique_idx" ON "stock_balances" USING btree ("business_id","warehouse_id","location_id","item_id","variant_id") WHERE "stock_balances"."location_id" is not null and "stock_balances"."variant_id" is not null;
