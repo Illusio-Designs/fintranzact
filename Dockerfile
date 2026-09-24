@@ -13,7 +13,8 @@ COPY packages/shared/package.json packages/shared/
 
 # Install ALL deps (need devDependencies for build)
 # Mount pnpm store cache to avoid re-downloading packages across builds
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=s/0f05d75b-399b-48ea-b2c4-bb88b6255a91-/root/.local/share/pnpm/store
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=s/0f05d75b-399b-48ea-b2c4-bb88b6255a91-/root/.local/share/pnpm/store \
+    pnpm install
 
 # Copy source code for backend packages only
 COPY packages/shared/ packages/shared/
