@@ -871,13 +871,6 @@ export const invoiceRouter = router({
 
         // 4. Handle line items — delete old, insert new, recalculate totals
         if (input.lineItems) {
-          // Step 1: Read old line items to reverse their stock impact
-          const oldLineItems = await tx.select({
-            itemId: invoiceItems.itemId,
-            quantity: invoiceItems.quantity,
-            conversionFactor: invoiceItems.conversionFactor,
-            variantId: invoiceItems.variantId,
-          }).from(invoiceItems).where(eq(invoiceItems.invoiceId, input.id));
 
           // Step 2: Reverse all inventory movements previously recorded for this invoice.
           // This makes repeated invoice updates safe: every previous inventory effect
@@ -1067,10 +1060,6 @@ export const invoiceRouter = router({
       }
 
       await ctx.db.transaction(async (tx) => {
-        const lineItemRows = await tx
-          .select()
-          .from(invoiceItems)
-          .where(eq(invoiceItems.invoiceId, input.id));
 
         const invoiceMovements = await tx
           .select({

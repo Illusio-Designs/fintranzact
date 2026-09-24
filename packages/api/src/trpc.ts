@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { Context } from "./context.js";
-import { getTenantDb, type TenantDatabase, controlDb, businesses, businessMembers, tenantMembers } from "@hisaabo/db";
+import { getTenantDb, type TenantDatabase, businesses, businessMembers } from "@hisaabo/db";
 import { eq, and } from "drizzle-orm";
 import { defineAbilityFor, mapDbRole, type AppAbility } from "./lib/permissions.js";
 import { getMaintenanceStatus } from "./lib/maintenance-cache.js";
