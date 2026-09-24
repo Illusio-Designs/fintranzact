@@ -61,7 +61,8 @@ COPY packages/shared/package.json packages/shared/
 
 # Install production deps only — keeps the image lean (no tsup, vitest, etc.)
 # argon2 needs a rebuild on alpine (native addon).
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=s/0f05d75b-399b-48ea-b2c4-bb88b6255a91-/root/.local/share/pnpm/store
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=s/0f05d75b-399b-48ea-b2c4-bb88b6255a91-/root/.local/share/pnpm/store \
+ pnpm install --prod
 
 # ── Smoke test: catch module resolution errors at build time ──
 # This would have caught the control-schema.js error before deployment.
