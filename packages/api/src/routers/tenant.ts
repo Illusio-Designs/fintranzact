@@ -115,28 +115,25 @@ export const tenantRouter = router({
       const tenantNameResult = await autoSelectTenantInSession(ctx.req, tenantId);
       return { tenantId, tenantName: tenantNameResult };
     } else {
-      // Self-hosted: join/create default tenant
-      let [defaultTenant] = await controlDb.select({ id: tenants.id })
-        .from(tenants).where(eq(tenants.slug, "default")).limit(1);
-      if (!defaultTenant) {
-        [defaultTenant] = await controlDb.insert(tenants).values({
-          name: "Default Organization",
-          slug: "default",
-          plan: "forever_free",
-        }).returning({ id: tenants.id });
-      }
+      // Self-hosted: each user gets their own organization and becomes owner.
+      const tenantName = `${displayName}'s Organization`;
+      const slug = generateSlug(tenantName);
 
-      const memberCount = await controlDb.select({ id: tenantMembers.id })
-        .from(tenantMembers).where(eq(tenantMembers.tenantId, defaultTenant.id));
-      const role = memberCount.length === 0 ? "owner" : "member";
+      const [tenant] = await controlDb.insert(tenants).values({
+        name: tenantName,
+        slug,
+        plan: "forever_free",
+      }).returning({ id: tenants.id });
 
       await controlDb.insert(tenantMembers).values({
-        tenantId: defaultTenant.id, userId: ctx.user.id,
-        role, acceptedAt: new Date(),
+        tenantId: tenant.id,
+        userId: ctx.user.id,
+        role: "owner",
+        acceptedAt: new Date(),
       });
 
-      const tenantNameResult = await autoSelectTenantInSession(ctx.req, defaultTenant.id);
-      return { tenantId: defaultTenant.id, tenantName: tenantNameResult };
+      const tenantNameResult = await autoSelectTenantInSession(ctx.req, tenant.id);
+      return { tenantId: tenant.id, tenantName: tenantNameResult };
     }
   }),
 

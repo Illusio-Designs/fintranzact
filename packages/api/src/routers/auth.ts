@@ -90,42 +90,31 @@ function isBearerClient(req: Request): boolean {
   return client === "mobile" || client === "desktop";
 }
 
-// ── Shared helper: self-hosted default tenant assignment ───────
-// Wrapped in a serializable transaction to prevent TOCTOU race on owner role
+// ── Shared helper: self-hosted tenant assignment ─────────────────────
+// Every new sign-up gets their own organization and becomes the owner.
 type ControlTx = Parameters<Parameters<typeof controlDb.transaction>[0]>[0];
 
-async function getOrCreateDefaultTenant(userId: string, parentTx?: ControlTx): Promise<string> {
+async function createTenantForUser(userId: string, displayName: string, parentTx?: ControlTx): Promise<string> {
   const run = async (tx: ControlTx) => {
-    let [existing] = await tx
-      .select({ id: tenants.id })
-      .from(tenants)
-      .where(eq(tenants.slug, "default"))
-      .limit(1);
+    const tenantName = `${displayName.trim() || "My Organization"}'s Organization`;
+    const slug = generateSlug(tenantName);
 
-    if (!existing) {
-      [existing] = await tx.insert(tenants).values({
-        name: "Default Organization",
-        slug: "default",
-        plan: "forever_free",
-      }).returning({ id: tenants.id });
-    }
-
-    const memberCount = await tx
-      .select({ id: tenantMembers.id })
-      .from(tenantMembers)
-      .where(eq(tenantMembers.tenantId, existing.id));
-
-    const role = memberCount.length === 0 ? "owner" : "member";
+    const [tenant] = await tx.insert(tenants).values({
+      name: tenantName,
+      slug,
+      plan: "forever_free",
+    }).returning({ id: tenants.id });
 
     await tx.insert(tenantMembers).values({
-      tenantId: existing.id,
+      tenantId: tenant.id,
       userId,
-      role,
+      role: "owner",
       acceptedAt: new Date(),
     });
 
-    return existing.id;
+    return tenant.id;
   };
+
   return parentTx ? run(parentTx) : controlDb.transaction(run);
 }
 
@@ -380,7 +369,7 @@ export const authRouter = router({
             await writeNewTenantRows(tx, user.id, provisioned, input.referralCode?.trim() || null);
             markUsed();
           } else {
-            await getOrCreateDefaultTenant(user.id, tx);
+            await createTenantForUser(user.id, displayName, tx);
           }
 
           const sessionId = nanoid(64);
@@ -676,7 +665,8 @@ export const authRouter = router({
               await writeNewTenantRows(tx, user.id, provisioned, null);
               markUsed();
             } else {
-              await getOrCreateDefaultTenant(user.id, tx);
+              const assignedName = user.name ?? emailLocal.split("@")[0] ?? "My Organization";
+              await createTenantForUser(user.id, assignedName, tx);
             }
           } else {
             // Existing user path — mark email verified

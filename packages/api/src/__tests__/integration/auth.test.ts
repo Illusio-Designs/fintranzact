@@ -128,6 +128,33 @@ describe("auth.register", () => {
     expect(msUntilExpiry).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
   });
 
+  it("creates a fresh tenant for each self-hosted registration and makes the user the owner", async () => {
+    const caller = unauthCaller();
+
+    const first = await caller.auth.register({
+      email: "owner-first@vyapar.in",
+      name: "First Owner",
+      password: "SecurePass1!",
+      confirmPassword: "SecurePass1!",
+    });
+
+    const second = await caller.auth.register({
+      email: "owner-second@vyapar.in",
+      name: "Second Owner",
+      password: "SecurePass1!",
+      confirmPassword: "SecurePass1!",
+    });
+
+    const firstMemberships = await db.select().from(tenantMembers).where(eq(tenantMembers.userId, first.user.id));
+    const secondMemberships = await db.select().from(tenantMembers).where(eq(tenantMembers.userId, second.user.id));
+
+    expect(firstMemberships).toHaveLength(1);
+    expect(firstMemberships[0]!.role).toBe("owner");
+    expect(secondMemberships).toHaveLength(1);
+    expect(secondMemberships[0]!.role).toBe("owner");
+    expect(firstMemberships[0]!.tenantId).not.toBe(secondMemberships[0]!.tenantId);
+  });
+
   it("rejects duplicate email registration — returns CONFLICT without creating a second user", async () => {
     const caller = unauthCaller();
 
