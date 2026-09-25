@@ -363,7 +363,10 @@ function RootLayout() {
   const [showTenantPicker, setShowTenantPicker] = useState(false);
 
   const createOrgMutation = trpc.tenant.create.useMutation();
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
+  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return sessionStorage.getItem("selectedBusinessId");
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const selectTenantMutation = trpc.tenant.select.useMutation({
@@ -379,6 +382,8 @@ function RootLayout() {
       // launch doesn't silently re-authenticate. No-op on web (the server
       // already cleared the cookie via Set-Cookie on the response).
       await clearDesktopToken();
+      sessionStorage.removeItem("planSelectionDone");
+      sessionStorage.removeItem("selectedBusinessId");
       setBusinessId(null);
       queryClient.clear();
       navigate({ to: "/login" });
@@ -421,13 +426,33 @@ function RootLayout() {
     { key: "s", alt: true, shift: true, handler: () => navigate({ to: "/settings" }), description: "Settings", scope: "navigation" },
   ]);
 
-  // Set business ID when businesses load — auto-select first
+  // Set business ID when businesses load. Auto-select only when there is a
+  // single business; if the user has multiple businesses, show a picker first.
   useEffect(() => {
-    if (businesses && businesses.length > 0 && !currentBusinessId) {
+    if (businesses && businesses.length === 1 && !currentBusinessId) {
       setBusinessId(businesses[0].id);
       setCurrentBusinessId(businesses[0].id);
+      sessionStorage.setItem("selectedBusinessId", businesses[0].id);
+      return;
+    }
+
+    if (businesses && businesses.length > 0 && currentBusinessId && !businesses.some((b) => b.id === currentBusinessId)) {
+      setCurrentBusinessId(null);
+      sessionStorage.removeItem("selectedBusinessId");
     }
   }, [businesses, currentBusinessId]);
+
+  useEffect(() => {
+    if (currentBusinessId) {
+      sessionStorage.setItem("selectedBusinessId", currentBusinessId);
+    }
+  }, [currentBusinessId]);
+
+  const selectedTenantPlan = session?.tenantId
+    ? tenantList?.find((tenant) => tenant.tenantId === session.tenantId)?.tenantPlan ?? null
+    : null;
+
+  const hasCompletedPlanSelection = selectedTenantPlan !== null && selectedTenantPlan !== undefined;
 
   // Single consolidated redirect — priority order matters
   const publicPaths = ["/login", "/auth/verify", "/auth/complete-profile", "/auth/verify-email-change", "/invite"];
@@ -462,7 +487,25 @@ function RootLayout() {
       }
     }
 
-    // Priority 3: Authenticated with name but no business → settings
+    // Priority 3: show company picker before plan gate so the user can
+    // switch orgs first, then decide plan only once per tenant.
+    const needsCompanySelection =
+      session?.tenantId &&
+      Array.isArray(businesses) &&
+      businesses.length > 1 &&
+      !currentBusinessId;
+
+    if (needsCompanySelection && !pathname.startsWith("/auth/")) {
+      return;
+    }
+
+    const planGateAllowed = ["/auth/plan-selection", "/login", "/auth/verify"].some((p) => pathname.startsWith(p));
+    if (session?.tenantId && !hasCompletedPlanSelection && !planGateAllowed && !needsCompanySelection) {
+      navigate({ to: "/auth/plan-selection" });
+      return;
+    }
+
+    // Priority 4: Authenticated with name but no business → settings
     // Guard: only redirect AFTER businesses query has completed its initial load.
     // businessesLoading is true when the query is enabled but has no data yet.
     // This prevents redirecting to /settings before we know if businesses exist.
@@ -472,7 +515,7 @@ function RootLayout() {
       }
       return;
     }
-    // Priority 4: On dashboard but role can't access it → first accessible page
+    // Priority 5: On dashboard but role can't access it → first accessible page
     if (pathname === "/" && session?.role && !canAccess(session.role, "Report", "read")) {
       navigate({ to: "/invoices" });
       return;
@@ -556,6 +599,73 @@ function RootLayout() {
   // the main layout yet (prevents flash of /settings "Set up your business")
   if (session.tenantId && businessesLoading) return loadingSpinner;
 
+  const shouldShowBusinessPicker =
+    !!session.tenantId &&
+    Array.isArray(businesses) &&
+    businesses.length > 1 &&
+    !currentBusinessId;
+
+  if (shouldShowBusinessPicker) {
+    return (
+      <div className="min-h-screen bg-surface-1 px-4 py-10 md:px-6">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-8 flex items-center gap-3">
+            <Logo className="w-10 h-10" />
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-text-tertiary">Welcome back</p>
+              <h1 className="text-2xl font-semibold text-text-primary">Choose a company</h1>
+            </div>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {businesses.map((business) => {
+              const initials = business.name
+                .split(" ")
+                .map((word: string) => word[0])
+                .slice(0, 2)
+                .join("")
+                .toUpperCase();
+
+              return (
+                <button
+                  key={business.id}
+                  type="button"
+                  onClick={() => {
+                    setBusinessId(business.id);
+                    setCurrentBusinessId(business.id);
+                    sessionStorage.setItem("selectedBusinessId", business.id);
+                    queryClient.invalidateQueries();
+                  }}
+                  className="group rounded-2xl border border-border-light bg-surface-0 p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md"
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-sm font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
+                        {initials}
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-text-primary">{business.name}</p>
+                        <p className="text-xs text-text-tertiary">{business.gstRegistrationType === "unregistered" ? "Unregistered" : "GST enabled"}</p>
+                      </div>
+                    </div>
+                    <span className="rounded-full border border-border-light bg-surface-1 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
+                      Open
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-sm text-text-secondary">
+                    <p>{business.city || "Location not set"}</p>
+                    <p>{business.phone || business.email || "No contact details yet"}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const displayName = session.user.name || session.user.email.split("@")[0];
   const initials = displayName
     .split(" ")
@@ -570,6 +680,7 @@ function RootLayout() {
   function handleBusinessSwitch(id: string) {
     setBusinessId(id);
     setCurrentBusinessId(id);
+    sessionStorage.setItem("selectedBusinessId", id);
     queryClient.invalidateQueries();
   }
 
@@ -599,234 +710,234 @@ function RootLayout() {
     <div className="flex flex-col h-screen overflow-hidden bg-surface-0">
       <MaintenanceBanner />
       <div className="flex flex-1 overflow-hidden">
-      {/* Mobile sidebar backdrop */}
-      {!isOnboarding && sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Sidebar — hidden during onboarding (no business context yet) */}
-      {!isOnboarding && (
-      <aside
-        className={cn(
-          "w-56 shrink-0 border-r border-border-light flex flex-col bg-surface-0 overflow-hidden",
-          // On mobile: fixed drawer that slides in/out
-          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        {/* Mobile sidebar backdrop */}
+        {!isOnboarding && sidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
         )}
-      >
-        {/* Logo + Org switcher */}
-        <div className="px-4 py-4 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <Logo className="w-8 h-8" />
-            <span className="font-semibold text-[15px] tracking-tight text-text-primary">
-              Hisaabo
-            </span>
-          </div>
-        </div>
 
-        {/* Nav sections */}
-        <nav className="flex-1 overflow-y-auto pb-2" onClick={() => setSidebarOpen(false)}>
-          {navSections.map((section) => {
-            const visibleItems = section.items
-              .filter((item) =>
-                canAccess(session?.role, item.resource, item.action) &&
-                (!("gstOnly" in item && item.gstOnly) || isGstRegistered)
-              )
-              .map((item) => {
-                // Rename reports label based on GST status (always visible)
-                if (item.to === "/gst") {
-                  return { ...item, label: isGstRegistered ? "GST Returns" : "Tax Reports" };
-                }
-                if (item.to === "/reports") {
-                  return { ...item, label: "Business Reports" };
-                }
-                return item;
-              });
-            if (visibleItems.length === 0) return null;
-            const sectionLabel = section.label === "COMPLIANCE" && !isGstRegistered ? "REPORTS" : section.label;
-            return (
-              <div key={section.label}>
-                <p className="px-3 pt-5 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-tertiary">
-                  {sectionLabel}
-                </p>
-                {visibleItems.map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className="flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors"
-                    activeProps={{
-                      className: "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors bg-brand-600/10 text-brand-700 font-medium",
-                    }}
-                    inactiveProps={{
-                      className: "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors text-text-secondary hover:bg-surface-2 hover:text-text-primary",
-                    }}
-                    activeOptions={{ exact: "exact" in item ? (item.exact as boolean) : false }}
-                  >
-                    <item.icon />
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            );
-          })}
-        </nav>
-
-        {/* Sidebar footer: org name + version */}
-        <div className="shrink-0 border-t border-border-light">
-          {hasMultipleTenants ? (
-            <button
-              type="button"
-              onClick={() => setShowTenantPicker(true)}
-              className="w-full px-4 py-2.5 text-left group"
-            >
-              <p className="flex items-center gap-1.5 text-[11px] font-medium text-text-tertiary/60 group-hover:text-text-secondary transition-colors">
-                <span className="truncate">{tenantName}</span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-tertiary/40 group-hover:text-text-secondary transition-colors">
-                  <path d="M8 9l4-4 4 4" /><path d="M16 15l-4 4-4-4" />
-                </svg>
-              </p>
-              <p className="text-[10px] text-text-tertiary/30 mt-0.5 tabular-nums">v{__APP_VERSION__}</p>
-            </button>
-          ) : (
-            <div className="px-4 py-2.5">
-              <p className="text-[11px] text-text-tertiary/50 truncate select-none">{tenantName}</p>
-              <p className="text-[10px] text-text-tertiary/30 mt-0.5 select-none tabular-nums">v{__APP_VERSION__}</p>
-            </div>
-          )}
-        </div>
-      </aside>
-      )}
-
-      {/* Main content */}
-      <main className="flex-1 flex flex-col bg-surface-1 md:ml-0">
-        {/* Top bar */}
-        <div className="h-14 border-b border-border-light flex items-center gap-2 px-4 md:px-6 shrink-0 bg-surface-0">
-          {/* Hamburger — mobile only, hidden during onboarding */}
-          {!isOnboarding && (
-          <button
-            type="button"
-            className="md:hidden flex items-center justify-center w-8 h-8 rounded-lg text-text-secondary hover:bg-surface-1 transition-colors shrink-0"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open navigation menu"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M2 4.5h14M2 9h14M2 13.5h14" />
-            </svg>
-          </button>
-          )}
-
-          {/* Logo in top bar during onboarding (sidebar is hidden) */}
-          {isOnboarding && (
-            <div className="flex items-center gap-2.5 mr-2">
-              <Logo className="w-7 h-7" />
-              <span className="font-semibold text-[15px] tracking-tight text-text-primary">Hisaabo</span>
-            </div>
-          )}
-
-          {/* Theme + shortcuts */}
-          <ThemeToggle />
-          <button
-            onClick={() => setShowShortcuts(true)}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-sm text-text-tertiary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
-            aria-label="Keyboard shortcuts"
-            title="Keyboard shortcuts (?)"
-          >
-            <span className="font-mono text-xs">?</span>
-          </button>
-
-          {/* Settings gear */}
-          <button
-            onClick={() => navigate({ to: "/settings" })}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
-            aria-label="Settings"
-            title="Settings"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          </button>
-
-          {/* Business switcher + User info — pushed to the right */}
-          <div className="ml-auto flex items-center gap-3 min-w-0">
-            {/* Business switcher */}
-            {businesses && businesses.length > 0 && (
-              <BusinessSwitcher
-                businesses={businesses.map((b) => ({ id: b.id, name: b.name }))}
-                activeBusinessId={currentBusinessId ?? businesses[0].id}
-                onSwitch={handleBusinessSwitch}
-                onCreateNew={canCreateBiz && canAccess(session?.role, "Business", "manage") ? () => {
-                  if (pathname === "/settings") {
-                    window.dispatchEvent(new CustomEvent("create-business"));
-                  } else {
-                    navigate({ to: "/settings", search: { action: "create-business" } });
-                  }
-                } : undefined}
-              />
+        {/* Sidebar — hidden during onboarding (no business context yet) */}
+        {!isOnboarding && (
+          <aside
+            className={cn(
+              "w-56 shrink-0 border-r border-border-light flex flex-col bg-surface-0 overflow-hidden",
+              // On mobile: fixed drawer that slides in/out
+              "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0",
+              sidebarOpen ? "translate-x-0" : "-translate-x-full"
             )}
-
-            {/* Avatar + name + role */}
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center text-brand-700 dark:text-brand-300 text-[10px] font-semibold shrink-0">
-                {initials}
-              </div>
-              <span className="hidden sm:block text-sm font-medium text-text-primary truncate max-w-[120px]">
-                {displayName}
-              </span>
-              {session.role && (
-                <span className="hidden sm:block shrink-0">
-                  <RoleBadge role={session.role} />
+          >
+            {/* Logo + Org switcher */}
+            <div className="px-4 py-4 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <Logo className="w-8 h-8" />
+                <span className="font-semibold text-[15px] tracking-tight text-text-primary">
+                  Hisaabo
                 </span>
+              </div>
+            </div>
+
+            {/* Nav sections */}
+            <nav className="flex-1 overflow-y-auto pb-2" onClick={() => setSidebarOpen(false)}>
+              {navSections.map((section) => {
+                const visibleItems = section.items
+                  .filter((item) =>
+                    canAccess(session?.role, item.resource, item.action) &&
+                    (!("gstOnly" in item && item.gstOnly) || isGstRegistered)
+                  )
+                  .map((item) => {
+                    // Rename reports label based on GST status (always visible)
+                    if (item.to === "/gst") {
+                      return { ...item, label: isGstRegistered ? "GST Returns" : "Tax Reports" };
+                    }
+                    if (item.to === "/reports") {
+                      return { ...item, label: "Business Reports" };
+                    }
+                    return item;
+                  });
+                if (visibleItems.length === 0) return null;
+                const sectionLabel = section.label === "COMPLIANCE" && !isGstRegistered ? "REPORTS" : section.label;
+                return (
+                  <div key={section.label}>
+                    <p className="px-3 pt-5 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-tertiary">
+                      {sectionLabel}
+                    </p>
+                    {visibleItems.map((item) => (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        className="flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors"
+                        activeProps={{
+                          className: "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors bg-brand-600/10 text-brand-700 font-medium",
+                        }}
+                        inactiveProps={{
+                          className: "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors text-text-secondary hover:bg-surface-2 hover:text-text-primary",
+                        }}
+                        activeOptions={{ exact: "exact" in item ? (item.exact as boolean) : false }}
+                      >
+                        <item.icon />
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                );
+              })}
+            </nav>
+
+            {/* Sidebar footer: org name + version */}
+            <div className="shrink-0 border-t border-border-light">
+              {hasMultipleTenants ? (
+                <button
+                  type="button"
+                  onClick={() => setShowTenantPicker(true)}
+                  className="w-full px-4 py-2.5 text-left group"
+                >
+                  <p className="flex items-center gap-1.5 text-[11px] font-medium text-text-tertiary/60 group-hover:text-text-secondary transition-colors">
+                    <span className="truncate">{tenantName}</span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-tertiary/40 group-hover:text-text-secondary transition-colors">
+                      <path d="M8 9l4-4 4 4" /><path d="M16 15l-4 4-4-4" />
+                    </svg>
+                  </p>
+                  <p className="text-[10px] text-text-tertiary/30 mt-0.5 tabular-nums">v{__APP_VERSION__}</p>
+                </button>
+              ) : (
+                <div className="px-4 py-2.5">
+                  <p className="text-[11px] text-text-tertiary/50 truncate select-none">{tenantName}</p>
+                  <p className="text-[10px] text-text-tertiary/30 mt-0.5 select-none tabular-nums">v{__APP_VERSION__}</p>
+                </div>
               )}
             </div>
+          </aside>
+        )}
 
-            {/* Logout */}
+        {/* Main content */}
+        <main className="flex-1 flex flex-col bg-surface-1 md:ml-0">
+          {/* Top bar */}
+          <div className="h-14 border-b border-border-light flex items-center gap-2 px-4 md:px-6 shrink-0 bg-surface-0">
+            {/* Hamburger — mobile only, hidden during onboarding */}
+            {!isOnboarding && (
+              <button
+                type="button"
+                className="md:hidden flex items-center justify-center w-8 h-8 rounded-lg text-text-secondary hover:bg-surface-1 transition-colors shrink-0"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M2 4.5h14M2 9h14M2 13.5h14" />
+                </svg>
+              </button>
+            )}
+
+            {/* Logo in top bar during onboarding (sidebar is hidden) */}
+            {isOnboarding && (
+              <div className="flex items-center gap-2.5 mr-2">
+                <Logo className="w-7 h-7" />
+                <span className="font-semibold text-[15px] tracking-tight text-text-primary">Hisaabo</span>
+              </div>
+            )}
+
+            {/* Theme + shortcuts */}
+            <ThemeToggle />
             <button
-              onClick={() => logoutMutation.mutate()}
-              disabled={logoutMutation.isPending}
-              className="flex items-center justify-center w-7 h-7 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
-              aria-label="Sign out"
-              title="Sign out"
+              onClick={() => setShowShortcuts(true)}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-sm text-text-tertiary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
+              aria-label="Keyboard shortcuts"
+              title="Keyboard shortcuts (?)"
             >
-              <LogoutIcon />
+              <span className="font-mono text-xs">?</span>
             </button>
+
+            {/* Settings gear */}
+            <button
+              onClick={() => navigate({ to: "/settings" })}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
+              aria-label="Settings"
+              title="Settings"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+
+            {/* Business switcher + User info — pushed to the right */}
+            <div className="ml-auto flex items-center gap-3 min-w-0">
+              {/* Business switcher */}
+              {businesses && businesses.length > 0 && (
+                <BusinessSwitcher
+                  businesses={businesses.map((b) => ({ id: b.id, name: b.name }))}
+                  activeBusinessId={currentBusinessId ?? businesses[0].id}
+                  onSwitch={handleBusinessSwitch}
+                  onCreateNew={canCreateBiz && canAccess(session?.role, "Business", "manage") ? () => {
+                    if (pathname === "/settings") {
+                      window.dispatchEvent(new CustomEvent("create-business"));
+                    } else {
+                      navigate({ to: "/settings", search: { action: "create-business" } });
+                    }
+                  } : undefined}
+                />
+              )}
+
+              {/* Avatar + name + role */}
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center text-brand-700 dark:text-brand-300 text-[10px] font-semibold shrink-0">
+                  {initials}
+                </div>
+                <span className="hidden sm:block text-sm font-medium text-text-primary truncate max-w-[120px]">
+                  {displayName}
+                </span>
+                {session.role && (
+                  <span className="hidden sm:block shrink-0">
+                    <RoleBadge role={session.role} />
+                  </span>
+                )}
+              </div>
+
+              {/* Logout */}
+              <button
+                onClick={() => logoutMutation.mutate()}
+                disabled={logoutMutation.isPending}
+                className="flex items-center justify-center w-7 h-7 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
+                aria-label="Sign out"
+                title="Sign out"
+              >
+                <LogoutIcon />
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-[1400px] mx-auto px-6 py-6">
-            <Outlet />
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-[1400px] mx-auto px-6 py-6">
+              <Outlet />
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
 
-      <CommandPalette open={showPalette} onClose={() => setShowPalette(false)} />
-      <ShortcutsDialog open={showShortcuts} onClose={() => setShowShortcuts(false)} />
-      <ShortcutIndicator />
+        <CommandPalette open={showPalette} onClose={() => setShowPalette(false)} />
+        <ShortcutsDialog open={showShortcuts} onClose={() => setShowShortcuts(false)} />
+        <ShortcutIndicator />
 
-      {/* Tenant picker overlay — shown when user clicks the tenant name */}
-      {showTenantPicker && (
-        <TenantPicker
-          tenants={tenantList ?? []}
-          onSelect={(tenantId) => {
-            setShowTenantPicker(false);
-            selectTenantMutation.mutate({ tenantId });
-          }}
-          onCreateNew={canCreateOrg ? async () => {
-            setShowTenantPicker(false);
-            await createOrgMutation.mutateAsync();
-            await utils.auth.me.refetch();
-            await utils.tenant.list.refetch();
-            await utils.business.list.refetch();
-          } : undefined}
-          onClose={() => setShowTenantPicker(false)}
-        />
-      )}
+        {/* Tenant picker overlay — shown when user clicks the tenant name */}
+        {showTenantPicker && (
+          <TenantPicker
+            tenants={tenantList ?? []}
+            onSelect={(tenantId) => {
+              setShowTenantPicker(false);
+              selectTenantMutation.mutate({ tenantId });
+            }}
+            onCreateNew={canCreateOrg ? async () => {
+              setShowTenantPicker(false);
+              await createOrgMutation.mutateAsync();
+              await utils.auth.me.refetch();
+              await utils.tenant.list.refetch();
+              await utils.business.list.refetch();
+            } : undefined}
+            onClose={() => setShowTenantPicker(false)}
+          />
+        )}
       </div>
     </div>
   );

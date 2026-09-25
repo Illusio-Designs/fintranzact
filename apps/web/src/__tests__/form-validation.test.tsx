@@ -23,6 +23,7 @@ import { render, screen } from "@testing-library/react";
 import { FormField, InputField } from "../components/ui/FormField";
 import { Listbox } from "../components/ui/Listbox";
 import { Combobox } from "../components/ui/Combobox";
+import { validateBusinessStep } from "../components/settings/BusinessTab";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ describe("FormField primitives — required marker consistency", () => {
         label="Payment Mode"
         required
         value="cash"
-        onChange={() => {}}
+        onChange={() => { }}
         options={[{ value: "cash", label: "Cash" }, { value: "upi", label: "UPI" }]}
       />
     );
@@ -90,7 +91,7 @@ describe("FormField primitives — required marker consistency", () => {
         label="Party"
         required
         value=""
-        onChange={() => {}}
+        onChange={() => { }}
         options={[{ value: "1", label: "Gupta Enterprises" }]}
       />
     );
@@ -156,7 +157,7 @@ describe("Validation error messages render visibly", () => {
         label="Type"
         required
         value=""
-        onChange={() => {}}
+        onChange={() => { }}
         options={[{ value: "sale", label: "Sale" }]}
         error="Type is required"
       />
@@ -170,7 +171,7 @@ describe("Validation error messages render visibly", () => {
         label="Party"
         required
         value=""
-        onChange={() => {}}
+        onChange={() => { }}
         options={[]}
         error="Party is required"
       />
@@ -360,6 +361,100 @@ describe("Automated invoice form validation contract", () => {
       lineItems: [{ description: "", quantity: "1", unitPrice: "1000" }],
     });
     expect(errs.lineItems).toBeDefined();
+  });
+});
+
+describe("Business onboarding step validation", () => {
+  it("requires business name on step 1", () => {
+    const errs = validateBusinessStep(0, {
+      name: "",
+      legalName: "",
+      gstRegType: "unregistered",
+      gstin: "",
+      stateCode: "",
+      pan: "",
+      phone: "",
+      email: "",
+      address: "",
+      city: "",
+      stateName: "",
+      pincode: "",
+    });
+
+    expect(errs.name).toBe("Business name is required");
+  });
+
+  it("requires GSTIN and PAN when GST registration is enabled", () => {
+    const errs = validateBusinessStep(1, {
+      name: "Test Business",
+      legalName: "",
+      gstRegType: "regular",
+      gstin: "",
+      stateCode: "",
+      pan: "",
+      phone: "9876543210",
+      email: "",
+      address: "123 Market Road",
+      city: "Mumbai",
+      stateName: "Maharashtra",
+      pincode: "400001",
+    });
+
+    expect(errs.gstin).toBe("GSTIN is required for GST-registered businesses");
+    expect(errs.pan).toBe("PAN is required for GST-registered businesses");
+  });
+
+  it("requires phone, address, and location details on later steps", () => {
+    const errs = validateBusinessStep(2, {
+      name: "Test Business",
+      legalName: "",
+      gstRegType: "unregistered",
+      gstin: "",
+      stateCode: "",
+      pan: "",
+      phone: "",
+      email: "",
+      address: "",
+      city: "",
+      stateName: "",
+      pincode: "",
+    });
+
+    expect(errs.phone).toBe("Phone number is required");
+
+    const addressErrs = validateBusinessStep(3, {
+      name: "Test Business",
+      legalName: "",
+      gstRegType: "unregistered",
+      gstin: "",
+      stateCode: "",
+      pan: "",
+      phone: "9876543210",
+      email: "",
+      address: "",
+      city: "",
+      stateName: "",
+      pincode: "",
+    });
+    expect(addressErrs.address).toBe("Address is required");
+
+    const locationErrs = validateBusinessStep(4, {
+      name: "Test Business",
+      legalName: "",
+      gstRegType: "unregistered",
+      gstin: "",
+      stateCode: "",
+      pan: "",
+      phone: "9876543210",
+      email: "",
+      address: "123 Market Road",
+      city: "",
+      stateName: "",
+      pincode: "",
+    });
+    expect(locationErrs.pincode).toBe("Pincode is required");
+    expect(locationErrs.city).toBe("City is required");
+    expect(locationErrs.stateName).toBe("State is required");
   });
 });
 

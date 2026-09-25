@@ -25,19 +25,19 @@ import { useDateRange, getGranularity } from "@/hooks/useDateRange";
 // ─── Milestone banner ─────────────────────────────────────────────────────────
 
 const MILESTONES: Array<{ count: number; message: string }> = [
-  { count: 1,   message: "Your first invoice — the beginning of something great." },
-  { count: 10,  message: "10 invoices created. You're in the rhythm now." },
-  { count: 50,  message: "50 invoices and counting. Solid momentum." },
+  { count: 1, message: "Your first invoice — the beginning of something great." },
+  { count: 10, message: "10 invoices created. You're in the rhythm now." },
+  { count: 50, message: "50 invoices and counting. Solid momentum." },
   { count: 100, message: "100 invoices. Your business is moving." },
   { count: 250, message: "250 invoices. That's impressive consistency." },
   { count: 500, message: "500 invoices. You're running a real operation." },
 ];
 
 const SALES_MILESTONES: Array<{ amount: number; message: string }> = [
-  { amount: 100000,   message: "First \u20b91 lakh in sales — well done." },
-  { amount: 500000,   message: "\u20b95 lakhs in sales. You're building something." },
-  { amount: 1000000,  message: "\u20b910 lakhs in sales. Keep going." },
-  { amount: 5000000,  message: "\u20b950 lakhs in sales. Remarkable progress." },
+  { amount: 100000, message: "First \u20b91 lakh in sales — well done." },
+  { amount: 500000, message: "\u20b95 lakhs in sales. You're building something." },
+  { amount: 1000000, message: "\u20b910 lakhs in sales. Keep going." },
+  { amount: 5000000, message: "\u20b950 lakhs in sales. Remarkable progress." },
   { amount: 10000000, message: "\u20b91 crore in sales. That's a milestone worth marking." },
 ];
 
@@ -184,36 +184,36 @@ type TargetTier = "seed" | "growing" | "fire" | "close" | "near" | "achieved";
 
 function getTier(pct: number): TargetTier {
   if (pct >= 100) return "achieved";
-  if (pct >= 90)  return "near";
-  if (pct >= 75)  return "close";
-  if (pct >= 50)  return "fire";
-  if (pct >= 25)  return "growing";
+  if (pct >= 90) return "near";
+  if (pct >= 75) return "close";
+  if (pct >= 50) return "fire";
+  if (pct >= 25) return "growing";
   return "seed";
 }
 
 const TIER_META: Record<TargetTier, { icon: string; message: string }> = {
-  seed:     { icon: "\uD83C\uDF31", message: "Just getting started" },
-  growing:  { icon: "\uD83D\uDCC8", message: "Building momentum" },
-  fire:     { icon: "\uD83D\uDD25", message: "On fire!" },
-  close:    { icon: "\u2B50",       message: "Almost there!" },
-  near:     { icon: "\uD83D\uDE80", message: "So close!" },
+  seed: { icon: "\uD83C\uDF31", message: "Just getting started" },
+  growing: { icon: "\uD83D\uDCC8", message: "Building momentum" },
+  fire: { icon: "\uD83D\uDD25", message: "On fire!" },
+  close: { icon: "\u2B50", message: "Almost there!" },
+  near: { icon: "\uD83D\uDE80", message: "So close!" },
   achieved: { icon: "\uD83C\uDFC6", message: "Target achieved!" },
 };
 
 function getBarFillClass(tier: TargetTier): string {
   if (tier === "achieved") return "target-progress-fill--achieved";
-  if (tier === "near")     return "target-progress-fill--near";
+  if (tier === "near") return "target-progress-fill--near";
   return "target-progress-fill";
 }
 
 function getBarColor(tier: TargetTier): string {
   if (tier === "achieved" || tier === "near") return "bg-emerald-500";
-  if (tier === "fire" || tier === "close")    return "bg-amber-500";
+  if (tier === "fire" || tier === "close") return "bg-amber-500";
   return "bg-brand-600";
 }
 
 function getMessageColor(tier: TargetTier): string {
-  if (tier === "achieved")             return "text-emerald-600 dark:text-emerald-400";
+  if (tier === "achieved") return "text-emerald-600 dark:text-emerald-400";
   if (tier === "near" || tier === "close") return "text-amber-600 dark:text-amber-400";
   return "text-text-tertiary";
 }
@@ -280,11 +280,11 @@ function TargetRow({ target }: { target: TargetProgress }) {
   const targetNum = parseFloat(target.targetValue);
 
   const currentFormatted = formatTargetValue(target, progress.current);
-  const targetFormatted  = formatTargetValue(target, targetNum);
+  const targetFormatted = formatTargetValue(target, targetNum);
 
   const barFillClass = getBarFillClass(tier);
-  const barColor     = getBarColor(tier);
-  const msgColor     = getMessageColor(tier);
+  const barColor = getBarColor(tier);
+  const msgColor = getMessageColor(tier);
 
   return (
     <div>
@@ -751,18 +751,18 @@ function ChartEmpty() {
 // ─── Payment mode breakdown ───────────────────────────────────────────────────
 
 const PAYMENT_MODE_COLORS: Record<string, string> = {
-  cash:   "#10b981",
-  bank:   "#5b5bd6",
-  upi:    "#f59e0b",
+  cash: "#10b981",
+  bank: "#5b5bd6",
+  upi: "#f59e0b",
   cheque: "#8b5cf6",
-  other:  "#94a3b8",
+  other: "#94a3b8",
 };
 const PAYMENT_MODE_LABELS: Record<string, string> = {
-  cash:   "Cash",
-  bank:   "Bank Transfer",
-  upi:    "UPI",
+  cash: "Cash",
+  bank: "Bank Transfer",
+  upi: "UPI",
   cheque: "Cheque",
-  other:  "Other",
+  other: "Other",
 };
 
 function PaymentModeWidget({ fromDate, toDate }: { fromDate?: string; toDate?: string }) {
@@ -1020,9 +1020,9 @@ function MonthlyComparisonWidget() {
   }
 
   const rows = [
-    { label: "Sales",     curr: data.sales.curr,     prev: data.sales.prev,     pct: data.sales.pctChange,     color: "text-emerald-600" },
+    { label: "Sales", curr: data.sales.curr, prev: data.sales.prev, pct: data.sales.pctChange, color: "text-emerald-600" },
     { label: "Purchases", curr: data.purchases.curr, prev: data.purchases.prev, pct: data.purchases.pctChange, color: "text-blue-600" },
-    { label: "Expenses",  curr: data.expenses.curr,  prev: data.expenses.prev,  pct: data.expenses.pctChange,  color: "text-text-primary" },
+    { label: "Expenses", curr: data.expenses.curr, prev: data.expenses.prev, pct: data.expenses.pctChange, color: "text-text-primary" },
   ];
 
   return (
@@ -1214,15 +1214,25 @@ function DashboardPage() {
 
   if (!data) {
     return (
-      <EmptyState
-        title="Welcome to Hisaabo"
-        description="Set up your business to start creating invoices and tracking payments."
-        action={
-          <Link to="/settings" className="btn-primary">
-            Set Up Business
-          </Link>
-        }
-      />
+      <div className="space-y-4">
+        <PageHeader
+          title="Dashboard"
+          actions={
+            <Link to="/invoices" search={{ create: "1" }} className="btn-primary">
+              + New Invoice
+            </Link>
+          }
+        />
+        <EmptyState
+          title="No activity yet"
+          description="Your business is ready. Create your first invoice or add your initial records to start tracking sales and payments."
+          action={
+            <Link to="/invoices" search={{ create: "1" }} className="btn-primary">
+              Create Invoice
+            </Link>
+          }
+        />
+      </div>
     );
   }
 
@@ -1275,78 +1285,78 @@ function DashboardPage() {
       )}
 
       <div style={{ opacity: isPending ? 0.6 : 1, transition: "opacity 0.15s ease" }}>
-      {milestone && (
-        <MilestoneBanner message={milestone.message} milestoneKey={milestone.key} />
-      )}
+        {milestone && (
+          <MilestoneBanner message={milestone.message} milestoneKey={milestone.key} />
+        )}
 
-      {/* Sales target widget — only visible to sellers and seller managers */}
-      {isSellerRole && myTargets.length > 0 && (
-        <TargetsWidget targets={myTargets} />
-      )}
+        {/* Sales target widget — only visible to sellers and seller managers */}
+        {isSellerRole && myTargets.length > 0 && (
+          <TargetsWidget targets={myTargets} />
+        )}
 
-      <SummaryCards data={data} periodLabel={periodLabel} />
+        <SummaryCards data={data} periodLabel={periodLabel} />
 
-      {/* Profit indicator cards */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="card px-4 py-3">
-          <p className="text-[11px] font-medium text-text-tertiary mb-1">Gross Profit</p>
-          <p className={cn(
-            "text-lg font-bold tabular-nums",
-            grossProfit >= 0 ? "text-emerald-600" : "text-red-600"
-          )}>
-            {formatCurrency(String(grossProfit))}
-          </p>
-        </div>
-        <div className="card px-4 py-3">
-          <p className="text-[11px] font-medium text-text-tertiary mb-1">Net Profit</p>
-          <p className={cn(
-            "text-lg font-bold tabular-nums",
-            netProfit >= 0 ? "text-emerald-600" : "text-red-600"
-          )}>
-            {formatCurrency(String(netProfit))}
-          </p>
-        </div>
-      </div>
-
-      {/* Overdue invoices alert */}
-      {overdueCount > 0 && (
-        <div className="mb-4 px-4 py-3 rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
-            <div>
-              <p className="text-sm font-medium text-red-700 dark:text-red-400">
-                {overdueCount} overdue invoice{overdueCount > 1 ? "s" : ""} totaling {formatCurrency(overdueAmount)}
-              </p>
-              <p className="text-xs text-red-600/70 dark:text-red-400/60">Past due date with outstanding balance</p>
-            </div>
+        {/* Profit indicator cards */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="card px-4 py-3">
+            <p className="text-[11px] font-medium text-text-tertiary mb-1">Gross Profit</p>
+            <p className={cn(
+              "text-lg font-bold tabular-nums",
+              grossProfit >= 0 ? "text-emerald-600" : "text-red-600"
+            )}>
+              {formatCurrency(String(grossProfit))}
+            </p>
           </div>
-          <Link to="/invoices" className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 shrink-0">
-            View →
-          </Link>
+          <div className="card px-4 py-3">
+            <p className="text-[11px] font-medium text-text-tertiary mb-1">Net Profit</p>
+            <p className={cn(
+              "text-lg font-bold tabular-nums",
+              netProfit >= 0 ? "text-emerald-600" : "text-red-600"
+            )}>
+              {formatCurrency(String(netProfit))}
+            </p>
+          </div>
         </div>
-      )}
 
-      {/* Charts grid — all charts respect the selected period */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SalesTrendChart fromDate={from} toDate={to} granularity={granularity} />
-        <InvoiceStatusChart fromDate={from} toDate={to} />
-        <TopSellingChart fromDate={from} toDate={to} />
-        <TopCustomersChart fromDate={from} toDate={to} />
-      </div>
+        {/* Overdue invoices alert */}
+        {overdueCount > 0 && (
+          <div className="mb-4 px-4 py-3 rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                  {overdueCount} overdue invoice{overdueCount > 1 ? "s" : ""} totaling {formatCurrency(overdueAmount)}
+                </p>
+                <p className="text-xs text-red-600/70 dark:text-red-400/60">Past due date with outstanding balance</p>
+              </div>
+            </div>
+            <Link to="/invoices" className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 shrink-0">
+              View →
+            </Link>
+          </div>
+        )}
 
-      {/* Analytics widgets — period-scoped */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-        <PaymentModeWidget fromDate={from} toDate={to} />
-        <ExpenseCategoryWidget fromDate={from} toDate={to} />
-      </div>
+        {/* Charts grid — all charts respect the selected period */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <SalesTrendChart fromDate={from} toDate={to} granularity={granularity} />
+          <InvoiceStatusChart fromDate={from} toDate={to} />
+          <TopSellingChart fromDate={from} toDate={to} />
+          <TopCustomersChart fromDate={from} toDate={to} />
+        </div>
 
-      {/* Efficiency + comparison row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-        <CollectionEfficiencyWidget fromDate={from} toDate={to} />
-        <MonthlyComparisonWidget />
-      </div>
+        {/* Analytics widgets — period-scoped */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          <PaymentModeWidget fromDate={from} toDate={to} />
+          <ExpenseCategoryWidget fromDate={from} toDate={to} />
+        </div>
+
+        {/* Efficiency + comparison row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          <CollectionEfficiencyWidget fromDate={from} toDate={to} />
+          <MonthlyComparisonWidget />
+        </div>
       </div>
     </div>
   );
