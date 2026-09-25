@@ -512,17 +512,6 @@ function Field({
   );
 }
 
-/* ─── Divider with text ───────────────────────────────────────────────────── */
-function OrDivider({ text }: { text: string }) {
-  return (
-    <div className="flex items-center gap-3 my-4">
-      <div className="flex-1 h-px bg-border-light" />
-      <span className="text-xs text-text-tertiary">{text}</span>
-      <div className="flex-1 h-px bg-border-light" />
-    </div>
-  );
-}
-
 /* ─── Main page ───────────────────────────────────────────────────────────── */
 function LoginPage() {
   const [mode, setMode] = useState<AuthMode>("register");
@@ -628,14 +617,6 @@ function LoginPage() {
   const isPending =
     loginMutation.isPending || registerMutation.isPending || magicLinkMutation.isPending;
 
-  function handleMagicLink(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    withTurnstile((token) => {
-      magicLinkMutation.mutate({ email, turnstileToken: token });
-    });
-  }
-
   function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -662,14 +643,6 @@ function LoginPage() {
         referralCode: referralCode.trim() || undefined,
         turnstileToken: token,
       });
-    });
-  }
-
-  function handleResend() {
-    if (cooldown > 0) return;
-    withTurnstile((token) => {
-      magicLinkMutation.mutate({ email, turnstileToken: token });
-      setCooldown(60);
     });
   }
 
@@ -948,27 +921,3 @@ function PrimaryButton({
   );
 }
 
-function GhostButton({
-  children,
-  onClick,
-  fullWidth,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  fullWidth?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="btn-ghost py-2.5"
-      style={{
-        width: fullWidth ? "100%" : undefined,
-        justifyContent: "center",
-        fontSize: 13,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
