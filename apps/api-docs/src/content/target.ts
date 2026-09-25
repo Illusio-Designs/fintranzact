@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const targetEndpoints: EndpointGroup = {
   id: "target",
@@ -41,7 +42,7 @@ export const targetEndpoints: EndpointGroup = {
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/target.create \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/target.create \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -58,7 +59,7 @@ export const targetEndpoints: EndpointGroup = {
         python: `import httpx
 
 httpx.post(
-    "https://api.hisaabo.in/api/trpc/target.create",
+    "${API_BASE_URL}/api/trpc/target.create",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {
         "userId": "user-uuid",
@@ -115,7 +116,7 @@ httpx.post(
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/target.list?input=%7B%22json%22%3A%7B%22active%22%3Atrue%2C%22withProgress%22%3Atrue%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/target.list?input=%7B%22json%22%3A%7B%22active%22%3Atrue%2C%22withProgress%22%3Atrue%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `// Get all active targets with live progress for admin dashboard
@@ -127,7 +128,7 @@ const targets = await trpc.target.list.query({
 
 params = urllib.parse.quote(json.dumps({"json": {"active": True, "withProgress": True}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/target.list?input={params}",
+    f"${API_BASE_URL}/api/trpc/target.list?input={params}",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )`,
       },
@@ -170,13 +171,13 @@ resp = httpx.get(
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/target.getProgress?input=%7B%22json%22%3A%7B%22id%22%3A%22target-uuid%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/target.getProgress?input=%7B%22json%22%3A%7B%22id%22%3A%22target-uuid%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { progress } = await trpc.target.getProgress.query({ id: "target-uuid" });
 console.log(progress.percentage + "% complete, " + progress.daysRemaining + " days left");`,
         python: `params = urllib.parse.quote(json.dumps({"json": {"id": "target-uuid"}}))
-resp = httpx.get(f"https://api.hisaabo.in/api/trpc/target.getProgress?input={params}", ...)`,
+resp = httpx.get(f"${API_BASE_URL}/api/trpc/target.getProgress?input={params}", ...)`,
       },
       gotchas: [
         "`onTrack` is true if `current >= (daysElapsed / daysTotal) * targetValue` or if the period has ended.",
@@ -209,7 +210,7 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/target.getProgress?input={par
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/target.update \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/target.update \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -220,7 +221,7 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/target.getProgress?input={par
   notes: "Revised upward after Q3 review",
 });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/target.update",
+    "${API_BASE_URL}/api/trpc/target.update",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"id": "target-uuid", "targetValue": "600000.00"}},
 )`,
@@ -245,14 +246,14 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/target.getProgress?input={par
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/target.delete \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/target.delete \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
   -d '{"json":{"id":"target-uuid"}}'`,
         javascript: `await trpc.target.delete.mutate({ id: "target-uuid" });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/target.delete",
+    "${API_BASE_URL}/api/trpc/target.delete",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"id": "target-uuid"}},
 )`,
@@ -295,7 +296,7 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/target.getProgress?input={par
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/target.myTargets" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/target.myTargets" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `// Render progress bars for the logged-in seller
@@ -304,7 +305,7 @@ myTargets.forEach(({ targetType, progress }) => {
   console.log(targetType, progress.percentage + "%", progress.onTrack ? "on track" : "behind");
 });`,
         python: `resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/target.myTargets",
+    "${API_BASE_URL}/api/trpc/target.myTargets",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )
 my_targets = resp.json()["result"]["data"]["json"]`,

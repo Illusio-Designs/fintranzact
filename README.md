@@ -436,7 +436,7 @@ Create an account on first visit. The setup wizard creates your first business w
 ### 2. Try the API immediately
 
 ```bash
-curl -X POST https://api.hisaabo.in/api/trpc/auth.register \
+curl -X POST ${import.meta.env.API_URL}/api/trpc/auth.register \
   -H "Content-Type: application/json" \
   -d '{"json":{"email":"you@yourshop.in","name":"Your Name","password":"strongpass123","confirmPassword":"strongpass123"}}'
 ```
@@ -619,7 +619,7 @@ See [docs/architecture/gst-accounting-roadmap.md](docs/architecture/gst-accounti
 | Resource | URL |
 |---|---|
 | User documentation | [docs.hisaabo.in](https://docs.hisaabo.in) |
-| API reference | [api.hisaabo.in](https://api.hisaabo.in) |
+| API reference | [api.hisaabo.in](${import.meta.env.VITE_API_URL ?? 'https://api.hisaabo.in'}) |
 | Self-hosting guide | [docs.hisaabo.in/getting-started/self-hosting](https://docs.hisaabo.in/getting-started/self-hosting) |
 | Contributing guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Security policy | [SECURITY.md](SECURITY.md) |

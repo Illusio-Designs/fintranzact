@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const storeEndpoints: EndpointGroup = {
   id: "store",
@@ -21,7 +22,7 @@ export const storeEndpoints: EndpointGroup = {
         example: { available: true },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/store.checkSlug?input=%7B%22json%22%3A%7B%22slug%22%3A%22gupta-sweets%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/store.checkSlug?input=%7B%22json%22%3A%7B%22slug%22%3A%22gupta-sweets%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { available } = await trpc.store.checkSlug.query({
@@ -34,7 +35,7 @@ if (available) {
 
 params = urllib.parse.quote(json.dumps({"json": {"slug": "gupta-sweets"}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/store.checkSlug?input={params}",
+    f"${API_BASE_URL}/api/trpc/store.checkSlug?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -74,7 +75,7 @@ print("Available:", result["available"])`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/store.getSettings" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/store.getSettings" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const settings = await trpc.store.getSettings.query();
@@ -83,7 +84,7 @@ console.log("URL: store.hisaabo.in/" + settings.storeSlug);`,
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/store.getSettings",
+    "${API_BASE_URL}/api/trpc/store.getSettings",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -126,7 +127,7 @@ settings = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/store.updateSettings \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/store.updateSettings \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -141,7 +142,7 @@ settings = resp.json()["result"]["data"]["json"]`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/store.updateSettings",
+    "${API_BASE_URL}/api/trpc/store.updateSettings",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -204,7 +205,7 @@ resp = httpx.post(
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/store.listStoreItems?input=%7B%22json%22%3A%7B%22page%22%3A1%2C%22limit%22%3A20%2C%22storeEnabled%22%3Atrue%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/store.listStoreItems?input=%7B%22json%22%3A%7B%22page%22%3A1%2C%22limit%22%3A20%2C%22storeEnabled%22%3Atrue%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { data, total } = await trpc.store.listStoreItems.query({
@@ -217,7 +218,7 @@ console.log(\`\${data.length} of \${total} items shown in store\`);`,
 
 params = urllib.parse.quote(json.dumps({"json": {"page": 1, "limit": 20, "storeEnabled": True}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/store.listStoreItems?input={params}",
+    f"${API_BASE_URL}/api/trpc/store.listStoreItems?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -248,7 +249,7 @@ result = resp.json()["result"]["data"]["json"]`,
         example: { updated: 12 },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/store.bulkToggleItems \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/store.bulkToggleItems \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -261,7 +262,7 @@ console.log(\`Enabled \${result.updated} items in store\`);`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/store.bulkToggleItems",
+    "${API_BASE_URL}/api/trpc/store.bulkToggleItems",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -305,7 +306,7 @@ resp = httpx.post(
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/store.updateItemStoreSettings \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/store.updateItemStoreSettings \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -319,7 +320,7 @@ resp = httpx.post(
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/store.updateItemStoreSettings",
+    "${API_BASE_URL}/api/trpc/store.updateItemStoreSettings",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -361,7 +362,7 @@ resp = httpx.post(
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/store.updateVariantStoreSettings \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/store.updateVariantStoreSettings \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -374,7 +375,7 @@ resp = httpx.post(
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/store.updateVariantStoreSettings",
+    "${API_BASE_URL}/api/trpc/store.updateVariantStoreSettings",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -434,7 +435,7 @@ resp = httpx.post(
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/store.listOrders?input=%7B%22json%22%3A%7B%22page%22%3A1%2C%22limit%22%3A20%2C%22status%22%3A%22pending%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/store.listOrders?input=%7B%22json%22%3A%7B%22page%22%3A1%2C%22limit%22%3A20%2C%22status%22%3A%22pending%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { data, total } = await trpc.store.listOrders.query({
@@ -447,7 +448,7 @@ console.log(\`\${total} pending orders\`);`,
 
 params = urllib.parse.quote(json.dumps({"json": {"page": 1, "limit": 20, "status": "pending"}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/store.listOrders?input={params}",
+    f"${API_BASE_URL}/api/trpc/store.listOrders?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -508,7 +509,7 @@ result = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/store.getOrder?input=%7B%22json%22%3A%7B%22id%22%3A%22order-uuid%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/store.getOrder?input=%7B%22json%22%3A%7B%22id%22%3A%22order-uuid%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const order = await trpc.store.getOrder.query({ id: "order-uuid" });
@@ -520,7 +521,7 @@ if (order.invoice) {
 
 params = urllib.parse.quote(json.dumps({"json": {"id": "order-uuid"}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/store.getOrder?input={params}",
+    f"${API_BASE_URL}/api/trpc/store.getOrder?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -550,7 +551,7 @@ order = resp.json()["result"]["data"]["json"]`,
         example: { success: true, orderId: "order-uuid" },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/store.confirmOrder \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/store.confirmOrder \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -562,7 +563,7 @@ order = resp.json()["result"]["data"]["json"]`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/store.confirmOrder",
+    "${API_BASE_URL}/api/trpc/store.confirmOrder",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -595,7 +596,7 @@ resp = httpx.post(
         example: { success: true, orderId: "order-uuid" },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/store.cancelOrder \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/store.cancelOrder \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -607,7 +608,7 @@ resp = httpx.post(
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/store.cancelOrder",
+    "${API_BASE_URL}/api/trpc/store.cancelOrder",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -642,7 +643,7 @@ resp = httpx.post(
         example: { success: true, status: "preparing" },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/store.updateOrderStatus \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/store.updateOrderStatus \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -654,7 +655,7 @@ resp = httpx.post(
         python: `import httpx
 
 httpx.post(
-    "https://api.hisaabo.in/api/trpc/store.updateOrderStatus",
+    "${API_BASE_URL}/api/trpc/store.updateOrderStatus",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,

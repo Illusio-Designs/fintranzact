@@ -30,7 +30,7 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-type AuthMode = "magic-link" | "magic-link-sent" | "password-login" | "register";
+type AuthMode = "register" | "login";
 
 /* ─── Pure-CSS animation keyframes injected once ─────────────────────────── */
 const KEYFRAMES = `
@@ -525,10 +525,11 @@ function OrDivider({ text }: { text: string }) {
 
 /* ─── Main page ───────────────────────────────────────────────────────────── */
 function LoginPage() {
-  const [mode, setMode] = useState<AuthMode>("magic-link");
+  const [mode, setMode] = useState<AuthMode>("register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [referralCode, setReferralCode] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [cooldown, setCooldown] = useState(0);
@@ -592,15 +593,14 @@ function LoginPage() {
       if (isDesktop() && data?.sessionToken) {
         await saveDesktopToken(data.sessionToken);
       }
-      utils.auth.me.invalidate();
-      navigate({ to: "/" });
+      await utils.auth.me.invalidate();
+      navigate({ to: "/auth/plan-selection" });
     },
     onError: (e) => setError(e.message),
   });
 
   const magicLinkMutation = trpc.auth.sendMagicLink.useMutation({
     onSuccess: () => {
-      setMode("magic-link-sent");
       setCooldown(60);
       setError("");
     },
@@ -645,12 +645,23 @@ function LoginPage() {
   function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (!username.trim()) {
+      setError("Username is required");
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords don't match");
       return;
     }
     withTurnstile((token) => {
-      registerMutation.mutate({ email, password, confirmPassword, name, turnstileToken: token });
+      registerMutation.mutate({
+        username: username.trim(),
+        email,
+        password,
+        confirmPassword,
+        referralCode: referralCode.trim() || undefined,
+        turnstileToken: token,
+      });
     });
   }
 
@@ -688,231 +699,120 @@ function LoginPage() {
               </div>
             )}
 
-            {/* ── Mode: magic-link ────────────────────────────────── */}
-            {mode === "magic-link" && (
+            <div className="mb-6">
+              <div className="inline-flex w-full rounded-xl border border-border-light bg-surface-2 p-1">
+                <button
+                  type="button"
+                  onClick={() => switchMode("register")}
+                  className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${mode === "register"
+                    ? "bg-brand-600 text-white shadow-sm"
+                    : "text-text-tertiary hover:text-text-primary"
+                    }`}
+                >
+                  Register
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMode("login")}
+                  className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${mode === "login"
+                    ? "bg-brand-600 text-white shadow-sm"
+                    : "text-text-tertiary hover:text-text-primary"
+                    }`}
+                >
+                  Login
+                </button>
+              </div>
+            </div>
+
+            {mode === "register" && (
               <div style={{ animation: "form-enter 0.35s ease-out" }}>
-                {new URLSearchParams(window.location.search).get("invite") === "1" && (
-                  <div className="mb-5 px-4 py-3 rounded-xl text-sm bg-brand-600/[0.06] border border-brand-600/20 text-brand-700 dark:text-brand-400">
-                    {new URLSearchParams(window.location.search).get("error") === "email_mismatch"
-                      ? "This invitation was sent to a different email address. Please sign in with the email where you received the invitation."
-                      : "You've been invited to join an organization! Sign in with the email address where you received the invitation."}
-                  </div>
-                )}
                 <div className="mb-8">
                   <h1
                     className="text-2xl font-bold text-text-primary mb-2"
                     style={{ letterSpacing: "-0.03em" }}
                   >
-                    Sign in to Hisaabo
+                    Create your account
                   </h1>
                   <p className="text-sm text-text-tertiary leading-relaxed">
-                    Enter your email and we'll send you a one-click sign-in link.
-                    No password required.
+                    Enter your details below and save your account.
                   </p>
                 </div>
 
                 {error && <ErrorBanner message={error} />}
 
-                <form onSubmit={handleMagicLink} className="space-y-4">
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <Field label="Username">
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required
+                      autoFocus
+                      className="input"
+                      placeholder="Enter username"
+                    />
+                  </Field>
+
                   <Field label="Email address">
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      autoFocus
                       className="input"
                       placeholder="you@yourcompany.com"
+                    />
+                  </Field>
+
+                  <Field label="Referral code (optional)">
+                    <input
+                      type="text"
+                      value={referralCode}
+                      onChange={(e) => setReferralCode(e.target.value)}
+                      className="input"
+                      placeholder="Optional referral code"
+                    />
+                  </Field>
+
+                  <Field label="Password">
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      className="input"
+                      placeholder="Min 8 characters"
+                    />
+                  </Field>
+
+                  <Field label="Retype password">
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      className="input"
+                      placeholder="Retype password"
                     />
                   </Field>
 
                   <PrimaryButton type="submit" disabled={isPending} fullWidth>
                     {isPending ? (
                       <>
-                        Sending link
+                        Saving account
                         <LoadingDots />
                       </>
                     ) : (
-                      <>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M22 2L11 13" />
-                          <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                        </svg>
-                        Send magic link
-                      </>
+                      "Save"
                     )}
                   </PrimaryButton>
                 </form>
-
-                <p className="text-center text-xs text-text-tertiary mt-4 leading-relaxed">
-                  No account yet? Just enter your email — we'll create one automatically.
-                </p>
-
-                <OrDivider text="or" />
-
-                <GhostButton
-                  onClick={() => switchMode("password-login")}
-                  fullWidth
-                >
-                  Use password instead
-                </GhostButton>
               </div>
             )}
 
-            {/* ── Mode: magic-link-sent ───────────────────────────── */}
-            {mode === "magic-link-sent" && (
-              <div
-                className="text-center"
-                style={{ animation: "form-enter 0.4s ease-out" }}
-              >
-                {/* Animated envelope ring */}
-                <div
-                  className="mx-auto mb-6"
-                  style={{
-                    width: 80,
-                    height: 80,
-                    position: "relative",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {/* Outer ring */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      borderRadius: "50%",
-                      border: "2px solid",
-                      borderColor: "#5b5bd6",
-                      opacity: 0.2,
-                      animation: "ring-expand 0.5s ease-out forwards",
-                    }}
-                  />
-                  {/* Inner circle */}
-                  <div
-                    style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg, #ebebff, #d4d4ff)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      animation: "envelope-rise 0.5s ease-out forwards",
-                    }}
-                    className="dark:!bg-none"
-                  >
-                    <div
-                      style={{
-                        width: 64,
-                        height: 64,
-                        borderRadius: "50%",
-                        background: "linear-gradient(135deg, rgba(91,91,214,0.15), rgba(91,91,214,0.25))",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <svg
-                        width="28"
-                        height="28"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#5b5bd6"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                <h1
-                  className="text-2xl font-bold text-text-primary mb-2"
-                  style={{ letterSpacing: "-0.03em" }}
-                >
-                  Check your email
-                </h1>
-                <p className="text-sm text-text-tertiary mb-1">
-                  We sent a magic sign-in link to
-                </p>
-                <p
-                  className="text-sm font-semibold text-text-primary mb-1"
-                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 13 }}
-                >
-                  {email}
-                </p>
-
-                {/* Animated shimmer progress bar */}
-                <div
-                  className="mx-auto mt-5 mb-5 rounded-full overflow-hidden"
-                  style={{
-                    height: 3,
-                    background: "var(--surface-2)",
-                    maxWidth: 200,
-                  }}
-                >
-                  <div
-                    style={{
-                      height: "100%",
-                      background: "linear-gradient(90deg, #5b5bd6, #fbbf24, #5b5bd6)",
-                      animation: "shimmer-bar 3s ease-in-out infinite",
-                      borderRadius: "inherit",
-                    }}
-                  />
-                </div>
-
-                <p className="text-xs text-text-tertiary mb-6">
-                  The link expires in 15 minutes. Check your spam folder if you don't see it.
-                </p>
-
-                {/* Resend button */}
-                <button
-                  onClick={handleResend}
-                  disabled={cooldown > 0 || magicLinkMutation.isPending}
-                  className="btn-primary w-full py-2.5 mb-3"
-                  style={{ justifyContent: "center" }}
-                >
-                  {cooldown > 0 ? (
-                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12 6 12 12 16 14" />
-                      </svg>
-                      Resend in {cooldown}s
-                    </span>
-                  ) : magicLinkMutation.isPending ? (
-                    <>
-                      Sending
-                      <LoadingDots />
-                    </>
-                  ) : (
-                    "Didn't receive it? Send again"
-                  )}
-                </button>
-
-                <button
-                  onClick={() => switchMode("magic-link")}
-                  className="text-sm text-text-tertiary hover:text-text-secondary transition-colors"
-                >
-                  Use a different email
-                </button>
-              </div>
-            )}
-
-            {/* ── Mode: password-login ────────────────────────────── */}
-            {mode === "password-login" && (
+            {mode === "login" && (
               <div style={{ animation: "form-enter 0.35s ease-out" }}>
-                {new URLSearchParams(window.location.search).get("invite") === "1" && (
-                  <div className="mb-5 px-4 py-3 rounded-xl text-sm bg-brand-600/[0.06] border border-brand-600/20 text-brand-700 dark:text-brand-400">
-                    {new URLSearchParams(window.location.search).get("error") === "email_mismatch"
-                      ? "This invitation was sent to a different email address. Please sign in with the email where you received the invitation."
-                      : "You've been invited to join an organization! Sign in with the email address where you received the invitation."}
-                  </div>
-                )}
                 <div className="mb-8">
                   <h1
                     className="text-2xl font-bold text-text-primary mb-2"
@@ -948,156 +848,21 @@ function LoginPage() {
                       required
                       minLength={8}
                       className="input"
-                      placeholder="Min 8 characters"
+                      placeholder="Enter password"
                     />
                   </Field>
 
                   <PrimaryButton type="submit" disabled={isPending} fullWidth>
                     {isPending ? (
                       <>
-                        Signing in
+                        Logging in
                         <LoadingDots />
                       </>
                     ) : (
-                      "Sign in"
+                      "Login"
                     )}
                   </PrimaryButton>
                 </form>
-
-                <p className="text-center text-sm mt-5 text-text-tertiary">
-                  Don't have an account?{" "}
-                  <button
-                    onClick={() => switchMode("register")}
-                    className="text-brand-600 hover:text-brand-700 font-semibold transition-colors"
-                  >
-                    Create one
-                  </button>
-                </p>
-
-                <OrDivider text="or" />
-
-                <GhostButton
-                  onClick={() => switchMode("magic-link")}
-                  fullWidth
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 2L11 13" />
-                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                  </svg>
-                  Use magic link instead
-                </GhostButton>
-              </div>
-            )}
-
-            {/* ── Mode: register ──────────────────────────────────── */}
-            {mode === "register" && (
-              <div style={{ animation: "form-enter 0.35s ease-out" }}>
-                {new URLSearchParams(window.location.search).get("invite") === "1" && (
-                  <div className="mb-5 px-4 py-3 rounded-xl text-sm bg-brand-600/[0.06] border border-brand-600/20 text-brand-700 dark:text-brand-400">
-                    {new URLSearchParams(window.location.search).get("error") === "email_mismatch"
-                      ? "This invitation was sent to a different email address. Please sign in with the email where you received the invitation."
-                      : "You've been invited to join an organization! Sign in with the email address where you received the invitation."}
-                  </div>
-                )}
-                <div className="mb-8">
-                  <h1
-                    className="text-2xl font-bold text-text-primary mb-2"
-                    style={{ letterSpacing: "-0.03em" }}
-                  >
-                    Create your account
-                  </h1>
-                  <p className="text-sm text-text-tertiary leading-relaxed">
-                    Get started with Hisaabo. You'll be the owner of your organization.
-                  </p>
-                </div>
-
-                {error && <ErrorBanner message={error} />}
-
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <Field label="Full name">
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                      autoFocus
-                      className="input"
-                      placeholder="Your name"
-                    />
-                  </Field>
-
-                  <Field label="Email address">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="input"
-                      placeholder="you@yourcompany.com"
-                    />
-                  </Field>
-
-                  <Field label="Password">
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={8}
-                      className="input"
-                      placeholder="Min 8 characters"
-                    />
-                  </Field>
-
-                  <Field label="Confirm password">
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                      className="input"
-                      placeholder="Repeat password"
-                    />
-                  </Field>
-
-                  <PrimaryButton type="submit" disabled={isPending} fullWidth>
-                    {isPending ? (
-                      <>
-                        Creating account
-                        <LoadingDots />
-                      </>
-                    ) : (
-                      "Create account"
-                    )}
-                  </PrimaryButton>
-                </form>
-
-                <p className="text-xs text-text-tertiary mt-3 text-center">
-                  This will create your organization and you'll be its owner.
-                </p>
-
-                <p className="text-center text-sm mt-5 text-text-tertiary">
-                  Already have an account?{" "}
-                  <button
-                    onClick={() => switchMode("password-login")}
-                    className="text-brand-600 hover:text-brand-700 font-semibold transition-colors"
-                  >
-                    Sign in
-                  </button>
-                </p>
-
-                <OrDivider text="or" />
-
-                <GhostButton
-                  onClick={() => switchMode("magic-link")}
-                  fullWidth
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 2L11 13" />
-                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                  </svg>
-                  Sign in with magic link instead
-                </GhostButton>
               </div>
             )}
 

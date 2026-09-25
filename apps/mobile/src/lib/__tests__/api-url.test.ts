@@ -12,7 +12,7 @@
  * The function has two resolution strategies (in order of priority):
  *   1. expo-constants `expoConfig.extra.apiUrl` — set in app.json/eas.json
  *   2. process.env.EXPO_PUBLIC_API_URL — set in .env or CI pipeline
- *   3. Fallback: the hardcoded production URL "https://api.hisaabo.in"
+ *   3. Fallback: the hardcoded production URL "${import.meta.env.API_URL}"
  *
  * These tests verify that priority ordering is respected.
  *
@@ -82,14 +82,14 @@ describe("getApiUrl — API URL resolution for different build environments", ()
     //       Play Store / App Store.
     // WHY: If the fallback URL is wrong or missing, every production user
     //      gets network errors on every screen. The production URL is
-    //      "https://api.hisaabo.in" — this test pins that exact value so a
+    //      "${import.meta.env.API_URL}" — this test pins that exact value so a
     //      typo in the source file is caught by CI before release.
     // PRECONDITION: process.env.EXPO_PUBLIC_API_URL is deleted in beforeEach
     //               and mockConstants.expoConfig is null.
 
     const url = getApiUrl();
 
-    expect(url).toBe("https://api.hisaabo.in");
+    expect(url).toBe("${import.meta.env.API_URL}");
   });
 
   // -------------------------------------------------------------------------
@@ -154,7 +154,7 @@ describe("getApiUrl — API URL resolution for different build environments", ()
     // Should not throw — should fall through to the production URL
     const url = getApiUrl();
 
-    expect(url).toBe("https://api.hisaabo.in");
+    expect(url).toBe("${import.meta.env.API_URL}");
   });
 
   // -------------------------------------------------------------------------

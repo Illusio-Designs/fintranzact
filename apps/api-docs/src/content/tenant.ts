@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const tenantEndpoints: EndpointGroup = {
   id: "tenant",
@@ -21,7 +22,7 @@ export const tenantEndpoints: EndpointGroup = {
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/tenant.create \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.create \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -d '{"json":{}}'`,
@@ -31,7 +32,7 @@ console.log("Created org:", result.tenantName);
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/tenant.create",
+    "${API_BASE_URL}/api/trpc/tenant.create",
     headers={"Authorization": f"Bearer {session_token}"},
     json={"json": {}},
 )
@@ -58,7 +59,7 @@ print("New org:", data["tenantName"])`,
         example: true,
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/tenant.canCreateOrg" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/tenant.canCreateOrg" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
         javascript: `const canCreate = await trpc.tenant.canCreateOrg.query();
 if (canCreate) {
@@ -67,7 +68,7 @@ if (canCreate) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/tenant.canCreateOrg",
+    "${API_BASE_URL}/api/trpc/tenant.canCreateOrg",
     headers={"Authorization": f"Bearer {session_token}"},
 )
 can_create = resp.json()["result"]["data"]["json"]`,
@@ -105,7 +106,7 @@ can_create = resp.json()["result"]["data"]["json"]`,
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/tenant.list" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/tenant.list" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
         javascript: `const orgs = await trpc.tenant.list.query();
 for (const org of orgs) {
@@ -114,7 +115,7 @@ for (const org of orgs) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/tenant.list",
+    "${API_BASE_URL}/api/trpc/tenant.list",
     headers={"Authorization": f"Bearer {session_token}"},
 )
 orgs = resp.json()["result"]["data"]["json"]
@@ -145,7 +146,7 @@ for org in orgs:
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/tenant.myInvitations" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/tenant.myInvitations" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
         javascript: `const invites = await trpc.tenant.myInvitations.query();
 if (invites.length > 0) {
@@ -155,7 +156,7 @@ if (invites.length > 0) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/tenant.myInvitations",
+    "${API_BASE_URL}/api/trpc/tenant.myInvitations",
     headers={"Authorization": f"Bearer {session_token}"},
 )
 invites = resp.json()["result"]["data"]["json"]`,
@@ -185,7 +186,7 @@ invites = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/tenant.acceptById \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.acceptById \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -d '{"json":{"invitationId":"01957a2b-9999-aaaa-bbbb-ccccddddeeee"}}'`,
@@ -197,7 +198,7 @@ console.log("Joined:", result.tenantName);
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/tenant.acceptById",
+    "${API_BASE_URL}/api/trpc/tenant.acceptById",
     headers={"Authorization": f"Bearer {session_token}"},
     json={"json": {"invitationId": "01957a2b-9999-aaaa-bbbb-ccccddddeeee"}},
 )
@@ -226,7 +227,7 @@ data = resp.json()["result"]["data"]["json"]`,
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/tenant.select \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.select \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -d '{"json":{"tenantId":"01957a2b-3c4d-7e8f-9012-abcdef012345"}}'`,
@@ -237,7 +238,7 @@ data = resp.json()["result"]["data"]["json"]`,
         python: `import httpx
 
 httpx.post(
-    "https://api.hisaabo.in/api/trpc/tenant.select",
+    "${API_BASE_URL}/api/trpc/tenant.select",
     headers={"Authorization": f"Bearer {session_token}"},
     json={"json": {"tenantId": "01957a2b-3c4d-7e8f-9012-abcdef012345"}},
 )`,
@@ -268,14 +269,14 @@ httpx.post(
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/tenant.current" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/tenant.current" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
         javascript: `const org = await trpc.tenant.current.query();
 console.log("Current org:", org?.name, "Plan:", org?.plan);`,
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/tenant.current",
+    "${API_BASE_URL}/api/trpc/tenant.current",
     headers={"Authorization": f"Bearer {session_token}"},
 )
 org = resp.json()["result"]["data"]["json"]`,
@@ -317,7 +318,7 @@ org = resp.json()["result"]["data"]["json"]`,
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/tenant.members" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/tenant.members" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
         javascript: `const members = await trpc.tenant.members.query();
 for (const m of members) {
@@ -326,7 +327,7 @@ for (const m of members) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/tenant.members",
+    "${API_BASE_URL}/api/trpc/tenant.members",
     headers={"Authorization": f"Bearer {session_token}"},
 )
 members = resp.json()["result"]["data"]["json"]
@@ -357,7 +358,7 @@ for m in members:
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/tenant.inviteMember \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.inviteMember \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -d '{"json":{"email":"priya@guptaenterprises.in","role":"seller"}}'`,
@@ -369,7 +370,7 @@ console.log("Invitation sent, expires:", invite.expiresAt);`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/tenant.inviteMember",
+    "${API_BASE_URL}/api/trpc/tenant.inviteMember",
     headers={"Authorization": f"Bearer {session_token}"},
     json={"json": {"email": "priya@guptaenterprises.in", "role": "seller"}},
 )
@@ -406,7 +407,7 @@ print("Token:", data["token"])`,
       },
       codeExamples: {
         curl: `# Token comes from the /invite/:token URL
-curl "https://api.hisaabo.in/api/trpc/tenant.peekInvitation?input=%7B%22json%22%3A%7B%22token%22%3A%22abc123def456ghi789jkl012mno345pq%22%7D%7D"`,
+curl "${API_BASE_URL}/api/trpc/tenant.peekInvitation?input=%7B%22json%22%3A%7B%22token%22%3A%22abc123def456ghi789jkl012mno345pq%22%7D%7D"`,
         javascript: `// Extract token from URL: /invite/abc123def456...
 const token = params.token;
 
@@ -419,7 +420,7 @@ if (preview) {
         python: `import httpx, json, urllib.parse
 
 params = urllib.parse.quote(json.dumps({"json": {"token": "abc123def456ghi789jkl012mno345pq"}}))
-resp = httpx.get(f"https://api.hisaabo.in/api/trpc/tenant.peekInvitation?input={params}")
+resp = httpx.get(f"${API_BASE_URL}/api/trpc/tenant.peekInvitation?input={params}")
 preview = resp.json()["result"]["data"]["json"]`,
       },
       gotchas: [
@@ -448,7 +449,7 @@ preview = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/tenant.acceptInvitation \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.acceptInvitation \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -d '{"json":{"token":"abc123def456ghi789jkl012mno345pq"}}'`,
@@ -460,7 +461,7 @@ console.log("Joined:", result.tenantName);
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/tenant.acceptInvitation",
+    "${API_BASE_URL}/api/trpc/tenant.acceptInvitation",
     headers={"Authorization": f"Bearer {session_token}"},
     json={"json": {"token": "abc123def456ghi789jkl012mno345pq"}},
 )
@@ -497,14 +498,14 @@ data = resp.json()["result"]["data"]["json"]`,
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/tenant.pendingInvitations" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/tenant.pendingInvitations" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
         javascript: `const pending = await trpc.tenant.pendingInvitations.query();
 console.log(\`\${pending.length} pending invitations\`);`,
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/tenant.pendingInvitations",
+    "${API_BASE_URL}/api/trpc/tenant.pendingInvitations",
     headers={"Authorization": f"Bearer {session_token}"},
 )
 pending = resp.json()["result"]["data"]["json"]`,
@@ -530,7 +531,7 @@ pending = resp.json()["result"]["data"]["json"]`,
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/tenant.revokeInvitation \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.revokeInvitation \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -d '{"json":{"invitationId":"invite-uuid-1"}}'`,
@@ -540,7 +541,7 @@ pending = resp.json()["result"]["data"]["json"]`,
         python: `import httpx
 
 httpx.post(
-    "https://api.hisaabo.in/api/trpc/tenant.revokeInvitation",
+    "${API_BASE_URL}/api/trpc/tenant.revokeInvitation",
     headers={"Authorization": f"Bearer {session_token}"},
     json={"json": {"invitationId": "invite-uuid-1"}},
 )`,
@@ -566,7 +567,7 @@ httpx.post(
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/tenant.removeMember \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.removeMember \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -d '{"json":{"userId":"user-uuid-2"}}'`,
@@ -577,7 +578,7 @@ httpx.post(
         python: `import httpx
 
 httpx.post(
-    "https://api.hisaabo.in/api/trpc/tenant.removeMember",
+    "${API_BASE_URL}/api/trpc/tenant.removeMember",
     headers={"Authorization": f"Bearer {session_token}"},
     json={"json": {"userId": "user-uuid-2"}},
 )`,
@@ -606,7 +607,7 @@ httpx.post(
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/tenant.updateMemberRole \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.updateMemberRole \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -d '{"json":{"userId":"user-uuid-2","role":"admin"}}'`,
@@ -617,7 +618,7 @@ httpx.post(
         python: `import httpx
 
 httpx.post(
-    "https://api.hisaabo.in/api/trpc/tenant.updateMemberRole",
+    "${API_BASE_URL}/api/trpc/tenant.updateMemberRole",
     headers={"Authorization": f"Bearer {session_token}"},
     json={"json": {"userId": "user-uuid-2", "role": "admin"}},
 )`,

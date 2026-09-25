@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const dashboardEndpoints: EndpointGroup = {
   id: "dashboard",
@@ -39,7 +40,7 @@ export const dashboardEndpoints: EndpointGroup = {
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/dashboard.summary" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/dashboard.summary" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const summary = await trpc.dashboard.summary.query();
@@ -48,7 +49,7 @@ console.log("Receivable:", summary.receivable);`,
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/dashboard.summary",
+    "${API_BASE_URL}/api/trpc/dashboard.summary",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -83,7 +84,7 @@ print("Sales:", summary["totalSales"])`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/dashboard.shippingSummary" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/dashboard.shippingSummary" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const shipping = await trpc.dashboard.shippingSummary.query({
@@ -91,7 +92,7 @@ print("Sales:", summary["totalSales"])`,
 });
 console.log("Net shipping margin:", shipping.net);`,
         python: `resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/dashboard.shippingSummary",
+    "${API_BASE_URL}/api/trpc/dashboard.shippingSummary",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )`,
       },
@@ -120,7 +121,7 @@ console.log("Net shipping margin:", shipping.net);`,
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/dashboard.salesTrend?input=%7B%22json%22%3A%7B%22months%22%3A12%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/dashboard.salesTrend?input=%7B%22json%22%3A%7B%22months%22%3A12%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const trend = await trpc.dashboard.salesTrend.query({ months: 12 });
@@ -131,7 +132,7 @@ trend.forEach(({ month, invoiced, collected }) => {
 
 params = urllib.parse.quote(json.dumps({"json": {"months": 6}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/dashboard.salesTrend?input={params}",
+    f"${API_BASE_URL}/api/trpc/dashboard.salesTrend?input={params}",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )`,
       },
@@ -154,12 +155,12 @@ resp = httpx.get(
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/dashboard.topOutstanding?input=%7B%22json%22%3A%7B%22limit%22%3A10%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/dashboard.topOutstanding?input=%7B%22json%22%3A%7B%22limit%22%3A10%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const top = await trpc.dashboard.topOutstanding.query({ limit: 10 });`,
         python: `params = urllib.parse.quote(json.dumps({"json": {"limit": 10}}))
-resp = httpx.get(f"https://api.hisaabo.in/api/trpc/dashboard.topOutstanding?input={params}", ...)`,
+resp = httpx.get(f"${API_BASE_URL}/api/trpc/dashboard.topOutstanding?input={params}", ...)`,
       },
       gotchas: [
         "Includes the party's `openingBalance` in the outstanding calculation. A party with a large opening balance and no invoices will still appear here.",
@@ -186,12 +187,12 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/dashboard.topOutstanding?inpu
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/dashboard.topCustomers?input=%7B%22json%22%3A%7B%22limit%22%3A5%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/dashboard.topCustomers?input=%7B%22json%22%3A%7B%22limit%22%3A5%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const customers = await trpc.dashboard.topCustomers.query({ limit: 5 });`,
         python: `params = urllib.parse.quote(json.dumps({"json": {"limit": 5}}))
-resp = httpx.get(f"https://api.hisaabo.in/api/trpc/dashboard.topCustomers?input={params}", ...)`,
+resp = httpx.get(f"${API_BASE_URL}/api/trpc/dashboard.topCustomers?input={params}", ...)`,
       },
     },
     {
@@ -221,7 +222,7 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/dashboard.topCustomers?input=
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/dashboard.topSellingItems?input=%7B%22json%22%3A%7B%22limit%22%3A5%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/dashboard.topSellingItems?input=%7B%22json%22%3A%7B%22limit%22%3A5%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const items = await trpc.dashboard.topSellingItems.query({
@@ -229,7 +230,7 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/dashboard.topCustomers?input=
   itemType: "product",
 });`,
         python: `params = urllib.parse.quote(json.dumps({"json": {"limit": 5, "itemType": "product"}}))
-resp = httpx.get(f"https://api.hisaabo.in/api/trpc/dashboard.topSellingItems?input={params}", ...)`,
+resp = httpx.get(f"${API_BASE_URL}/api/trpc/dashboard.topSellingItems?input={params}", ...)`,
       },
     },
     {
@@ -251,12 +252,12 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/dashboard.topSellingItems?inp
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/dashboard.expensesByCategory" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/dashboard.expensesByCategory" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const breakdown = await trpc.dashboard.expensesByCategory.query();`,
         python: `resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/dashboard.expensesByCategory",
+    "${API_BASE_URL}/api/trpc/dashboard.expensesByCategory",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )`,
       },
@@ -280,12 +281,12 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/dashboard.topSellingItems?inp
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/dashboard.invoiceStatusBreakdown" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/dashboard.invoiceStatusBreakdown" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const breakdown = await trpc.dashboard.invoiceStatusBreakdown.query();`,
         python: `resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/dashboard.invoiceStatusBreakdown",
+    "${API_BASE_URL}/api/trpc/dashboard.invoiceStatusBreakdown",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )`,
       },
@@ -318,7 +319,7 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/dashboard.topSellingItems?inp
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/dashboard.profitAndLoss" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/dashboard.profitAndLoss" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const pl = await trpc.dashboard.profitAndLoss.query({
@@ -327,7 +328,7 @@ resp = httpx.get(f"https://api.hisaabo.in/api/trpc/dashboard.topSellingItems?inp
 });
 console.log("Net profit:", pl.netProfit, "(" + pl.netMarginPercent + "%)");`,
         python: `resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/dashboard.profitAndLoss",
+    "${API_BASE_URL}/api/trpc/dashboard.profitAndLoss",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )`,
       },
@@ -368,13 +369,13 @@ console.log("Net profit:", pl.netProfit, "(" + pl.netMarginPercent + "%)");`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/dashboard.receivablesAging" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/dashboard.receivablesAging" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const aging = await trpc.dashboard.receivablesAging.query();
 const overdue = aging.rows.filter(r => parseFloat(r.days90Plus) > 0);`,
         python: `resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/dashboard.receivablesAging",
+    "${API_BASE_URL}/api/trpc/dashboard.receivablesAging",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )`,
       },

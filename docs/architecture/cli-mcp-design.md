@@ -398,7 +398,7 @@ export type RouterOutputs = inferRouterOutputs<AppRouter>;
 export type RouterInputs = inferRouterInputs<AppRouter>;
 
 export interface ClientConfig {
-  apiUrl: string;       // e.g. "https://api.hisaabo.in" or "http://localhost:3000"
+  apiUrl: string;       // e.g. "${import.meta.env.API_URL}" or "http://localhost:3000"
   token: string;        // session ID used as Bearer token
   tenantId: string;     // x-tenant-id header (maps to ctx.tenantId in the API)
   businessId: string;   // x-business-id header (maps to ctx.businessId in the API)
@@ -1260,7 +1260,7 @@ Prompts: "Select active business:" (if multiple)
 
 Writes ~/.hisaabo/config.json (mode 0600):
 {
-  "apiUrl": "https://api.hisaabo.in",
+  "apiUrl": "${import.meta.env.API_URL}",
   "token": "abc123",
   "tenantId": "...",
   "businessId": "...",

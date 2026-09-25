@@ -33,6 +33,32 @@ function generateSlug(name: string): string {
 }
 
 export const tenantRouter = router({
+  updatePlan: protectedProcedure
+    .input(z.object({
+      plan: z.enum(["forever_free", "free", "pro", "business", "enterprise"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const tenantId = ctx.tenantId ?? (
+        await controlDb.select({ tenantId: tenantMembers.tenantId })
+          .from(tenantMembers)
+          .where(and(
+            eq(tenantMembers.userId, ctx.user.id),
+            eq(tenantMembers.role, "owner"),
+          ))
+          .limit(1)
+      )[0]?.tenantId ?? null;
+
+      if (!tenantId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No organization selected to update." });
+      }
+
+      await controlDb.update(tenants)
+        .set({ plan: input.plan, updatedAt: new Date() })
+        .where(eq(tenants.id, tenantId));
+
+      return { plan: input.plan };
+    }),
+
   // Create a new organization for the authenticated user.
   // User becomes the owner. In self-hosted mode, joins the default tenant instead.
   create: protectedProcedure.mutation(async ({ ctx }) => {
@@ -64,6 +90,7 @@ export const tenantRouter = router({
             dbPort: dbConfig.dbPort,
             dbUser: dbConfig.dbUser,
             dbPassword: dbConfig.dbPassword,
+            plan: "forever_free",
           }).returning({ id: tenants.id });
 
           await tx.insert(tenantMembers).values({
@@ -93,7 +120,9 @@ export const tenantRouter = router({
         .from(tenants).where(eq(tenants.slug, "default")).limit(1);
       if (!defaultTenant) {
         [defaultTenant] = await controlDb.insert(tenants).values({
-          name: "Default Organization", slug: "default",
+          name: "Default Organization",
+          slug: "default",
+          plan: "forever_free",
         }).returning({ id: tenants.id });
       }
 
@@ -121,8 +150,8 @@ export const tenantRouter = router({
         eq(tenantMembers.role, "owner"),
       ));
 
-    const planRank: Record<string, number> = { free: 0, pro: 1, business: 2, enterprise: 3 };
-    let bestPlan = "free";
+    const planRank: Record<string, number> = { forever_free: 0, free: 0, pro: 1, business: 2, enterprise: 3 };
+    let bestPlan = "forever_free";
     for (const org of ownedOrgs) {
       if ((planRank[org.plan ?? "free"] ?? 0) > (planRank[bestPlan] ?? 0)) {
         bestPlan = org.plan ?? "free";

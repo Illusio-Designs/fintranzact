@@ -4,7 +4,7 @@ import { relations } from "drizzle-orm";
 // ── Enums ──────────────────────────────────────────────────────
 
 export const tenantStatusEnum = pgEnum("tenant_status", ["active", "suspended", "deleted"]);
-export const tenantPlanEnum = pgEnum("tenant_plan", ["free", "pro", "business", "enterprise"]);
+export const tenantPlanEnum = pgEnum("tenant_plan", ["forever_free", "free", "pro", "business", "enterprise"]);
 export const memberRoleEnum = pgEnum("member_role", [
   // Legacy values (kept for backward compat with existing DB rows)
   "owner", "admin", "member", "viewer",
@@ -33,6 +33,9 @@ export const tenants = pgTable("tenants", {
 }, (t) => [
   uniqueIndex("tenants_slug_idx").on(t.slug),
 ]);
+// Add referralCode column to tenants for tracking referral at tenant level
+// (nullable — optional on signup)
+tenants.referralCode = text("referral_code");
 
 // ── Users (moved from schema.ts) ───────────────────────────────
 
@@ -40,6 +43,7 @@ export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull(),
   name: text("name"),
+  referralCode: text("referral_code"),
   passwordHash: text("password_hash"),
   emailVerified: boolean("email_verified").default(false).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

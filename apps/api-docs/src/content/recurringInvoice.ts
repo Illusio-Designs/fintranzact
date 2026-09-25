@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const recurringInvoiceEndpoints: EndpointGroup = {
   id: "recurring",
@@ -45,7 +46,7 @@ export const recurringInvoiceEndpoints: EndpointGroup = {
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/recurringInvoice.list?input=%7B%22json%22%3A%7B%22page%22%3A1%2C%22limit%22%3A20%2C%22status%22%3A%22active%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/recurringInvoice.list?input=%7B%22json%22%3A%7B%22page%22%3A1%2C%22limit%22%3A20%2C%22status%22%3A%22active%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { data, total } = await trpc.recurringInvoice.list.query({
@@ -58,7 +59,7 @@ console.log(\`\${total} active recurring templates\`);`,
 
 params = urllib.parse.quote(json.dumps({"json": {"page": 1, "limit": 20, "status": "active"}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/recurringInvoice.list?input={params}",
+    f"${API_BASE_URL}/api/trpc/recurringInvoice.list?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -108,7 +109,7 @@ result = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/recurringInvoice.getById?input=%7B%22json%22%3A%7B%22id%22%3A%22template-uuid%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/recurringInvoice.getById?input=%7B%22json%22%3A%7B%22id%22%3A%22template-uuid%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const template = await trpc.recurringInvoice.getById.query({
@@ -120,7 +121,7 @@ console.log("Next run:", template.nextRunDate);`,
 
 params = urllib.parse.quote(json.dumps({"json": {"id": "template-uuid"}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/recurringInvoice.getById?input={params}",
+    f"${API_BASE_URL}/api/trpc/recurringInvoice.getById?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -173,7 +174,7 @@ template = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/recurringInvoice.create \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/recurringInvoice.create \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -210,7 +211,7 @@ console.log("Template created, next run:", template.nextRunDate);`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/recurringInvoice.create",
+    "${API_BASE_URL}/api/trpc/recurringInvoice.create",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -262,7 +263,7 @@ template = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/recurringInvoice.update \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/recurringInvoice.update \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -277,7 +278,7 @@ template = resp.json()["result"]["data"]["json"]`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/recurringInvoice.update",
+    "${API_BASE_URL}/api/trpc/recurringInvoice.update",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -311,7 +312,7 @@ resp = httpx.post(
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/recurringInvoice.delete \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/recurringInvoice.delete \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -320,7 +321,7 @@ resp = httpx.post(
         python: `import httpx
 
 httpx.post(
-    "https://api.hisaabo.in/api/trpc/recurringInvoice.delete",
+    "${API_BASE_URL}/api/trpc/recurringInvoice.delete",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -355,7 +356,7 @@ httpx.post(
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/recurringInvoice.pause \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/recurringInvoice.pause \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -367,7 +368,7 @@ console.log("Status:", paused.status); // "paused"`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/recurringInvoice.pause",
+    "${API_BASE_URL}/api/trpc/recurringInvoice.pause",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -402,7 +403,7 @@ resp = httpx.post(
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/recurringInvoice.resume \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/recurringInvoice.resume \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -414,7 +415,7 @@ console.log("Next run:", resumed.nextRunDate);`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/recurringInvoice.resume",
+    "${API_BASE_URL}/api/trpc/recurringInvoice.resume",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -451,7 +452,7 @@ print("Next run:", data["nextRunDate"])`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/recurringInvoice.runNow \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/recurringInvoice.runNow \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -463,7 +464,7 @@ console.log("Generated invoice:", result.invoiceNumber);`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/recurringInvoice.runNow",
+    "${API_BASE_URL}/api/trpc/recurringInvoice.runNow",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -523,7 +524,7 @@ print("Generated:", result["invoiceNumber"])`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/recurringInvoice.executionHistory?input=%7B%22json%22%3A%7B%22templateId%22%3A%22template-uuid%22%2C%22page%22%3A1%2C%22limit%22%3A20%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/recurringInvoice.executionHistory?input=%7B%22json%22%3A%7B%22templateId%22%3A%22template-uuid%22%2C%22page%22%3A1%2C%22limit%22%3A20%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { data, total } = await trpc.recurringInvoice.executionHistory.query({
@@ -538,7 +539,7 @@ for (const run of data) {
 
 params = urllib.parse.quote(json.dumps({"json": {"templateId": "template-uuid", "page": 1, "limit": 20}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/recurringInvoice.executionHistory?input={params}",
+    f"${API_BASE_URL}/api/trpc/recurringInvoice.executionHistory?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -569,7 +570,7 @@ result = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/recurringInvoice.planUsage" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/recurringInvoice.planUsage" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const usage = await trpc.recurringInvoice.planUsage.query();
@@ -578,7 +579,7 @@ console.log(\`\${usage.totalTemplates} templates configured\`);`,
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/recurringInvoice.planUsage",
+    "${API_BASE_URL}/api/trpc/recurringInvoice.planUsage",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -626,7 +627,7 @@ print(f"{usage['runsThisMonth']}/5 runs this month")`,
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/recurringInvoice.suggestions" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/recurringInvoice.suggestions" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const suggestions = await trpc.recurringInvoice.suggestions.query();
@@ -636,7 +637,7 @@ for (const s of suggestions) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/recurringInvoice.suggestions",
+    "${API_BASE_URL}/api/trpc/recurringInvoice.suggestions",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,

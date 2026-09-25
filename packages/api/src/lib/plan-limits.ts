@@ -29,6 +29,18 @@ export interface PlanLimits {
 }
 
 const PLAN_LIMITS: Record<string, PlanLimits> = {
+  forever_free: {
+    maxOwnedOrgs: Infinity,
+    maxBusinesses: Infinity,
+    maxTeamMembers: Infinity,
+    maxConcurrentSessions: Infinity,
+    maxApiKeys: Infinity,
+    recurringRunsPerMonth: Infinity,
+    auditRetentionDays: null,
+    dataExport: true,
+    onlineStore: true,
+    pdfBranding: false,
+  },
   free: {
     maxOwnedOrgs: 1,
     maxBusinesses: 1,
@@ -115,8 +127,8 @@ export async function enforceOrgCreationLimit(userId: string): Promise<void> {
     ));
 
   // Effective plan = best plan across all owned orgs
-  const planRank: Record<string, number> = { free: 0, pro: 1, business: 2, enterprise: 3 };
-  let bestPlan = "free";
+  const planRank: Record<string, number> = { forever_free: 0, free: 0, pro: 1, business: 2, enterprise: 3 };
+  let bestPlan = "forever_free";
   for (const org of ownedOrgs) {
     if ((planRank[org.plan ?? "free"] ?? 0) > (planRank[bestPlan] ?? 0)) {
       bestPlan = org.plan ?? "free";

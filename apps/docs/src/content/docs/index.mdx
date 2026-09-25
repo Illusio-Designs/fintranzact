@@ -19,7 +19,7 @@ import ForCA from '../../components/ForCA.astro';
 import ForBusiness from '../../components/ForBusiness.astro';
 
 :::tip[Who are you?]
-Use the **CA / Business** toggle in the top-right header to personalize these docs. The content adapts to show the most relevant guides and FAQ for your role. Developers looking for API integration should head to the [API reference](https://api.hisaabo.in).
+Use the **CA / Business** toggle in the top-right header to personalize these docs. The content adapts to show the most relevant guides and FAQ for your role. Developers looking for API integration should head to the [API reference](${import.meta.env.API_URL}).
 :::
 
 ## Quick Start
@@ -44,5 +44,5 @@ Use the **CA / Business** toggle in the top-right header to personalize these do
 </ForCA>
 
 :::note[Building on the API?]
-API reference, tRPC endpoints, MCP integration, and the CLI live in the [API documentation](https://api.hisaabo.in). The [AI & Automation](/ai) section here covers the higher-level integration story for non-developers.
+API reference, tRPC endpoints, MCP integration, and the CLI live in the [API documentation](${import.meta.env.API_URL}). The [AI & Automation](/ai) section here covers the higher-level integration story for non-developers.
 :::

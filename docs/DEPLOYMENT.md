@@ -54,13 +54,13 @@
 
 | Variable | Description | Example |
 |---|---|---|
-| `VITE_API_URL` | API server URL (build-time) | `https://api.hisaabo.in` |
+| `VITE_API_URL` | API server URL (build-time) | `${import.meta.env.API_URL}` |
 
 ### Cloudflare Pages (Store)
 
 | Variable | Description | Example |
 |---|---|---|
-| `VITE_API_URL` | API server URL (build-time) | `https://api.hisaabo.in` |
+| `VITE_API_URL` | API server URL (build-time) | `${import.meta.env.API_URL}` |
 
 ### Backend (Docker / GHCR)
 

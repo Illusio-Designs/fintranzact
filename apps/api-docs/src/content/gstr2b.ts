@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const gstr2bEndpoints: EndpointGroup = {
   id: "gstr2b",
@@ -33,7 +34,7 @@ export const gstr2bEndpoints: EndpointGroup = {
       },
       codeExamples: {
         curl: `# Read the GSTR-2B JSON file and upload
-curl -X POST https://api.hisaabo.in/api/trpc/gstr2b.upload \\
+curl -X POST ${API_BASE_URL}/api/trpc/gstr2b.upload \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -58,7 +59,7 @@ file_path = Path("GSTR2B_Jan2026.json")
 content = file_path.read_text()
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/gstr2b.upload",
+    "${API_BASE_URL}/api/trpc/gstr2b.upload",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -131,7 +132,7 @@ print(f"Matched: {summary['matchedRecords']}/{summary['totalRecords']}")`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gstr2b.uploads?input=%7B%22json%22%3A%7B%22page%22%3A1%2C%22limit%22%3A10%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gstr2b.uploads?input=%7B%22json%22%3A%7B%22page%22%3A1%2C%22limit%22%3A10%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { uploads, total } = await trpc.gstr2b.uploads.query({
@@ -145,7 +146,7 @@ for (const upload of uploads) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gstr2b.uploads",
+    "${API_BASE_URL}/api/trpc/gstr2b.uploads",
     params={"input": '{"json":{"page":1,"limit":10}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -209,7 +210,7 @@ for upload in data["uploads"]:
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gstr2b.records?input=%7B%22json%22%3A%7B%22uploadId%22%3A%22upload-uuid%22%2C%22matchStatus%22%3A%22mismatched%22%2C%22page%22%3A1%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gstr2b.records?input=%7B%22json%22%3A%7B%22uploadId%22%3A%22upload-uuid%22%2C%22matchStatus%22%3A%22mismatched%22%2C%22page%22%3A1%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { records, total } = await trpc.gstr2b.records.query({
@@ -223,7 +224,7 @@ for (const rec of records) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gstr2b.records",
+    "${API_BASE_URL}/api/trpc/gstr2b.records",
     params={"input": '{"json":{"uploadId":"upload-uuid","matchStatus":"mismatched","page":1}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -272,7 +273,7 @@ for rec in data["records"]:
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gstr2b.summary?input=%7B%22json%22%3A%7B%22returnPeriod%22%3A%222026-01%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gstr2b.summary?input=%7B%22json%22%3A%7B%22returnPeriod%22%3A%222026-01%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const summary = await trpc.gstr2b.summary.query({
@@ -288,7 +289,7 @@ if (summary.hasData) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gstr2b.summary",
+    "${API_BASE_URL}/api/trpc/gstr2b.summary",
     params={"input": '{"json":{"returnPeriod":"2026-01"}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -354,7 +355,7 @@ else:
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gstr2b.missingInBooks?input=%7B%22json%22%3A%7B%22uploadId%22%3A%22upload-uuid%22%2C%22page%22%3A1%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gstr2b.missingInBooks?input=%7B%22json%22%3A%7B%22uploadId%22%3A%22upload-uuid%22%2C%22page%22%3A1%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { records, total } = await trpc.gstr2b.missingInBooks.query({
@@ -367,7 +368,7 @@ for (const rec of records) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gstr2b.missingInBooks",
+    "${API_BASE_URL}/api/trpc/gstr2b.missingInBooks",
     params={"input": '{"json":{"uploadId":"upload-uuid","page":1}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -419,7 +420,7 @@ for rec in data["records"]:
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gstr2b.missingIn2B?input=%7B%22json%22%3A%7B%22returnPeriod%22%3A%222026-01%22%2C%22page%22%3A1%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gstr2b.missingIn2B?input=%7B%22json%22%3A%7B%22returnPeriod%22%3A%222026-01%22%2C%22page%22%3A1%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { records, total } = await trpc.gstr2b.missingIn2B.query({
@@ -432,7 +433,7 @@ for (const inv of records) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gstr2b.missingIn2B",
+    "${API_BASE_URL}/api/trpc/gstr2b.missingIn2B",
     params={"input": '{"json":{"returnPeriod":"2026-01","page":1}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -470,7 +471,7 @@ for inv in data["records"]:
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/gstr2b.linkInvoice \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/gstr2b.linkInvoice \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -483,7 +484,7 @@ for inv in data["records"]:
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/gstr2b.linkInvoice",
+    "${API_BASE_URL}/api/trpc/gstr2b.linkInvoice",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -521,7 +522,7 @@ print("Linked:", result["success"])`,
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/gstr2b.ignoreRecord \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/gstr2b.ignoreRecord \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -533,7 +534,7 @@ print("Linked:", result["success"])`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/gstr2b.ignoreRecord",
+    "${API_BASE_URL}/api/trpc/gstr2b.ignoreRecord",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,

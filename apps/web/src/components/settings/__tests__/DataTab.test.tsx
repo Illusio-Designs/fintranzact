@@ -77,7 +77,7 @@ vi.mock("@/components/ImportWizard", () => ({
 // prevents any accidental import-time failures.
 vi.mock("jszip", () => ({
   default: class {
-    file() {}
+    file() { }
     generateAsync = async () => new Blob();
   },
 }));
@@ -289,7 +289,7 @@ describe("DataTab — FullBackupSection", () => {
   // and this component resolves it via apiUrl(VITE_API_URL).
 
   it("relative URL is resolved against VITE_API_URL in split-host mode", () => {
-    vi.stubEnv("VITE_API_URL", "https://api.hisaabo.in");
+    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
     try {
       // Spy on createElement so we can capture the anchor the component creates
       // without disturbing the rest of the render path.
@@ -316,7 +316,7 @@ describe("DataTab — FullBackupSection", () => {
       // jsdom resolves anchor.href against the document base URL when assigned
       // from a relative href, so we compare on .href directly which reflects
       // exactly what the browser would navigate to.
-      expect(anchors[0].href).toBe("https://api.hisaabo.in/api/export/ten-1?token=tok-1");
+      expect(anchors[0].href).toBe("${import.meta.env.API_URL}/api/export/ten-1?token=tok-1");
 
       spy.mockRestore();
     } finally {
@@ -325,7 +325,7 @@ describe("DataTab — FullBackupSection", () => {
   });
 
   it("absolute URL from server is used as-is (back-compat with older servers)", () => {
-    vi.stubEnv("VITE_API_URL", "https://api.hisaabo.in");
+    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
     try {
       const createElement = document.createElement.bind(document);
       const anchors: HTMLAnchorElement[] = [];

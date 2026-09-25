@@ -135,7 +135,7 @@ describe("RestoreOnboarding — upload URL resolution (split-host regression)", 
   });
 
   it("relative URL from server is resolved against VITE_API_URL", async () => {
-    vi.stubEnv("VITE_API_URL", "https://api.hisaabo.in");
+    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
     mutateAsync.mockResolvedValue({
       url: "/api/selfImport/ten-1?token=tok-1",
       token: "tok-1",
@@ -143,14 +143,14 @@ describe("RestoreOnboarding — upload URL resolution (split-host regression)", 
     });
     const xhr = installXhrStub();
 
-    render(<RestoreOnboarding tenantId="ten-1" onBack={() => {}} />);
+    render(<RestoreOnboarding tenantId="ten-1" onBack={() => { }} />);
     selectFile();
     await runRestoreFlow();
 
     await waitFor(() => expect(xhr.instances).toHaveLength(1));
     expect(xhr.instances[0].open).toHaveBeenCalledWith(
       "POST",
-      "https://api.hisaabo.in/api/selfImport/ten-1?token=tok-1",
+      "${import.meta.env.API_URL}/api/selfImport/ten-1?token=tok-1",
     );
 
     // Resolve the upload promise so React state settles before teardown.
@@ -160,7 +160,7 @@ describe("RestoreOnboarding — upload URL resolution (split-host regression)", 
   });
 
   it("absolute URL from server is used as-is (back-compat)", async () => {
-    vi.stubEnv("VITE_API_URL", "https://api.hisaabo.in");
+    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
     mutateAsync.mockResolvedValue({
       url: "https://legacy.example.com/api/selfImport/ten-1?token=tok-1",
       token: "tok-1",
@@ -168,7 +168,7 @@ describe("RestoreOnboarding — upload URL resolution (split-host regression)", 
     });
     const xhr = installXhrStub();
 
-    render(<RestoreOnboarding tenantId="ten-1" onBack={() => {}} />);
+    render(<RestoreOnboarding tenantId="ten-1" onBack={() => { }} />);
     selectFile();
     await runRestoreFlow();
 
@@ -192,7 +192,7 @@ describe("RestoreOnboarding — upload URL resolution (split-host regression)", 
     });
     const xhr = installXhrStub();
 
-    render(<RestoreOnboarding tenantId="ten-1" onBack={() => {}} />);
+    render(<RestoreOnboarding tenantId="ten-1" onBack={() => { }} />);
     selectFile();
     await runRestoreFlow();
 

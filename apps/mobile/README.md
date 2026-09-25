@@ -10,7 +10,7 @@ The Hisaabo mobile app. Built with Expo SDK 52 and React Native 0.76, it runs on
 
 ## Cloud vs. self-hosted
 
-The mobile app is a **Hisaabo Cloud** feature. It connects to `https://api.hisaabo.in` by default and is available free with basic features on the App Store and Google Play.
+The mobile app is a **Hisaabo Cloud** feature. It connects to `${import.meta.env.API_URL}` by default and is available free with basic features on the App Store and Google Play.
 
 If you are self-hosting Hisaabo, you do not need the mobile app. The web app (`apps/web`) is fully responsive and works on any mobile browser.
 
@@ -177,8 +177,8 @@ The Expo config reads environment variables prefixed with `EXPO_PUBLIC_`:
 
 | Variable | Description | Default |
 |---|---|---|
-| `EXPO_PUBLIC_API_URL` | API server base URL | `https://api.hisaabo.in` (Hisaabo Cloud) |
+| `EXPO_PUBLIC_API_URL` | API server base URL | `${import.meta.env.API_URL}` (Hisaabo Cloud) |
 
 For local development the `dev:android` script sets this automatically to your WSL IP.
 
-For production Hisaabo Cloud builds, `EXPO_PUBLIC_API_URL` is set to `https://api.hisaabo.in` in the EAS project environment variables on [expo.dev](https://expo.dev). If you are building a custom binary targeting your own self-hosted server, set this variable to your API's public URL instead.
+For production Hisaabo Cloud builds, `EXPO_PUBLIC_API_URL` is set to `${import.meta.env.API_URL}` in the EAS project environment variables on [expo.dev](https://expo.dev). If you are building a custom binary targeting your own self-hosted server, set this variable to your API's public URL instead.

@@ -24,14 +24,30 @@ export const loginSchema = z.object({
 });
 
 export const registerSchema = z.object({
+  username: z.string().trim().min(3).max(50).optional(),
+  name: z.string().trim().min(2).max(100).optional(),
   email: z.string().email().max(255),
-  name: z.string().min(2).max(100),
   password: z.string().min(8).max(128),
   confirmPassword: z.string(),
+  referralCode: z.string().trim().max(50).optional().or(z.literal("")),
   turnstileToken: z.string().optional(),
-}).refine((d) => d.password === d.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
+}).superRefine((data, ctx) => {
+  const username = (data.username ?? data.name)?.trim();
+  if (!username) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["username"],
+      message: "Username is required",
+    });
+  }
+
+  if (data.password !== data.confirmPassword) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["confirmPassword"],
+      message: "Passwords don't match",
+    });
+  }
 });
 
 export const magicLinkRequestSchema = z.object({

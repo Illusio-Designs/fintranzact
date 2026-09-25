@@ -79,13 +79,35 @@ describe("loginSchema — validates email + password login credentials", () => {
 describe("registerSchema — validates new user registration input", () => {
   const validInput = {
     email: "rahul@example.in",
-    name: "Rahul Sharma",
+    username: "rahulsharma",
     password: "mypassword123",
     confirmPassword: "mypassword123",
   };
 
   it("accepts valid registration data with matching passwords", () => {
     expect(registerSchema.safeParse(validInput).success).toBe(true);
+  });
+
+  it("keeps the referral code in the validated registration payload", () => {
+    const result = registerSchema.safeParse({
+      ...validInput,
+      referralCode: "REF123",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.referralCode).toBe("REF123");
+    }
+  });
+
+  it("requires a username for registrations", () => {
+    const result = registerSchema.safeParse({
+      email: "rahul@example.in",
+      password: "mypassword123",
+      confirmPassword: "mypassword123",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toContain("username");
   });
 
   it("rejects when password and confirmPassword do not match", () => {

@@ -29,16 +29,16 @@ describe("apiUrl", () => {
   });
 
   it("prefixes the path with VITE_API_URL when set (split-host prod)", () => {
-    vi.stubEnv("VITE_API_URL", "https://api.hisaabo.in");
+    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
     expect(apiUrl("/api/invoices/abc/pdf?format=a5")).toBe(
-      "https://api.hisaabo.in/api/invoices/abc/pdf?format=a5",
+      "${import.meta.env.API_URL}/api/invoices/abc/pdf?format=a5",
     );
   });
 
   it("produces an absolute URL that resolves to the API origin in split-host mode", () => {
-    vi.stubEnv("VITE_API_URL", "https://api.hisaabo.in");
+    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
     const result = apiUrl("/api/parties/p1/ledger.pdf?from=2024-04-01");
-    expect(new URL(result).origin).toBe("https://api.hisaabo.in");
+    expect(new URL(result).origin).toBe("${import.meta.env.API_URL}");
     expect(new URL(result).pathname).toBe("/api/parties/p1/ledger.pdf");
   });
 
@@ -53,11 +53,11 @@ describe("apiUrl", () => {
   });
 
   it("preserves query strings and special characters in the path", () => {
-    vi.stubEnv("VITE_API_URL", "https://api.hisaabo.in");
+    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
     expect(
       apiUrl("/api/invoices/abc/pdf?format=a5&download=true"),
     ).toBe(
-      "https://api.hisaabo.in/api/invoices/abc/pdf?format=a5&download=true",
+      "${import.meta.env.API_URL}/api/invoices/abc/pdf?format=a5&download=true",
     );
   });
 });

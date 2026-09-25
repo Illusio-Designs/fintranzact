@@ -1,7 +1,7 @@
 //! Desktop session-token storage backed by the OS credential manager.
 //!
 //! The desktop app uses Bearer-token auth (not HttpOnly cookies) so that
-//! the Tauri webview at `tauri.localhost` can talk to `https://api.hisaabo.in`
+//! the Tauri webview at `tauri.localhost` can talk to `${import.meta.env.API_URL}`
 //! cross-origin without relaxing `SameSite=Lax` on web. Tokens are stored
 //! in the OS-native credential store — Keychain on macOS, Credential Manager
 //! on Windows, libsecret on Linux — matching the mobile app's

@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const gstEndpoints: EndpointGroup = {
   id: "gst",
@@ -55,7 +56,7 @@ export const gstEndpoints: EndpointGroup = {
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gst.gstr1?input=%7B%22json%22%3A%7B%22year%22%3A2026%2C%22month%22%3A1%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gst.gstr1?input=%7B%22json%22%3A%7B%22year%22%3A2026%2C%22month%22%3A1%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const report = await trpc.gst.gstr1.query({
@@ -67,7 +68,7 @@ console.log("B2CS taxable:", report.b2cs.taxableValue);`,
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gst.gstr1",
+    "${API_BASE_URL}/api/trpc/gst.gstr1",
     params={"input": '{"json":{"year":2026,"month":1}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -116,7 +117,7 @@ print("Period:", report["period"])`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gst.gstr3b?input=%7B%22json%22%3A%7B%22year%22%3A2026%2C%22month%22%3A1%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gst.gstr3b?input=%7B%22json%22%3A%7B%22year%22%3A2026%2C%22month%22%3A1%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const summary = await trpc.gst.gstr3b.query({
@@ -128,7 +129,7 @@ console.log("Net ITC CGST:", summary.table4.netItc.cgst);`,
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gst.gstr3b",
+    "${API_BASE_URL}/api/trpc/gst.gstr3b",
     params={"input": '{"json":{"year":2026,"month":1}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -165,7 +166,7 @@ print("Tax payable CGST:", summary["table3_1"]["outwardTaxable"]["cgst"])`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gst.gstr1CSV?input=%7B%22json%22%3A%7B%22year%22%3A2026%2C%22month%22%3A1%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gst.gstr1CSV?input=%7B%22json%22%3A%7B%22year%22%3A2026%2C%22month%22%3A1%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { csv, filename } = await trpc.gst.gstr1CSV.query({
@@ -181,7 +182,7 @@ a.click();`,
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gst.gstr1CSV",
+    "${API_BASE_URL}/api/trpc/gst.gstr1CSV",
     params={"input": '{"json":{"year":2026,"month":1}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -226,7 +227,7 @@ with open(data["filename"], "w") as f:
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gst.gstr1Json?input=%7B%22json%22%3A%7B%22year%22%3A2026%2C%22month%22%3A1%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gst.gstr1Json?input=%7B%22json%22%3A%7B%22year%22%3A2026%2C%22month%22%3A1%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { json, filename } = await trpc.gst.gstr1Json.query({
@@ -242,7 +243,7 @@ a.click();`,
         python: `import httpx, json
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gst.gstr1Json",
+    "${API_BASE_URL}/api/trpc/gst.gstr1Json",
     params={"input": '{"json":{"year":2026,"month":1}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -289,7 +290,7 @@ print("Saved portal JSON:", data["filename"])`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gst.gstr9?input=%7B%22json%22%3A%7B%22financialYear%22%3A2025%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gst.gstr9?input=%7B%22json%22%3A%7B%22financialYear%22%3A2025%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const annual = await trpc.gst.gstr9.query({
@@ -300,7 +301,7 @@ console.log("Total outward:", annual.table4.total.taxableValue);`,
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gst.gstr9",
+    "${API_BASE_URL}/api/trpc/gst.gstr9",
     params={"input": '{"json":{"financialYear":2025}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -343,7 +344,7 @@ print("FY:", annual["financialYear"])`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gst.gstr9Json?input=%7B%22json%22%3A%7B%22financialYear%22%3A2025%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gst.gstr9Json?input=%7B%22json%22%3A%7B%22financialYear%22%3A2025%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { json, filename } = await trpc.gst.gstr9Json.query({
@@ -358,7 +359,7 @@ a.click();`,
         python: `import httpx, json
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gst.gstr9Json",
+    "${API_BASE_URL}/api/trpc/gst.gstr9Json",
     params={"input": '{"json":{"financialYear":2025}}'},
     headers={
         "Authorization": f"Bearer {session_token}",
@@ -397,7 +398,7 @@ with open(data["filename"], "w") as f:
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/gst.cmp08?input=%7B%22json%22%3A%7B%22year%22%3A2026%2C%22quarter%22%3A1%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/gst.cmp08?input=%7B%22json%22%3A%7B%22year%22%3A2026%2C%22quarter%22%3A1%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const cmp = await trpc.gst.cmp08.query({
@@ -409,7 +410,7 @@ console.log("Tax payable (1%):", cmp.taxPayable);`,
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/gst.cmp08",
+    "${API_BASE_URL}/api/trpc/gst.cmp08",
     params={"input": '{"json":{"year":2026,"quarter":1}}'},
     headers={
         "Authorization": f"Bearer {session_token}",

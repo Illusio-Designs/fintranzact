@@ -5,8 +5,12 @@
     "output": "apps/web/dist"
   },
   "routes": {
-    "include": ["/*"],
-    "exclude": ["/api/*"]
+    "include": [
+      "/*"
+    ],
+    "exclude": [
+      "/api/*"
+    ]
   },
   "headers": {
     "/*": {
@@ -21,6 +25,10 @@
     }
   },
   "redirects": [
-    { "source": "/api/:path*", "destination": "https://api.hisaabo.in/api/:path*", "status": 200 }
+    {
+      "source": "/api/:path*",
+      "destination": "${import.meta.env.API_URL}/api/:path*",
+      "status": 200
+    }
   ]
 }

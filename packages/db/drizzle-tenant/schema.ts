@@ -24,7 +24,7 @@ export const recurringTemplateStatus = pgEnum("recurring_template_status", ['act
 export const sessionAuthMethod = pgEnum("session_auth_method", ['cookie', 'bearer'])
 export const shipmentStatus = pgEnum("shipment_status", ['pending', 'shipped', 'in_transit', 'delivered', 'returned'])
 export const storeOrderStatus = pgEnum("store_order_status", ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled'])
-export const tenantPlan = pgEnum("tenant_plan", ['free', 'pro', 'business', 'enterprise'])
+export const tenantPlan = pgEnum("tenant_plan", ['forever_free', 'free', 'pro', 'business', 'enterprise'])
 export const tenantStatus = pgEnum("tenant_status", ['active', 'suspended', 'deleted'])
 export const unit = pgEnum("unit", ['pcs', 'kg', 'g', 'l', 'ml', 'm', 'cm', 'ft', 'in', 'box', 'dozen', 'pair', 'set', 'pkt', 'bun', 'pouch', 'jar', 'btl', 'bag', 'ton', 'pack', 'pet', 'person', 'other'])
 
@@ -44,10 +44,10 @@ export const premises = pgTable("premises", {
 	uniqueIndex("premises_business_code_idx").using("btree", table.businessId.asc().nullsLast().op("text_ops"), table.code.asc().nullsLast().op("text_ops")),
 	index("premises_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "premises_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "premises_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const warehouses = pgTable("warehouses", {
@@ -66,15 +66,15 @@ export const warehouses = pgTable("warehouses", {
 	index("warehouses_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	index("warehouses_premise_idx").using("btree", table.premiseId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "warehouses_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "warehouses_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.premiseId],
-			foreignColumns: [premises.id],
-			name: "warehouses_premise_id_premises_id_fk"
-		}).onDelete("restrict"),
+		columns: [table.premiseId],
+		foreignColumns: [premises.id],
+		name: "warehouses_premise_id_premises_id_fk"
+	}).onDelete("restrict"),
 ]);
 
 export const warehouseLocations = pgTable("warehouse_locations", {
@@ -92,16 +92,17 @@ export const warehouseLocations = pgTable("warehouse_locations", {
 	index("warehouse_locations_parent_idx").using("btree", table.parentId.asc().nullsLast().op("uuid_ops")),
 	index("warehouse_locations_warehouse_idx").using("btree", table.warehouseId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.warehouseId],
-			foreignColumns: [warehouses.id],
-			name: "warehouse_locations_warehouse_id_warehouses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.warehouseId],
+		foreignColumns: [warehouses.id],
+		name: "warehouse_locations_warehouse_id_warehouses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const users = pgTable("users", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	email: text().notNull(),
 	name: text(),
+	referralCode: text("referral_code"),
 	passwordHash: text("password_hash"),
 	emailVerified: boolean("email_verified").default(false).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -140,10 +141,10 @@ export const magicLinkTokens = pgTable("magic_link_tokens", {
 	index("magic_link_tokens_email_idx").using("btree", table.email.asc().nullsLast().op("text_ops")),
 	index("magic_link_tokens_hash_idx").using("btree", table.tokenHash.asc().nullsLast().op("text_ops")),
 	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [users.id],
-			name: "magic_link_tokens_user_id_users_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.userId],
+		foreignColumns: [users.id],
+		name: "magic_link_tokens_user_id_users_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const tenantMembers = pgTable("tenant_members", {
@@ -158,20 +159,20 @@ export const tenantMembers = pgTable("tenant_members", {
 	uniqueIndex("tenant_members_unique_idx").using("btree", table.tenantId.asc().nullsLast().op("uuid_ops"), table.userId.asc().nullsLast().op("uuid_ops")),
 	index("tenant_members_user_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.tenantId],
-			foreignColumns: [tenants.id],
-			name: "tenant_members_tenant_id_tenants_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.tenantId],
+		foreignColumns: [tenants.id],
+		name: "tenant_members_tenant_id_tenants_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [users.id],
-			name: "tenant_members_user_id_users_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.userId],
+		foreignColumns: [users.id],
+		name: "tenant_members_user_id_users_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.invitedBy],
-			foreignColumns: [users.id],
-			name: "tenant_members_invited_by_users_id_fk"
-		}).onDelete("set null"),
+		columns: [table.invitedBy],
+		foreignColumns: [users.id],
+		name: "tenant_members_invited_by_users_id_fk"
+	}).onDelete("set null"),
 ]);
 
 export const apiKeys = pgTable("api_keys", {
@@ -188,15 +189,15 @@ export const apiKeys = pgTable("api_keys", {
 	index("api_keys_hash_idx").using("btree", table.keyHash.asc().nullsLast().op("text_ops")),
 	index("api_keys_user_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [users.id],
-			name: "api_keys_user_id_users_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.userId],
+		foreignColumns: [users.id],
+		name: "api_keys_user_id_users_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.tenantId],
-			foreignColumns: [tenants.id],
-			name: "api_keys_tenant_id_tenants_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.tenantId],
+		foreignColumns: [tenants.id],
+		name: "api_keys_tenant_id_tenants_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const systemConfig = pgTable("system_config", {
@@ -220,15 +221,15 @@ export const invitations = pgTable("invitations", {
 	index("invitations_tenant_idx").using("btree", table.tenantId.asc().nullsLast().op("uuid_ops")),
 	uniqueIndex("invitations_token_idx").using("btree", table.token.asc().nullsLast().op("text_ops")),
 	foreignKey({
-			columns: [table.tenantId],
-			foreignColumns: [tenants.id],
-			name: "invitations_tenant_id_tenants_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.tenantId],
+		foreignColumns: [tenants.id],
+		name: "invitations_tenant_id_tenants_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.invitedBy],
-			foreignColumns: [users.id],
-			name: "invitations_invited_by_users_id_fk"
-		}).onDelete("set null"),
+		columns: [table.invitedBy],
+		foreignColumns: [users.id],
+		name: "invitations_invited_by_users_id_fk"
+	}).onDelete("set null"),
 ]);
 
 export const auditLog = pgTable("audit_log", {
@@ -246,10 +247,10 @@ export const auditLog = pgTable("audit_log", {
 	index("audit_log_date_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.createdAt.asc().nullsLast().op("timestamptz_ops")),
 	index("audit_log_entity_idx").using("btree", table.entityType.asc().nullsLast().op("text_ops"), table.entityId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "audit_log_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "audit_log_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const bankAccounts = pgTable("bank_accounts", {
@@ -260,18 +261,18 @@ export const bankAccounts = pgTable("bank_accounts", {
 	ifsc: text(),
 	bankName: text("bank_name"),
 	accountType: bankAccountType("account_type").default('savings').notNull(),
-	openingBalance: numeric("opening_balance", { precision: 15, scale:  2 }).default('0').notNull(),
-	currentBalance: numeric("current_balance", { precision: 15, scale:  2 }).default('0').notNull(),
+	openingBalance: numeric("opening_balance", { precision: 15, scale: 2 }).default('0').notNull(),
+	currentBalance: numeric("current_balance", { precision: 15, scale: 2 }).default('0').notNull(),
 	isDefault: boolean("is_default").default(false).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	index("bank_accounts_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "bank_accounts_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "bank_accounts_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const sessions = pgTable("sessions", {
@@ -289,15 +290,15 @@ export const sessions = pgTable("sessions", {
 	index("sessions_tenant_idx").using("btree", table.tenantId.asc().nullsLast().op("uuid_ops")),
 	index("sessions_user_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [users.id],
-			name: "sessions_user_id_users_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.userId],
+		foreignColumns: [users.id],
+		name: "sessions_user_id_users_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.tenantId],
-			foreignColumns: [tenants.id],
-			name: "sessions_tenant_id_tenants_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.tenantId],
+		foreignColumns: [tenants.id],
+		name: "sessions_tenant_id_tenants_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const bankStatementTemplates = pgTable("bank_statement_templates", {
@@ -321,10 +322,10 @@ export const bankStatementTemplates = pgTable("bank_statement_templates", {
 	uniqueIndex("bst_business_bank_version_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.bankSlug.asc().nullsLast().op("uuid_ops"), table.version.asc().nullsLast().op("int4_ops"), table.fileFormat.asc().nullsLast().op("uuid_ops")),
 	index("bst_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "bank_statement_templates_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "bank_statement_templates_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const bankTransactions = pgTable("bank_transactions", {
@@ -332,7 +333,7 @@ export const bankTransactions = pgTable("bank_transactions", {
 	businessId: uuid("business_id").notNull(),
 	bankAccountId: uuid("bank_account_id").notNull(),
 	type: bankTransactionType().notNull(),
-	amount: numeric({ precision: 15, scale:  2 }).notNull(),
+	amount: numeric({ precision: 15, scale: 2 }).notNull(),
 	description: text(),
 	referenceType: text("reference_type"),
 	referenceId: uuid("reference_id"),
@@ -346,15 +347,15 @@ export const bankTransactions = pgTable("bank_transactions", {
 	index("bank_txn_payment_idx").using("btree", table.paymentId.asc().nullsLast().op("uuid_ops")),
 	index("bank_txn_ref_idx").using("btree", table.referenceType.asc().nullsLast().op("text_ops"), table.referenceId.asc().nullsLast().op("text_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "bank_transactions_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "bank_transactions_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.bankAccountId],
-			foreignColumns: [bankAccounts.id],
-			name: "bank_transactions_bank_account_id_bank_accounts_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.bankAccountId],
+		foreignColumns: [bankAccounts.id],
+		name: "bank_transactions_bank_account_id_bank_accounts_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const bankStatementLines = pgTable("bank_statement_lines", {
@@ -364,13 +365,13 @@ export const bankStatementLines = pgTable("bank_statement_lines", {
 	lineNumber: integer("line_number").notNull(),
 	transactionDate: timestamp("transaction_date", { withTimezone: true, mode: 'string' }).notNull(),
 	narration: text(),
-	debit: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	credit: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	balance: numeric({ precision: 15, scale:  2 }),
+	debit: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	credit: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	balance: numeric({ precision: 15, scale: 2 }),
 	referenceNumber: text("reference_number"),
 	rawData: jsonb("raw_data"),
 	matchStatus: bankStatementMatchStatus("match_status").default('unmatched').notNull(),
-	matchConfidence: numeric("match_confidence", { precision: 3, scale:  2 }),
+	matchConfidence: numeric("match_confidence", { precision: 3, scale: 2 }),
 	matchedPaymentId: uuid("matched_payment_id"),
 	matchedExpenseId: uuid("matched_expense_id"),
 	matchedBankTransactionId: uuid("matched_bank_transaction_id"),
@@ -383,15 +384,15 @@ export const bankStatementLines = pgTable("bank_statement_lines", {
 	index("bsl_import_idx").using("btree", table.importId.asc().nullsLast().op("uuid_ops")),
 	index("bsl_status_idx").using("btree", table.importId.asc().nullsLast().op("enum_ops"), table.matchStatus.asc().nullsLast().op("enum_ops")),
 	foreignKey({
-			columns: [table.importId],
-			foreignColumns: [bankStatementImports.id],
-			name: "bank_statement_lines_import_id_bank_statement_imports_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.importId],
+		foreignColumns: [bankStatementImports.id],
+		name: "bank_statement_lines_import_id_bank_statement_imports_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "bank_statement_lines_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "bank_statement_lines_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const businessMembers = pgTable("business_members", {
@@ -404,10 +405,10 @@ export const businessMembers = pgTable("business_members", {
 	uniqueIndex("business_members_business_user_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.userId.asc().nullsLast().op("uuid_ops")),
 	index("business_members_user_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "business_members_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "business_members_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const bankCategorizationRules = pgTable("bank_categorization_rules", {
@@ -427,15 +428,15 @@ export const bankCategorizationRules = pgTable("bank_categorization_rules", {
 }, (table) => [
 	index("bcr_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "bank_categorization_rules_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "bank_categorization_rules_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.bankAccountId],
-			foreignColumns: [bankAccounts.id],
-			name: "bank_categorization_rules_bank_account_id_bank_accounts_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.bankAccountId],
+		foreignColumns: [bankAccounts.id],
+		name: "bank_categorization_rules_bank_account_id_bank_accounts_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const eInvoiceConfigs = pgTable("e_invoice_configs", {
@@ -450,16 +451,16 @@ export const eInvoiceConfigs = pgTable("e_invoice_configs", {
 	tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true, mode: 'string' }),
 	isSandbox: boolean("is_sandbox").default(true).notNull(),
 	isEnabled: boolean("is_enabled").default(false).notNull(),
-	thresholdCrore: numeric("threshold_crore", { precision: 5, scale:  2 }).default('5').notNull(),
+	thresholdCrore: numeric("threshold_crore", { precision: 5, scale: 2 }).default('5').notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	uniqueIndex("einv_config_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "e_invoice_configs_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "e_invoice_configs_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const ewayBills = pgTable("eway_bills", {
@@ -494,15 +495,15 @@ export const ewayBills = pgTable("eway_bills", {
 	index("ewb_status_idx").using("btree", table.businessId.asc().nullsLast().op("enum_ops"), table.status.asc().nullsLast().op("uuid_ops")),
 	index("ewb_validity_idx").using("btree", table.businessId.asc().nullsLast().op("timestamptz_ops"), table.validUpto.asc().nullsLast().op("timestamptz_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "eway_bills_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "eway_bills_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.invoiceId],
-			foreignColumns: [invoices.id],
-			name: "eway_bills_invoice_id_invoices_id_fk"
-		}).onDelete("set null"),
+		columns: [table.invoiceId],
+		foreignColumns: [invoices.id],
+		name: "eway_bills_invoice_id_invoices_id_fk"
+	}).onDelete("set null"),
 ]);
 
 export const expenses = pgTable("expenses", {
@@ -510,7 +511,7 @@ export const expenses = pgTable("expenses", {
 	businessId: uuid("business_id").notNull(),
 	category: text().notNull(),
 	description: text(),
-	amount: numeric({ precision: 15, scale:  2 }).notNull(),
+	amount: numeric({ precision: 15, scale: 2 }).notNull(),
 	mode: paymentMode().notNull(),
 	expenseDate: timestamp("expense_date", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	referenceNumber: text("reference_number"),
@@ -525,15 +526,15 @@ export const expenses = pgTable("expenses", {
 	index("expenses_category_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.category.asc().nullsLast().op("text_ops")),
 	index("expenses_date_idx").using("btree", table.businessId.asc().nullsLast().op("timestamptz_ops"), table.expenseDate.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "expenses_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "expenses_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.bankAccountId],
-			foreignColumns: [bankAccounts.id],
-			name: "expenses_bank_account_id_bank_accounts_id_fk"
-		}),
+		columns: [table.bankAccountId],
+		foreignColumns: [bankAccounts.id],
+		name: "expenses_bank_account_id_bank_accounts_id_fk"
+	}),
 ]);
 
 export const businesses = pgTable("businesses", {
@@ -578,12 +579,12 @@ export const businesses = pgTable("businesses", {
 	nextProformaNumber: integer("next_proforma_number").default(1).notNull(),
 	financialYearStartMonth: integer("financial_year_start_month").default(4).notNull(),
 	currency: text().default('INR').notNull(),
-	annualTurnover: numeric("annual_turnover", { precision: 15, scale:  2 }),
+	annualTurnover: numeric("annual_turnover", { precision: 15, scale: 2 }),
 	storeEnabled: boolean("store_enabled").default(false).notNull(),
 	storeSlug: text("store_slug"),
 	storeTagline: text("store_tagline"),
 	storeAccentColor: text("store_accent_color"),
-	storeMinOrderAmount: numeric("store_min_order_amount", { precision: 15, scale:  2 }),
+	storeMinOrderAmount: numeric("store_min_order_amount", { precision: 15, scale: 2 }),
 	storeDeliveryNote: text("store_delivery_note"),
 	storeWhatsappNumber: text("store_whatsapp_number"),
 	storeAllowNegativeStock: boolean("store_allow_negative_stock").default(false).notNull(),
@@ -615,7 +616,7 @@ export const bankStatementImports = pgTable("bank_statement_imports", {
 	unmatchedLines: integer("unmatched_lines").default(0).notNull(),
 	statementStartDate: timestamp("statement_start_date", { withTimezone: true, mode: 'string' }),
 	statementEndDate: timestamp("statement_end_date", { withTimezone: true, mode: 'string' }),
-	closingBalance: numeric("closing_balance", { precision: 15, scale:  2 }),
+	closingBalance: numeric("closing_balance", { precision: 15, scale: 2 }),
 	createdByUserId: uuid("created_by_user_id"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -623,20 +624,20 @@ export const bankStatementImports = pgTable("bank_statement_imports", {
 	index("bsi_bank_account_idx").using("btree", table.bankAccountId.asc().nullsLast().op("uuid_ops")),
 	index("bsi_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "bank_statement_imports_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "bank_statement_imports_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.bankAccountId],
-			foreignColumns: [bankAccounts.id],
-			name: "bank_statement_imports_bank_account_id_bank_accounts_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.bankAccountId],
+		foreignColumns: [bankAccounts.id],
+		name: "bank_statement_imports_bank_account_id_bank_accounts_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.templateId],
-			foreignColumns: [bankStatementTemplates.id],
-			name: "bank_statement_imports_template_id_bank_statement_templates_id_"
-		}).onDelete("set null"),
+		columns: [table.templateId],
+		foreignColumns: [bankStatementTemplates.id],
+		name: "bank_statement_imports_template_id_bank_statement_templates_id_"
+	}).onDelete("set null"),
 ]);
 
 export const chartOfAccounts = pgTable("chart_of_accounts", {
@@ -656,10 +657,10 @@ export const chartOfAccounts = pgTable("chart_of_accounts", {
 	index("coa_parent_idx").using("btree", table.parentId.asc().nullsLast().op("uuid_ops")),
 	index("coa_type_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.accountType.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "chart_of_accounts_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "chart_of_accounts_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const invoiceItems = pgTable("invoice_items", {
@@ -668,35 +669,35 @@ export const invoiceItems = pgTable("invoice_items", {
 	itemId: uuid("item_id"),
 	itemName: text("item_name").notNull(),
 	description: text(),
-	quantity: numeric({ precision: 15, scale:  3 }).notNull(),
-	unitPrice: numeric("unit_price", { precision: 15, scale:  2 }).notNull(),
-	taxPercent: numeric("tax_percent", { precision: 5, scale:  2 }).default('0').notNull(),
-	taxAmount: numeric("tax_amount", { precision: 15, scale:  2 }).default('0').notNull(),
-	discountPercent: numeric("discount_percent", { precision: 5, scale:  2 }).default('0').notNull(),
-	totalAmount: numeric("total_amount", { precision: 15, scale:  2 }).notNull(),
+	quantity: numeric({ precision: 15, scale: 3 }).notNull(),
+	unitPrice: numeric("unit_price", { precision: 15, scale: 2 }).notNull(),
+	taxPercent: numeric("tax_percent", { precision: 5, scale: 2 }).default('0').notNull(),
+	taxAmount: numeric("tax_amount", { precision: 15, scale: 2 }).default('0').notNull(),
+	discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).default('0').notNull(),
+	totalAmount: numeric("total_amount", { precision: 15, scale: 2 }).notNull(),
 	sortOrder: integer("sort_order").default(0).notNull(),
 	selectedUnit: text("selected_unit"),
-	conversionFactor: numeric("conversion_factor", { precision: 10, scale:  4 }).default('1'),
+	conversionFactor: numeric("conversion_factor", { precision: 10, scale: 4 }).default('1'),
 	variantId: uuid("variant_id"),
 }, (table) => [
 	index("invoice_items_invoice_idx").using("btree", table.invoiceId.asc().nullsLast().op("uuid_ops")),
 	index("invoice_items_item_idx").using("btree", table.itemId.asc().nullsLast().op("uuid_ops")),
 	index("invoice_items_variant_idx").using("btree", table.variantId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.invoiceId],
-			foreignColumns: [invoices.id],
-			name: "invoice_items_invoice_id_invoices_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.invoiceId],
+		foreignColumns: [invoices.id],
+		name: "invoice_items_invoice_id_invoices_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.itemId],
-			foreignColumns: [items.id],
-			name: "invoice_items_item_id_items_id_fk"
-		}).onDelete("set null"),
+		columns: [table.itemId],
+		foreignColumns: [items.id],
+		name: "invoice_items_item_id_items_id_fk"
+	}).onDelete("set null"),
 	foreignKey({
-			columns: [table.variantId],
-			foreignColumns: [itemVariants.id],
-			name: "invoice_items_variant_id_item_variants_id_fk"
-		}).onDelete("set null"),
+		columns: [table.variantId],
+		foreignColumns: [itemVariants.id],
+		name: "invoice_items_variant_id_item_variants_id_fk"
+	}).onDelete("set null"),
 ]);
 
 export const items = pgTable("items", {
@@ -709,18 +710,18 @@ export const items = pgTable("items", {
 	itemMode: itemMode("item_mode").default('simple').notNull(),
 	unitVariants: jsonb("unit_variants"),
 	variantAttributes: jsonb("variant_attributes"),
-	salePrice: numeric("sale_price", { precision: 15, scale:  2 }),
-	purchasePrice: numeric("purchase_price", { precision: 15, scale:  2 }),
-	taxPercent: numeric("tax_percent", { precision: 5, scale:  2 }).default('0').notNull(),
-	stockQuantity: numeric("stock_quantity", { precision: 15, scale:  3 }).default('0').notNull(),
-	lowStockAlert: numeric("low_stock_alert", { precision: 15, scale:  3 }),
+	salePrice: numeric("sale_price", { precision: 15, scale: 2 }),
+	purchasePrice: numeric("purchase_price", { precision: 15, scale: 2 }),
+	taxPercent: numeric("tax_percent", { precision: 5, scale: 2 }).default('0').notNull(),
+	stockQuantity: numeric("stock_quantity", { precision: 15, scale: 3 }).default('0').notNull(),
+	lowStockAlert: numeric("low_stock_alert", { precision: 15, scale: 3 }),
 	description: text(),
 	itemType: itemType("item_type").default('product').notNull(),
 	category: text(),
 	taxInclusive: boolean("tax_inclusive").default(false).notNull(),
 	source: text(),
 	storeEnabled: boolean("store_enabled").default(false).notNull(),
-	storePrice: numeric("store_price", { precision: 15, scale:  2 }),
+	storePrice: numeric("store_price", { precision: 15, scale: 2 }),
 	storeSortOrder: integer("store_sort_order").default(0).notNull(),
 	storeCategory: text("store_category"),
 	storeDescription: text("store_description"),
@@ -734,10 +735,10 @@ export const items = pgTable("items", {
 	index("items_sku_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.sku.asc().nullsLast().op("uuid_ops")),
 	index("items_store_idx").using("btree", table.businessId.asc().nullsLast().op("bool_ops"), table.storeEnabled.asc().nullsLast().op("bool_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "items_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "items_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const itemVariants = pgTable("item_variants", {
@@ -745,12 +746,12 @@ export const itemVariants = pgTable("item_variants", {
 	itemId: uuid("item_id").notNull(),
 	attributeValues: jsonb("attribute_values").notNull(),
 	sku: text(),
-	salePrice: numeric("sale_price", { precision: 15, scale:  2 }),
-	purchasePrice: numeric("purchase_price", { precision: 15, scale:  2 }),
-	stockQuantity: numeric("stock_quantity", { precision: 15, scale:  3 }).default('0').notNull(),
-	lowStockAlert: numeric("low_stock_alert", { precision: 15, scale:  3 }),
+	salePrice: numeric("sale_price", { precision: 15, scale: 2 }),
+	purchasePrice: numeric("purchase_price", { precision: 15, scale: 2 }),
+	stockQuantity: numeric("stock_quantity", { precision: 15, scale: 3 }).default('0').notNull(),
+	lowStockAlert: numeric("low_stock_alert", { precision: 15, scale: 3 }),
 	storeEnabled: boolean("store_enabled").default(false).notNull(),
-	storePrice: numeric("store_price", { precision: 15, scale:  2 }),
+	storePrice: numeric("store_price", { precision: 15, scale: 2 }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	deletedAt: timestamp("deleted_at", { withTimezone: true, mode: 'string' }),
@@ -759,10 +760,10 @@ export const itemVariants = pgTable("item_variants", {
 	index("item_variants_item_idx").using("btree", table.itemId.asc().nullsLast().op("uuid_ops")),
 	index("item_variants_sku_idx").using("btree", table.sku.asc().nullsLast().op("text_ops")),
 	foreignKey({
-			columns: [table.itemId],
-			foreignColumns: [items.id],
-			name: "item_variants_item_id_items_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.itemId],
+		foreignColumns: [items.id],
+		name: "item_variants_item_id_items_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const gstr2BUploads = pgTable("gstr2b_uploads", {
@@ -780,21 +781,21 @@ export const gstr2BUploads = pgTable("gstr2b_uploads", {
 	index("g2b_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	index("g2b_period_idx").using("btree", table.businessId.asc().nullsLast().op("text_ops"), table.returnPeriod.asc().nullsLast().op("text_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "gstr2b_uploads_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "gstr2b_uploads_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const itcUtilizations = pgTable("itc_utilizations", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	businessId: uuid("business_id").notNull(),
 	returnPeriod: text("return_period").notNull(),
-	cgstUtilized: numeric("cgst_utilized", { precision: 15, scale:  2 }).default('0').notNull(),
-	sgstUtilized: numeric("sgst_utilized", { precision: 15, scale:  2 }).default('0').notNull(),
-	igstUtilizedAgainstCgst: numeric("igst_utilized_against_cgst", { precision: 15, scale:  2 }).default('0').notNull(),
-	igstUtilizedAgainstSgst: numeric("igst_utilized_against_sgst", { precision: 15, scale:  2 }).default('0').notNull(),
-	igstUtilizedAgainstIgst: numeric("igst_utilized_against_igst", { precision: 15, scale:  2 }).default('0').notNull(),
+	cgstUtilized: numeric("cgst_utilized", { precision: 15, scale: 2 }).default('0').notNull(),
+	sgstUtilized: numeric("sgst_utilized", { precision: 15, scale: 2 }).default('0').notNull(),
+	igstUtilizedAgainstCgst: numeric("igst_utilized_against_cgst", { precision: 15, scale: 2 }).default('0').notNull(),
+	igstUtilizedAgainstSgst: numeric("igst_utilized_against_sgst", { precision: 15, scale: 2 }).default('0').notNull(),
+	igstUtilizedAgainstIgst: numeric("igst_utilized_against_igst", { precision: 15, scale: 2 }).default('0').notNull(),
 	notes: text(),
 	createdByUserId: uuid("created_by_user_id"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -803,10 +804,10 @@ export const itcUtilizations = pgTable("itc_utilizations", {
 	index("itc_util_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	uniqueIndex("itc_util_period_idx").using("btree", table.businessId.asc().nullsLast().op("text_ops"), table.returnPeriod.asc().nullsLast().op("text_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "itc_utilizations_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "itc_utilizations_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const journalEntries = pgTable("journal_entries", {
@@ -828,10 +829,10 @@ export const journalEntries = pgTable("journal_entries", {
 	index("je_date_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.entryDate.asc().nullsLast().op("timestamptz_ops")),
 	uniqueIndex("je_number_idx").using("btree", table.businessId.asc().nullsLast().op("text_ops"), table.entryNumber.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "journal_entries_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "journal_entries_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const itcLedgerEntries = pgTable("itc_ledger_entries", {
@@ -840,10 +841,10 @@ export const itcLedgerEntries = pgTable("itc_ledger_entries", {
 	invoiceId: uuid("invoice_id"),
 	returnPeriod: text("return_period").notNull(),
 	status: itcStatus().notNull(),
-	cgst: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	sgst: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	igst: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	cess: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
+	cgst: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	sgst: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	igst: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	cess: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
 	isReverseCharge: boolean("is_reverse_charge").default(false).notNull(),
 	blockReason: text("block_reason"),
 	reversalReason: text("reversal_reason"),
@@ -856,37 +857,37 @@ export const itcLedgerEntries = pgTable("itc_ledger_entries", {
 	index("itc_period_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.returnPeriod.asc().nullsLast().op("text_ops")),
 	index("itc_status_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.status.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "itc_ledger_entries_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "itc_ledger_entries_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.invoiceId],
-			foreignColumns: [invoices.id],
-			name: "itc_ledger_entries_invoice_id_invoices_id_fk"
-		}).onDelete("set null"),
+		columns: [table.invoiceId],
+		foreignColumns: [invoices.id],
+		name: "itc_ledger_entries_invoice_id_invoices_id_fk"
+	}).onDelete("set null"),
 ]);
 
 export const journalEntryLines = pgTable("journal_entry_lines", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	journalEntryId: uuid("journal_entry_id").notNull(),
 	accountId: uuid("account_id").notNull(),
-	debit: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	credit: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
+	debit: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	credit: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
 	narration: text(),
 }, (table) => [
 	index("jel_account_idx").using("btree", table.accountId.asc().nullsLast().op("uuid_ops")),
 	index("jel_entry_idx").using("btree", table.journalEntryId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.journalEntryId],
-			foreignColumns: [journalEntries.id],
-			name: "journal_entry_lines_journal_entry_id_journal_entries_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.journalEntryId],
+		foreignColumns: [journalEntries.id],
+		name: "journal_entry_lines_journal_entry_id_journal_entries_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.accountId],
-			foreignColumns: [chartOfAccounts.id],
-			name: "journal_entry_lines_account_id_chart_of_accounts_id_fk"
-		}).onDelete("restrict"),
+		columns: [table.accountId],
+		foreignColumns: [chartOfAccounts.id],
+		name: "journal_entry_lines_account_id_chart_of_accounts_id_fk"
+	}).onDelete("restrict"),
 ]);
 
 export const journalEntryTemplates = pgTable("journal_entry_templates", {
@@ -900,10 +901,10 @@ export const journalEntryTemplates = pgTable("journal_entry_templates", {
 }, (table) => [
 	index("jet_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "journal_entry_templates_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "journal_entry_templates_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const invoices = pgTable("invoices", {
@@ -916,14 +917,14 @@ export const invoices = pgTable("invoices", {
 	invoiceNumber: text("invoice_number").notNull(),
 	invoiceDate: timestamp("invoice_date", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	dueDate: timestamp("due_date", { withTimezone: true, mode: 'string' }),
-	subtotal: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	taxAmount: numeric("tax_amount", { precision: 15, scale:  2 }).default('0').notNull(),
-	discountAmount: numeric("discount_amount", { precision: 15, scale:  2 }).default('0').notNull(),
+	subtotal: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	taxAmount: numeric("tax_amount", { precision: 15, scale: 2 }).default('0').notNull(),
+	discountAmount: numeric("discount_amount", { precision: 15, scale: 2 }).default('0').notNull(),
 	charges: jsonb(),
-	additionalCharges: numeric("additional_charges", { precision: 15, scale:  2 }).default('0').notNull(),
-	roundOff: numeric("round_off", { precision: 15, scale:  2 }).default('0').notNull(),
-	totalAmount: numeric("total_amount", { precision: 15, scale:  2 }).default('0').notNull(),
-	amountPaid: numeric("amount_paid", { precision: 15, scale:  2 }).default('0').notNull(),
+	additionalCharges: numeric("additional_charges", { precision: 15, scale: 2 }).default('0').notNull(),
+	roundOff: numeric("round_off", { precision: 15, scale: 2 }).default('0').notNull(),
+	totalAmount: numeric("total_amount", { precision: 15, scale: 2 }).default('0').notNull(),
+	amountPaid: numeric("amount_paid", { precision: 15, scale: 2 }).default('0').notNull(),
 	notes: text(),
 	termsAndConditions: text("terms_and_conditions"),
 	referenceDocumentId: uuid("reference_document_id"),
@@ -957,15 +958,15 @@ export const invoices = pgTable("invoices", {
 	index("invoices_ref_doc_idx").using("btree", table.referenceDocumentId.asc().nullsLast().op("uuid_ops")),
 	index("invoices_status_idx").using("btree", table.businessId.asc().nullsLast().op("enum_ops"), table.status.asc().nullsLast().op("enum_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "invoices_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "invoices_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.partyId],
-			foreignColumns: [parties.id],
-			name: "invoices_party_id_parties_id_fk"
-		}).onDelete("restrict"),
+		columns: [table.partyId],
+		foreignColumns: [parties.id],
+		name: "invoices_party_id_parties_id_fk"
+	}).onDelete("restrict"),
 ]);
 
 export const payments = pgTable("payments", {
@@ -974,8 +975,8 @@ export const payments = pgTable("payments", {
 	businessId: uuid("business_id").notNull(),
 	invoiceId: uuid("invoice_id"),
 	partyId: uuid("party_id").notNull(),
-	amount: numeric({ precision: 15, scale:  2 }).notNull(),
-	discount: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
+	amount: numeric({ precision: 15, scale: 2 }).notNull(),
+	discount: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
 	mode: paymentMode().notNull(),
 	referenceNumber: text("reference_number"),
 	paymentDate: timestamp("payment_date", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -994,20 +995,20 @@ export const payments = pgTable("payments", {
 	index("payments_party_date_idx").using("btree", table.businessId.asc().nullsLast().op("timestamptz_ops"), table.partyId.asc().nullsLast().op("timestamptz_ops"), table.paymentDate.asc().nullsLast().op("uuid_ops")),
 	index("payments_party_idx").using("btree", table.partyId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "payments_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "payments_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.invoiceId],
-			foreignColumns: [invoices.id],
-			name: "payments_invoice_id_invoices_id_fk"
-		}).onDelete("set null"),
+		columns: [table.invoiceId],
+		foreignColumns: [invoices.id],
+		name: "payments_invoice_id_invoices_id_fk"
+	}).onDelete("set null"),
 	foreignKey({
-			columns: [table.partyId],
-			foreignColumns: [parties.id],
-			name: "payments_party_id_parties_id_fk"
-		}).onDelete("restrict"),
+		columns: [table.partyId],
+		foreignColumns: [parties.id],
+		name: "payments_party_id_parties_id_fk"
+	}).onDelete("restrict"),
 ]);
 
 export const recurringInvoiceTemplates = pgTable("recurring_invoice_templates", {
@@ -1021,7 +1022,7 @@ export const recurringInvoiceTemplates = pgTable("recurring_invoice_templates", 
 	lineItems: jsonb("line_items").notNull(),
 	notes: text(),
 	termsAndConditions: text("terms_and_conditions"),
-	additionalCharges: numeric("additional_charges", { precision: 15, scale:  2 }).default('0').notNull(),
+	additionalCharges: numeric("additional_charges", { precision: 15, scale: 2 }).default('0').notNull(),
 	charges: jsonb(),
 	status: recurringTemplateStatus().default('active').notNull(),
 	startDate: timestamp("start_date", { withTimezone: true, mode: 'string' }).notNull(),
@@ -1039,15 +1040,15 @@ export const recurringInvoiceTemplates = pgTable("recurring_invoice_templates", 
 	index("recurring_tpl_party_idx").using("btree", table.partyId.asc().nullsLast().op("uuid_ops")),
 	index("recurring_tpl_status_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.status.asc().nullsLast().op("enum_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "recurring_invoice_templates_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "recurring_invoice_templates_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.partyId],
-			foreignColumns: [parties.id],
-			name: "recurring_invoice_templates_party_id_parties_id_fk"
-		}).onDelete("restrict"),
+		columns: [table.partyId],
+		foreignColumns: [parties.id],
+		name: "recurring_invoice_templates_party_id_parties_id_fk"
+	}).onDelete("restrict"),
 ]);
 
 export const paymentGatewayConfigs = pgTable("payment_gateway_configs", {
@@ -1065,20 +1066,20 @@ export const paymentGatewayConfigs = pgTable("payment_gateway_configs", {
 	uniqueIndex("pg_config_account_idx").using("btree", table.bankAccountId.asc().nullsLast().op("uuid_ops")),
 	index("pg_config_business_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "payment_gateway_configs_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "payment_gateway_configs_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.bankAccountId],
-			foreignColumns: [bankAccounts.id],
-			name: "payment_gateway_configs_bank_account_id_bank_accounts_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.bankAccountId],
+		foreignColumns: [bankAccounts.id],
+		name: "payment_gateway_configs_bank_account_id_bank_accounts_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.settlementAccountId],
-			foreignColumns: [bankAccounts.id],
-			name: "payment_gateway_configs_settlement_account_id_bank_accounts_id_"
-		}).onDelete("restrict"),
+		columns: [table.settlementAccountId],
+		foreignColumns: [bankAccounts.id],
+		name: "payment_gateway_configs_settlement_account_id_bank_accounts_id_"
+	}).onDelete("restrict"),
 ]);
 
 export const salesTargets = pgTable("sales_targets", {
@@ -1086,7 +1087,7 @@ export const salesTargets = pgTable("sales_targets", {
 	businessId: uuid("business_id").notNull(),
 	userId: uuid("user_id").notNull(),
 	targetType: text("target_type").notNull(),
-	targetValue: numeric("target_value", { precision: 15, scale:  2 }).notNull(),
+	targetValue: numeric("target_value", { precision: 15, scale: 2 }).notNull(),
 	itemId: uuid("item_id"),
 	periodType: text("period_type").notNull(),
 	periodStart: timestamp("period_start", { withTimezone: true, mode: 'string' }).notNull(),
@@ -1100,15 +1101,15 @@ export const salesTargets = pgTable("sales_targets", {
 	index("sales_targets_period_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.periodStart.asc().nullsLast().op("timestamptz_ops"), table.periodEnd.asc().nullsLast().op("uuid_ops")),
 	index("sales_targets_user_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.userId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "sales_targets_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "sales_targets_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.itemId],
-			foreignColumns: [items.id],
-			name: "sales_targets_item_id_items_id_fk"
-		}).onDelete("set null"),
+		columns: [table.itemId],
+		foreignColumns: [items.id],
+		name: "sales_targets_item_id_items_id_fk"
+	}).onDelete("set null"),
 ]);
 
 export const shipments = pgTable("shipments", {
@@ -1120,8 +1121,8 @@ export const shipments = pgTable("shipments", {
 	mode: text(),
 	trackingNumber: text("tracking_number"),
 	trackingUrl: text("tracking_url"),
-	cost: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	weight: numeric({ precision: 10, scale:  3 }),
+	cost: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	weight: numeric({ precision: 10, scale: 3 }),
 	shippingAddress: text("shipping_address"),
 	shippingCity: text("shipping_city"),
 	shippingPincode: text("shipping_pincode"),
@@ -1144,20 +1145,20 @@ export const shipments = pgTable("shipments", {
 	index("shipments_party_idx").using("btree", table.partyId.asc().nullsLast().op("uuid_ops")),
 	index("shipments_status_idx").using("btree", table.businessId.asc().nullsLast().op("enum_ops"), table.status.asc().nullsLast().op("enum_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "shipments_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "shipments_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.invoiceId],
-			foreignColumns: [invoices.id],
-			name: "shipments_invoice_id_invoices_id_fk"
-		}).onDelete("set null"),
+		columns: [table.invoiceId],
+		foreignColumns: [invoices.id],
+		name: "shipments_invoice_id_invoices_id_fk"
+	}).onDelete("set null"),
 	foreignKey({
-			columns: [table.partyId],
-			foreignColumns: [parties.id],
-			name: "shipments_party_id_parties_id_fk"
-		}).onDelete("set null"),
+		columns: [table.partyId],
+		foreignColumns: [parties.id],
+		name: "shipments_party_id_parties_id_fk"
+	}).onDelete("set null"),
 ]);
 
 export const shipmentEvents = pgTable("shipment_events", {
@@ -1174,10 +1175,10 @@ export const shipmentEvents = pgTable("shipment_events", {
 	index("shipment_events_shipment_idx").using("btree", table.shipmentId.asc().nullsLast().op("uuid_ops")),
 	index("shipment_events_time_idx").using("btree", table.shipmentId.asc().nullsLast().op("timestamptz_ops"), table.eventTime.asc().nullsLast().op("timestamptz_ops")),
 	foreignKey({
-			columns: [table.shipmentId],
-			foreignColumns: [shipments.id],
-			name: "shipment_events_shipment_id_shipments_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.shipmentId],
+		foreignColumns: [shipments.id],
+		name: "shipment_events_shipment_id_shipments_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const stockAdjustments = pgTable("stock_adjustments", {
@@ -1185,9 +1186,9 @@ export const stockAdjustments = pgTable("stock_adjustments", {
 	businessId: uuid("business_id").notNull(),
 	itemId: uuid("item_id").notNull(),
 	variantId: uuid("variant_id"),
-	quantity: numeric({ precision: 15, scale:  3 }).notNull(),
-	previousStock: numeric("previous_stock", { precision: 15, scale:  3 }).notNull(),
-	newStock: numeric("new_stock", { precision: 15, scale:  3 }).notNull(),
+	quantity: numeric({ precision: 15, scale: 3 }).notNull(),
+	previousStock: numeric("previous_stock", { precision: 15, scale: 3 }).notNull(),
+	newStock: numeric("new_stock", { precision: 15, scale: 3 }).notNull(),
 	reason: text(),
 	adjustmentDate: timestamp("adjustment_date", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	createdByUserId: uuid("created_by_user_id"),
@@ -1199,20 +1200,20 @@ export const stockAdjustments = pgTable("stock_adjustments", {
 	index("stock_adj_item_idx").using("btree", table.itemId.asc().nullsLast().op("uuid_ops")),
 	index("stock_adj_variant_idx").using("btree", table.variantId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "stock_adjustments_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "stock_adjustments_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.itemId],
-			foreignColumns: [items.id],
-			name: "stock_adjustments_item_id_items_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.itemId],
+		foreignColumns: [items.id],
+		name: "stock_adjustments_item_id_items_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.variantId],
-			foreignColumns: [itemVariants.id],
-			name: "stock_adjustments_variant_id_item_variants_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.variantId],
+		foreignColumns: [itemVariants.id],
+		name: "stock_adjustments_variant_id_item_variants_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const storeOrders = pgTable("store_orders", {
@@ -1228,7 +1229,7 @@ export const storeOrders = pgTable("store_orders", {
 	deliveryCity: text("delivery_city"),
 	deliveryPincode: text("delivery_pincode"),
 	deliveryNotes: text("delivery_notes"),
-	totalAmount: numeric("total_amount", { precision: 15, scale:  2 }).default('0').notNull(),
+	totalAmount: numeric("total_amount", { precision: 15, scale: 2 }).default('0').notNull(),
 	itemCount: integer("item_count").default(0).notNull(),
 	source: text().default('online_store').notNull(),
 	confirmedAt: timestamp("confirmed_at", { withTimezone: true, mode: 'string' }),
@@ -1244,15 +1245,15 @@ export const storeOrders = pgTable("store_orders", {
 	index("store_orders_phone_idx").using("btree", table.businessId.asc().nullsLast().op("text_ops"), table.customerPhone.asc().nullsLast().op("uuid_ops")),
 	index("store_orders_status_idx").using("btree", table.businessId.asc().nullsLast().op("uuid_ops"), table.status.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "store_orders_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "store_orders_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.invoiceId],
-			foreignColumns: [invoices.id],
-			name: "store_orders_invoice_id_invoices_id_fk"
-		}).onDelete("set null"),
+		columns: [table.invoiceId],
+		foreignColumns: [invoices.id],
+		name: "store_orders_invoice_id_invoices_id_fk"
+	}).onDelete("set null"),
 ]);
 
 export const accessTokens = pgTable("access_tokens", {
@@ -1264,10 +1265,10 @@ export const accessTokens = pgTable("access_tokens", {
 	index("access_tokens_expires_idx").using("btree", table.expiresAt.asc().nullsLast().op("timestamptz_ops")),
 	index("access_tokens_session_idx").using("btree", table.sessionId.asc().nullsLast().op("text_ops")),
 	foreignKey({
-			columns: [table.sessionId],
-			foreignColumns: [sessions.id],
-			name: "access_tokens_session_id_sessions_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.sessionId],
+		foreignColumns: [sessions.id],
+		name: "access_tokens_session_id_sessions_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const ewayBillVehicleUpdates = pgTable("eway_bill_vehicle_updates", {
@@ -1280,10 +1281,10 @@ export const ewayBillVehicleUpdates = pgTable("eway_bill_vehicle_updates", {
 }, (table) => [
 	index("ewb_vehicle_ewb_idx").using("btree", table.ewayBillId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.ewayBillId],
-			foreignColumns: [ewayBills.id],
-			name: "eway_bill_vehicle_updates_eway_bill_id_eway_bills_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.ewayBillId],
+		foreignColumns: [ewayBills.id],
+		name: "eway_bill_vehicle_updates_eway_bill_id_eway_bills_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const recurringInvoiceRuns = pgTable("recurring_invoice_runs", {
@@ -1299,20 +1300,20 @@ export const recurringInvoiceRuns = pgTable("recurring_invoice_runs", {
 	index("recurring_run_executed_idx").using("btree", table.businessId.asc().nullsLast().op("timestamptz_ops"), table.executedAt.asc().nullsLast().op("timestamptz_ops")),
 	index("recurring_run_template_idx").using("btree", table.templateId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.templateId],
-			foreignColumns: [recurringInvoiceTemplates.id],
-			name: "recurring_invoice_runs_template_id_recurring_invoice_templates_"
-		}).onDelete("cascade"),
+		columns: [table.templateId],
+		foreignColumns: [recurringInvoiceTemplates.id],
+		name: "recurring_invoice_runs_template_id_recurring_invoice_templates_"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "recurring_invoice_runs_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "recurring_invoice_runs_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.invoiceId],
-			foreignColumns: [invoices.id],
-			name: "recurring_invoice_runs_invoice_id_invoices_id_fk"
-		}).onDelete("set null"),
+		columns: [table.invoiceId],
+		foreignColumns: [invoices.id],
+		name: "recurring_invoice_runs_invoice_id_invoices_id_fk"
+	}).onDelete("set null"),
 ]);
 
 export const gstr2BRecords = pgTable("gstr2b_records", {
@@ -1323,12 +1324,12 @@ export const gstr2BRecords = pgTable("gstr2b_records", {
 	supplierName: text("supplier_name"),
 	invoiceNumber: text("invoice_number").notNull(),
 	invoiceDate: timestamp("invoice_date", { withTimezone: true, mode: 'string' }),
-	invoiceValue: numeric("invoice_value", { precision: 15, scale:  2 }).default('0').notNull(),
-	taxableValue: numeric("taxable_value", { precision: 15, scale:  2 }).default('0').notNull(),
-	cgst: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	sgst: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	igst: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
-	cess: numeric({ precision: 15, scale:  2 }).default('0').notNull(),
+	invoiceValue: numeric("invoice_value", { precision: 15, scale: 2 }).default('0').notNull(),
+	taxableValue: numeric("taxable_value", { precision: 15, scale: 2 }).default('0').notNull(),
+	cgst: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	sgst: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	igst: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
+	cess: numeric({ precision: 15, scale: 2 }).default('0').notNull(),
 	itcAvailable: text("itc_available"),
 	reason: text(),
 	sourceType: text("source_type"),
@@ -1342,15 +1343,15 @@ export const gstr2BRecords = pgTable("gstr2b_records", {
 	index("g2br_match_idx").using("btree", table.uploadId.asc().nullsLast().op("text_ops"), table.matchStatus.asc().nullsLast().op("uuid_ops")),
 	index("g2br_upload_idx").using("btree", table.uploadId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.uploadId],
-			foreignColumns: [gstr2BUploads.id],
-			name: "gstr2b_records_upload_id_gstr2b_uploads_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.uploadId],
+		foreignColumns: [gstr2BUploads.id],
+		name: "gstr2b_records_upload_id_gstr2b_uploads_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "gstr2b_records_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "gstr2b_records_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const parties = pgTable("parties", {
@@ -1368,10 +1369,10 @@ export const parties = pgTable("parties", {
 	state: text(),
 	stateCode: text("state_code"),
 	pincode: text(),
-	openingBalance: numeric("opening_balance", { precision: 15, scale:  2 }).default('0').notNull(),
+	openingBalance: numeric("opening_balance", { precision: 15, scale: 2 }).default('0').notNull(),
 	category: text(),
 	creditPeriodDays: integer("credit_period_days"),
-	creditLimit: numeric("credit_limit", { precision: 15, scale:  2 }),
+	creditLimit: numeric("credit_limit", { precision: 15, scale: 2 }),
 	contactPersonName: text("contact_person_name"),
 	contactPersonDob: timestamp("contact_person_dob", { withTimezone: true, mode: 'string' }),
 	bankAccountNumber: text("bank_account_number"),
@@ -1385,29 +1386,29 @@ export const parties = pgTable("parties", {
 	index("parties_name_idx").using("btree", table.businessId.asc().nullsLast().op("text_ops"), table.name.asc().nullsLast().op("uuid_ops")),
 	index("parties_type_idx").using("btree", table.businessId.asc().nullsLast().op("enum_ops"), table.type.asc().nullsLast().op("enum_ops")),
 	foreignKey({
-			columns: [table.businessId],
-			foreignColumns: [businesses.id],
-			name: "parties_business_id_businesses_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.businessId],
+		foreignColumns: [businesses.id],
+		name: "parties_business_id_businesses_id_fk"
+	}).onDelete("cascade"),
 ]);
 
 export const paymentAllocations = pgTable("payment_allocations", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	paymentId: uuid("payment_id").notNull(),
 	invoiceId: uuid("invoice_id").notNull(),
-	amount: numeric({ precision: 15, scale:  2 }).notNull(),
+	amount: numeric({ precision: 15, scale: 2 }).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	index("payment_alloc_invoice_idx").using("btree", table.invoiceId.asc().nullsLast().op("uuid_ops")),
 	index("payment_alloc_payment_idx").using("btree", table.paymentId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
-			columns: [table.paymentId],
-			foreignColumns: [payments.id],
-			name: "payment_allocations_payment_id_payments_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.paymentId],
+		foreignColumns: [payments.id],
+		name: "payment_allocations_payment_id_payments_id_fk"
+	}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.invoiceId],
-			foreignColumns: [invoices.id],
-			name: "payment_allocations_invoice_id_invoices_id_fk"
-		}).onDelete("cascade"),
+		columns: [table.invoiceId],
+		foreignColumns: [invoices.id],
+		name: "payment_allocations_invoice_id_invoices_id_fk"
+	}).onDelete("cascade"),
 ]);

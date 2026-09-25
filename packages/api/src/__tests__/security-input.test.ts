@@ -33,10 +33,28 @@ import {
   createApiKeySchema,
 } from "@hisaabo/shared";
 import { escapeLike } from "../lib/escape-like.js";
+import { getLimits } from "../lib/plan-limits.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECURITY — ILIKE wildcard injection (Finding #7) — FIXED
 // ─────────────────────────────────────────────────────────────────────────────
+describe("plan limits — forever free is truly unlimited", () => {
+  it("returns unlimited access for the forever free plan", () => {
+    const limits = getLimits("forever_free");
+
+    expect(limits.maxOwnedOrgs).toBe(Infinity);
+    expect(limits.maxBusinesses).toBe(Infinity);
+    expect(limits.maxTeamMembers).toBe(Infinity);
+    expect(limits.maxConcurrentSessions).toBe(Infinity);
+    expect(limits.maxApiKeys).toBe(Infinity);
+    expect(limits.recurringRunsPerMonth).toBe(Infinity);
+    expect(limits.auditRetentionDays).toBeNull();
+    expect(limits.dataExport).toBe(true);
+    expect(limits.onlineStore).toBe(true);
+    expect(limits.pdfBranding).toBe(false);
+  });
+});
+
 describe("SECURITY — ILIKE metacharacters are escaped via escapeLike()", () => {
   /**
    * All search endpoints now pass user input through escapeLike() before

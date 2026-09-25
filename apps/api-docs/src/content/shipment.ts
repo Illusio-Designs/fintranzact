@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const shipmentEndpoints: EndpointGroup = {
   id: "shipment",
@@ -83,7 +84,7 @@ await trpc.business.update.mutate({
 
 The webhook URL format is:
 \`\`\`
-POST https://api.hisaabo.in/webhooks/shipping/{businessId}
+POST ${API_BASE_URL}/webhooks/shipping/{businessId}
 \`\`\`
 where \`{businessId}\` is the UUID of the business (available from \`business.list\`). Register this URL in your carrier's dashboard as the tracking/status webhook endpoint. No authentication header is required on the carrier side — the business ID in the path is the routing key.
 
@@ -185,7 +186,7 @@ All endpoints require an active business context via the \`x-business-id\` heade
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/shipment.list?input=%7B%22json%22%3A%7B%22status%22%3A%22shipped%22%2C%22page%22%3A1%2C%22limit%22%3A20%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/shipment.list?input=%7B%22json%22%3A%7B%22status%22%3A%22shipped%22%2C%22page%22%3A1%2C%22limit%22%3A20%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const result = await trpc.shipment.list.query({
@@ -207,7 +208,7 @@ params = urllib.parse.urlencode({
     "input": json.dumps({"json": {"status": "shipped", "page": 1, "limit": 20}})
 })
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/shipment.list?{params}",
+    f"${API_BASE_URL}/api/trpc/shipment.list?{params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -265,7 +266,7 @@ for s in data["data"]:
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/shipment.getById?input=%7B%22json%22%3A%7B%22id%22%3A%22a1b2c3d4-e5f6-7890-abcd-ef1234567890%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/shipment.getById?input=%7B%22json%22%3A%7B%22id%22%3A%22a1b2c3d4-e5f6-7890-abcd-ef1234567890%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const shipment = await trpc.shipment.getById.query({
@@ -285,7 +286,7 @@ params = urllib.parse.urlencode({
     "input": json.dumps({"json": {"id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"}})
 })
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/shipment.getById?{params}",
+    f"${API_BASE_URL}/api/trpc/shipment.getById?{params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -437,7 +438,7 @@ shipment = resp.json()["result"]["data"]["json"]
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/shipment.create \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/shipment.create \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -459,7 +460,7 @@ console.log(shipment.trackingUrl);
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/shipment.create",
+    "${API_BASE_URL}/api/trpc/shipment.create",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -602,7 +603,7 @@ print(shipment["trackingUrl"])`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/shipment.update \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/shipment.update \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -632,7 +633,7 @@ const tracked = await trpc.shipment.update.mutate({
 
 # Advance status to in_transit
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/shipment.update",
+    "${API_BASE_URL}/api/trpc/shipment.update",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -674,7 +675,7 @@ shipment = resp.json()["result"]["data"]["json"]`,
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/shipment.delete \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/shipment.delete \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -685,7 +686,7 @@ shipment = resp.json()["result"]["data"]["json"]`,
         python: `import httpx
 
 httpx.post(
-    "https://api.hisaabo.in/api/trpc/shipment.delete",
+    "${API_BASE_URL}/api/trpc/shipment.delete",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -706,7 +707,7 @@ httpx.post(
       method: "mutation",
       path: "POST /webhooks/shipping/:businessId",
       title: "Carrier Status Webhook",
-      description: `Raw HTTP endpoint (not tRPC) that receives status push events from shipping carriers. Register the URL \`https://api.hisaabo.in/webhooks/shipping/{businessId}\` in your carrier's dashboard as the tracking webhook destination. The business ID in the URL is the routing key — no additional authentication header is needed on the carrier side.
+      description: `Raw HTTP endpoint (not tRPC) that receives status push events from shipping carriers. Register the URL \`${API_BASE_URL}/webhooks/shipping/{businessId}\` in your carrier's dashboard as the tracking webhook destination. The business ID in the URL is the routing key — no additional authentication header is needed on the carrier side.
 
 When the webhook fires, the handler:
 1. Extracts the tracking number from the payload (tries \`awb\`, \`tracking_id\`, \`waybill\`, \`trackingNumber\` in that order).
@@ -788,7 +789,7 @@ The handler does **not** automatically advance \`shipment.status\` — status up
       },
       codeExamples: {
         curl: `# Minimal generic payload
-curl -X POST https://api.hisaabo.in/webhooks/shipping/YOUR_BUSINESS_ID \\
+curl -X POST ${API_BASE_URL}/webhooks/shipping/YOUR_BUSINESS_ID \\
   -H "Content-Type: application/json" \\
   -d '{
     "awb": "DEL1234567890IN",
@@ -799,7 +800,7 @@ curl -X POST https://api.hisaabo.in/webhooks/shipping/YOUR_BUSINESS_ID \\
   }'
 
 # Delhivery webhook format (as sent by the carrier)
-curl -X POST https://api.hisaabo.in/webhooks/shipping/YOUR_BUSINESS_ID \\
+curl -X POST ${API_BASE_URL}/webhooks/shipping/YOUR_BUSINESS_ID \\
   -H "Content-Type: application/json" \\
   -d '{
     "waybill": "DEL1234567890IN",
@@ -811,7 +812,7 @@ curl -X POST https://api.hisaabo.in/webhooks/shipping/YOUR_BUSINESS_ID \\
   }'
 
 # BlueDart webhook format
-curl -X POST https://api.hisaabo.in/webhooks/shipping/YOUR_BUSINESS_ID \\
+curl -X POST ${API_BASE_URL}/webhooks/shipping/YOUR_BUSINESS_ID \\
   -H "Content-Type: application/json" \\
   -d '{
     "tracking_id": "BLU987654321",
@@ -824,7 +825,7 @@ curl -X POST https://api.hisaabo.in/webhooks/shipping/YOUR_BUSINESS_ID \\
 const businessId = "YOUR_BUSINESS_ID";
 
 const resp = await fetch(
-  \`https://api.hisaabo.in/webhooks/shipping/\${businessId}\`,
+  \`${API_BASE_URL}/webhooks/shipping/\${businessId}\`,
   {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -856,7 +857,7 @@ business_id = "YOUR_BUSINESS_ID"
 
 # Send a test carrier status update
 resp = httpx.post(
-    f"https://api.hisaabo.in/webhooks/shipping/{business_id}",
+    f"${API_BASE_URL}/webhooks/shipping/{business_id}",
     json={
         "awb": "DEL1234567890IN",
         "status": "in_transit",

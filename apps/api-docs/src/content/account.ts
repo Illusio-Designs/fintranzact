@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const accountEndpoints: EndpointGroup = {
   id: "accounts",
@@ -92,31 +93,31 @@ export const accountEndpoints: EndpointGroup = {
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/account.list" \\
-  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
-  -H "x-business-id: YOUR_BUSINESS_ID"`,
+        curl: `curl ${API_BASE_URL}/api/trpc/account.list` \\
+  - H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  - H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const accounts = await trpc.account.list.query();
 
-// Group by type for a tree view
-const grouped = Object.groupBy(accounts, a => a.accountType);
-console.log("Assets:", grouped.asset?.length ?? 0);
-console.log("Liabilities:", grouped.liability?.length ?? 0);
-console.log("Income:", grouped.income?.length ?? 0);
-console.log("Expenses:", grouped.expense?.length ?? 0);`,
+  // Group by type for a tree view
+  const grouped = Object.groupBy(accounts, a => a.accountType);
+  console.log("Assets:", grouped.asset?.length ?? 0);
+  console.log("Liabilities:", grouped.liability?.length ?? 0);
+  console.log("Income:", grouped.income?.length ?? 0);
+  console.log("Expenses:", grouped.expense?.length ?? 0);`,
         python: `resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/account.list",
-    headers={
-        "Authorization": f"Bearer {session_token}",
-        "x-business-id": business_id,
+    "${API_BASE_URL}/api/trpc/account.list",
+    headers = {
+      "Authorization": f"Bearer {session_token}",
+      "x-business-id": business_id,
     },
-)
+  )
 accounts = resp.json()["result"]["data"]["json"]
 
 # Group by type
 from itertools import groupby
-for account_type, group in groupby(accounts, key=lambda a: a["accountType"]):
-    items = list(group)
-    print(f"{account_type}: {len(items)} accounts")`,
+for account_type, group in groupby(accounts, key = lambda a: a["accountType"]):
+  items = list(group)
+print(f"{account_type}: {len(items)} accounts")`,
       },
       gotchas: [
         "Returns ALL accounts (active and inactive). Filter by `isActive: true` client-side if needed for dropdowns.",
@@ -156,26 +157,26 @@ for account_type, group in groupby(accounts, key=lambda a: a["accountType"]):
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/account.create \\
-  -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
-  -H "x-business-id: YOUR_BUSINESS_ID" \\
-  -d '{
-    "json": {
-      "code": "4500",
-      "name": "Marketing Expenses",
+        curl: `curl - X POST ${ API_BASE_URL } /api/trpc / account.create \\
+-H "Content-Type: application/json" \\
+-H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+-H "x-business-id: YOUR_BUSINESS_ID" \\
+-d '{
+"json": {
+  "code": "4500",
+    "name": "Marketing Expenses",
       "accountType": "expense"
-    }
+}
   }'`,
-        javascript: `const account = await trpc.account.create.mutate({
+javascript: `const account = await trpc.account.create.mutate({
   code: "4500",
   name: "Marketing Expenses",
   accountType: "expense",
 });
 
 console.log(\`Created: \${account.code} - \${account.name}\`);`,
-        python: `resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/account.create",
+  python: `resp = httpx.post(
+    "${API_BASE_URL}/api/trpc/account.create",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -188,41 +189,41 @@ console.log(\`Created: \${account.code} - \${account.name}\`);`,
 )
 account = resp.json()["result"]["data"]["json"]`,
       },
-      gotchas: [
-        "Account code must be unique within the business. A duplicate code will cause a database constraint error.",
-        "Requires `admin` role. Members and viewers cannot create accounts.",
-        "The `accountType` determines which financial statement the account appears in: asset/liability on Balance Sheet, income/expense on P&L.",
-        "Custom accounts are created with `isSystem: false`, meaning they can be deleted later (unlike seeded accounts).",
-      ],
-      relatedEndpoints: ["account-list"],
+gotchas: [
+  "Account code must be unique within the business. A duplicate code will cause a database constraint error.",
+  "Requires `admin` role. Members and viewers cannot create accounts.",
+  "The `accountType` determines which financial statement the account appears in: asset/liability on Balance Sheet, income/expense on P&L.",
+  "Custom accounts are created with `isSystem: false`, meaning they can be deleted later (unlike seeded accounts).",
+],
+  relatedEndpoints: ["account-list"],
     },
-    {
-      id: "account-update",
-      method: "mutation",
+{
+  id: "account-update",
+    method: "mutation",
       path: "account.update",
-      title: "Update Account",
-      description: "Update an account's name or active status. Account code and type cannot be changed after creation. Both system and custom accounts can be renamed. Use `isActive: false` to hide accounts from dropdowns without deleting them.",
-      auth: "business",
-      requiredRole: "admin",
-      input: [
-        { name: "id", type: "string (UUID)", required: true, description: "Account ID to update" },
-        { name: "name", type: "string", required: false, description: "Updated account name" },
-        { name: "isActive", type: "boolean", required: false, description: "Set to false to deactivate (hide from dropdowns)" },
-      ],
-      output: {
-        description: "Updated account.",
-        example: {
-          id: "acc-custom-uuid",
-          code: "4500",
+        title: "Update Account",
+          description: "Update an account's name or active status. Account code and type cannot be changed after creation. Both system and custom accounts can be renamed. Use `isActive: false` to hide accounts from dropdowns without deleting them.",
+            auth: "business",
+              requiredRole: "admin",
+                input: [
+                  { name: "id", type: "string (UUID)", required: true, description: "Account ID to update" },
+                  { name: "name", type: "string", required: false, description: "Updated account name" },
+                  { name: "isActive", type: "boolean", required: false, description: "Set to false to deactivate (hide from dropdowns)" },
+                ],
+                  output: {
+    description: "Updated account.",
+      example: {
+      id: "acc-custom-uuid",
+        code: "4500",
           name: "Digital Marketing Expenses",
-          accountType: "expense",
-          isSystem: false,
-          isActive: true,
-          updatedAt: "2026-04-08T11:00:00.000Z",
+            accountType: "expense",
+              isSystem: false,
+                isActive: true,
+                  updatedAt: "2026-04-08T11:00:00.000Z",
         },
-      },
-      codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/account.update \\
+  },
+  codeExamples: {
+    curl: `curl -X POST ${API_BASE_URL}/api/trpc/account.update \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -232,7 +233,7 @@ account = resp.json()["result"]["data"]["json"]`,
       "name": "Digital Marketing Expenses"
     }
   }'`,
-        javascript: `const updated = await trpc.account.update.mutate({
+      javascript: `const updated = await trpc.account.update.mutate({
   id: "acc-custom-uuid",
   name: "Digital Marketing Expenses",
 });
@@ -243,52 +244,52 @@ await trpc.account.update.mutate({
   isActive: false,
 });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/account.update",
+    "${API_BASE_URL}/api/trpc/account.update",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"id": "acc-custom-uuid", "name": "Digital Marketing Expenses"}},
 )`,
       },
-      gotchas: [
-        "Account `code` and `accountType` cannot be changed after creation. Only `name` and `isActive` can be updated.",
-        "System accounts can be renamed but not deactivated. Attempting to set `isActive: false` on a system account has no effect since the update only applies provided fields.",
-        "Returns NOT_FOUND if the account belongs to a different business.",
-      ],
+  gotchas: [
+    "Account `code` and `accountType` cannot be changed after creation. Only `name` and `isActive` can be updated.",
+    "System accounts can be renamed but not deactivated. Attempting to set `isActive: false` on a system account has no effect since the update only applies provided fields.",
+    "Returns NOT_FOUND if the account belongs to a different business.",
+  ],
     },
-    {
-      id: "account-delete",
-      method: "mutation",
+{
+  id: "account-delete",
+    method: "mutation",
       path: "account.delete",
-      title: "Delete Account",
-      description: "Permanently delete a custom account from the Chart of Accounts. System accounts (seeded on business creation) cannot be deleted. This is a hard delete.",
-      auth: "business",
-      requiredRole: "admin",
-      input: [
-        { name: "id", type: "string (UUID)", required: true, description: "Account ID to delete" },
-      ],
-      output: {
-        description: "Success confirmation.",
-        example: { success: true },
-      },
-      codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/account.delete \\
+        title: "Delete Account",
+          description: "Permanently delete a custom account from the Chart of Accounts. System accounts (seeded on business creation) cannot be deleted. This is a hard delete.",
+            auth: "business",
+              requiredRole: "admin",
+                input: [
+                  { name: "id", type: "string (UUID)", required: true, description: "Account ID to delete" },
+                ],
+                  output: {
+    description: "Success confirmation.",
+      example: { success: true },
+  },
+  codeExamples: {
+    curl: `curl -X POST ${API_BASE_URL}/api/trpc/account.delete \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
   -d '{"json":{"id":"acc-custom-uuid"}}'`,
-        javascript: `await trpc.account.delete.mutate({ id: "acc-custom-uuid" });`,
+      javascript: `await trpc.account.delete.mutate({ id: "acc-custom-uuid" });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/account.delete",
+    "${API_BASE_URL}/api/trpc/account.delete",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"id": "acc-custom-uuid"}},
 )`,
       },
-      gotchas: [
-        "System accounts (`isSystem: true`) CANNOT be deleted. The API returns FORBIDDEN with \"Cannot delete a system account\".",
-        "If the account is referenced by journal entry lines, deletion will fail with a FK constraint error. Void or delete referencing entries first.",
-        "Consider using `account.update` with `isActive: false` instead of deleting, to preserve historical references.",
-        "This is a hard delete. There is no undo or soft-delete mechanism.",
-      ],
-      relatedEndpoints: ["account-update"],
+  gotchas: [
+    "System accounts (`isSystem: true`) CANNOT be deleted. The API returns FORBIDDEN with \"Cannot delete a system account\".",
+    "If the account is referenced by journal entry lines, deletion will fail with a FK constraint error. Void or delete referencing entries first.",
+    "Consider using `account.update` with `isActive: false` instead of deleting, to preserve historical references.",
+    "This is a hard delete. There is no undo or soft-delete mechanism.",
+  ],
+    relatedEndpoints: ["account-update"],
     },
   ],
 };

@@ -7,7 +7,7 @@
  *
  * WHY BEARER INSTEAD OF COOKIES ON DESKTOP:
  * The Tauri webview serves the bundled app from `tauri.localhost` and
- * the API lives at `https://api.hisaabo.in` — a different site. The
+ * the API lives at `${import.meta.env.API_URL}` — a different site. The
  * server's `session_id` cookie uses `SameSite=Lax`, which blocks
  * cross-site XHR cookie replay. Relaxing it to `SameSite=None` would
  * expose the web app to CSRF. Bearer tokens sidestep the whole issue:

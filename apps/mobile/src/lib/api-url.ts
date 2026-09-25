@@ -23,5 +23,5 @@ export function getApiUrl(): string {
 
   // Production default — the URL every Play Store / App Store user hits.
   // Changing this value is a production-impacting deployment decision.
-  return "https://api.hisaabo.in";
+  return process.env.EXPO_PUBLIC_API_URL ?? (typeof importMeta !== 'undefined' && (importMeta as any).env?.VITE_API_URL) ?? "https://api.hisaabo.in";
 }

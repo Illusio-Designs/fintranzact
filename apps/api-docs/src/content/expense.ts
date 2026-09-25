@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const expenseEndpoints: EndpointGroup = {
   id: "expense",
@@ -43,7 +44,7 @@ export const expenseEndpoints: EndpointGroup = {
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/expense.list?input=%7B%22json%22%3A%7B%22page%22%3A1%2C%22limit%22%3A20%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/expense.list?input=%7B%22json%22%3A%7B%22page%22%3A1%2C%22limit%22%3A20%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const result = await trpc.expense.list.query({
@@ -57,7 +58,7 @@ console.log(result.data, result.total);`,
 
 params = urllib.parse.quote(json.dumps({"json": {"page": 1, "limit": 20}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/expense.list?input={params}",
+    f"${API_BASE_URL}/api/trpc/expense.list?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -100,7 +101,7 @@ data = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/expense.create \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/expense.create \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -115,7 +116,7 @@ data = resp.json()["result"]["data"]["json"]`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/expense.create",
+    "${API_BASE_URL}/api/trpc/expense.create",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -155,7 +156,7 @@ expense = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/expense.update \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/expense.update \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -165,7 +166,7 @@ expense = resp.json()["result"]["data"]["json"]`,
   data: { amount: "500.00", mode: "upi" },
 });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/expense.update",
+    "${API_BASE_URL}/api/trpc/expense.update",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"id": "exp-uuid", "data": {"amount": "500.00"}}},
 )`,
@@ -189,14 +190,14 @@ expense = resp.json()["result"]["data"]["json"]`,
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/expense.delete \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/expense.delete \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
   -d '{"json":{"id":"exp-uuid"}}'`,
         javascript: `await trpc.expense.delete.mutate({ id: "exp-uuid" });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/expense.delete",
+    "${API_BASE_URL}/api/trpc/expense.delete",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"id": "exp-uuid"}},
 )`,
@@ -220,13 +221,13 @@ expense = resp.json()["result"]["data"]["json"]`,
         example: ["Meals", "Office Supplies", "Rent", "Transport"],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/expense.categories" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/expense.categories" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const categories = await trpc.expense.categories.query();
 // Use for autocomplete: ["Meals", "Rent", "Transport", ...]`,
         python: `resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/expense.categories",
+    "${API_BASE_URL}/api/trpc/expense.categories",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )
 categories = resp.json()["result"]["data"]["json"]`,
@@ -251,7 +252,7 @@ categories = resp.json()["result"]["data"]["json"]`,
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/expense.summary?input=%7B%22json%22%3A%7B%22from%22%3A%222026-04-01T00%3A00%3A00.000Z%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/expense.summary?input=%7B%22json%22%3A%7B%22from%22%3A%222026-04-01T00%3A00%3A00.000Z%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const summary = await trpc.expense.summary.query({
@@ -263,7 +264,7 @@ summary.forEach(({ category, total }) => console.log(category, total));`,
 
 params = urllib.parse.quote(json.dumps({"json": {"from": "2026-04-01T00:00:00.000Z"}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/expense.summary?input={params}",
+    f"${API_BASE_URL}/api/trpc/expense.summary?input={params}",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )
 summary = resp.json()["result"]["data"]["json"]`,

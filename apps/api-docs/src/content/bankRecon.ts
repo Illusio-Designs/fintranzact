@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const bankReconEndpoints: EndpointGroup = {
   id: "bank-recon",
@@ -48,7 +49,7 @@ export const bankReconEndpoints: EndpointGroup = {
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.uploadCSV \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.uploadCSV \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -76,7 +77,7 @@ console.log("Template:", result.detectedTemplate?.bankDisplayName ?? "None");
     csv_content = f.read()
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.uploadCSV",
+    "${API_BASE_URL}/api/trpc/bankRecon.uploadCSV",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -132,7 +133,7 @@ print(f"Detected {result['totalRows']} rows, template: {result.get('detectedTemp
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.confirmMapping \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.confirmMapping \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -162,7 +163,7 @@ print(f"Detected {result['totalRows']} rows, template: {result.get('detectedTemp
 console.log(\`Matched: \${result.matchedLines}/\${result.totalLines}\`);
 console.log(\`Unmatched: \${result.unmatchedLines} lines need review\`);`,
         python: `resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.confirmMapping",
+    "${API_BASE_URL}/api/trpc/bankRecon.confirmMapping",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -234,7 +235,7 @@ print(f"Matched: {result['matchedLines']}/{result['totalLines']}")`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/bankRecon.importList?input=%7B%22json%22%3A%7B%22bankAccountId%22%3A%22ba-hdfc-uuid%22%2C%22page%22%3A1%2C%22limit%22%3A20%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/bankRecon.importList?input=%7B%22json%22%3A%7B%22bankAccountId%22%3A%22ba-hdfc-uuid%22%2C%22page%22%3A1%2C%22limit%22%3A20%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const { data, total } = await trpc.bankRecon.importList.query({
@@ -253,7 +254,7 @@ params = urllib.parse.quote(json.dumps({"json": {
     "bankAccountId": "ba-hdfc-uuid", "page": 1, "limit": 20
 }}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/bankRecon.importList?input={params}",
+    f"${API_BASE_URL}/api/trpc/bankRecon.importList?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -296,7 +297,7 @@ result = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/bankRecon.importDetail?input=%7B%22json%22%3A%7B%22importId%22%3A%22imp-uuid%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/bankRecon.importDetail?input=%7B%22json%22%3A%7B%22importId%22%3A%22imp-uuid%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const imp = await trpc.bankRecon.importDetail.query({
@@ -310,7 +311,7 @@ console.log(\`Closing balance: \u20B9\${imp.closingBalance}\`);`,
 
 params = urllib.parse.quote(json.dumps({"json": {"importId": "imp-uuid"}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/bankRecon.importDetail?input={params}",
+    f"${API_BASE_URL}/api/trpc/bankRecon.importDetail?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -380,7 +381,7 @@ imp = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/bankRecon.lines?input=%7B%22json%22%3A%7B%22importId%22%3A%22imp-uuid%22%2C%22status%22%3A%22unmatched%22%2C%22page%22%3A1%2C%22limit%22%3A50%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/bankRecon.lines?input=%7B%22json%22%3A%7B%22importId%22%3A%22imp-uuid%22%2C%22status%22%3A%22unmatched%22%2C%22page%22%3A1%2C%22limit%22%3A50%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `// Show only unmatched lines for review
@@ -402,7 +403,7 @@ params = urllib.parse.quote(json.dumps({"json": {
     "importId": "imp-uuid", "status": "unmatched", "page": 1, "limit": 50
 }}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/bankRecon.lines?input={params}",
+    f"${API_BASE_URL}/api/trpc/bankRecon.lines?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -433,14 +434,14 @@ result = resp.json()["result"]["data"]["json"]`,
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.confirmMatch \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.confirmMatch \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
   -d '{"json":{"lineId":"sl-uuid-1"}}'`,
         javascript: `await trpc.bankRecon.confirmMatch.mutate({ lineId: "sl-uuid-1" });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.confirmMatch",
+    "${API_BASE_URL}/api/trpc/bankRecon.confirmMatch",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"lineId": "sl-uuid-1"}},
 )`,
@@ -469,7 +470,7 @@ result = resp.json()["result"]["data"]["json"]`,
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.manualMatch \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.manualMatch \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -491,7 +492,7 @@ await trpc.bankRecon.manualMatch.mutate({
   expenseId: "exp-uuid-match",
 });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.manualMatch",
+    "${API_BASE_URL}/api/trpc/bankRecon.manualMatch",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"lineId": "sl-uuid-2", "paymentId": "pay-uuid-match"}},
 )`,
@@ -519,14 +520,14 @@ await trpc.bankRecon.manualMatch.mutate({
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.unmatch \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.unmatch \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
   -d '{"json":{"lineId":"sl-uuid-1"}}'`,
         javascript: `await trpc.bankRecon.unmatch.mutate({ lineId: "sl-uuid-1" });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.unmatch",
+    "${API_BASE_URL}/api/trpc/bankRecon.unmatch",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"lineId": "sl-uuid-1"}},
 )`,
@@ -567,7 +568,7 @@ await trpc.bankRecon.manualMatch.mutate({
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.createExpense \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.createExpense \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -592,7 +593,7 @@ await trpc.bankRecon.manualMatch.mutate({
 
 console.log("Created expense:", expense.id);`,
         python: `resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.createExpense",
+    "${API_BASE_URL}/api/trpc/bankRecon.createExpense",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -632,14 +633,14 @@ expense = resp.json()["result"]["data"]["json"]`,
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.ignoreLine \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.ignoreLine \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
   -d '{"json":{"lineId":"sl-uuid-3"}}'`,
         javascript: `await trpc.bankRecon.ignoreLine.mutate({ lineId: "sl-uuid-3" });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.ignoreLine",
+    "${API_BASE_URL}/api/trpc/bankRecon.ignoreLine",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"lineId": "sl-uuid-3"}},
 )`,
@@ -683,7 +684,7 @@ expense = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/bankRecon.summary?input=%7B%22json%22%3A%7B%22bankAccountId%22%3A%22ba-hdfc-uuid%22%7D%7D" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/bankRecon.summary?input=%7B%22json%22%3A%7B%22bankAccountId%22%3A%22ba-hdfc-uuid%22%7D%7D" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const brs = await trpc.bankRecon.summary.query({
@@ -702,7 +703,7 @@ if (brs.difference !== "0.00") {
 
 params = urllib.parse.quote(json.dumps({"json": {"bankAccountId": "ba-hdfc-uuid"}}))
 resp = httpx.get(
-    f"https://api.hisaabo.in/api/trpc/bankRecon.summary?input={params}",
+    f"${API_BASE_URL}/api/trpc/bankRecon.summary?input={params}",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -758,7 +759,7 @@ print(f"Difference: {brs['difference']}")`,
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/bankRecon.templateList" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/bankRecon.templateList" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const templates = await trpc.bankRecon.templateList.query();
@@ -767,7 +768,7 @@ const seeded = templates.filter(t => t.isSeeded);
 const custom = templates.filter(t => !t.isSeeded);
 console.log(\`\${seeded.length} built-in, \${custom.length} custom templates\`);`,
         python: `resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/bankRecon.templateList",
+    "${API_BASE_URL}/api/trpc/bankRecon.templateList",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -815,7 +816,7 @@ templates = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.templateCreate \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.templateCreate \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -848,7 +849,7 @@ templates = resp.json()["result"]["data"]["json"]`,
   label: "Saraswat Net Banking CSV",
 });`,
         python: `resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.templateCreate",
+    "${API_BASE_URL}/api/trpc/bankRecon.templateCreate",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -892,7 +893,7 @@ templates = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.templateFork \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.templateFork \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -910,7 +911,7 @@ templates = resp.json()["result"]["data"]["json"]`,
 console.log(\`Forked as v\${forked.version}\`);
 // Now update the forked template with templateUpdate`,
         python: `resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.templateFork",
+    "${API_BASE_URL}/api/trpc/bankRecon.templateFork",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -958,7 +959,7 @@ console.log(\`Forked as v\${forked.version}\`);
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.templateUpdate \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.templateUpdate \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -978,7 +979,7 @@ console.log(\`Forked as v\${forked.version}\`);
   label: "HDFC - Fixed date column",
 });`,
         python: `resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.templateUpdate",
+    "${API_BASE_URL}/api/trpc/bankRecon.templateUpdate",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -1015,14 +1016,14 @@ console.log(\`Forked as v\${forked.version}\`);
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.templateDelete \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.templateDelete \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
   -d '{"json":{"id":"tmpl-forked-uuid"}}'`,
         javascript: `await trpc.bankRecon.templateDelete.mutate({ id: "tmpl-forked-uuid" });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.templateDelete",
+    "${API_BASE_URL}/api/trpc/bankRecon.templateDelete",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"id": "tmpl-forked-uuid"}},
 )`,
@@ -1077,7 +1078,7 @@ console.log(\`Forked as v\${forked.version}\`);
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/bankRecon.ruleList" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/bankRecon.ruleList" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const rules = await trpc.bankRecon.ruleList.query();
@@ -1086,7 +1087,7 @@ rules.forEach(rule => {
   console.log(\`\${rule.matchField} \${rule.matchType} "\${rule.matchValue}" -> \${rule.action}\`);
 });`,
         python: `resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/bankRecon.ruleList",
+    "${API_BASE_URL}/api/trpc/bankRecon.ruleList",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -1136,7 +1137,7 @@ rules = resp.json()["result"]["data"]["json"]`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.ruleCreate \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.ruleCreate \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -1161,7 +1162,7 @@ rules = resp.json()["result"]["data"]["json"]`,
 
 console.log("Rule created:", rule.id);`,
         python: `resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.ruleCreate",
+    "${API_BASE_URL}/api/trpc/bankRecon.ruleCreate",
     headers={
         "Authorization": f"Bearer {session_token}",
         "x-business-id": business_id,
@@ -1214,7 +1215,7 @@ console.log("Rule created:", rule.id);`,
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.ruleUpdate \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.ruleUpdate \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
@@ -1229,7 +1230,7 @@ console.log("Rule created:", rule.id);`,
   data: { priority: 75, isActive: true },
 });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.ruleUpdate",
+    "${API_BASE_URL}/api/trpc/bankRecon.ruleUpdate",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"id": "rule-uuid-1", "data": {"priority": 75, "isActive": True}}},
 )`,
@@ -1255,14 +1256,14 @@ console.log("Rule created:", rule.id);`,
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/bankRecon.ruleDelete \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/bankRecon.ruleDelete \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID" \\
   -d '{"json":{"id":"rule-uuid-1"}}'`,
         javascript: `await trpc.bankRecon.ruleDelete.mutate({ id: "rule-uuid-1" });`,
         python: `httpx.post(
-    "https://api.hisaabo.in/api/trpc/bankRecon.ruleDelete",
+    "${API_BASE_URL}/api/trpc/bankRecon.ruleDelete",
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
     json={"json": {"id": "rule-uuid-1"}},
 )`,

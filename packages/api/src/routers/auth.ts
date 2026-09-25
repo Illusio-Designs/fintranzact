@@ -106,6 +106,7 @@ async function getOrCreateDefaultTenant(userId: string, parentTx?: ControlTx): P
       [existing] = await tx.insert(tenants).values({
         name: "Default Organization",
         slug: "default",
+        plan: "forever_free",
       }).returning({ id: tenants.id });
     }
 
@@ -146,7 +147,7 @@ async function createSessionForUser(
 
   const previousSessionId = getSessionIdFromRequest(ctx.req);
   if (previousSessionId && !previousSessionId.startsWith("hisaabo_key_")) {
-    controlDb.delete(sessions).where(eq(sessions.id, previousSessionId)).catch(() => {});
+    controlDb.delete(sessions).where(eq(sessions.id, previousSessionId)).catch(() => { });
     invalidateSessionCache(previousSessionId);
   }
 
@@ -223,6 +224,7 @@ async function writeNewTenantRows(
   tx: ControlTx,
   userId: string,
   provisioned: ProvisionedTenant,
+  referralCode: string | null = null,
 ): Promise<string> {
   const [tenant] = await tx.insert(tenants).values({
     name: provisioned.tenantName,
@@ -232,6 +234,8 @@ async function writeNewTenantRows(
     dbPort: provisioned.dbConfig.dbPort,
     dbUser: provisioned.dbConfig.dbUser,
     dbPassword: provisioned.dbConfig.dbPassword,
+    plan: "forever_free",
+    referralCode: referralCode || null,
   }).returning({ id: tenants.id });
   await tx.insert(tenantMembers).values({
     tenantId: tenant.id,
@@ -301,6 +305,9 @@ export const authRouter = router({
       throw new TRPCError({ code: "CONFLICT", message: "Email already registered" });
     }
 
+    const username = (input.username ?? input.name ?? input.email.split("@")[0]).trim();
+    const displayName = username || input.email.split("@")[0];
+
     const passwordHash = await argon2.hash(input.password, {
       type: argon2.argon2id,
       memoryCost: 65536,
@@ -323,10 +330,12 @@ export const authRouter = router({
         gt(invitations.expiresAt, new Date()),
       ))
       .limit(1);
-
-    const needsAutoTenant = process.env.MULTI_TENANT === "true" && !pendingInvitePeek;
+    // By default, create a tenant for brand-new signups unless there's a
+    // pending invite for this email. This makes interactive sign-up
+    // tenant-first instead of creating a member on an existing org.
+    const needsAutoTenant = !pendingInvitePeek;
     const provisioned: ProvisionedTenant | null = needsAutoTenant
-      ? await provisionNewTenantForUser(input.name || input.email.split("@")[0])
+      ? await provisionNewTenantForUser(displayName)
       : null;
 
     // Insert user, assign tenant, and create session in one outer transaction.
@@ -338,7 +347,8 @@ export const authRouter = router({
         controlDb.transaction(async (tx) => {
           const [user] = await tx.insert(users).values({
             email: input.email,
-            name: input.name,
+            name: displayName,
+            referralCode: input.referralCode?.trim() || null,
             passwordHash,
           }).returning({ id: users.id, email: users.email, name: users.name });
 
@@ -367,7 +377,7 @@ export const authRouter = router({
                 message: "Sign-up state changed — please try again.",
               });
             }
-            await writeNewTenantRows(tx, user.id, provisioned);
+            await writeNewTenantRows(tx, user.id, provisioned, input.referralCode?.trim() || null);
             markUsed();
           } else {
             await getOrCreateDefaultTenant(user.id, tx);
@@ -663,7 +673,7 @@ export const authRouter = router({
                   message: "Sign-in state changed — please try again.",
                 });
               }
-              await writeNewTenantRows(tx, user.id, provisioned);
+              await writeNewTenantRows(tx, user.id, provisioned, null);
               markUsed();
             } else {
               await getOrCreateDefaultTenant(user.id, tx);

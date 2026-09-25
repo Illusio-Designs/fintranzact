@@ -14,7 +14,7 @@
 import superjson from "superjson";
 
 export interface ClientConfig {
-  /** Base API URL, e.g. "http://localhost:3000" or "https://api.hisaabo.in" */
+  /** Base API URL, e.g. "http://localhost:3000" or the public API URL. */
   apiUrl: string;
   /** Session ID used as Bearer token — from HISAABO_API_KEY env var */
   token: string;

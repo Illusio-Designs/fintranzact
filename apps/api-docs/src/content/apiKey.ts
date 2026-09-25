@@ -1,4 +1,5 @@
 import type { EndpointGroup } from "./types";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const apiKeyEndpoints: EndpointGroup = {
   id: "api-keys",
@@ -35,7 +36,7 @@ export const apiKeyEndpoints: EndpointGroup = {
         ],
       },
       codeExamples: {
-        curl: `curl "https://api.hisaabo.in/api/trpc/apiKey.list" \\
+        curl: `curl "${API_BASE_URL}/api/trpc/apiKey.list" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
         javascript: `const keys = await trpc.apiKey.list.query();
 for (const key of keys) {
@@ -44,7 +45,7 @@ for (const key of keys) {
         python: `import httpx
 
 resp = httpx.get(
-    "https://api.hisaabo.in/api/trpc/apiKey.list",
+    "${API_BASE_URL}/api/trpc/apiKey.list",
     headers={"Authorization": f"Bearer {session_token}"},
 )
 keys = resp.json()["result"]["data"]["json"]
@@ -79,7 +80,7 @@ for key in keys:
         },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/apiKey.create \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/apiKey.create \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -d '{"json":{"name":"MCP Agent — Production","expiresAt":"2026-07-08T00:00:00.000Z"}}'`,
@@ -94,7 +95,7 @@ console.log("Save this key — it cannot be retrieved later.");`,
         python: `import httpx
 
 resp = httpx.post(
-    "https://api.hisaabo.in/api/trpc/apiKey.create",
+    "${API_BASE_URL}/api/trpc/apiKey.create",
     headers={"Authorization": f"Bearer {session_token}"},
     json={"json": {
         "name": "MCP Agent — Production",
@@ -130,7 +131,7 @@ print("API Key:", data["key"])`,
         example: { success: true },
       },
       codeExamples: {
-        curl: `curl -X POST https://api.hisaabo.in/api/trpc/apiKey.revoke \\
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/apiKey.revoke \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -d '{"json":{"id":"key-uuid"}}'`,
@@ -139,7 +140,7 @@ print("API Key:", data["key"])`,
         python: `import httpx
 
 httpx.post(
-    "https://api.hisaabo.in/api/trpc/apiKey.revoke",
+    "${API_BASE_URL}/api/trpc/apiKey.revoke",
     headers={"Authorization": f"Bearer {session_token}"},
     json={"json": {"id": "key-uuid"}},
 )`,

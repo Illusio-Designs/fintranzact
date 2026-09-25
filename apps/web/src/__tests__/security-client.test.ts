@@ -104,7 +104,7 @@ describe("SECURITY — tRPC client sends credentials via cookies, not localStora
     expect(headers).toHaveProperty("x-business-id", "biz-ramesh-kirana-001");
 
     // Verify it's a header, not encoded in the URL
-    expect(Object.keys(headers).some((k) => k.includes("?"  ))).toBe(false);
+    expect(Object.keys(headers).some((k) => k.includes("?"))).toBe(false);
     expect(Object.keys(headers).some((k) => k.includes("business"))).toBe(true);
   });
 
@@ -215,9 +215,9 @@ describe("SECURITY — sensitive values must not be logged to console", () => {
    */
 
   beforeEach(() => {
-    vi.spyOn(console, "log").mockImplementation(() => {});
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => { });
+    vi.spyOn(console, "error").mockImplementation(() => { });
+    vi.spyOn(console, "warn").mockImplementation(() => { });
   });
 
   afterEach(() => {
@@ -293,9 +293,9 @@ describe("SECURITY — tRPC client URL is either relative or points to trusted A
   });
 
   it("when VITE_API_URL is set, the full URL points to the expected /api/trpc path", () => {
-    const VITE_API_URL = "https://api.hisaabo.in";
+    const VITE_API_URL = "${import.meta.env.API_URL}";
     const TRPC_URL = `${VITE_API_URL}/api/trpc`;
-    expect(TRPC_URL).toBe("https://api.hisaabo.in/api/trpc");
+    expect(TRPC_URL).toBe("${import.meta.env.API_URL}/api/trpc");
     expect(new URL(TRPC_URL).pathname).toBe("/api/trpc");
   });
 
