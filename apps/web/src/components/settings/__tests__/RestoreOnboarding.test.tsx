@@ -5,7 +5,7 @@
  * the relative selfImport URL returned by the server. In split-host prod
  * (app.hisaabo.in + api.hisaabo.in) that pointed at the SPA, not the API,
  * and the upload silently failed. The component now resolves through
- * `apiUrl(VITE_API_URL)` so split-host hits the API host correctly.
+ * `apiUrl(API_URL)` so split-host hits the API host correctly.
  *
  * These tests exercise the relative-vs-absolute URL branch by mocking
  * XMLHttpRequest and the selfImport mutation, then asserting xhr.open was
@@ -134,8 +134,8 @@ describe("RestoreOnboarding — upload URL resolution (split-host regression)", 
     vi.unstubAllEnvs();
   });
 
-  it("relative URL from server is resolved against VITE_API_URL", async () => {
-    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
+  it("relative URL from server is resolved against API_URL", async () => {
+    vi.stubEnv("API_URL", "${import.meta.env.API_URL}");
     mutateAsync.mockResolvedValue({
       url: "/api/selfImport/ten-1?token=tok-1",
       token: "tok-1",
@@ -160,7 +160,7 @@ describe("RestoreOnboarding — upload URL resolution (split-host regression)", 
   });
 
   it("absolute URL from server is used as-is (back-compat)", async () => {
-    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
+    vi.stubEnv("API_URL", "${import.meta.env.API_URL}");
     mutateAsync.mockResolvedValue({
       url: "https://legacy.example.com/api/selfImport/ten-1?token=tok-1",
       token: "tok-1",
@@ -183,8 +183,8 @@ describe("RestoreOnboarding — upload URL resolution (split-host regression)", 
     });
   });
 
-  it("relative URL stays same-origin when VITE_API_URL is unset (single-origin deploy)", async () => {
-    vi.stubEnv("VITE_API_URL", "");
+  it("relative URL stays same-origin when API_URL is unset (single-origin deploy)", async () => {
+    vi.stubEnv("API_URL", "");
     mutateAsync.mockResolvedValue({
       url: "/api/selfImport/ten-1?token=tok-1",
       token: "tok-1",

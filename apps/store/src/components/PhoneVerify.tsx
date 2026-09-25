@@ -102,7 +102,7 @@ export function PhoneVerify({ slug, accentColor, onVerified, onBack }: PhoneVeri
     setError("");
 
     try {
-      const API_URL = (import.meta.env.VITE_API_URL as string | undefined) || "";
+      const API_URL = (import.meta.env.API_URL as string | undefined) || "";
       const prefix = API_URL ? `${API_URL}/store` : "";
       // `credentials: "omit"` — never attach cookies (the admin
       // `session_id` cookie from a same-origin self-hosted deploy would

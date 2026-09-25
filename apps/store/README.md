@@ -66,12 +66,12 @@ Set this environment variable in Cloudflare Pages:
 
 | Variable | Description |
 |---|---|
-| `VITE_API_URL` | Base URL of the API server (e.g., `https://api.yourdomain.com`) |
+| `API_URL` | Base URL of the API server (e.g., `https://api.yourdomain.com`) |
 | `VITE_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key for order form bot protection |
 
 The store runs on its own subdomain (e.g., `store.hisaabo.in`). Customer-facing URLs are clean: `store.hisaabo.in/my-bakery` — no `/store/` prefix.
 
-The backend API endpoints still use the `/store/` prefix internally (`/store/<slug>/catalog.json`, `/store/<slug>/order`). In dev, the Vite proxy rewrites `/<slug>/catalog.json` → `/store/<slug>/catalog.json`. In production, `VITE_API_URL` points to the API server directly.
+The backend API endpoints still use the `/store/` prefix internally (`/store/<slug>/catalog.json`, `/store/<slug>/order`). In dev, the Vite proxy rewrites `/<slug>/catalog.json` → `/store/<slug>/catalog.json`. In production, `API_URL` points to the API server directly.
 
 ---
 

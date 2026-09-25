@@ -1,5 +1,5 @@
 import type { EndpointGroup } from "./types";
-const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
 
 export const journalEndpoints: EndpointGroup = {
   id: "journals",

@@ -26,7 +26,7 @@ export const authEndpoints: EndpointGroup = {
         },
       },
       codeExamples: {
-        curl: `curl -X POST ${import.meta.env.VITE_API_URL ?? 'https://api.hisaabo.in'}/api/trpc/auth.register \\
+        curl: `curl -X POST ${import.meta.env.API_URL ?? 'https://api.hisaabo.in'}/api/trpc/auth.register \\
   -H "Content-Type: application/json" \\
   -d '{"json":{"email":"rahul@myshop.in","name":"Rahul Sharma","password":"strongpass123","confirmPassword":"strongpass123"}}'`,
         javascript: `const result = await trpc.auth.register.mutate({

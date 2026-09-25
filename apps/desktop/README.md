@@ -13,7 +13,7 @@ The desktop app is a **Hisaabo Cloud** feature. Pre-built installers connect to 
 
 If you are self-hosting Hisaabo, you do not need the desktop app. The web app (`apps/web`) runs in any browser and delivers the same full-featured experience.
 
-**Advanced:** Self-hosted users can build the desktop app from source, targeting their own API, by setting `VITE_API_URL` to their server URL before running `cargo tauri build`.
+**Advanced:** Self-hosted users can build the desktop app from source, targeting their own API, by setting `API_URL` to their server URL before running `cargo tauri build`.
 
 ## What this app does
 
@@ -84,7 +84,7 @@ The `targets: "all"` setting in `tauri.conf.json` builds all available formats f
 
 ## API connection
 
-In development the desktop app connects to the API at `http://localhost:3000` (proxied through Vite at `/api`). In production builds the webview loads from the embedded static files, so API calls go to whatever `VITE_API_URL` was set to at build time, or fall back to relative `/api` paths (which requires the API to be served from the same origin or configured via a reverse proxy).
+In development the desktop app connects to the API at `http://localhost:3000` (proxied through Vite at `/api`). In production builds the webview loads from the embedded static files, so API calls go to whatever `API_URL` was set to at build time, or fall back to relative `/api` paths (which requires the API to be served from the same origin or configured via a reverse proxy).
 
 The CSP in `tauri.conf.json` allows connections to `http://localhost:3000` (dev) and `https://*.pages.dev` (Cloudflare Pages builds):
 

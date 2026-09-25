@@ -165,8 +165,8 @@ async function callIssueAccessToken(): Promise<{ accessToken: string; expiresAt:
   const refreshToken = cachedRefresh;
   if (!refreshToken) return null;
 
-  const TRPC_URL = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_API_URL
-    ? `${(import.meta as unknown as { env: Record<string, string> }).env.VITE_API_URL}/api/trpc`
+  const TRPC_URL = (import.meta as unknown as { env: Record<string, string> }).env?.API_URL
+    ? `${(import.meta as unknown as { env: Record<string, string> }).env.API_URL}/api/trpc`
     : "/api/trpc";
 
   try {

@@ -6,7 +6,7 @@ The Hisaabo API reference site. A Stripe-style interactive documentation site th
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4-38BDF8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
-Published at [api.hisaabo.in](${import.meta.env.VITE_API_URL ?? 'https://api.hisaabo.in'}).
+Published at [api.hisaabo.in](${import.meta.env.API_URL ?? 'https://api.hisaabo.in'}).
 
 ---
 

@@ -286,10 +286,10 @@ describe("DataTab — FullBackupSection", () => {
   // Background: the server used to return an absolute URL built from APP_URL
   // (the frontend host), so the anchor click went to app.hisaabo.in instead
   // of api.hisaabo.in and silently failed. Server now returns a relative URL
-  // and this component resolves it via apiUrl(VITE_API_URL).
+  // and this component resolves it via apiUrl(API_URL).
 
-  it("relative URL is resolved against VITE_API_URL in split-host mode", () => {
-    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
+  it("relative URL is resolved against API_URL in split-host mode", () => {
+    vi.stubEnv("API_URL", "${import.meta.env.API_URL}");
     try {
       // Spy on createElement so we can capture the anchor the component creates
       // without disturbing the rest of the render path.
@@ -325,7 +325,7 @@ describe("DataTab — FullBackupSection", () => {
   });
 
   it("absolute URL from server is used as-is (back-compat with older servers)", () => {
-    vi.stubEnv("VITE_API_URL", "${import.meta.env.API_URL}");
+    vi.stubEnv("API_URL", "${import.meta.env.API_URL}");
     try {
       const createElement = document.createElement.bind(document);
       const anchors: HTMLAnchorElement[] = [];

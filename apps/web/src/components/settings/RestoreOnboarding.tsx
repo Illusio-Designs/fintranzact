@@ -91,7 +91,7 @@ export function RestoreOnboarding({ tenantId, onBack }: RestoreOnboardingProps) 
 
     try {
       const { url } = await importMut.mutateAsync({ tenantId });
-      // Resolve against VITE_API_URL when the server returns a relative path
+      // Resolve against API_URL when the server returns a relative path
       // so split-host deploys hit the API host, not the SPA host.
       const uploadUrl = url.startsWith("http") ? url : apiUrl(url);
 

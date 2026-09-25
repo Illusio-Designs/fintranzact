@@ -26,6 +26,7 @@ export const tenants = pgTable("tenants", {
   // Encrypted at rest via AES-256-GCM when DB_ENCRYPTION_KEY is set (see crypto.ts).
   // Legacy plaintext values are handled gracefully on read.
   dbPassword: text("db_password"),
+  referralCode: text("referral_code"),
   plan: tenantPlanEnum("plan").default("free").notNull(),
   status: tenantStatusEnum("status").default("active").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -33,9 +34,6 @@ export const tenants = pgTable("tenants", {
 }, (t) => [
   uniqueIndex("tenants_slug_idx").on(t.slug),
 ]);
-// Add referralCode column to tenants for tracking referral at tenant level
-// (nullable — optional on signup)
-tenants.referralCode = text("referral_code");
 
 // ── Users (moved from schema.ts) ───────────────────────────────
 

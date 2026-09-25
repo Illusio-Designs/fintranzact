@@ -10,7 +10,7 @@ import { FAQSection } from "./components/FAQ";
 import { allEndpointGroups, allSections } from "./content";
 import { Link } from "react-router-dom";
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? (typeof process !== 'undefined' ? process.env.VITE_API_URL : undefined) ?? "https://api.hisaabo.in"
+const BASE_URL = import.meta.env.API_URL ?? "https://api.hisaabo.in";
 
 const QUICK_START_CODE = `import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
@@ -19,7 +19,7 @@ import type { AppRouter } from "@hisaabo/api";
 const trpc = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: `${ BASE_URL }/api/trpc`,
+      url: \`${BASE_URL}/api/trpc\`,
       transformer: superjson,
       headers() {
         return {

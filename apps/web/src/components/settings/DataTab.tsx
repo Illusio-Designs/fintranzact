@@ -159,7 +159,7 @@ function CsvExportSection() {
 function FullBackupSection({ tenantId }: { tenantId: string }) {
   const exportMut = trpc.selfExport.request.useMutation({
     onSuccess: (data) => {
-      // Resolve the URL against VITE_API_URL when the server returns a
+      // Resolve the URL against API_URL when the server returns a
       // relative path (split-host deploys: app.hisaabo.in + api.hisaabo.in).
       // Falls through unchanged when the server returns an absolute URL.
       const href = data.url.startsWith("http") ? data.url : apiUrl(data.url);

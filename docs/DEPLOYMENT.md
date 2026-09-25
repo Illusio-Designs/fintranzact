@@ -54,13 +54,13 @@
 
 | Variable | Description | Example |
 |---|---|---|
-| `VITE_API_URL` | API server URL (build-time) | `${import.meta.env.API_URL}` |
+| `API_URL` | API server URL (build-time) | `${import.meta.env.API_URL}` |
 
 ### Cloudflare Pages (Store)
 
 | Variable | Description | Example |
 |---|---|---|
-| `VITE_API_URL` | API server URL (build-time) | `${import.meta.env.API_URL}` |
+| `API_URL` | API server URL (build-time) | `${import.meta.env.API_URL}` |
 
 ### Backend (Docker / GHCR)
 
@@ -84,7 +84,7 @@
 |---|---|---|
 | `CLOUDFLARE_API_TOKEN` | deploy-web, deploy-store | Cloudflare API token with Pages edit permission |
 | `CLOUDFLARE_ACCOUNT_ID` | deploy-web, deploy-store | Cloudflare account ID |
-| `VITE_API_URL` | deploy-web, deploy-store | API URL injected at build time |
+| `API_URL` | deploy-web, deploy-store | API URL injected at build time |
 
 Note: `GITHUB_TOKEN` is provided automatically by GitHub Actions for GHCR pushes.
 

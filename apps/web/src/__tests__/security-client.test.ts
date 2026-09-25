@@ -280,21 +280,21 @@ describe("SECURITY — sensitive values must not be logged to console", () => {
 describe("SECURITY — tRPC client URL is either relative or points to trusted API origin", () => {
   /**
    * The tRPC client in trpc.ts resolves the API URL at build time:
-   * - When VITE_API_URL is set (production): absolute URL to the trusted API origin
-   * - When VITE_API_URL is unset (dev): relative "/api/trpc" proxied by Vite dev server
+   * - When API_URL is set (production): absolute URL to the trusted API origin
+   * - When API_URL is unset (dev): relative "/api/trpc" proxied by Vite dev server
    *
    * In both cases credentials: "include" is used, so the URL must be trusted.
    */
 
-  it("the fallback API URL (no VITE_API_URL) is a relative path starting with /api/trpc", () => {
+  it("the fallback API URL (no API_URL) is a relative path starting with /api/trpc", () => {
     const API_URL = "/api/trpc";
     expect(API_URL).toMatch(/^\/api\/trpc/);
     expect(API_URL).not.toMatch(/^https?:\/\//); // must not be absolute
   });
 
-  it("when VITE_API_URL is set, the full URL points to the expected /api/trpc path", () => {
-    const VITE_API_URL = "${import.meta.env.API_URL}";
-    const TRPC_URL = `${VITE_API_URL}/api/trpc`;
+  it("when API_URL is set, the full URL points to the expected /api/trpc path", () => {
+    const API_URL = "${import.meta.env.API_URL}";
+    const TRPC_URL = `${API_URL}/api/trpc`;
     expect(TRPC_URL).toBe("${import.meta.env.API_URL}/api/trpc");
     expect(new URL(TRPC_URL).pathname).toBe("/api/trpc");
   });

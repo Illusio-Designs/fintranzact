@@ -21,7 +21,7 @@ function cspPlugin(): Plugin {
       order: "pre",
       handler(html, ctx) {
         const isDev = ctx.server !== undefined;
-        const apiOrigin = process.env.VITE_API_URL; // e.g. "${import.meta.env.API_URL}"
+        const apiOrigin = process.env.API_URL; // e.g. "${import.meta.env.API_URL}"
         const connectSrc = isDev
           ? "connect-src 'self' ws:"
           : apiOrigin

@@ -34,7 +34,7 @@ jobs:
       - name: Build store app
         run: pnpm --filter @hisaabo/store build
         env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          API_URL: ${{ secrets.API_URL }}
           VITE_TURNSTILE_SITE_KEY: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
 
       - name: Deploy to Cloudflare Pages

@@ -184,7 +184,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          API_URL: ${{ secrets.API_URL }}
           VITE_TURNSTILE_SITE_KEY: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ""
         with:

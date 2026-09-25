@@ -4,7 +4,7 @@ import { useUser } from "../lib/user-context";
 export function AuthBanner() {
   const { session, loading } = useUser();
 
-  // Loading state -- only shows when VITE_API_URL is configured
+  // Loading state -- only shows when API_URL is configured
   if (loading) {
     return (
       <div
