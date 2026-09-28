@@ -78,6 +78,20 @@
       "when": 1789821602456,
       "tag": "0010_living_lifeguard",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790590990820,
+      "tag": "0011_supreme_dark_beast",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790593679168,
+      "tag": "0012_amusing_madame_hydra",
+      "breakpoints": true
     }
   ]
 }

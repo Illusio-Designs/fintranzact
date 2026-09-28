@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -21,6 +21,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState(() => sessionStorage.getItem("settings-tab") || "business");
   const handleTabChange = (t: string) => { setTab(t); sessionStorage.setItem("settings-tab", t); };
   const { data: businesses, isLoading } = trpc.business.list.useQuery();
@@ -104,9 +105,10 @@ function SettingsPage() {
             </button>
           )}
           <BusinessForm
+            onboardingMode
             onDone={(name) => {
               if (name) setNewBizName(name);
-              setShowWhatsNext(true);
+              navigate({ to: "/auth/plan-selection" });
             }}
           />
         </div>
@@ -120,9 +122,10 @@ function SettingsPage() {
         <div>
           <PageHeader title="Almost there!" description="Set up your business to start creating invoices" />
           <BusinessForm
+            onboardingMode
             onDone={(name) => {
               if (name) setNewBizName(name);
-              setShowWhatsNext(true);
+              navigate({ to: "/auth/plan-selection" });
             }}
           />
         </div>
@@ -199,11 +202,12 @@ function SettingsPage() {
       <div>
         <PageHeader title="Create New Business" description="Add another business to your organization" />
         <BusinessForm
+          onboardingMode
           onDone={(name) => {
             window.history.replaceState({}, "", "/settings");
             if (name) setNewBizName(name);
             setShowCreateBusiness(false);
-            setShowWhatsNext(true);
+            navigate({ to: "/auth/plan-selection" });
           }}
         />
       </div>

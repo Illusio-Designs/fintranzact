@@ -148,6 +148,20 @@
       "when": 1700000000001,
       "tag": "0020_add_user_referral_code",
       "breakpoints": false
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790593923915,
+      "tag": "0021_stiff_shooting_star",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790596945041,
+      "tag": "0022_add_session_auth_fields",
+      "breakpoints": true
     }
   ]
 }

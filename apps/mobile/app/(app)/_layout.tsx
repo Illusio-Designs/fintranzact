@@ -20,8 +20,10 @@ export default function AppLayout() {
   const { data: session, isLoading: sessionLoading } = trpc.auth.me.useQuery(undefined, { enabled: !!token });
 
   // Auto-select tenant if only one (same pattern as web root layout)
-  const { data: tenantList } = trpc.tenant.list.useQuery(undefined, {
-    enabled: !!session?.user && !session?.tenantId,
+  const {
+    data: tenantList,
+  } = trpc.tenant.list.useQuery(undefined, {
+    enabled: !!session?.user,
   });
 
   const selectTenantMutation = trpc.tenant.select.useMutation({

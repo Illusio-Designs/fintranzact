@@ -1,4 +1,18 @@
-import { pgTable, text, timestamp, numeric, integer, boolean, uuid, pgEnum, index, uniqueIndex, jsonb, customType } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  numeric,
+  integer,
+  boolean,
+  uuid,
+  pgEnum,
+  index,
+  uniqueIndex,
+  jsonb,
+  customType,
+  date,
+} from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 // bytea for binary blobs (e.g., business logo image bytes). Drizzle doesn't
@@ -39,9 +53,28 @@ export const businesses = pgTable("businesses", {
   gstRegistrationType: gstRegistrationTypeEnum("gst_registration_type").default("unregistered").notNull(),
   gstin: text("gstin"),
   pan: text("pan"),
+  businessType: text("business_type")
+    .default("proprietorship")
+    .notNull(),
+  tan: text("tan"),
+  cin: text("cin"),
+  llpin: text("llpin"),
+  udyamNumber: text("udyam_number"),
+  iecCode: text("iec_code"),
+  lutArn: text("lut_arn"),
+  eInvoiceEnabled: boolean("e_invoice_enabled")
+    .default(false)
+    .notNull(),
+  eWayBillEnabled: boolean("e_way_bill_enabled")
+    .default(false)
+    .notNull(),
   phone: text("phone"),
   email: text("email"),
   address: text("address"),
+  addressLine1: text("address_line_1"),
+  addressLine2: text("address_line_2"),
+  landmark: text("landmark"),
+  countryOfOperations: text("country_of_operations"),
   city: text("city"),
   state: text("state"),
   stateCode: text("state_code"), // 2-digit GST state code (01-38) for inter/intra-state detection
@@ -74,6 +107,9 @@ export const businesses = pgTable("businesses", {
   proformaPrefix: text("proforma_prefix").default("PI").notNull(),
   nextProformaNumber: integer("next_proforma_number").default(1).notNull(),
   financialYearStart: integer("financial_year_start_month").default(4).notNull(), // April
+  financialYearStartDate: date("financial_year_start_date", {
+    mode: "string",
+  }),
   currency: text("currency").default("INR").notNull(),
   annualTurnover: numeric("annual_turnover", { precision: 15, scale: 2 }), // For HSN digit enforcement & e-invoicing threshold
   // ── Online Store settings ──

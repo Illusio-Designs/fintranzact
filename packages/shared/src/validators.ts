@@ -69,19 +69,63 @@ export const completeProfileSchema = z.object({
 export const gstRegistrationTypes = ["regular", "composition", "unregistered"] as const;
 export type GstRegistrationType = (typeof gstRegistrationTypes)[number];
 
+export const businessTypes = [
+  "proprietorship",
+  "partnership",
+  "llp",
+  "private_limited",
+  "public_limited",
+  "one_person_company",
+  "huf",
+  "trust",
+  "society",
+  "other",
+] as const;
+
+export type BusinessType = (typeof businessTypes)[number];
+
 export const createBusinessSchema = z.object({
+  // General business details
   name: z.string().min(1).max(200),
   legalName: z.string().max(200).optional(),
-  gstRegistrationType: z.enum(gstRegistrationTypes).default("unregistered"),
-  gstin: z.string().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/).optional().or(z.literal("")),
-  pan: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/),
+  businessType: z.enum(businessTypes).default("proprietorship"),
+
   phone: z.string().min(1).max(15),
   email: z.string().email().optional().or(z.literal("")),
   address: z.string().min(1).max(500),
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  landmark: z.string().optional(),
+  countryOfOperations: z.string().optional(),
+  financialYearStartDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid financial year start date")
+    .optional(),
   city: z.string().max(100).optional(),
   state: z.string().max(100).optional(),
   stateCode: z.string().max(2).optional(),
   pincode: z.string().max(10).optional(),
+
+  // Statutory details
+  gstRegistrationType: z.enum(gstRegistrationTypes).default("unregistered"),
+  gstin: z
+    .string()
+    .regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/)
+    .optional()
+    .or(z.literal("")),
+  pan: z
+    .string()
+    .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/),
+  tan: z.string().max(10).optional().or(z.literal("")),
+  cin: z.string().max(21).optional().or(z.literal("")),
+  llpin: z.string().max(7).optional().or(z.literal("")),
+  udyamNumber: z.string().max(30).optional().or(z.literal("")),
+  iecCode: z.string().max(10).optional().or(z.literal("")),
+  lutArn: z.string().max(100).optional().or(z.literal("")),
+  eInvoiceEnabled: z.boolean().default(false),
+  eWayBillEnabled: z.boolean().default(false),
+
+  // Document defaults
   invoicePrefix: z.string().min(1).max(10).default("INV"),
   currency: z.string().length(3).default("INR"),
   paymentPrefix: z.string().min(1).max(10).default("PAY"),
@@ -89,7 +133,6 @@ export const createBusinessSchema = z.object({
   creditNotePrefix: z.string().min(1).max(10).default("CN"),
   deliveryChallanPrefix: z.string().min(1).max(10).default("DC"),
   proformaPrefix: z.string().min(1).max(10).default("PI"),
-  // Document defaults — applied to new documents but always overridable per-doc.
   defaultRoundOff: z.boolean().default(true),
   defaultTermsAndConditions: z.string().max(2000).nullable().optional(),
 });

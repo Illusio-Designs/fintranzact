@@ -1,4 +1,10 @@
-import { createRootRoute, Link, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  Link,
+  Outlet,
+  useNavigate,
+  useLocation,
+} from "@tanstack/react-router";
 import React, { useState, useEffect } from "react";
 import { trpc, setBusinessId, queryClient } from "@/lib/trpc";
 import { useHotkeys } from "@/hooks/useHotkeys";
@@ -25,11 +31,23 @@ function RootError({ error }: { error: Error }) {
     <div className="min-h-screen flex items-center justify-center bg-surface-1 p-8">
       <div className="max-w-md text-center">
         <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-950 flex items-center justify-center mx-auto mb-4">
-          <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          <svg
+            className="w-6 h-6 text-red-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+            />
           </svg>
         </div>
-        <h1 className="text-lg font-semibold text-text-primary mb-2">Something went wrong</h1>
+        <h1 className="text-lg font-semibold text-text-primary mb-2">
+          Something went wrong
+        </h1>
         <p className="text-sm text-text-tertiary mb-6">
           {error?.message || "An unexpected error occurred. Please try again."}
         </p>
@@ -50,21 +68,45 @@ const ROLE_ABILITIES: Record<string, Set<string>> = {
   owner: new Set(["*"]),
   admin: new Set(["*"]),
   seller_manager: new Set([
-    "Invoice:read", "Invoice:create", "Party:read", "Item:read",
-    "Payment:read", "Store:read", "RecurringInvoice:read", "Business:read",
+    "Invoice:read",
+    "Invoice:create",
+    "Party:read",
+    "Item:read",
+    "Payment:read",
+    "Store:read",
+    "RecurringInvoice:read",
+    "Business:read",
   ]),
   seller: new Set([
-    "Invoice:read", "Invoice:create", "Party:read", "Item:read",
-    "Payment:read", "Store:read", "Business:read", "RecurringInvoice:read",
+    "Invoice:read",
+    "Invoice:create",
+    "Party:read",
+    "Item:read",
+    "Payment:read",
+    "Store:read",
+    "Business:read",
+    "RecurringInvoice:read",
   ]),
   accountant: new Set([
-    "Payment:read", "Expense:read", "BankAccount:read", "Invoice:read",
-    "Party:read", "Item:read", "Store:read", "RecurringInvoice:read",
-    "Report:read", "GstReport:read", "Business:read",
+    "Payment:read",
+    "Expense:read",
+    "BankAccount:read",
+    "Invoice:read",
+    "Party:read",
+    "Item:read",
+    "Store:read",
+    "RecurringInvoice:read",
+    "Report:read",
+    "GstReport:read",
+    "Business:read",
   ]),
 };
 
-function canAccess(role: string | null | undefined, resource: string, action: string): boolean {
+function canAccess(
+  role: string | null | undefined,
+  resource: string,
+  action: string,
+): boolean {
   if (!role) return true; // graceful degradation while loading
   const abilities = ROLE_ABILITIES[role];
   if (!abilities) return true; // unknown role — show all
@@ -78,51 +120,175 @@ const navSections = [
   {
     label: "OVERVIEW",
     items: [
-      { to: "/", label: "Dashboard", icon: DashboardIcon, exact: true, resource: "Report", action: "read" },
+      {
+        to: "/",
+        label: "Dashboard",
+        icon: DashboardIcon,
+        exact: true,
+        resource: "Report",
+        action: "read",
+      },
     ],
   },
   {
     label: "SALES",
     items: [
-      { to: "/invoices", label: "Invoices", icon: InvoiceIcon, resource: "Invoice", action: "read" },
-      { to: "/quotations", label: "Quotations", icon: QuotationIcon, resource: "Invoice", action: "read" },
-      { to: "/sales-returns", label: "Sales Returns", icon: SalesReturnIcon, resource: "Invoice", action: "read" },
-      { to: "/credit-notes", label: "Credit Notes", icon: CreditNoteIcon, resource: "Invoice", action: "read" },
-      { to: "/delivery-challans", label: "Delivery Challans", icon: DeliveryIcon, resource: "Invoice", action: "read" },
-      { to: "/proforma-invoices", label: "Proforma Invoices", icon: ProformaIcon, resource: "Invoice", action: "read" },
-      { to: "/store-orders", label: "Store Orders", icon: StoreOrdersIcon, resource: "Store", action: "read" },
-      { to: "/automated-invoices", label: "Recurring Invoices", icon: AutomatedInvoiceIcon, resource: "RecurringInvoice", action: "read" },
+      {
+        to: "/invoices",
+        label: "Invoices",
+        icon: InvoiceIcon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/quotations",
+        label: "Quotations",
+        icon: QuotationIcon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/sales-returns",
+        label: "Sales Returns",
+        icon: SalesReturnIcon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/credit-notes",
+        label: "Credit Notes",
+        icon: CreditNoteIcon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/delivery-challans",
+        label: "Delivery Challans",
+        icon: DeliveryIcon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/proforma-invoices",
+        label: "Proforma Invoices",
+        icon: ProformaIcon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/store-orders",
+        label: "Store Orders",
+        icon: StoreOrdersIcon,
+        resource: "Store",
+        action: "read",
+      },
+      {
+        to: "/automated-invoices",
+        label: "Recurring Invoices",
+        icon: AutomatedInvoiceIcon,
+        resource: "RecurringInvoice",
+        action: "read",
+      },
     ],
   },
   {
     label: "CONTACTS",
     items: [
-      { to: "/parties", label: "Parties", icon: PartyIcon, resource: "Party", action: "read" },
+      {
+        to: "/parties",
+        label: "Parties",
+        icon: PartyIcon,
+        resource: "Party",
+        action: "read",
+      },
     ],
   },
   {
     label: "INVENTORY",
     items: [
-      { to: "/items", label: "Items", icon: ItemIcon, resource: "Item", action: "read" },
+      {
+        to: "/items",
+        label: "Items",
+        icon: ItemIcon,
+        resource: "Item",
+        action: "read",
+      },
     ],
   },
   {
     label: "MONEY",
     items: [
-      { to: "/payments", label: "Payments", icon: PaymentIcon, resource: "Payment", action: "read" },
-      { to: "/cash-and-bank", label: "Cash & Bank", icon: BankIcon, resource: "BankAccount", action: "read" },
-      { to: "/expenses", label: "Expenses", icon: ExpenseIcon, resource: "Expense", action: "read" },
-      { to: "/shipments", label: "Shipments", icon: ShipmentsIcon, resource: "Invoice", action: "read" },
+      {
+        to: "/payments",
+        label: "Payments",
+        icon: PaymentIcon,
+        resource: "Payment",
+        action: "read",
+      },
+      {
+        to: "/cash-and-bank",
+        label: "Cash & Bank",
+        icon: BankIcon,
+        resource: "BankAccount",
+        action: "read",
+      },
+      {
+        to: "/expenses",
+        label: "Expenses",
+        icon: ExpenseIcon,
+        resource: "Expense",
+        action: "read",
+      },
+      {
+        to: "/shipments",
+        label: "Shipments",
+        icon: ShipmentsIcon,
+        resource: "Invoice",
+        action: "read",
+      },
     ],
   },
   {
     label: "COMPLIANCE",
     items: [
-      { to: "/gst", label: "__REPORTS__", icon: GSTIcon, resource: "GstReport", action: "read" }, // label set dynamically based on GST status
-      { to: "/gstr2b", label: "GSTR-2B Recon", icon: ReportsIcon, resource: "GstReport", action: "read", gstOnly: true },
-      { to: "/itc", label: "Input Tax Credit", icon: ReportsIcon, resource: "ITC", action: "read", gstOnly: true },
-      { to: "/eway-bills", label: "E-Way Bills", icon: ReportsIcon, resource: "EWayBill", action: "read", gstOnly: true },
-      { to: "/reports", label: "Reports", icon: ReportsIcon, resource: "Report", action: "read" },
+      {
+        to: "/gst",
+        label: "__REPORTS__",
+        icon: GSTIcon,
+        resource: "GstReport",
+        action: "read",
+      }, // label set dynamically based on GST status
+      {
+        to: "/gstr2b",
+        label: "GSTR-2B Recon",
+        icon: ReportsIcon,
+        resource: "GstReport",
+        action: "read",
+        gstOnly: true,
+      },
+      {
+        to: "/itc",
+        label: "Input Tax Credit",
+        icon: ReportsIcon,
+        resource: "ITC",
+        action: "read",
+        gstOnly: true,
+      },
+      {
+        to: "/eway-bills",
+        label: "E-Way Bills",
+        icon: ReportsIcon,
+        resource: "EWayBill",
+        action: "read",
+        gstOnly: true,
+      },
+      {
+        to: "/reports",
+        label: "Reports",
+        icon: ReportsIcon,
+        resource: "Report",
+        action: "read",
+      },
     ],
   },
 ];
@@ -132,7 +298,8 @@ const navSections = [
 function NoOrgScreen() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
-  const { data: pendingInvites, isLoading: invitesLoading } = trpc.tenant.myInvitations.useQuery();
+  const { data: pendingInvites, isLoading: invitesLoading } =
+    trpc.tenant.myInvitations.useQuery();
   const { data: canCreateOrg } = trpc.tenant.canCreateOrg.useQuery();
 
   const acceptByIdMutation = trpc.tenant.acceptById.useMutation({
@@ -153,14 +320,17 @@ function NoOrgScreen() {
   });
 
   const isActing = acceptByIdMutation.isPending || createOrgMutation.isPending;
-  const error = acceptByIdMutation.error?.message ?? createOrgMutation.error?.message;
+  const error =
+    acceptByIdMutation.error?.message ?? createOrgMutation.error?.message;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-surface-1">
       <div className="w-full max-w-[400px] rounded-2xl p-8 shadow-elevated bg-surface-0 border border-border-light">
         <div className="flex items-center justify-center gap-2.5 mb-6">
           <Logo className="w-9 h-9" />
-          <span className="font-semibold text-lg tracking-tight text-text-primary">Hisaabo</span>
+          <span className="font-semibold text-lg tracking-tight text-text-primary">
+            Hisaabo
+          </span>
         </div>
 
         {invitesLoading ? (
@@ -186,7 +356,9 @@ function NoOrgScreen() {
               {pendingInvites.map((inv) => (
                 <button
                   key={inv.id}
-                  onClick={() => acceptByIdMutation.mutate({ invitationId: inv.id })}
+                  onClick={() =>
+                    acceptByIdMutation.mutate({ invitationId: inv.id })
+                  }
                   disabled={isActing}
                   className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 border-brand-200 bg-brand-50/50 hover:border-brand-400 hover:bg-brand-50 transition-colors text-left group dark:border-brand-600/30 dark:bg-brand-600/10 dark:hover:border-brand-500"
                 >
@@ -201,9 +373,10 @@ function NoOrgScreen() {
                       as {formatRole(inv.role)}
                     </p>
                   </div>
-                  {acceptByIdMutation.isPending && acceptByIdMutation.variables?.invitationId === inv.id && (
-                    <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
-                  )}
+                  {acceptByIdMutation.isPending &&
+                    acceptByIdMutation.variables?.invitationId === inv.id && (
+                      <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                    )}
                 </button>
               ))}
             </div>
@@ -211,8 +384,14 @@ function NoOrgScreen() {
             {canCreateOrg && (
               <>
                 <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border-light" /></div>
-                  <div className="relative flex justify-center"><span className="bg-surface-0 px-3 text-xs text-text-tertiary">or</span></div>
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border-light" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-surface-0 px-3 text-xs text-text-tertiary">
+                      or
+                    </span>
+                  </div>
                 </div>
 
                 <button
@@ -220,14 +399,18 @@ function NoOrgScreen() {
                   disabled={isActing}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-border-light hover:border-border-medium hover:bg-surface-1 transition-colors text-sm font-medium text-text-secondary"
                 >
-                  {createOrgMutation.isPending ? "Creating..." : "I want my own organization instead"}
+                  {createOrgMutation.isPending
+                    ? "Creating..."
+                    : "I want my own organization instead"}
                 </button>
               </>
             )}
           </>
         ) : (
           <>
-            <h2 className="text-lg font-semibold text-text-primary mb-1 text-center">No organization found</h2>
+            <h2 className="text-lg font-semibold text-text-primary mb-1 text-center">
+              No organization found
+            </h2>
             <p className="text-sm text-text-tertiary mb-6 text-center">
               {canCreateOrg
                 ? "Create an organization to get started, or ask your team admin to send you an invitation."
@@ -246,7 +429,9 @@ function NoOrgScreen() {
                 disabled={createOrgMutation.isPending}
                 className="btn-primary w-full py-2.5"
               >
-                {createOrgMutation.isPending ? "Creating..." : "Create Organization"}
+                {createOrgMutation.isPending
+                  ? "Creating..."
+                  : "Create Organization"}
               </button>
             )}
           </>
@@ -277,8 +462,14 @@ function TenantPicker({
   onClose?: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-xl bg-surface-0 border border-border-light shadow-modal p-6 animate-scale-in" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-xl bg-surface-0 border border-border-light shadow-modal p-6 animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="text-base font-semibold text-text-primary mb-1">
           Select Organization
         </h2>
@@ -321,8 +512,18 @@ function TenantPicker({
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-dashed border-border-medium hover:border-brand-400 hover:bg-brand-600/5 transition-colors text-left group"
             >
               <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center text-text-secondary group-hover:text-brand-600 shrink-0">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 4.5v15m7.5-7.5h-15"
+                  />
                 </svg>
               </div>
               <span className="text-sm font-medium text-text-secondary group-hover:text-brand-700 transition-colors">
@@ -340,11 +541,23 @@ function TenantPicker({
 
 function RootLayout() {
   const utils = trpc.useUtils();
-  const { data: session, isLoading: sessionLoading, isFetching: sessionFetching } = trpc.auth.me.useQuery();
-  const { data: tenantList } = trpc.tenant.list.useQuery(undefined, {
+  const {
+    data: session,
+    isLoading: sessionLoading,
+    isFetching: sessionFetching,
+  } = trpc.auth.me.useQuery();
+  const {
+    data: tenantList,
+    isLoading: tenantListLoading,
+    isFetching: tenantListFetching,
+  } = trpc.tenant.list.useQuery(undefined, {
     enabled: !!session?.user,
   });
-  const { data: businesses, isLoading: businessesLoading, isFetching: businessesFetching } = trpc.business.list.useQuery(undefined, {
+  const {
+    data: businesses,
+    isLoading: businessesLoading,
+    isFetching: businessesFetching,
+  } = trpc.business.list.useQuery(undefined, {
     enabled: !!session?.user && !!session?.tenantId,
   });
 
@@ -363,10 +576,12 @@ function RootLayout() {
   const [showTenantPicker, setShowTenantPicker] = useState(false);
 
   const createOrgMutation = trpc.tenant.create.useMutation();
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return sessionStorage.getItem("selectedBusinessId");
-  });
+  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
+    () => {
+      if (typeof window === "undefined") return null;
+      return sessionStorage.getItem("selectedBusinessId");
+    },
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const selectTenantMutation = trpc.tenant.select.useMutation({
@@ -385,6 +600,7 @@ function RootLayout() {
       sessionStorage.removeItem("planSelectionDone");
       sessionStorage.removeItem("selectedBusinessId");
       setBusinessId(null);
+      setCurrentBusinessId(null);
       queryClient.clear();
       navigate({ to: "/login" });
     },
@@ -412,31 +628,113 @@ function RootLayout() {
       scope: "global",
     },
     // ── Navigation shortcuts (Alt+Shift+Key) ──
-    { key: "d", alt: true, shift: true, handler: () => navigate({ to: "/" }), description: "Dashboard", scope: "navigation" },
-    { key: "i", alt: true, shift: true, handler: () => navigate({ to: "/invoices" }), description: "Invoices", scope: "navigation" },
-    { key: "q", alt: true, shift: true, handler: () => navigate({ to: "/quotations" }), description: "Quotations", scope: "navigation" },
-    { key: "c", alt: true, shift: true, handler: () => navigate({ to: "/credit-notes" }), description: "Credit Notes", scope: "navigation" },
-    { key: "p", alt: true, shift: true, handler: () => navigate({ to: "/parties" }), description: "Parties", scope: "navigation" },
-    { key: "t", alt: true, shift: true, handler: () => navigate({ to: "/items" }), description: "Items", scope: "navigation" },
-    { key: "m", alt: true, shift: true, handler: () => navigate({ to: "/payments" }), description: "Payments", scope: "navigation" },
-    { key: "b", alt: true, shift: true, handler: () => navigate({ to: "/cash-and-bank" }), description: "Cash & Bank", scope: "navigation" },
-    { key: "e", alt: true, shift: true, handler: () => navigate({ to: "/expenses" }), description: "Expenses", scope: "navigation" },
-    { key: "g", alt: true, shift: true, handler: () => navigate({ to: "/gst" }), description: "GST Returns", scope: "navigation" },
-    { key: "r", alt: true, shift: true, handler: () => navigate({ to: "/reports" }), description: "Business Reports", scope: "navigation" },
-    { key: "s", alt: true, shift: true, handler: () => navigate({ to: "/settings" }), description: "Settings", scope: "navigation" },
+    {
+      key: "d",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/" }),
+      description: "Dashboard",
+      scope: "navigation",
+    },
+    {
+      key: "i",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/invoices" }),
+      description: "Invoices",
+      scope: "navigation",
+    },
+    {
+      key: "q",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/quotations" }),
+      description: "Quotations",
+      scope: "navigation",
+    },
+    {
+      key: "c",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/credit-notes" }),
+      description: "Credit Notes",
+      scope: "navigation",
+    },
+    {
+      key: "p",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/parties" }),
+      description: "Parties",
+      scope: "navigation",
+    },
+    {
+      key: "t",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/items" }),
+      description: "Items",
+      scope: "navigation",
+    },
+    {
+      key: "m",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/payments" }),
+      description: "Payments",
+      scope: "navigation",
+    },
+    {
+      key: "b",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/cash-and-bank" }),
+      description: "Cash & Bank",
+      scope: "navigation",
+    },
+    {
+      key: "e",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/expenses" }),
+      description: "Expenses",
+      scope: "navigation",
+    },
+    {
+      key: "g",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/gst" }),
+      description: "GST Returns",
+      scope: "navigation",
+    },
+    {
+      key: "r",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/reports" }),
+      description: "Business Reports",
+      scope: "navigation",
+    },
+    {
+      key: "s",
+      alt: true,
+      shift: true,
+      handler: () => navigate({ to: "/settings" }),
+      description: "Settings",
+      scope: "navigation",
+    },
   ]);
 
   // Set business ID when businesses load. Auto-select only when there is a
   // single business; if the user has multiple businesses, show a picker first.
   useEffect(() => {
-    if (businesses && businesses.length === 1 && !currentBusinessId) {
-      setBusinessId(businesses[0].id);
-      setCurrentBusinessId(businesses[0].id);
-      sessionStorage.setItem("selectedBusinessId", businesses[0].id);
-      return;
-    }
-
-    if (businesses && businesses.length > 0 && currentBusinessId && !businesses.some((b) => b.id === currentBusinessId)) {
+    if (
+      businesses &&
+      businesses.length > 0 &&
+      currentBusinessId &&
+      !businesses.some((b) => b.id === currentBusinessId)
+    ) {
       setCurrentBusinessId(null);
       sessionStorage.removeItem("selectedBusinessId");
     }
@@ -449,13 +747,21 @@ function RootLayout() {
   }, [currentBusinessId]);
 
   const selectedTenantPlan = session?.tenantId
-    ? tenantList?.find((tenant) => tenant.tenantId === session.tenantId)?.tenantPlan ?? null
+    ? (tenantList?.find((tenant) => tenant.tenantId === session.tenantId)
+      ?.tenantPlan ?? null)
     : null;
 
-  const hasCompletedPlanSelection = selectedTenantPlan !== null && selectedTenantPlan !== undefined;
+  const hasCompletedPlanSelection =
+    selectedTenantPlan !== null && selectedTenantPlan !== undefined;
 
   // Single consolidated redirect — priority order matters
-  const publicPaths = ["/login", "/auth/verify", "/auth/complete-profile", "/auth/verify-email-change", "/invite"];
+  const publicPaths = [
+    "/login",
+    "/auth/verify",
+    "/auth/complete-profile",
+    "/auth/verify-email-change",
+    "/invite",
+  ];
   useEffect(() => {
     if (sessionLoading || sessionFetching) return;
 
@@ -487,21 +793,35 @@ function RootLayout() {
       }
     }
 
-    // Priority 3: show company picker before plan gate so the user can
-    // switch orgs first, then decide plan only once per tenant.
-    const needsCompanySelection =
-      session?.tenantId &&
-      Array.isArray(businesses) &&
-      businesses.length > 1 &&
-      !currentBusinessId;
+    // Plan is tenant-level.
+    // DB is the single source of truth.
+    const planGateAllowed = [
+      "/auth/plan-selection",
+      "/onboarding",
+      "/business/create",
+      "/login",
+      "/auth/verify",
+    ].some((p) => pathname.startsWith(p));
 
-    if (needsCompanySelection && !pathname.startsWith("/auth/")) {
+    if (
+      session?.tenantId &&
+      !tenantListLoading &&
+      !tenantListFetching &&
+      !hasCompletedPlanSelection &&
+      !planGateAllowed
+    ) {
+      navigate({ to: "/auth/plan-selection" });
       return;
     }
 
-    const planGateAllowed = ["/auth/plan-selection", "/login", "/auth/verify"].some((p) => pathname.startsWith(p));
-    if (session?.tenantId && !hasCompletedPlanSelection && !planGateAllowed && !needsCompanySelection) {
-      navigate({ to: "/auth/plan-selection" });
+    // Company selection happens only after the tenant has a plan.
+    const needsCompanySelection =
+      session?.tenantId &&
+      Array.isArray(businesses) &&
+      businesses.length > 0 &&
+      !currentBusinessId;
+
+    if (needsCompanySelection && !pathname.startsWith("/auth/")) {
       return;
     }
 
@@ -509,21 +829,54 @@ function RootLayout() {
     // Guard: only redirect AFTER businesses query has completed its initial load.
     // businessesLoading is true when the query is enabled but has no data yet.
     // This prevents redirecting to /settings before we know if businesses exist.
-    if (session?.tenantId && !businessesLoading && !businessesFetching && Array.isArray(businesses) && businesses.length === 0) {
-      if (pathname !== "/settings") {
-        navigate({ to: "/settings" });
+    if (
+      session?.tenantId &&
+      !businessesLoading &&
+      !businessesFetching &&
+      Array.isArray(businesses) &&
+      businesses.length === 0
+    ) {
+      if (
+        pathname !== "/onboarding" &&
+        !pathname.startsWith("/auth/plan-selection") &&
+        !pathname.startsWith("/business/create")
+      ) {
+        navigate({ to: "/onboarding" });
       }
       return;
     }
+
     // Priority 5: On dashboard but role can't access it → first accessible page
-    if (pathname === "/" && session?.role && !canAccess(session.role, "Report", "read")) {
+    if (
+      pathname === "/" &&
+      session?.role &&
+      !canAccess(session.role, "Report", "read")
+    ) {
       navigate({ to: "/invoices" });
       return;
     }
-  }, [sessionLoading, sessionFetching, session, businesses, navigate, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    sessionLoading,
+    sessionFetching,
+    session,
+    businesses,
+    navigate,
+    pathname,
+    currentBusinessId,
+    tenantList,
+    tenantListLoading,
+    tenantListFetching,
+    hasCompletedPlanSelection,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select single tenant
-  const shouldAutoSelectTenant = !!(session?.user && !session?.tenantId && tenantList?.length === 1 && !selectTenantMutation.isPending && !selectTenantMutation.isSuccess);
+  const shouldAutoSelectTenant = !!(
+    session?.user &&
+    !session?.tenantId &&
+    tenantList?.length === 1 &&
+    !selectTenantMutation.isPending &&
+    !selectTenantMutation.isSuccess
+  );
   useEffect(() => {
     if (shouldAutoSelectTenant && tenantList) {
       selectTenantMutation.mutate({ tenantId: tenantList[0].tenantId });
@@ -586,11 +939,15 @@ function RootLayout() {
       <TenantPicker
         tenants={tenantList}
         onSelect={(tenantId) => selectTenantMutation.mutate({ tenantId })}
-        onCreateNew={canCreateOrg ? async () => {
-          await createOrgMutation.mutateAsync();
-          await utils.auth.me.refetch();
-          await utils.tenant.list.refetch();
-        } : undefined}
+        onCreateNew={
+          canCreateOrg
+            ? async () => {
+              await createOrgMutation.mutateAsync();
+              await utils.auth.me.refetch();
+              await utils.tenant.list.refetch();
+            }
+            : undefined
+        }
       />
     );
   }
@@ -599,10 +956,26 @@ function RootLayout() {
   // the main layout yet (prevents flash of /settings "Set up your business")
   if (session.tenantId && businessesLoading) return loadingSpinner;
 
+  // Tenant-level routes are independent of business context.
+  // They must render without waiting for the business list and
+  // must not use the business dashboard shell.
+  if (
+    pathname.startsWith("/auth/plan-selection") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/business/create")
+  ) {
+    return <Outlet />;
+  }
+
+  // Business-level routes require business context.
+  if (session.tenantId && businessesLoading) {
+    return loadingSpinner;
+  }
+
   const shouldShowBusinessPicker =
     !!session.tenantId &&
     Array.isArray(businesses) &&
-    businesses.length > 1 &&
+    businesses.length > 0 &&
     !currentBusinessId;
 
   if (shouldShowBusinessPicker) {
@@ -612,8 +985,12 @@ function RootLayout() {
           <div className="mb-8 flex items-center gap-3">
             <Logo className="w-10 h-10" />
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-text-tertiary">Welcome back</p>
-              <h1 className="text-2xl font-semibold text-text-primary">Choose a company</h1>
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-text-tertiary">
+                Welcome back
+              </p>
+              <h1 className="text-2xl font-semibold text-text-primary">
+                Choose a company
+              </h1>
             </div>
           </div>
 
@@ -644,8 +1021,14 @@ function RootLayout() {
                         {initials}
                       </div>
                       <div>
-                        <p className="text-base font-semibold text-text-primary">{business.name}</p>
-                        <p className="text-xs text-text-tertiary">{business.gstRegistrationType === "unregistered" ? "Unregistered" : "GST enabled"}</p>
+                        <p className="text-base font-semibold text-text-primary">
+                          {business.name}
+                        </p>
+                        <p className="text-xs text-text-tertiary">
+                          {business.gstRegistrationType === "unregistered"
+                            ? "Unregistered"
+                            : "GST enabled"}
+                        </p>
                       </div>
                     </div>
                     <span className="rounded-full border border-border-light bg-surface-1 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
@@ -655,7 +1038,11 @@ function RootLayout() {
 
                   <div className="space-y-2 text-sm text-text-secondary">
                     <p>{business.city || "Location not set"}</p>
-                    <p>{business.phone || business.email || "No contact details yet"}</p>
+                    <p>
+                      {business.phone ||
+                        business.email ||
+                        "No contact details yet"}
+                    </p>
                   </div>
                 </button>
               );
@@ -684,9 +1071,13 @@ function RootLayout() {
     queryClient.invalidateQueries();
   }
 
-  const activeBusiness = businesses?.find((b) => b.id === (currentBusinessId ?? businesses?.[0]?.id)) ?? businesses?.[0];
+  const activeBusiness =
+    businesses?.find(
+      (b) => b.id === (currentBusinessId ?? businesses?.[0]?.id),
+    ) ?? businesses?.[0];
   const isGstRegistered =
-    activeBusiness?.gstRegistrationType !== "unregistered" || !!activeBusiness?.gstin;
+    activeBusiness?.gstRegistrationType !== "unregistered" ||
+    !!activeBusiness?.gstin;
 
   // No businesses yet — user is in the onboarding flow. Hide the sidebar
   // since nav items are meaningless without a business context.
@@ -726,7 +1117,7 @@ function RootLayout() {
               "w-56 shrink-0 border-r border-border-light flex flex-col bg-surface-0 overflow-hidden",
               // On mobile: fixed drawer that slides in/out
               "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0",
-              sidebarOpen ? "translate-x-0" : "-translate-x-full"
+              sidebarOpen ? "translate-x-0" : "-translate-x-full",
             )}
           >
             {/* Logo + Org switcher */}
@@ -740,17 +1131,24 @@ function RootLayout() {
             </div>
 
             {/* Nav sections */}
-            <nav className="flex-1 overflow-y-auto pb-2" onClick={() => setSidebarOpen(false)}>
+            <nav
+              className="flex-1 overflow-y-auto pb-2"
+              onClick={() => setSidebarOpen(false)}
+            >
               {navSections.map((section) => {
                 const visibleItems = section.items
-                  .filter((item) =>
-                    canAccess(session?.role, item.resource, item.action) &&
-                    (!("gstOnly" in item && item.gstOnly) || isGstRegistered)
+                  .filter(
+                    (item) =>
+                      canAccess(session?.role, item.resource, item.action) &&
+                      (!("gstOnly" in item && item.gstOnly) || isGstRegistered),
                   )
                   .map((item) => {
                     // Rename reports label based on GST status (always visible)
                     if (item.to === "/gst") {
-                      return { ...item, label: isGstRegistered ? "GST Returns" : "Tax Reports" };
+                      return {
+                        ...item,
+                        label: isGstRegistered ? "GST Returns" : "Tax Reports",
+                      };
                     }
                     if (item.to === "/reports") {
                       return { ...item, label: "Business Reports" };
@@ -758,7 +1156,10 @@ function RootLayout() {
                     return item;
                   });
                 if (visibleItems.length === 0) return null;
-                const sectionLabel = section.label === "COMPLIANCE" && !isGstRegistered ? "REPORTS" : section.label;
+                const sectionLabel =
+                  section.label === "COMPLIANCE" && !isGstRegistered
+                    ? "REPORTS"
+                    : section.label;
                 return (
                   <div key={section.label}>
                     <p className="px-3 pt-5 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-tertiary">
@@ -770,12 +1171,17 @@ function RootLayout() {
                         to={item.to}
                         className="flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors"
                         activeProps={{
-                          className: "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors bg-brand-600/10 text-brand-700 font-medium",
+                          className:
+                            "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors bg-brand-600/10 text-brand-700 font-medium",
                         }}
                         inactiveProps={{
-                          className: "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors text-text-secondary hover:bg-surface-2 hover:text-text-primary",
+                          className:
+                            "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors text-text-secondary hover:bg-surface-2 hover:text-text-primary",
                         }}
-                        activeOptions={{ exact: "exact" in item ? (item.exact as boolean) : false }}
+                        activeOptions={{
+                          exact:
+                            "exact" in item ? (item.exact as boolean) : false,
+                        }}
                       >
                         <item.icon />
                         {item.label}
@@ -796,16 +1202,33 @@ function RootLayout() {
                 >
                   <p className="flex items-center gap-1.5 text-[11px] font-medium text-text-tertiary/60 group-hover:text-text-secondary transition-colors">
                     <span className="truncate">{tenantName}</span>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-tertiary/40 group-hover:text-text-secondary transition-colors">
-                      <path d="M8 9l4-4 4 4" /><path d="M16 15l-4 4-4-4" />
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="shrink-0 text-text-tertiary/40 group-hover:text-text-secondary transition-colors"
+                    >
+                      <path d="M8 9l4-4 4 4" />
+                      <path d="M16 15l-4 4-4-4" />
                     </svg>
                   </p>
-                  <p className="text-[10px] text-text-tertiary/30 mt-0.5 tabular-nums">v{__APP_VERSION__}</p>
+                  <p className="text-[10px] text-text-tertiary/30 mt-0.5 tabular-nums">
+                    v{__APP_VERSION__}
+                  </p>
                 </button>
               ) : (
                 <div className="px-4 py-2.5">
-                  <p className="text-[11px] text-text-tertiary/50 truncate select-none">{tenantName}</p>
-                  <p className="text-[10px] text-text-tertiary/30 mt-0.5 select-none tabular-nums">v{__APP_VERSION__}</p>
+                  <p className="text-[11px] text-text-tertiary/50 truncate select-none">
+                    {tenantName}
+                  </p>
+                  <p className="text-[10px] text-text-tertiary/30 mt-0.5 select-none tabular-nums">
+                    v{__APP_VERSION__}
+                  </p>
                 </div>
               )}
             </div>
@@ -824,7 +1247,15 @@ function RootLayout() {
                 onClick={() => setSidebarOpen(true)}
                 aria-label="Open navigation menu"
               >
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 18 18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                >
                   <path d="M2 4.5h14M2 9h14M2 13.5h14" />
                 </svg>
               </button>
@@ -834,7 +1265,9 @@ function RootLayout() {
             {isOnboarding && (
               <div className="flex items-center gap-2.5 mr-2">
                 <Logo className="w-7 h-7" />
-                <span className="font-semibold text-[15px] tracking-tight text-text-primary">Hisaabo</span>
+                <span className="font-semibold text-[15px] tracking-tight text-text-primary">
+                  Hisaabo
+                </span>
               </div>
             )}
 
@@ -856,7 +1289,16 @@ function RootLayout() {
               aria-label="Settings"
               title="Settings"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.75}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
                 <circle cx="12" cy="12" r="3" />
               </svg>
@@ -867,16 +1309,20 @@ function RootLayout() {
               {/* Business switcher */}
               {businesses && businesses.length > 0 && (
                 <BusinessSwitcher
-                  businesses={businesses.map((b) => ({ id: b.id, name: b.name }))}
+                  businesses={businesses.map((b) => ({
+                    id: b.id,
+                    name: b.name,
+                  }))}
                   activeBusinessId={currentBusinessId ?? businesses[0].id}
                   onSwitch={handleBusinessSwitch}
-                  onCreateNew={canCreateBiz && canAccess(session?.role, "Business", "manage") ? () => {
-                    if (pathname === "/settings") {
-                      window.dispatchEvent(new CustomEvent("create-business"));
-                    } else {
-                      navigate({ to: "/settings", search: { action: "create-business" } });
-                    }
-                  } : undefined}
+                  onCreateNew={
+                    canCreateBiz &&
+                      canAccess(session?.role, "Business", "manage")
+                      ? () => {
+                        navigate({ to: "/business/create" });
+                      }
+                      : undefined
+                  }
                 />
               )}
 
@@ -916,8 +1362,14 @@ function RootLayout() {
           </div>
         </main>
 
-        <CommandPalette open={showPalette} onClose={() => setShowPalette(false)} />
-        <ShortcutsDialog open={showShortcuts} onClose={() => setShowShortcuts(false)} />
+        <CommandPalette
+          open={showPalette}
+          onClose={() => setShowPalette(false)}
+        />
+        <ShortcutsDialog
+          open={showShortcuts}
+          onClose={() => setShowShortcuts(false)}
+        />
         <ShortcutIndicator />
 
         {/* Tenant picker overlay — shown when user clicks the tenant name */}
@@ -928,13 +1380,17 @@ function RootLayout() {
               setShowTenantPicker(false);
               selectTenantMutation.mutate({ tenantId });
             }}
-            onCreateNew={canCreateOrg ? async () => {
-              setShowTenantPicker(false);
-              await createOrgMutation.mutateAsync();
-              await utils.auth.me.refetch();
-              await utils.tenant.list.refetch();
-              await utils.business.list.refetch();
-            } : undefined}
+            onCreateNew={
+              canCreateOrg
+                ? async () => {
+                  setShowTenantPicker(false);
+                  await createOrgMutation.mutateAsync();
+                  await utils.auth.me.refetch();
+                  await utils.tenant.list.refetch();
+                  await utils.business.list.refetch();
+                }
+                : undefined
+            }
             onClose={() => setShowTenantPicker(false)}
           />
         )}
@@ -950,7 +1406,11 @@ type Theme = "light" | "dark" | "system";
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
 
-  const next: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
+  const next: Record<Theme, Theme> = {
+    system: "light",
+    light: "dark",
+    dark: "system",
+  };
   const icons: Record<Theme, React.ReactNode> = {
     system: <MonitorIcon />,
     light: <SunIcon />,
@@ -978,17 +1438,24 @@ function ThemeToggle() {
 
 const roleStyles: Record<string, string> = {
   owner: "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300",
-  admin: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  admin:
+    "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
   member: "bg-surface-2 text-text-secondary",
   seller: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  accountant: "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+  accountant:
+    "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
 };
 
 function RoleBadge({ role }: { role: string }) {
   const style = roleStyles[role] ?? "bg-surface-2 text-text-secondary";
   const label = formatRole(role);
   return (
-    <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 leading-none", style)}>
+    <span
+      className={cn(
+        "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 leading-none",
+        style,
+      )}
+    >
       {label}
     </span>
   );
@@ -996,7 +1463,13 @@ function RoleBadge({ role }: { role: string }) {
 
 // ── Keyboard Shortcuts Dialog ──────────────────────────────────
 
-function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function ShortcutsDialog({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
   const hotkeys = open ? getRegisteredHotkeys() : [];
 
   // Group by scope
@@ -1038,31 +1511,53 @@ function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void
   };
 
   // Sort scopes: global first, navigation second, then page-specific
-  const scopeOrder = ["global", "navigation", "parties", "items", "payments", "invoices", "expenses", "general"];
+  const scopeOrder = [
+    "global",
+    "navigation",
+    "parties",
+    "items",
+    "payments",
+    "invoices",
+    "expenses",
+    "general",
+  ];
 
   return (
-    <Modal open={open} onClose={onClose} title="Keyboard Shortcuts" className="max-w-md">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Keyboard Shortcuts"
+      className="max-w-md"
+    >
       <div className="space-y-4">
-        {scopeOrder.filter((s) => grouped[s]?.length).map((scope) => ({ scope, defs: grouped[scope] })).concat(
-          Object.entries(grouped).filter(([s]) => !scopeOrder.includes(s)).map(([scope, defs]) => ({ scope, defs }))
-        ).map(({ scope, defs }) => (
-          <div key={scope}>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-text-tertiary mb-2">
-              {scopeLabels[scope] || scope}
-            </p>
-            <div className="space-y-0.5">
-              {defs.map((h) => (
-                <div
-                  key={h.description}
-                  className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-surface-1"
-                >
-                  <span className="text-sm text-text-secondary">{h.description}</span>
-                  <KbdShortcut keys={formatKey(h)} />
-                </div>
-              ))}
+        {scopeOrder
+          .filter((s) => grouped[s]?.length)
+          .map((scope) => ({ scope, defs: grouped[scope] }))
+          .concat(
+            Object.entries(grouped)
+              .filter(([s]) => !scopeOrder.includes(s))
+              .map(([scope, defs]) => ({ scope, defs })),
+          )
+          .map(({ scope, defs }) => (
+            <div key={scope}>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-text-tertiary mb-2">
+                {scopeLabels[scope] || scope}
+              </p>
+              <div className="space-y-0.5">
+                {defs.map((h) => (
+                  <div
+                    key={h.description}
+                    className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-surface-1"
+                  >
+                    <span className="text-sm text-text-secondary">
+                      {h.description}
+                    </span>
+                    <KbdShortcut keys={formatKey(h)} />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
       </div>
     </Modal>
   );
@@ -1072,7 +1567,16 @@ function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void
 
 function DashboardIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="1.5" y="1.5" width="5" height="5" rx="1" />
       <rect x="9.5" y="1.5" width="5" height="5" rx="1" />
       <rect x="1.5" y="9.5" width="5" height="5" rx="1" />
@@ -1083,7 +1587,16 @@ function DashboardIcon() {
 
 function InvoiceIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z" />
       <path d="M5 6h6M5 8.5h4" />
     </svg>
@@ -1092,7 +1605,16 @@ function InvoiceIcon() {
 
 function QuotationIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z" />
       <path d="M5 6h4M5 8.5h3" />
       <path d="M10.5 10l1.5-1.5-1.5-1.5" />
@@ -1102,7 +1624,16 @@ function QuotationIcon() {
 
 function CreditNoteIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z" />
       <path d="M5 8.5h6" />
     </svg>
@@ -1111,7 +1642,16 @@ function CreditNoteIcon() {
 
 function DeliveryIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M1.5 9.5h8V3.5H1.5v6z" />
       <path d="M9.5 5.5h2.5l2 2.5v1.5h-4.5V5.5z" />
       <circle cx="4" cy="11.5" r="1.2" />
@@ -1122,7 +1662,16 @@ function DeliveryIcon() {
 
 function ProformaIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z" />
       <path d="M5 6h6M5 8.5h3" />
       <path d="M9.5 10.5l1.5 1 2-2" />
@@ -1132,7 +1681,16 @@ function ProformaIcon() {
 
 function PartyIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <circle cx="8" cy="5" r="2.5" />
       <path d="M3 13.5c0-2.5 2.2-4 5-4s5 1.5 5 4" />
     </svg>
@@ -1141,7 +1699,16 @@ function PartyIcon() {
 
 function ItemIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M2 4l6-2.5L14 4v8l-6 2.5L2 12V4z" />
       <path d="M8 6.5V14.5M2 4l6 2.5L14 4" />
     </svg>
@@ -1150,7 +1717,16 @@ function ItemIcon() {
 
 function PaymentIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" />
       <path d="M1.5 7h13" />
     </svg>
@@ -1159,7 +1735,16 @@ function PaymentIcon() {
 
 function BankIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M1.5 13.5h13M1.5 6.5h13" />
       <path d="M8 2.5l6 4H2l6-4z" />
       <path d="M3.5 6.5v7M6.5 6.5v7M9.5 6.5v7M12.5 6.5v7" />
@@ -1169,7 +1754,16 @@ function BankIcon() {
 
 function GSTIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M2 13V3a1 1 0 011-1h10a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1z" />
       <path d="M5 6h6M5 8.5h4M5 11h2" />
     </svg>
@@ -1178,7 +1772,16 @@ function GSTIcon() {
 
 function SalesReturnIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z" />
       <path d="M6 6l-2 2 2 2" />
       <path d="M4 8h5.5a1.5 1.5 0 000-3H9" />
@@ -1188,7 +1791,16 @@ function SalesReturnIcon() {
 
 function ExpenseIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="3" y="1.5" width="10" height="13" rx="1" />
       <path d="M6 5h4M6 8h4M6 11h2" />
     </svg>
@@ -1197,7 +1809,16 @@ function ExpenseIcon() {
 
 function ShipmentsIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M1 5.5h8v7H1z" />
       <path d="M9 7h3.5l2 2.5V12.5H9V7z" />
       <circle cx="3.5" cy="13" r="1.2" />
@@ -1209,7 +1830,16 @@ function ShipmentsIcon() {
 
 function AutomatedInvoiceIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="2" y="1.5" width="8" height="11" rx="1" />
       <path d="M5 5h2M5 7.5h2" />
       <path d="M12.5 7.5a3 3 0 11-1-2.2" />
@@ -1220,7 +1850,16 @@ function AutomatedInvoiceIcon() {
 
 function ReportsIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M2 12.5V4l3 3 3-3.5L11 6l3-3" />
       <path d="M2 14.5h12" />
     </svg>
@@ -1229,18 +1868,34 @@ function ReportsIcon() {
 
 function StoreOrdersIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M1.5 2.5h13l-1.5 6h-10z" />
       <circle cx="5.5" cy="13" r="1.2" />
       <circle cx="10.5" cy="13" r="1.2" />
       <path d="M5.5 11.8V9.5M10.5 11.8V9.5" />
     </svg>
-  )
+  );
 }
 
 function SunIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
       <circle cx="8" cy="8" r="3" />
       <path d="M8 1.5v2M8 12.5v2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M1.5 8h2M12.5 8h2M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" />
     </svg>
@@ -1249,7 +1904,14 @@ function SunIcon() {
 
 function MoonIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
       <path d="M13.5 8.5a5.5 5.5 0 01-7-7 5.5 5.5 0 107 7z" />
     </svg>
   );
@@ -1257,7 +1919,14 @@ function MoonIcon() {
 
 function MonitorIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
       <rect x="1.5" y="2.5" width="13" height="9" rx="1.5" />
       <path d="M5.5 14h5M8 11.5v2.5" />
     </svg>
@@ -1266,7 +1935,16 @@ function MonitorIcon() {
 
 function LogoutIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3" />
       <path d="M11 11l3-3-3-3" />
       <path d="M14 8H6" />

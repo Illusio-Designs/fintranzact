@@ -19,6 +19,7 @@ import { Route as ProformaInvoicesRouteImport } from './routes/proforma-invoices
 import { Route as PosRouteImport } from './routes/pos'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PartiesRouteImport } from './routes/parties'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as JournalEntriesRouteImport } from './routes/journal-entries'
 import { Route as ItemsRouteImport } from './routes/items'
@@ -36,6 +37,7 @@ import { Route as BankReconciliationRouteImport } from './routes/bank-reconcilia
 import { Route as AutomatedInvoicesRouteImport } from './routes/automated-invoices'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as InviteTokenRouteImport } from './routes/invite/$token'
+import { Route as BusinessCreateRouteImport } from './routes/business/create'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthPlanSelectionRouteImport } from './routes/auth/plan-selection'
 import { Route as AuthCompleteProfileRouteImport } from './routes/auth/complete-profile'
@@ -88,6 +90,11 @@ const PaymentsRoute = PaymentsRouteImport.update({
 const PartiesRoute = PartiesRouteImport.update({
   id: '/parties',
   path: '/parties',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -175,6 +182,11 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
   path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BusinessCreateRoute = BusinessCreateRouteImport.update({
+  id: '/business/create',
+  path: '/business/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthVerifyRoute = AuthVerifyRouteImport.update({
   id: '/auth/verify',
   path: '/auth/verify',
@@ -208,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/items': typeof ItemsRoute
   '/journal-entries': typeof JournalEntriesRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/payments': typeof PaymentsRoute
   '/pos': typeof PosRoute
@@ -221,6 +234,7 @@ export interface FileRoutesByFullPath {
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/business/create': typeof BusinessCreateRoute
   '/invite/$token': typeof InviteTokenRoute
 }
 export interface FileRoutesByTo {
@@ -240,6 +254,7 @@ export interface FileRoutesByTo {
   '/items': typeof ItemsRoute
   '/journal-entries': typeof JournalEntriesRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/payments': typeof PaymentsRoute
   '/pos': typeof PosRoute
@@ -253,6 +268,7 @@ export interface FileRoutesByTo {
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/business/create': typeof BusinessCreateRoute
   '/invite/$token': typeof InviteTokenRoute
 }
 export interface FileRoutesById {
@@ -273,6 +289,7 @@ export interface FileRoutesById {
   '/items': typeof ItemsRoute
   '/journal-entries': typeof JournalEntriesRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/payments': typeof PaymentsRoute
   '/pos': typeof PosRoute
@@ -286,6 +303,7 @@ export interface FileRoutesById {
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/business/create': typeof BusinessCreateRoute
   '/invite/$token': typeof InviteTokenRoute
 }
 export interface FileRouteTypes {
@@ -307,6 +325,7 @@ export interface FileRouteTypes {
     | '/items'
     | '/journal-entries'
     | '/login'
+    | '/onboarding'
     | '/parties'
     | '/payments'
     | '/pos'
@@ -320,6 +339,7 @@ export interface FileRouteTypes {
     | '/auth/complete-profile'
     | '/auth/plan-selection'
     | '/auth/verify'
+    | '/business/create'
     | '/invite/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -339,6 +359,7 @@ export interface FileRouteTypes {
     | '/items'
     | '/journal-entries'
     | '/login'
+    | '/onboarding'
     | '/parties'
     | '/payments'
     | '/pos'
@@ -352,6 +373,7 @@ export interface FileRouteTypes {
     | '/auth/complete-profile'
     | '/auth/plan-selection'
     | '/auth/verify'
+    | '/business/create'
     | '/invite/$token'
   id:
     | '__root__'
@@ -371,6 +393,7 @@ export interface FileRouteTypes {
     | '/items'
     | '/journal-entries'
     | '/login'
+    | '/onboarding'
     | '/parties'
     | '/payments'
     | '/pos'
@@ -384,6 +407,7 @@ export interface FileRouteTypes {
     | '/auth/complete-profile'
     | '/auth/plan-selection'
     | '/auth/verify'
+    | '/business/create'
     | '/invite/$token'
   fileRoutesById: FileRoutesById
 }
@@ -404,6 +428,7 @@ export interface RootRouteChildren {
   ItemsRoute: typeof ItemsRoute
   JournalEntriesRoute: typeof JournalEntriesRoute
   LoginRoute: typeof LoginRoute
+  OnboardingRoute: typeof OnboardingRoute
   PartiesRoute: typeof PartiesRoute
   PaymentsRoute: typeof PaymentsRoute
   PosRoute: typeof PosRoute
@@ -417,6 +442,7 @@ export interface RootRouteChildren {
   AuthCompleteProfileRoute: typeof AuthCompleteProfileRoute
   AuthPlanSelectionRoute: typeof AuthPlanSelectionRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
+  BusinessCreateRoute: typeof BusinessCreateRoute
   InviteTokenRoute: typeof InviteTokenRoute
 }
 
@@ -490,6 +516,13 @@ declare module '@tanstack/react-router' {
       path: '/parties'
       fullPath: '/parties'
       preLoaderRoute: typeof PartiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -611,6 +644,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/business/create': {
+      id: '/business/create'
+      path: '/business/create'
+      fullPath: '/business/create'
+      preLoaderRoute: typeof BusinessCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/verify': {
       id: '/auth/verify'
       path: '/auth/verify'
@@ -652,6 +692,7 @@ const rootRouteChildren: RootRouteChildren = {
   ItemsRoute: ItemsRoute,
   JournalEntriesRoute: JournalEntriesRoute,
   LoginRoute: LoginRoute,
+  OnboardingRoute: OnboardingRoute,
   PartiesRoute: PartiesRoute,
   PaymentsRoute: PaymentsRoute,
   PosRoute: PosRoute,
@@ -665,6 +706,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCompleteProfileRoute: AuthCompleteProfileRoute,
   AuthPlanSelectionRoute: AuthPlanSelectionRoute,
   AuthVerifyRoute: AuthVerifyRoute,
+  BusinessCreateRoute: BusinessCreateRoute,
   InviteTokenRoute: InviteTokenRoute,
 }
 export const routeTree = rootRouteImport
