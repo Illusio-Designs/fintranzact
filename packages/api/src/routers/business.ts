@@ -285,6 +285,10 @@ export const businessRouter = router({
     const biz = await ctx.db.transaction(async (tx) => {
       const [biz] = await tx.insert(businesses).values({
         ...input,
+        eWayBillThreshold:
+          input.eWayBillThreshold == null
+            ? null
+            : String(input.eWayBillThreshold),
         createdByUserId: ctx.user.id,
       }).returning();
 

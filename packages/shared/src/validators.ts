@@ -124,6 +124,13 @@ export const createBusinessSchema = z.object({
   lutArn: z.string().max(100).optional().or(z.literal("")),
   eInvoiceEnabled: z.boolean().default(false),
   eWayBillEnabled: z.boolean().default(false),
+  assesseeOfOtherTerritory: z.boolean().default(false),
+  gstReturnPeriodicity: z.enum(["monthly", "quarterly"]).default("monthly"),
+  eWayBillThreshold: z.coerce
+    .number()
+    .nonnegative()
+    .optional()
+    .nullable(),
 
   // Document defaults
   invoicePrefix: z.string().min(1).max(10).default("INV"),

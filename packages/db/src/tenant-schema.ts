@@ -68,6 +68,16 @@ export const businesses = pgTable("businesses", {
   eWayBillEnabled: boolean("e_way_bill_enabled")
     .default(false)
     .notNull(),
+  assesseeOfOtherTerritory: boolean("assessee_of_other_territory")
+    .default(false)
+    .notNull(),
+  gstReturnPeriodicity: text("gst_return_periodicity")
+    .default("monthly")
+    .notNull(),
+  eWayBillThreshold: numeric("e_way_bill_threshold", {
+    precision: 15,
+    scale: 2,
+  }),
   phone: text("phone"),
   email: text("email"),
   address: text("address"),

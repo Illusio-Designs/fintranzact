@@ -68,6 +68,9 @@ export interface BusinessStepValues {
   lutArn: string;
   eInvoiceEnabled: boolean;
   eWayBillEnabled: boolean;
+  assesseeOfOtherTerritory: boolean;
+  gstReturnPeriodicity: string;
+  eWayBillThreshold: number | null;
 }
 
 export function validateBusinessStep(
@@ -317,6 +320,19 @@ export function BusinessForm({
 
   const [eWayBillEnabled, setEWayBillEnabled] = useState(
     existing?.eWayBillEnabled ?? false,
+  );
+
+  const [assesseeOfOtherTerritory, setAssesseeOfOtherTerritory] =
+    useState(existing?.assesseeOfOtherTerritory ?? false);
+
+  const [gstReturnPeriodicity, setGstReturnPeriodicity] = useState<
+    "monthly" | "quarterly"
+  >(existing?.gstReturnPeriodicity ?? "monthly");
+
+  const [eWayBillThreshold, setEWayBillThreshold] = useState(
+    existing?.eWayBillThreshold != null
+      ? String(existing.eWayBillThreshold)
+      : "",
   );
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -616,7 +632,13 @@ export function BusinessForm({
               <Listbox
                 label="GST Registration"
                 value={gstRegType}
-                onChange={setGstRegType}
+                onChange={(value) => {
+                  setGstRegType(value);
+
+                  if (value !== "regular") {
+                    setEInvoiceEnabled(false);
+                  }
+                }}
                 options={GST_REG_OPTIONS}
               />
 
@@ -698,29 +720,86 @@ export function BusinessForm({
               />
             </div>
 
+
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-text-primary">
-                Compliance features
+                GST configuration
               </h3>
 
               <label className="flex items-center justify-between rounded-xl border border-border-light p-4 cursor-pointer">
                 <div>
                   <p className="text-sm font-medium text-text-primary">
-                    Enable e-Invoice
+                    Assessee of Other Territory
                   </p>
-
                   <p className="text-xs text-text-tertiary mt-1">
-                    Enable e-Invoice functionality for this business.
+                    Specify whether the business is an assessee of another territory.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={assesseeOfOtherTerritory}
+                  onChange={(e) =>
+                    setAssesseeOfOtherTerritory(e.target.checked)
+                  }
+                  className="h-4 w-4"
+                />
+              </label>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-text-primary">
+                  GST/VAT Return Periodicity
+                </label>
+                <select
+                  value={gstReturnPeriodicity}
+                  onChange={(e) =>
+                    setGstReturnPeriodicity(
+                      e.target.value as "monthly" | "quarterly",
+                    )
+                  }
+                  className="w-full rounded-xl border border-border-light bg-surface px-3 py-2 text-sm text-text-primary"
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly (QRMP)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-text-primary">
+                  E-Way Bill Threshold (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={eWayBillThreshold}
+                  onChange={(e) => setEWayBillThreshold(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full rounded-xl border border-border-light bg-surface px-3 py-2 text-sm text-text-primary"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-text-primary">
+                Compliance features
+              </h3>
+
+              <label className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium">Enable e-Invoice</p>
+                  <p className="text-sm text-muted-foreground">
+                    {gstRegType === "regular"
+                      ? "Enable e-Invoice functionality for this business."
+                      : "Available only when GST Registration is set to Regular."}
                   </p>
                 </div>
 
                 <input
                   type="checkbox"
-                  checked={eInvoiceEnabled}
-                  onChange={(e) =>
-                    setEInvoiceEnabled(e.target.checked)
-                  }
-                  className="h-4 w-4"
+                  checked={gstRegType === "regular" && eInvoiceEnabled}
+                  disabled={gstRegType !== "regular"}
+                  onChange={(e) => setEInvoiceEnabled(e.target.checked)}
+                  className="h-4 w-4 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </label>
 
@@ -846,6 +925,15 @@ export function BusinessForm({
                 </li>
 
                 <li>
+                  <span className="text-text-tertiary">
+                    GST Registration:
+                  </span>{" "}
+                  {GST_REG_OPTIONS.find(
+                    (option) => option.value === gstRegType
+                  )?.label ?? "Not GST Registered"}
+                </li>
+
+                <li>
                   <span className="text-text-tertiary">TAN:</span>{" "}
                   {tan || "—"}
                 </li>
@@ -893,6 +981,32 @@ export function BusinessForm({
                     E-Way Bill:
                   </span>{" "}
                   {eWayBillEnabled ? "Enabled" : "Disabled"}
+                </li>
+
+
+                <li>
+                  <span className="text-text-tertiary">
+                    Other Territory:
+                  </span>{" "}
+                  {assesseeOfOtherTerritory ? "Yes" : "No"}
+                </li>
+
+                <li>
+                  <span className="text-text-tertiary">
+                    Return Periodicity:
+                  </span>{" "}
+                  {gstReturnPeriodicity === "monthly"
+                    ? "Monthly"
+                    : "Quarterly (QRMP)"}
+                </li>
+
+                <li>
+                  <span className="text-text-tertiary">
+                    E-Way Bill Threshold:
+                  </span>{" "}
+                  {eWayBillThreshold.trim()
+                    ? `₹${Number(eWayBillThreshold).toLocaleString("en-IN")}`
+                    : "Not set"}
                 </li>
               </ul>
             </div>
@@ -958,6 +1072,12 @@ export function BusinessForm({
       lutArn,
       eInvoiceEnabled,
       eWayBillEnabled,
+      assesseeOfOtherTerritory,
+      gstReturnPeriodicity,
+      eWayBillThreshold:
+        eWayBillThreshold.trim() === ""
+          ? null
+          : Number(eWayBillThreshold),
     });
 
     if (Object.keys(stepErrors).length > 0) {
@@ -1033,6 +1153,12 @@ export function BusinessForm({
 
       eInvoiceEnabled,
       eWayBillEnabled,
+      assesseeOfOtherTerritory,
+      gstReturnPeriodicity,
+      eWayBillThreshold:
+        eWayBillThreshold.trim() === ""
+          ? undefined
+          : Number(eWayBillThreshold),
     };
 
     if (existing) {
