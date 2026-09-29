@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { LandingPage } from "@/components/LandingPage";
+import { isMarketingPath } from "@/components/marketing/MarketingLayout";
 import { isDesktop } from "@/lib/isDesktop";
 import { clearDesktopToken } from "@/lib/desktop-session";
 
@@ -767,8 +768,12 @@ function RootLayout() {
   // Logged-out visitors to "/" on the web see the public landing page; the
   // desktop app has no marketing page and goes straight to login.
   const showsLandingPage = pathname === "/" && !isDesktop();
+  // Marketing pages (/pricing, /about, …) are public for everyone, signed in
+  // or not, and render outside the app shell.
+  const showsMarketingPage = isMarketingPath(pathname) && !isDesktop();
 
   useEffect(() => {
+    if (showsMarketingPage) return;
     if (sessionLoading || sessionFetching) return;
 
     // Priority 1: Not authenticated → login
@@ -901,6 +906,8 @@ function RootLayout() {
       </div>
     </div>
   );
+
+  if (showsMarketingPage) return <Outlet />;
 
   // Loading session
   if (sessionLoading) return loadingSpinner;
