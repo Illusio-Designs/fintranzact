@@ -23,30 +23,7 @@ import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { useDateRange, getGranularity } from "@/hooks/useDateRange";
 import { Icon, IconCircle, type IconCircleTone, type IconSvgElement } from "@/components/ui/Icon";
 import { WidgetHeader } from "@/components/ui/WidgetHeader";
-import {
-  Alert02Icon,
-  Analytics01Icon,
-  ArrowDown01Icon,
-  ArrowUp01Icon,
-  Award01Icon,
-  Cancel01Icon,
-  ChartBarLineIcon,
-  ChartLineData01Icon,
-  Coins01Icon,
-  CreditCardIcon,
-  Invoice01Icon,
-  Invoice03Icon,
-  MoneyReceive01Icon,
-  MoneySend01Icon,
-  PackageIcon,
-  PieChartIcon,
-  ShoppingCart01Icon,
-  Target02Icon,
-  UserGroupIcon,
-  Wallet01Icon,
-  ChartDecreaseIcon,
-  ChartIncreaseIcon,
-} from "@hugeicons/core-free-icons";
+import { Alert02Icon, Analytics01Icon, ArrowDown01Icon, ArrowUp01Icon, Award01Icon, Cancel01Icon, ChartBarLineIcon, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineData01Icon, Coins01Icon, CreditCardIcon, FireIcon, Invoice01Icon, Invoice03Icon, MoneyReceive01Icon, MoneySend01Icon, PackageIcon, PieChartIcon, SproutIcon, Rocket01Icon, ShoppingCart01Icon, StarIcon, Target02Icon, UserGroupIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 
 // ─── Milestone banner ─────────────────────────────────────────────────────────
 
@@ -206,13 +183,13 @@ function getTier(pct: number): TargetTier {
   return "seed";
 }
 
-const TIER_META: Record<TargetTier, { icon: string; message: string }> = {
-  seed: { icon: "\uD83C\uDF31", message: "Just getting started" },
-  growing: { icon: "\uD83D\uDCC8", message: "Building momentum" },
-  fire: { icon: "\uD83D\uDD25", message: "On fire!" },
-  close: { icon: "\u2B50", message: "Almost there!" },
-  near: { icon: "\uD83D\uDE80", message: "So close!" },
-  achieved: { icon: "\uD83C\uDFC6", message: "Target achieved!" },
+const TIER_META: Record<TargetTier, { icon: IconSvgElement; message: string }> = {
+  seed: { icon: SproutIcon, message: "Just getting started" },
+  growing: { icon: ChartIncreaseIcon, message: "Building momentum" },
+  fire: { icon: FireIcon, message: "On fire!" },
+  close: { icon: StarIcon, message: "Almost there!" },
+  near: { icon: Rocket01Icon, message: "So close!" },
+  achieved: { icon: Award01Icon, message: "Target achieved!" },
 };
 
 function getBarFillClass(tier: TargetTier): string {
@@ -329,8 +306,8 @@ function TargetRow({ target }: { target: TargetProgress }) {
         <span className="text-[11px] text-text-tertiary">
           {daysLeft === 0 ? "Last day" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} remaining`}
         </span>
-        <span className={cn("text-[11px] font-medium", msgColor)}>
-          <span aria-hidden="true">{meta.icon} </span>
+        <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium", msgColor)}>
+          <Icon icon={meta.icon} size={12} />
           {meta.message}
         </span>
       </div>

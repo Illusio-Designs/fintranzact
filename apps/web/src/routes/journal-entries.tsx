@@ -18,6 +18,7 @@ import { SegmentedControl } from "@/components/ui/Tabs";
 import { Icon } from "@/components/ui/Icon";
 import { AlertCircleIcon, ArrowRight01Icon, Copy01Icon, Delete02Icon, PencilEdit02Icon, Tick02Icon, UnavailableIcon } from "@hugeicons/core-free-icons";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/journal-entries")({
   component: JournalEntriesPage,
 });
@@ -879,7 +880,7 @@ function EntryRow({
             <div className="bg-surface-1/50 border-y border-border-light px-6 py-4">
               {isFetchingDetail ? (
                 <div className="flex items-center gap-2 text-sm text-text-tertiary py-2">
-                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  <Spinner size="xs" />
                   Loading details...
                 </div>
               ) : expandedEntry ? (
@@ -964,7 +965,7 @@ function TemplatesTab({
     return (
       <div className="card p-8">
         <div className="flex items-center justify-center gap-2 text-sm text-text-tertiary">
-          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <Spinner size="sm" />
           Loading templates...
         </div>
       </div>

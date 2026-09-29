@@ -14,6 +14,8 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Select } from "@/components/ui/Select";
 import { SearchInput } from "@/components/ui/SearchInput";
 
+import { Alert02Icon, CancelCircleIcon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/Icon";
 export const Route = createFileRoute("/e-invoicing")({
   component: EInvoicingPage,
 });
@@ -201,8 +203,8 @@ function DashboardTab() {
                         {statusLabel(inv.eInvoiceStatus)}
                       </Badge>
                       {inv.eInvoiceError && (
-                        <span className="ml-1.5 text-[10px] text-red-500" title={inv.eInvoiceError}>
-                          ⚠
+                        <span className="ml-1.5 inline-flex align-middle text-red-500" title={inv.eInvoiceError} aria-label={inv.eInvoiceError}>
+                          <Icon icon={Alert02Icon} size={12} />
                         </span>
                       )}
                     </td>
@@ -536,7 +538,7 @@ function SettingsTab() {
               ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400"
               : "bg-red-600/[0.08] text-red-700 dark:text-red-400",
           )}>
-            <span>{testResult.success ? "✓" : "✗"}</span>
+            <Icon icon={testResult.success ? CheckmarkCircle02Icon : CancelCircleIcon} size={16} />
             <span>{testResult.message}</span>
           </div>
         )}

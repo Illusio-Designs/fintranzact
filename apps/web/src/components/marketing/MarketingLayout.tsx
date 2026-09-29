@@ -3,6 +3,8 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { Logo } from "@/components/ui/Logo";
 import { cn } from "@/lib/utils";
 
+import { Cancel01Icon, Menu01Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/Icon";
 /**
  * Shared chrome (header, footer, page title) for the public marketing pages.
  * These pages render for everyone — signed in or not — and never touch the
@@ -135,13 +137,7 @@ export function MarketingLayout({
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
             >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                {menuOpen ? (
-                  <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
-                ) : (
-                  <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
-                )}
-              </svg>
+              <Icon icon={menuOpen ? Cancel01Icon : Menu01Icon} size={20} />
             </button>
           </div>
         </div>

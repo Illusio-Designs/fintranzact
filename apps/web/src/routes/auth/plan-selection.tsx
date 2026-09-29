@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { PLAN_OPTIONS, type PlanId } from "@/lib/plans";
 
+import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/Icon";
 export const Route = createFileRoute("/auth/plan-selection")({
   component: PlanSelectionPage,
 });
@@ -78,7 +80,7 @@ function PlanSelectionPage() {
                 <div className="mt-4 space-y-2 text-sm text-text-secondary">
                   {plan.features.map((feature) => (
                     <div key={feature} className="flex items-start gap-2">
-                      <span className="mt-1 text-brand-600">✓</span>
+                      <Icon icon={CheckmarkCircle02Icon} size={16} className="mt-0.5 text-brand-600" />
                       <span>{feature}</span>
                     </div>
                   ))}

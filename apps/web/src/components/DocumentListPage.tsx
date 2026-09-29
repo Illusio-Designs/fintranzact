@@ -11,6 +11,7 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { DocumentCreator, type DocumentType } from "@/components/DocumentCreator";
 import { toast } from "@/hooks/useToast";
 
+import { Icon, type IconSvgElement } from "@/components/ui/Icon";
 // ── Types ─────────────────────────────────────────────────────────
 
 interface Tab {
@@ -61,7 +62,8 @@ export interface DocumentListPageConfig {
    */
   emptyDescription: (type: "sale" | "purchase", status: string) => string;
   /** SVG path d-value for the empty-state icon */
-  emptyIconPath: string;
+  /** Hugeicon shown in the empty state. */
+  emptyIcon: IconSvgElement;
 
   // Table column 2
   /** Column 2 header label, e.g. "Challan #", "Quotation #" */
@@ -112,7 +114,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
     statusTabs,
     emptyTitle,
     emptyDescription,
-    emptyIconPath,
+    emptyIcon,
     col2Header,
     col4Variant,
     col4Header,
@@ -232,22 +234,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
         </div>
       ) : !data?.data.length ? (
         <EmptyState
-          icon={
-            <svg
-              className="w-6 h-6 text-text-tertiary"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d={emptyIconPath}
-              />
-            </svg>
-          }
+          icon={<Icon icon={emptyIcon} size={26} />}
           title={emptyTitle}
           description={emptyDescription(type, status)}
           action={

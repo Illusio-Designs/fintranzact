@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { DocumentListPage } from "@/components/DocumentListPage";
 
+import { FileValidationIcon } from "@hugeicons/core-free-icons";
 export const Route = createFileRoute("/proforma-invoices")({
   validateSearch: (search) => z.object({ id: z.string().uuid().optional() }).parse(search),
   component: ProformaInvoicesPage,
@@ -55,8 +56,7 @@ function ProformaInvoicesPage() {
         emptyTitle: "No proforma invoices found",
         emptyDescription: (_type, status) =>
           `No proforma invoices${status ? ` with status "${status}"` : ""}.`,
-        emptyIconPath:
-          "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+        emptyIcon: FileValidationIcon,
         col2Header: "Proforma #",
         col4Variant: "dueDate",
         col4Header: "Due Date",

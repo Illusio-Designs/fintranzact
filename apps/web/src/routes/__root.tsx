@@ -53,6 +53,7 @@ import { isMarketingPath } from "@/components/marketing/MarketingLayout";
 import { isDesktop } from "@/lib/isDesktop";
 import { clearDesktopToken } from "@/lib/desktop-session";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createRootRoute({
   component: RootLayout,
   errorComponent: RootError,
@@ -355,7 +356,7 @@ function NoOrgScreen() {
 
         {invitesLoading ? (
           <div className="text-center py-4">
-            <div className="w-5 h-5 mx-auto border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+            <Spinner size="md" className="text-brand-600 mx-auto" />
           </div>
         ) : pendingInvites && pendingInvites.length > 0 ? (
           <>
@@ -395,7 +396,7 @@ function NoOrgScreen() {
                   </div>
                   {acceptByIdMutation.isPending &&
                     acceptByIdMutation.variables?.invitationId === inv.id && (
-                      <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                      <Spinner size="sm" className="text-brand-600 shrink-0" />
                     )}
                 </button>
               ))}
@@ -907,7 +908,7 @@ function RootLayout() {
     <div className="min-h-screen flex items-center justify-center bg-surface-0">
       <div className="flex flex-col items-center gap-3">
         <Logo className="w-10 h-10" />
-        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" className="text-brand-600" />
       </div>
     </div>
   );
@@ -949,7 +950,7 @@ function RootLayout() {
         <div className="min-h-screen flex items-center justify-center bg-surface-0">
           <div className="flex flex-col items-center gap-3">
             <Logo className="w-10 h-10" />
-            <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+            <Spinner size="md" className="text-brand-600" />
           </div>
         </div>
       );

@@ -8,6 +8,7 @@ import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
 import { Cancel01Icon, Download04Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons";
 
+import { Spinner } from "@/components/ui/Spinner";
 interface LineItem {
   id: string;
   itemId?: string;
@@ -676,7 +677,7 @@ export function DownloadPDFButton({ invoiceId, invoiceNumber }: { invoiceId: str
         className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950 transition-colors disabled:opacity-50 border border-brand-200 dark:border-brand-800"
       >
         {loading ? (
-          <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <Spinner size="xs" />
         ) : (
           <Icon icon={Download04Icon} size={14} />
         )}

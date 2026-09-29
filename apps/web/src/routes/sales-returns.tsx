@@ -2,6 +2,7 @@ import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { z } from "zod";
 import { DocumentListPage } from "@/components/DocumentListPage";
 
+import { ReturnRequestIcon } from "@hugeicons/core-free-icons";
 export const Route = createFileRoute("/sales-returns")({
   validateSearch: (search) => z.object({ id: z.string().uuid().optional() }).parse(search),
   component: SalesReturnsPage,
@@ -28,7 +29,7 @@ function SalesReturnsPage() {
         emptyTitle: "No sales returns found",
         emptyDescription: (_type, status) =>
           `No sales returns${status ? ` with status "${status}"` : ""}.`,
-        emptyIconPath: "M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6",
+        emptyIcon: ReturnRequestIcon,
         col2Header: "Return #",
         col4Variant: "refInvoice",
         col4Header: "Ref. Invoice",

@@ -20,7 +20,7 @@ import { Combobox } from "@/components/ui/Combobox";
 import { InputField } from "@/components/ui/FormField";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/Icon";
-import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import {
   type UiUnitVariant,
   recomputeSingleRow,
@@ -139,7 +139,7 @@ export function UnitVariantEditor({
                 {staleDerived && (
                   <span className="text-amber-600 dark:text-amber-400 ml-1">
                     {" · "}
-                    <span aria-hidden="true">⚠</span> base changed ·{" "}
+                    <Icon icon={Alert02Icon} size={12} className="inline -mt-0.5" /> base changed ·{" "}
                     <button
                       type="button"
                       onClick={() => recompute(i)}

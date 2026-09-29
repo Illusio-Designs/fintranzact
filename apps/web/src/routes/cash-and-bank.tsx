@@ -23,6 +23,7 @@ import { toast } from "@/hooks/useToast";
 import { getDatePreset } from "@/hooks/useDateRange";
 import type { GatewayChargeConfig } from "@fintranzact/shared";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/cash-and-bank")({
   component: CashAndBankPage,
 });
@@ -449,7 +450,7 @@ function CashAndBankPage() {
                     className="btn-secondary text-xs px-3 py-1.5 ml-auto shrink-0 flex items-center gap-1.5"
                   >
                     {exporting ? (
-                      <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      <Spinner size="xs" />
                     ) : (
                       <Icon icon={Download04Icon} size={14} />
                     )}
@@ -535,7 +536,7 @@ function CashAndBankPage() {
                   {/* Infinite scroll loading indicator */}
                   {txnFetching && allTxns.length > 0 && (
                     <div className="flex items-center justify-center py-3 border-t border-border-light">
-                      <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+                      <Spinner size="sm" className="text-brand-600" />
                       <span className="ml-2 text-xs text-text-tertiary">Loading more...</span>
                     </div>
                   )}

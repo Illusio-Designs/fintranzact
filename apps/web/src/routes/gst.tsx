@@ -19,6 +19,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Download04Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/gst")({
   component: GSTReportsPage,
 });
@@ -1368,7 +1369,7 @@ function PartyLedgerView() {
                   >
                     {exporting ? (
                       <>
-                        <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        <Spinner size="xs" />
                         Exporting...
                       </>
                     ) : (
@@ -1385,7 +1386,7 @@ function PartyLedgerView() {
                   >
                     {exportingPdf ? (
                       <>
-                        <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        <Spinner size="xs" />
                         Exporting...
                       </>
                     ) : (
@@ -1526,7 +1527,7 @@ function TallyExportView() {
           >
             {downloading ? (
               <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <Spinner size="sm" className="text-white" />
                 Preparing...
               </>
             ) : (
@@ -1910,7 +1911,7 @@ function GSTR9View() {
             >
               {downloading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <Spinner size="sm" className="text-white" />
                   Preparing...
                 </>
               ) : (

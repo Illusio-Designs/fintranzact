@@ -1,39 +1,41 @@
 import { Link } from "@tanstack/react-router";
 import { CtaBand, MarketingLayout } from "@/components/marketing/MarketingLayout";
 
+import { Building03Icon, ChartBarLineIcon, CreditCardIcon, FlashIcon, Invoice01Icon, PackageIcon } from "@hugeicons/core-free-icons";
+import { IconCircle, type IconSvgElement } from "@/components/ui/Icon";
 /**
  * Public landing page shown at "/" to visitors who are not signed in.
  * Sign-in / sign-up happen on /login; this page only links there.
  */
 
-const FEATURES: Array<{ title: string; body: string; icon: string }> = [
+const FEATURES: Array<{ title: string; body: string; icon: IconSvgElement }> = [
   {
-    icon: "🧾",
+    icon: Invoice01Icon,
     title: "GST invoicing",
     body: "Create GST-compliant sale and purchase invoices, quotations, credit notes and delivery challans in seconds.",
   },
   {
-    icon: "⚡",
+    icon: FlashIcon,
     title: "e-Invoice & e-Way Bill",
     body: "Generate IRN, QR codes and e-way bills straight from your invoices — no copy-pasting into government portals.",
   },
   {
-    icon: "📊",
+    icon: ChartBarLineIcon,
     title: "GST returns & reports",
     body: "GSTR-1, GSTR-3B, GSTR-2B reconciliation, ITC tracking, P&L, balance sheet and day book, always up to date.",
   },
   {
-    icon: "💳",
+    icon: CreditCardIcon,
     title: "Payments & banking",
     body: "Record receipts and payments, track outstanding balances and reconcile bank statements against your books.",
   },
   {
-    icon: "📦",
+    icon: PackageIcon,
     title: "Inventory & POS",
     body: "Manage items, variants, stock and warehouses, and bill walk-in customers from a fast point-of-sale screen.",
   },
   {
-    icon: "🏢",
+    icon: Building03Icon,
     title: "Multiple businesses & teams",
     body: "Run several businesses under one organization and invite your team with role-based access.",
   },
@@ -100,12 +102,7 @@ export function LandingPage() {
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((feature) => (
             <div key={feature.title} className="card p-6">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-xl"
-                aria-hidden
-              >
-                {feature.icon}
-              </div>
+              <IconCircle icon={feature.icon} size="lg" />
               <h3 className="mt-4 text-base font-semibold">{feature.title}</h3>
               <p className="mt-2 text-sm text-text-tertiary">{feature.body}</p>
             </div>

@@ -3,18 +3,8 @@ import Papa from "papaparse";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { Spinner } from "@/components/ui/Spinner";
 import { Select } from "@/components/ui/Select";
-import { Icon } from "@/components/ui/Icon";
-import {
-  Tick02Icon,
-  CheckmarkBadge01Icon,
-  Upload04Icon,
-  CheckmarkCircle02Icon,
-  MinusSignCircleIcon,
-  InformationCircleIcon,
-  ArrowRight01Icon,
-  Cancel01Icon,
-  Alert02Icon,
-} from "@hugeicons/core-free-icons";
+import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
+import { Alert02Icon, ArrowRight01Icon, BankIcon, Cancel01Icon, ChartBarLineIcon, CheckmarkBadge01Icon, CheckmarkCircle02Icon, InformationCircleIcon, Invoice01Icon, MinusSignCircleIcon, PackageIcon, Tick02Icon, Upload04Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
@@ -347,15 +337,15 @@ const EXPECTED_HEADERS: Record<EntityKey, string[]> = {
 // FILE_TYPES descriptor for the single-drop-zone UI
 const FILE_TYPES: Array<{
   key: EntityKey;
-  icon: string;
+  icon: IconSvgElement;
   label: string;
   description: string;
   required: boolean;
 }> = [
-  { key: "invoices", icon: "📋", label: "Sales Summary", description: "Invoices with party names, amounts, dates", required: true },
-  { key: "parties", icon: "👥", label: "Party Balance", description: "Customer/supplier details with phone, address", required: false },
-  { key: "items", icon: "📦", label: "Rate List", description: "Product catalog with prices", required: false },
-  { key: "cashBank", icon: "🏦", label: "Cash & Bank Statement", description: "Payment transactions with dates and modes", required: false },
+  { key: "invoices", icon: Invoice01Icon, label: "Sales Summary", description: "Invoices with party names, amounts, dates", required: true },
+  { key: "parties", icon: UserGroupIcon, label: "Party Balance", description: "Customer/supplier details with phone, address", required: false },
+  { key: "items", icon: PackageIcon, label: "Rate List", description: "Product catalog with prices", required: false },
+  { key: "cashBank", icon: BankIcon, label: "Cash & Bank Statement", description: "Payment transactions with dates and modes", required: false },
 ];
 
 // Parse a GST Sales Report CSV using its own expected headers
@@ -2145,7 +2135,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                 <div className="space-y-2.5">
                   {[
                     {
-                      icon: "📋",
+                      icon: Invoice01Icon,
                       name: "Sales Summary",
                       path: "Reports → Sales Summary Report → Download CSV",
                       what: "Invoice numbers, dates, parties, totals, payment status",
@@ -2153,7 +2143,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       badgeColor: "text-red-600 dark:text-red-400 bg-red-600/[0.08]",
                     },
                     {
-                      icon: "📊",
+                      icon: ChartBarLineIcon,
                       name: "GST Sales Report",
                       path: "Reports → GST Report → Sales → Download CSV",
                       what: "Line items per invoice — items sold, quantities, prices, GST breakdown",
@@ -2161,7 +2151,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       badgeColor: "text-amber-600 dark:text-amber-400 bg-amber-600/[0.08]",
                     },
                     {
-                      icon: "👥",
+                      icon: UserGroupIcon,
                       name: "All Party Balance",
                       path: "Parties → ⋮ Menu → Download Report → All Party Balance CSV",
                       what: "Customer details — phone numbers, addresses, GSTIN, balances",
@@ -2169,7 +2159,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       badgeColor: "text-brand-600 dark:text-brand-400 bg-brand-600/[0.08]",
                     },
                     {
-                      icon: "📦",
+                      icon: PackageIcon,
                       name: "Stock Summary",
                       path: "Items → ⋮ Menu → Download Report → Stock Summary CSV",
                       what: "Product catalog with units, categories, prices, current stock",
@@ -2177,7 +2167,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       badgeColor: "text-brand-600 dark:text-brand-400 bg-brand-600/[0.08]",
                     },
                     {
-                      icon: "🏦",
+                      icon: BankIcon,
                       name: "Cash & Bank Statement",
                       path: "Cash & Bank → Select each account → Download CSV",
                       what: "Payment transactions with dates, modes (Cash/UPI/Bank), invoice linkage",
@@ -2186,7 +2176,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                     },
                   ].map((file) => (
                     <div key={file.name} className="flex gap-3">
-                      <span className="text-base shrink-0 mt-0.5">{file.icon}</span>
+                      <IconCircle icon={file.icon} size="sm" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-semibold text-text-primary">{file.name}</span>
@@ -2294,7 +2284,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       )}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="text-base">{ft.icon}</span>
+                        <IconCircle icon={ft.icon} size="sm" />
                         <div>
                           <p className="text-sm font-medium text-text-primary">{ft.label}</p>
                           <p className="text-[11px] text-text-tertiary">{ft.description}</p>
@@ -2307,7 +2297,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                         return (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-emerald-600 font-medium tabular-nums">
-                            ✓ {fileCount} file{fileCount !== 1 ? "s" : ""} · {rowCount.toLocaleString()} rows
+                            <Icon icon={Tick02Icon} size={14} className="inline -mt-0.5" /> {fileCount} file{fileCount !== 1 ? "s" : ""} · {rowCount.toLocaleString()} rows
                           </span>
                           <button
                             type="button"
@@ -2330,7 +2320,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                 {gstReportFile ? (
                   <div className="flex items-center justify-between px-4 py-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-600/[0.05]">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-base">📊</span>
+                      <IconCircle icon={ChartBarLineIcon} size="sm" />
                       <div>
                         <p className="text-sm font-medium text-text-primary">GST Sales Report</p>
                         <p className="text-[11px] text-text-tertiary">Line items per invoice — items, quantities, prices, GST</p>
@@ -2338,7 +2328,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-emerald-600 font-medium tabular-nums">
-                        ✓ {gstFileCount} file{gstFileCount !== 1 ? "s" : ""} · {gstReportFile.rows.length.toLocaleString()} line items
+                        <Icon icon={Tick02Icon} size={14} className="inline -mt-0.5" /> {gstFileCount} file{gstFileCount !== 1 ? "s" : ""} · {gstReportFile.rows.length.toLocaleString()} line items
                       </span>
                       <button
                         type="button"
@@ -2353,7 +2343,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                 ) : (
                   <div className="flex items-center justify-between px-4 py-2.5 rounded-lg border border-border-light">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-base">📊</span>
+                      <IconCircle icon={ChartBarLineIcon} size="sm" />
                       <div>
                         <p className="text-sm font-medium text-text-primary">GST Sales Report</p>
                         <p className="text-[11px] text-text-tertiary">Line items per invoice — items, quantities, prices, GST</p>

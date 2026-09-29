@@ -2,6 +2,7 @@ import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { z } from "zod";
 import { DocumentListPage } from "@/components/DocumentListPage";
 
+import { DeliveryTruck01Icon } from "@hugeicons/core-free-icons";
 export const Route = createFileRoute("/delivery-challans")({
   validateSearch: (search) => z.object({ id: z.string().uuid().optional() }).parse(search),
   component: DeliveryChallansPage,
@@ -28,8 +29,7 @@ function DeliveryChallansPage() {
         emptyTitle: "No delivery challans found",
         emptyDescription: (type, status) =>
           `No ${type === "sale" ? "sales" : "purchase"} delivery challans${status ? ` with status "${status}"` : ""}.`,
-        emptyIconPath:
-          "M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V8l-4-4H8zm0 0v4h4M8 12h8M8 16h4",
+        emptyIcon: DeliveryTruck01Icon,
         col2Header: "Challan #",
         col4Variant: "dueDate",
         col4Header: "Due Date",

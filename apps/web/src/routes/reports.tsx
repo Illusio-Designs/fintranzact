@@ -12,6 +12,7 @@ import { useDateRange } from "@/hooks/useDateRange";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Analytics01Icon, ArrowRight01Icon, Cash01Icon, Download04Icon, FileEmpty01Icon, InformationCircleIcon, Invoice01Icon, Menu01Icon, MoneySend01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
@@ -195,7 +196,7 @@ function DaybookReport({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" className="text-brand-600" />
       </div>
     );
   }
@@ -521,7 +522,7 @@ function OutstandingReport({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" className="text-brand-600" />
       </div>
     );
   }
@@ -766,7 +767,7 @@ function RegisterReport({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" className="text-brand-600" />
       </div>
     );
   }
@@ -1118,7 +1119,7 @@ function PartyStatementReport({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" className="text-brand-600" />
       </div>
     );
   }
@@ -1412,7 +1413,7 @@ function StockSummaryReport() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" className="text-brand-600" />
       </div>
     );
   }
@@ -1766,7 +1767,7 @@ interface ItemSalesData {
 function LoadingSpinner() {
   return (
     <div className="flex items-center justify-center py-16">
-      <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+      <Spinner size="md" className="text-brand-600" />
     </div>
   );
 }
@@ -2399,7 +2400,7 @@ function CollectionEfficiencyReport({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" className="text-brand-600" />
       </div>
     );
   }
@@ -2615,7 +2616,7 @@ function CashFlowReport({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" className="text-brand-600" />
       </div>
     );
   }

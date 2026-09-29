@@ -6,7 +6,7 @@ import { isDesktop } from "@/lib/isDesktop";
 import { Logo } from "@/components/ui/Logo";
 import { saveDesktopToken } from "@/lib/desktop-session";
 import { Icon } from "@/components/ui/Icon";
-import { AlertCircleIcon } from "@hugeicons/core-free-icons";
+import { AlertCircleIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 
 /* ─── Turnstile type (declared in TurnstileModal) ──────────────────────── */
 declare global {
@@ -368,10 +368,10 @@ function BrandPanel() {
 
           <div style={{ display: "flex", gap: 20 }}>
             {[
-              { n: "GST Ready", icon: "✓" },
-              { n: "100% Free", icon: "✓" },
-              { n: "Secure & Private", icon: "✓" },
-            ].map(({ n, icon }) => (
+              { n: "GST Ready" },
+              { n: "100% Free" },
+              { n: "Secure & Private" },
+            ].map(({ n }) => (
               <div
                 key={n}
                 style={{
@@ -398,7 +398,7 @@ function BrandPanel() {
                     flexShrink: 0,
                   }}
                 >
-                  {icon}
+                  <Icon icon={Tick02Icon} size={11} strokeWidth={2.5} />
                 </span>
                 {n}
               </div>

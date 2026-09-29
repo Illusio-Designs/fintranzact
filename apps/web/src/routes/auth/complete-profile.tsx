@@ -6,6 +6,7 @@ import { Logo } from "@/components/ui/Logo";
 import { Icon } from "@/components/ui/Icon";
 import { Add01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/auth/complete-profile")({
   component: CompleteProfilePage,
 });
@@ -204,7 +205,7 @@ function CompleteProfilePage() {
                   </p>
                 </div>
                 {acceptInviteMutation.isPending && (
-                  <div className="ml-auto w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <Spinner size="sm" className="text-brand-600 ml-auto shrink-0" />
                 )}
               </button>
 

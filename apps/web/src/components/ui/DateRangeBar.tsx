@@ -4,6 +4,7 @@ import { Download04Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "./Icon";
 import { DateInput } from "./DateInput";
 
+import { Spinner } from "./Spinner";
 interface DateRangeBarProps {
   preset: DatePreset;
   onPresetChange: (preset: DatePreset) => void;
@@ -69,7 +70,7 @@ export function DateRangeBar({
         >
           {exporting ? (
             <>
-              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              <Spinner size="xs" />
               Preparing...
             </>
           ) : (

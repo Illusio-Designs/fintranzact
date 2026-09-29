@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { Add01Icon, ArrowDown01Icon, Cancel01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "./Icon";
 
+import { Spinner } from "./Spinner";
 export interface ComboboxOption {
   value: string;
   label: string;
@@ -331,7 +332,7 @@ export function Combobox({
         >
           {isLoading ? (
             <li className="px-3 py-2 text-sm text-text-tertiary flex items-center gap-2" role="option" aria-selected={false}>
-              <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+              <Spinner size="xs" className="shrink-0" />
               Searching...
             </li>
           ) : (

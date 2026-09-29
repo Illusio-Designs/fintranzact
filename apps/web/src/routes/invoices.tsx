@@ -28,8 +28,9 @@ import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { RecordPaymentPanel } from "@/components/RecordPaymentPanel";
 import { Icon } from "@/components/ui/Icon";
-import { Cash01Icon, Delete02Icon, Download04Icon, File01Icon, SentIcon } from "@hugeicons/core-free-icons";
+import { Cash01Icon, Delete02Icon, Download04Icon, File01Icon, FlashIcon, SentIcon } from "@hugeicons/core-free-icons";
 
+import { Spinner } from "@/components/ui/Spinner";
 const invoicesSearchSchema = z.object({
   id: z.string().uuid().optional(),
   create: z.string().optional(),
@@ -152,7 +153,7 @@ function DownloadPDFButton({
         className="p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition-colors disabled:opacity-50"
       >
         {loading ? (
-          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <Spinner size="sm" />
         ) : (
           <Icon icon={Download04Icon} size={16} />
         )}
@@ -1026,7 +1027,7 @@ function InvoicesPage() {
                 className="btn-secondary inline-flex items-center gap-2"
                 title="Open the fullscreen cashier register in this tab"
               >
-                <span aria-hidden="true">⚡</span>
+                <Icon icon={FlashIcon} size={16} />
                 Switch to POS
               </a>
             )}

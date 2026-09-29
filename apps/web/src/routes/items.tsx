@@ -32,6 +32,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ArrowDown01Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/items")({
   component: ItemsPage,
 });
@@ -319,7 +320,7 @@ function ItemsPage() {
               >
                 {exporting ? (
                   <>
-                    <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <Spinner size="xs" />
                     Preparing...
                   </>
                 ) : (

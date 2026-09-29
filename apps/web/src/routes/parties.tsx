@@ -23,8 +23,9 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Icon } from "@/components/ui/Icon";
-import { ArrowRight02Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, ArrowRight01Icon, ArrowRight02Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/parties")({
   component: PartiesPage,
 });
@@ -180,7 +181,7 @@ function PartiesPage() {
             >
               {exporting ? (
                 <>
-                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  <Spinner size="xs" />
                   Preparing...
                 </>
               ) : (
@@ -1014,7 +1015,7 @@ function MergePartyModal({
             <p className="text-xs font-semibold text-text-secondary">What will happen</p>
             <ul className="space-y-1 text-xs text-text-secondary">
               <li className="flex items-start gap-1.5">
-                <span className="text-brand-500 mt-0.5">→</span>
+                <Icon icon={ArrowRight01Icon} size={14} className="text-brand-500 mt-0.5" />
                 <span>
                   Merging <span className="font-medium text-text-primary">{sourceName}</span>
                   {" "}into{" "}
@@ -1022,7 +1023,7 @@ function MergePartyModal({
                 </span>
               </li>
               <li className="flex items-start gap-1.5">
-                <span className="text-brand-500 mt-0.5">→</span>
+                <Icon icon={ArrowRight01Icon} size={14} className="text-brand-500 mt-0.5" />
                 <span>
                   The merged party will keep <span className="font-medium text-text-primary">{selectedTarget.name}</span>'s
                   details (address, phone, GSTIN)
@@ -1030,7 +1031,7 @@ function MergePartyModal({
               </li>
               {sourceStats && (
                 <li className="flex items-start gap-1.5">
-                  <span className="text-brand-500 mt-0.5">→</span>
+                  <Icon icon={ArrowRight01Icon} size={14} className="text-brand-500 mt-0.5" />
                   <span>
                     <span className="font-medium text-text-primary">{sourceStats.invoiceCount} invoice{sourceStats.invoiceCount !== 1 ? "s" : ""}</span>
                     {" and "}
@@ -1055,11 +1056,11 @@ function MergePartyModal({
                 </li>
               )}
               <li className="flex items-start gap-1.5">
-                <span className="text-brand-500 mt-0.5">→</span>
+                <Icon icon={ArrowRight01Icon} size={14} className="text-brand-500 mt-0.5" />
                 <span>Opening balances will be combined</span>
               </li>
               <li className="flex items-start gap-1.5">
-                <span className="text-red-500 mt-0.5">✕</span>
+                <Icon icon={Cancel01Icon} size={14} className="text-red-500 mt-0.5" />
                 <span>
                   <span className="font-medium text-text-primary">{sourceName}</span> will be permanently deleted
                 </span>
@@ -1072,7 +1073,7 @@ function MergePartyModal({
         {selectedTarget && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3">
             <div className="flex items-start gap-2">
-              <span className="text-amber-500 text-base leading-none mt-0.5">⚠️</span>
+              <Icon icon={Alert02Icon} size={16} className="text-amber-500" />
               <p className="text-xs text-amber-800 dark:text-amber-300">
                 <span className="font-semibold">This action is irreversible.</span>{" "}
                 All invoices, payments, and credit notes from{" "}
