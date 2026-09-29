@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Select } from "./Select";
 import { DateInput } from "./DateInput";
+import { PasswordInput } from "./PasswordInput";
 
 interface FormFieldProps {
   label: string;
@@ -69,6 +70,15 @@ export function InputField({ label, error, required, className, id, ...props }: 
           aria-describedby={props["aria-describedby"]}
           data-testid={(props as { "data-testid"?: string })["data-testid"]}
         />
+      </FormField>
+    );
+  }
+  if (props.type === "password") {
+    // Password fields get a show/hide eye button.
+    const { type: _type, ...rest } = props;
+    return (
+      <FormField label={label} error={error} required={required} htmlFor={fieldId}>
+        <PasswordInput id={fieldId} className={className} {...rest} />
       </FormField>
     );
   }

@@ -408,3 +408,14 @@ input, select, textarea {
     transition: none;
   }
 }
+
+/* Marketing pages: subtle dot grid used behind the home-page hero and panels. */
+.landing-dots {
+  background-image: radial-gradient(rgba(59, 94, 170, 0.12) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.dark .landing-dots,
+.landing-dots-dark {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.075) 1px, transparent 1px);
+  background-size: 22px 22px;
+}

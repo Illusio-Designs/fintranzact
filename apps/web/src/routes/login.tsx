@@ -8,6 +8,7 @@ import { saveDesktopToken } from "@/lib/desktop-session";
 import { Icon } from "@/components/ui/Icon";
 import { AlertCircleIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 
+import { PasswordInput } from "@/components/ui/PasswordInput";
 /* ─── Turnstile type (declared in TurnstileModal) ──────────────────────── */
 declare global {
   interface Window {
@@ -724,8 +725,7 @@ function LoginPage() {
                   </Field>
 
                   <Field label="Password">
-                    <input
-                      type="password"
+                    <PasswordInput
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
@@ -736,8 +736,7 @@ function LoginPage() {
                   </Field>
 
                   <Field label="Retype password">
-                    <input
-                      type="password"
+                    <PasswordInput
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
@@ -790,8 +789,7 @@ function LoginPage() {
                   </Field>
 
                   <Field label="Password">
-                    <input
-                      type="password"
+                    <PasswordInput
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
