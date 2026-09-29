@@ -1,20 +1,17 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { Logo } from "@/components/ui/Logo";
-import { cn } from "@/lib/utils";
 
-import { Cancel01Icon, Menu01Icon } from "@hugeicons/core-free-icons";
-import { Icon } from "@/components/ui/Icon";
 import { useIndiaTimeTheme } from "@/hooks/useTheme";
+import { CONTACT_EMAIL, DOCS_URL, SiteHeader } from "./SiteHeader";
+
 /**
  * Shared chrome (header, footer, page title) for the public marketing pages.
- * These pages render for everyone — signed in or not — and never touch the
- * API, so they stay fast and crawlable.
+ * These pages render for everyone — signed in or not — and need no session,
+ * so they stay fast and crawlable.
  */
 
-export const CONTACT_EMAIL = "support@fintranzact.com";
-export const SECURITY_EMAIL = "security@fintranzact.com";
-export const DOCS_URL = "https://docs.fintranzact.com";
+export { CONTACT_EMAIL, DOCS_URL, SECURITY_EMAIL } from "./SiteHeader";
 
 /** Paths served by the marketing layout instead of the app shell. */
 export const MARKETING_PATHS = [
@@ -22,6 +19,7 @@ export const MARKETING_PATHS = [
   "/pricing",
   "/about",
   "/contact",
+  "/partners",
   "/privacy",
   "/terms",
   "/refund-policy",
@@ -32,13 +30,6 @@ export function isMarketingPath(pathname: string) {
   const path = pathname.replace(/\/+$/, "") || "/";
   return MARKETING_PATHS.includes(path);
 }
-
-const NAV_LINKS = [
-  { to: "/features", label: "Features" },
-  { to: "/pricing", label: "Pricing" },
-  { to: "/about", label: "About" },
-  { to: "/contact", label: "Contact" },
-] as const;
 
 const FOOTER_COLUMNS: Array<{
   title: string;
@@ -57,6 +48,7 @@ const FOOTER_COLUMNS: Array<{
     links: [
       { label: "About us", to: "/about" },
       { label: "Contact", to: "/contact" },
+      { label: "Partner with us", to: "/partners" },
     ],
   },
   {
@@ -98,14 +90,15 @@ export function MarketingLayout({
 }) {
   usePageTitle(title);
   useIndiaTimeTheme(autoTheme);
-  const { pathname } = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { pathname, hash } = useLocation();
   const year = new Date().getFullYear();
 
+  // New page: start at the top, or at the linked section (e.g. /features#gst-compliance).
   useEffect(() => {
-    setMenuOpen(false);
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    const target = hash ? document.getElementById(hash) : null;
+    if (target) target.scrollIntoView({ block: "start" });
+    else window.scrollTo(0, 0);
+  }, [pathname, hash]);
 
   return (
     <div className="flex min-h-screen flex-col bg-surface-0 text-text-primary">
@@ -113,79 +106,7 @@ export function MarketingLayout({
         <div className="bg-[#0b1530] px-4 py-2.5 text-center text-[13px] text-slate-300">{announcement}</div>
       )}
 
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 border-b border-border-light bg-surface-0/90 backdrop-blur">
-        <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
-          <Link to="/" className="flex items-center gap-2.5">
-            <Logo className="h-[34px] w-[34px]" />
-            <span className="font-display text-[19px] font-extrabold tracking-tight text-[#0f1b3d] dark:text-white">
-              Fintranzact
-            </span>
-          </Link>
-
-          <nav className="hidden items-center gap-1 lg:flex" aria-label="Main">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className={cn(
-                  "rounded-md px-3.5 py-2.5 text-[15px] font-medium transition hover:text-text-primary",
-                  pathname === link.to ? "text-text-primary" : "text-text-secondary",
-                )}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <Link
-              to="/login"
-              search={{ mode: "login" }}
-              className="hidden h-11 items-center px-4 text-[15px] font-semibold text-text-secondary hover:text-text-primary sm:inline-flex"
-            >
-              Log in
-            </Link>
-            <Link
-              to="/login"
-              search={{ mode: "register" }}
-              className="inline-flex h-11 items-center rounded-[10px] bg-brand-600 px-5 text-[15px] font-semibold text-white shadow-[0_6px_16px_-6px_rgba(59,94,170,.6)] transition hover:bg-brand-700"
-            >
-              Start free
-            </Link>
-            <button
-              type="button"
-              className="btn-ghost lg:hidden"
-              aria-label={menuOpen ? "Close menu" : "Open menu"}
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              <Icon icon={menuOpen ? Cancel01Icon : Menu01Icon} size={20} />
-            </button>
-          </div>
-        </div>
-
-        {menuOpen && (
-          <nav className="border-t border-border-light px-4 py-3 lg:hidden" aria-label="Mobile">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className="block rounded-md px-2 py-3 text-[15px] font-medium text-text-secondary hover:bg-surface-1"
-              >
-                {link.label}
-              </Link>
-            ))}
-            <Link
-              to="/login"
-              search={{ mode: "login" }}
-              className="block rounded-md px-2 py-3 text-[15px] font-medium text-text-secondary hover:bg-surface-1"
-            >
-              Log in
-            </Link>
-          </nav>
-        )}
-      </header>
+      <SiteHeader />
 
       <main className="flex-1">{children}</main>
 

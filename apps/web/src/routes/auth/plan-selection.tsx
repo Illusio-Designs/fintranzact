@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { PLAN_OPTIONS, type PlanId } from "@/lib/plans";
+import { usePlans, type PlanId } from "@/lib/plans";
 
 import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/Icon";
@@ -13,12 +13,13 @@ function PlanSelectionPage() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
   const [selectedPlan, setSelectedPlan] = useState<PlanId>("forever_free");
+  const { plans } = usePlans();
 
   const selectedLabel = useMemo(
     () =>
-      PLAN_OPTIONS.find((plan) => plan.id === selectedPlan)?.name ??
+      plans.find((plan) => plan.id === selectedPlan)?.name ??
       "Forever Free",
-    [selectedPlan],
+    [plans, selectedPlan],
   );
 
   const updatePlanMutation = trpc.tenant.updatePlan.useMutation({
@@ -54,7 +55,7 @@ function PlanSelectionPage() {
 
         <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
           <div className="grid gap-4 md:grid-cols-3">
-            {PLAN_OPTIONS.map((plan) => (
+            {plans.map((plan) => (
               <button
                 key={plan.id}
                 type="button"

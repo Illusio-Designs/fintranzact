@@ -4,7 +4,8 @@ import {
   MarketingLayout,
   PageHero,
 } from "@/components/marketing/MarketingLayout";
-import { PLAN_LIMITS, PLAN_OPTIONS, formatPlanLimit, type PlanId } from "@/lib/plans";
+import { useMemo } from "react";
+import { formatPlanLimit, usePlans, type PlanId, type PlanOption } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 import { EYEBROW, FaqAccordion, HEADING, PricingCards } from "@/components/marketing/sections";
 
@@ -57,11 +58,12 @@ const INCLUDED: Array<[IconSvgElement, string, string]> = [
 type Cell = boolean | string;
 
 /**
- * Comparison rows. The limit rows are read from PLAN_LIMITS — the same values
- * the API enforces — so this table can never promise more than a plan allows.
+ * Comparison rows. The limit rows come from each plan's `limits` as served by
+ * the API's `plan.list` — the values the API enforces — so this table can
+ * never promise more than a plan allows.
  */
-function buildComparison(): Array<{ group: string; rows: Array<[string, ...Cell[]]> }> {
-  const limits = PLAN_OPTIONS.map((plan) => PLAN_LIMITS[plan.id]);
+function buildComparison(plans: PlanOption[]): Array<{ group: string; rows: Array<[string, ...Cell[]]> }> {
+  const limits = plans.map((plan) => plan.limits);
   const row = (label: string, pick: (l: (typeof limits)[number]) => Cell): [string, ...Cell[]] => [
     label,
     ...limits.map(pick),
@@ -69,8 +71,8 @@ function buildComparison(): Array<{ group: string; rows: Array<[string, ...Cell[
   const all = (label: string): [string, ...Cell[]] => [label, ...limits.map(() => true)];
   // Paid-plan extras: included in the named plan and every plan listed after it.
   const from = (label: string, planId: PlanId): [string, ...Cell[]] => {
-    const start = PLAN_OPTIONS.findIndex((p) => p.id === planId);
-    return [label, ...PLAN_OPTIONS.map((_, i) => start >= 0 && i >= start)];
+    const start = plans.findIndex((p) => p.id === planId);
+    return [label, ...plans.map((_, i) => start >= 0 && i >= start)];
   };
   return [
     {
@@ -121,7 +123,6 @@ function buildComparison(): Array<{ group: string; rows: Array<[string, ...Cell[
   ];
 }
 
-const COMPARE = buildComparison();
 
 function CellValue({ value }: { value: Cell }) {
   if (value === true) {
@@ -144,6 +145,8 @@ function CellValue({ value }: { value: Cell }) {
 }
 
 function PricingPage() {
+  const { plans } = usePlans();
+  const compare = useMemo(() => buildComparison(plans), [plans]);
   return (
     <MarketingLayout title="Pricing">
       <PageHero
@@ -191,7 +194,7 @@ function PricingPage() {
                   <th scope="col" className="w-2/5 px-6 py-5 text-sm font-semibold text-text-tertiary">
                     Features
                   </th>
-                  {PLAN_OPTIONS.map((plan) => (
+                  {plans.map((plan) => (
                     <th key={plan.id} scope="col" className="px-6 py-5 text-center">
                       <span className="block font-display text-lg font-extrabold text-[#0f1b3d] dark:text-white">{plan.name}</span>
                       <span className="mt-0.5 block text-sm font-medium text-text-tertiary">{plan.price}</span>
@@ -199,10 +202,10 @@ function PricingPage() {
                   ))}
                 </tr>
               </thead>
-              {COMPARE.map((section) => (
+              {compare.map((section) => (
                 <tbody key={section.group}>
                   <tr className="bg-surface-1">
-                    <th colSpan={4} scope="colgroup" className="px-6 py-3 text-xs font-bold uppercase tracking-[0.1em] text-brand-600 dark:text-brand-300">
+                    <th colSpan={plans.length + 1} scope="colgroup" className="px-6 py-3 text-xs font-bold uppercase tracking-[0.1em] text-brand-600 dark:text-brand-300">
                       {section.group}
                     </th>
                   </tr>

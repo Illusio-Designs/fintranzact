@@ -28,6 +28,7 @@ import { createCsrfMiddleware } from "./lib/csrf-middleware.js";
 import { assertAllowedStoreOrigin } from "./lib/store-origin.js";
 import { registerExportRoute } from "./http/exportStream.js";
 import { registerImportRoute } from "./http/importStream.js";
+import { listPublicPlansJson } from "./lib/public-plans.js";
 
 // ── Process crash handlers ────────────────────────────────────
 process.on("unhandledRejection", (reason) => {
@@ -294,6 +295,12 @@ app.get("/pay/upi", async (c) => {
   </div>
 </div>
 </body></html>`);
+});
+
+// Public plan catalogue (prices, features, enforced limits). Unlimited = null.
+app.get("/api/plans", (c) => {
+  c.header("Cache-Control", "public, max-age=300");
+  return c.json({ plans: listPublicPlansJson() });
 });
 
 app.get("/health", async (c) => {

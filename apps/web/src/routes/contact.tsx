@@ -115,14 +115,16 @@ function ContactPage() {
                 placeholder="you@yourcompany.com"
               />
             </div>
-            <TextareaField
-              label="Message"
-              required
-              className="mt-5 min-h-36"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="How can we help?"
-            />
+            <div className="mt-5">
+              <TextareaField
+                label="Message"
+                required
+                className="min-h-36"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="How can we help?"
+              />
+            </div>
             <button
               type="submit"
               className="mt-7 inline-flex h-[52px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
