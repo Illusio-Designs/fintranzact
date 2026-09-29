@@ -20,6 +20,7 @@ import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPClient, IRPError } from "../lib/irp-client.js";
+import { resolveIRPConfig } from "../lib/irp-config.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 
 export const invoiceRouter = router({
@@ -674,7 +675,7 @@ export const invoiceRouter = router({
             },
           );
 
-          const client = new IRPClient(config, db);
+          const client = new IRPClient(resolveIRPConfig(config), db);
           const result = await client.generateIRN(irpJson);
 
           await db

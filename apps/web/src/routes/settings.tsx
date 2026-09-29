@@ -196,6 +196,15 @@ function SettingsPage() {
     }
     return (
       <div>
+        <button
+          className="btn-ghost text-xs mb-4"
+          onClick={() => {
+            window.history.replaceState({}, "", "/settings");
+            setShowCreateBusiness(false);
+          }}
+        >
+          &larr; Back to settings
+        </button>
         <PageHeader title="Create New Business" description="Add another business to your organization" />
         <BusinessForm
           onboardingMode

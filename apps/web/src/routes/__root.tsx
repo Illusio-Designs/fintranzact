@@ -5,10 +5,10 @@ import {
   useNavigate,
   useLocation,
 } from "@tanstack/react-router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { trpc, setBusinessId, queryClient } from "@/lib/trpc";
 import { useHotkeys } from "@/hooks/useHotkeys";
-import { useTheme } from "@/hooks/useTheme";
+import { useIndiaTimeTheme } from "@/hooks/useTheme";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { ShortcutIndicator } from "@/components/ui/ShortcutIndicator";
@@ -16,12 +16,12 @@ import { Modal } from "@/components/ui/Modal";
 import { BusinessSwitcher } from "@/components/ui/BusinessSwitcher";
 import { Logo } from "@/components/ui/Logo";
 import { Icon } from "@/components/ui/Icon";
+import { Tooltip } from "@/components/ui/Tooltip";
 import {
   Add01Icon,
   Alert02Icon,
   BankIcon,
   ChartLineData01Icon,
-  ComputerIcon,
   CreditCardIcon,
   DashboardSquare01Icon,
   DeliveryTruck01Icon,
@@ -31,7 +31,9 @@ import {
   Invoice01Icon,
   Logout01Icon,
   Menu01Icon,
-  Moon02Icon,
+  ArrowDown01Icon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
   NoteRemoveIcon,
   PackageIcon,
   ReceiptDollarIcon,
@@ -39,7 +41,6 @@ import {
   Settings01Icon,
   ShippingTruck01Icon,
   ShoppingCart01Icon,
-  Sun03Icon,
   TaxesIcon,
   UnfoldMoreIcon,
   UserIcon,
@@ -134,6 +135,9 @@ function canAccess(
   if (abilities.has("*")) return true;
   return abilities.has(`${resource}:${action}`);
 }
+
+const NAV_COLLAPSED_KEY = "fintranzact:nav-collapsed";
+const NAV_SECTIONS_KEY = "fintranzact:nav-sections";
 
 // ── Sidebar nav structure ──────────────────────────────────────
 
@@ -592,7 +596,6 @@ function RootLayout() {
 
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  useTheme();
   const [showPalette, setShowPalette] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showTenantPicker, setShowTenantPicker] = useState(false);
@@ -609,7 +612,73 @@ function RootLayout() {
   // already attached to the first requests child routes fire (their effects
   // run before any effect here would).
   setBusinessId(currentBusinessId);
+  // Light or dark follows the clock in India rather than a manual toggle, so
+  // every surface — app and public pages alike — matches the working day of
+  // the businesses using it.
+  useIndiaTimeTheme();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Desktop rail state. Persisted because a collapsed sidebar is a workspace
+  // preference — having it spring back open on every reload would defeat it.
+  // Mobile ignores this entirely and keeps using the slide-in drawer.
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(NAV_COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(NAV_COLLAPSED_KEY, navCollapsed ? "1" : "0");
+    } catch {
+      // Private mode / storage disabled — the rail still works, just per-session.
+    }
+  }, [navCollapsed]);
+
+  // Which nav groups are expanded. Absent from the map means open, so a fresh
+  // install shows the full menu and collapsing is an explicit choice.
+  const [closedSections, setClosedSections] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(NAV_SECTIONS_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(NAV_SECTIONS_KEY, JSON.stringify(closedSections));
+    } catch {
+      // Non-fatal: groups just reset next session.
+    }
+  }, [closedSections]);
+
+  const activeSection = useMemo(() => {
+    for (const section of navSections) {
+      for (const item of section.items) {
+        const hit =
+          "exact" in item && item.exact
+            ? pathname === item.to
+            : pathname === item.to || pathname.startsWith(`${item.to}/`);
+        if (hit) return section.label;
+      }
+    }
+    return null;
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!activeSection) return;
+    setClosedSections((prev) =>
+      prev[activeSection] ? { ...prev, [activeSection]: false } : prev,
+    );
+  }, [activeSection]);
+
+  const toggleSection = useCallback((label: string) => {
+    setClosedSections((prev) => ({ ...prev, [label]: !prev[label] }));
+  }, []);
 
   const selectTenantMutation = trpc.tenant.select.useMutation({
     onSuccess: () => {
@@ -654,7 +723,99 @@ function RootLayout() {
       description: "Keyboard shortcuts",
       scope: "global",
     },
-    // ── Navigation shortcuts (Alt+Shift+Key) ──
+    // ── Navigation: press G, then the key ──
+    //
+    // Sequences rather than Alt+Shift chords: Alt+Shift is the Windows
+    // input-language switcher, so on any machine with a second keyboard
+    // layout installed those chords never reach the page. The Alt+Shift
+    // bindings below are kept as aliases for anyone already using them; the
+    // shortcuts dialog dedupes by description and shows the sequence.
+    {
+      key: "d",
+      leader: "g",
+      handler: () => navigate({ to: "/" }),
+      description: "Dashboard",
+      scope: "navigation",
+    },
+    {
+      key: "i",
+      leader: "g",
+      handler: () => navigate({ to: "/invoices" }),
+      description: "Invoices",
+      scope: "navigation",
+    },
+    {
+      key: "q",
+      leader: "g",
+      handler: () => navigate({ to: "/quotations" }),
+      description: "Quotations",
+      scope: "navigation",
+    },
+    {
+      key: "c",
+      leader: "g",
+      handler: () => navigate({ to: "/credit-notes" }),
+      description: "Credit Notes",
+      scope: "navigation",
+    },
+    {
+      key: "p",
+      leader: "g",
+      handler: () => navigate({ to: "/parties" }),
+      description: "Parties",
+      scope: "navigation",
+    },
+    {
+      key: "t",
+      leader: "g",
+      handler: () => navigate({ to: "/items" }),
+      description: "Items",
+      scope: "navigation",
+    },
+    {
+      key: "m",
+      leader: "g",
+      handler: () => navigate({ to: "/payments" }),
+      description: "Payments",
+      scope: "navigation",
+    },
+    {
+      key: "b",
+      leader: "g",
+      handler: () => navigate({ to: "/cash-and-bank" }),
+      description: "Cash & Bank",
+      scope: "navigation",
+    },
+    {
+      key: "e",
+      leader: "g",
+      handler: () => navigate({ to: "/expenses" }),
+      description: "Expenses",
+      scope: "navigation",
+    },
+    {
+      key: "g",
+      leader: "g",
+      handler: () => navigate({ to: "/gst" }),
+      description: "GST Returns",
+      scope: "navigation",
+    },
+    {
+      key: "r",
+      leader: "g",
+      handler: () => navigate({ to: "/reports" }),
+      description: "Business Reports",
+      scope: "navigation",
+    },
+    {
+      key: "s",
+      leader: "g",
+      handler: () => navigate({ to: "/settings" }),
+      description: "Settings",
+      scope: "navigation",
+    },
+
+    // ── Aliases: Alt+Shift+Key ──
     {
       key: "d",
       alt: true,
@@ -1182,17 +1343,53 @@ function RootLayout() {
               "w-56 shrink-0 border-r border-border-light flex flex-col bg-surface-0 overflow-hidden",
               // On mobile: fixed drawer that slides in/out
               "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0",
+              // Desktop only: collapse to an icon rail. The drawer keeps its
+              // full width on mobile, where there is no room for a rail.
+              "md:transition-[width] md:duration-200",
+              navCollapsed ? "md:w-[60px]" : "md:w-56",
               sidebarOpen ? "translate-x-0" : "-translate-x-full",
             )}
           >
-            {/* Logo + Org switcher */}
-            <div className="px-4 py-4 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <Logo className="w-8 h-8" />
-                <span className="font-semibold text-[15px] tracking-tight text-text-primary">
+            {/* Brand + rail toggle. Collapsed, the two stack so neither needs
+                absolute positioning inside the scroll container. */}
+            <div
+              className={cn(
+                "py-4 shrink-0 flex gap-2",
+                navCollapsed
+                  ? "px-4 justify-between md:px-0 md:flex-col md:items-center md:gap-3"
+                  : "px-4 items-center justify-between",
+              )}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Logo className="w-8 h-8 shrink-0" />
+                <span
+                  className={cn(
+                    "font-semibold text-[15px] tracking-tight text-text-primary truncate",
+                    navCollapsed && "md:hidden",
+                  )}
+                >
                   Fintranzact
                 </span>
               </div>
+
+              {/* Desktop only — the mobile drawer closes by tapping the backdrop */}
+              <Tooltip label="Expand sidebar" disabled={!navCollapsed}>
+                <button
+                  type="button"
+                  onClick={() => setNavCollapsed((v) => !v)}
+                  className={cn(
+                    "hidden md:flex items-center justify-center w-7 h-7 rounded-lg shrink-0",
+                    "text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors",
+                  )}
+                  aria-label={navCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-expanded={!navCollapsed}
+                >
+                  <Icon
+                    icon={navCollapsed ? PanelLeftOpenIcon : PanelLeftCloseIcon}
+                    size={16}
+                  />
+                </button>
+              </Tooltip>
             </div>
 
             {/* Nav sections */}
@@ -1225,33 +1422,96 @@ function RootLayout() {
                   section.label === "COMPLIANCE" && !isGstRegistered
                     ? "REPORTS"
                     : section.label;
+                // Collapsed, the rail is too narrow for a text heading, so
+                // groups read as a hairline rule instead of disappearing.
+                const base = cn(
+                  "flex items-center rounded-lg text-[13px] transition-colors",
+                  navCollapsed
+                    ? "mx-2 px-0 py-2 md:justify-center gap-2.5 md:gap-0"
+                    : "mx-2 px-3 py-[7px] gap-2.5",
+                );
+
+                // A collapsed rail has no room for headings or disclosure
+                // arrows, so there the group is just a rule and every item
+                // stays reachable.
+                const isRail = navCollapsed;
+                const closed = !isRail && !!closedSections[section.label];
+                const panelId = `nav-section-${section.label.toLowerCase()}`;
+
                 return (
                   <div key={section.label}>
-                    <p className="px-3 pt-5 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-tertiary">
-                      {sectionLabel}
-                    </p>
+                    {isRail ? (
+                      <div
+                        className="mx-3 my-2 border-t border-border-light md:block hidden"
+                        role="separator"
+                        aria-label={sectionLabel}
+                      />
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        // The <nav> closes the mobile drawer on click; opening
+                        // a group is navigation *within* the menu, not a
+                        // destination, so it must not dismiss it.
+                        e.stopPropagation();
+                        toggleSection(section.label);
+                      }}
+                      aria-expanded={!closed}
+                      aria-controls={panelId}
+                      className={cn(
+                        "w-full flex items-center justify-between gap-2 px-3 pt-5 pb-1.5",
+                        "text-[10px] font-semibold uppercase tracking-widest text-text-tertiary",
+                        "hover:text-text-secondary transition-colors",
+                        isRail && "md:hidden",
+                      )}
+                    >
+                      <span className="truncate">{sectionLabel}</span>
+                      <Icon
+                        icon={ArrowDown01Icon}
+                        size={12}
+                        className={cn(
+                          "shrink-0 transition-transform duration-150",
+                          closed && "-rotate-90",
+                        )}
+                      />
+                    </button>
+
+                    <div id={panelId} hidden={closed}>
                     {visibleItems.map((item) => (
-                      <Link
+                      <Tooltip
                         key={item.to}
-                        to={item.to}
-                        className="flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors"
-                        activeProps={{
-                          className:
-                            "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors bg-brand-600/10 text-brand-700 font-medium",
-                        }}
-                        inactiveProps={{
-                          className:
-                            "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors text-text-secondary hover:bg-surface-2 hover:text-text-primary",
-                        }}
-                        activeOptions={{
-                          exact:
-                            "exact" in item ? (item.exact as boolean) : false,
-                        }}
+                        label={item.label}
+                        disabled={!navCollapsed}
                       >
-                        <Icon icon={item.icon} size={16} />
-                        {item.label}
-                      </Link>
+                        <Link
+                          to={item.to}
+                          className={base}
+                          activeProps={{
+                            className: cn(
+                              base,
+                              "bg-brand-600/10 text-brand-700 font-medium",
+                            ),
+                          }}
+                          inactiveProps={{
+                            className: cn(
+                              base,
+                              "text-text-secondary hover:bg-surface-2 hover:text-text-primary",
+                            ),
+                          }}
+                          activeOptions={{
+                            exact:
+                              "exact" in item ? (item.exact as boolean) : false,
+                          }}
+                        >
+                          <Icon icon={item.icon} size={16} className="shrink-0" />
+                          <span className={cn("truncate", navCollapsed && "md:hidden")}>
+                            {item.label}
+                          </span>
+                        </Link>
+                      </Tooltip>
                     ))}
+                    </div>
                   </div>
                 );
               })}
@@ -1260,32 +1520,59 @@ function RootLayout() {
             {/* Sidebar footer: org name + version */}
             <div className="shrink-0 border-t border-border-light">
               {hasMultipleTenants ? (
-                <button
-                  type="button"
-                  onClick={() => setShowTenantPicker(true)}
-                  className="w-full px-4 py-2.5 text-left group"
-                >
-                  <p className="flex items-center gap-1.5 text-[11px] font-medium text-text-tertiary/60 group-hover:text-text-secondary transition-colors">
-                    <span className="truncate">{tenantName}</span>
-                    <Icon
-                      icon={UnfoldMoreIcon}
-                      size={10}
-                      className="text-text-tertiary/40 group-hover:text-text-secondary transition-colors"
-                    />
-                  </p>
-                  <p className="text-[10px] text-text-tertiary/30 mt-0.5 tabular-nums">
-                    v{__APP_VERSION__}
-                  </p>
-                </button>
+                // Collapsed: the org name has nowhere to go, so the switcher
+                // becomes an icon button carrying the name as its tooltip.
+                <Tooltip label={tenantName} disabled={!navCollapsed}>
+                  <button
+                    type="button"
+                    onClick={() => setShowTenantPicker(true)}
+                    className={cn(
+                      "w-full py-2.5 text-left group",
+                      navCollapsed ? "px-4 md:px-0 md:flex md:justify-center" : "px-4",
+                    )}
+                    aria-label={`Switch organization — currently ${tenantName}`}
+                  >
+                    <p className="flex items-center gap-1.5 text-[11px] font-medium text-text-tertiary/60 group-hover:text-text-secondary transition-colors">
+                      <span className={cn("truncate", navCollapsed && "md:hidden")}>
+                        {tenantName}
+                      </span>
+                      <Icon
+                        icon={UnfoldMoreIcon}
+                        size={navCollapsed ? 14 : 10}
+                        className="text-text-tertiary/40 group-hover:text-text-secondary transition-colors shrink-0"
+                      />
+                    </p>
+                    <p
+                      className={cn(
+                        "text-[10px] text-text-tertiary/30 mt-0.5 tabular-nums",
+                        navCollapsed && "md:hidden",
+                      )}
+                    >
+                      v{__APP_VERSION__}
+                    </p>
+                  </button>
+                </Tooltip>
               ) : (
-                <div className="px-4 py-2.5">
-                  <p className="text-[11px] text-text-tertiary/50 truncate select-none">
-                    {tenantName}
-                  </p>
-                  <p className="text-[10px] text-text-tertiary/30 mt-0.5 select-none tabular-nums">
-                    v{__APP_VERSION__}
-                  </p>
-                </div>
+                <Tooltip label={`${tenantName} · v${__APP_VERSION__}`} disabled={!navCollapsed}>
+                  <div
+                    className={cn(
+                      "py-2.5",
+                      navCollapsed ? "px-4 md:px-0 md:text-center" : "px-4",
+                    )}
+                  >
+                    <p
+                      className={cn(
+                        "text-[11px] text-text-tertiary/50 truncate select-none",
+                        navCollapsed && "md:hidden",
+                      )}
+                    >
+                      {tenantName}
+                    </p>
+                    <p className="text-[10px] text-text-tertiary/30 mt-0.5 select-none tabular-nums">
+                      v{__APP_VERSION__}
+                    </p>
+                  </div>
+                </Tooltip>
               )}
             </div>
           </aside>
@@ -1317,8 +1604,7 @@ function RootLayout() {
               </div>
             )}
 
-            {/* Theme + shortcuts */}
-            <ThemeToggle />
+            {/* Shortcuts */}
             <button
               onClick={() => setShowShortcuts(true)}
               className="flex items-center justify-center w-8 h-8 rounded-lg text-sm text-text-tertiary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
@@ -1433,41 +1719,6 @@ function RootLayout() {
   );
 }
 
-// ── Theme Toggle ───────────────────────────────────────────────
-
-type Theme = "light" | "dark" | "system";
-
-function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-
-  const next: Record<Theme, Theme> = {
-    system: "light",
-    light: "dark",
-    dark: "system",
-  };
-  const icons: Record<Theme, React.ReactNode> = {
-    system: <Icon icon={ComputerIcon} size={16} />,
-    light: <Icon icon={Sun03Icon} size={16} />,
-    dark: <Icon icon={Moon02Icon} size={16} />,
-  };
-  const labels: Record<Theme, string> = {
-    system: "System theme",
-    light: "Light mode",
-    dark: "Dark mode",
-  };
-
-  return (
-    <button
-      onClick={() => setTheme(next[theme])}
-      className="flex items-center justify-center w-8 h-8 rounded-lg text-text-tertiary hover:bg-surface-1 transition-colors border border-border-light"
-      aria-label={labels[theme]}
-      title={labels[theme]}
-    >
-      {icons[theme]}
-    </button>
-  );
-}
-
 // ── Role Badge ────────────────────────────────────────────────
 
 const roleStyles: Record<string, string> = {
@@ -1526,6 +1777,8 @@ function ShortcutsDialog({
 
   function formatKey(h: (typeof hotkeys)[0]): string[] {
     const keys: string[] = [];
+    // A sequence reads "G then D", not a simultaneous chord.
+    if (h.leader) keys.push(h.leader.toUpperCase(), "then");
     if (h.ctrl) keys.push("⌘");
     if (h.alt) keys.push("Alt");
     if (h.shift) keys.push("⇧");
@@ -1535,7 +1788,7 @@ function ShortcutsDialog({
 
   const scopeLabels: Record<string, string> = {
     global: "Global",
-    navigation: "Navigation (Alt+Shift + Key)",
+    navigation: "Navigation (press G, then the key)",
     parties: "Parties",
     items: "Items",
     payments: "Payments",

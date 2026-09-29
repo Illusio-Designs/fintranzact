@@ -585,6 +585,7 @@ app.get("/api/invoices/:id/pdf", async (c) => {
     // structuredClone across worker threads as Uint8Array, and PDFKit
     // accepts either.
     logoBuffer: biz.logoData ?? undefined,
+    signatureBuffer: biz.signatureData ?? undefined,
   };
 
   const pdfBuffer = await generatePDFInWorker(pdfData, format);
@@ -616,8 +617,13 @@ const LOGO_SAFE_HEADERS = {
   "Cross-Origin-Resource-Policy": "same-site",
 };
 
-app.get("/api/businesses/:id/logo", async (c) => {
+// GET /api/businesses/:id/signature serves the authorised-signatory image
+// through the identical guard chain; `kind` picks the column pair.
+async function serveBusinessImage(c: Context, kind: "logo" | "signature") {
+  // Typed as optional here because the handler is generic over the route;
+  // both registrations below declare :id, so this is belt-and-braces.
   const businessId = c.req.param("id");
+  if (!businessId) return c.json({ error: "Not found" }, 404);
 
   const sessionId = getSessionIdFromRequest(c.req.raw);
   if (!sessionId) return c.json({ error: "Unauthorized" }, 401);
@@ -641,9 +647,16 @@ app.get("/api/businesses/:id/logo", async (c) => {
     logoData: businesses.logoData,
     logoMimeType: businesses.logoMimeType,
     logoUpdatedAt: businesses.logoUpdatedAt,
+    signatureData: businesses.signatureData,
+    signatureMimeType: businesses.signatureMimeType,
+    signatureUpdatedAt: businesses.signatureUpdatedAt,
   }).from(businesses).where(eq(businesses.id, businessId)).limit(1);
 
-  if (!row || !row.logoData || !row.logoMimeType) {
+  const imageData = kind === "logo" ? row?.logoData : row?.signatureData;
+  const imageMime = kind === "logo" ? row?.logoMimeType : row?.signatureMimeType;
+  const imageUpdatedAt = kind === "logo" ? row?.logoUpdatedAt : row?.signatureUpdatedAt;
+
+  if (!row || !imageData || !imageMime) {
     return new Response(new Uint8Array(EMPTY_PNG), {
       status: 200,
       headers: {
@@ -654,21 +667,24 @@ app.get("/api/businesses/:id/logo", async (c) => {
     });
   }
 
-  const etag = `"${row.logoUpdatedAt?.getTime() ?? 0}"`;
+  const etag = `"${imageUpdatedAt?.getTime() ?? 0}"`;
   if (c.req.header("if-none-match") === etag) {
     return new Response(null, { status: 304, headers: { ETag: etag, ...LOGO_SAFE_HEADERS } });
   }
 
-  return new Response(new Uint8Array(row.logoData), {
+  return new Response(new Uint8Array(imageData), {
     status: 200,
     headers: {
       ...LOGO_SAFE_HEADERS,
-      "Content-Type": row.logoMimeType,
+      "Content-Type": imageMime,
       "Cache-Control": "private, max-age=300",
       ETag: etag,
     },
   });
-});
+}
+
+app.get("/api/businesses/:id/logo", (c) => serveBusinessImage(c, "logo"));
+app.get("/api/businesses/:id/signature", (c) => serveBusinessImage(c, "signature"));
 
 // ── Party Ledger PDF endpoint ─────────────────────────────────
 // GET /api/parties/:id/ledger.pdf?from=...&to=...

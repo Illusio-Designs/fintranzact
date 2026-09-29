@@ -37,6 +37,7 @@ import {
   items,
   parties,
   businesses,
+  ewayBillConfigs,
 } from "@fintranzact/db";
 import {
   generateEwayBillSchema,
@@ -46,6 +47,7 @@ import {
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { EWBClient, computeValidUpto } from "../lib/ewb-client.js";
+import { decryptEwbConfig } from "../lib/field-encryption.js";
 import { mapInvoiceToEWB } from "../lib/invoice-to-ewb.js";
 import type { TransportDetails, InvoiceForEWB, LineItemForEWB } from "../lib/invoice-to-ewb.js";
 
@@ -54,20 +56,44 @@ import type { TransportDetails, InvoiceForEWB, LineItemForEWB } from "../lib/inv
 const EWB_MIN_VALUE = 50000; // ₹50,000 threshold for mandatory EWB
 
 /**
- * Build an EWBClient from environment variables.
- * Returns null if credentials are not configured.
+ * Build an EWBClient for a business.
+ *
+ * Credentials come from two places, because that is how the NIC/GSP model
+ * actually works:
+ *   - username / password — the taxpayer's own API login, issued per GSTIN,
+ *     so they are stored per business in eway_bill_configs (encrypted).
+ *   - clientId / clientSecret — issued once to the GSP (this deployment), so
+ *     they live in env and are shared by every business.
+ *
+ * A business row that carries its own client credentials overrides the env
+ * pair; a deployment with no per-business row at all falls back entirely to
+ * env, which preserves the original behaviour.
+ *
+ * Returns null if no usable credential set can be assembled.
  */
-function getEWBClient(): EWBClient | null {
-  const clientId = process.env.NIC_EWB_CLIENT_ID;
-  const clientSecret = process.env.NIC_EWB_CLIENT_SECRET;
-  const username = process.env.NIC_EWB_USERNAME;
-  const password = process.env.NIC_EWB_PASSWORD;
+async function getEWBClient(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  businessId: string,
+): Promise<EWBClient | null> {
+  const [row] = await db
+    .select()
+    .from(ewayBillConfigs)
+    .where(and(eq(ewayBillConfigs.businessId, businessId), eq(ewayBillConfigs.isEnabled, true)))
+    .limit(1);
+
+  const config = row ? decryptEwbConfig(row) : null;
+
+  const clientId = config?.clientId || process.env.NIC_EWB_CLIENT_ID;
+  const clientSecret = config?.clientSecret || process.env.NIC_EWB_CLIENT_SECRET;
+  const username = config?.username || process.env.NIC_EWB_USERNAME;
+  const password = config?.password || process.env.NIC_EWB_PASSWORD;
 
   if (!clientId || !clientSecret || !username || !password) {
     return null;
   }
 
-  const sandbox = process.env.NIC_EWB_SANDBOX !== "false";
+  const sandbox = config ? config.isSandbox : process.env.NIC_EWB_SANDBOX !== "false";
 
   return new EWBClient({
     clientId,
@@ -82,12 +108,17 @@ function getEWBClient(): EWBClient | null {
 /**
  * Assert that the EWB client is available, throw PRECONDITION_FAILED if not.
  */
-function requireEWBClient(): EWBClient {
-  const client = getEWBClient();
+async function requireEWBClient(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  businessId: string,
+): Promise<EWBClient> {
+  const client = await getEWBClient(db, businessId);
   if (!client) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "E-Way Bill API credentials are not configured. Contact your administrator.",
+      message:
+        "E-Way Bill API credentials are not configured. Add your E-Way Bill portal ID and password in business settings, or contact your administrator.",
     });
   }
   return client;
@@ -272,7 +303,7 @@ export const ewayBillRouter = router({
       const ewbPayload = mapInvoiceToEWB(invoiceForEWB, lineItemsForEWB, transportDetails);
 
       // Override GSTIN in the client with the actual business GSTIN
-      const ewbClient = requireEWBClient();
+      const ewbClient = await requireEWBClient(ctx.db, ctx.businessId);
       ewbClient.config.gstin = business.gstin ?? "";
 
       // ── 8. Call NIC EWB API ───────────────────────────────────────────────
@@ -358,7 +389,7 @@ export const ewayBillRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "E-Way Bill number not found" });
       }
 
-      const ewbClient = requireEWBClient();
+      const ewbClient = await requireEWBClient(ctx.db, ctx.businessId);
 
       // Fetch business GSTIN
       const [business] = await ctx.db
@@ -419,7 +450,7 @@ export const ewayBillRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "E-Way Bill number not found" });
       }
 
-      const ewbClient = requireEWBClient();
+      const ewbClient = await requireEWBClient(ctx.db, ctx.businessId);
 
       const [business] = await ctx.db
         .select({ gstin: businesses.gstin, stateCode: businesses.stateCode })
@@ -526,7 +557,7 @@ export const ewayBillRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "E-Way Bill number not found" });
       }
 
-      const ewbClient = requireEWBClient();
+      const ewbClient = await requireEWBClient(ctx.db, ctx.businessId);
 
       const [business] = await ctx.db
         .select({ gstin: businesses.gstin, stateCode: businesses.stateCode })

@@ -2,7 +2,6 @@ import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { Logo } from "@/components/ui/Logo";
 
-import { useIndiaTimeTheme } from "@/hooks/useTheme";
 import { CONTACT_EMAIL, DOCS_URL, SiteHeader } from "./SiteHeader";
 
 /**
@@ -59,7 +58,6 @@ export function usePageTitle(title?: string) {
 export function MarketingLayout({
   title,
   announcement,
-  autoTheme = true,
   children,
 }: {
   title?: string;
@@ -67,13 +65,13 @@ export function MarketingLayout({
    * Follow the time of day in India (light by day, dark at night). Pages with
    * their own theme controls, like the widget gallery, turn this off.
    */
-  autoTheme?: boolean;
   /** Optional slim strip above the header (used by the home page). */
   announcement?: ReactNode;
   children: ReactNode;
 }) {
   usePageTitle(title);
-  useIndiaTimeTheme(autoTheme);
+  // Theme follows the time of day in India, locked once by the root route
+  // for every surface at once — nothing to do per-layout.
   const { pathname, hash } = useLocation();
   const year = new Date().getFullYear();
 

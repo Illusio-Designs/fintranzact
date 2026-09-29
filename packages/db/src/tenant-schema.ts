@@ -102,6 +102,14 @@ export const businesses = pgTable("businesses", {
   logoWidth: integer("logo_width"),
   logoHeight: integer("logo_height"),
   logoUpdatedAt: timestamp("logo_updated_at", { withTimezone: true }),
+  // Authorised-signatory image, stored exactly like the logo (PNG/JPEG only,
+  // magic-byte checked on upload). Rendered above the signature line on
+  // invoices and other documents.
+  signatureData: bytea("signature_data"),
+  signatureMimeType: text("signature_mime_type"),
+  signatureWidth: integer("signature_width"),
+  signatureHeight: integer("signature_height"),
+  signatureUpdatedAt: timestamp("signature_updated_at", { withTimezone: true }),
   invoicePrefix: text("invoice_prefix").default("INV").notNull(),
   nextInvoiceNumber: integer("next_invoice_number").default(1).notNull(),
   paymentPrefix: text("payment_prefix").default("PAY").notNull(),
@@ -1396,8 +1404,10 @@ export const eInvoiceConfigs = pgTable("e_invoice_configs", {
   id: uuid("id").primaryKey().defaultRandom(),
   businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
   gstin: text("gstin").notNull(),
-  clientId: text("client_id").notNull(),
-  clientSecret: text("client_secret").notNull(),
+  // GSP credentials are deployment-level (env fallback), so they are optional
+  // here; username/password are the per-business taxpayer API credentials.
+  clientId: text("client_id"),
+  clientSecret: text("client_secret"),
   username: text("username").notNull(),
   password: text("password").notNull(),
   authToken: text("auth_token"),
@@ -1415,6 +1425,26 @@ export const eInvoiceConfigs = pgTable("e_invoice_configs", {
 
 export const ewayBillStatusEnum = pgEnum("eway_bill_status", [
   "generated", "active", "cancelled", "expired",
+]);
+
+export const ewayBillConfigs = pgTable("eway_bill_configs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  gstin: text("gstin").notNull(),
+  // Deployment-level GSP credentials fall back to NIC_EWB_CLIENT_ID /
+  // NIC_EWB_CLIENT_SECRET when null.
+  clientId: text("client_id"),
+  clientSecret: text("client_secret"),
+  username: text("username").notNull(),
+  password: text("password").notNull(),
+  authToken: text("auth_token"),
+  tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+  isSandbox: boolean("is_sandbox").default(true).notNull(),
+  isEnabled: boolean("is_enabled").default(false).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("ewb_config_business_idx").on(t.businessId),
 ]);
 
 export const ewayBills = pgTable("eway_bills", {

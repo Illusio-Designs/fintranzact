@@ -211,4 +211,82 @@ describe("useHotkeys", () => {
 
     expect(handler).toHaveBeenCalledTimes(1);
   });
+  // ── Leader sequences ───────────────────────────────────────────────────────
+  //
+  // These replace Alt+Shift chords for navigation: Alt+Shift is the Windows
+  // input-language switcher, so those chords never reach the page on a machine
+  // with a second keyboard layout installed.
+
+  it("leader sequence fires when leader then key are pressed", () => {
+    const handler = vi.fn();
+    renderHook(() => useHotkeys([makeDef({ key: "d", leader: "g", handler })]));
+
+    fireKey("g");
+    expect(handler).not.toHaveBeenCalled(); // leader alone does nothing
+
+    fireKey("d");
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("leader key alone does not fire, and a wrong follow-up cancels it", () => {
+    const handler = vi.fn();
+    renderHook(() => useHotkeys([makeDef({ key: "d", leader: "g", handler })]));
+
+    fireKey("g");
+    fireKey("z"); // not a registered follow-up
+    expect(handler).not.toHaveBeenCalled();
+
+    // The sequence must be restarted, not resumed.
+    fireKey("d");
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("the follow-up key does not fire on its own", () => {
+    const handler = vi.fn();
+    renderHook(() => useHotkeys([makeDef({ key: "d", leader: "g", handler })]));
+
+    fireKey("d");
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("a doubled sequence (G then G) resolves to its own target", () => {
+    const gst = vi.fn();
+    renderHook(() =>
+      useHotkeys([makeDef({ key: "g", leader: "g", description: "GST", handler: gst })]),
+    );
+
+    fireKey("g");
+    fireKey("g");
+
+    expect(gst).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not arm the leader while typing in an input", () => {
+    const handler = vi.fn();
+    renderHook(() => useHotkeys([makeDef({ key: "d", leader: "g", handler })]));
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    fireKey("g", { target: input });
+    fireKey("d", { target: input });
+    document.body.removeChild(input);
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("a plain single-key shortcut still wins over arming a leader", () => {
+    const leaderHandler = vi.fn();
+    const plainHandler = vi.fn();
+    renderHook(() =>
+      useHotkeys([
+        makeDef({ key: "d", leader: "g", handler: leaderHandler }),
+        makeDef({ key: "g", description: "Plain G", handler: plainHandler }),
+      ]),
+    );
+
+    fireKey("g");
+
+    expect(plainHandler).toHaveBeenCalledTimes(1);
+    expect(leaderHandler).not.toHaveBeenCalled();
+  });
 });
