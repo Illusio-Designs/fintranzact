@@ -47,9 +47,11 @@ test.describe("GST / Tax Reports — Presence", () => {
   });
 
   test("renders period selector with current year", async ({ page }) => {
-    // Month + year <select> elements are shown for GSTR-1 / GSTR-3B (default tab)
+    // Month + year pickers are shown for GSTR-1 / GSTR-3B (default tab). They
+    // are custom <Select> comboboxes that expose the chosen value as data-value.
     const currentYear = new Date().getFullYear().toString();
-    // <option> inside a native <select> is hidden per Playwright — assert via select value
-    await expect(page.locator(`select option[value="${currentYear}"]`).first()).toBeAttached();
+    await expect(
+      page.locator(`[role="combobox"][data-value="${currentYear}"]`).first(),
+    ).toBeVisible();
   });
 });
