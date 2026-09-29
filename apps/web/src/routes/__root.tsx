@@ -44,6 +44,7 @@ import {
   TaxesIcon,
   UnfoldMoreIcon,
   UserIcon,
+  Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { getRegisteredHotkeys } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
@@ -1340,13 +1341,14 @@ function RootLayout() {
         {!isOnboarding && (
           <aside
             className={cn(
-              "w-56 shrink-0 border-r border-border-light flex flex-col bg-surface-0 overflow-hidden",
+              // Navy brand sidebar in both themes (light text on #0f1b3d).
+              "w-60 shrink-0 border-r border-white/5 flex flex-col overflow-hidden bg-[#0f1b3d] text-[#c3cee6] dark:bg-[#0b1226]",
               // On mobile: fixed drawer that slides in/out
               "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0",
               // Desktop only: collapse to an icon rail. The drawer keeps its
               // full width on mobile, where there is no room for a rail.
               "md:transition-[width] md:duration-200",
-              navCollapsed ? "md:w-[60px]" : "md:w-56",
+              navCollapsed ? "md:w-[64px]" : "md:w-60",
               sidebarOpen ? "translate-x-0" : "-translate-x-full",
             )}
           >
@@ -1361,10 +1363,10 @@ function RootLayout() {
               )}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <Logo className="w-8 h-8 shrink-0" />
+                <Logo variant="light" className="w-8 h-8 shrink-0" />
                 <span
                   className={cn(
-                    "font-semibold text-[15px] tracking-tight text-text-primary truncate",
+                    "font-display font-extrabold text-[17px] tracking-tight text-white truncate",
                     navCollapsed && "md:hidden",
                   )}
                 >
@@ -1379,7 +1381,7 @@ function RootLayout() {
                   onClick={() => setNavCollapsed((v) => !v)}
                   className={cn(
                     "hidden md:flex items-center justify-center w-7 h-7 rounded-lg shrink-0",
-                    "text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors",
+                    "text-[#9fb0d6] hover:text-white hover:bg-white/10 transition-colors",
                   )}
                   aria-label={navCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                   aria-expanded={!navCollapsed}
@@ -1425,7 +1427,7 @@ function RootLayout() {
                 // Collapsed, the rail is too narrow for a text heading, so
                 // groups read as a hairline rule instead of disappearing.
                 const base = cn(
-                  "flex items-center rounded-lg text-[13px] transition-colors",
+                  "flex items-center rounded-[9px] text-[13.5px] transition-colors",
                   navCollapsed
                     ? "mx-2 px-0 py-2 md:justify-center gap-2.5 md:gap-0"
                     : "mx-2 px-3 py-[7px] gap-2.5",
@@ -1442,7 +1444,7 @@ function RootLayout() {
                   <div key={section.label}>
                     {isRail ? (
                       <div
-                        className="mx-3 my-2 border-t border-border-light md:block hidden"
+                        className="mx-3 my-2 border-t border-white/10 md:block hidden"
                         role="separator"
                         aria-label={sectionLabel}
                       />
@@ -1461,8 +1463,8 @@ function RootLayout() {
                       aria-controls={panelId}
                       className={cn(
                         "w-full flex items-center justify-between gap-2 px-3 pt-5 pb-1.5",
-                        "text-[10px] font-semibold uppercase tracking-widest text-text-tertiary",
-                        "hover:text-text-secondary transition-colors",
+                        "text-[10px] font-bold uppercase tracking-widest text-[#7f90b5]",
+                        "hover:text-[#c3cee6] transition-colors",
                         isRail && "md:hidden",
                       )}
                     >
@@ -1490,13 +1492,13 @@ function RootLayout() {
                           activeProps={{
                             className: cn(
                               base,
-                              "bg-brand-600/10 text-brand-700 font-medium",
+                              "bg-brand-600 text-white font-semibold shadow-[0_4px_12px_-6px_rgba(59,94,170,.9)]",
                             ),
                           }}
                           inactiveProps={{
                             className: cn(
                               base,
-                              "text-text-secondary hover:bg-surface-2 hover:text-text-primary",
+                              "text-[#c3cee6] hover:bg-white/[.07] hover:text-white",
                             ),
                           }}
                           activeOptions={{
@@ -1518,7 +1520,7 @@ function RootLayout() {
             </nav>
 
             {/* Sidebar footer: org name + version */}
-            <div className="shrink-0 border-t border-border-light">
+            <div className="shrink-0 border-t border-white/10">
               {hasMultipleTenants ? (
                 // Collapsed: the org name has nowhere to go, so the switcher
                 // becomes an icon button carrying the name as its tooltip.
@@ -1532,19 +1534,19 @@ function RootLayout() {
                     )}
                     aria-label={`Switch organization — currently ${tenantName}`}
                   >
-                    <p className="flex items-center gap-1.5 text-[11px] font-medium text-text-tertiary/60 group-hover:text-text-secondary transition-colors">
+                    <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#c3cee6] group-hover:text-white transition-colors">
                       <span className={cn("truncate", navCollapsed && "md:hidden")}>
                         {tenantName}
                       </span>
                       <Icon
                         icon={UnfoldMoreIcon}
                         size={navCollapsed ? 14 : 10}
-                        className="text-text-tertiary/40 group-hover:text-text-secondary transition-colors shrink-0"
+                        className="text-[#7f90b5] group-hover:text-white transition-colors shrink-0"
                       />
                     </p>
                     <p
                       className={cn(
-                        "text-[10px] text-text-tertiary/30 mt-0.5 tabular-nums",
+                        "text-[10px] text-[#7f90b5] mt-0.5 tabular-nums",
                         navCollapsed && "md:hidden",
                       )}
                     >
@@ -1562,13 +1564,13 @@ function RootLayout() {
                   >
                     <p
                       className={cn(
-                        "text-[11px] text-text-tertiary/50 truncate select-none",
+                        "text-[12px] font-semibold text-[#c3cee6] truncate select-none",
                         navCollapsed && "md:hidden",
                       )}
                     >
                       {tenantName}
                     </p>
-                    <p className="text-[10px] text-text-tertiary/30 mt-0.5 select-none tabular-nums">
+                    <p className="text-[10px] text-[#7f90b5] mt-0.5 select-none tabular-nums">
                       v{__APP_VERSION__}
                     </p>
                   </div>
@@ -1579,9 +1581,9 @@ function RootLayout() {
         )}
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col bg-surface-1 md:ml-0">
+        <main className="flex-1 min-w-0 flex flex-col bg-surface-1 md:ml-0">
           {/* Top bar */}
-          <div className="h-14 border-b border-border-light flex items-center gap-2 px-4 md:px-6 shrink-0 bg-surface-0">
+          <div className="h-16 border-b border-border-light flex items-center gap-2 px-4 md:px-6 shrink-0 bg-surface-0">
             {/* Hamburger — mobile only, hidden during onboarding */}
             {!isOnboarding && (
               <button
@@ -1602,6 +1604,22 @@ function RootLayout() {
                   Fintranzact
                 </span>
               </div>
+            )}
+
+            {/* Search — opens the command palette (also ⌘K / Ctrl+K) */}
+            {!isOnboarding && (
+              <button
+                type="button"
+                onClick={() => setShowPalette(true)}
+                className="flex h-10 min-w-0 items-center gap-2.5 rounded-xl border border-border-light bg-surface-1 px-3 text-sm text-text-tertiary transition-colors hover:border-border-color sm:w-72 lg:w-96"
+                aria-label="Search and jump to"
+              >
+                <Icon icon={Search01Icon} size={17} className="shrink-0" />
+                <span className="hidden flex-1 truncate text-left sm:block">Search or jump to…</span>
+                <kbd className="hidden rounded-md border border-border-light px-1.5 py-0.5 font-sans text-[11px] font-semibold sm:block">
+                  ⌘K
+                </kbd>
+              </button>
             )}
 
             {/* Shortcuts */}

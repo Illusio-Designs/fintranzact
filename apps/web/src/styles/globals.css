@@ -17,6 +17,12 @@
   --warning: #d97706;
   --danger: #dc2626;
   --info: #2563eb;
+  /* Chart series, fixed order (validated for colour-blind separation) */
+  --chart-1: #3b5eaa;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
 }
 
 .dark {
@@ -29,6 +35,11 @@
   --text-tertiary: #71717a;
   --border-color: #2c2c35;
   --border-light: #232329;
+  --chart-1: #6f8fd8;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
 }
 
 * {
