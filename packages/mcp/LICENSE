@@ -1,31 +1,47 @@
-The O'Saasy License (v1.0)
+Fintranzact Proprietary License
 
-Copyright (c) 2026 Fintranzact
+Copyright (c) 2026 Fintranzact. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to use,
-copy, modify, merge, publish, and distribute the Software, subject to the
-following conditions:
+This package, including its source code, object code and documentation (the
+"Software"), is the proprietary and confidential property of Fintranzact.
 
-1. NON-COMPETE CLAUSE: You may not use the Software, or any derivative work
-   based on the Software, to offer a hosted or managed service that competes
-   with the original Software as a commercial SaaS (Software as a Service)
-   product. Self-hosting for your own business use is explicitly permitted
-   and encouraged.
+1. LIMITED USE GRANT
+   If you hold an active Fintranzact account, Fintranzact grants you a
+   personal, non-exclusive, non-transferable, revocable licence to install
+   and run the Software, unmodified, solely to access your own Fintranzact
+   account and data. This licence ends automatically when your Fintranzact
+   account ends. No other right is granted.
 
-2. The above copyright notice and this permission notice shall be included in
-   all copies or substantial portions of the Software.
+2. RESTRICTIONS
+   Without the prior written permission of Fintranzact, you may not, in whole
+   or in part:
+   a. copy the Software, except as needed to install and run it under
+      section 1;
+   b. modify, translate, adapt or create derivative works of the Software;
+   c. publish, distribute, sell, sublicense, rent, lease or otherwise make the
+      Software available to any third party;
+   d. use the Software, or any part or derivative of it, to build or offer a
+      product or service to any third party;
+   e. decompile, disassemble or reverse-engineer the Software, except to the
+      extent such restriction is prohibited by applicable law;
+   f. remove or alter any copyright, trademark or proprietary notice.
 
-3. You may freely use this Software for:
-   - Personal or internal business use (self-hosted)
-   - Educational and research purposes
-   - Building products that are not substantially similar hosted services
-   - Contributing improvements back to the original project
+3. TRADEMARKS
+   "Fintranzact", the Fintranzact logo and related marks are trademarks of
+   Fintranzact and may not be used without prior written permission.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+4. TERMINATION
+   Any use of the Software in breach of this licence automatically ends your
+   licence. Fintranzact reserves all rights and remedies available under law.
+
+5. NO WARRANTY; LIMITATION OF LIABILITY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED. TO THE MAXIMUM EXTENT PERMITTED BY LAW, FINTRANZACT SHALL NOT BE
+   LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+6. GOVERNING LAW
+   This licence is governed by the laws of India, and the courts of India
+   shall have exclusive jurisdiction over any dispute arising from it.
+
+For licensing enquiries, contact Fintranzact.
