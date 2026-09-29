@@ -26,11 +26,22 @@ declare global {
   }
 }
 
+type AuthMode = "register" | "login";
+
 export const Route = createFileRoute("/login")({
+  // ?mode=login | register lets the public landing page open the right tab.
+  // Other params (e.g. invite=1&error=… from the invite flow) pass through.
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { mode?: AuthMode; invite?: string; error?: string } => ({
+    ...(search.mode === "login" || search.mode === "register"
+      ? { mode: search.mode }
+      : {}),
+    ...(typeof search.invite === "string" ? { invite: search.invite } : {}),
+    ...(typeof search.error === "string" ? { error: search.error } : {}),
+  }),
   component: LoginPage,
 });
-
-type AuthMode = "register" | "login";
 
 /* ─── Pure-CSS animation keyframes injected once ─────────────────────────── */
 const KEYFRAMES = `
@@ -514,7 +525,8 @@ function Field({
 
 /* ─── Main page ───────────────────────────────────────────────────────────── */
 function LoginPage() {
-  const [mode, setMode] = useState<AuthMode>("register");
+  const { mode: initialMode } = Route.useSearch();
+  const [mode, setMode] = useState<AuthMode>(initialMode ?? "register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
