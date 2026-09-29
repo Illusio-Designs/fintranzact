@@ -591,6 +591,11 @@ function RootLayout() {
       return sessionStorage.getItem("selectedBusinessId");
     },
   );
+  // Keep the tRPC client's x-business-id in step with the selection during
+  // render, so a business restored from sessionStorage after a reload is
+  // already attached to the first requests child routes fire (their effects
+  // run before any effect here would).
+  setBusinessId(currentBusinessId);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const selectTenantMutation = trpc.tenant.select.useMutation({

@@ -5,13 +5,14 @@
  * then saves the browser storage state (cookies) so all test projects
  * can reuse the session without logging in again.
  *
- * Login page flow: magic-link (default) → password-login → register
+ * Login page flow: Register tab (username, email, password) → Save
  * Business creation: done via API (more reliable than filling the complex form)
  */
 import { test as setup, expect } from "@playwright/test";
 import path from "path";
 import fs from "fs";
 import type { GlobalSeed } from "./helpers/seed";
+import { registerViaUI } from "./helpers/auth";
 
 const AUTH_FILE = path.join(__dirname, ".auth", "user.json");
 const SEED_FILE = path.join(__dirname, ".auth", "seed.json");
@@ -26,21 +27,7 @@ setup("authenticate", async ({ page, request }) => {
   const name = "E2E Test User";
 
   // ── Step 1: Register via UI ───────────────────────────────────
-  await page.goto("/login");
-
-  // magic-link → password-login → register
-  await page.getByText("Use password instead").click();
-  await page.getByText("Create one").click();
-  await expect(page.getByText("Create your account")).toBeVisible();
-
-  await page.getByPlaceholder("Your name").fill(name);
-  await page.getByPlaceholder("you@yourcompany.com").fill(email);
-  await page.getByPlaceholder("Min 8 characters").fill(password);
-  await page.getByPlaceholder("Repeat password").fill(password);
-  await page.getByRole("button", { name: "Create account" }).click();
-
-  // Wait for redirect away from login
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 });
+  await registerViaUI(page, { username: name, email, password });
 
   // ── Step 2: Create business via API ───────────────────────────
   // Extract cookies from the browser context to use in API calls
@@ -133,7 +120,8 @@ setup("authenticate", async ({ page, request }) => {
   fs.writeFileSync(SEED_FILE, JSON.stringify(seed, null, 2));
 
   // ── Step 4: Verify we're in the main app ──────────────────────
-  // Reload to pick up the new business
+  // Select the new business (kept in sessionStorage) and open the app
+  await page.evaluate((id) => sessionStorage.setItem("selectedBusinessId", id), businessId);
   await page.goto("/invoices");
   await expect(page.locator("h1").first()).toContainText("Invoices", { timeout: 10_000 });
 

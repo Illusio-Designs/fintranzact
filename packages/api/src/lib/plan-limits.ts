@@ -112,6 +112,24 @@ async function getTenantPlan(tenantId: string): Promise<string> {
 }
 
 /**
+ * A user's effective plan is the best plan across the orgs they own, or null
+ * when they own none. It starts from the plans actually owned (not an assumed
+ * default), so owning only legacy "free" orgs keeps the free limits.
+ * forever_free outranks free because it is the unlimited successor plan.
+ */
+export function effectiveOwnerPlan(ownedOrgs: Array<{ plan: string | null }>): string | null {
+  const planRank: Record<string, number> = { free: 0, forever_free: 1, pro: 2, business: 3, enterprise: 4 };
+  let bestPlan: string | null = null;
+  for (const org of ownedOrgs) {
+    const plan = org.plan ?? "free";
+    if (bestPlan === null || (planRank[plan] ?? 0) > (planRank[bestPlan] ?? 0)) {
+      bestPlan = plan;
+    }
+  }
+  return bestPlan;
+}
+
+/**
  * Enforce org creation limit.
  * Counts orgs the user owns and checks against the highest plan they have.
  * A user's effective plan is the best plan across all orgs they own.
@@ -126,14 +144,9 @@ export async function enforceOrgCreationLimit(userId: string): Promise<void> {
       eq(tenantMembers.role, "owner"),
     ));
 
-  // Effective plan = best plan across all owned orgs
-  const planRank: Record<string, number> = { forever_free: 0, free: 0, pro: 1, business: 2, enterprise: 3 };
-  let bestPlan = "forever_free";
-  for (const org of ownedOrgs) {
-    if ((planRank[org.plan ?? "free"] ?? 0) > (planRank[bestPlan] ?? 0)) {
-      bestPlan = org.plan ?? "free";
-    }
-  }
+  const bestPlan = effectiveOwnerPlan(ownedOrgs);
+  // Owning no org yet: nothing to limit.
+  if (bestPlan === null) return;
 
   const limits = getLimits(bestPlan);
   if (limits.maxOwnedOrgs === Infinity) return;

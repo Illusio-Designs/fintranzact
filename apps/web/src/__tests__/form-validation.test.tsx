@@ -418,7 +418,7 @@ describe("Business onboarding step validation", () => {
     expect(errs.name).toBe("Business name is required");
   });
 
-  it("requires GSTIN and PAN when GST registration is enabled", () => {
+  it("requires GSTIN on the GST step when GST registration is enabled", () => {
     const errs = validateBusinessStep(1, {
       name: "Test Business",
       legalName: "",
@@ -469,11 +469,63 @@ describe("Business onboarding step validation", () => {
     });
 
     expect(errs.gstin).toBe("GSTIN is required for GST-registered businesses");
-    expect(errs.pan).toBe("PAN is required for GST-registered businesses");
   });
 
-  it("requires phone, address, and location details on later steps", () => {
+  it("requires PAN on the tax details step", () => {
     const errs = validateBusinessStep(2, {
+      name: "Test Business",
+      legalName: "",
+      businessType: "proprietorship",
+
+      phone: "9876543210",
+      email: "",
+      address: "123 Market Road",
+      addressLine1: "123 Main Street",
+      addressLine2: "",
+      landmark: "",
+      countryOfOperations: "India",
+      financialYearStartDate: "2026-04-01",
+      city: "Mumbai",
+      stateName: "Maharashtra",
+      stateCode: "",
+      pincode: "400001",
+
+      currency: "INR",
+      invoicePrefix: "INV",
+      paymentPrefix: "PAY",
+      quotationPrefix: "QUO",
+      creditNotePrefix: "CN",
+      deliveryChallanPrefix: "DC",
+      proformaPrefix: "PI",
+      defaultRoundOff: false,
+      defaultTermsAndConditions: "",
+
+      gstRegType: "regular",
+      gstin: "",
+      pan: "",
+      tan: "",
+      cin: "",
+      llpin: "",
+      udyamNumber: "",
+      iecCode: "",
+      lutArn: "",
+      eInvoiceEnabled: false,
+      eWayBillEnabled: false,
+      assesseeOfOtherTerritory: false,
+      gstReturnPeriodicity: "monthly",
+      eWayBillThreshold: null,
+
+      deductorType: "",
+      responsiblePersonName: "",
+      responsiblePersonPan: "",
+      responsiblePersonDesignation: "",
+    });
+
+    expect(errs.pan).toBe("PAN is required");
+  });
+
+  it("requires phone, address, and location details on the first step", () => {
+    const errs = validateBusinessStep(0, {
       name: "Test Business",
       legalName: "",
       gstRegType: "unregistered",
@@ -523,108 +575,10 @@ describe("Business onboarding step validation", () => {
     });
 
     expect(errs.phone).toBe("Phone number is required");
-
-    const addressErrs = validateBusinessStep(3, {
-      name: "Test Business",
-      legalName: "",
-      gstRegType: "unregistered",
-      gstin: "",
-      stateCode: "",
-      pan: "",
-      phone: "9876543210",
-      email: "",
-      address: "",
-      addressLine1: "123 Main Street",
-      addressLine2: "",
-      landmark: "",
-      countryOfOperations: "India",
-      financialYearStartDate: "2026-04-01",
-      city: "",
-      stateName: "",
-      pincode: "",
-
-      businessType: "proprietorship",
-
-      currency: "INR",
-      invoicePrefix: "INV",
-      paymentPrefix: "PAY",
-      quotationPrefix: "QUO",
-      creditNotePrefix: "CN",
-      deliveryChallanPrefix: "DC",
-      proformaPrefix: "PI",
-      defaultRoundOff: false,
-      defaultTermsAndConditions: "",
-
-      tan: "",
-      cin: "",
-      llpin: "",
-      udyamNumber: "",
-      iecCode: "",
-      lutArn: "",
-      eInvoiceEnabled: false,
-      eWayBillEnabled: false,
-      assesseeOfOtherTerritory: false,
-      gstReturnPeriodicity: "monthly",
-      eWayBillThreshold: null,
-
-      deductorType: "",
-      responsiblePersonName: "",
-      responsiblePersonPan: "",
-      responsiblePersonDesignation: "",
-    });
-    expect(addressErrs.address).toBe("Address is required");
-
-    const locationErrs = validateBusinessStep(4, {
-      name: "Test Business",
-      legalName: "",
-      gstRegType: "unregistered",
-      gstin: "",
-      stateCode: "",
-      pan: "",
-      phone: "9876543210",
-      email: "",
-      address: "123 Market Road",
-      addressLine1: "123 Main Street",
-      addressLine2: "",
-      landmark: "",
-      countryOfOperations: "India",
-      financialYearStartDate: "2026-04-01",
-      city: "",
-      stateName: "",
-      pincode: "",
-
-      businessType: "proprietorship",
-
-      currency: "INR",
-      invoicePrefix: "INV",
-      paymentPrefix: "PAY",
-      quotationPrefix: "QUO",
-      creditNotePrefix: "CN",
-      deliveryChallanPrefix: "DC",
-      proformaPrefix: "PI",
-      defaultRoundOff: false,
-      defaultTermsAndConditions: "",
-
-      tan: "",
-      cin: "",
-      llpin: "",
-      udyamNumber: "",
-      iecCode: "",
-      lutArn: "",
-      eInvoiceEnabled: false,
-      eWayBillEnabled: false,
-      assesseeOfOtherTerritory: false,
-      gstReturnPeriodicity: "monthly",
-      eWayBillThreshold: null,
-
-      deductorType: "",
-      responsiblePersonName: "",
-      responsiblePersonPan: "",
-      responsiblePersonDesignation: "",
-    });
-    expect(locationErrs.pincode).toBe("Pincode is required");
-    expect(locationErrs.city).toBe("City is required");
-    expect(locationErrs.stateName).toBe("State is required");
+    expect(errs.address).toBe("Address is required");
+    expect(errs.city).toBe("City is required");
+    expect(errs.stateName).toBe("State is required");
+    expect(errs.pincode).toBe("Pincode is required");
   });
 });
 

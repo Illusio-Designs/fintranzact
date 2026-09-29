@@ -258,9 +258,10 @@ describe("Cross-tenant isolation — party listing is scoped to the caller's bus
 
 describe("Role differences across tenants — same user has different permissions depending on active tenant", () => {
   it("Suresh as admin on Acme can delete a party in Acme's business — succeeds", async () => {
-    // Upgrade Suresh to admin on tenant1 for this test group
+    // Upgrade Suresh to admin on tenant1 for this test group. Permissions come
+    // from the role inside the business, so promote him on business1 as well.
     const { getControlDb } = await import("../helpers/test-db.js");
-    const { tenantMembers } = await import("@fintranzact/db");
+    const { tenantMembers, businessMembers } = await import("@fintranzact/db");
     const { eq, and } = await import("drizzle-orm");
     const db = getControlDb();
 
@@ -268,6 +269,13 @@ describe("Role differences across tenants — same user has different permission
       .update(tenantMembers)
       .set({ role: "admin" })
       .where(and(eq(tenantMembers.tenantId, world.tenant1.id), eq(tenantMembers.userId, world.suresh.id)));
+    await world.tenantDb
+      .insert(businessMembers)
+      .values({ businessId: world.business1.id, userId: world.suresh.id, role: "admin" })
+      .onConflictDoUpdate({
+        target: [businessMembers.businessId, businessMembers.userId],
+        set: { role: "admin" },
+      });
 
     // Create a fresh party to delete
     const victim = await createParty(world.tenantDb, world.business1.id, {

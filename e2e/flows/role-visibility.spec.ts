@@ -4,7 +4,9 @@
  * For each role (seller, accountant), this test:
  *   1. Invites a user with that role (via owner's API)
  *   2. Registers the invited user via UI
- *   3. Visits the invite link to accept
+ *   3. Visits the invite link, which accepts it automatically
+ *   3b. Has the owner assign the user to the seeded business (business
+ *       access is per business; joining the organization alone shows none)
  *   4. Verifies which sidebar nav items are visible vs. hidden
  *   5. Verifies which routes are accessible vs. redirected
  *
@@ -12,6 +14,8 @@
  * because the free plan limits to 3 team members total.
  */
 import { test, expect, ApiHelper } from "../helpers/fixtures";
+import { openRegisterForm, fillRegisterForm } from "../helpers/auth";
+import { loadSeed } from "../helpers/seed";
 
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
 
@@ -35,20 +39,16 @@ const ROLE_NAV_VISIBLE: Record<string, string[]> = {
     "Payments",
     "Cash & Bank",
     "Expenses",
-    "Reports",
+    "Business Reports",
   ],
 };
 
-/** Nav items that each role should NOT see */
-const ROLE_NAV_HIDDEN: Record<string, string[]> = {
-  seller: ["Dashboard", "Cash & Bank", "Expenses", "Reports"],
-  accountant: [
-    "Quotations",
-    "Sales Returns",
-    "Credit Notes",
-    "Delivery Challans",
-    "Proforma Invoices",
-  ],
+/**
+ * Nav items that each role should NOT see. Accountants can read every
+ * section in the sidebar, so only sellers have hidden items.
+ */
+const ROLE_NAV_HIDDEN = {
+  seller: ["Dashboard", "Cash & Bank", "Expenses", "GST Returns", "E-Way Bills"],
 };
 
 /**
@@ -78,20 +78,12 @@ async function createRoleUser(
     role,
   });
 
-  // Step 2: Register the new user via UI in a fresh context
-  const context = await browser.newContext();
+  // Step 2: Register the new user via UI in a fresh, logged-out context
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const page = await context.newPage();
 
-  await page.goto("/login");
-  await page.getByText("Use password instead").click();
-  await page.getByText("Create one").click();
-  await expect(page.getByText("Create your account")).toBeVisible();
-
-  await page.getByPlaceholder("Your name").fill(name);
-  await page.getByPlaceholder("you@yourcompany.com").fill(email);
-  await page.getByPlaceholder("Min 8 characters").fill(password);
-  await page.getByPlaceholder("Repeat password").fill(password);
-  await page.getByRole("button", { name: "Create account" }).click();
+  await openRegisterForm(page);
+  await fillRegisterForm(page, { username: name, email, password });
 
   // Wait for redirect — user has a pending invite so may land differently
   await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 });
@@ -99,22 +91,20 @@ async function createRoleUser(
   // Step 3: Visit the invite acceptance page
   await page.goto(`/invite/${invite.token}`);
 
-  // The invite page should auto-accept and show "You've joined [org]!"
-  // or the user may already be redirected
-  const joinedText = page.getByText(/you've joined/i);
-  const isJoined = await joinedText
-    .waitFor({ state: "visible", timeout: 5_000 })
-    .then(() => true)
-    .catch(() => false);
+  // The invite page auto-accepts and moves on into the organization
+  await expect(page).not.toHaveURL(/\/invite\//, { timeout: 15_000 });
 
-  if (isJoined) {
-    // Click "Continue with [org]"
-    await page.getByText(/continue with/i).first().click();
-    await expect(page).toHaveURL(/\/(invoices|dashboard|items|parties)/, { timeout: 10_000 });
-  } else {
-    // Already redirected into the app — wait for a known page
-    await expect(page).toHaveURL(/\/(invoices|dashboard|items|parties|settings)/, { timeout: 10_000 });
-  }
+  // Step 3b: Owner assigns the new member to the seeded business
+  const { businessId } = loadSeed();
+  const members = await api.query<Array<{ userId: string; userEmail: string }>>("tenant.members");
+  const member = members.find((m) => m.userEmail === email);
+  expect(member, `invited ${role} not found in tenant members`).toBeDefined();
+  await api.mutate("business.addMember", { businessId, userId: member!.userId, role: "member" });
+
+  // Open the app with that business selected (kept in sessionStorage)
+  await page.evaluate((id: string) => sessionStorage.setItem("selectedBusinessId", id), businessId);
+  await page.goto("/invoices");
+  await expect(page.locator("h1").first()).toContainText("Invoices", { timeout: 15_000 });
 
   return { context, page };
 }
@@ -283,19 +273,6 @@ test.describe("Role: Accountant", () => {
     }
   });
 
-  test("accountant does NOT see restricted nav items", async () => {
-    await rolePage.goto("/invoices");
-    await rolePage.locator("h1").first().waitFor({ state: "visible", timeout: 10_000 });
-
-    const sidebar = rolePage.locator("nav, aside").first();
-
-    for (const item of ROLE_NAV_HIDDEN.accountant) {
-      await expect(
-        sidebar.getByText(item, { exact: true }),
-      ).not.toBeVisible();
-    }
-  });
-
   test("accountant can access expenses page", async () => {
     await rolePage.goto("/expenses");
     await expect(rolePage.locator("h1").first()).toContainText("Expenses", { timeout: 10_000 });
@@ -308,7 +285,10 @@ test.describe("Role: Accountant", () => {
 
   test("accountant can access reports page", async () => {
     await rolePage.goto("/reports");
-    await expect(rolePage.locator("h1").first()).toContainText("Reports", { timeout: 10_000 });
+    // The heading shows the open report (e.g. "Daybook"), so check the page
+    // loaded without redirecting away.
+    await expect(rolePage.locator("h1").first()).toBeVisible({ timeout: 10_000 });
+    await expect(rolePage).toHaveURL(/\/reports/);
   });
 
   test("accountant can access invoices page", async () => {

@@ -1,13 +1,18 @@
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import {
+  businesses,
+  invoiceItems,
   items,
   itemVariants,
+  premises,
   stockBalances,
   stockMovements,
   warehouses,
   warehouseLocations,
   inventorySettings,
 } from "@fintranzact/db";
+
+const DEFAULT_CODE = "MAIN";
 
 type InventoryDb = any;
 type QuantityExpression = string | SQL<string>;
@@ -64,15 +69,7 @@ export async function getDefaultWarehouse(
     operation: InventoryOperation;
   },
 ) {
-  const [settings] = await tx
-    .select()
-    .from(inventorySettings)
-    .where(eq(inventorySettings.businessId, input.businessId))
-    .limit(1);
-
-  if (!settings) {
-    throw new Error("Inventory settings not configured for this business.");
-  }
+  const settings = await ensureDefaultWarehouse(tx, input.businessId);
 
   const warehouseId =
     input.operation === "sale"
@@ -121,6 +118,184 @@ export async function getDefaultWarehouse(
   }
 
   return warehouse;
+}
+
+/**
+ * Make sure a business has inventory settings pointing at a warehouse.
+ *
+ * New businesses get this at registration (business.create). Businesses that
+ * existed before warehouses were introduced get it lazily the first time stock
+ * moves. The default is one "Main" premise + warehouse built from the business
+ * address, used for every operation. Safe to call concurrently: the unique
+ * indexes on (business, code) and inventory_settings.business_id absorb races.
+ */
+export async function ensureDefaultWarehouse(tx: InventoryDb, businessId: string) {
+  const [existing] = await tx
+    .select()
+    .from(inventorySettings)
+    .where(eq(inventorySettings.businessId, businessId))
+    .limit(1);
+  if (existing) return existing;
+
+  const [biz] = await tx
+    .select({
+      address: businesses.address,
+      city: businesses.city,
+      state: businesses.state,
+      pincode: businesses.pincode,
+    })
+    .from(businesses)
+    .where(eq(businesses.id, businessId))
+    .limit(1);
+  if (!biz) throw new Error("Business not found.");
+
+  const fullAddress =
+    [biz.address, biz.city, biz.state, biz.pincode].filter(Boolean).join(", ") || null;
+
+  // Reuse a warehouse the business already set up by hand, if any.
+  let [warehouse] = await tx
+    .select({ id: warehouses.id })
+    .from(warehouses)
+    .where(and(eq(warehouses.businessId, businessId), eq(warehouses.status, "active")))
+    .limit(1);
+
+  if (!warehouse) {
+    await tx
+      .insert(premises)
+      .values({
+        businessId,
+        name: "Main premises",
+        code: DEFAULT_CODE,
+        address: biz.address ?? null,
+        city: biz.city ?? null,
+        state: biz.state ?? null,
+      })
+      .onConflictDoNothing();
+    const [premise] = await tx
+      .select({ id: premises.id })
+      .from(premises)
+      .where(and(eq(premises.businessId, businessId), eq(premises.code, DEFAULT_CODE)))
+      .limit(1);
+
+    await tx
+      .insert(warehouses)
+      .values({
+        businessId,
+        premiseId: premise!.id,
+        name: "Main warehouse",
+        code: DEFAULT_CODE,
+        warehouseType: "main",
+        address: fullAddress,
+      })
+      .onConflictDoNothing();
+    [warehouse] = await tx
+      .select({ id: warehouses.id })
+      .from(warehouses)
+      .where(and(eq(warehouses.businessId, businessId), eq(warehouses.code, DEFAULT_CODE)))
+      .limit(1);
+  }
+
+  const warehouseId = warehouse!.id;
+  await tx
+    .insert(inventorySettings)
+    .values({
+      businessId,
+      salesWarehouseId: warehouseId,
+      purchaseWarehouseId: warehouseId,
+      salesReturnWarehouseId: warehouseId,
+      purchaseReturnWarehouseId: warehouseId,
+      productionWarehouseId: warehouseId,
+      stockAdjustmentWarehouseId: warehouseId,
+    })
+    .onConflictDoNothing();
+
+  const [settings] = await tx
+    .select()
+    .from(inventorySettings)
+    .where(eq(inventorySettings.businessId, businessId))
+    .limit(1);
+  return settings!;
+}
+
+/**
+ * Undo the stock effect of an invoice before it is edited or deleted.
+ *
+ * Invoices with recorded stock movements are reversed per warehouse using the
+ * net of all their movements, so repeated edits never double-reverse.
+ * Invoices from before warehouses existed have no movements; their stock was
+ * applied straight to item quantities, so reverse it the same way from their
+ * line items.
+ */
+export async function reverseInvoiceStock(
+  tx: InventoryDb,
+  input: {
+    businessId: string;
+    invoiceId: string;
+    invoiceType: string;
+    referenceType: "INVOICE_UPDATE_REVERSAL" | "INVOICE_DELETE_REVERSAL";
+    actorUserId: string;
+  },
+) {
+  const netMovements = await tx
+    .select({
+      warehouseId: stockMovements.warehouseId,
+      itemId: stockMovements.itemId,
+      variantId: stockMovements.variantId,
+      quantity: sql<string>`SUM(${stockMovements.quantity}::numeric)`,
+    })
+    .from(stockMovements)
+    .where(
+      and(
+        eq(stockMovements.businessId, input.businessId),
+        eq(stockMovements.referenceId, input.invoiceId),
+        sql`${stockMovements.referenceType} IN ('INVOICE', 'INVOICE_UPDATE', 'INVOICE_UPDATE_REVERSAL')`,
+      ),
+    )
+    .groupBy(stockMovements.warehouseId, stockMovements.itemId, stockMovements.variantId);
+
+  const isSale = input.invoiceType === "sale";
+
+  if (netMovements.length > 0) {
+    for (const movement of netMovements) {
+      if (Number(movement.quantity) === 0) continue;
+      await recordStockMovement(tx, {
+        businessId: input.businessId,
+        warehouseId: movement.warehouseId,
+        itemId: movement.itemId,
+        variantId: movement.variantId,
+        referenceType: input.referenceType,
+        referenceId: input.invoiceId,
+        movementType: isSale ? "SALE_REVERSAL" : "PURCHASE_REVERSAL",
+        quantity: sql<string>`-(${movement.quantity})::numeric`,
+        actorUserId: input.actorUserId,
+      });
+    }
+    return;
+  }
+
+  const lineItems = await tx
+    .select({
+      itemId: invoiceItems.itemId,
+      variantId: invoiceItems.variantId,
+      quantity: invoiceItems.quantity,
+      conversionFactor: invoiceItems.conversionFactor,
+    })
+    .from(invoiceItems)
+    .where(eq(invoiceItems.invoiceId, input.invoiceId));
+
+  for (const li of lineItems) {
+    if (!li.itemId && !li.variantId) continue;
+    const base = li.variantId
+      ? sql<string>`${li.quantity}::numeric`
+      : sql<string>`(${li.quantity}::numeric * ${li.conversionFactor ?? "1"}::numeric)`;
+    await updateLegacyStockQuantity(tx, {
+      businessId: input.businessId,
+      itemId: li.itemId as string,
+      variantId: li.variantId,
+      // A sale took stock out, so reversing puts it back (and vice versa).
+      quantity: isSale ? base : sql<string>`-${base}`,
+    });
+  }
 }
 
 export async function validateInventoryLocation(

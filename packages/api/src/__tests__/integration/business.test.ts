@@ -218,11 +218,19 @@ describe("business.list", () => {
     expect(found!.name).toBe("List Test Biz");
   });
 
-  it("seller can list businesses — business listing requires only tenantProcedure (not admin)", async () => {
+  it("seller sees only businesses they are assigned to — listing requires only tenantProcedure (not admin)", async () => {
     const caller = tenantLevelCaller(seller, tenant.id);
-    const list = await caller.business.list();
-    expect(Array.isArray(list)).toBe(true);
-    expect(list.length).toBeGreaterThanOrEqual(1);
+    const before = await caller.business.list();
+    expect(before.find((b) => b.id === createdBizId)).toBeUndefined();
+
+    await tenantLevelCaller(owner, tenant.id).business.addMember({
+      businessId: createdBizId,
+      userId: seller.id,
+      role: "member",
+    });
+
+    const after = await caller.business.list();
+    expect(after.find((b) => b.id === createdBizId)).toBeDefined();
   });
 });
 
@@ -256,10 +264,11 @@ describe("business.getById", () => {
     expect(biz!.name).toBe("GetById Test Biz");
   });
 
-  it("returns null for a non-existent business ID", async () => {
+  it("rejects a non-existent business ID the same way as one the caller cannot access", async () => {
     const caller = tenantLevelCaller(owner, tenant.id);
-    const biz = await caller.business.getById({ id: "00000000-0000-0000-0000-000000000000" });
-    expect(biz).toBeNull();
+    await expect(
+      caller.business.getById({ id: "00000000-0000-0000-0000-000000000000" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
 

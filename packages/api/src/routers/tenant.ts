@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
 import { invalidateSessionCache, getSessionIdFromRequest } from "../context.js";
 import { emailService } from "../lib/email.js";
-import { enforceTeamMemberLimit, enforceOrgCreationLimit, getLimits } from "../lib/plan-limits.js";
+import { effectiveOwnerPlan, enforceTeamMemberLimit, enforceOrgCreationLimit, getLimits } from "../lib/plan-limits.js";
 
 function hashInvitationToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -147,13 +147,8 @@ export const tenantRouter = router({
         eq(tenantMembers.role, "owner"),
       ));
 
-    const planRank: Record<string, number> = { forever_free: 0, free: 0, pro: 1, business: 2, enterprise: 3 };
-    let bestPlan = "forever_free";
-    for (const org of ownedOrgs) {
-      if ((planRank[org.plan ?? "free"] ?? 0) > (planRank[bestPlan] ?? 0)) {
-        bestPlan = org.plan ?? "free";
-      }
-    }
+    const bestPlan = effectiveOwnerPlan(ownedOrgs);
+    if (bestPlan === null) return true;
 
     const limits = getLimits(bestPlan);
     return limits.maxOwnedOrgs === Infinity || ownedOrgs.length < limits.maxOwnedOrgs;
