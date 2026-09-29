@@ -1,6 +1,6 @@
 # @hisaabo/api
 
-The Hisaabo backend. A [Hono](https://hono.dev/) HTTP server with a [tRPC v11](https://trpc.io/) router that provides fully type-safe access to all business data. 14 routers, 130+ procedures, rate limiting, audit logging, PDF generation, and email.
+The Fintranzact backend. A [Hono](https://hono.dev/) HTTP server with a [tRPC v11](https://trpc.io/) router that provides fully type-safe access to all business data. 14 routers, 130+ procedures, rate limiting, audit logging, PDF generation, and email.
 
 [![Hono](https://img.shields.io/badge/Hono-4-E36002?logo=hono&logoColor=white)](https://hono.dev/)
 [![tRPC](https://img.shields.io/badge/tRPC-v11-2596BE?logo=trpc&logoColor=white)](https://trpc.io/)

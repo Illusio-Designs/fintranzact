@@ -2,7 +2,7 @@
  * Integration tests for the payment router.
  *
  * WHY THIS FILE EXISTS:
- * Payment creation is the most financially-sensitive write path in Hisaabo. A
+ * Payment creation is the most financially-sensitive write path in Fintranzact. A
  * single bug can:
  *   - Allow a customer to pay less than they owe (amountPaid not updated)
  *   - Allow overpayment (no guard against paying more than the invoice balance)

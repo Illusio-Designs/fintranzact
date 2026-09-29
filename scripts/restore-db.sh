@@ -1,5 +1,5 @@
 #!/bin/bash
-# ── Hisaabo Single Database Restore ──────────────────────────────
+# ── Fintranzact Single Database Restore ──────────────────────────────
 # Restore a single database from backup without affecting other databases.
 # Designed for per-tenant restore in multi-tenant deployments.
 #

@@ -553,7 +553,7 @@ export async function main() {
   const isMultiTenant = process.env.MULTI_TENANT === "true";
   const mode = isMultiTenant ? "multi-tenant" : "self-hosted";
 
-  log("info", `Hisaabo migration runner starting`, { mode });
+  log("info", `Fintranzact migration runner starting`, { mode });
 
   const success = isMultiTenant ? await migrateMultiTenant() : await migrateSelfHosted();
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# ── Hisaabo PostgreSQL Backup Script ──────────────────────────────
+# ── Fintranzact PostgreSQL Backup Script ──────────────────────────────
 # Multi-database backup with restore verification, encryption, and
 # offsite R2/S3 upload. Run via cron or manually.
 #
@@ -19,7 +19,7 @@ VERIFY_FAILED=0
 BACKUP_FILES=()
 
 echo "=========================================="
-echo "[$TIMESTAMP] Starting Hisaabo backup..."
+echo "[$TIMESTAMP] Starting Fintranzact backup..."
 echo "=========================================="
 
 # Ensure backup dir exists

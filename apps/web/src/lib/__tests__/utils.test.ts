@@ -2,7 +2,7 @@
  * Tests for pure utility functions in apps/web/src/lib/utils.ts
  *
  * WHY THIS FILE EXISTS:
- * utils.ts exports small, composable functions used throughout the Hisaabo
+ * utils.ts exports small, composable functions used throughout the Fintranzact
  * web app — from building Tailwind class strings to generating CSV exports
  * for business owners. Regressions in these helpers can corrupt user-facing
  * data silently. This file pins the exact contract of every exported function
@@ -78,7 +78,7 @@ describe("cn() — Tailwind className merger", () => {
   });
 
   it("handles a mix of falsy and truthy values in arbitrary order", () => {
-    // Realistic Hisaabo usage: status badge conditional classes
+    // Realistic Fintranzact usage: status badge conditional classes
     const isPaid = true;
     const isOverdue = false;
     expect(
@@ -121,7 +121,7 @@ describe("formatDateInput() — converts dates to YYYY-MM-DD for HTML date input
   });
 
   it("preserves the year, month, and day for financial-year boundary dates", () => {
-    // Financial year starts April 1 — a critical date in Hisaabo
+    // Financial year starts April 1 — a critical date in Fintranzact
     const result = formatDateInput("2025-04-01T00:00:00.000Z");
     expect(result).toBe("2025-04-01");
   });

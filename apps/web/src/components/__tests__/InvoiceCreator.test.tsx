@@ -1,7 +1,7 @@
 /**
  * InvoiceCreator — invoice creation form
  *
- * The InvoiceCreator is the most financially critical component in Hisaabo.
+ * The InvoiceCreator is the most financially critical component in Fintranzact.
  * It computes line-item totals that feed directly into the invoice stored in
  * the database and the GST reports filed with the government.  A calculation
  * error here could result in incorrect tax filings or billing disputes.
@@ -142,7 +142,7 @@ function getLineRow(rowIndex = 0) {
 // ─── Pure arithmetic unit tests ───────────────────────────────────────────────
 // These tests exercise the calculation logic that lives inside InvoiceCreator
 // by driving the form UI and reading the rendered totals.  They serve as a
-// specification of the financial arithmetic Hisaabo uses.
+// specification of the financial arithmetic Fintranzact uses.
 
 describe("InvoiceCreator — invoice creation form with real-time GST calculations", () => {
 

@@ -1,8 +1,8 @@
 /**
- * invoice-to-irp.ts — Transform Hisaabo invoice to IRP JSON Schema v1.1.
+ * invoice-to-irp.ts — Transform Fintranzact invoice to IRP JSON Schema v1.1.
  *
  * WHY THIS FILE EXISTS:
- * The NIC IRP has a specific JSON schema that differs from Hisaabo's internal
+ * The NIC IRP has a specific JSON schema that differs from Fintranzact's internal
  * data model. This module handles all field mapping, UQC code translation,
  * GST split (CGST/SGST for intra-state, IGST for inter-state), and
  * document type mapping (invoice → INV, credit_note → CRN, debit_note → DBN).
@@ -70,7 +70,7 @@ export interface IRPLineItem {
   itemHsn?: string | null;
 }
 
-// ── UQC mapping (Hisaabo unit → IRP UQC code) ─────────────────────────────────
+// ── UQC mapping (Fintranzact unit → IRP UQC code) ─────────────────────────────────
 // Reference: https://einvoice1.gst.gov.in/Others/MasterCodes
 
 const UQC_MAP: Record<string, string> = {
@@ -146,7 +146,7 @@ function round2(v: number): number {
 // ── Main mapping function ──────────────────────────────────────────────────────
 
 /**
- * Map a Hisaabo invoice to the NIC IRP JSON Schema v1.1.
+ * Map a Fintranzact invoice to the NIC IRP JSON Schema v1.1.
  *
  * @param invoice   - Invoice row from DB
  * @param lineItems - Invoice line items

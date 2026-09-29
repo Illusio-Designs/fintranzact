@@ -194,7 +194,7 @@ jobs:
           # apps/desktop/src-tauri/tauri.conf.prod.json.
           args: "--config src-tauri/tauri.conf.prod.json"
           tagName: ${{ github.ref_name }}
-          releaseName: "Hisaabo ${{ github.ref_name }}"
+          releaseName: "Fintranzact ${{ github.ref_name }}"
           releaseBody: "Desktop builds for ${{ github.ref_name }}. See the [release notes](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}) for details."
           releaseDraft: true
           prerelease: false
@@ -430,6 +430,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "Hisaabo ${{ github.ref_name }}"
+          name: "Fintranzact ${{ github.ref_name }}"
           body_path: ${{ steps.notes.outputs.body_path }}
           draft: false

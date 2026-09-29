@@ -15,8 +15,8 @@ test.describe("Login Negative Paths", () => {
     await page.goto("/login");
     await page.getByPlaceholder("you@yourcompany.com").waitFor({ state: "visible", timeout: 10_000 });
 
-    // Should show Hisaabo branding
-    await expect(page.getByText("Hisaabo").first()).toBeVisible();
+    // Should show Fintranzact branding
+    await expect(page.getByText("Fintranzact").first()).toBeVisible();
 
     // Should show email input
     await expect(page.getByPlaceholder("you@yourcompany.com")).toBeVisible();

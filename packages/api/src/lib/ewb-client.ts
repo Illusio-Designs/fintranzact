@@ -1,5 +1,5 @@
 /**
- * ewb-client.ts — NIC E-Way Bill API client for Hisaabo.
+ * ewb-client.ts — NIC E-Way Bill API client for Fintranzact.
  *
  * WHY THIS FILE EXISTS:
  * The NIC E-Way Bill portal (ewb.nic.in) exposes a REST API for generating,

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "[entrypoint] Hisaabo API — starting up"
+echo "[entrypoint] Fintranzact API — starting up"
 echo "[entrypoint] Node $(node --version) | ENV=${NODE_ENV}"
 
 # ── Validate required env vars ────────────────────────────────
@@ -19,5 +19,5 @@ if ! node /app/packages/db/dist/migrate.mjs; then
 fi
 
 # ── Start the API server ───────────────────────────────────────
-echo "[entrypoint] Starting Hisaabo API server on port ${PORT:-3000}..."
+echo "[entrypoint] Starting Fintranzact API server on port ${PORT:-3000}..."
 exec node packages/api/dist/server.js

@@ -76,7 +76,7 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 ARG VERSION=dev
-LABEL org.opencontainers.image.title="Hisaabo API"
+LABEL org.opencontainers.image.title="Fintranzact API"
 LABEL org.opencontainers.image.description="Invoicing and business management API"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.source="https://github.com/hisaabo/hisaabo"

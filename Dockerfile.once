@@ -1,4 +1,4 @@
-# ── Hisaabo — ONCE-compatible all-in-one image ─────────────────
+# ── Fintranzact — ONCE-compatible all-in-one image ─────────────────
 # Single container: PostgreSQL 16 + Node API on port 3000
 # Managed by s6-overlay for process supervision
 #
@@ -219,7 +219,7 @@ if ! DATABASE_URL="postgresql://postgres@/hisaabo?host=$SOCKETDIR" \
 fi
 
 # Start API — connects to PG via Unix socket
-echo "[api] Starting Hisaabo API on port ${PORT:-80}..."
+echo "[api] Starting Fintranzact API on port ${PORT:-80}..."
 exec env DATABASE_URL="postgresql://postgres@/hisaabo?host=$SOCKETDIR" \
   node packages/api/dist/server.js
 APIRUN
@@ -354,7 +354,7 @@ RUN chmod +x /hooks/post-restore
 # ── Metadata ─────────────────────────────────────────────────
 
 ARG VERSION=dev
-LABEL org.opencontainers.image.title="Hisaabo"
+LABEL org.opencontainers.image.title="Fintranzact"
 LABEL org.opencontainers.image.description="Invoicing and business management — all-in-one (PostgreSQL + API)"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.source="https://github.com/hisaabo/hisaabo"

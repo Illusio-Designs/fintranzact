@@ -2,7 +2,7 @@
  * Tests for packages/shared/src/money.ts
  *
  * WHY THIS FILE EXISTS:
- * All monetary calculations in Hisaabo use fixed-point arithmetic (integers in paise)
+ * All monetary calculations in Fintranzact use fixed-point arithmetic (integers in paise)
  * instead of floating-point to avoid the classic JS precision bug where
  * 0.1 + 0.2 = 0.30000000000000004 instead of 0.30.
  * These tests verify that the money module is correct for every operation used
@@ -37,7 +37,7 @@ describe("money.add — adds two money string/number values using paise arithmet
   });
 
   it("adds negative amounts (representing credit notes or refunds)", () => {
-    // In Hisaabo a credit note may be represented as a negative value.
+    // In Fintranzact a credit note may be represented as a negative value.
     // Adding a negative is effectively subtracting — must work correctly.
     expect(money.add("500.00", "-100.00")).toBe("400.00");
   });
