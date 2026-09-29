@@ -1,5 +1,6 @@
 import { parties } from "@fintranzact/db";
 import { eq } from "drizzle-orm";
+import { panFromGstin } from "@fintranzact/shared";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalParty } from "../types.js";
 
@@ -33,7 +34,7 @@ export async function runPartiesImport(
       phone: p.phone || null,
       email: p.email || null,
       gstin: p.gstin || null,
-      pan: p.pan || null,
+      pan: p.pan || panFromGstin(p.gstin) || null,
       openingBalance: p.openingBalance || "0",
       billingAddress: p.billingAddress || null,
       shippingAddress: p.shippingAddress || null,

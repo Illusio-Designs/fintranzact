@@ -22,6 +22,7 @@ import {
   uploadBusinessLogoSchema,
   // Party
   createPartySchema,
+  panFromGstin,
   // Item
   createItemSchema,
   // Invoice
@@ -245,6 +246,21 @@ describe("createPartySchema — validates creation of a customer or supplier (pa
   it("accepts an empty string GSTIN (unregistered parties)", () => {
     const result = createPartySchema.safeParse({ ...validCustomer, gstin: "" });
     expect(result.success).toBe(true);
+  });
+
+  it("accepts a valid PAN for a party", () => {
+    const result = createPartySchema.safeParse({ ...validCustomer, pan: "AAPFU0939F" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an empty string PAN", () => {
+    const result = createPartySchema.safeParse({ ...validCustomer, pan: "" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a malformed party PAN", () => {
+    const result = createPartySchema.safeParse({ ...validCustomer, pan: "AAPFU0939" });
+    expect(result.success).toBe(false);
   });
 
   it("rejects a creditPeriodDays value above 365", () => {
@@ -932,5 +948,26 @@ describe("createInvoiceSchema — source origin-channel enum attributes sales to
   it("rejects uppercase or otherwise miscased source values — enum matching is strict to avoid 'POS' / 'Pos' / 'pos' coexisting", () => {
     const result = createInvoiceSchema.safeParse({ ...baseValid, source: "POS" });
     expect(result.success).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// panFromGstin
+// ─────────────────────────────────────────────────────────────────────────────
+describe("panFromGstin — the PAN is characters 3-12 of a GSTIN", () => {
+  it("extracts the PAN from a valid GSTIN", () => {
+    expect(panFromGstin("27AAPFU0939F1ZV")).toBe("AAPFU0939F");
+  });
+
+  it("normalises case and whitespace", () => {
+    expect(panFromGstin(" 27aapfu0939f1zv ")).toBe("AAPFU0939F");
+  });
+
+  it("returns null for an invalid, partial or missing GSTIN", () => {
+    expect(panFromGstin("27AAPFU0939F")).toBeNull();
+    expect(panFromGstin("XXAAPFU0939F1ZV")).toBeNull();
+    expect(panFromGstin("")).toBeNull();
+    expect(panFromGstin(undefined)).toBeNull();
+    expect(panFromGstin(null)).toBeNull();
   });
 });

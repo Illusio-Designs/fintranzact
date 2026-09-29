@@ -17,6 +17,7 @@ import { trpc } from "../../../src/lib/trpc";
 import { makeStyles } from "../../../src/lib/makeStyles";
 import { useColors } from "../../../src/contexts/ThemeContext";
 import { haptic } from "../../../src/lib/haptics";
+import { GSTIN_REGEX, PAN_REGEX, panFromGstin } from "@fintranzact/shared";
 
 type PartyType = "customer" | "supplier";
 
@@ -31,6 +32,7 @@ export default function CreatePartyScreen() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [gstin, setGstin] = useState("");
+  const [pan, setPan] = useState("");
   const [billingAddress, setBillingAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -39,6 +41,7 @@ export default function CreatePartyScreen() {
   const phoneRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
   const gstinRef = useRef<TextInput>(null);
+  const panRef = useRef<TextInput>(null);
   const addressRef = useRef<TextInput>(null);
   const cityRef = useRef<TextInput>(null);
   const stateRef = useRef<TextInput>(null);
@@ -62,13 +65,11 @@ export default function CreatePartyScreen() {
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       newErrors.email = "Enter a valid email";
     }
-    if (
-      gstin &&
-      !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(
-        gstin
-      )
-    ) {
+    if (gstin && !GSTIN_REGEX.test(gstin)) {
       newErrors.gstin = "Enter a valid GSTIN";
+    }
+    if (pan && !PAN_REGEX.test(pan)) {
+      newErrors.pan = "Enter a valid PAN";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -83,6 +84,7 @@ export default function CreatePartyScreen() {
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
       gstin: gstin.trim() || undefined,
+      pan: pan.trim() || undefined,
       billingAddress: billingAddress.trim() || undefined,
       city: city.trim() || undefined,
       state: state.trim() || undefined,
@@ -272,17 +274,50 @@ export default function CreatePartyScreen() {
                   placeholderTextColor={colors.textMuted}
                   value={gstin}
                   onChangeText={(t) => {
-                    setGstin(t.toUpperCase());
+                    const next = t.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                    // Characters 3-12 of a GSTIN are the PAN. Fill it in
+                    // unless the user already typed a different PAN.
+                    const detected = panFromGstin(next);
+                    if (detected && (!pan || pan === panFromGstin(gstin))) {
+                      setPan(detected);
+                    }
+                    setGstin(next);
                     if (errors.gstin) setErrors((e) => ({ ...e, gstin: "" }));
                   }}
                   autoCapitalize="characters"
                   maxLength={15}
                   returnKeyType="next"
-                  onSubmitEditing={() => addressRef.current?.focus()}
+                  onSubmitEditing={() => panRef.current?.focus()}
                   blurOnSubmit={false}
                 />
                 {errors.gstin && (
                   <Text style={styles.errorText}>{errors.gstin}</Text>
+                )}
+              </View>
+
+              <View style={styles.fieldDivider} />
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>PAN</Text>
+                <TextInput
+                  ref={panRef}
+                  style={[styles.input, errors.pan && styles.inputError]}
+                  placeholder="AAAAA0000A"
+                  placeholderTextColor={colors.textMuted}
+                  value={pan}
+                  onChangeText={(t) => {
+                    setPan(t.toUpperCase().replace(/[^A-Z0-9]/g, ""));
+                    if (errors.pan) setErrors((e) => ({ ...e, pan: "" }));
+                  }}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={10}
+                  returnKeyType="next"
+                  onSubmitEditing={() => addressRef.current?.focus()}
+                  blurOnSubmit={false}
+                />
+                {errors.pan && (
+                  <Text style={styles.errorText}>{errors.pan}</Text>
                 )}
               </View>
             </View>
