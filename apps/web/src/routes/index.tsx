@@ -18,7 +18,7 @@ import { PillTabs } from "@/components/ui/Tabs";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { useDateRange, getGranularity } from "@/hooks/useDateRange";
 import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
-import { Add01Icon, Alert02Icon, Analytics01Icon, ArrowDown01Icon, ArrowUp01Icon, Award01Icon, Cancel01Icon, ChartBarLineIcon, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineData01Icon, Coins01Icon, CreditCardIcon, FireIcon, Invoice01Icon, Invoice03Icon, MoneyReceive01Icon, MoneySend01Icon, PackageIcon, PieChartIcon, SproutIcon, Rocket01Icon, ShoppingCart01Icon, StarIcon, Target02Icon, UserGroupIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, Analytics01Icon, ArrowDown01Icon, ArrowUp01Icon, Award01Icon, Cancel01Icon, ChartBarLineIcon, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineData01Icon, Coins01Icon, CreditCardIcon, FireIcon, Invoice01Icon, Invoice03Icon, MoneyReceive01Icon, MoneySend01Icon, PackageIcon, PieChartIcon, SproutIcon, Rocket01Icon, ShoppingCart01Icon, StarIcon, Target02Icon, UserGroupIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 
 // ─── Milestone banner ─────────────────────────────────────────────────────────
 
@@ -1398,20 +1398,13 @@ function DashboardPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <DateRangeBar
+            variant="segmented"
             preset={preset}
             onPresetChange={handlePresetChange}
             customFrom={customFrom}
             customTo={customTo}
             onCustomChange={setCustomRange}
           />
-          <Link
-            to="/invoices"
-            search={{ create: "1" }}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-bold text-white shadow-[0_8px_18px_-8px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
-          >
-            <Icon icon={Add01Icon} size={16} strokeWidth={2.2} />
-            New invoice
-          </Link>
         </div>
       </div>
 
