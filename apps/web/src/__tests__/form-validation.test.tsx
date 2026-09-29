@@ -408,6 +408,11 @@ describe("Business onboarding step validation", () => {
       assesseeOfOtherTerritory: false,
       gstReturnPeriodicity: "monthly",
       eWayBillThreshold: null,
+
+      deductorType: "",
+      responsiblePersonName: "",
+      responsiblePersonPan: "",
+      responsiblePersonDesignation: "",
     });
 
     expect(errs.name).toBe("Business name is required");
@@ -456,6 +461,11 @@ describe("Business onboarding step validation", () => {
       assesseeOfOtherTerritory: false,
       gstReturnPeriodicity: "monthly",
       eWayBillThreshold: null,
+
+      deductorType: "",
+      responsiblePersonName: "",
+      responsiblePersonPan: "",
+      responsiblePersonDesignation: "",
     });
 
     expect(errs.gstin).toBe("GSTIN is required for GST-registered businesses");
@@ -505,6 +515,11 @@ describe("Business onboarding step validation", () => {
       assesseeOfOtherTerritory: false,
       gstReturnPeriodicity: "monthly",
       eWayBillThreshold: null,
+
+      deductorType: "",
+      responsiblePersonName: "",
+      responsiblePersonPan: "",
+      responsiblePersonDesignation: "",
     });
 
     expect(errs.phone).toBe("Phone number is required");
@@ -551,6 +566,11 @@ describe("Business onboarding step validation", () => {
       assesseeOfOtherTerritory: false,
       gstReturnPeriodicity: "monthly",
       eWayBillThreshold: null,
+
+      deductorType: "",
+      responsiblePersonName: "",
+      responsiblePersonPan: "",
+      responsiblePersonDesignation: "",
     });
     expect(addressErrs.address).toBe("Address is required");
 
@@ -596,6 +616,11 @@ describe("Business onboarding step validation", () => {
       assesseeOfOtherTerritory: false,
       gstReturnPeriodicity: "monthly",
       eWayBillThreshold: null,
+
+      deductorType: "",
+      responsiblePersonName: "",
+      responsiblePersonPan: "",
+      responsiblePersonDesignation: "",
     });
     expect(locationErrs.pincode).toBe("Pincode is required");
     expect(locationErrs.city).toBe("City is required");

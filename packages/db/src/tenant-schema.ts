@@ -57,6 +57,10 @@ export const businesses = pgTable("businesses", {
     .default("proprietorship")
     .notNull(),
   tan: text("tan"),
+  deductorType: text("deductor_type"),
+  responsiblePersonName: text("responsible_person_name"),
+  responsiblePersonPan: text("responsible_person_pan"),
+  responsiblePersonDesignation: text("responsible_person_designation"),
   cin: text("cin"),
   llpin: text("llpin"),
   udyamNumber: text("udyam_number"),

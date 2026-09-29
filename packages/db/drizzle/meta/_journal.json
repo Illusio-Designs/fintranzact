@@ -169,6 +169,13 @@
       "when": 1790607427472,
       "tag": "0023_loose_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790668291772,
+      "tag": "0024_omniscient_ultron",
+      "breakpoints": true
     }
   ]
 }

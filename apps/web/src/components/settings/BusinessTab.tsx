@@ -71,6 +71,11 @@ export interface BusinessStepValues {
   assesseeOfOtherTerritory: boolean;
   gstReturnPeriodicity: string;
   eWayBillThreshold: number | null;
+
+  deductorType: string;
+  responsiblePersonName: string;
+  responsiblePersonPan: string;
+  responsiblePersonDesignation: string;
 }
 
 export function validateBusinessStep(
@@ -119,20 +124,29 @@ export function validateBusinessStep(
       break;
 
     case 1:
+      if (values.gstRegType !== "unregistered") {
+        if (!values.gstin.trim()) {
+          errors.gstin = "GSTIN is required for GST-registered businesses";
+        } else if (!gstinPattern.test(values.gstin)) {
+          errors.gstin = "Invalid GSTIN format";
+        }
+      }
+      break;
+
+    case 2:
       if (!values.pan.trim()) {
         errors.pan = "PAN is required";
       } else if (!panPattern.test(values.pan)) {
         errors.pan = "Invalid PAN format";
       }
 
-      if (values.gstRegType !== "unregistered") {
-        if (!values.gstin.trim()) {
-          errors.gstin =
-            "GSTIN is required for GST-registered businesses";
-        } else if (!gstinPattern.test(values.gstin)) {
-          errors.gstin = "Invalid GSTIN format";
-        }
+      if (
+        values.responsiblePersonPan.trim() &&
+        !panPattern.test(values.responsiblePersonPan)
+      ) {
+        errors.responsiblePersonPan = "Invalid PAN format";
       }
+      break;
 
       break;
 
@@ -335,6 +349,18 @@ export function BusinessForm({
       : "",
   );
 
+  const [deductorType, setDeductorType] = useState(
+    existing?.deductorType || "",
+  );
+  const [responsiblePersonName, setResponsiblePersonName] = useState(
+    existing?.responsiblePersonName || "",
+  );
+  const [responsiblePersonPan, setResponsiblePersonPan] = useState(
+    existing?.responsiblePersonPan || "",
+  );
+  const [responsiblePersonDesignation, setResponsiblePersonDesignation] =
+    useState(existing?.responsiblePersonDesignation || "");
+
   const [currentStep, setCurrentStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -347,7 +373,8 @@ export function BusinessForm({
 
   const wizardSteps = [
     "Business details",
-    "Statutory details",
+    "GST details",
+    "Corporate Tax details",
     "Review & create",
   ];
 
@@ -623,11 +650,6 @@ export function BusinessForm({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <PanInput
-                value={pan}
-                onChange={setPan}
-                error={errors.pan}
-              />
 
               <Listbox
                 label="GST Registration"
@@ -659,65 +681,6 @@ export function BusinessForm({
                 />
               )}
 
-              <InputField
-                label="TAN"
-                value={tan}
-                onChange={(e) =>
-                  setTan(e.target.value.toUpperCase())
-                }
-                maxLength={10}
-                placeholder="Optional"
-              />
-
-              {isCompanyType && (
-                <InputField
-                  label="CIN"
-                  value={cin}
-                  onChange={(e) =>
-                    setCin(e.target.value.toUpperCase())
-                  }
-                  maxLength={21}
-                  placeholder="Company CIN"
-                />
-              )}
-
-              {isLlp && (
-                <InputField
-                  label="LLPIN"
-                  value={llpin}
-                  onChange={(e) =>
-                    setLlpin(e.target.value.toUpperCase())
-                  }
-                  maxLength={7}
-                  placeholder="LLP Identification Number"
-                />
-              )}
-
-              <InputField
-                label="Udyam Registration Number"
-                value={udyamNumber}
-                onChange={(e) => setUdyamNumber(e.target.value)}
-                maxLength={30}
-                placeholder="Optional"
-              />
-
-              <InputField
-                label="IEC Code"
-                value={iecCode}
-                onChange={(e) =>
-                  setIecCode(e.target.value.toUpperCase())
-                }
-                maxLength={10}
-                placeholder="Optional"
-              />
-
-              <InputField
-                label="LUT ARN"
-                value={lutArn}
-                onChange={(e) => setLutArn(e.target.value)}
-                maxLength={100}
-                placeholder="Optional"
-              />
             </div>
 
 
@@ -827,8 +790,141 @@ export function BusinessForm({
           </div>
         );
 
+
       // ==========================================================
-      // STEP 3 — REVIEW
+      // STEP 3 — CORPORATE TAX DETAILS
+      // ==========================================================
+      case 2:
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-text-primary">
+                Corporate Tax Details
+              </h3>
+              <p className="text-xs text-text-tertiary mt-1">
+                Add PAN, tax deduction and corporate registration details.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-text-primary">
+                Tax identification
+              </h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <PanInput
+                  value={pan}
+                  onChange={setPan}
+                  error={errors.pan}
+                />
+
+                <InputField
+                  label="TAN"
+                  value={tan}
+                  onChange={(e) =>
+                    setTan(e.target.value.toUpperCase())
+                  }
+                  maxLength={10}
+                />
+
+                <InputField
+                  label="Deductor Type"
+                  value={deductorType}
+                  onChange={(e) => setDeductorType(e.target.value)}
+                  placeholder="Enter deductor type"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-text-primary">
+                Corporate registrations
+              </h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                {isCompanyType && (
+                  <InputField
+                    label="CIN"
+                    value={cin}
+                    onChange={(e) =>
+                      setCin(e.target.value.toUpperCase())
+                    }
+                    maxLength={21}
+                  />
+                )}
+
+                {isLlp && (
+                  <InputField
+                    label="LLPIN"
+                    value={llpin}
+                    onChange={(e) =>
+                      setLlpin(e.target.value.toUpperCase())
+                    }
+                    maxLength={8}
+                  />
+                )}
+
+                <InputField
+                  label="Udyam Registration Number"
+                  value={udyamNumber}
+                  onChange={(e) =>
+                    setUdyamNumber(e.target.value.toUpperCase())
+                  }
+                />
+
+                <InputField
+                  label="IEC Code"
+                  value={iecCode}
+                  onChange={(e) =>
+                    setIecCode(e.target.value.toUpperCase())
+                  }
+                  maxLength={10}
+                />
+
+                <InputField
+                  label="LUT ARN"
+                  value={lutArn}
+                  onChange={(e) =>
+                    setLutArn(e.target.value.toUpperCase())
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-text-primary">
+                Responsible person
+              </h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <InputField
+                  label="Responsible Person Name"
+                  value={responsiblePersonName}
+                  onChange={(e) =>
+                    setResponsiblePersonName(e.target.value)
+                  }
+                />
+
+                <PanInput
+                  value={responsiblePersonPan}
+                  onChange={setResponsiblePersonPan}
+                  error={errors.responsiblePersonPan}
+                />
+
+                <InputField
+                  label="Designation"
+                  value={responsiblePersonDesignation}
+                  onChange={(e) =>
+                    setResponsiblePersonDesignation(e.target.value)
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      // ==========================================================
+      // STEP 4 — REVIEW
       // ==========================================================
       default:
         return (
@@ -1078,6 +1174,10 @@ export function BusinessForm({
         eWayBillThreshold.trim() === ""
           ? null
           : Number(eWayBillThreshold),
+      deductorType,
+      responsiblePersonName,
+      responsiblePersonPan,
+      responsiblePersonDesignation,
     });
 
     if (Object.keys(stepErrors).length > 0) {
@@ -1159,6 +1259,12 @@ export function BusinessForm({
         eWayBillThreshold.trim() === ""
           ? undefined
           : Number(eWayBillThreshold),
+
+      deductorType: deductorType || undefined,
+      responsiblePersonName: responsiblePersonName || undefined,
+      responsiblePersonPan: responsiblePersonPan || undefined,
+      responsiblePersonDesignation:
+        responsiblePersonDesignation || undefined,
     };
 
     if (existing) {

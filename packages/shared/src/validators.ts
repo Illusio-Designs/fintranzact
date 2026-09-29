@@ -117,6 +117,29 @@ export const createBusinessSchema = z.object({
     .string()
     .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/),
   tan: z.string().max(10).optional().or(z.literal("")),
+  deductorType: z
+    .string()
+    .max(50)
+    .optional()
+    .or(z.literal("")),
+
+  responsiblePersonName: z
+    .string()
+    .max(200)
+    .optional()
+    .or(z.literal("")),
+
+  responsiblePersonPan: z
+    .string()
+    .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/)
+    .optional()
+    .or(z.literal("")),
+
+  responsiblePersonDesignation: z
+    .string()
+    .max(100)
+    .optional()
+    .or(z.literal("")),
   cin: z.string().max(21).optional().or(z.literal("")),
   llpin: z.string().max(7).optional().or(z.literal("")),
   udyamNumber: z.string().max(30).optional().or(z.literal("")),
