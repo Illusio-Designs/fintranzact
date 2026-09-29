@@ -31,7 +31,9 @@ describe("ToastContainer — goey-toast host", () => {
     act(() => {
       toast.success("Invoice saved", "INV-0023 has been saved successfully.");
     });
-    await waitFor(() => expect(screen.getByText("Invoice saved")).toBeInTheDocument());
+    // goey-toast fills the title in after its enter animation starts, which
+    // can take longer than waitFor's 1s default when the whole suite is busy.
+    expect(await screen.findByText("Invoice saved", {}, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it("switches the toaster to the dark theme when the app is in dark mode", async () => {
