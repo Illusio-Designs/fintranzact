@@ -200,8 +200,7 @@ export function CtaBand({
             <p className="mt-2 text-base text-[#dbe4f5]">{body}</p>
           </div>
           <Link
-            to="/login"
-            search={{ mode: "register" }}
+            to="/register"
             className="inline-flex h-[52px] shrink-0 items-center rounded-xl bg-white px-6 text-base font-bold text-brand-900 transition hover:bg-brand-50"
           >
             Get started free

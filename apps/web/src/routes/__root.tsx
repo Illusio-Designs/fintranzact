@@ -813,6 +813,12 @@ function RootLayout() {
       return;
     }
 
+    // Already signed in: the login and register pages have nothing to do.
+    if (pathname === "/login" || pathname === "/register") {
+      navigate({ to: "/", replace: true });
+      return;
+    }
+
     // Priority 2.5: Pending invite token in localStorage → accept it
     // This handles the case where an existing user (has name) clicked an
     // invite link, was redirected to login, and is now back. The invite
@@ -832,6 +838,7 @@ function RootLayout() {
       "/onboarding",
       "/business/create",
       "/login",
+      "/register",
       "/auth/verify",
     ].some((p) => pathname.startsWith(p));
 
@@ -929,8 +936,11 @@ function RootLayout() {
 
   if (showsMarketingPage) return <Outlet />;
 
-  // Loading session
-  if (sessionLoading) return loadingSpinner;
+  // Loading session. Sign-in pages don't need the answer to render; if the
+  // visitor turns out to be signed in, the effect above moves them on.
+  if (sessionLoading) {
+    return publicPaths.some((p) => pathname.startsWith(p)) ? <Outlet /> : loadingSpinner;
+  }
 
   // Couldn't check the session (server unreachable): offer a retry instead
   // of pretending the visitor is signed out.

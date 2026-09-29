@@ -19,6 +19,7 @@ export const MARKETING_PATHS = [
 /** Sign-in and invite pages a signed-out visitor may open. */
 export const AUTH_PUBLIC_PATHS = [
   "/login",
+  "/register",
   "/auth/verify",
   "/auth/complete-profile",
   "/auth/verify-email-change",
