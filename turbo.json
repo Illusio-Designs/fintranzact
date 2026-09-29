@@ -7,6 +7,7 @@
     },
     "build": {
       "dependsOn": ["^build"],
+      "env": ["API_URL", "VITE_*"],
       "outputs": ["dist/**"]
     },
     "typecheck": {
