@@ -1,6 +1,8 @@
 import { eq, and, sql, desc, gte, lte, inArray, count, getTableColumns } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { ensureDefaultWarehouse } from "../lib/inventory-service.js";
+import { backfillLegacyBusinessMembers } from "../lib/business-membership.js";
 import {
   businesses,
   businessMembers,
@@ -43,6 +45,7 @@ async function requireTenantAdmin(userId: string, tenantId: string) {
 
 export const businessRouter = router({
   list: tenantProcedure.query(async ({ ctx }) => {
+    await backfillLegacyBusinessMembers(ctx.db, ctx.tenantId);
     const { logoData: _logoData, ...cols } = getTableColumns(businesses);
 
     const rows = await ctx.db
@@ -245,6 +248,7 @@ export const businessRouter = router({
   getById: tenantProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
+      await backfillLegacyBusinessMembers(ctx.db, ctx.tenantId);
       const [membership] = await ctx.db
         .select({ userId: businessMembers.userId })
         .from(businessMembers)
@@ -303,6 +307,10 @@ export const businessRouter = router({
         userId: ctx.user.id,
         role: "admin",
       });
+
+      // Every business starts with one "Main" warehouse built from the
+      // address given at registration, used for all stock movements.
+      await ensureDefaultWarehouse(tx, biz.id);
 
       // Auto-create a Cash account for every new business — must be atomic with
       // business creation so a failed account insert never leaves a business

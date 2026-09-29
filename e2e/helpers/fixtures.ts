@@ -6,7 +6,11 @@
  *   - API helper for calling tRPC procedures directly (seeding)
  *   - Common navigation helpers
  */
+import fs from "fs";
+import path from "path";
 import { test as base, expect, type Page } from "@playwright/test";
+
+const SEED_FILE = path.join(__dirname, "..", ".auth", "seed.json");
 
 /** Helper to call tRPC mutations/queries directly via HTTP for seeding */
 export class ApiHelper {
@@ -83,6 +87,20 @@ export class ApiHelper {
 export const test = base.extend<{
   api: ApiHelper;
 }>({
+  // The app keeps the selected company in sessionStorage, which Playwright's
+  // storageState does not persist. Pre-select the seeded business so pages
+  // open straight into the app instead of the "Choose a company" screen.
+  page: async ({ page }, use) => {
+    if (fs.existsSync(SEED_FILE)) {
+      const { businessId } = JSON.parse(fs.readFileSync(SEED_FILE, "utf-8")) as { businessId?: string };
+      if (businessId) {
+        await page.addInitScript((id) => {
+          if (!sessionStorage.getItem("selectedBusinessId")) sessionStorage.setItem("selectedBusinessId", id);
+        }, businessId);
+      }
+    }
+    await use(page);
+  },
   api: async ({ page }, use) => {
     const baseUrl = process.env.API_URL ?? "http://localhost:3000";
     const api = new ApiHelper(page, baseUrl);

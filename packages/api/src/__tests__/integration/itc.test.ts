@@ -54,8 +54,8 @@ let supplierParty: TestParty;      // same-state supplier for purchase invoices
 let interStateSupplier: TestParty; // inter-state supplier (Karnataka)
 
 // Use a fixed month to avoid FY boundary edge cases
-const TEST_YEAR = 2026;
-const TEST_MONTH = 3; // March 2026
+const TEST_YEAR = 2024;
+const TEST_MONTH = 3; // March 2024 — fixed months stay clear of the date-relative tests
 const TEST_PERIOD = `${TEST_YEAR}-${String(TEST_MONTH).padStart(2, "0")}`;
 
 function callerForRamesh() {
@@ -676,8 +676,8 @@ describe("ITC aging alerts", () => {
 
 describe("ITC dashboard", () => {
   // Use a separate month so these tests don't interfere with auto-creation tests
-  const DASH_YEAR = 2026;
-  const DASH_MONTH = 4; // April 2026
+  const DASH_YEAR = 2024;
+  const DASH_MONTH = 4; // April 2024
   const DASH_PERIOD = `${DASH_YEAR}-${String(DASH_MONTH).padStart(2, "0")}`;
 
   it("returns correct ITC summary", async () => {
@@ -774,8 +774,8 @@ describe("ITC dashboard", () => {
 
 describe("GSTR-3B Table 4", () => {
   // Use a dedicated month for table 4 tests
-  const T4_YEAR = 2026;
-  const T4_MONTH = 5; // May 2026
+  const T4_YEAR = 2024;
+  const T4_MONTH = 5; // May 2024
 
   it("populates Table 4 with correct ITC breakdown", async () => {
     const caller = callerForRamesh();
@@ -853,8 +853,8 @@ describe("GSTR-3B Table 4", () => {
 
 describe("ITC utilization", () => {
   // Use a dedicated month for utilization tests
-  const UTIL_YEAR = 2026;
-  const UTIL_MONTH = 6; // June 2026
+  const UTIL_YEAR = 2024;
+  const UTIL_MONTH = 6; // June 2024
   const UTIL_PERIOD = `${UTIL_YEAR}-${String(UTIL_MONTH).padStart(2, "0")}`;
 
   it("records utilization for a period", async () => {

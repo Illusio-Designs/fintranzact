@@ -164,6 +164,7 @@ describe("defineAbilityFor — builds CASL ability for each role", () => {
     //   Store:             read
     //   SalesTarget:       read
     //   RecurringInvoice:  read
+    //   Report:            read
 
     const CAN: [Action, Resource][] = [
       // Invoice — create, read, update (no delete: sellers must not destroy records)
@@ -187,6 +188,8 @@ describe("defineAbilityFor — builds CASL ability for each role", () => {
       ["read", "SalesTarget"],
       // RecurringInvoice — read only
       ["read", "RecurringInvoice"],
+      // Report — read only (business reports on the dashboard)
+      ["read", "Report"],
     ];
 
     it.each(CAN)("can %s %s", (action, resource) => {

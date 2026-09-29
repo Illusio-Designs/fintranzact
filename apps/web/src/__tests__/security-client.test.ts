@@ -293,9 +293,9 @@ describe("SECURITY — tRPC client URL is either relative or points to trusted A
   });
 
   it("when API_URL is set, the full URL points to the expected /api/trpc path", () => {
-    const API_URL = "${import.meta.env.API_URL}";
+    const API_URL = "https://api.fintranzact.com";
     const TRPC_URL = `${API_URL}/api/trpc`;
-    expect(TRPC_URL).toBe("${import.meta.env.API_URL}/api/trpc");
+    expect(TRPC_URL).toBe("https://api.fintranzact.com/api/trpc");
     expect(new URL(TRPC_URL).pathname).toBe("/api/trpc");
   });
 

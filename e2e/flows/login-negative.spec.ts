@@ -6,67 +6,53 @@
  * WITHOUT storageState to simulate unauthenticated users.
  */
 import { test, expect } from "../helpers/fixtures";
+import { openLoginForm, openRegisterForm, fillRegisterForm } from "../helpers/auth";
 
 test.describe("Login Negative Paths", () => {
-  test("login page renders with magic link mode by default", async ({ browser }) => {
-    const ctx = await browser.newContext();
+  test("login page opens on the Register tab by default", async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await ctx.newPage();
 
     await page.goto("/login");
-    await page.getByPlaceholder("you@yourcompany.com").waitFor({ state: "visible", timeout: 10_000 });
 
     // Should show Fintranzact branding
     await expect(page.getByText("Fintranzact").first()).toBeVisible();
 
-    // Should show email input
-    await expect(page.getByPlaceholder("you@yourcompany.com")).toBeVisible();
-
-    // Should show "Send magic link" button
-    await expect(page.getByRole("button", { name: /send magic link|sign in/i }).first()).toBeVisible();
-
-    // Should show "Use password instead" link
-    await expect(page.getByText(/use password instead/i).first()).toBeVisible();
+    // Register and Login tabs, with the register form open
+    await expect(page.getByRole("button", { name: "Register" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Login" }).first()).toBeVisible();
+    await expect(page.getByText("Create your account")).toBeVisible();
+    await expect(page.getByPlaceholder("Enter username")).toBeVisible();
+    await expect(page.getByPlaceholder("Retype password")).toBeVisible();
 
     await page.close();
     await ctx.close();
   });
 
-  test("switching to password mode shows password field", async ({ browser }) => {
-    const ctx = await browser.newContext();
+  test("switching to the Login tab shows email and password fields", async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await ctx.newPage();
 
     await page.goto("/login");
-    await page.getByPlaceholder("you@yourcompany.com").waitFor({ state: "visible", timeout: 10_000 });
+    await page.getByRole("button", { name: "Login" }).first().click();
 
-    // Switch to password mode
-    await page.getByText(/use password instead/i).first().click();
-
-    // Should now show password field
-    await expect(page.getByPlaceholder("Min 8 characters")).toBeVisible();
-
-    // Should show "Sign in" button
-    await expect(page.getByRole("button", { name: /sign in/i }).first()).toBeVisible();
+    await expect(page.getByPlaceholder("you@yourcompany.com")).toBeVisible();
+    await expect(page.getByPlaceholder("Enter password")).toBeVisible();
+    await expect(page.locator("form").getByRole("button", { name: "Login" })).toBeVisible();
 
     await page.close();
     await ctx.close();
   });
 
   test("wrong password shows error message", async ({ browser }) => {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await ctx.newPage();
 
-    await page.goto("/login");
-    await page.getByPlaceholder("you@yourcompany.com").waitFor({ state: "visible", timeout: 10_000 });
+    await openLoginForm(page);
 
-    // Switch to password mode
-    await page.getByText(/use password instead/i).first().click();
-
-    // Fill in email and wrong password
-    await page.getByPlaceholder("you@yourcompany.com").fill("nonexistent-user@test.hisaabo.in");
-    await page.getByPlaceholder("Min 8 characters").fill("WrongPassword123!");
-
-    // Click Sign in
-    await page.getByRole("button", { name: /sign in/i }).first().click();
+    await page.getByPlaceholder("you@yourcompany.com").fill("nonexistent-user@test.fintranzact.com");
+    await page.getByPlaceholder("Enter password").fill("WrongPassword123!");
+    await page.locator("form").getByRole("button", { name: "Login" }).click();
 
     // Either an error toast or inline error should appear
     await expect(
@@ -78,33 +64,18 @@ test.describe("Login Negative Paths", () => {
   });
 
   test("register with mismatched passwords shows error", async ({ browser }) => {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await ctx.newPage();
 
-    await page.goto("/login");
-    await page.getByPlaceholder("you@yourcompany.com").waitFor({ state: "visible", timeout: 10_000 });
+    await openRegisterForm(page);
+    await fillRegisterForm(page, {
+      username: "Test User",
+      email: `mismatch-${Date.now()}@test.fintranzact.com`,
+      password: "Test@1234!",
+      confirmPassword: "DifferentPass123!",
+    });
 
-    // Switch to password mode then register
-    await page.getByText(/use password instead/i).first().click();
-    await page.getByText(/create one/i).first().click();
-
-    // Should show register form
-    await expect(page.getByPlaceholder("Your name")).toBeVisible();
-    await expect(page.getByPlaceholder("Repeat password")).toBeVisible();
-
-    // Fill form with mismatched passwords
-    await page.getByPlaceholder("Your name").fill("Test User");
-    await page.getByPlaceholder("you@yourcompany.com").fill(`mismatch-${Date.now()}@test.hisaabo.in`);
-    await page.getByPlaceholder("Min 8 characters").fill("Test@1234!");
-    await page.getByPlaceholder("Repeat password").fill("DifferentPass123!");
-
-    // Click Create account
-    await page.getByRole("button", { name: /create account/i }).first().click();
-
-    // Should show error about password mismatch
-    await expect(
-      page.getByText(/match|mismatch|same|don't match|do not match/i).first(),
-    ).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/passwords don't match/i)).toBeVisible({ timeout: 5_000 });
 
     await page.close();
     await ctx.close();

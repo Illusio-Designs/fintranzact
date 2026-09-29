@@ -1,6 +1,6 @@
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { getDefaultWarehouse, recordStockMovement } from "../lib/inventory-service.js";
+import { getDefaultWarehouse, recordStockMovement, reverseInvoiceStock } from "../lib/inventory-service.js";
 import {
   invoices,
   invoiceItems,
@@ -11,7 +11,6 @@ import {
   shipments,
   itcLedgerEntries,
   eInvoiceConfigs,
-  stockMovements,
 } from "@fintranzact/db";
 import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
@@ -872,38 +871,15 @@ export const invoiceRouter = router({
         // 4. Handle line items — delete old, insert new, recalculate totals
         if (input.lineItems) {
 
-          // Step 2: Reverse all inventory movements previously recorded for this invoice.
-          // This makes repeated invoice updates safe: every previous inventory effect
-          // belonging to this invoice is fully reversed before applying the new lines.
-          const previousMovements = await tx
-            .select({
-              warehouseId: stockMovements.warehouseId,
-              itemId: stockMovements.itemId,
-              variantId: stockMovements.variantId,
-              quantity: stockMovements.quantity,
-              movementType: stockMovements.movementType,
-            })
-            .from(stockMovements).where(and(
-              eq(stockMovements.businessId, ctx.businessId),
-              eq(stockMovements.referenceId, input.id),
-              sql`${stockMovements.referenceType} IN ('INVOICE', 'INVOICE_UPDATE')`,
-            ));
-
-          for (const movement of previousMovements) {
-            await recordStockMovement(tx, {
-              businessId: ctx.businessId,
-              warehouseId: movement.warehouseId,
-              itemId: movement.itemId,
-              variantId: movement.variantId,
-              referenceType: "INVOICE_UPDATE_REVERSAL",
-              referenceId: input.id,
-              movementType: movement.movementType === "SALE"
-                ? "SALE_REVERSAL"
-                : "PURCHASE_REVERSAL",
-              quantity: sql<string>`-${movement.quantity}::numeric`,
-              actorUserId: ctx.user!.id,
-            });
-          }
+          // Step 2: Undo this invoice's current stock effect before applying the
+          // new lines. Nets all earlier movements, so repeated edits are safe.
+          await reverseInvoiceStock(tx, {
+            businessId: ctx.businessId,
+            invoiceId: input.id,
+            invoiceType: existing.type,
+            referenceType: "INVOICE_UPDATE_REVERSAL",
+            actorUserId: ctx.user!.id,
+          });
 
           // Step 3: Delete existing line items
           await tx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, input.id));
@@ -1061,43 +1037,13 @@ export const invoiceRouter = router({
 
       await ctx.db.transaction(async (tx) => {
 
-        const invoiceMovements = await tx
-          .select({
-            warehouseId: stockMovements.warehouseId,
-            itemId: stockMovements.itemId,
-            variantId: stockMovements.variantId,
-            quantity: sql<string>`SUM(${stockMovements.quantity}::numeric)`,
-          })
-          .from(stockMovements)
-          .where(
-            and(
-              eq(stockMovements.businessId, ctx.businessId),
-              eq(stockMovements.referenceId, input.id),
-              sql`${stockMovements.referenceType} IN ('INVOICE', 'INVOICE_UPDATE', 'INVOICE_UPDATE_REVERSAL')`,
-            ),
-          )
-          .groupBy(
-            stockMovements.warehouseId,
-            stockMovements.itemId,
-            stockMovements.variantId,
-          );
-
-        for (const movement of invoiceMovements) {
-          if (movement.quantity === "0") continue;
-
-          await recordStockMovement(tx, {
-            businessId: ctx.businessId,
-            warehouseId: movement.warehouseId,
-            itemId: movement.itemId,
-            variantId: movement.variantId,
-            referenceType: "INVOICE_DELETE_REVERSAL",
-            referenceId: input.id,
-            movementType:
-              inv.type === "sale" ? "SALE_REVERSAL" : "PURCHASE_REVERSAL",
-            quantity: sql<string>`-(${movement.quantity})::numeric`,
-            actorUserId: ctx.user!.id,
-          });
-        }
+        await reverseInvoiceStock(tx, {
+          businessId: ctx.businessId,
+          invoiceId: input.id,
+          invoiceType: inv.type,
+          referenceType: "INVOICE_DELETE_REVERSAL",
+          actorUserId: ctx.user!.id,
+        });
 
         // Auto-reverse ITC when a purchase invoice is deleted
         if (inv.type === "purchase" && inv.documentType === "invoice") {

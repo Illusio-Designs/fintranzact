@@ -1,7 +1,8 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { Context } from "./context.js";
-import { getTenantDb, type TenantDatabase, businesses, businessMembers } from "@fintranzact/db";
+import { getTenantDb, type TenantDatabase, controlDb, businesses, businessMembers, tenantMembers } from "@fintranzact/db";
+import { backfillLegacyBusinessMembers } from "./lib/business-membership.js";
 import { eq, and } from "drizzle-orm";
 import { defineAbilityFor, mapDbRole, type AppAbility } from "./lib/permissions.js";
 import { getMaintenanceStatus } from "./lib/maintenance-cache.js";
@@ -156,20 +157,43 @@ const hasBusinessAccess = t.middleware(async ({ ctx, next }) => {
     throw new TRPCError({ code: "FORBIDDEN", message: "Business not found" });
   }
 
+  // In self-hosted mode all businesses live in the same DB. Verify the business
+  // creator is a member of the caller's tenant to prevent cross-tenant access;
+  // business membership alone is not tied to a tenant.
+  const [creatorMembership] = await controlDb
+    .select({ userId: tenantMembers.userId })
+    .from(tenantMembers)
+    .where(and(
+      eq(tenantMembers.tenantId, ctx.tenantId as string),
+      eq(tenantMembers.userId, biz.createdByUserId),
+    ))
+    .limit(1);
+
+  if (!creatorMembership) {
+    if (process.env.NODE_ENV === "development") console.log("[hasBusinessAccess] FAIL: creator not a tenant member. businessId:", ctx.businessId, "createdByUserId:", biz.createdByUserId, "tenantId:", ctx.tenantId);
+    throw new TRPCError({ code: "FORBIDDEN", message: "Business not found" });
+  }
+
   // Verify that the current user is assigned to this business.
   // business_members lives in the tenant DB, while users live in the
   // control DB, so userId is stored as a plain UUID.
-  const [businessMembership] = await (ctx as unknown as TenantCtx).db
+  const findMembership = () => (ctx as unknown as TenantCtx).db
     .select({
       userId: businessMembers.userId,
       role: businessMembers.role,
     })
     .from(businessMembers)
     .where(and(
-      eq(businessMembers.businessId, ctx.businessId),
+      eq(businessMembers.businessId, ctx.businessId as string),
       eq(businessMembers.userId, ctx.user?.id as string),
     ))
     .limit(1);
+
+  let [businessMembership] = await findMembership();
+  if (!businessMembership) {
+    await backfillLegacyBusinessMembers((ctx as unknown as TenantCtx).db, ctx.tenantId as string);
+    [businessMembership] = await findMembership();
+  }
 
   if (!businessMembership) {
     if (process.env.NODE_ENV === "development") {
@@ -228,13 +252,22 @@ function withPermissions() {
       });
     }
 
-    // Business roles are currently:
-    //   admin  -> full business access
-    //   member -> seller-level access
-    //
+    // Business membership decides whether the user can open the business; the
+    // role they act with inside it comes from:
+    //   business admin  -> admin (superadmin for tenant owners/superadmins)
+    //   business member -> their tenant role (seller, accountant, ...), the
+    //                      same role the web/mobile navigation is built from.
     // Keep the mapping centralized through mapDbRole so CASL remains
     // responsible for the actual permission definitions.
-    const permissionRole = mapDbRole(businessMembership.role);
+    const [tenantMembership] = await controlDb
+      .select({ role: tenantMembers.role })
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, user.id)))
+      .limit(1);
+    const tenantRole = mapDbRole(tenantMembership?.role ?? "member");
+    const permissionRole = businessMembership.role === "admin"
+      ? (tenantRole === "superadmin" ? "superadmin" : "admin")
+      : tenantRole;
 
     const ability = defineAbilityFor({
       userId: user.id,

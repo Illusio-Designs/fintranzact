@@ -29,16 +29,16 @@ describe("apiUrl", () => {
   });
 
   it("prefixes the path with API_URL when set (split-host prod)", () => {
-    vi.stubEnv("API_URL", "${import.meta.env.API_URL}");
+    vi.stubEnv("API_URL", "https://api.fintranzact.com");
     expect(apiUrl("/api/invoices/abc/pdf?format=a5")).toBe(
-      "${import.meta.env.API_URL}/api/invoices/abc/pdf?format=a5",
+      "https://api.fintranzact.com/api/invoices/abc/pdf?format=a5",
     );
   });
 
   it("produces an absolute URL that resolves to the API origin in split-host mode", () => {
-    vi.stubEnv("API_URL", "${import.meta.env.API_URL}");
+    vi.stubEnv("API_URL", "https://api.fintranzact.com");
     const result = apiUrl("/api/parties/p1/ledger.pdf?from=2024-04-01");
-    expect(new URL(result).origin).toBe("${import.meta.env.API_URL}");
+    expect(new URL(result).origin).toBe("https://api.fintranzact.com");
     expect(new URL(result).pathname).toBe("/api/parties/p1/ledger.pdf");
   });
 
@@ -53,11 +53,11 @@ describe("apiUrl", () => {
   });
 
   it("preserves query strings and special characters in the path", () => {
-    vi.stubEnv("API_URL", "${import.meta.env.API_URL}");
+    vi.stubEnv("API_URL", "https://api.fintranzact.com");
     expect(
       apiUrl("/api/invoices/abc/pdf?format=a5&download=true"),
     ).toBe(
-      "${import.meta.env.API_URL}/api/invoices/abc/pdf?format=a5&download=true",
+      "https://api.fintranzact.com/api/invoices/abc/pdf?format=a5&download=true",
     );
   });
 });
