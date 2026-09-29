@@ -15,6 +15,8 @@ import { ShippingTab } from "@/components/settings/ShippingTab";
 import { WhatsNextModal } from "@/components/settings/WhatsNextModal";
 import { ImportWizard } from "@/components/ImportWizard";
 import { RestoreOnboarding } from "@/components/settings/RestoreOnboarding";
+import { Icon } from "@/components/ui/Icon";
+import { Add01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -141,9 +143,7 @@ function SettingsPage() {
             className="w-full flex items-start gap-3 px-5 py-4 rounded-xl border border-border-light hover:border-brand-400 hover:bg-brand-600/[0.03] transition-colors text-left group card"
           >
             <span className="w-9 h-9 shrink-0 rounded-lg bg-surface-2 group-hover:bg-brand-600/10 flex items-center justify-center text-text-tertiary group-hover:text-brand-600 transition-colors mt-0.5">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
+              <Icon icon={Add01Icon} size={20} />
             </span>
             <div>
               <p className="text-sm font-medium text-text-primary">Create a new business</p>
@@ -156,11 +156,7 @@ function SettingsPage() {
             className="w-full flex items-start gap-3 px-5 py-4 rounded-xl border border-border-light hover:border-brand-400 hover:bg-brand-600/[0.03] transition-colors text-left group card"
           >
             <span className="w-9 h-9 shrink-0 rounded-lg bg-surface-2 group-hover:bg-brand-600/10 flex items-center justify-center text-text-tertiary group-hover:text-brand-600 transition-colors mt-0.5">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
+              <Icon icon={Upload04Icon} size={20} />
             </span>
             <div>
               <p className="text-sm font-medium text-text-primary">Restore from a backup</p>

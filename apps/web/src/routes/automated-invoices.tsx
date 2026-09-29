@@ -17,6 +17,16 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
+import { Icon } from "@/components/ui/Icon";
+import {
+  ArrowDown01Icon,
+  Delete02Icon,
+  PauseIcon,
+  PlayIcon,
+  FlashIcon,
+  PencilEdit02Icon,
+  BulbIcon,
+} from "@hugeicons/core-free-icons";
 
 export const Route = createFileRoute("/automated-invoices")({
   component: AutomatedInvoicesPage,
@@ -481,7 +491,7 @@ function AutomatedInvoicesPage() {
           >
             <div className="flex items-center gap-2">
               <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-brand-600/10">
-                <SuggestionIcon />
+                <Icon icon={BulbIcon} size={14} className="text-brand-600" />
               </span>
               <span className="text-sm font-medium text-text-primary">
                 Smart Suggestions
@@ -490,15 +500,11 @@ function AutomatedInvoicesPage() {
                 {suggestions.length}
               </span>
             </div>
-            <svg
-              className={cn("w-4 h-4 text-text-tertiary transition-transform", suggestionsOpen && "rotate-180")}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
+            <Icon
+              icon={ArrowDown01Icon}
+              size={16}
+              className={cn("text-text-tertiary transition-transform", suggestionsOpen && "rotate-180")}
+            />
           </button>
           {suggestionsOpen && (
             <div className="px-4 py-3 space-y-2">
@@ -622,7 +628,7 @@ function AutomatedInvoicesPage() {
                               title="Pause"
                               disabled={pauseMutation.isPending}
                             >
-                              <PauseIcon />
+                              <Icon icon={PauseIcon} size={14} />
                             </button>
                           )}
                           {template.status === "paused" && (
@@ -633,7 +639,7 @@ function AutomatedInvoicesPage() {
                               title="Resume"
                               disabled={resumeMutation.isPending}
                             >
-                              <PlayIcon />
+                              <Icon icon={PlayIcon} size={14} />
                             </button>
                           )}
                           {(template.status === "active" || template.status === "paused") && (
@@ -644,7 +650,7 @@ function AutomatedInvoicesPage() {
                               title="Run Now"
                               disabled={runNowMutation.isPending}
                             >
-                              <RunNowIcon />
+                              <Icon icon={FlashIcon} size={14} />
                             </button>
                           )}
                           <button
@@ -653,7 +659,7 @@ function AutomatedInvoicesPage() {
                             aria-label="Edit template"
                             title="Edit"
                           >
-                            <EditIcon />
+                            <Icon icon={PencilEdit02Icon} size={14} />
                           </button>
                           <button
                             onClick={() => deleteConfirm.requestDelete(template.id, template.name || "Untitled")}
@@ -661,7 +667,7 @@ function AutomatedInvoicesPage() {
                             aria-label="Delete template"
                             title="Delete"
                           >
-                            <DeleteIcon />
+                            <Icon icon={Delete02Icon} size={14} />
                           </button>
                         </div>
                       </td>
@@ -973,9 +979,7 @@ function AutomatedInvoicesPage() {
                         onClick={() => removeLineItem(idx)}
                         aria-label="Remove line item"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        <Icon icon={Delete02Icon} size={14} />
                       </button>
                     )}
                   </div>
@@ -1319,55 +1323,5 @@ function TemplateTableSkeleton() {
         </div>
       ))}
     </div>
-  );
-}
-
-// ── Icons ────────────────────────────────────────────────────────
-
-function PauseIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6" />
-    </svg>
-  );
-}
-
-function PlayIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-    </svg>
-  );
-}
-
-function RunNowIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-    </svg>
-  );
-}
-
-function EditIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-    </svg>
-  );
-}
-
-function DeleteIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-  );
-}
-
-function SuggestionIcon() {
-  return (
-    <svg className="w-3.5 h-3.5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-    </svg>
   );
 }

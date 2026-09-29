@@ -11,8 +11,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { InputField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { Spinner } from "@/components/ui/Spinner";
+import { Select } from "@/components/ui/Select";
 import { SearchInput } from "@/components/ui/SearchInput";
 
+import { Alert02Icon, CancelCircleIcon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/Icon";
 export const Route = createFileRoute("/e-invoicing")({
   component: EInvoicingPage,
 });
@@ -200,8 +203,8 @@ function DashboardTab() {
                         {statusLabel(inv.eInvoiceStatus)}
                       </Badge>
                       {inv.eInvoiceError && (
-                        <span className="ml-1.5 text-[10px] text-red-500" title={inv.eInvoiceError}>
-                          ⚠
+                        <span className="ml-1.5 inline-flex align-middle text-red-500" title={inv.eInvoiceError} aria-label={inv.eInvoiceError}>
+                          <Icon icon={Alert02Icon} size={12} />
                         </span>
                       )}
                     </td>
@@ -284,7 +287,7 @@ function DashboardTab() {
             <label className="text-xs font-medium text-text-secondary block mb-1">
               Cancel Reason
             </label>
-            <select
+            <Select
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value as CancelReason)}
               className="input w-full text-sm"
@@ -292,7 +295,7 @@ function DashboardTab() {
               {CANCEL_REASONS.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <InputField
             label="Remarks (optional)"
@@ -497,9 +500,10 @@ function SettingsTab() {
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
+              role="switch"
               checked={form.isSandbox}
               onChange={(e) => setField("isSandbox", e.target.checked)}
-              className="w-4 h-4 rounded border-border-light text-brand-600"
+              className="switch"
             />
             <div>
               <span className="text-sm font-medium text-text-primary">Use Sandbox (Testing)</span>
@@ -512,9 +516,10 @@ function SettingsTab() {
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
+              role="switch"
               checked={form.isEnabled}
               onChange={(e) => setField("isEnabled", e.target.checked)}
-              className="w-4 h-4 rounded border-border-light text-brand-600"
+              className="switch"
             />
             <div>
               <span className="text-sm font-medium text-text-primary">Enable E-Invoicing</span>
@@ -533,7 +538,7 @@ function SettingsTab() {
               ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400"
               : "bg-red-600/[0.08] text-red-700 dark:text-red-400",
           )}>
-            <span>{testResult.success ? "✓" : "✗"}</span>
+            <Icon icon={testResult.success ? CheckmarkCircle02Icon : CancelCircleIcon} size={16} />
             <span>{testResult.message}</span>
           </div>
         )}

@@ -5,6 +5,14 @@ import { trpc } from "@/lib/trpc";
 import { apiUrl } from "@/lib/api-url";
 import { toast } from "@/hooks/useToast";
 import { Spinner } from "@/components/ui/Spinner";
+import { Icon } from "@/components/ui/Icon";
+import {
+  Archive01Icon,
+  Download04Icon,
+  InformationCircleIcon,
+  Table01Icon,
+  Upload04Icon,
+} from "@hugeicons/core-free-icons";
 import { todayISODate } from "@/lib/utils";
 import dayjs from "dayjs";
 
@@ -14,57 +22,6 @@ function formatDateTime(iso: string): string {
   const d = dayjs(iso);
   if (!d.isValid()) return "—";
   return d.format("D MMM YYYY, h:mm A");
-}
-
-// ── Icons ─────────────────────────────────────────────────────────────────────
-
-function DownloadIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-}
-
-function UploadIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
-  );
-}
-
-function SpreadsheetIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
-    </svg>
-  );
-}
-
-function ArchiveIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-      <rect x="2" y="4" width="20" height="4" rx="1" />
-      <path d="M4 8v11a2 2 0 002 2h12a2 2 0 002-2V8" />
-      <line x1="10" y1="12" x2="14" y2="12" />
-    </svg>
-  );
-}
-
-function InfoIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="8" x2="12" y2="12" />
-      <line x1="12" y1="16" x2="12.01" y2="16" />
-    </svg>
-  );
 }
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
@@ -101,7 +58,7 @@ function SectionCard({
 function ImportSection({ onOpen }: { onOpen: () => void }) {
   return (
     <SectionCard
-      icon={<UploadIcon />}
+      icon={<Icon icon={Upload04Icon} size={20} />}
       title="Import data"
       description="Migrate from myBillBook, Tally, or upload CSV files into the current business."
     >
@@ -139,7 +96,7 @@ function CsvExportSection() {
 
   return (
     <SectionCard
-      icon={<SpreadsheetIcon />}
+      icon={<Icon icon={Table01Icon} size={20} />}
       title="Export as CSV"
       description="Download the current business as CSV files in a ZIP bundle — ideal for spreadsheets and external tools. Not used for restoring."
     >
@@ -185,12 +142,12 @@ function FullBackupSection({ tenantId }: { tenantId: string }) {
 
   return (
     <SectionCard
-      icon={<ArchiveIcon />}
+      icon={<Icon icon={Archive01Icon} size={20} />}
       title="Full backup (restorable)"
       description="Download a complete snapshot of your organization — all businesses, parties, items, invoices, payments, and other records. Re-import into an empty organization to restore."
     >
       <div className="flex items-center gap-2 text-xs text-text-tertiary mb-4 px-0.5">
-        <InfoIcon />
+        <Icon icon={InformationCircleIcon} size={16} />
         <span>Limit: 2 exports per day. Restore from the onboarding screen of a new organization.</span>
       </div>
       <button
@@ -199,7 +156,7 @@ function FullBackupSection({ tenantId }: { tenantId: string }) {
         disabled={exportMut.isPending}
         aria-label="Export tenant data"
       >
-        {exportMut.isPending ? <Spinner size="sm" /> : <DownloadIcon />}
+        {exportMut.isPending ? <Spinner size="sm" /> : <Icon icon={Download04Icon} size={20} />}
         {exportMut.isPending ? "Preparing backup…" : "Download backup"}
       </button>
     </SectionCard>

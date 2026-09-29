@@ -6,6 +6,8 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { PartyCombobox } from "@/components/ui/PartyCombobox";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { InputField, TextareaField } from "@/components/ui/FormField";
+import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
+import { BankIcon, Cash01Icon, CreditCardIcon, Link01Icon, MinusSignIcon, SmartPhone01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { calculateGatewayCharge } from "@fintranzact/shared";
 import type { GatewayChargeConfig } from "@fintranzact/shared";
 
@@ -24,15 +26,15 @@ export interface RecordPaymentPanelProps {
 
 // ── Account type icons ────────────────────────────────────────────────────────
 
-export function accountTypeIcon(type: string): string {
+export function accountTypeIcon(type: string): IconSvgElement {
   switch (type) {
-    case "cash":            return "💵";
-    case "current":         return "🏦";
-    case "savings":         return "🏦";
-    case "upi":             return "📱";
-    case "credit_card":     return "💳";
-    case "payment_gateway": return "🔗";
-    default:                return "💳";
+    case "cash":            return Cash01Icon;
+    case "current":         return BankIcon;
+    case "savings":         return BankIcon;
+    case "upi":             return SmartPhone01Icon;
+    case "credit_card":     return CreditCardIcon;
+    case "payment_gateway": return Link01Icon;
+    default:                return CreditCardIcon;
   }
 }
 
@@ -548,14 +550,10 @@ export function RecordPaymentPanel({
                               )}
                             >
                               {isFullyPaid && (
-                                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className="text-white">
-                                  <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
+                                <Icon icon={Tick02Icon} size={11} className="text-white" />
                               )}
                               {isPartial && (
-                                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className="text-brand-600">
-                                  <path d="M3 6H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                </svg>
+                                <Icon icon={MinusSignIcon} size={11} className="text-brand-600" />
                               )}
                             </button>
                           </div>
@@ -715,9 +713,7 @@ export function RecordPaymentPanel({
                     )}
                     aria-pressed={isSelected}
                   >
-                    <span className="text-base leading-none" aria-hidden="true">
-                      {accountTypeIcon(account.accountType)}
-                    </span>
+                    <IconCircle icon={accountTypeIcon(account.accountType)} size="sm" />
                     <span
                       className={cn(
                         "text-xs font-semibold mt-1 truncate w-full",

@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
+import { BankIcon, Cash01Icon, CreditCardIcon, Link01Icon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
 
 // Importing RecordPaymentPanel pulls in the trpc client module at eval time.
 // Even though we only touch pure helpers, we stub trpc to keep the import safe.
@@ -19,30 +20,30 @@ import {
 } from "../RecordPaymentPanel";
 
 describe("accountTypeIcon", () => {
-  it("returns 💵 for cash", () => {
-    expect(accountTypeIcon("cash")).toBe("💵");
+  it("returns the cash icon for cash", () => {
+    expect(accountTypeIcon("cash")).toBe(Cash01Icon);
   });
 
-  it("returns 🏦 for current and savings accounts", () => {
-    expect(accountTypeIcon("current")).toBe("🏦");
-    expect(accountTypeIcon("savings")).toBe("🏦");
+  it("returns the bank icon for current and savings accounts", () => {
+    expect(accountTypeIcon("current")).toBe(BankIcon);
+    expect(accountTypeIcon("savings")).toBe(BankIcon);
   });
 
-  it("returns 📱 for upi", () => {
-    expect(accountTypeIcon("upi")).toBe("📱");
+  it("returns the phone icon for upi", () => {
+    expect(accountTypeIcon("upi")).toBe(SmartPhone01Icon);
   });
 
-  it("returns 💳 for credit_card", () => {
-    expect(accountTypeIcon("credit_card")).toBe("💳");
+  it("returns the card icon for credit_card", () => {
+    expect(accountTypeIcon("credit_card")).toBe(CreditCardIcon);
   });
 
-  it("returns 🔗 for payment_gateway", () => {
-    expect(accountTypeIcon("payment_gateway")).toBe("🔗");
+  it("returns the link icon for payment_gateway", () => {
+    expect(accountTypeIcon("payment_gateway")).toBe(Link01Icon);
   });
 
-  it("falls back to 💳 for unknown account types", () => {
-    expect(accountTypeIcon("unknown")).toBe("💳");
-    expect(accountTypeIcon("")).toBe("💳");
+  it("falls back to the card icon for unknown account types", () => {
+    expect(accountTypeIcon("unknown")).toBe(CreditCardIcon);
+    expect(accountTypeIcon("")).toBe(CreditCardIcon);
   });
 });
 

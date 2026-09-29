@@ -1,13 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { gooeyToast } from "goey-toast";
 
-type ToastVariant = "success" | "error" | "info";
-
-export interface Toast {
-  id: string;
-  title: string;
-  description?: string;
-  variant: ToastVariant;
-}
+type ToastVariant = "success" | "error" | "info" | "warning";
 
 interface ToastOptions {
   title: string;
@@ -15,18 +8,14 @@ interface ToastOptions {
   variant?: ToastVariant;
 }
 
-type Listener = (toast: Toast) => void;
-const listeners: Set<Listener> = new Set();
-let toastId = 0;
-
-export function toast(options: ToastOptions) {
-  const t: Toast = {
-    id: String(++toastId),
-    title: options.title,
-    description: options.description,
-    variant: options.variant || "info",
-  };
-  listeners.forEach((fn) => fn(t));
+/**
+ * Show a toast notification. All toasts are rendered by goey-toast's
+ * <GooeyToaster />, mounted once by <ToastContainer /> in main.tsx.
+ * Returns the toast id so callers can dismiss it early.
+ */
+export function toast(options: ToastOptions): string | number {
+  const show = gooeyToast[options.variant ?? "info"];
+  return show(options.title, options.description ? { description: options.description } : undefined);
 }
 
 toast.success = (title: string, description?: string) =>
@@ -35,26 +24,6 @@ toast.error = (title: string, description?: string) =>
   toast({ title, description, variant: "error" });
 toast.info = (title: string, description?: string) =>
   toast({ title, description, variant: "info" });
-
-export function useToastListener() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-
-  useEffect(() => {
-    const listener: Listener = (t) => {
-      setToasts((prev) => [...prev, t]);
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((x) => x.id !== t.id));
-      }, 4000);
-    };
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
-  }, []);
-
-  const dismiss = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  return { toasts, dismiss };
-}
+toast.warning = (title: string, description?: string) =>
+  toast({ title, description, variant: "warning" });
+toast.dismiss = (id?: string | number) => gooeyToast.dismiss(id);

@@ -3,6 +3,9 @@ import { trpc } from "@/lib/trpc";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { PillTabs } from "@/components/ui/Tabs";
+import { DateInput } from "@/components/ui/DateInput";
+import { Icon } from "@/components/ui/Icon";
+import { ComputerIcon, Key01Icon, SmartPhone01Icon, Tablet01Icon } from "@hugeicons/core-free-icons";
 import { toast } from "@/hooks/useToast";
 import { cn, todayISODate } from "@/lib/utils";
 import dayjs from "dayjs";
@@ -99,34 +102,10 @@ export function timeAgo(date: Date | string | null): string {
 
 // ── Device icon SVGs ──────────────────────────────────────────────────────────
 
-function MonitorIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
-    </svg>
-  );
-}
-
-function PhoneIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="5" y="2" width="14" height="20" rx="2" /><path d="M12 18h.01" />
-    </svg>
-  );
-}
-
-function TabletIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="4" y="2" width="16" height="20" rx="2" /><path d="M12 18h.01" />
-    </svg>
-  );
-}
-
 function DeviceIcon({ type }: { type: "desktop" | "mobile" | "tablet" }) {
-  if (type === "mobile") return <PhoneIcon />;
-  if (type === "tablet") return <TabletIcon />;
-  return <MonitorIcon />;
+  if (type === "mobile") return <Icon icon={SmartPhone01Icon} size={18} />;
+  if (type === "tablet") return <Icon icon={Tablet01Icon} size={18} />;
+  return <Icon icon={ComputerIcon} size={18} />;
 }
 
 // ── Profile Section ───────────────────────────────────────────────────────────
@@ -491,14 +470,6 @@ function ActivityLogContent() {
 
 // ── API Keys Section ─────────────────────────────────────────────────────────
 
-function KeyIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-    </svg>
-  );
-}
-
 function ApiKeysContent() {
   const { data: session } = trpc.auth.me.useQuery();
   const { data: tenantList } = trpc.tenant.list.useQuery();
@@ -593,7 +564,7 @@ function ApiKeysContent() {
                   className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border-light bg-surface-0"
                 >
                   <div className="w-9 h-9 rounded-lg bg-surface-2 flex items-center justify-center text-text-secondary shrink-0">
-                    <KeyIcon />
+                    <Icon icon={Key01Icon} size={18} />
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -679,8 +650,7 @@ function ApiKeysContent() {
               <label className="text-sm font-medium text-text-primary block mb-1">
                 Expiry Date <span className="text-text-tertiary text-xs">(optional)</span>
               </label>
-              <input
-                type="date"
+              <DateInput
                 className="input w-full"
                 value={newKeyExpiry}
                 onChange={(e) => setNewKeyExpiry(e.target.value)}

@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { InputField } from "@/components/ui/FormField";
 import { Combobox } from "@/components/ui/Combobox";
 import { Listbox } from "@/components/ui/Listbox";
+import { Select } from "@/components/ui/Select";
 import { toast } from "@/hooks/useToast";
 import { GstinInput } from "./GstinInput";
 import { PanInput } from "./PanInput";
@@ -645,9 +646,10 @@ export function BusinessForm({
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
+                  role="switch"
                   checked={defaultRoundOff}
                   onChange={(e) => setDefaultRoundOff(e.target.checked)}
-                  className="h-4 w-4"
+                  className="switch"
                 />
 
                 <div>
@@ -751,11 +753,12 @@ export function BusinessForm({
                 </div>
                 <input
                   type="checkbox"
+                  role="switch"
                   checked={assesseeOfOtherTerritory}
                   onChange={(e) =>
                     setAssesseeOfOtherTerritory(e.target.checked)
                   }
-                  className="h-4 w-4"
+                  className="switch"
                 />
               </label>
 
@@ -763,7 +766,7 @@ export function BusinessForm({
                 <label className="text-sm font-medium text-text-primary">
                   GST/VAT Return Periodicity
                 </label>
-                <select
+                <Select
                   value={gstReturnPeriodicity}
                   onChange={(e) =>
                     setGstReturnPeriodicity(
@@ -774,7 +777,7 @@ export function BusinessForm({
                 >
                   <option value="monthly">Monthly</option>
                   <option value="quarterly">Quarterly (QRMP)</option>
-                </select>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
@@ -810,10 +813,11 @@ export function BusinessForm({
 
                 <input
                   type="checkbox"
+                  role="switch"
                   checked={gstRegType === "regular" && eInvoiceEnabled}
                   disabled={gstRegType !== "regular"}
                   onChange={(e) => setEInvoiceEnabled(e.target.checked)}
-                  className="h-4 w-4 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="switch disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </label>
 
@@ -830,11 +834,12 @@ export function BusinessForm({
 
                 <input
                   type="checkbox"
+                  role="switch"
                   checked={eWayBillEnabled}
                   onChange={(e) =>
                     setEWayBillEnabled(e.target.checked)
                   }
-                  className="h-4 w-4"
+                  className="switch"
                 />
               </label>
             </div>

@@ -198,39 +198,39 @@ describe("DateRangeBar — date filter toolbar for reports and lists", () => {
         customTo: "2024-03-31",
       });
 
-      const dateInputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
-      // Expect at least two date inputs to be present.
-      expect(dateInputs.length).toBeGreaterThanOrEqual(2);
+      // Custom calendar date pickers show the formatted dates.
+      expect(screen.getByRole("button", { name: "From date" })).toHaveTextContent("1 Apr 2024");
+      expect(screen.getByRole("button", { name: "To date" })).toHaveTextContent("31 Mar 2024");
     });
 
     it("hides custom date inputs when preset is 'this-month' so the toolbar stays compact", () => {
       renderBar({ preset: "this-month" });
 
       // No date type inputs should be in the DOM.
-      const dateInputs = document.querySelectorAll("input[type='date']");
-      expect(dateInputs).toHaveLength(0);
+      expect(screen.queryByRole("button", { name: "From date" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "To date" })).toBeNull();
     });
 
     it("hides custom date inputs when preset is 'last-fy'", () => {
       renderBar({ preset: "last-fy" });
 
-      const dateInputs = document.querySelectorAll("input[type='date']");
-      expect(dateInputs).toHaveLength(0);
+      expect(screen.queryByRole("button", { name: "From date" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "To date" })).toBeNull();
     });
 
     it("hides custom date inputs when preset is 'all'", () => {
       renderBar({ preset: "all" });
 
-      const dateInputs = document.querySelectorAll("input[type='date']");
-      expect(dateInputs).toHaveLength(0);
+      expect(screen.queryByRole("button", { name: "From date" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "To date" })).toBeNull();
     });
 
     it("hides custom date inputs when preset is 'custom' but onCustomChange is not provided", () => {
       // When onCustomChange is absent the component conditionally suppresses the inputs.
       renderBar({ preset: "custom" });
 
-      const dateInputs = document.querySelectorAll("input[type='date']");
-      expect(dateInputs).toHaveLength(0);
+      expect(screen.queryByRole("button", { name: "From date" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "To date" })).toBeNull();
     });
 
     it("changing the From date input calls onCustomChange with the new from value and the current to value", async () => {
@@ -242,15 +242,12 @@ describe("DateRangeBar — date filter toolbar for reports and lists", () => {
         customTo: "2024-09-30",
       });
 
-      const [fromInput] = document.querySelectorAll("input[type='date']") as NodeListOf<HTMLInputElement>;
-      await userEvent.clear(fromInput);
-      await userEvent.type(fromInput, "2024-07-01");
+      // Open the From calendar (it starts on April 2024) and pick the 15th.
+      await userEvent.click(screen.getByRole("button", { name: "From date" }));
+      await userEvent.click(screen.getByRole("gridcell", { name: "15 Apr 2024" }));
 
-      // onCustomChange must have been called; the last call carries the typed date.
-      expect(onCustomChange).toHaveBeenCalled();
-      const lastCall = onCustomChange.mock.calls[onCustomChange.mock.calls.length - 1];
       // Second argument (to) must remain the original customTo value.
-      expect(lastCall[1]).toBe("2024-09-30");
+      expect(onCustomChange).toHaveBeenLastCalledWith("2024-04-15", "2024-09-30");
     });
 
     it("changing the To date input calls onCustomChange with the current from value and the new to value", async () => {
@@ -262,15 +259,13 @@ describe("DateRangeBar — date filter toolbar for reports and lists", () => {
         customTo: "2024-09-30",
       });
 
-      const inputs = document.querySelectorAll("input[type='date']") as NodeListOf<HTMLInputElement>;
-      const toInput = inputs[1];
-      await userEvent.clear(toInput);
-      await userEvent.type(toInput, "2024-12-31");
+      // Open the To calendar (September 2024), move to October and pick the 31st.
+      await userEvent.click(screen.getByRole("button", { name: "To date" }));
+      await userEvent.click(screen.getByRole("button", { name: "Next month" }));
+      await userEvent.click(screen.getByRole("gridcell", { name: "31 Oct 2024" }));
 
-      expect(onCustomChange).toHaveBeenCalled();
-      const lastCall = onCustomChange.mock.calls[onCustomChange.mock.calls.length - 1];
       // First argument (from) must remain the original customFrom value.
-      expect(lastCall[0]).toBe("2024-04-01");
+      expect(onCustomChange).toHaveBeenLastCalledWith("2024-04-01", "2024-10-31");
     });
   });
 

@@ -25,11 +25,11 @@ export function PillTabs({ tabs, value, onChange, size = "md", className }: Pill
           onClick={() => tab.value !== value && onChange(tab.value)}
           className={cn(
             "font-medium transition-colors inline-flex items-center gap-1.5 rounded-md",
-            isSmall ? "px-2 py-0.5 text-[10px]" : "px-3 py-1.5 text-sm rounded-lg",
+            isSmall ? "px-2 py-0.5 text-[10px]" : "px-3.5 py-1.5 text-sm rounded-full",
             tab.value === value
               ? isSmall
                 ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-400 shadow-sm"
-                : "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-400"
+                : "bg-brand-600 text-white shadow-sm"
               : "text-text-tertiary hover:text-text-secondary hover:bg-surface-2"
           )}
         >
@@ -40,7 +40,9 @@ export function PillTabs({ tabs, value, onChange, size = "md", className }: Pill
                 "inline-flex items-center justify-center rounded-full font-medium min-w-[18px] px-1",
                 isSmall ? "text-[9px]" : "text-[11px]",
                 tab.value === value
-                  ? "bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-400"
+                  ? isSmall
+                    ? "bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-400"
+                    : "bg-white/25 text-white"
                   : "bg-surface-3 text-text-tertiary"
               )}
             >

@@ -116,7 +116,7 @@ test.describe("Expenses — Mutation", () => {
     // Payment Mode listbox
     await expect(dialog.getByText(/payment mode/i)).toBeVisible();
     // Date field
-    await expect(dialog.locator('input[type="date"]')).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /^date$/i })).toBeVisible();
   });
 
   test("Add Expense validates required fields", async () => {

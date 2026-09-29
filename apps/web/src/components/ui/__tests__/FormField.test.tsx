@@ -18,6 +18,7 @@
 
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import { FormField, InputField, SelectField, TextareaField } from "../FormField";
 
@@ -150,7 +151,7 @@ describe("SelectField — labelled native <select> element", () => {
     expect(screen.getByRole("combobox")).toBeInTheDocument();
   });
 
-  it("renders all provided option children inside the select", () => {
+  it("renders all provided option children inside the select", async () => {
     render(
       <SelectField label="Financial year">
         <option value="2024-25">2024-25</option>
@@ -158,6 +159,8 @@ describe("SelectField — labelled native <select> element", () => {
       </SelectField>
     );
 
+    // The custom select lists its options once opened.
+    await userEvent.click(screen.getByRole("combobox"));
     expect(screen.getByRole("option", { name: "2024-25" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "2025-26" })).toBeInTheDocument();
   });

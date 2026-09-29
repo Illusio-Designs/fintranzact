@@ -14,6 +14,9 @@ import { Listbox } from "@/components/ui/Listbox";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Spinner } from "@/components/ui/Spinner";
+import { Icon } from "@/components/ui/Icon";
+import { Alert02Icon } from "@hugeicons/core-free-icons";
+import { Select } from "@/components/ui/Select";
 
 export const Route = createFileRoute("/itc")({
   component: ITCPage,
@@ -142,7 +145,7 @@ function ITCPage() {
 
       {/* Period selector */}
       <div className="flex items-center gap-3 mb-6">
-        <select
+        <Select
           className="input w-40"
           value={month}
           onChange={(e) => setMonth(Number(e.target.value))}
@@ -151,8 +154,8 @@ function ITCPage() {
           {months.map((m, i) => (
             <option key={i} value={i + 1}>{m}</option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
           className="input w-28"
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
@@ -161,7 +164,7 @@ function ITCPage() {
           {years.map((y) => (
             <option key={y} value={y}>{y}</option>
           ))}
-        </select>
+        </Select>
         <span className="text-xs text-text-tertiary ml-2">
           Return period: {months[month - 1]} {year}
         </span>
@@ -660,9 +663,7 @@ function AgingAlertsView() {
       {criticalCount > 0 && (
         <div className="card px-4 py-3 border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800">
           <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+            <Icon icon={Alert02Icon} size={20} className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-red-700 dark:text-red-400">
                 {criticalCount} critical alert{criticalCount !== 1 ? "s" : ""} — ITC at risk of expiry

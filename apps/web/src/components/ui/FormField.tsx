@@ -1,5 +1,14 @@
-import { ReactNode, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, useId } from "react";
+import {
+  ChangeEvent,
+  ReactNode,
+  InputHTMLAttributes,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+  useId,
+} from "react";
 import { cn } from "@/lib/utils";
+import { Select } from "./Select";
+import { DateInput } from "./DateInput";
 
 interface FormFieldProps {
   label: string;
@@ -37,6 +46,32 @@ export function InputField({ label, error, required, className, id, ...props }: 
   // the caller does not supply an explicit id.
   const autoId = useId();
   const fieldId = id ?? autoId;
+  if (props.type === "date") {
+    // Dates use the custom calendar popover instead of the browser's picker.
+    const { value, defaultValue, onChange, onBlur, min, max, name, disabled, autoFocus, placeholder } = props;
+    return (
+      <FormField label={label} error={error} required={required} htmlFor={fieldId}>
+        <DateInput
+          id={fieldId}
+          className={className}
+          value={value === undefined ? undefined : String(value ?? "")}
+          defaultValue={defaultValue === undefined ? undefined : String(defaultValue)}
+          onChange={(e) => onChange?.(e as unknown as ChangeEvent<HTMLInputElement>)}
+          onBlur={onBlur ? () => onBlur({} as never) : undefined}
+          min={min === undefined ? undefined : String(min)}
+          max={max === undefined ? undefined : String(max)}
+          name={name}
+          disabled={disabled}
+          required={required}
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={props["aria-describedby"]}
+          data-testid={(props as { "data-testid"?: string })["data-testid"]}
+        />
+      </FormField>
+    );
+  }
   return (
     <FormField label={label} error={error} required={required} htmlFor={fieldId}>
       <input id={fieldId} className={cn("input", className)} {...props} />
@@ -64,9 +99,21 @@ export function SelectField({
   const fieldId = id ?? autoId;
   return (
     <FormField label={label} error={error} required={required} htmlFor={fieldId}>
-      <select id={fieldId} className={cn("input", className)} {...props}>
+      <Select
+        id={fieldId}
+        className={className}
+        value={props.value as string | number | undefined}
+        defaultValue={props.defaultValue as string | number | undefined}
+        onChange={(e) => props.onChange?.(e as unknown as ChangeEvent<HTMLSelectElement>)}
+        name={props.name}
+        disabled={props.disabled}
+        required={required}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={props["aria-describedby"]}
+        data-testid={(props as { "data-testid"?: string })["data-testid"]}
+      >
         {children}
-      </select>
+      </Select>
     </FormField>
   );
 }
