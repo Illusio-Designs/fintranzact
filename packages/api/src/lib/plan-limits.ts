@@ -12,89 +12,18 @@ import { eq, and, gt, isNull, count } from "drizzle-orm";
 import { controlDb, tenants, tenantMembers, invitations } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 import { businesses } from "@fintranzact/db";
+import { PLAN_LIMITS, type PlanLimits } from "@fintranzact/shared";
 
 // ── Plan limit definitions ────────────────────────────────────────────────────
+// Defined once in @fintranzact/shared so the pricing page shows exactly the
+// limits enforced here.
 
-export interface PlanLimits {
-  maxOwnedOrgs: number;         // orgs a user can own (across all their tenants)
-  maxBusinesses: number;        // businesses per tenant
-  maxTeamMembers: number;       // members + pending invites per tenant
-  maxConcurrentSessions: number;
-  maxApiKeys: number;
-  recurringRunsPerMonth: number;
-  auditRetentionDays: number | null; // null = unlimited
-  dataExport: boolean;
-  onlineStore: boolean;
-  pdfBranding: boolean;         // true = shows "Powered by Fintranzact"
-}
-
-const PLAN_LIMITS: Record<string, PlanLimits> = {
-  forever_free: {
-    maxOwnedOrgs: Infinity,
-    maxBusinesses: Infinity,
-    maxTeamMembers: Infinity,
-    maxConcurrentSessions: Infinity,
-    maxApiKeys: Infinity,
-    recurringRunsPerMonth: Infinity,
-    auditRetentionDays: null,
-    dataExport: true,
-    onlineStore: true,
-    pdfBranding: false,
-  },
-  free: {
-    maxOwnedOrgs: 1,
-    maxBusinesses: 1,
-    maxTeamMembers: 3,
-    maxConcurrentSessions: 3,
-    maxApiKeys: 0,
-    recurringRunsPerMonth: 5,
-    auditRetentionDays: 30,
-    dataExport: false,
-    onlineStore: false,
-    pdfBranding: true,
-  },
-  pro: {
-    maxOwnedOrgs: 3,
-    maxBusinesses: 5,
-    maxTeamMembers: 15,
-    maxConcurrentSessions: 10,
-    maxApiKeys: 3,
-    recurringRunsPerMonth: Infinity,
-    auditRetentionDays: 365,
-    dataExport: true,
-    onlineStore: true,
-    pdfBranding: false,
-  },
-  business: {
-    maxOwnedOrgs: Infinity,
-    maxBusinesses: Infinity,
-    maxTeamMembers: Infinity,
-    maxConcurrentSessions: Infinity,
-    maxApiKeys: Infinity,
-    recurringRunsPerMonth: Infinity,
-    auditRetentionDays: null,
-    dataExport: true,
-    onlineStore: true,
-    pdfBranding: false,
-  },
-  enterprise: {
-    maxOwnedOrgs: Infinity,
-    maxBusinesses: Infinity,
-    maxTeamMembers: Infinity,
-    maxConcurrentSessions: Infinity,
-    maxApiKeys: Infinity,
-    recurringRunsPerMonth: Infinity,
-    auditRetentionDays: null,
-    dataExport: true,
-    onlineStore: true,
-    pdfBranding: false,
-  },
-};
+export type { PlanLimits };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function getLimits(plan: string): PlanLimits {
-  return PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+  return PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS] ?? PLAN_LIMITS.free;
 }
 
 /** Backwards-compat export used by recurring invoice scheduler. */

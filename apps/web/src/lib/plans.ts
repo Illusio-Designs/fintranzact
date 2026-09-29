@@ -1,51 +1,14 @@
 /**
- * Plan catalogue shown on the public pricing page and during sign-up plan
- * selection. Keep both in sync by editing only this list.
+ * Plans shown on the public pricing page and during sign-up plan selection.
+ * The data lives in @fintranzact/shared next to the limits the API enforces,
+ * so prices, features and limits stay in one place.
  */
+import { formatPlanPrice, PLANS, type PlanId, type PlanInfo } from "@fintranzact/shared";
 
-export type PlanId = "forever_free" | "free" | "pro" | "business" | "enterprise";
+export type { PlanId, PlanInfo };
+export { PLAN_LIMITS, formatPlanLimit, formatPlanPrice } from "@fintranzact/shared";
 
-export const PLAN_OPTIONS: Array<{
-  id: PlanId;
-  name: string;
-  tagline: string;
-  price: string;
-  features: string[];
-  highlight?: boolean;
-}> = [
-  {
-    id: "forever_free",
-    name: "Forever Free",
-    tagline: "Unlimited for life",
-    price: "₹0",
-    features: [
-      "Unlimited invoices, parties, and payments",
-      "Unlimited businesses and team members",
-      "Unlimited API access",
-      "No branding or paywall",
-    ],
-    highlight: true,
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    tagline: "Best for growing teams",
-    price: "Custom",
-    features: [
-      "Advanced automation and workflows",
-      "Priority support",
-      "Expanded collaboration",
-    ],
-  },
-  {
-    id: "business",
-    name: "Business",
-    tagline: "Scale without limits",
-    price: "Custom",
-    features: [
-      "Multi-tenant controls",
-      "Premium reporting",
-      "Dedicated onboarding",
-    ],
-  },
-];
+export const PLAN_OPTIONS: Array<PlanInfo & { price: string }> = PLANS.map((plan) => ({
+  ...plan,
+  price: formatPlanPrice(plan),
+}));
