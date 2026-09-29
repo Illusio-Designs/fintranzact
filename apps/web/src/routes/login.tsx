@@ -524,7 +524,7 @@ function LoginPage() {
   /**
    * Wraps a form submission: opens the Turnstile modal, then fires the action with the token.
    * On desktop (Tauri), skips the modal and fires immediately with no token — the API has
-   * a matching carve-out that trusts the `x-hisaabo-client: desktop` header.
+   * a matching carve-out that trusts the `x-fintranzact-client: desktop` header.
    */
   function withTurnstile(action: (token: string | undefined) => void) {
     if (isDesktop()) {

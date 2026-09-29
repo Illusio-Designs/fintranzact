@@ -571,7 +571,7 @@ Copy `.env.example` to `.env`. Key variables:
 
 | Variable | Description | Example |
 |---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://hisaabo:pass@localhost:5432/hisaabo` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://fintranzact:pass@localhost:5432/fintranzact` |
 | `PORT` | API server port | `3000` |
 | `CORS_ORIGINS` | Allowed origins (comma-separated) | `https://fintranzact-web.vercel.app` |
 | `APP_URL` | Frontend URL (for magic link emails) | `https://fintranzact-web.vercel.app` |

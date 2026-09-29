@@ -175,8 +175,8 @@ async function callIssueAccessToken(): Promise<{ accessToken: string; expiresAt:
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${refreshToken}`,
-        "X-Requested-With": "hisaabo",
-        "X-Hisaabo-Client": "desktop",
+        "X-Requested-With": "fintranzact",
+        "X-Fintranzact-Client": "desktop",
       },
       credentials: "omit",
       body: JSON.stringify({ "0": { json: null } }),

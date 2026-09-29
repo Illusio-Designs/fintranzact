@@ -3,7 +3,7 @@
  *
  * WHY THIS FILE EXISTS:
  * State-changing requests authenticated via cookies must carry the
- * `X-Requested-With: hisaabo` header. This blocks cross-origin form
+ * `X-Requested-With: fintranzact` header (legacy `hisaabo` still accepted). This blocks cross-origin form
  * submissions and navigation-based CSRF attacks on cookie-authenticated
  * endpoints (web app, desktop).
  *
@@ -46,6 +46,7 @@
  */
 
 import type { Context, Next } from "hono";
+import { isFirstPartyRequestedWith } from "./client-headers.js";
 
 /**
  * Tauri desktop webview origins. These are first-party, shipped-app
@@ -108,7 +109,7 @@ export interface CsrfMiddlewareOptions {
 }
 
 /**
- * Build a Hono middleware that enforces the `X-Requested-With: hisaabo`
+ * Build a Hono middleware that enforces the `X-Requested-With: fintranzact`
  * CSRF header on state-changing, cookie-authenticated requests.
  *
  * Pulled out of `server.ts` so it can be unit-tested in isolation
@@ -185,7 +186,7 @@ export function createCsrfMiddleware(options: CsrfMiddlewareOptions = {}) {
 
     // Cookie-authenticated state-changing request → require CSRF header.
     const xrw = c.req.header("x-requested-with");
-    if (xrw !== "hisaabo") {
+    if (!isFirstPartyRequestedWith(xrw)) {
       return c.json({ error: "CSRF validation failed" }, 403);
     }
 

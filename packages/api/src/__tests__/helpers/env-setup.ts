@@ -15,7 +15,7 @@
 
 const testUrl =
   process.env.TEST_DATABASE_URL ??
-  "postgresql://test:test@localhost:5433/hisaabo_test";
+  "postgresql://test:test@localhost:5433/fintranzact_test";
 
 process.env.DATABASE_URL = testUrl;
 process.env.CONTROL_DATABASE_URL = testUrl;

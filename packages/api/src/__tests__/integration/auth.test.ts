@@ -53,7 +53,7 @@ function callerWithSession(sessionId: string, userId: string, email: string, ten
     // The tRPC-layer CSRF middleware requires this sentinel on any
     // cookie-authenticated POST (see `packages/api/src/trpc.ts`). Real
     // web clients send it unconditionally; integration tests must match.
-    "x-requested-with": "hisaabo",
+    "x-requested-with": "fintranzact",
     ...(tenantId ? {} : {}),
   });
   const req = new Request("http://localhost:3000/api/trpc/test", {

@@ -74,7 +74,7 @@ describe("CSRF middleware — Hono layer for non-tRPC routes", () => {
     expect(body).toEqual({ ok: true });
   });
 
-  it("CSRF middleware still rejects POST requests that have a session_id cookie, no Authorization header, and no X-Requested-With: hisaabo — this is the original cookie-auth browser threat model and must stay protected", async () => {
+  it("CSRF middleware still rejects POST requests that have a session_id cookie, no Authorization header, and no X-Requested-With: fintranzact — this is the original cookie-auth browser threat model and must stay protected", async () => {
     const app = buildTestApp();
 
     // Classic browser-origin CSRF: attacker-controlled page submits
@@ -95,10 +95,28 @@ describe("CSRF middleware — Hono layer for non-tRPC routes", () => {
     expect(body).toEqual({ error: "CSRF validation failed" });
   });
 
-  it("CSRF middleware allows POST when the request has session_id cookie and X-Requested-With: hisaabo — web and desktop clients pass unchanged", async () => {
+  it("CSRF middleware allows POST when the request has session_id cookie and X-Requested-With: fintranzact — web and desktop clients pass unchanged", async () => {
     const app = buildTestApp();
 
     // Web / desktop Tauri: cookies + the sentinel header the JS client sets.
+    const res = await app.request("/api/store/order", {
+      method: "POST",
+      headers: {
+        "cookie": "session_id=real-browser-session",
+        "x-requested-with": "fintranzact",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ items: [] }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ ok: true });
+  });
+
+  it("CSRF middleware still accepts the legacy X-Requested-With: hisaabo value — already-installed mobile/desktop builds must keep working after the rename", async () => {
+    const app = buildTestApp();
+
     const res = await app.request("/api/store/order", {
       method: "POST",
       headers: {
@@ -110,8 +128,22 @@ describe("CSRF middleware — Hono layer for non-tRPC routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toEqual({ ok: true });
+  });
+
+  it("CSRF middleware rejects any other X-Requested-With value on a cookie POST — only the first-party markers are accepted", async () => {
+    const app = buildTestApp();
+
+    const res = await app.request("/api/store/order", {
+      method: "POST",
+      headers: {
+        "cookie": "session_id=real-browser-session",
+        "x-requested-with": "XMLHttpRequest",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ items: [] }),
+    });
+
+    expect(res.status).toBe(403);
   });
 
   it("CSRF middleware allows POST when the request has no session_id cookie at all — unauthenticated public endpoints like sendMagicLink must not be gated by CSRF", async () => {

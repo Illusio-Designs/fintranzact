@@ -7,7 +7,7 @@
 #
 # Usage:
 #   scripts/test-backup-restore.sh              # uses localhost, user=postgres
-#   PGHOST=localhost PGUSER=hisaabo scripts/test-backup-restore.sh
+#   PGHOST=localhost PGUSER=fintranzact scripts/test-backup-restore.sh
 #
 # Exit code 0 = all tests passed, non-zero = failure
 set -euo pipefail
@@ -21,7 +21,7 @@ BACKUP_DIR=$(mktemp -d)
 TEST_PREFIX="_backuptest_$$"
 
 # Test database names — use unique prefix to avoid collisions
-DB_CONTROL="${TEST_PREFIX}_hisaabo"
+DB_CONTROL="${TEST_PREFIX}_fintranzact"
 DB_TENANT_A="${TEST_PREFIX}_tenant_alpha"
 DB_TENANT_B="${TEST_PREFIX}_tenant_beta"
 ALL_DBS="$DB_CONTROL $DB_TENANT_A $DB_TENANT_B"

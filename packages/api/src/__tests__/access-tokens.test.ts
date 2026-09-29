@@ -41,8 +41,8 @@ function makeBearerRequest(token: string, xClient = "desktop") {
   const headers = new Headers({
     "content-type": "application/json",
     "Authorization": `Bearer ${token}`,
-    "x-requested-with": "hisaabo",
-    "x-hisaabo-client": xClient,
+    "x-requested-with": "fintranzact",
+    "x-fintranzact-client": xClient,
   });
   return new Request("http://localhost:3000/api/trpc/auth.issueAccessToken", {
     method: "POST",
