@@ -6,6 +6,7 @@ import { secureHeaders } from "hono/secure-headers";
 import type { Context, Next } from "hono";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { eq, and, gt, lt, inArray, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 import { escapeLike } from "./lib/escape-like.js";
 import { buildBusinessDateFilter } from "./lib/business-date.js";
 import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
@@ -18,6 +19,7 @@ import { appRouter } from "./router.js";
 import { createContext, getSessionIdFromRequest } from "./context.js";
 import type { InvoicePDFData } from "./lib/invoice-pdf.js";
 import { generateLedgerPDF } from "./lib/ledger-pdf.js";
+import { generateLabelSheetPDF, LABEL_PRESETS } from "./lib/label-pdf.js";
 import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, tenantMembers, magicLinkTokens, bankAccounts, storeOrders, payments, assertMigrationsPresent } from "@fintranzact/db";
 import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
@@ -1653,6 +1655,123 @@ app.post("/store/:slug/order", async (c) => {
 });
 
 // ── Self-export download endpoint ─────────────────────────────
+// Label print request. Quantities are bounded here as well as in the PDF
+// generator so an absurd payload is rejected before any work happens.
+const labelRequestSchema = z.object({
+  presetId: z.enum(Object.keys(LABEL_PRESETS) as [string, ...string[]]),
+  showPrice: z.boolean().default(true),
+  showName: z.boolean().default(true),
+  lines: z.array(z.object({
+    itemId: z.string().uuid(),
+    variantId: z.string().uuid().optional(),
+    quantity: z.number().int().min(1).max(500),
+  })).min(1).max(500),
+});
+
+// POST /api/items/labels — barcode label sheet as a PDF.
+//
+// POST rather than GET because the body carries a per-item quantity map, and
+// a label run can cover far more items than a query string should hold.
+// Auth chain is identical to the other PDF endpoints.
+app.post("/api/items/labels", async (c) => {
+  if (!checkPdfRateLimit(getClientIp(c))) {
+    return c.json({ error: "Too many PDF requests. Try again later." }, 429);
+  }
+
+  const sessionId = getSessionIdFromRequest(c.req.raw);
+  if (!sessionId) return c.json({ error: "Unauthorized" }, 401);
+
+  const [sessionRow] = await controlDb
+    .select({ userId: sessions.userId, tenantId: sessions.tenantId })
+    .from(sessions)
+    .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, new Date())))
+    .limit(1);
+
+  if (!sessionRow) return c.json({ error: "Unauthorized" }, 401);
+  if (!sessionRow.tenantId) return c.json({ error: "No organization selected" }, 400);
+
+  const [tenant] = await controlDb.select({ status: tenants.status })
+    .from(tenants).where(eq(tenants.id, sessionRow.tenantId)).limit(1);
+  if (!tenant || tenant.status !== "active") return c.json({ error: "Organization suspended" }, 403);
+
+  const businessId = c.req.header("x-business-id");
+  if (!businessId) return c.json({ error: "No business selected" }, 400);
+
+  const db = await getTenantDb(sessionRow.tenantId);
+  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
+  if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
+
+  const parsed = labelRequestSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({ error: "Invalid label request", detail: parsed.error.flatten() }, 400);
+  }
+  const body = parsed.data;
+
+  const [biz] = await db.select({ name: businesses.name })
+    .from(businesses).where(eq(businesses.id, businessId)).limit(1);
+
+  // Read the catalogue rows server-side: the client sends ids and counts, and
+  // never the printed values, so a tampered request cannot put arbitrary text
+  // or someone else's product on a label.
+  const itemIds = body.lines.map((l) => l.itemId);
+  const rows = await db.select().from(items)
+    .where(and(
+      eq(items.businessId, businessId),
+      inArray(items.id, itemIds),
+      isNull(items.deletedAt),
+    ));
+  const itemsById = new Map(rows.map((r) => [r.id, r]));
+
+  const variantIds = body.lines.map((l) => l.variantId).filter((v): v is string => !!v);
+  const variantRows = variantIds.length
+    ? await db.select().from(itemVariants)
+        .where(and(inArray(itemVariants.id, variantIds), isNull(itemVariants.deletedAt)))
+    : [];
+  const variantsById = new Map(variantRows.map((v) => [v.id, v]));
+
+  const labelItems = body.lines.flatMap((line) => {
+    const item = itemsById.get(line.itemId);
+    if (!item) return [];
+
+    const variant = line.variantId ? variantsById.get(line.variantId) : null;
+    // A variant belonging to a different item would be a mismatched request.
+    if (line.variantId && (!variant || variant.itemId !== item.id)) return [];
+
+    const price = variant?.salePrice ?? item.salePrice;
+    return [{
+      name: item.name,
+      barcode: (variant?.barcode ?? item.barcode ?? "").trim(),
+      price: price ? `₹${price}` : undefined,
+      variantLabel: variant
+        ? Object.entries(variant.attributeValues as Record<string, string>)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ")
+        : undefined,
+      quantity: line.quantity,
+    }];
+  });
+
+  const { pdf, printed, skipped } = await generateLabelSheetPDF({
+    businessName: biz?.name ?? "",
+    presetId: body.presetId,
+    items: labelItems,
+    showPrice: body.showPrice,
+    showName: body.showName,
+  });
+
+  return new Response(new Uint8Array(pdf), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": 'inline; filename="labels.pdf"',
+      "Cache-Control": "no-store",
+      // Surfaced in the UI so a silent skip never looks like a successful run.
+      "X-Labels-Printed": String(printed),
+      "X-Labels-Skipped": encodeURIComponent(JSON.stringify(skipped)),
+    },
+  });
+});
+
 registerExportRoute(app);
 
 // ── Self-import upload endpoint ────────────────────────────────

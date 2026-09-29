@@ -277,6 +277,15 @@ export const decimalStr3 = z.string().regex(/^-?\d+(\.\d{1,3})?$/);
 export const itemVariantSchema = z.object({
   attributeValues: z.record(z.string().min(1), z.string().min(1)),
   sku: z.string().max(50).optional(),
+  // Scannable code. Printable ASCII only — Code 128 encodes exactly that
+  // range, and it keeps stray whitespace from a scanner out of the value.
+  barcode: z
+    .string()
+    .max(64)
+    .regex(/^[ -~]*$/, "Barcode may only contain printable characters")
+    .optional()
+    .or(z.literal("")),
+
   salePrice: decimalStr.optional(),
   purchasePrice: decimalStr.optional(),
   stockQuantity: decimalStr3.default("0"),
@@ -289,6 +298,14 @@ const createItemBaseSchema = z.object({
   name: z.string().min(1).max(200),
   hsn: z.string().max(20).optional(),
   sku: z.string().max(50).optional(),
+  // Scannable code. Printable ASCII only — Code 128 encodes exactly that
+  // range, and it keeps stray whitespace from a scanner out of the value.
+  barcode: z
+    .string()
+    .max(64)
+    .regex(/^[ -~]*$/, "Barcode may only contain printable characters")
+    .optional()
+    .or(z.literal("")),
   unit: z.enum(units).default("pcs"),
   itemMode: z.enum(itemModes).default("simple"),
   salePrice: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),

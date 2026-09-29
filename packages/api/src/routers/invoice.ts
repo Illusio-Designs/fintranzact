@@ -21,7 +21,77 @@ import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPClient, IRPError } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
+import { internalBarcodeFor } from "../lib/internal-barcode.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
+
+/**
+ * Give an item (or variant) an in-store barcode if it does not have one.
+ *
+ * CONCURRENCY:
+ * The counter is bumped with a single UPDATE ... RETURNING, so two purchases
+ * landing at once each get their own number — the same allocate-then-increment
+ * approach the document numbers use. Reading then writing would let both read
+ * the same value.
+ *
+ * Opt-out is per business (`autoGenerateBarcodes`), for shops that only ever
+ * scan the supplier's own barcode and do not want a second code on the shelf.
+ */
+async function ensureBarcodeForStock(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  businessId: string,
+  itemId: string,
+  variantId: string | null,
+): Promise<string | null> {
+  const [biz] = await tx
+    .select({ auto: businesses.autoGenerateBarcodes })
+    .from(businesses)
+    .where(eq(businesses.id, businessId))
+    .limit(1);
+  if (!biz?.auto) return null;
+
+  // Only fill a gap; a supplier's printed barcode always wins.
+  if (variantId) {
+    const [variant] = await tx
+      .select({ barcode: itemVariants.barcode })
+      .from(itemVariants)
+      .where(eq(itemVariants.id, variantId))
+      .limit(1);
+    if (!variant || variant.barcode) return null;
+  } else {
+    const [item] = await tx
+      .select({ barcode: items.barcode })
+      .from(items)
+      .where(eq(items.id, itemId))
+      .limit(1);
+    if (!item || item.barcode) return null;
+  }
+
+  const [counter] = await tx
+    .update(businesses)
+    .set({ nextBarcodeNumber: sql`${businesses.nextBarcodeNumber} + 1` })
+    .where(eq(businesses.id, businessId))
+    .returning({ next: businesses.nextBarcodeNumber });
+
+  // RETURNING gives the post-increment value, so the number just reserved is
+  // one below it.
+  const sequence = (counter?.next ?? 2) - 1;
+  const barcode = internalBarcodeFor(sequence);
+
+  if (variantId) {
+    await tx
+      .update(itemVariants)
+      .set({ barcode, updatedAt: new Date() })
+      .where(eq(itemVariants.id, variantId));
+  } else {
+    await tx
+      .update(items)
+      .set({ barcode, updatedAt: new Date() })
+      .where(eq(items.id, itemId));
+  }
+
+  return barcode;
+}
 
 export const invoiceRouter = router({
   list: viewerProcedure
@@ -466,6 +536,15 @@ export const invoiceRouter = router({
             quantity: signedQuantity,
             actorUserId: ctx.user!.id,
           });
+
+          // Goods receipt is the moment stock becomes something you put on a
+          // shelf, so anything arriving without a scannable code gets an
+          // in-store one now — ready to label straight off the purchase.
+          // Sales never mint codes: selling an unbarcoded item is not a
+          // reason to relabel it.
+          if (input.type === "purchase") {
+            await ensureBarcodeForStock(tx, ctx.businessId, itemId, li.variantId || null);
+          }
         }
       }
 

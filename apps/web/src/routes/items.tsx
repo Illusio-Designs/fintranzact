@@ -9,6 +9,7 @@ import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import type { ItemType, ItemMode } from "@fintranzact/shared";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { LabelPrintDialog, type LabelCandidate } from "@/components/items/LabelPrintDialog";
 import { Modal } from "@/components/ui/Modal";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
@@ -123,6 +124,7 @@ function ItemsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const deleteConfirm = useDeleteConfirmation();
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [showLabels, setShowLabels] = useState(false);
   const [editItemId, setEditItemId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -140,6 +142,21 @@ function ItemsPage() {
 
   const { data: lowStockCount } = trpc.item.lowStockCount.useQuery();
   const utils = trpc.useUtils();
+
+  // Labels cover the items currently on screen, so the search and low-stock
+  // filters double as the label selection — "show me what needs relabelling,
+  // then print exactly that".
+  const labelCandidates: LabelCandidate[] = useMemo(
+    () =>
+      (data?.data ?? [])
+        .filter((it) => it.itemType === "product")
+        .map((it) => ({
+          itemId: it.id,
+          name: it.name,
+          barcode: it.barcode ?? null,
+        })),
+    [data],
+  );
 
   async function fetchAllItems() {
     let allData: any[] = [];
@@ -274,13 +291,21 @@ function ItemsPage() {
         title="Items"
         description="Products and services inventory"
         actions={
-          <button
-            className="btn-primary inline-flex items-center gap-2"
-            onClick={() => setShowAddModal(true)}
-          >
-            + Add Item
-            <KbdShortcut keys={["N"]} className="opacity-60" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="btn-secondary inline-flex items-center gap-2"
+              onClick={() => setShowLabels(true)}
+            >
+              Print labels
+            </button>
+            <button
+              className="btn-primary inline-flex items-center gap-2"
+              onClick={() => setShowAddModal(true)}
+            >
+              + Add Item
+              <KbdShortcut keys={["N"]} className="opacity-60" />
+            </button>
+          </div>
         }
       />
 
@@ -456,6 +481,12 @@ function ItemsPage() {
       />
 
       {/* Item Detail */}
+      <LabelPrintDialog
+        open={showLabels}
+        onClose={() => setShowLabels(false)}
+        candidates={labelCandidates}
+      />
+
       {selectedItemId && (
         <ItemDetailPanel
           itemId={selectedItemId}
@@ -482,6 +513,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [itemType, setItemType] = useState<ItemType>("product");
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
+  const [barcode, setBarcode] = useState("");
   const [category, setCategory] = useState("");
   const [hsn, setHsn] = useState("");
   const [salePrice, setSalePrice] = useState("");
@@ -590,6 +622,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
     setItemType("product");
     setName("");
     setSku("");
+    setBarcode("");
     setCategory("");
     setHsn("");
     setSalePrice("");
@@ -628,6 +661,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
       itemMode: effectiveMode,
       name,
       sku: sku || undefined,
+      barcode: barcode || undefined,
       category: category || undefined,
       hsn: hsn || undefined,
       salePrice: salePrice || undefined,
@@ -762,6 +796,14 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                 value={hsn}
                 onChange={(e) => setHsn(e.target.value)}
                 placeholder="HSN/SAC code"
+              />
+            </div>
+            <div className="mt-3">
+              <InputField
+                label="Barcode"
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                placeholder="Scan or type — generated on purchase if left blank"
               />
             </div>
             <div className="mt-3">
@@ -1034,6 +1076,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
   const [itemType, setItemType] = useState<ItemType>("product");
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
+  const [barcode, setBarcode] = useState("");
   const [category, setCategory] = useState("");
   const [hsn, setHsn] = useState("");
   const [salePrice, setSalePrice] = useState("");
@@ -1061,6 +1104,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
     setItemType(item.itemType ?? "product");
     setName(item.name);
     setSku(item.sku ?? "");
+    setBarcode(item.barcode ?? "");
     setCategory(item.category ?? "");
     setHsn(item.hsn ?? "");
     setSalePrice(item.salePrice ?? "");
@@ -1179,6 +1223,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         itemType,
         name,
         sku: sku || undefined,
+        barcode: barcode || undefined,
         category: category || undefined,
         hsn: hsn || undefined,
         salePrice: salePrice || undefined,
@@ -1327,6 +1372,14 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
                 value={hsn}
                 onChange={(e) => setHsn(e.target.value)}
                 placeholder="HSN/SAC code"
+              />
+            </div>
+            <div className="mt-3">
+              <InputField
+                label="Barcode"
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                placeholder="Scan or type — generated on purchase if left blank"
               />
             </div>
             <div className="mt-3">
