@@ -319,6 +319,9 @@ export function BusinessForm({
 
   const [gstin, setGstin] = useState(existing?.gstin || "");
   const [pan, setPan] = useState(existing?.pan || "");
+  // PAN last auto-filled from the GSTIN — lets a corrected GSTIN update the
+  // PAN again without overwriting a PAN the user typed by hand.
+  const [autoPan, setAutoPan] = useState<string | null>(null);
   const [tan, setTan] = useState(existing?.tan || "");
   const [cin, setCin] = useState(existing?.cin || "");
   const [llpin, setLlpin] = useState(existing?.llpin || "");
@@ -675,7 +678,10 @@ export function BusinessForm({
                     }
                   }}
                   onPanDetected={(detectedPan) => {
-                    if (!pan) setPan(detectedPan);
+                    if (!pan || pan === autoPan) {
+                      setPan(detectedPan);
+                      setAutoPan(detectedPan);
+                    }
                   }}
                   error={errors.gstin}
                 />

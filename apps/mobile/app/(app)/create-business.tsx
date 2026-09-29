@@ -18,6 +18,8 @@ import { useBusinessStore } from "../../src/stores/business";
 import { makeStyles } from "../../src/lib/makeStyles";
 import { useColors } from "../../src/contexts/ThemeContext";
 
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
 interface FormState {
   name: string;
   legalName: string;
@@ -239,7 +241,19 @@ export default function CreateBusinessScreen() {
             ref={gstinRef}
             label="GSTIN"
             value={form.gstin}
-            onChangeText={(v) => setForm((f) => ({ ...f, gstin: v.toUpperCase() }))}
+            onChangeText={(v) =>
+              setForm((f) => {
+                const gstin = v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                // Characters 3-12 of a GSTIN are the business PAN. Fill it in
+                // unless the user already typed a different PAN themselves.
+                const prevPan = GSTIN_REGEX.test(f.gstin) ? f.gstin.slice(2, 12) : null;
+                const pan =
+                  GSTIN_REGEX.test(gstin) && (!f.pan || f.pan === prevPan)
+                    ? gstin.slice(2, 12)
+                    : f.pan;
+                return { ...f, gstin, pan };
+              })
+            }
             placeholder="22AAAAA0000A1Z5"
             autoCapitalize="characters"
             autoCorrect={false}
