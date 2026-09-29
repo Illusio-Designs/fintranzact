@@ -98,28 +98,14 @@ function PlanSelectionPage() {
               {selectedLabel}
             </div>
             <div className="mt-4 rounded-xl border border-border-light bg-surface-1 p-4 text-sm text-text-secondary">
-              {selectedPlan === "forever_free" ? (
-                <>
-                  <div className="font-semibold text-text-primary mb-1">
-                    Forever Free includes:
-                  </div>
-                  <ul className="space-y-2">
-                    <li>• Unlimited businesses, teams, and invoices</li>
-                    <li>• Full invoice and accounting features</li>
-                    <li>• Unlimited API and integrations</li>
-                  </ul>
-                </>
-              ) : (
-                <>
-                  <div className="font-semibold text-text-primary mb-1">
-                    This plan is best for scaling teams.
-                  </div>
-                  <p>
-                    Upgrade later after your business grows and needs extra
-                    automation or premium controls.
-                  </p>
-                </>
-              )}
+              <div className="font-semibold text-text-primary mb-1">
+                {selectedLabel} includes:
+              </div>
+              <ul className="space-y-2">
+                {(plans.find((plan) => plan.id === selectedPlan)?.features ?? []).map((feature) => (
+                  <li key={feature}>• {feature}</li>
+                ))}
+              </ul>
             </div>
 
             <button

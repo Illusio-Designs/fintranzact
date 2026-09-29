@@ -49,7 +49,7 @@ import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { LandingPage } from "@/components/LandingPage";
-import { isMarketingPath } from "@/components/marketing/MarketingLayout";
+import { AUTH_PUBLIC_PATHS, isMarketingPath } from "@/lib/public-paths";
 import { isDesktop } from "@/lib/isDesktop";
 import { clearDesktopToken } from "@/lib/desktop-session";
 
@@ -554,7 +554,20 @@ function RootLayout() {
     data: session,
     isLoading: sessionLoading,
     isFetching: sessionFetching,
-  } = trpc.auth.me.useQuery();
+    isError: sessionCheckFailed,
+    refetch: refetchSession,
+  } = trpc.auth.me.useQuery(undefined, {
+    // A failed check (network blip, cold start, 429/5xx) is not the same as
+    // being signed out, so retry a few times before giving up.
+    retry: (failureCount, error) => {
+      const code = (error as { data?: { code?: string } })?.data?.code;
+      return code !== "UNAUTHORIZED" && failureCount < 3;
+    },
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+  });
+  // We could not find out whether the visitor is signed in. Never treat that
+  // as "signed out" (that is what used to bounce people to /login at random).
+  const sessionUnknown = !session && sessionCheckFailed;
   const {
     data: tenantList,
     isLoading: tenantListLoading,
@@ -769,13 +782,7 @@ function RootLayout() {
     selectedTenantPlan !== null && selectedTenantPlan !== undefined;
 
   // Single consolidated redirect — priority order matters
-  const publicPaths = [
-    "/login",
-    "/auth/verify",
-    "/auth/complete-profile",
-    "/auth/verify-email-change",
-    "/invite",
-  ];
+  const publicPaths = AUTH_PUBLIC_PATHS;
   // Logged-out visitors to "/" on the web see the public landing page; the
   // desktop app has no marketing page and goes straight to login.
   const showsLandingPage = pathname === "/" && !isDesktop();
@@ -786,6 +793,7 @@ function RootLayout() {
   useEffect(() => {
     if (showsMarketingPage) return;
     if (sessionLoading || sessionFetching) return;
+    if (sessionUnknown) return;
 
     // Priority 1: Not authenticated → login
     // (the web root shows the public landing page instead).
@@ -882,6 +890,7 @@ function RootLayout() {
   }, [
     sessionLoading,
     sessionFetching,
+    sessionUnknown,
     session,
     businesses,
     navigate,
@@ -922,6 +931,25 @@ function RootLayout() {
 
   // Loading session
   if (sessionLoading) return loadingSpinner;
+
+  // Couldn't check the session (server unreachable): offer a retry instead
+  // of pretending the visitor is signed out.
+  if (sessionUnknown) {
+    if (showsLandingPage) return <LandingPage />;
+    if (publicPaths.some((p) => pathname.startsWith(p))) return <Outlet />;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-0 px-4">
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <Logo className="w-10 h-10" />
+          <p className="text-base font-semibold text-text-primary">We couldn't reach Fintranzact</p>
+          <p className="text-sm text-text-tertiary">Check your internet connection and try again.</p>
+          <button type="button" className="btn-primary mt-2" onClick={() => refetchSession()} disabled={sessionFetching}>
+            {sessionFetching ? "Retrying…" : "Try again"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Not authenticated
   if (!session?.user) {

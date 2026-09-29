@@ -5,6 +5,7 @@ import superjson from "superjson";
 import type { AppRouter } from "@fintranzact/api";
 import { isDesktop } from "./isDesktop";
 import { ensureAccessToken } from "./desktop-session";
+import { isAuthPublicPath, isMarketingPath } from "@/lib/public-paths";
 
 // The explicit `as any` cast avoids TS2742 "inferred type cannot be named" error caused
 // by tRPC's internal .d.mts paths resolving through hoisted node_modules.
@@ -92,6 +93,10 @@ function handleAuthError(error: unknown) {
   if (isRedirectingToLogin) return;
   const trpcError = error as { data?: { code?: string } };
   if (trpcError?.data?.code === "UNAUTHORIZED") {
+    // Public pages work signed out; a stray 401 there must not bounce the
+    // visitor to the login screen.
+    const path = window.location.pathname;
+    if (isMarketingPath(path) || isAuthPublicPath(path)) return;
     isRedirectingToLogin = true;
     // Use sessionStorage so the login page can show a message
     sessionStorage.setItem("sessionExpired", "1");
