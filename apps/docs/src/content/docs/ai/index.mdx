@@ -278,7 +278,7 @@ const { data, total } = await trpc.invoice.list.query({
 - 120 requests/minute for authenticated requests
 - 10 requests/minute for anonymous requests
 
-AI agent workflows that batch-process large datasets should spread requests over time or request a higher limit for self-hosted installations.
+AI agent workflows that batch-process large datasets should spread requests over time or contact Fintranzact support to request a higher limit.
 
 ### Type-safe client
 
@@ -340,7 +340,7 @@ The workflow:
 3. Surfaces items where you may be underpricing (leaving money on the table) or overpricing (losing sales)
 4. Suggests adjusted prices — you accept, modify, or dismiss each suggestion
 
-Your actual pricing data never leaves your server. The market data feeds are external; the comparison logic runs locally.
+Your actual pricing data stays in your Fintranzact account. The market data feeds are external; the comparison logic runs locally.
 
 ### Shiprocket Integration
 
@@ -494,5 +494,4 @@ Agent: "Hello! Your order SO-4821 (25 kg Basmati Rice) was dispatched
 - [Invoicing](/invoicing/) — Invoice structure, line items, tax calculation
 - [GST Compliance](/gst/) — GSTR-1, GSTR-3B, HSN codes, state-wise tax rules
 - [Online Store](/online-store/) — Store setup, catalog management, order fulfillment
-- [API Reference](https://api-docs.hisaabo.in) — Full tRPC procedure documentation
-- [Self-Hosting](/self-hosting/) — Production deployment, environment variables, security
+- [API Reference](https://api-docs.fintranzact.com) — Full tRPC procedure documentation

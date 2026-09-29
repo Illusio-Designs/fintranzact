@@ -23,7 +23,7 @@ export function getBusinessId() {
 function commonOptions() {
   // Desktop uses Bearer-token auth (see apps/web/src/lib/desktop-session.ts
   // for the rationale — SameSite=Lax cookies can't span `tauri.localhost`
-  // and `api.hisaabo.in`). Web keeps the HttpOnly cookie for XSS resistance.
+  // and `api.fintranzact.com`). Web keeps the HttpOnly cookie for XSS resistance.
   //
   // TWO-TOKEN FLOW (desktop):
   // `headers()` is async — tRPC supports this. On desktop we await

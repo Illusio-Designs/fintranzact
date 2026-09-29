@@ -494,7 +494,7 @@ function OverviewPage() {
                   </thead>
                   <tbody>
                     {[
-                      { origin: "Same origin (*.hisaabo.in)", auth: "Authenticated", limit: "120" },
+                      { origin: "Same origin (*.fintranzact.com)", auth: "Authenticated", limit: "120" },
                       { origin: "Same origin", auth: "Unauthenticated", limit: "60" },
                       { origin: "External", auth: "Authenticated", limit: "60" },
                       { origin: "External", auth: "Unauthenticated", limit: "10" },
@@ -508,7 +508,7 @@ function OverviewPage() {
                   </tbody>
                 </table>
                 <p className="mt-3" style={{ color: "var(--text-muted)" }}>
-                  Same-origin is determined by the <InlineCode>Origin</InlineCode> header matching configured CORS origins or <InlineCode>*.hisaabo.in</InlineCode> subdomains. Server-side calls without an Origin header are treated as same-origin.
+                  Same-origin is determined by the <InlineCode>Origin</InlineCode> header matching configured CORS origins or <InlineCode>*.fintranzact.com</InlineCode> subdomains. Server-side calls without an Origin header are treated as same-origin.
                 </p>
               </div>
             </div>

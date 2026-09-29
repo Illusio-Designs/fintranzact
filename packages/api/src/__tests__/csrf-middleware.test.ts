@@ -296,8 +296,8 @@ describe("SECURITY — CSRF middleware Bearer-auth Origin allowlist (P1 #7 defen
       expect(isOriginAllowedForBearer("https://app.hisaabo.in", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(true);
     });
 
-    it("returns true for https://billing.hisaabo.in — *.hisaabo.in wildcard covers all first-party subdomains", () => {
-      expect(isOriginAllowedForBearer("https://billing.hisaabo.in", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(true);
+    it("returns true for https://billing.fintranzact.com — *.fintranzact.com wildcard covers all first-party subdomains", () => {
+      expect(isOriginAllowedForBearer("https://billing.fintranzact.com", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(true);
     });
 
     it("returns true for http://tauri.localhost — Tauri desktop app on Linux/WSL must not be blocked by the allowlist", () => {
@@ -316,8 +316,8 @@ describe("SECURITY — CSRF middleware Bearer-auth Origin allowlist (P1 #7 defen
       expect(isOriginAllowedForBearer("https://evil.com", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(false);
     });
 
-    it("returns false for https://notreallyhisaabo.in.evil.com — subdomain spoofing attempt must not match the hisaabo.in regex", () => {
-      expect(isOriginAllowedForBearer("https://notreallyhisaabo.in.evil.com", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(false);
+    it("returns false for https://notreallyfintranzact.com.evil.com — subdomain spoofing attempt must not match the fintranzact.com regex", () => {
+      expect(isOriginAllowedForBearer("https://notreallyfintranzact.com.evil.com", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(false);
     });
 
     it("returns false for https://hisaabo.in.evil.com — another subdomain-spoofing variant that anchors '.in' mid-string", () => {
@@ -382,14 +382,14 @@ describe("SECURITY — CSRF middleware Bearer-auth Origin allowlist (P1 #7 defen
       expect(body).toEqual({ ok: true });
     });
 
-    it("Bearer + https://billing.hisaabo.in Origin → request passes — *.hisaabo.in wildcard allows any first-party subdomain", async () => {
+    it("Bearer + https://billing.fintranzact.com Origin → request passes — *.fintranzact.com wildcard allows any first-party subdomain", async () => {
       const app = buildTestApp();
 
       const res = await app.request("/api/store/order", {
         method: "POST",
         headers: {
           "authorization": "Bearer subdomain-token",
-          "origin": "https://billing.hisaabo.in",
+          "origin": "https://billing.fintranzact.com",
           "content-type": "application/json",
         },
         body: "{}",

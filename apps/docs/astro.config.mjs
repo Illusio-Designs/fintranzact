@@ -23,7 +23,6 @@ export default defineConfig({
           label: "Getting Started",
           items: [
             { label: "What is Fintranzact?", slug: "getting-started" },
-            { label: "Self-Hosting Setup", slug: "getting-started/self-hosting" },
             { label: "Create Your Business", slug: "getting-started/create-business" },
             { label: "Import Data", slug: "getting-started/import-data" },
           ],
@@ -82,7 +81,6 @@ export default defineConfig({
         {
           label: "Advanced",
           items: [
-            { label: "Self-Hosting Reference", slug: "self-hosting" },
             {
               label: "AI & Automation",
               items: [
@@ -119,5 +117,5 @@ export default defineConfig({
       ],
     }),
   ],
-  site: "https://docs.hisaabo.in",
+  site: "https://docs.fintranzact.com",
 });

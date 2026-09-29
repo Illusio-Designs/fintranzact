@@ -92,7 +92,7 @@ Go to Settings → Bank Accounts, edit your account, and enter the UPI ID (for e
 2. Click the **Download PDF** button in the invoice detail view. If you want a specific format, click the dropdown arrow next to the button and select A4, A5, or thermal.
 3. The PDF is generated on the server and downloaded to your browser's default download location.
 
-You can also share the PDF directly by clicking **Share** — this copies a download link to the clipboard (requires the invoice to be accessible from your server's URL).
+You can also share the PDF directly by clicking **Share** — this copies a download link to the clipboard.
 </ForDesktop>
 
 <ForMobile>
@@ -114,7 +114,7 @@ Logo support is available through the business settings. Upload a PNG or JPG log
 The thermal format is optimised for 80mm roll printers at the standard 203 DPI. The font size is fixed to fit the roll width. If text is too small on your specific printer, check your printer's scaling settings.
 
 **Can I customise the invoice template?**
-The PDF template is currently fixed in the codebase (`packages/api/src/lib/invoice-pdf.ts`). If you are self-hosting, you can modify this file and rebuild the Docker image to customise the layout. Community-contributed custom templates are welcome via pull request.
+The PDF template is currently fixed. You can add your logo, bank details, and default terms and conditions in your business settings.
 
 **Is the PDF generated on the server or in the browser?**
 The PDF is generated on the **server** using PDFKit (a Node.js library). This means it works correctly regardless of the browser or device the user is on, and the output is always consistent.

@@ -64,25 +64,25 @@ For the cloud tier, a CDN (Cloudflare) sits in front and caches catalog response
 
 ---
 
-### ADR-002: Path-Based Routing (`store.hisaabo.in/:slug`) Over Subdomain Routing
+### ADR-002: Path-Based Routing (`store.fintranzact.com/:slug`) Over Subdomain Routing
 
 **Status**: Proposed
 
-**Context**: The original request asks for `business-slug.store.hisaabo.in`. Wildcard subdomains require wildcard TLS certificates, DNS configuration, and custom domain support is complex (per-domain TLS via SNI). Self-hosters typically cannot set up wildcard DNS.
+**Context**: The original request asks for `business-slug.store.fintranzact.com`. Wildcard subdomains require wildcard TLS certificates, DNS configuration, and custom domain support is complex (per-domain TLS via SNI). Self-hosters typically cannot set up wildcard DNS.
 
 **Options considered**:
 
 | Option | Pros | Cons |
 |--------|------|------|
-| A. Wildcard subdomain `slug.store.hisaabo.in` | Pretty URLs; feels premium | Wildcard TLS; DNS config; self-hosters cannot replicate; cookie scoping headaches |
-| B. Path-based `store.hisaabo.in/slug` | Simple TLS; works for self-hosters; CDN-friendly | Less "branded" feel; slightly longer URLs |
+| A. Wildcard subdomain `slug.store.fintranzact.com` | Pretty URLs; feels premium | Wildcard TLS; DNS config; self-hosters cannot replicate; cookie scoping headaches |
+| B. Path-based `store.fintranzact.com/slug` | Simple TLS; works for self-hosters; CDN-friendly | Less "branded" feel; slightly longer URLs |
 | C. Path within main app `/store/slug` | Simplest; no new domain | Mixes public/private on same origin; cookie leakage risk |
 
-**Decision**: Option B for launch, with a redirect layer for Option A as a cloud-only premium feature later. The store lives at `store.hisaabo.in/:slug` (cloud) or `localhost:3000/store/:slug` (self-hosted). In cloud mode, this is a separate domain from the admin app (`app.hisaabo.in`), which provides cookie isolation for free.
+**Decision**: Option B for launch, with a redirect layer for Option A as a cloud-only premium feature later. The store lives at `store.fintranzact.com/:slug` (cloud) or `localhost:3000/store/:slug` (self-hosted). In cloud mode, this is a separate domain from the admin app (`app.fintranzact.com`), which provides cookie isolation for free.
 
 Self-hosted users access it at the same origin under `/store/:slug`, which is fine because they control their own domain and there is no cross-tenant concern.
 
-Custom domains (Phase 2) are handled via a CNAME to `store.hisaabo.in` plus a `custom_domain` column in `store_settings`, resolved at the CDN/reverse-proxy layer.
+Custom domains (Phase 2) are handled via a CNAME to `store.fintranzact.com` plus a `custom_domain` column in `store_settings`, resolved at the CDN/reverse-proxy layer.
 
 **Consequences**:
 - Easier: Standard TLS, trivial CDN config, works identically in self-hosted mode.
@@ -739,7 +739,7 @@ GET /store/:slug  ->  HTML response:
     "@context": "https://schema.org",
     "@type": "Store",
     "name": "{Business Name}",
-    "url": "https://store.hisaabo.in/{slug}"
+    "url": "https://store.fintranzact.com/{slug}"
   }
   </script>
 </head>
@@ -844,7 +844,7 @@ Tab layout with three sections: Items, Orders, Settings.
 /store
 ================================
 
-Store Management                [Store URL: store.hisaabo.in/mithai-palace  (copy)]
+Store Management                [Store URL: store.fintranzact.com/mithai-palace  (copy)]
 
 [Items]  [Orders (3 new)]  [Categories]  [Settings]
 
@@ -916,7 +916,7 @@ Clicking an order expands to show:
 | Enable Store    [====ON====]                                  |
 |                                                               |
 | Store URL                                                     |
-| store.hisaabo.in/ [mithai-palace    ] [Check Availability]    |
+| store.fintranzact.com/ [mithai-palace    ] [Check Availability]    |
 | (lowercase letters, numbers, hyphens only)                    |
 |                                                               |
 | Tagline                                                       |
@@ -963,8 +963,8 @@ The store SPA's static assets (`/store/assets/*`) are served by the Hono server 
 In cloud mode, there are two domains:
 
 ```
-app.hisaabo.in          -- Admin SPA (served by CDN, API proxied to backend)
-store.hisaabo.in/:slug  -- Store pages (served by CDN, API proxied to backend)
+app.fintranzact.com          -- Admin SPA (served by CDN, API proxied to backend)
+store.fintranzact.com/:slug  -- Store pages (served by CDN, API proxied to backend)
 ```
 
 Cookie isolation is automatic because different domains cannot share cookies. The store domain has no session cookies.
@@ -1033,9 +1033,9 @@ export { store as storeRoutes };
 
 ### 8.5 CORS for Store Routes
 
-Store routes need their own CORS config. In cloud mode, the store SPA is served from `store.hisaabo.in` and the API is at the same origin, so CORS is not needed (same-origin). In self-hosted mode, same thing.
+Store routes need their own CORS config. In cloud mode, the store SPA is served from `store.fintranzact.com` and the API is at the same origin, so CORS is not needed (same-origin). In self-hosted mode, same thing.
 
-However, if a business uses a custom domain (Phase 2), the store SPA at `custom.example.com` needs CORS to access `store.hisaabo.in/:slug/api/*`. This is handled per-request by checking the `custom_domain` field in store settings.
+However, if a business uses a custom domain (Phase 2), the store SPA at `custom.example.com` needs CORS to access `store.fintranzact.com/:slug/api/*`. This is handled per-request by checking the `custom_domain` field in store settings.
 
 For Phase 1: no additional CORS configuration needed since the store SPA and API share the same origin.
 

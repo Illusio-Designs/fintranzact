@@ -380,7 +380,7 @@ ${deepLinkHtml}
 
 function createEmailService(): EmailService {
   const resendKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM || "Fintranzact <noreply@hisaabo.in>";
+  const fromAddress = process.env.EMAIL_FROM || "Fintranzact <noreply@fintranzact.com>";
 
   if (resendKey) {
     console.log("[email] Using Resend email service");

@@ -10,7 +10,7 @@ The public-facing online storefront for Fintranzact businesses. A lightweight Re
 
 ## What this app does
 
-Every Fintranzact business can enable a public storefront at `store.hisaabo.in/<slug>`. The store app reads the business slug from the URL path, fetches the catalog from the API, and renders a mobile-first product listing with cart and checkout.
+Every Fintranzact business can enable a public storefront at `store.fintranzact.com/<slug>`. The store app reads the business slug from the URL path, fetches the catalog from the API, and renders a mobile-first product listing with cart and checkout.
 
 When a customer places an order, the API creates an unfulfilled invoice in the business's Fintranzact account. The business owner then fulfills and marks it from the web dashboard.
 
@@ -69,7 +69,7 @@ Set this environment variable in Cloudflare Pages:
 | `API_URL` | Base URL of the API server (e.g., `https://api.yourdomain.com`) |
 | `VITE_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key for order form bot protection |
 
-The store runs on its own subdomain (e.g., `store.hisaabo.in`). Customer-facing URLs are clean: `store.hisaabo.in/my-bakery` — no `/store/` prefix.
+The store runs on its own subdomain (e.g., `store.fintranzact.com`). Customer-facing URLs are clean: `store.fintranzact.com/my-bakery` — no `/store/` prefix.
 
 The backend API endpoints still use the `/store/` prefix internally (`/store/<slug>/catalog.json`, `/store/<slug>/order`). In dev, the Vite proxy rewrites `/<slug>/catalog.json` → `/store/<slug>/catalog.json`. In production, `API_URL` points to the API server directly.
 

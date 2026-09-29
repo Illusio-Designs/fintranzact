@@ -160,7 +160,7 @@ function FullBackupSection({ tenantId }: { tenantId: string }) {
   const exportMut = trpc.selfExport.request.useMutation({
     onSuccess: (data) => {
       // Resolve the URL against API_URL when the server returns a
-      // relative path (split-host deploys: app.hisaabo.in + api.hisaabo.in).
+      // relative path (split-host deploys: app.fintranzact.com + api.fintranzact.com).
       // Falls through unchanged when the server returns an absolute URL.
       const href = data.url.startsWith("http") ? data.url : apiUrl(data.url);
       const anchor = document.createElement("a");

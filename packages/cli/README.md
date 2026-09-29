@@ -188,7 +188,7 @@ hisaabo whoami
 | `export --tenant <slug> -o <file>` | Download full tenant backup as `.tar.gz` |
 | `restore --tenant <slug> -i <file>` | Restore backup into an empty tenant |
 
-These are tenant-level commands -- they don't require a business to be selected. Only tenant owners can use them. See [full docs](https://docs.hisaabo.in/ai/cli/#hisaabo-export) for details.
+These are tenant-level commands -- they don't require a business to be selected. Only tenant owners can use them. See [full docs](https://docs.fintranzact.com/ai/cli/#hisaabo-export) for details.
 
 ---
 
@@ -337,4 +337,4 @@ The CLI stores credentials in the OS config directory (`~/.config/hisaabo-cli` o
 
 ## Full Documentation
 
-[docs.hisaabo.in/ai/cli/](https://docs.hisaabo.in/ai/cli/) -- Setup guide, full command reference with all flags, scripting recipes, and CI/CD integration examples.
+[docs.fintranzact.com/ai/cli/](https://docs.fintranzact.com/ai/cli/) -- Setup guide, full command reference with all flags, scripting recipes, and CI/CD integration examples.

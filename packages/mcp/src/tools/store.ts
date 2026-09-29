@@ -27,7 +27,7 @@ export function registerStoreTools(server: McpServer, client: HisaaboClient) {
       "Get the current online store configuration for the active business.",
       "Returns whether the store is enabled, the store URL slug, tagline, accent color, minimum order amount, and order prefix.",
       "If storeEnabled=false, the public store is not accessible.",
-      "The store URL is: https://<storeSlug>.hisaabo.in (when enabled).",
+      "The store URL is: https://store.fintranzact.com/<storeSlug> (when enabled).",
     ].join(" "),
     {},
     wrapTool(async (_input) => {

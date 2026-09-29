@@ -123,7 +123,7 @@ function getClientIp(c: Context): string {
 }
 
 // ── Rate limiting (in-memory, per IP, origin-aware) ───────────
-// Same-origin (.hisaabo.in) requests get higher limits (own apps).
+// Same-origin (.fintranzact.com) requests get higher limits (own apps).
 // External/third-party origins get strict limits.
 // Unauthenticated external requests get the lowest tier.
 const rateMap = new Map<string, { count: number; reset: number }>();
@@ -135,8 +135,8 @@ function isSameOrigin(c: Context): boolean {
   // Same-origin: no Origin header (server-side calls), or matches configured CORS origins
   if (!origin) return true;
   if (CORS_ORIGINS.some((allowed) => origin === allowed)) return true;
-  // Match *.hisaabo.in subdomains
-  if (/^https?:\/\/([a-z0-9-]+\.)?hisaabo\.in$/i.test(origin)) return true;
+  // Match *.fintranzact.com subdomains
+  if (/^https?:\/\/([a-z0-9-]+\.)?fintranzact\.com$/i.test(origin)) return true;
   // Our own Tauri desktop app — different scheme/host but first-party.
   if (TAURI_DESKTOP_ORIGINS.includes(origin)) return true;
   return false;

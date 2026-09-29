@@ -20,7 +20,7 @@
  * stolen token replayed from an unexpected browser origin is still a
  * signal worth blocking. When an `Origin` header IS present (browsers
  * always send it on cross-origin requests) and it does not match the
- * allowlist (CORS_ORIGINS + *.hisaabo.in + Tauri desktop origins), we
+ * allowlist (CORS_ORIGINS + *.fintranzact.com + Tauri desktop origins), we
  * reject with 403. Mobile apps, CLIs, and server-to-server callers
  * never send Origin, so they are unaffected — this only tightens the
  * attack surface for browser-based Bearer usage.
@@ -65,7 +65,7 @@ export const CSRF_TAURI_ORIGINS = [
  * Return true if `origin` is on the Bearer-auth allowlist:
  *   1. Empty origin (mobile / server-to-server callers do not send Origin).
  *   2. Exact match against one of the configured CORS origins.
- *   3. Any *.hisaabo.in subdomain (matches the regex used in isSameOrigin).
+ *   3. Any *.fintranzact.com subdomain (matches the regex used in isSameOrigin).
  *   4. Any of the Tauri desktop origins.
  *
  * This is a pure function that accepts the allowlists as parameters so
@@ -78,7 +78,7 @@ export function isOriginAllowedForBearer(
 ): boolean {
   if (!origin) return true;
   if (corsOrigins.some((allowed) => origin === allowed)) return true;
-  if (/^https?:\/\/([a-z0-9-]+\.)?hisaabo\.in$/i.test(origin)) return true;
+  if (/^https?:\/\/([a-z0-9-]+\.)?fintranzact\.com$/i.test(origin)) return true;
   if (tauriOrigins.includes(origin)) return true;
   return false;
 }

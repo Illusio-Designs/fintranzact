@@ -47,10 +47,10 @@ hisaabo login --token hisaabo_key_xxxxxxxxxxxxxxxxxx
 
 The CLI validates the key, resolves your user and business context, and stores it in `~/.config/hisaabo/config.json`. API keys do not expire unless you set an expiry date during creation.
 
-To specify a self-hosted instance:
+To point the CLI at a specific Fintranzact API URL:
 
 ```bash
-hisaabo login --token hisaabo_key_xxx --api-url https://your-instance.com
+hisaabo login --token hisaabo_key_xxx --api-url https://fintranzact-production.up.railway.app
 ```
 
 ### Environment variables (recommended for automation)
@@ -1566,5 +1566,4 @@ Priority order (highest to lowest): command-line flags → environment variables
 - [AI & Automation overview](/ai/)
 - [MCP Server](/ai/mcp-server/) — For interactive AI agents and Claude Desktop
 - [Integrations](/ai/integrations/) — WhatsApp, Slack, Google Sheets, and more
-- [API Reference](https://api-docs.hisaabo.in)
-- [Self-Hosting](/self-hosting/) — Running Fintranzact on your own infrastructure
+- [API Reference](https://api-docs.fintranzact.com)

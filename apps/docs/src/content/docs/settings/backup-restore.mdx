@@ -7,7 +7,7 @@ import ForDesktop from '../../../components/ForDesktop.astro';
 
 <ForDesktop>
 
-Fintranzact lets you export a complete snapshot of your organization's data and restore it into a new, empty organization. This is useful for migrating between instances (e.g. cloud to self-hosted), creating a test copy of your data, or disaster recovery.
+Fintranzact lets you export a complete snapshot of your organization's data and restore it into a new, empty organization. This is useful for keeping your own copy of your books, creating a test copy of your data, or disaster recovery.
 
 ## Exporting a backup
 
@@ -66,7 +66,7 @@ For programmatic access, the backup system uses a two-step token flow:
 
 Both endpoints use `protectedProcedure` (session auth only) — no `x-business-id` header is needed.
 
-See the [API documentation](https://api-docs.hisaabo.in) for request/response schemas and code examples.
+See the [API documentation](https://api-docs.fintranzact.com) for request/response schemas and code examples.
 
 ## What's included in a backup
 
@@ -90,8 +90,8 @@ User accounts and organization membership are **not** included — the backup co
 **Can I restore into an organization that already has data?**
 No. Restore requires a completely empty organization (zero businesses). This prevents ID conflicts and ensures data integrity.
 
-**Can I export from cloud and restore to self-hosted (or vice versa)?**
-Yes, as long as the Fintranzact versions are compatible. The archive includes a schema checksum that the import engine validates.
+**Can I restore a backup into a different organization?**
+Yes, into any new, empty organization, as long as the Fintranzact versions are compatible. The archive includes a schema checksum that the import engine validates.
 
 **How large are backup files?**
 It depends on your data volume. The archive is gzip-compressed, so a business with a few thousand invoices typically produces a file under 10 MB.

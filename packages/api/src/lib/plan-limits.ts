@@ -25,7 +25,7 @@ export interface PlanLimits {
   auditRetentionDays: number | null; // null = unlimited
   dataExport: boolean;
   onlineStore: boolean;
-  pdfBranding: boolean;         // true = shows "Powered by hisaabo.in"
+  pdfBranding: boolean;         // true = shows "Powered by Fintranzact"
 }
 
 const PLAN_LIMITS: Record<string, PlanLimits> = {

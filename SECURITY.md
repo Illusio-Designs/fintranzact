@@ -4,7 +4,7 @@
 
 If you discover a security vulnerability in Fintranzact, **please report it responsibly**. Do not open a public GitHub issue.
 
-**Email:** security@hisaabo.in
+**Email:** security@fintranzact.com
 
 Include:
 - Description of the vulnerability

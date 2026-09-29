@@ -4,14 +4,14 @@ const API_BASE_URL = (import.meta.env.API_URL || (typeof window !== "undefined" 
 export const storeEndpoints: EndpointGroup = {
   id: "store",
   title: "Online Store",
-  description: "Configure and manage your public online storefront at store.hisaabo.in/your-slug. Toggle items for store visibility, set store-specific pricing, manage orders with phone verification and WhatsApp notifications.",
+  description: "Configure and manage your public online storefront at store.fintranzact.com/your-slug. Toggle items for store visibility, set store-specific pricing, manage orders with phone verification and WhatsApp notifications.",
   endpoints: [
     {
       id: "store-check-slug",
       method: "query",
       path: "store.checkSlug",
       title: "Check Slug Availability",
-      description: "Check whether a store URL slug is available. The slug forms the public store URL: `store.hisaabo.in/{slug}`. Excludes the current business from the uniqueness check, so re-checking your own slug returns available.",
+      description: "Check whether a store URL slug is available. The slug forms the public store URL: `store.fintranzact.com/{slug}`. Excludes the current business from the uniqueness check, so re-checking your own slug returns available.",
       auth: "business",
       requiredRole: "viewer",
       input: [
@@ -80,7 +80,7 @@ print("Available:", result["available"])`,
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const settings = await trpc.store.getSettings.query();
 console.log("Store enabled:", settings.storeEnabled);
-console.log("URL: store.hisaabo.in/" + settings.storeSlug);`,
+console.log("URL: store.fintranzact.com/" + settings.storeSlug);`,
         python: `import httpx
 
 resp = httpx.get(

@@ -1,6 +1,6 @@
 ---
 title: What is Fintranzact?
-description: Fintranzact is a self-hosted invoicing and business management app built for Indian small businesses. Manage GST invoices, parties, inventory, payments, and expenses — all from your own server.
+description: Fintranzact is a cloud invoicing and business management app built for Indian small businesses. Manage GST invoices, parties, inventory, payments, and expenses from any browser.
 sidebar:
   order: 1
 ---
@@ -9,7 +9,7 @@ import ForCA from '../../../components/ForCA.astro';
 import ForBusiness from '../../../components/ForBusiness.astro';
 
 <ForBusiness>
-New here? The fastest path is: add your business, add one party (your first customer), raise invoice #1. Ten minutes, no training videos. Jump to [Self-Hosting Setup](/getting-started/self-hosting) or start with [Create Your Business](/getting-started/create-business).
+New here? The fastest path is: add your business, add one party (your first customer), raise invoice #1. Ten minutes, no training videos. [Sign up](https://fintranzact-web.vercel.app/login?mode=register), then start with [Create Your Business](/getting-started/create-business).
 </ForBusiness>
 
 <ForCA>
@@ -18,26 +18,23 @@ Managing multiple clients? Each client is a separate **business** under your sin
 :::
 </ForCA>
 
-Fintranzact is a **self-hosted invoicing and business management app** designed for Indian small businesses. It replaces tools like MyBillBook, Vyaapaar, and Tally for teams that want to own their data and run the software on their own infrastructure.
+Fintranzact is a **cloud invoicing and business management app** designed for Indian small businesses. It replaces tools like MyBillBook, Vyaapaar, and Tally — there is nothing to install or maintain.
 
-You get GST-compliant invoicing, party (customer/supplier) management, inventory tracking, payment recording, expense management, banking, and a built-in online store — all in one app. The full-featured web application works in any browser on any device. Fintranzact Cloud adds native Android/iOS apps and a desktop app for macOS, Windows, and Linux.
+You get GST-compliant invoicing, party (customer/supplier) management, inventory tracking, payment recording, expense management, banking, and a built-in online store — all in one app. The full-featured web application works in any browser on any device, and native Android/iOS and desktop apps are available too.
 
 ## Who is Fintranzact for?
 
 Fintranzact is the right fit if you:
 
 - Run a small business in India with GST needs (regular, composition, or unregistered)
-- Want your business data on your own server, not locked in a third-party cloud
-- Have basic technical ability to run a Docker container (or have someone who can)
+- Want your books available securely from anywhere, with no software to install or maintain
 - Need to manage multiple businesses from one account
 - Want to move away from MyBillBook or a similar tool and keep your existing data
 
 Fintranzact is **not** a good fit if you need real-time inventory counting hardware integration (barcode scanners with live sync) or complex multi-warehouse logistics with zone-based picking.
 
 :::note
-**Self-hosted:** Access Fintranzact from any browser on any device — the web app is fully responsive and works on phones and tablets without installing anything.
-
-**Fintranzact Cloud:** Includes everything in self-hosted, plus native Android/iOS apps and a desktop app (macOS/Windows/Linux) with extras like barcode scanning and invoice PDF sharing via WhatsApp.
+Access Fintranzact from any browser on any device — the web app is fully responsive and works on phones and tablets without installing anything. Native Android/iOS apps and a desktop app (macOS/Windows/Linux) add extras like barcode scanning and invoice PDF sharing via WhatsApp.
 :::
 
 ## Key features
@@ -64,7 +61,7 @@ Log business expenses by category with a payment mode and optional reference num
 Generate GSTR-1 and GSTR-3B reports for any month directly from your invoice data. Export GSTR-1 as CSV for uploading to the GST portal.
 
 ### Online store
-Publish a customer-facing storefront at a URL you choose (for example, `yourshop.hisaabo.in`). Customers browse your items, place orders, and provide their delivery details. Each order automatically creates a draft invoice in your account.
+Publish a customer-facing storefront at a URL you choose (for example, `store.fintranzact.com/yourshop`). Customers browse your items, place orders, and provide their delivery details. Each order automatically creates a draft invoice in your account.
 
 ### Banking
 Track multiple bank accounts, UPI accounts, and cash balances. Payments can be linked to a bank account, automatically creating a transaction in that account. Transfer money between accounts with a dedicated transfer feature.
@@ -74,34 +71,29 @@ One account can own and manage multiple businesses. Switch between businesses fr
 
 ## How it works
 
-Fintranzact is a full-stack application with a backend API and a web frontend. You run the server on your own infrastructure using Docker. Your business data is stored in a PostgreSQL database that you control.
+Fintranzact runs in the cloud. You sign up, add your business, and start invoicing — Fintranzact takes care of servers, backups, security updates and GST rule changes.
 
 ```
-Your server
-├── PostgreSQL database  ← your data
-├── Fintranzact API (Node.js)  ← business logic
-└── Fintranzact Web (Vite)  ← browser interface
+Fintranzact Cloud
+├── Secure PostgreSQL database  ← your business data
+├── Fintranzact API             ← business logic
+└── Fintranzact Web             ← browser interface
 
-Self-hosted access
-└── Web app (any browser, including mobile browsers)
-
-Fintranzact Cloud (additional)
-├── Native Android app
-├── Native iOS app
+Access from
+├── Any browser (desktop, tablet or phone)
+├── Native Android and iOS apps
 └── Desktop app (macOS / Windows / Linux)
 ```
 
 The web app and all clients communicate with the API through tRPC — a type-safe RPC protocol. The web app uses session cookies for authentication; the native mobile app uses Bearer token authentication via the `Authorization` header.
 
-The native mobile and desktop apps connect to Fintranzact Cloud by default. Self-hosted users access the same full feature set through the web app, which is fully responsive on all screen sizes.
-
 ## What you need to get started
 
-- A Linux server (VPS, cloud VM, or a home server) with Docker and Docker Compose installed
-- A PostgreSQL 16 instance (included in the Docker Compose setup)
-- About 15 minutes
+- An email address
+- A web browser
+- About 10 minutes
 
-Ready to install? Continue to [Self-Hosting Setup](/getting-started/self-hosting).
+Ready? [Create your account](https://fintranzact-web.vercel.app/login?mode=register), then continue to [Create Your Business](/getting-started/create-business).
 
 ## Frequently asked questions
 
@@ -109,7 +101,7 @@ Ready to install? Continue to [Self-Hosting Setup](/getting-started/self-hosting
 Yes, you can start on the Forever Free plan. Paid plans add advanced features and priority support.
 
 **Does Fintranzact work without internet?**
-Yes. Once installed on your server, Fintranzact runs entirely on your local network. Your data never leaves your server unless you configure email delivery.
+No. Fintranzact is a cloud service, so you need an internet connection. Your data is stored securely and backed up regularly.
 
 **Can I import data from MyBillBook?**
 Yes. Fintranzact supports importing parties, items, invoices, and payments from MyBillBook export files. See [Import Data](/getting-started/import-data) for the step-by-step process.

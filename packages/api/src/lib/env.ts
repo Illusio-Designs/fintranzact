@@ -9,7 +9,7 @@ interface EnvCheck {
 
 const checks: EnvCheck[] = [
   { key: "DATABASE_URL", required: true, hint: "PostgreSQL connection string" },
-  { key: "CORS_ORIGINS", required: true, hint: "Comma-separated allowed origins (e.g. https://app.hisaabo.in)" },
+  { key: "CORS_ORIGINS", required: true, hint: "Comma-separated allowed origins (e.g. https://app.fintranzact.com)" },
   { key: "APP_URL", required: false, hint: "Frontend URL for magic link emails" },
   {
     key: "ENCRYPTION_KEY",

@@ -232,7 +232,7 @@ Trial Balance, Balance Sheet, P&L, Cash Flow, General Ledger, Daybook, Sales and
 
 ### Online Store
 
-Public storefront at `store.hisaabo.in/your-slug`. Phone verification for orders. WhatsApp notifications. Custom shipping methods. Configurable minimum order amount.
+Public storefront at `store.fintranzact.com/your-slug`. Phone verification for orders. WhatsApp notifications. Custom shipping methods. Configurable minimum order amount.
 
 ---
 
@@ -440,7 +440,7 @@ hisaabo login --api-url https://your-hisaabo-instance.com
 hisaabo whoami --json  # Copy token, tenantId, businessId
 ```
 
-Then add to `claude_desktop_config.json` -- see the [MCP Server guide](https://docs.hisaabo.in/ai/mcp-server/).
+Then add to `claude_desktop_config.json` -- see the [MCP Server guide](https://docs.fintranzact.com/ai/mcp-server/).
 
 ---
 
@@ -561,7 +561,7 @@ cd apps/desktop && cargo tauri build
 pnpm --filter @hisaabo/mobile build:apk
 ```
 
-Full production guide: [docs.hisaabo.in/self-hosting](https://docs.hisaabo.in/getting-started/self-hosting)
+Full production guide: [docs.fintranzact.com/self-hosting](https://docs.fintranzact.com/getting-started/self-hosting)
 
 ---
 
@@ -609,9 +609,9 @@ See [docs/architecture/gst-accounting-roadmap.md](docs/architecture/gst-accounti
 
 | Resource | URL |
 |---|---|
-| User documentation | [docs.hisaabo.in](https://docs.hisaabo.in) |
-| API reference | [api.hisaabo.in](${import.meta.env.VITE_API_URL ?? 'https://fintranzact-production.up.railway.app'}) |
-| Self-hosting guide | [docs.hisaabo.in/getting-started/self-hosting](https://docs.hisaabo.in/getting-started/self-hosting) |
+| User documentation | [docs.fintranzact.com](https://docs.fintranzact.com) |
+| API reference | [api.fintranzact.com](${import.meta.env.VITE_API_URL ?? 'https://fintranzact-production.up.railway.app'}) |
+| Self-hosting guide | [docs.fintranzact.com/getting-started/self-hosting](https://docs.fintranzact.com/getting-started/self-hosting) |
 | Contributing guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Security policy | [SECURITY.md](SECURITY.md) |
 
