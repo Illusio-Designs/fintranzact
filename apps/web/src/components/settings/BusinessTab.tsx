@@ -141,6 +141,7 @@ export function validateBusinessStep(
       }
 
       if (
+        values.tan.trim() &&
         values.responsiblePersonPan.trim() &&
         !panPattern.test(values.responsiblePersonPan)
       ) {
@@ -319,6 +320,9 @@ export function BusinessForm({
 
   const [gstin, setGstin] = useState(existing?.gstin || "");
   const [pan, setPan] = useState(existing?.pan || "");
+  // PAN last auto-filled from the GSTIN — lets a corrected GSTIN update the
+  // PAN again without overwriting a PAN the user typed by hand.
+  const [autoPan, setAutoPan] = useState<string | null>(null);
   const [tan, setTan] = useState(existing?.tan || "");
   const [cin, setCin] = useState(existing?.cin || "");
   const [llpin, setLlpin] = useState(existing?.llpin || "");
@@ -360,6 +364,8 @@ export function BusinessForm({
   );
   const [responsiblePersonDesignation, setResponsiblePersonDesignation] =
     useState(existing?.responsiblePersonDesignation || "");
+  // Deductor type and responsible person only apply to TDS deductors (TAN holders).
+  const hasTan = tan.trim() !== "";
 
   const [currentStep, setCurrentStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -675,7 +681,10 @@ export function BusinessForm({
                     }
                   }}
                   onPanDetected={(detectedPan) => {
-                    if (!pan) setPan(detectedPan);
+                    if (!pan || pan === autoPan) {
+                      setPan(detectedPan);
+                      setAutoPan(detectedPan);
+                    }
                   }}
                   error={errors.gstin}
                 />
@@ -811,7 +820,7 @@ export function BusinessForm({
                 Tax identification
               </h3>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <PanInput
                   value={pan}
                   onChange={setPan}
@@ -825,16 +834,51 @@ export function BusinessForm({
                     setTan(e.target.value.toUpperCase())
                   }
                   maxLength={10}
+                  placeholder="Optional — only if you deduct TDS"
                 />
 
-                <InputField
-                  label="Deductor Type"
-                  value={deductorType}
-                  onChange={(e) => setDeductorType(e.target.value)}
-                  placeholder="Enter deductor type"
-                />
+                {hasTan && (
+                  <InputField
+                    label="Deductor Type"
+                    value={deductorType}
+                    onChange={(e) => setDeductorType(e.target.value)}
+                    placeholder="Enter deductor type"
+                  />
+                )}
               </div>
             </div>
+
+            {hasTan && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Responsible person
+                </h3>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <InputField
+                    label="Responsible Person Name"
+                    value={responsiblePersonName}
+                    onChange={(e) =>
+                      setResponsiblePersonName(e.target.value)
+                    }
+                  />
+
+                  <PanInput
+                    value={responsiblePersonPan}
+                    onChange={setResponsiblePersonPan}
+                    error={errors.responsiblePersonPan}
+                  />
+
+                  <InputField
+                    label="Designation"
+                    value={responsiblePersonDesignation}
+                    onChange={(e) =>
+                      setResponsiblePersonDesignation(e.target.value)
+                    }
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-text-primary">
@@ -886,36 +930,6 @@ export function BusinessForm({
                   value={lutArn}
                   onChange={(e) =>
                     setLutArn(e.target.value.toUpperCase())
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-text-primary">
-                Responsible person
-              </h3>
-
-              <div className="grid grid-cols-2 gap-4">
-                <InputField
-                  label="Responsible Person Name"
-                  value={responsiblePersonName}
-                  onChange={(e) =>
-                    setResponsiblePersonName(e.target.value)
-                  }
-                />
-
-                <PanInput
-                  value={responsiblePersonPan}
-                  onChange={setResponsiblePersonPan}
-                  error={errors.responsiblePersonPan}
-                />
-
-                <InputField
-                  label="Designation"
-                  value={responsiblePersonDesignation}
-                  onChange={(e) =>
-                    setResponsiblePersonDesignation(e.target.value)
                   }
                 />
               </div>
@@ -1260,11 +1274,11 @@ export function BusinessForm({
           ? undefined
           : Number(eWayBillThreshold),
 
-      deductorType: deductorType || undefined,
-      responsiblePersonName: responsiblePersonName || undefined,
-      responsiblePersonPan: responsiblePersonPan || undefined,
+      deductorType: (hasTan && deductorType) || undefined,
+      responsiblePersonName: (hasTan && responsiblePersonName) || undefined,
+      responsiblePersonPan: (hasTan && responsiblePersonPan) || undefined,
       responsiblePersonDesignation:
-        responsiblePersonDesignation || undefined,
+        (hasTan && responsiblePersonDesignation) || undefined,
     };
 
     if (existing) {

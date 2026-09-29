@@ -61,6 +61,11 @@ function getVersion(): string {
 }
 
 export default defineConfig({
+  // Vite only exposes VITE_* vars to client code by default; the app reads
+  // import.meta.env.API_URL (trpc.ts, api-url.ts), so expose it explicitly.
+  // Without this, split-host deploys (e.g. Vercel) send API calls to the web
+  // host itself and get empty responses ("Unexpected end of JSON input").
+  envPrefix: ["VITE_", "API_URL"],
   define: {
     __APP_VERSION__: JSON.stringify(getVersion()),
   },
