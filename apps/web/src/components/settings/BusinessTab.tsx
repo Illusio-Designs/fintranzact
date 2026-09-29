@@ -302,6 +302,18 @@ export function BusinessForm({
   const [proformaPrefix, setProformaPrefix] = useState(
     existing?.proformaPrefix || "PI",
   );
+  const [debitNotePrefix, setDebitNotePrefix] = useState(
+    existing?.debitNotePrefix || "DN",
+  );
+  const [salesReturnPrefix, setSalesReturnPrefix] = useState(
+    existing?.salesReturnPrefix || "SR",
+  );
+  const [purchaseReturnPrefix, setPurchaseReturnPrefix] = useState(
+    existing?.purchaseReturnPrefix || "PR",
+  );
+  const [annualTurnover, setAnnualTurnover] = useState(
+    existing?.annualTurnover != null ? String(existing.annualTurnover) : "",
+  );
 
   const [defaultRoundOff, setDefaultRoundOff] = useState(
     existing?.defaultRoundOff ?? true,
@@ -542,12 +554,24 @@ export function BusinessForm({
               />
             </div>
 
-            <InputField
-              label="Financial Year Start Date"
-              value={financialYearStartDate}
-              onChange={(e) => setFinancialYearStartDate(e.target.value)}
-              type="date"
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <InputField
+                label="Financial Year Start Date"
+                value={financialYearStartDate}
+                onChange={(e) => setFinancialYearStartDate(e.target.value)}
+                type="date"
+              />
+
+              <InputField
+                label="Annual Turnover (₹)"
+                value={annualTurnover}
+                onChange={(e) =>
+                  setAnnualTurnover(e.target.value.replace(/[^0-9.]/g, ""))
+                }
+                inputMode="decimal"
+                placeholder="Used for HSN and e-invoicing rules"
+              />
+            </div>
 
             <div>
               <h3 className="text-sm font-semibold text-text-primary">
@@ -595,6 +619,24 @@ export function BusinessForm({
                   label="Proforma Invoice Prefix"
                   value={proformaPrefix}
                   onChange={(e) => setProformaPrefix(e.target.value)}
+                />
+
+                <InputField
+                  label="Debit Note Prefix"
+                  value={debitNotePrefix}
+                  onChange={(e) => setDebitNotePrefix(e.target.value)}
+                />
+
+                <InputField
+                  label="Sales Return Prefix"
+                  value={salesReturnPrefix}
+                  onChange={(e) => setSalesReturnPrefix(e.target.value)}
+                />
+
+                <InputField
+                  label="Purchase Return Prefix"
+                  value={purchaseReturnPrefix}
+                  onChange={(e) => setPurchaseReturnPrefix(e.target.value)}
                 />
               </div>
             </div>
@@ -1010,6 +1052,13 @@ export function BusinessForm({
                 </li>
 
                 <li>
+                  <span className="text-text-tertiary">
+                    Annual Turnover:
+                  </span>{" "}
+                  {annualTurnover ? `₹${annualTurnover}` : "—"}
+                </li>
+
+                <li>
                   <span className="text-text-tertiary">Currency:</span>{" "}
                   {currency || "—"}
                 </li>
@@ -1133,6 +1182,9 @@ export function BusinessForm({
                 <li>Credit Note: {creditNotePrefix}</li>
                 <li>Delivery Challan: {deliveryChallanPrefix}</li>
                 <li>Proforma: {proformaPrefix}</li>
+                <li>Debit Note: {debitNotePrefix}</li>
+                <li>Sales Return: {salesReturnPrefix}</li>
+                <li>Purchase Return: {purchaseReturnPrefix}</li>
                 <li>
                   Round-off: {defaultRoundOff ? "Enabled" : "Disabled"}
                 </li>
@@ -1242,6 +1294,11 @@ export function BusinessForm({
       creditNotePrefix: creditNotePrefix || "CN",
       deliveryChallanPrefix: deliveryChallanPrefix || "DC",
       proformaPrefix: proformaPrefix || "PI",
+      debitNotePrefix: debitNotePrefix || "DN",
+      salesReturnPrefix: salesReturnPrefix || "SR",
+      purchaseReturnPrefix: purchaseReturnPrefix || "PR",
+      annualTurnover:
+        annualTurnover.trim() === "" ? null : Number(annualTurnover),
 
       defaultRoundOff,
       defaultTermsAndConditions:

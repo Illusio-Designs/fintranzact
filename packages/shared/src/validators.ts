@@ -163,6 +163,11 @@ export const createBusinessSchema = z.object({
   creditNotePrefix: z.string().min(1).max(10).default("CN"),
   deliveryChallanPrefix: z.string().min(1).max(10).default("DC"),
   proformaPrefix: z.string().min(1).max(10).default("PI"),
+  debitNotePrefix: z.string().min(1).max(10).default("DN"),
+  salesReturnPrefix: z.string().min(1).max(10).default("SR"),
+  purchaseReturnPrefix: z.string().min(1).max(10).default("PR"),
+  // Drives HSN digit enforcement and the e-invoicing threshold.
+  annualTurnover: z.number().nonnegative().nullable().optional(),
   defaultRoundOff: z.boolean().default(true),
   defaultTermsAndConditions: z.string().max(2000).nullable().optional(),
 });
