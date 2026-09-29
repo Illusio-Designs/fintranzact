@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Add01Icon, CheckmarkCircle02Icon, MinusSignIcon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/Icon";
-import { PLAN_OPTIONS } from "@/lib/plans";
+import { usePlans } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,9 +18,10 @@ export const HEADING = "font-display font-extrabold tracking-[-0.025em] text-[#0
 
 /** The three plan cards; the highlighted plan is shown as a navy card. */
 export function PricingCards({ className }: { className?: string }) {
+  const { plans } = usePlans();
   return (
     <div className={cn("grid items-stretch gap-6 md:grid-cols-3", className)}>
-      {PLAN_OPTIONS.map((plan) =>
+      {plans.map((plan) =>
         plan.highlight ? (
           <div
             key={plan.id}

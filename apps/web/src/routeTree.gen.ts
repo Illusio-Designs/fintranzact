@@ -23,6 +23,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PosRouteImport } from './routes/pos'
 import { Route as PaymentsRouteImport } from './routes/payments'
+import { Route as PartnersRouteImport } from './routes/partners'
 import { Route as PartiesRouteImport } from './routes/parties'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
@@ -118,6 +119,11 @@ const PosRoute = PosRouteImport.update({
 const PaymentsRoute = PaymentsRouteImport.update({
   id: '/payments',
   path: '/payments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnersRoute = PartnersRouteImport.update({
+  id: '/partners',
+  path: '/partners',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PartiesRoute = PartiesRouteImport.update({
@@ -273,6 +279,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/pos': typeof PosRoute
   '/pricing': typeof PricingRoute
@@ -315,6 +322,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/pos': typeof PosRoute
   '/pricing': typeof PricingRoute
@@ -358,6 +366,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/pos': typeof PosRoute
   '/pricing': typeof PricingRoute
@@ -402,6 +411,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
+    | '/partners'
     | '/payments'
     | '/pos'
     | '/pricing'
@@ -444,6 +454,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
+    | '/partners'
     | '/payments'
     | '/pos'
     | '/pricing'
@@ -486,6 +497,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
+    | '/partners'
     | '/payments'
     | '/pos'
     | '/pricing'
@@ -529,6 +541,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
   PartiesRoute: typeof PartiesRoute
+  PartnersRoute: typeof PartnersRoute
   PaymentsRoute: typeof PaymentsRoute
   PosRoute: typeof PosRoute
   PricingRoute: typeof PricingRoute
@@ -648,6 +661,13 @@ declare module '@tanstack/react-router' {
       path: '/payments'
       fullPath: '/payments'
       preLoaderRoute: typeof PaymentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partners': {
+      id: '/partners'
+      path: '/partners'
+      fullPath: '/partners'
+      preLoaderRoute: typeof PartnersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/parties': {
@@ -857,6 +877,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
   PartiesRoute: PartiesRoute,
+  PartnersRoute: PartnersRoute,
   PaymentsRoute: PaymentsRoute,
   PosRoute: PosRoute,
   PricingRoute: PricingRoute,

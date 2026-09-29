@@ -368,7 +368,7 @@ function HeroPreview() {
 
 function Industries() {
   return (
-    <section className="border-b border-border-light bg-surface-1">
+    <section id="industries" className="scroll-mt-24 border-b border-border-light bg-surface-1">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-4 py-10 md:px-6">
         <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">
           Built for every kind of Indian business
