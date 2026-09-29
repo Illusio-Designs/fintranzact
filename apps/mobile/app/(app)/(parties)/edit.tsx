@@ -17,6 +17,7 @@ import { trpc } from "../../../src/lib/trpc";
 import { makeStyles } from "../../../src/lib/makeStyles";
 import { useColors } from "../../../src/contexts/ThemeContext";
 import { haptic } from "../../../src/lib/haptics";
+import { GSTIN_REGEX, PAN_REGEX, panFromGstin } from "@fintranzact/shared";
 import { QueryError } from "../../../src/components/ui";
 
 type PartyType = "customer" | "supplier";
@@ -38,6 +39,7 @@ export default function EditPartyScreen() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [gstin, setGstin] = useState("");
+  const [pan, setPan] = useState("");
   const [billingAddress, setBillingAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -51,6 +53,7 @@ export default function EditPartyScreen() {
       setPhone(party.phone ?? "");
       setEmail(party.email ?? "");
       setGstin(party.gstin ?? "");
+      setPan(party.pan ?? "");
       setBillingAddress(party.billingAddress ?? "");
       setCity(party.city ?? "");
       setState(party.state ?? "");
@@ -78,11 +81,11 @@ export default function EditPartyScreen() {
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       newErrors.email = "Enter a valid email";
     }
-    if (
-      gstin &&
-      !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin)
-    ) {
+    if (gstin && !GSTIN_REGEX.test(gstin)) {
       newErrors.gstin = "Enter a valid GSTIN";
+    }
+    if (pan && !PAN_REGEX.test(pan)) {
+      newErrors.pan = "Enter a valid PAN";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -98,6 +101,7 @@ export default function EditPartyScreen() {
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
         gstin: gstin.trim() || undefined,
+        pan: pan.trim() || undefined,
         billingAddress: billingAddress.trim() || undefined,
         city: city.trim() || undefined,
         state: state.trim() || undefined,
@@ -293,7 +297,14 @@ export default function EditPartyScreen() {
                   placeholderTextColor={colors.textMuted}
                   value={gstin}
                   onChangeText={(t) => {
-                    setGstin(t.toUpperCase());
+                    const next = t.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                    // Characters 3-12 of a GSTIN are the PAN. Fill it in
+                    // unless the user already typed a different PAN.
+                    const detected = panFromGstin(next);
+                    if (detected && (!pan || pan === panFromGstin(gstin))) {
+                      setPan(detected);
+                    }
+                    setGstin(next);
                     if (errors.gstin) setErrors((e) => ({ ...e, gstin: "" }));
                   }}
                   autoCapitalize="characters"
@@ -301,6 +312,28 @@ export default function EditPartyScreen() {
                 />
                 {errors.gstin && (
                   <Text style={styles.errorText}>{errors.gstin}</Text>
+                )}
+              </View>
+
+              <View style={styles.fieldDivider} />
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>PAN</Text>
+                <TextInput
+                  style={[styles.input, errors.pan && styles.inputError]}
+                  placeholder="AAAAA0000A"
+                  placeholderTextColor={colors.textMuted}
+                  value={pan}
+                  onChangeText={(t) => {
+                    setPan(t.toUpperCase().replace(/[^A-Z0-9]/g, ""));
+                    if (errors.pan) setErrors((e) => ({ ...e, pan: "" }));
+                  }}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={10}
+                />
+                {errors.pan && (
+                  <Text style={styles.errorText}>{errors.pan}</Text>
                 )}
               </View>
             </View>

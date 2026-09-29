@@ -7,7 +7,7 @@ import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
-import type { PartyType } from "@fintranzact/shared";
+import { GSTIN_REGEX, PAN_REGEX, type PartyType } from "@fintranzact/shared";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { InputField, TextareaField } from "@/components/ui/FormField";
@@ -27,6 +27,7 @@ import { Alert02Icon, ArrowRight01Icon, ArrowRight02Icon, Cancel01Icon, Delete02
 
 import { Spinner } from "@/components/ui/Spinner";
 import { PhoneInput } from "@/components/ui/PhoneInput";
+import { GstinInput } from "@/components/settings/GstinInput";
 export const Route = createFileRoute("/parties")({
   component: PartiesPage,
 });
@@ -1120,6 +1121,9 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [openingBalance, setOpeningBalance] = useState("");
   const [gstin, setGstin] = useState("");
   const [pan, setPan] = useState("");
+  // PAN last auto-filled from the GSTIN, so a corrected GSTIN can update it
+  // without overwriting a PAN the user typed by hand.
+  const [autoPan, setAutoPan] = useState<string | null>(null);
   const [category, setCategory] = useState("");
   const [billingAddress, setBillingAddress] = useState("");
   const [shippingAddress, setShippingAddress] = useState("");
@@ -1156,6 +1160,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
     setOpeningBalance("");
     setGstin("");
     setPan("");
+    setAutoPan(null);
     setCategory("");
     setBillingAddress("");
     setShippingAddress("");
@@ -1178,6 +1183,14 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
   }
 
   function handleCreate() {
+    if (gstin && !GSTIN_REGEX.test(gstin)) {
+      toast.error("Invalid GSTIN format");
+      return;
+    }
+    if (pan && !PAN_REGEX.test(pan)) {
+      toast.error("Invalid PAN format");
+      return;
+    }
     createMutation.mutate({
       type: partyType,
       name,
@@ -1265,11 +1278,15 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
             placeholder="0.00"
           />
         </div>
-        <InputField
-          label="GSTIN"
+        <GstinInput
           value={gstin}
-          onChange={(e) => setGstin(e.target.value)}
-          placeholder="22AAAAA0000A1Z5"
+          onChange={setGstin}
+          onPanDetected={(detectedPan) => {
+            if (!pan || pan === autoPan) {
+              setPan(detectedPan);
+              setAutoPan(detectedPan);
+            }
+          }}
         />
 
         {/* Section divider */}
@@ -1290,7 +1307,8 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
               <InputField
                 label="PAN"
                 value={pan}
-                onChange={(e) => setPan(e.target.value)}
+                onChange={(e) => setPan(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                maxLength={10}
                 placeholder="AAAAA0000A"
               />
               <InputField
