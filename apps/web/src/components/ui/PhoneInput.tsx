@@ -1,6 +1,38 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown01Icon, Search01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import {
+  AE,
+  AU,
+  BD,
+  BH,
+  BT,
+  CA,
+  DE,
+  FR,
+  GB,
+  HK,
+  ID,
+  IN,
+  IT,
+  JP,
+  KE,
+  KW,
+  LK,
+  MV,
+  MY,
+  NG,
+  NL,
+  NP,
+  NZ,
+  OM,
+  QA,
+  SA,
+  SG,
+  TH,
+  US,
+  ZA,
+} from "country-flag-icons/react/3x2";
 import { cn } from "@/lib/utils";
 import { useAnchoredPopover } from "@/hooks/useAnchoredPopover";
 import { Icon } from "./Icon";
@@ -52,6 +84,20 @@ export const COUNTRIES: Country[] = [
 ];
 
 const DEFAULT_COUNTRY = COUNTRIES[0];
+
+const FLAGS: Record<string, (props: { className?: string; title?: string }) => React.JSX.Element> = {
+  AE, AU, BD, BH, BT, CA, DE, FR, GB, HK, ID, IN, IT, JP, KE, KW, LK, MV, MY, NG, NL, NP, NZ, OM, QA, SA, SG, TH, US, ZA,
+};
+
+/** Country flag (SVG, so it renders the same on every OS); falls back to the ISO code. */
+function Flag({ code, className }: { code: string; className?: string }) {
+  const F = FLAGS[code];
+  if (!F) {
+    return <span className="text-[10px] font-bold text-text-secondary">{code}</span>;
+  }
+  return <F className={cn("block h-[14px] w-[21px] shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.08)]", className)} aria-hidden="true" />;
+}
+
 
 /**
  * Split a stored phone value into country + national digits.
@@ -218,9 +264,7 @@ export function PhoneInput({
           aria-label={`Country code: ${country.name} ${country.dial}`}
           className="flex shrink-0 items-center gap-1.5 rounded-l-lg border-r border-[var(--border-color)] bg-surface-1 pl-2.5 pr-2 text-sm text-text-primary outline-none hover:bg-surface-2 focus-visible:bg-surface-2"
         >
-          <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-brand-700 dark:bg-brand-900/50 dark:text-brand-200">
-            {country.code}
-          </span>
+          <Flag code={country.code} />
           <span className="font-medium tabular-nums">{country.dial}</span>
           <Icon
             icon={ArrowDown01Icon}
@@ -301,9 +345,7 @@ export function PhoneInput({
                       i === active && "bg-surface-2",
                     )}
                   >
-                    <span className="w-7 shrink-0 rounded bg-surface-2 px-1 py-0.5 text-center text-[10px] font-bold text-text-secondary">
-                      {c.code}
-                    </span>
+                    <Flag code={c.code} />
                     <span className={cn("flex-1 truncate", isSel && "font-semibold")}>{c.name}</span>
                     <span className="tabular-nums text-text-tertiary">{c.dial}</span>
                     {isSel && <Icon icon={Tick02Icon} size={16} className="text-brand-600 dark:text-brand-300" />}
