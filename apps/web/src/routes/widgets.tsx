@@ -257,7 +257,7 @@ function ThemeSwitch() {
 
 function WidgetsPage() {
   return (
-    <MarketingLayout title="Widgets" autoTheme={false}>
+    <MarketingLayout title="Widgets">
       <PageHero
         eyebrow="Component & widget gallery"
         title="Every control and dashboard widget, live"

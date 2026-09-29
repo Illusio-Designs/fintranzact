@@ -15,12 +15,50 @@ const PREVIEW_H = 112;
 const MAX_PX = 800;
 const MAX_BYTES = 1_048_576;
 
+export interface PendingImage {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
 interface Props {
-  businessId: string;
+  /** Which image slot this uploader edits. */
+  kind?: "logo" | "signature";
+  /**
+   * Omitted while creating a business — the row does not exist yet, so there
+   * is nothing to PATCH. In that case the component becomes controlled:
+   * `pending`/`onPendingChange` hold the picked image and the caller uploads
+   * it once the business has an id.
+   */
+  businessId?: string;
   // Pass from business.list row; used for cache-busting.
   logoUpdatedAt?: string | Date | null;
   hasLogo?: boolean;
+  pending?: PendingImage | null;
+  onPendingChange?: (value: PendingImage | null) => void;
 }
+
+const COPY = {
+  logo: {
+    title: "Business Logo",
+    blurb: "Appears on invoices and your storefront. PNG, JPEG, or SVG.",
+    empty: "No logo",
+    save: "Save Logo",
+    removeConfirm: "Remove the business logo?",
+    previewLabel: "Logo preview",
+    tooLarge: "Compressed logo too large",
+  },
+  signature: {
+    title: "Authorised Signature",
+    blurb:
+      "Printed above the signature line on invoices and other documents. Use a transparent PNG of a signed scan for the cleanest result.",
+    empty: "No signature",
+    save: "Save Signature",
+    removeConfirm: "Remove the authorised signature?",
+    previewLabel: "Signature preview",
+    tooLarge: "Compressed signature too large",
+  },
+} as const;
 
 /**
  * Browser-side logo uploader:
@@ -33,7 +71,17 @@ interface Props {
  * The server re-validates magic bytes and size; this client code is not a
  * security boundary.
  */
-export function LogoUploader({ businessId, logoUpdatedAt, hasLogo }: Props) {
+export function LogoUploader({
+  kind = "logo",
+  businessId,
+  logoUpdatedAt,
+  hasLogo,
+  pending,
+  onPendingChange,
+}: Props) {
+  const copy = COPY[kind];
+  // No id yet ⇒ creation flow: the parent owns the picked image.
+  const deferred = !businessId;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [processing, setProcessing] = useState(false);
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
@@ -41,7 +89,7 @@ export function LogoUploader({ businessId, logoUpdatedAt, hasLogo }: Props) {
 
   const utils = trpc.useUtils();
 
-  const uploadMutation = trpc.business.uploadLogo.useMutation({
+  const uploadLogoMutation = trpc.business.uploadLogo.useMutation({
     onSuccess: () => {
       toast.success("Logo updated");
       setPreviewDataUrl(null);
@@ -54,7 +102,7 @@ export function LogoUploader({ businessId, logoUpdatedAt, hasLogo }: Props) {
     },
   });
 
-  const deleteMutation = trpc.business.deleteLogo.useMutation({
+  const deleteLogoMutation = trpc.business.deleteLogo.useMutation({
     onSuccess: () => {
       toast.success("Logo removed");
       utils.business.list.invalidate();
@@ -65,11 +113,38 @@ export function LogoUploader({ businessId, logoUpdatedAt, hasLogo }: Props) {
     },
   });
 
+  const uploadSignatureMutation = trpc.business.uploadSignature.useMutation({
+    onSuccess: () => {
+      toast.success("Signature updated");
+      setPreviewDataUrl(null);
+      setPreviewDims(null);
+      utils.business.list.invalidate();
+      utils.business.getById.invalidate();
+    },
+    onError: (err) => {
+      toast.error("Signature upload failed", err.message);
+    },
+  });
+
+  const deleteSignatureMutation = trpc.business.deleteSignature.useMutation({
+    onSuccess: () => {
+      toast.success("Signature removed");
+      utils.business.list.invalidate();
+      utils.business.getById.invalidate();
+    },
+    onError: (err) => {
+      toast.error("Could not remove signature", err.message);
+    },
+  });
+
+  const uploadMutation = kind === "logo" ? uploadLogoMutation : uploadSignatureMutation;
+  const deleteMutation = kind === "logo" ? deleteLogoMutation : deleteSignatureMutation;
+
   const cacheBuster = typeof logoUpdatedAt === "string"
     ? Date.parse(logoUpdatedAt)
     : logoUpdatedAt?.getTime?.() ?? 0;
-  const existingLogoUrl = hasLogo
-    ? apiUrl(`/api/businesses/${businessId}/logo?v=${cacheBuster}`)
+  const existingLogoUrl = hasLogo && businessId
+    ? apiUrl(`/api/businesses/${businessId}/${kind}?v=${cacheBuster}`)
     : null;
 
   async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -91,7 +166,13 @@ export function LogoUploader({ businessId, logoUpdatedAt, hasLogo }: Props) {
     try {
       const { dataUrl, width, height } = await rasterizeAndCompress(file);
       if (dataUrl.length > MAX_BYTES * 1.4) {
-        toast.error("Compressed logo too large", "Try a simpler image");
+        toast.error(copy.tooLarge, "Try a simpler image");
+        return;
+      }
+      if (deferred) {
+        // Nothing to upload to yet — stash it on the parent, which sends it
+        // once the business row exists.
+        onPendingChange?.({ dataUrl, width, height });
         return;
       }
       setPreviewDataUrl(dataUrl);
@@ -104,7 +185,7 @@ export function LogoUploader({ businessId, logoUpdatedAt, hasLogo }: Props) {
   }
 
   function handleSave() {
-    if (!previewDataUrl || !previewDims) return;
+    if (!previewDataUrl || !previewDims || !businessId) return;
     uploadMutation.mutate({
       id: businessId,
       data: { dataUrl: previewDataUrl, width: previewDims.w, height: previewDims.h },
@@ -112,20 +193,25 @@ export function LogoUploader({ businessId, logoUpdatedAt, hasLogo }: Props) {
   }
 
   function handleRemove() {
-    if (!confirm("Remove the business logo?")) return;
+    if (deferred) {
+      onPendingChange?.(null);
+      return;
+    }
+    if (!businessId) return;
+    if (!confirm(copy.removeConfirm)) return;
     deleteMutation.mutate({ id: businessId });
   }
 
   const isPending = uploadMutation.isPending || deleteMutation.isPending || processing;
+  // In deferred mode the parent holds the picked image.
+  const shownDataUrl = deferred ? pending?.dataUrl ?? null : previewDataUrl;
 
   return (
     <div className="card p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-base font-semibold text-text-primary">Business Logo</h3>
-          <p className="text-xs text-text-tertiary mt-1">
-            Appears on invoices and your storefront. PNG, JPEG, or SVG.
-          </p>
+          <h3 className="text-base font-semibold text-text-primary">{copy.title}</h3>
+          <p className="text-xs text-text-tertiary mt-1">{copy.blurb}</p>
         </div>
       </div>
 
@@ -135,22 +221,22 @@ export function LogoUploader({ businessId, logoUpdatedAt, hasLogo }: Props) {
         <div
           className="flex-shrink-0 border border-dashed border-border rounded bg-background-secondary flex items-center justify-center overflow-hidden"
           style={{ width: PREVIEW_W, height: PREVIEW_H }}
-          aria-label="Logo preview"
+          aria-label={copy.previewLabel}
         >
-          {previewDataUrl ? (
+          {shownDataUrl ? (
             <img
-              src={previewDataUrl}
-              alt="Pending logo preview"
+              src={shownDataUrl}
+              alt={`Pending ${kind} preview`}
               className="max-w-full max-h-full object-contain"
             />
           ) : existingLogoUrl ? (
             <img
               src={existingLogoUrl}
-              alt="Current business logo"
+              alt={`Current business ${kind}`}
               className="max-w-full max-h-full object-contain"
             />
           ) : (
-            <span className="text-xs text-text-tertiary">No logo</span>
+            <span className="text-xs text-text-tertiary">{copy.empty}</span>
           )}
         </div>
 
@@ -169,19 +255,21 @@ export function LogoUploader({ businessId, logoUpdatedAt, hasLogo }: Props) {
               onClick={() => fileInputRef.current?.click()}
               disabled={isPending}
             >
-              {previewDataUrl ? "Pick a different file" : "Choose file"}
+              {shownDataUrl ? "Pick a different file" : "Choose file"}
             </button>
-            {previewDataUrl && (
+            {/* Deferred mode has nothing to save against yet — the image
+                travels with the business on create. */}
+            {previewDataUrl && !deferred && (
               <button
                 type="button"
                 className="btn-primary"
                 onClick={handleSave}
                 disabled={isPending}
               >
-                {uploadMutation.isPending ? "Uploading…" : "Save Logo"}
+                {uploadMutation.isPending ? "Uploading…" : copy.save}
               </button>
             )}
-            {hasLogo && !previewDataUrl && (
+            {((hasLogo && !previewDataUrl) || (deferred && pending)) && (
               <button
                 type="button"
                 className="btn-secondary"

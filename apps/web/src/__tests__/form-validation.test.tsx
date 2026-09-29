@@ -471,8 +471,10 @@ describe("Business onboarding step validation", () => {
     expect(errs.gstin).toBe("GSTIN is required for GST-registered businesses");
   });
 
-  it("requires PAN on the tax details step", () => {
-    const errs = validateBusinessStep(2, {
+  // PAN moved onto the GST step: the GSTIN embeds the PAN, and GstinInput
+  // auto-fills this field from it, so the two belong together.
+  it("requires PAN on the GST step", () => {
+    const errs = validateBusinessStep(1, {
       name: "Test Business",
       legalName: "",
       businessType: "proprietorship",

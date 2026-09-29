@@ -35,6 +35,7 @@ import type { TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { IRPClient, IRPError } from "../lib/irp-client.js";
+import { resolveIRPConfig } from "../lib/irp-config.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 import { encryptEInvoiceConfig, decryptEInvoiceConfig } from "../lib/field-encryption.js";
 
@@ -62,7 +63,7 @@ async function generateIRNForInvoice(
     });
   }
 
-  const config = decryptEInvoiceConfig(rawConfig);
+  const config = resolveIRPConfig(rawConfig);
 
   const [invoice] = await db
     .select()
@@ -224,8 +225,8 @@ export const eInvoiceRouter = router({
 
       // Encrypt sensitive fields before persisting
       const encrypted = encryptEInvoiceConfig({
-        clientId: input.clientId,
-        clientSecret: input.clientSecret,
+        clientId: input.clientId || null,
+        clientSecret: input.clientSecret || null,
         username: input.username,
         password: input.password,
       });
@@ -283,11 +284,17 @@ export const eInvoiceRouter = router({
 
     if (!rawConfig) return null;
 
+    // Read-for-display only: decrypt, but do NOT resolve GSP credentials —
+    // viewing the settings page must not fail just because the server has no
+    // IRP_CLIENT_ID configured, and the full row (thresholdCrore et al) is
+    // what the page renders.
     const config = decryptEInvoiceConfig(rawConfig);
     return {
       ...config,
       password: "••••••••", // Mask password in response
-      clientSecret: config.clientSecret.slice(0, 4) + "••••••••",
+      clientSecret: config.clientSecret
+        ? config.clientSecret.slice(0, 4) + "••••••••"
+        : null,
     };
   }),
 
@@ -311,7 +318,7 @@ export const eInvoiceRouter = router({
     }
 
     try {
-      const config = decryptEInvoiceConfig(rawConfig);
+      const config = resolveIRPConfig(rawConfig);
       const client = new IRPClient(config, ctx.db);
       await client.authenticate();
       return { success: true, message: "Successfully connected to IRP" };
@@ -371,7 +378,7 @@ export const eInvoiceRouter = router({
         });
       }
 
-      const config = decryptEInvoiceConfig(rawConfig);
+      const config = resolveIRPConfig(rawConfig);
 
       // Fetch invoice
       const [invoice] = await ctx.db

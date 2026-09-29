@@ -147,6 +147,13 @@ export const createBusinessSchema = z.object({
   lutArn: z.string().max(100).optional().or(z.literal("")),
   eInvoiceEnabled: z.boolean().default(false),
   eWayBillEnabled: z.boolean().default(false),
+
+  // Taxpayer API credentials for the compliance portals. Optional: the feature
+  // toggles work without them, and they can be filled in later from Settings.
+  eInvoiceUsername: z.string().max(100).optional().or(z.literal("")),
+  eInvoicePassword: z.string().max(200).optional().or(z.literal("")),
+  eWayBillUsername: z.string().max(100).optional().or(z.literal("")),
+  eWayBillPassword: z.string().max(200).optional().or(z.literal("")),
   assesseeOfOtherTerritory: z.boolean().default(false),
   gstReturnPeriodicity: z.enum(["monthly", "quarterly"]).default("monthly"),
   eWayBillThreshold: z.coerce
@@ -184,6 +191,10 @@ export const uploadBusinessLogoSchema = z.object({
   width: z.number().int().positive().max(4000),
   height: z.number().int().positive().max(4000),
 });
+
+// Signature upload: same envelope as the logo (PNG/JPEG data URL, ~1MB
+// decoded). Server re-checks magic bytes on the decoded bytes.
+export const uploadBusinessSignatureSchema = uploadBusinessLogoSchema;
 
 export const updateSequenceNumberSchema = z.object({
   documentType: z.enum(["invoice", "payment", "quotation", "credit_note", "delivery_challan", "proforma"]),
@@ -729,8 +740,10 @@ export const bankCategorizationRuleSchema = z.object({
 
 export const eInvoiceConfigSchema = z.object({
   gstin: z.string().length(15),
-  clientId: z.string().min(1).max(200),
-  clientSecret: z.string().min(1).max(500),
+  // GSP client credentials are deployment-level; when omitted the server falls
+  // back to its configured environment values.
+  clientId: z.string().max(200).optional().or(z.literal("")),
+  clientSecret: z.string().max(500).optional().or(z.literal("")),
   username: z.string().min(1).max(100),
   password: z.string().min(1).max(200),
   isSandbox: z.boolean().default(true),

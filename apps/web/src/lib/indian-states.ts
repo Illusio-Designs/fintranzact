@@ -1,7 +1,7 @@
 export interface IndianState {
   code: string;
   name: string;
-  type: "state" | "ut";
+  type: "state" | "ut" | "other";
 }
 
 export const INDIAN_STATES: IndianState[] = [
@@ -43,4 +43,8 @@ export const INDIAN_STATES: IndianState[] = [
   { code: "36", name: "Telangana", type: "state" },
   { code: "37", name: "Andhra Pradesh (New)", type: "state" },
   { code: "38", name: "Ladakh", type: "ut" },
+  // GST code 97. Not a state or UT: the offshore area beyond territorial
+  // waters (continental shelf / EEZ). Supplies to and from it are always
+  // inter-state, so it carries IGST regardless of the counterparty's state.
+  { code: "97", name: "Other Territory", type: "other" },
 ];

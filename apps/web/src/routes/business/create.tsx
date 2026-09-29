@@ -62,6 +62,18 @@ function CreateBusinessPage() {
       <div className="mx-auto max-w-5xl">
         <StandaloneHeader />
 
+        {/* Only offered once a business exists — during first-time setup
+            there is no dashboard to go back to. */}
+        {!isFirstBusiness && (
+          <button
+            type="button"
+            className="btn-ghost text-xs mb-4"
+            onClick={() => navigate({ to: "/" })}
+          >
+            &larr; Back to dashboard
+          </button>
+        )}
+
         <div className="mb-6">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">
             {isFirstBusiness ? "Organization setup" : "Organization"}
