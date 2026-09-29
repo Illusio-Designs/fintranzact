@@ -62,7 +62,7 @@ Output is in `dist/`. The build produces a static SPA — no server-side renderi
 
 ## Deployment
 
-Deploy the `dist/` folder to Cloudflare Pages (or any static host):
+Deploy the `dist/` folder to Vercel (or any static host):
 
 | Setting | Value |
 |---|---|
@@ -70,13 +70,13 @@ Deploy the `dist/` folder to Cloudflare Pages (or any static host):
 | Output directory | `apps/web/dist` |
 | Node.js version | 20 |
 
-Set these environment variables in Cloudflare Pages:
+Set these environment variables in Vercel:
 
 | Variable | Description |
 |---|---|
 | `VITE_TURNSTILE_SITE_KEY` | Cloudflare Turnstile key for the online store (optional if store is disabled) |
 
-The app proxies all API calls through `/api` in development. In production, the API must be deployed separately and the web app must be able to reach it. If your API is at `https://api.yourdomain.com`, configure the Vite proxy or set up a Cloudflare Pages Function to proxy `/api/*` requests.
+The app proxies all API calls through `/api` in development. In production, the API must be deployed separately and the web app must be able to reach it. If your API is at `https://api.yourdomain.com`, configure the Vite proxy or set up a Vercel rewrite to proxy `/api/*` requests.
 
 ---
 

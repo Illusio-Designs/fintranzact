@@ -127,8 +127,7 @@ jobs:
           cache-from: type=gha,scope=once
           cache-to: type=gha,mode=max,scope=once
 
-  # ── Web & Store deploy to Cloudflare Pages on push to main ─────
-  # (handled by deploy-web.yml and deploy-store.yml — no need to duplicate here)
+  # ── Web & Store deploy via Vercel's Git integration on push to main ─
 
   # ── Desktop (Tauri — Windows, macOS, Linux) ────────────────────
   desktop:

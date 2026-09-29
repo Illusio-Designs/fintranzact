@@ -54,7 +54,7 @@ pnpm --filter @fintranzact/store build
 
 ## Deployment
 
-The store is a static SPA deployed to Cloudflare Pages:
+The store is a static SPA deployed to Vercel:
 
 | Setting | Value |
 |---|---|
@@ -62,7 +62,7 @@ The store is a static SPA deployed to Cloudflare Pages:
 | Output directory | `apps/store/dist` |
 | Node.js version | 20 |
 
-Set this environment variable in Cloudflare Pages:
+Set this environment variable in Vercel:
 
 | Variable | Description |
 |---|---|
