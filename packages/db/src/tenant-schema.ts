@@ -126,6 +126,12 @@ export const businesses = pgTable("businesses", {
   nextPurchaseReturnNumber: integer("next_purchase_return_number").default(1).notNull(),
   deliveryChallanPrefix: text("delivery_challan_prefix").default("DC").notNull(),
   nextDeliveryChallanNumber: integer("next_delivery_challan_number").default(1).notNull(),
+  // Counter behind auto-generated internal barcodes (see generateInternalBarcode).
+  // Follows the same allocate-then-increment pattern as the document numbers
+  // above so two concurrent purchases cannot mint the same code.
+  nextBarcodeNumber: integer("next_barcode_number").default(1).notNull(),
+  // Turn auto-generation off for businesses that print supplier barcodes only.
+  autoGenerateBarcodes: boolean("auto_generate_barcodes").default(true).notNull(),
   proformaPrefix: text("proforma_prefix").default("PI").notNull(),
   nextProformaNumber: integer("next_proforma_number").default(1).notNull(),
   financialYearStart: integer("financial_year_start_month").default(4).notNull(), // April
@@ -420,6 +426,11 @@ export const items = pgTable("items", {
   name: text("name").notNull(),
   hsn: text("hsn"),
   sku: text("sku"),
+  // Scannable product code (EAN-13 / UPC-A / Code 128). Kept separate from
+  // `sku`: an SKU is an internal catalogue code chosen by the business, while
+  // a barcode is what a scanner actually reads off the package. POS matched
+  // on SKU as a stand-in before this column existed.
+  barcode: text("barcode"),
   unit: unitEnum("unit").default("pcs").notNull(),
   itemMode: itemModeEnum("item_mode").default("simple").notNull(),
   unitVariants: jsonb("unit_variants").$type<Array<{
@@ -458,6 +469,12 @@ export const items = pgTable("items", {
   index("items_business_idx").on(t.businessId),
   index("items_name_idx").on(t.businessId, t.name),
   index("items_sku_idx").on(t.businessId, t.sku),
+  // Scans are exact-match lookups on the hot path, and a barcode must resolve
+  // to exactly one item within a business. Partial so the many items without
+  // a barcode don't all collide on NULL.
+  uniqueIndex("items_barcode_idx")
+    .on(t.businessId, t.barcode)
+    .where(sql`${t.barcode} IS NOT NULL AND ${t.deletedAt} IS NULL`),
   index("items_store_idx").on(t.businessId, t.storeEnabled),
   // Partial index that mirrors the active-read path (`items.list`, catalog,
   // store, dashboards). The query planner picks this up for any WHERE that
@@ -473,6 +490,9 @@ export const itemVariants = pgTable("item_variants", {
   itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
   attributeValues: jsonb("attribute_values").$type<Record<string, string>>().notNull(), // e.g. { "Size": "M", "Color": "Red" }
   sku: text("sku"),
+  // Each variant scans as its own product — a red medium tee and a blue large
+  // tee carry different barcodes even though they share an item.
+  barcode: text("barcode"),
   salePrice: numeric("sale_price", { precision: 15, scale: 2 }),
   purchasePrice: numeric("purchase_price", { precision: 15, scale: 2 }),
   stockQuantity: numeric("stock_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
@@ -490,6 +510,10 @@ export const itemVariants = pgTable("item_variants", {
 }, (t) => [
   index("item_variants_item_idx").on(t.itemId),
   index("item_variants_sku_idx").on(t.sku),
+  // Scan lookups hit this directly. Not unique here: item_variants has no
+  // business_id to scope on, so cross-business uniqueness is enforced in the
+  // API alongside the items check rather than by a constraint.
+  index("item_variants_barcode_idx").on(t.barcode),
   // Partial index for the active-variant read path (variant lookups in
   // item detail pages, stock/reporting joins). Mirrors items_active_idx.
   index("item_variants_active_idx").on(t.itemId).where(sql`deleted_at IS NULL`),

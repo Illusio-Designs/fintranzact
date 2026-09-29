@@ -1,0 +1,2 @@
+ALTER TABLE "businesses" ADD COLUMN "next_barcode_number" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "businesses" ADD COLUMN "auto_generate_barcodes" boolean DEFAULT true NOT NULL;

@@ -208,8 +208,15 @@ export const posRouter = router({
       ];
       if (input.search) {
         const pat = `%${escapeLike(input.search)}%`;
-        // Match on name or SKU — SKU doubles as a barcode fallback in v1.
-        conditions.push(or(ilike(items.name, pat), ilike(items.sku, pat))!);
+        // Name, barcode, or SKU. SKU stays in the match because it predates
+        // the barcode column and older label runs encode it.
+        conditions.push(
+          or(
+            ilike(items.name, pat),
+            ilike(items.barcode, pat),
+            ilike(items.sku, pat),
+          )!,
+        );
       }
 
       const offset = (input.page - 1) * input.limit;

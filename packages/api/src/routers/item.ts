@@ -110,6 +110,59 @@ export const itemRouter = router({
       return { ...item, variants: [] as typeof itemVariants.$inferSelect[] };
     }),
 
+  /**
+   * Resolve a scanned code to an item (and variant, when the scan matched a
+   * variant barcode).
+   *
+   * Lookup order is deliberate: barcodes first because that is what a scanner
+   * emits, then SKU as a fallback so businesses that printed SKU-based labels
+   * before this feature existed keep working. Variant barcodes are checked
+   * alongside item barcodes — a size/colour scans as its own product.
+   */
+  lookupByCode: viewerProcedure
+    .input(z.object({ code: z.string().min(1).max(64) }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Item");
+      const code = input.code.trim();
+      if (!code) return null;
+
+      const [byBarcode] = await ctx.db.select().from(items)
+        .where(and(
+          eq(items.businessId, ctx.businessId),
+          eq(items.barcode, code),
+          isNull(items.deletedAt),
+        ))
+        .limit(1);
+      if (byBarcode) return { item: byBarcode, variant: null, matchedOn: "barcode" as const };
+
+      // Variants have no businessId of their own, so scope through the join.
+      const [variantHit] = await ctx.db
+        .select({ item: items, variant: itemVariants })
+        .from(itemVariants)
+        .innerJoin(items, eq(itemVariants.itemId, items.id))
+        .where(and(
+          eq(items.businessId, ctx.businessId),
+          eq(itemVariants.barcode, code),
+          isNull(items.deletedAt),
+          isNull(itemVariants.deletedAt),
+        ))
+        .limit(1);
+      if (variantHit) {
+        return { item: variantHit.item, variant: variantHit.variant, matchedOn: "barcode" as const };
+      }
+
+      const [bySku] = await ctx.db.select().from(items)
+        .where(and(
+          eq(items.businessId, ctx.businessId),
+          eq(items.sku, code),
+          isNull(items.deletedAt),
+        ))
+        .limit(1);
+      if (bySku) return { item: bySku, variant: null, matchedOn: "sku" as const };
+
+      return null;
+    }),
+
   create: memberProcedure.input(createItemSchema).mutation(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "Item");
     const { variants: initialVariants, ...itemData } = input;
@@ -117,6 +170,9 @@ export const itemRouter = router({
     return ctx.db.transaction(async (tx) => {
       const [item] = await tx.insert(items).values({
         ...itemData,
+        // Blank means "no barcode". Storing "" instead of NULL would make
+        // every barcode-less item collide on the partial unique index.
+        barcode: itemData.barcode?.trim() || null,
         businessId: ctx.businessId,
       }).returning();
 
@@ -127,6 +183,7 @@ export const itemRouter = router({
             itemId: item.id,
             attributeValues: v.attributeValues,
             sku: v.sku || null,
+            barcode: v.barcode || null,
             salePrice: v.salePrice || null,
             purchasePrice: v.purchasePrice || null,
             stockQuantity: v.stockQuantity || "0",
@@ -270,7 +327,14 @@ export const itemRouter = router({
       // the public API. Re-activation would require an explicit restore
       // endpoint, which is deferred per FIXES.md.
       const [item] = await ctx.db.update(items)
-        .set({ ...input.data, updatedAt: new Date() })
+        .set({
+          ...input.data,
+          // Same NULL-vs-"" rule as create; only touched when supplied.
+          ...(input.data.barcode !== undefined
+            ? { barcode: input.data.barcode?.trim() || null }
+            : {}),
+          updatedAt: new Date(),
+        })
         .where(and(
           eq(items.id, input.id),
           eq(items.businessId, ctx.businessId),
@@ -680,6 +744,7 @@ export const itemRouter = router({
         itemId: input.itemId,
         attributeValues: input.variant.attributeValues,
         sku: input.variant.sku || null,
+        barcode: input.variant.barcode || null,
         salePrice: input.variant.salePrice || null,
         purchasePrice: input.variant.purchasePrice || null,
         stockQuantity: input.variant.stockQuantity || "0",
@@ -726,6 +791,7 @@ export const itemRouter = router({
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.data.attributeValues !== undefined) updates.attributeValues = input.data.attributeValues;
       if (input.data.sku !== undefined) updates.sku = input.data.sku || null;
+      if (input.data.barcode !== undefined) updates.barcode = input.data.barcode || null;
       if (input.data.salePrice !== undefined) updates.salePrice = input.data.salePrice || null;
       if (input.data.purchasePrice !== undefined) updates.purchasePrice = input.data.purchasePrice || null;
       if (input.data.stockQuantity !== undefined) updates.stockQuantity = input.data.stockQuantity;
@@ -829,6 +895,7 @@ export const itemRouter = router({
           itemId: input.itemId,
           attributeValues: v.attributeValues,
           sku: v.sku || null,
+          barcode: v.barcode || null,
           salePrice: v.salePrice || null,
           purchasePrice: v.purchasePrice || null,
           stockQuantity: v.stockQuantity || "0",
