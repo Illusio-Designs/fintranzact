@@ -14,7 +14,7 @@ const BASE_URL = import.meta.env.API_URL ?? "https://fintranzact-production.up.r
 
 const QUICK_START_CODE = `import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
-import type { AppRouter } from "@hisaabo/api";
+import type { AppRouter } from "@fintranzact/api";
 
 const trpc = createTRPCClient<AppRouter>({
   links: [

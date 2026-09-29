@@ -10,7 +10,7 @@ import {
     stockBalances,
     warehousePermissions,
     businessMembers,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 
 import { router, tenantProcedure } from "../trpc.js";
 import { recordStockMovement } from "../lib/inventory-service.js";

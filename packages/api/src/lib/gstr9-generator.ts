@@ -19,7 +19,7 @@
  * generateGSTR1/3B use.
  */
 
-import type { TenantDatabase } from "@hisaabo/db";
+import type { TenantDatabase } from "@fintranzact/db";
 import { generateGSTR1, generateGSTR3B, type GSTR1Report, type GSTR3BReport } from "./gst-reports.js";
 
 // ── Types ──────────────────────────────────────────────────────

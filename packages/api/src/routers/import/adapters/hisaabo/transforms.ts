@@ -3,8 +3,8 @@
 // we still need parseFlexibleDate for date strings, but units and modes
 // are already canonical values.
 import { parseFlexibleDate } from "../../helpers.js";
-import { units } from "@hisaabo/shared";
-import type { Unit } from "@hisaabo/shared";
+import { units } from "@fintranzact/shared";
+import type { Unit } from "@fintranzact/shared";
 import type {
   CanonicalParty,
   CanonicalItem,

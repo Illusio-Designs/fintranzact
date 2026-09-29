@@ -2573,7 +2573,7 @@ The `businesses.financialYearStart` month (1-indexed, default 4 = April) should 
 
 ### Money Arithmetic
 
-Per project rules: all monetary values are stored as `NUMERIC(15,2)`. All SQL aggregations must cast to `::numeric` before arithmetic. Return values as text strings (never JS floats). Use the existing `money` module from `@hisaabo/shared` for any server-side arithmetic after fetching from the database. The `money.sub()`, `money.add()`, and `money.toNumber()` functions handle paise-level precision correctly.
+Per project rules: all monetary values are stored as `NUMERIC(15,2)`. All SQL aggregations must cast to `::numeric` before arithmetic. Return values as text strings (never JS floats). Use the existing `money` module from `@fintranzact/shared` for any server-side arithmetic after fetching from the database. The `money.sub()`, `money.add()`, and `money.toNumber()` functions handle paise-level precision correctly.
 
 ### Export Architecture
 

@@ -260,7 +260,7 @@ describe("Role differences across tenants — same user has different permission
   it("Suresh as admin on Acme can delete a party in Acme's business — succeeds", async () => {
     // Upgrade Suresh to admin on tenant1 for this test group
     const { getControlDb } = await import("../helpers/test-db.js");
-    const { tenantMembers } = await import("@hisaabo/db");
+    const { tenantMembers } = await import("@fintranzact/db");
     const { eq, and } = await import("drizzle-orm");
     const db = getControlDb();
 

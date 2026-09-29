@@ -5,7 +5,7 @@
  * each user role should have access to. This is a PURE DATA contract test —
  * it does not render components (routes depend on TanStack Router). Instead
  * it tests the PERMISSION MATRIX as a specification, duplicating the CASL
- * logic from `@hisaabo/api` since cross-package imports are not available
+ * logic from `@fintranzact/api` since cross-package imports are not available
  * in web tests.
  *
  * ┌──────────────────┬────────┬───────┬────────────────┬────────┬────────────┐
@@ -35,13 +35,13 @@
  * └──────────────────┴────────┴───────┴────────────────┴────────┴────────────┘
  *
  * Source of truth: packages/api/src/lib/permissions.ts
- * Run with: pnpm --filter @hisaabo/web test -- --run src/__tests__/role-access.test.ts
+ * Run with: pnpm --filter @fintranzact/web test -- --run src/__tests__/role-access.test.ts
  */
 
 import { describe, it, expect } from "vitest";
 
 // ─── Duplicated Permission Logic ─────────────────────────────────────────────
-// Mirrors defineAbilityFor from @hisaabo/api without CASL dependency.
+// Mirrors defineAbilityFor from @fintranzact/api without CASL dependency.
 // We use a simple Set-based approach since we only need can/cannot checks.
 
 type Action = "create" | "read" | "update" | "delete" | "manage";

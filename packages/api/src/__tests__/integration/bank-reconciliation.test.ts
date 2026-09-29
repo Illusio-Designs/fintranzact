@@ -24,7 +24,7 @@ import { eq } from "drizzle-orm";
 import {
   bankStatementImports,
   bankStatementLines,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   createTestWorld,
   createBankAccount,

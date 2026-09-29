@@ -38,7 +38,7 @@ function readApiVersion(): string {
     try {
       const raw = readFileSync(p, "utf8");
       const pkg = JSON.parse(raw) as { name?: string; version?: string };
-      if (pkg.name === "@hisaabo/api" && typeof pkg.version === "string") {
+      if (pkg.name === "@fintranzact/api" && typeof pkg.version === "string") {
         return pkg.version;
       }
     } catch {

@@ -3,7 +3,7 @@ import { Modal } from "@/components/ui/Modal";
 import { InputField } from "@/components/ui/FormField";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
-import type { PartyType } from "@hisaabo/shared";
+import type { PartyType } from "@fintranzact/shared";
 
 export interface QuickPartyCreateProps {
   open: boolean;

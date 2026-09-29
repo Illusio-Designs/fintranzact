@@ -8,7 +8,7 @@
  * in code are seeded on next upload, with no migration required.
  */
 
-import { bankStatementTemplates } from "@hisaabo/db";
+import { bankStatementTemplates } from "@fintranzact/db";
 import { and, eq } from "drizzle-orm";
 
 import { SBI_TEMPLATES } from "./banks/sbi.js";

@@ -6,7 +6,7 @@ import {
   httpLink,
 } from "@trpc/client";
 import superjson from "superjson";
-import type { AppRouter } from "@hisaabo/api";
+import type { AppRouter } from "@fintranzact/api";
 import { getTokenSync } from "./auth";
 import { getApiUrl } from "./api-url";
 import { useBusinessStore } from "../stores/business";

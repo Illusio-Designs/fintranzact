@@ -16,14 +16,14 @@
 import { z } from "zod";
 import { eq, and, sql, desc, isNull, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { gstr2bUploads, gstr2bRecords, invoices, parties } from "@hisaabo/db";
+import { gstr2bUploads, gstr2bRecords, invoices, parties } from "@fintranzact/db";
 import {
   gstr2bUploadSchema,
   gstr2bRecordsInputSchema,
   gstr2bSummaryInputSchema,
   gstr2bLinkInvoiceSchema,
   gstr2bIgnoreRecordSchema,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import {

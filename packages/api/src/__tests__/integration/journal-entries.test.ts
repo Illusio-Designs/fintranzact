@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
-import { chartOfAccounts, journalEntries } from "@hisaabo/db";
+import { chartOfAccounts, journalEntries } from "@fintranzact/db";
 import { createTestWorld, type TestWorld } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
 import { getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { seedChartOfAccounts } from "../../lib/coa-seed.js";
-import { money } from "@hisaabo/shared";
+import { money } from "@fintranzact/shared";
 
 let world: TestWorld;
 

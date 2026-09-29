@@ -1,6 +1,6 @@
-import { parties, items, invoices, invoiceItems, payments, shipments } from "@hisaabo/db";
+import { parties, items, invoices, invoiceItems, payments, shipments } from "@fintranzact/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { calcLineItem, money } from "@hisaabo/shared";
+import { calcLineItem, money } from "@fintranzact/shared";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalInvoice } from "../types.js";
 

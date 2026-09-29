@@ -25,7 +25,7 @@ import {
   recurringInvoiceTemplates,
   recurringInvoiceRuns,
   getTenantDb,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   createTestWorld,
   createItem,

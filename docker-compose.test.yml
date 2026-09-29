@@ -9,7 +9,7 @@
 #
 # Set in your environment before running API integration tests:
 #   export TEST_DATABASE_URL=postgresql://test:test@localhost:5433/fintranzact_test
-#   pnpm --filter @hisaabo/api test
+#   pnpm --filter @fintranzact/api test
 
 services:
   test-db:

@@ -2,8 +2,8 @@ import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import { createHash } from "crypto";
 import { logger } from "./lib/logger.js";
 import { getClientKind } from "./lib/client-headers.js";
-import { controlDb } from "@hisaabo/db";
-import { sessions, users, apiKeys, accessTokens } from "@hisaabo/db";
+import { controlDb } from "@fintranzact/db";
+import { sessions, users, apiKeys, accessTokens } from "@fintranzact/db";
 import { eq, gt, and } from "drizzle-orm";
 
 // Bearer session sliding-window constants — must mirror auth.ts values

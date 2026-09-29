@@ -969,8 +969,8 @@ Add to root `package.json`:
 "scripts": {
   "test": "vitest run",
   "test:watch": "vitest",
-  "test:mobile": "pnpm --filter @hisaabo/mobile test",
-  "test:e2e": "pnpm --filter @hisaabo/web playwright test"
+  "test:mobile": "pnpm --filter @fintranzact/mobile test",
+  "test:e2e": "pnpm --filter @fintranzact/web playwright test"
 }
 ```
 
@@ -1026,7 +1026,7 @@ test-unit:
         node-version: 22
         cache: pnpm
     - run: pnpm install --frozen-lockfile
-    - run: pnpm --filter @hisaabo/shared test
+    - run: pnpm --filter @fintranzact/shared test
 ```
 
 ### New job: `test-api`
@@ -1065,11 +1065,11 @@ test-api:
         cache: pnpm
     - run: pnpm install --frozen-lockfile
     - name: Push test schema
-      run: pnpm --filter @hisaabo/db db:push
+      run: pnpm --filter @fintranzact/db db:push
       env:
         DATABASE_URL: postgresql://fintranzact:fintranzact_dev@localhost:5433/fintranzact_test
     - name: Run API tests
-      run: pnpm --filter @hisaabo/api test
+      run: pnpm --filter @fintranzact/api test
 ```
 
 ### New job: `test-web`
@@ -1090,7 +1090,7 @@ test-web:
         node-version: 22
         cache: pnpm
     - run: pnpm install --frozen-lockfile
-    - run: pnpm --filter @hisaabo/web test
+    - run: pnpm --filter @fintranzact/web test
 ```
 
 ### New job: `test-mobile`
@@ -1114,7 +1114,7 @@ test-mobile:
         node-version: 22
         cache: pnpm
     - run: pnpm install --frozen-lockfile
-    - run: pnpm --filter @hisaabo/mobile test
+    - run: pnpm --filter @fintranzact/mobile test
 ```
 
 Note: The `changed_files` approach above is a simplification. The actual implementation should use `dorny/paths-filter` action or `tj-actions/changed-files` to correctly detect mobile file changes in PR context.
@@ -1160,7 +1160,7 @@ test-e2e:
     - name: Install Playwright browsers
       run: pnpm exec playwright install --with-deps chromium
     - name: Run E2E tests
-      run: pnpm --filter @hisaabo/web test:e2e
+      run: pnpm --filter @fintranzact/web test:e2e
       env:
         DATABASE_URL: postgresql://fintranzact:fintranzact_dev@localhost:5432/fintranzact_e2e
     - name: Upload Playwright report

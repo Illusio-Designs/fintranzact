@@ -8,14 +8,14 @@ import {
   itemVariants,
   businesses,
   parties,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   createInvoiceSchema,
   paginationSchema,
   type DocumentType,
   calcLineItem,
   calcInvoiceTotals,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { logAudit } from "./audit.js";
 import { buildBusinessDateFilter } from "./business-date.js";

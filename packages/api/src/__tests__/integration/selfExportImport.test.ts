@@ -17,7 +17,7 @@
  *   This is sequential — vitest config uses singleFork + pool.
  *
  * RUNNING:
- *   pnpm --filter @hisaabo/api test -- selfExportImport
+ *   pnpm --filter @fintranzact/api test -- selfExportImport
  */
 
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
@@ -51,7 +51,7 @@ import {
   recurringInvoiceTemplates,
   eInvoiceConfigs,
   auditLog,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   getControlDb,
   getTenantTestDb,

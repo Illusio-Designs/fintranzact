@@ -1,4 +1,4 @@
-import { parties } from "@hisaabo/db";
+import { parties } from "@fintranzact/db";
 import { eq } from "drizzle-orm";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalParty } from "../types.js";

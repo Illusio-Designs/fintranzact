@@ -14,7 +14,7 @@ import {
   businesses,
   journalEntries,
   journalEntryLines,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import { deriveLedger, deriveFullLedger } from "../lib/derive-ledger.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import {
@@ -28,7 +28,7 @@ import {
   partyStatementInputSchema,
   paymentSummaryInputSchema,
   money,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { generateTallyXml } from "../lib/tally-xml-export.js";

@@ -1,4 +1,4 @@
-import { bankAccounts, bankTransactions } from "@hisaabo/db";
+import { bankAccounts, bankTransactions } from "@fintranzact/db";
 import { eq, sql } from "drizzle-orm";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalTransfer } from "../types.js";

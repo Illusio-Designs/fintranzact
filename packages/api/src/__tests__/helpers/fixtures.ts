@@ -33,7 +33,7 @@ import {
   payments,
   expenses,
   bankAccounts,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import { getControlDb, getTenantTestDb, type TenantTestDb } from "./test-db.js";
 
 // ── Type helpers ───────────────────────────────────────────────────────────────

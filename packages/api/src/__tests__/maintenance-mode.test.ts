@@ -41,8 +41,8 @@ vi.mock("../lib/maintenance-cache.js", () => ({
 
 // `hasTenantAccess` calls getTenantDb(tenantId) BEFORE the maintenance check.
 // Returning a bare object is fine — no queries run against it in these tests.
-vi.mock("@hisaabo/db", async () => {
-  const actual = await vi.importActual<typeof import("@hisaabo/db")>("@hisaabo/db");
+vi.mock("@fintranzact/db", async () => {
+  const actual = await vi.importActual<typeof import("@fintranzact/db")>("@fintranzact/db");
   return {
     ...actual,
     getTenantDb: vi.fn(async () => ({} as never)),

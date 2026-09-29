@@ -72,7 +72,7 @@ import {
   ewayBillVehicleUpdates,
   gstr2bUploads,
   gstr2bRecords,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 
 // Reconstruct schema objects for Drizzle so each instance has only its tables
 const controlSchema = {
@@ -256,14 +256,14 @@ export async function truncateAllTables(): Promise<void> {
  *
  * Closes THREE pools:
  *   1. The test-helper's shared client (getTestClient / _client above).
- *   2. The @hisaabo/db control-plane pool (controlClient in control-client.ts).
- *   3. The @hisaabo/db tenant pools (singleTenantDb + per-tenant in
+ *   2. The @fintranzact/db control-plane pool (controlClient in control-client.ts).
+ *   3. The @fintranzact/db tenant pools (singleTenantDb + per-tenant in
  *      tenant-pool.ts).
  *
  * (2) and (3) matter because Vitest's per-file module isolation
  * (`isolate: true` is the default and we rely on it for `vi.mock` scoping)
- * re-evaluates @hisaabo/db for EACH test file, so each file gets its own
- * fresh pools. If we only closed (1), the old @hisaabo/db pools from prior
+ * re-evaluates @fintranzact/db for EACH test file, so each file gets its own
+ * fresh pools. If we only closed (1), the old @fintranzact/db pools from prior
  * files would stay alive in the single worker process (`pool: "forks"` +
  * `singleFork: true`) until `idle_timeout` expired, monotonically growing
  * the total connection count and exhausting the test DB's
@@ -281,7 +281,7 @@ export async function closeTestDb(): Promise<void> {
     _tenantDb = null;
   }
 
-  // Also close @hisaabo/db's module-level pools. These are re-created per
+  // Also close @fintranzact/db's module-level pools. These are re-created per
   // test file by Vitest's module isolation, so they must be closed per file
   // too — otherwise they leak across the run.
   pending.push(closeControlClient());

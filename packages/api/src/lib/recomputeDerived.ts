@@ -18,8 +18,8 @@ import {
   invoices,
   stockAdjustments,
   paymentAllocations,
-} from "@hisaabo/db";
-import type { TenantDatabase } from "@hisaabo/db";
+} from "@fintranzact/db";
+import type { TenantDatabase } from "@fintranzact/db";
 import { logger } from "./logger.js";
 
 export interface RecomputeWarning {

@@ -1,4 +1,4 @@
-# @hisaabo/store
+# @fintranzact/store
 
 The public-facing online storefront for Fintranzact businesses. A lightweight React 19 SPA that customers visit to browse a business's catalog and place orders — no login required.
 
@@ -31,7 +31,7 @@ When a customer places an order, the API creates an unfulfilled invoice in the b
 
 ```bash
 # From monorepo root
-pnpm --filter @hisaabo/store dev
+pnpm --filter @fintranzact/store dev
 
 # Or from this directory
 pnpm dev
@@ -46,7 +46,7 @@ To enable a business's store, go to **Settings > Online Store** in the web dashb
 ## Building
 
 ```bash
-pnpm --filter @hisaabo/store build
+pnpm --filter @fintranzact/store build
 # Output: apps/store/dist/
 ```
 
@@ -58,7 +58,7 @@ The store is a static SPA deployed to Cloudflare Pages:
 
 | Setting | Value |
 |---|---|
-| Build command | `pnpm --filter @hisaabo/store build` |
+| Build command | `pnpm --filter @fintranzact/store build` |
 | Output directory | `apps/store/dist` |
 | Node.js version | 20 |
 
@@ -115,4 +115,4 @@ apps/store/
 └── vite.config.ts
 ```
 
-The store has no dependency on `@hisaabo/api` or tRPC. It uses plain `fetch` calls to the REST endpoints. Types in `src/types.ts` are manually maintained to match the API response shapes — if you change the catalog or order endpoint in the API, update these types.
+The store has no dependency on `@fintranzact/api` or tRPC. It uses plain `fetch` calls to the REST endpoints. Types in `src/types.ts` are manually maintained to match the API response shapes — if you change the catalog or order endpoint in the API, update these types.

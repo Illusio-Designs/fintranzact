@@ -1,14 +1,14 @@
 import { eq, and, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { journalEntries, journalEntryLines, chartOfAccounts, journalEntryTemplates } from "@hisaabo/db";
+import { journalEntries, journalEntryLines, chartOfAccounts, journalEntryTemplates } from "@fintranzact/db";
 import { escapeLike } from "../lib/escape-like.js";
 import {
   createJournalEntrySchema,
   updateJournalEntrySchema,
   voidJournalEntrySchema,
   createJournalEntryTemplateSchema,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";

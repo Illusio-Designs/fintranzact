@@ -1,4 +1,4 @@
-# @hisaabo/mobile
+# @fintranzact/mobile
 
 The Hisaabo mobile app. Built with Expo SDK 52 and React Native 0.76, it runs on Android and iOS using the same tRPC API as the web dashboard.
 
@@ -32,7 +32,7 @@ No build required. Install Expo Go on your physical device or emulator, then:
 
 ```bash
 # From monorepo root
-pnpm --filter @hisaabo/mobile dev
+pnpm --filter @fintranzact/mobile dev
 
 # Or from this directory
 pnpm dev
@@ -66,7 +66,7 @@ New-NetFirewallRule -DisplayName "WSL API" -Direction Inbound -Protocol TCP -Loc
 ### Option 3: iOS simulator (macOS only)
 
 ```bash
-pnpm --filter @hisaabo/mobile dev:ios
+pnpm --filter @fintranzact/mobile dev:ios
 ```
 
 Requires Xcode and iOS Simulator installed on macOS.
@@ -78,7 +78,7 @@ Requires Xcode and iOS Simulator installed on macOS.
 ### Debug APK (Android)
 
 ```bash
-pnpm --filter @hisaabo/mobile build:apk
+pnpm --filter @fintranzact/mobile build:apk
 ```
 
 This runs `apps/mobile/scripts/build-apk.sh`, which handles the Expo prebuild and local Gradle build. The APK is output to `android/app/build/outputs/apk/`.
@@ -109,7 +109,7 @@ eas build --profile production --platform android
 If you need to modify native code (add a native module, change permissions, etc.):
 
 ```bash
-pnpm --filter @hisaabo/mobile prebuild
+pnpm --filter @fintranzact/mobile prebuild
 ```
 
 This generates the `android/` and `ios/` directories from the Expo config. These directories are gitignored — regenerate them when needed.
@@ -147,11 +147,11 @@ Every tRPC request includes `Authorization: Bearer <token>` via a custom header 
 
 ### tRPC client
 
-The mobile app imports `AppRouter` from `@hisaabo/api` (devDependency, types only) and creates a typed tRPC client with `httpBatchLink`, identical in shape to the web client but configured for Bearer auth instead of cookies:
+The mobile app imports `AppRouter` from `@fintranzact/api` (devDependency, types only) and creates a typed tRPC client with `httpBatchLink`, identical in shape to the web client but configured for Bearer auth instead of cookies:
 
 ```typescript
 // src/lib/trpc.ts
-import type { AppRouter } from "@hisaabo/api";
+import type { AppRouter } from "@fintranzact/api";
 import { createTRPCReact } from "@trpc/react-query";
 
 export const trpc = createTRPCReact<AppRouter>();
@@ -167,7 +167,7 @@ The app uses `expo-local-authentication` to optionally gate access behind Face I
 
 ### Shared validators and money module
 
-The mobile app imports `@hisaabo/shared` directly, giving it access to the same Zod schemas and the `money` fixed-point arithmetic module used by the API and web app. Never use `parseFloat` for monetary values.
+The mobile app imports `@fintranzact/shared` directly, giving it access to the same Zod schemas and the `money` fixed-point arithmetic module used by the API and web app. Never use `parseFloat` for monetary values.
 
 ---
 

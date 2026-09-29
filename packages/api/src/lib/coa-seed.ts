@@ -1,4 +1,4 @@
-import { chartOfAccounts } from "@hisaabo/db";
+import { chartOfAccounts } from "@fintranzact/db";
 
 interface SeedAccount {
   code: string;

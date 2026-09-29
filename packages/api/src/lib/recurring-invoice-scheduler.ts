@@ -5,7 +5,7 @@
  */
 
 import { eq, and, sql, gte, lte } from "drizzle-orm";
-import { getTenantDb, controlDb, tenants, recurringInvoiceTemplates, recurringInvoiceRuns } from "@hisaabo/db";
+import { getTenantDb, controlDb, tenants, recurringInvoiceTemplates, recurringInvoiceRuns } from "@fintranzact/db";
 import { generateInvoiceFromTemplate } from "./recurring-invoice-generator.js";
 import { RECURRING_RUNS_PER_MONTH_FREE } from "./plan-limits.js";
 

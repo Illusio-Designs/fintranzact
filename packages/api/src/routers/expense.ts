@@ -1,8 +1,8 @@
 import { eq, and, sql, desc, ilike, or, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { expenses, bankAccounts, bankTransactions } from "@hisaabo/db";
-import { createExpenseSchema, paginationSchema, money } from "@hisaabo/shared";
+import { expenses, bankAccounts, bankTransactions } from "@fintranzact/db";
+import { createExpenseSchema, paginationSchema, money } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";

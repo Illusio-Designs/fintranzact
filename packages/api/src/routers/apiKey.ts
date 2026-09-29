@@ -2,8 +2,8 @@ import { TRPCError } from "@trpc/server";
 import { createHash, randomBytes } from "crypto";
 import { eq, and } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc.js";
-import { controlDb, apiKeys } from "@hisaabo/db";
-import { createApiKeySchema, revokeApiKeySchema } from "@hisaabo/shared";
+import { controlDb, apiKeys } from "@fintranzact/db";
+import { createApiKeySchema, revokeApiKeySchema } from "@fintranzact/shared";
 import { enforceApiKeyLimit } from "../lib/plan-limits.js";
 
 export const apiKeyRouter = router({

@@ -1,4 +1,4 @@
-# @hisaabo/api
+# @fintranzact/api
 
 The Fintranzact backend. A [Hono](https://hono.dev/) HTTP server with a [tRPC v11](https://trpc.io/) router that provides fully type-safe access to all business data. 14 routers, 130+ procedures, rate limiting, audit logging, PDF generation, and email.
 
@@ -12,7 +12,7 @@ The Fintranzact backend. A [Hono](https://hono.dev/) HTTP server with a [tRPC v1
 
 ```bash
 # From monorepo root
-pnpm --filter @hisaabo/api dev
+pnpm --filter @fintranzact/api dev
 
 # Or from this directory
 pnpm dev
@@ -25,7 +25,7 @@ The API starts at `http://localhost:3000`. Requires a running PostgreSQL instanc
 ## Building
 
 ```bash
-pnpm --filter @hisaabo/api build
+pnpm --filter @fintranzact/api build
 ```
 
 Uses [tsup](https://tsup.egoist.dev/) to bundle `src/server.ts` → `dist/server.js`. The PDF worker is compiled separately:

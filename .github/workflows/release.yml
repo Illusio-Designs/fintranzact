@@ -271,10 +271,10 @@ jobs:
       - name: Set version from git tag
         run: node -e "const fs=require('fs'),f='packages/cli/package.json',p=JSON.parse(fs.readFileSync(f));p.version=process.env.GITHUB_REF_NAME.replace(/^v/,'');fs.writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
 
-      - run: pnpm --filter @hisaabo/cli build
+      - run: pnpm --filter @fintranzact/cli build
 
       # Publishes via npm Trusted Publishing (OIDC). Requires a Trusted
-      # Publisher config on npmjs.org for @hisaabo/cli pointing at this
+      # Publisher config on npmjs.org for @fintranzact/cli pointing at this
       # repo and workflow filename "release.yml". No NPM_TOKEN secret is
       # used. Provenance is auto-attached when OIDC publishing is
       # detected — do NOT pass --provenance explicitly.
@@ -282,11 +282,11 @@ jobs:
       # We pack with pnpm (resolves workspace: protocol into real
       # versions in the tarball's package.json) and then publish the
       # tarball with `npm publish` per npm's Trusted Publisher docs.
-      - name: Publish @hisaabo/cli
+      - name: Publish @fintranzact/cli
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          if npm view "@hisaabo/cli@${VERSION}" version >/dev/null 2>&1; then
-            echo "⏭️  @hisaabo/cli@${VERSION} already published — skipping"
+          if npm view "@fintranzact/cli@${VERSION}" version >/dev/null 2>&1; then
+            echo "⏭️  @fintranzact/cli@${VERSION} already published — skipping"
             exit 0
           fi
           pnpm -C packages/cli pack --pack-destination /tmp/cli
@@ -317,18 +317,18 @@ jobs:
       - name: Set version from git tag
         run: node -e "const fs=require('fs'),f='packages/mcp/package.json',p=JSON.parse(fs.readFileSync(f));p.version=process.env.GITHUB_REF_NAME.replace(/^v/,'');fs.writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
 
-      - run: pnpm --filter @hisaabo/mcp build
+      - run: pnpm --filter @fintranzact/mcp build
 
       # Publishes via npm Trusted Publishing (OIDC). Requires a Trusted
-      # Publisher config on npmjs.org for @hisaabo/mcp pointing at this
+      # Publisher config on npmjs.org for @fintranzact/mcp pointing at this
       # repo and workflow filename "release.yml". No NPM_TOKEN secret is
       # used. Provenance is auto-attached when OIDC publishing is
       # detected — do NOT pass --provenance explicitly.
-      - name: Publish @hisaabo/mcp
+      - name: Publish @fintranzact/mcp
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          if npm view "@hisaabo/mcp@${VERSION}" version >/dev/null 2>&1; then
-            echo "⏭️  @hisaabo/mcp@${VERSION} already published — skipping"
+          if npm view "@fintranzact/mcp@${VERSION}" version >/dev/null 2>&1; then
+            echo "⏭️  @fintranzact/mcp@${VERSION} already published — skipping"
             exit 0
           fi
           pnpm -C packages/mcp pack --pack-destination /tmp/mcp
@@ -405,8 +405,8 @@ jobs:
           $(web_status "$STORE" "Online Store")
           $(status "$MOBILE" "$MOBILE_RESULT" "Android APK")
           $(status "$DESKTOP" "$DESKTOP_RESULT" "Desktop (Win/Mac/Linux)")
-          $(status "$CLI" "$CLI_RESULT" "CLI (@hisaabo/cli)")
-          $(status "$MCP" "$MCP_RESULT" "MCP Server (@hisaabo/mcp)")
+          $(status "$CLI" "$CLI_RESULT" "CLI (@fintranzact/cli)")
+          $(status "$MCP" "$MCP_RESULT" "MCP Server (@fintranzact/mcp)")
 
           ## Docker
 

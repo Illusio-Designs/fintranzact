@@ -22,7 +22,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { sessions, accessTokens } from "@hisaabo/db";
+import { sessions, accessTokens } from "@fintranzact/db";
 import {
   createUser,
   createTenant,

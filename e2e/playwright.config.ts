@@ -35,7 +35,7 @@ export default defineConfig({
 
   webServer: [
     {
-      command: "pnpm --filter @hisaabo/api dev",
+      command: "pnpm --filter @fintranzact/api dev",
       url: `${API_URL}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
@@ -44,7 +44,7 @@ export default defineConfig({
       env: { DISABLE_RATE_LIMIT: "1" },
     },
     {
-      command: "pnpm --filter @hisaabo/web dev",
+      command: "pnpm --filter @fintranzact/web dev",
       url: BASE_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,

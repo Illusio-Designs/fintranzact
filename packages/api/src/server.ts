@@ -18,8 +18,8 @@ import { appRouter } from "./router.js";
 import { createContext, getSessionIdFromRequest } from "./context.js";
 import type { InvoicePDFData } from "./lib/invoice-pdf.js";
 import { generateLedgerPDF } from "./lib/ledger-pdf.js";
-import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, tenantMembers, magicLinkTokens, bankAccounts, storeOrders, payments, assertMigrationsPresent } from "@hisaabo/db";
-import { calcLineItem, calcInvoiceTotals, money } from "@hisaabo/shared";
+import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, tenantMembers, magicLinkTokens, bankAccounts, storeOrders, payments, assertMigrationsPresent } from "@fintranzact/db";
+import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
 import { logger } from "./lib/logger.js";
@@ -1734,7 +1734,7 @@ app.post("/webhooks/shipping/:businessId", async (c) => {
   }
 
   // Resolve tenant from business ID and get DB connection
-  const { shipments: shipmentsTable, shipmentEvents } = await import("@hisaabo/db");
+  const { shipments: shipmentsTable, shipmentEvents } = await import("@fintranzact/db");
   // In single-tenant mode, use "single"; in multi-tenant, scan active tenants to find the owner
   const isMultiTenant = process.env.MULTI_TENANT === "true";
   let db: Awaited<ReturnType<typeof getTenantDb>>;
@@ -1827,7 +1827,7 @@ app.notFound((c) => {
 // Refuse to boot if the migration SQL directories aren't where the bundled
 // runtime expects them. Without this, a broken Dockerfile / bundle layout
 // would boot "successfully" and only fail on the first user signup (which is
-// how we learned the hard way that @hisaabo/db's __dirname shifts when tsup
+// how we learned the hard way that @fintranzact/db's __dirname shifts when tsup
 // inlines it into apps/api/dist).
 {
   const missing = assertMigrationsPresent();

@@ -1,6 +1,6 @@
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
-import { invoices, invoiceItems, parties, businesses, items as itemsTable } from "@hisaabo/db";
-import type { TenantDatabase } from "@hisaabo/db";
+import { invoices, invoiceItems, parties, businesses, items as itemsTable } from "@fintranzact/db";
+import type { TenantDatabase } from "@fintranzact/db";
 import { buildBusinessDateFilter } from "./business-date.js";
 
 // Split a tax amount exactly in half using paise-level integer arithmetic

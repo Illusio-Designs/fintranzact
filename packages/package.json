@@ -1,5 +1,5 @@
 {
-  "name": "@hisaabo/cli",
+  "name": "@fintranzact/cli",
   "version": "0.1.0",
   "private": false,
   "type": "module",
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hisaabo/shared": "workspace:*",
+    "@fintranzact/shared": "workspace:*",
     "ink": "^5.2.0",
     "react": "^18.3.1",
     "@inkjs/ui": "^2.0.0",
@@ -22,7 +22,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@hisaabo/api": "workspace:*",
+    "@fintranzact/api": "workspace:*",
     "@types/react": "^18.3.0",
     "@types/node": "^22.0.0",
     "tsup": "^8.3.0",

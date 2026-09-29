@@ -3,7 +3,7 @@
  *
  * This is an inline copy of the client designed in packages/client (ADR-001).
  * When packages/client is built, this file should be replaced with:
- *   import { HisaaboClient } from "@hisaabo/client";
+ *   import { HisaaboClient } from "@fintranzact/client";
  *
  * The tRPC wire format used here:
  *   - Queries: GET /api/trpc/<path>?input=<superjson-encoded>
@@ -1020,7 +1020,7 @@ export class HisaaboClient {
 }
 
 // ── Shared types ───────────────────────────────────────────────────────────
-// These mirror the API router output shapes — no runtime dependency on @hisaabo/api.
+// These mirror the API router output shapes — no runtime dependency on @fintranzact/api.
 // Keep in sync with packages/api/src/routers/*.ts return types.
 
 export interface PaginatedResult<T> {

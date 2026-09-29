@@ -6,7 +6,7 @@
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { controlDb, getTenantDb, businesses, tenantMembers } from "@hisaabo/db";
+import { controlDb, getTenantDb, businesses, tenantMembers } from "@fintranzact/db";
 import { eq, and, count as sqlCount } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc.js";
 import { signImportToken } from "../lib/importToken.js";

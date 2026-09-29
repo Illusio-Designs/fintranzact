@@ -22,8 +22,8 @@
 import { config } from "dotenv";
 config({ path: "../../.env" });
 
-import { controlDb, tenants, getTenantDb } from "@hisaabo/db";
-import { reEncryptField, getKeyVersion } from "@hisaabo/db";
+import { controlDb, tenants, getTenantDb } from "@fintranzact/db";
+import { reEncryptField, getKeyVersion } from "@fintranzact/db";
 import { eq } from "drizzle-orm";
 
 const EXECUTE = process.argv.includes("--execute");
@@ -121,7 +121,7 @@ async function rotateTenantDb(tenantId: string, tenantSlug: string): Promise<Rot
   }
 
   // Dynamic imports for tenant schema tables
-  const { eInvoiceConfigs, businesses } = await import("@hisaabo/db");
+  const { eInvoiceConfigs, businesses } = await import("@fintranzact/db");
 
   // ── e_invoice_configs ──────────────────────────────────────────────────
   const configs = await db.select().from(eInvoiceConfigs);

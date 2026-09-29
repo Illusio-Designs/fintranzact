@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { shipments, invoices, parties } from "@hisaabo/db";
+import { shipments, invoices, parties } from "@fintranzact/db";
 import { router, memberProcedure, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";

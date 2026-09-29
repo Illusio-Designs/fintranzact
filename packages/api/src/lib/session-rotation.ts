@@ -1,5 +1,5 @@
 import { and, eq, ne } from "drizzle-orm";
-import { controlDb, sessions } from "@hisaabo/db";
+import { controlDb, sessions } from "@fintranzact/db";
 import { revokeAllUserSessions, invalidateSessionCache } from "../context.js";
 
 /**

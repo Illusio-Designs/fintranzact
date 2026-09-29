@@ -415,7 +415,7 @@ delivery_method = result.get("deliveryMethod")  # None if no prior invoices`,
       gotchas: [
         "Only sale invoices are considered — purchase invoices are excluded.",
         "Returns `null` (not an error) when no prior invoices exist. Always handle the null case before using the result as a default.",
-        "The returned value matches the `deliveryMethods` enum exported from `@hisaabo/shared`: `self_pickup`, `hand_delivery`, `courier`, `bus`, `transport`, `post`.",
+        "The returned value matches the `deliveryMethods` enum exported from `@fintranzact/shared`: `self_pickup`, `hand_delivery`, `courier`, `bus`, `transport`, `post`.",
       ],
       relatedEndpoints: ["invoice-create"],
     },

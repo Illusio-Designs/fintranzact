@@ -17,7 +17,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { trpc } from "../../../../src/lib/trpc";
 import { formatCurrency } from "../../../../src/lib/utils";
-import { calcInvoiceTotals } from "@hisaabo/shared";
+import { calcInvoiceTotals } from "@fintranzact/shared";
 import { makeStyles } from "../../../../src/lib/makeStyles";
 import { useColors } from "../../../../src/contexts/ThemeContext";
 import { haptic } from "../../../../src/lib/haptics";

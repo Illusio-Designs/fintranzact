@@ -2,8 +2,8 @@
  * Programmatic database migration runner.
  *
  * Usage:
- *   pnpm --filter @hisaabo/db migrate          # run migrations
- *   pnpm --filter @hisaabo/db migrate:verify    # check status only (--verify-only)
+ *   pnpm --filter @fintranzact/db migrate          # run migrations
+ *   pnpm --filter @fintranzact/db migrate:verify    # check status only (--verify-only)
  *
  * Self-hosted (MULTI_TENANT !== "true"):
  *   Applies drizzle/ (unified) migrations to DATABASE_URL.
@@ -33,7 +33,7 @@ import { createHash } from "node:crypto";
 // folders in each one:
 //   1. Dev (tsx): __dirname = packages/db/src            → ../drizzle-*
 //   2. migrate-cli bundle: __dirname = packages/db/dist  → ../drizzle-*
-//   3. API bundle (tsup noExternal inlines @hisaabo/db): __dirname =
+//   3. API bundle (tsup noExternal inlines @fintranzact/db): __dirname =
 //      packages/api/dist → must hop over to packages/db/drizzle-*
 //
 // Case 3 is the one that broke tenant provisioning at runtime: the control-DB
@@ -547,7 +547,7 @@ export function assertMigrationsPresent(): string[] {
 // function exports (e.g. migrateSingleTenantDb from provision-tenant.ts) must
 // not trigger migrations — previously a top-level main() call here caused the
 // API server to attempt migrations and crash on startup when tsup bundled
-// @hisaabo/db into packages/api/dist/ (wrong path resolution + process.exit).
+// @fintranzact/db into packages/api/dist/ (wrong path resolution + process.exit).
 
 export async function main() {
   const isMultiTenant = process.env.MULTI_TENANT === "true";

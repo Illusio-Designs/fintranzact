@@ -1,7 +1,7 @@
 import { eq, and, sql, desc, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { invoices, invoiceItems, items, payments, expenses, parties, businesses } from "@hisaabo/db";
-import { money } from "@hisaabo/shared";
+import { invoices, invoiceItems, items, payments, expenses, parties, businesses } from "@fintranzact/db";
+import { money } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";

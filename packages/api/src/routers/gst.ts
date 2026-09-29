@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
-import { invoices, businesses } from "@hisaabo/db";
+import { invoices, businesses } from "@fintranzact/db";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { generateGSTR1, generateGSTR3B, gstr1ToCSV, gstr1ToPortalJson } from "../lib/gst-reports.js";

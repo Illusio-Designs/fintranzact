@@ -22,7 +22,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { users, sessions, tenants, tenantMembers, magicLinkTokens, invitations } from "@hisaabo/db";
+import { users, sessions, tenants, tenantMembers, magicLinkTokens, invitations } from "@fintranzact/db";
 import { isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {

@@ -1,4 +1,4 @@
-# @hisaabo/shared
+# @fintranzact/shared
 
 Shared utilities used by the API, web app, and mobile app. Zod input validators, TypeScript types, fixed-point money arithmetic, and invoice calculation logic — the single source of truth for business rules that must be consistent across all platforms.
 
@@ -38,7 +38,7 @@ import {
   createItemSchema,
   createPaymentSchema,
   // ... and many more
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 
 // Use in a form (web/mobile)
 const result = createPartySchema.safeParse(formData);
@@ -55,7 +55,7 @@ When you change a validator — adding a required field, tightening a constraint
 `calcLineItem` and `calcInvoiceTotals` implement the GST tax calculation logic shared by the API (when saving) and the web/mobile apps (for live preview before saving).
 
 ```typescript
-import { calcLineItem, calcInvoiceTotals } from "@hisaabo/shared";
+import { calcLineItem, calcInvoiceTotals } from "@fintranzact/shared";
 
 const lineItem = calcLineItem({
   unitPrice: "100.00",
@@ -79,7 +79,7 @@ CGST/SGST vs IGST split is determined by comparing the business's state code wit
 Fixed-point decimal arithmetic that stores values internally as integer paise (1 INR = 100 paise) to avoid floating-point precision errors:
 
 ```typescript
-import { money } from "@hisaabo/shared";
+import { money } from "@fintranzact/shared";
 
 money.add("100.00", "0.05")      // "100.05"
 money.sub("500.00", "37.50")     // "462.50"

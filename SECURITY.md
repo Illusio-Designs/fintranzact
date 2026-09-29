@@ -46,7 +46,7 @@ We will acknowledge receipt within 48 hours and aim to provide a fix or mitigati
 - Per-IP enforcement via Hono middleware
 
 ### Input Validation
-- Every tRPC procedure validates input with Zod schemas from `@hisaabo/shared`
+- Every tRPC procedure validates input with Zod schemas from `@fintranzact/shared`
 - SQL injection prevented by Drizzle ORM parameterized queries
 - XSS prevented by React's default escaping + explicit `escapeHtml()` in email templates
 
