@@ -33,7 +33,7 @@ The online store is a public-facing storefront that lets Fintranzact businesses 
 
 - Fintranzact is multi-tenant with per-tenant databases (`getTenantDb`). The store must resolve a public slug to a tenant + business without authentication.
 - The existing invoice pipeline (atomic numbering, `calcInvoiceTotals`, stock adjustment) is battle-tested. Orders should flow through it, not around it.
-- The project uses an O'Saasy license where multi-tenancy is cloud-only. The online store must work in both self-hosted (single-tenant) and cloud (multi-tenant) modes.
+- Multi-tenancy is cloud-only. The online store must work in both self-hosted (single-tenant) and cloud (multi-tenant) modes.
 - Quality bar is extremely high. The store page must load in under 1 second on a 4G Indian mobile connection.
 
 ---

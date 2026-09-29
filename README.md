@@ -640,7 +640,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
 ## License
 
-Fintranzact is proprietary software. © Fintranzact. All rights reserved. Unauthorised copying, distribution or hosting is not permitted.
+Fintranzact is proprietary software of Finvera Solutions LLP. © 2026 Finvera Solutions LLP. All rights reserved. See the [Fintranzact Proprietary License](LICENSE). Copying, modifying, distributing or hosting this code without written permission is not permitted.
 
 ---
 
