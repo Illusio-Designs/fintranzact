@@ -40,7 +40,6 @@ import {
   Notification01Icon,
   PackageIcon,
   PieChartIcon,
-  Search01Icon,
   Settings01Icon,
   ShoppingCart01Icon,
   Sun03Icon,
