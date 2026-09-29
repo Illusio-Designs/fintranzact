@@ -127,4 +127,4 @@ Open a GitHub issue with the `enhancement` label. Describe:
 
 ## License
 
-By contributing, you agree that your contributions are assigned to Fintranzact and become part of its proprietary software under the [Fintranzact Proprietary License](LICENSE).
+By contributing, you agree that your contributions are assigned to Finvera Solutions LLP and become part of its proprietary Fintranzact software under the [Fintranzact Proprietary License](LICENSE).
