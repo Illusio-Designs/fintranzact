@@ -5,10 +5,10 @@ import {
   useNavigate,
   useLocation,
 } from "@tanstack/react-router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { trpc, setBusinessId, queryClient } from "@/lib/trpc";
 import { useHotkeys } from "@/hooks/useHotkeys";
-import { useTheme } from "@/hooks/useTheme";
+import { useIndiaTimeTheme } from "@/hooks/useTheme";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { ShortcutIndicator } from "@/components/ui/ShortcutIndicator";
@@ -16,12 +16,12 @@ import { Modal } from "@/components/ui/Modal";
 import { BusinessSwitcher } from "@/components/ui/BusinessSwitcher";
 import { Logo } from "@/components/ui/Logo";
 import { Icon } from "@/components/ui/Icon";
+import { Tooltip } from "@/components/ui/Tooltip";
 import {
   Add01Icon,
   Alert02Icon,
   BankIcon,
   ChartLineData01Icon,
-  ComputerIcon,
   CreditCardIcon,
   DashboardSquare01Icon,
   DeliveryTruck01Icon,
@@ -31,7 +31,9 @@ import {
   Invoice01Icon,
   Logout01Icon,
   Menu01Icon,
-  Moon02Icon,
+  ArrowDown01Icon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
   NoteRemoveIcon,
   PackageIcon,
   ReceiptDollarIcon,
@@ -39,17 +41,22 @@ import {
   Settings01Icon,
   ShippingTruck01Icon,
   ShoppingCart01Icon,
-  Sun03Icon,
   TaxesIcon,
   UnfoldMoreIcon,
   UserIcon,
+  Search01Icon,
+  File01Icon,
+  Location01Icon,
+  Call02Icon,
+  PlusSignIcon,
 } from "@hugeicons/core-free-icons";
 import { getRegisteredHotkeys } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
+import { NotificationsBell } from "@/components/NotificationsBell";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { LandingPage } from "@/components/LandingPage";
-import { isMarketingPath } from "@/components/marketing/MarketingLayout";
+import { AUTH_PUBLIC_PATHS, isMarketingPath } from "@/lib/public-paths";
 import { isDesktop } from "@/lib/isDesktop";
 import { clearDesktopToken } from "@/lib/desktop-session";
 
@@ -134,6 +141,9 @@ function canAccess(
   if (abilities.has("*")) return true;
   return abilities.has(`${resource}:${action}`);
 }
+
+const NAV_COLLAPSED_KEY = "fintranzact:nav-collapsed";
+const NAV_SECTIONS_KEY = "fintranzact:nav-sections";
 
 // ── Sidebar nav structure ──────────────────────────────────────
 
@@ -554,7 +564,20 @@ function RootLayout() {
     data: session,
     isLoading: sessionLoading,
     isFetching: sessionFetching,
-  } = trpc.auth.me.useQuery();
+    isError: sessionCheckFailed,
+    refetch: refetchSession,
+  } = trpc.auth.me.useQuery(undefined, {
+    // A failed check (network blip, cold start, 429/5xx) is not the same as
+    // being signed out, so retry a few times before giving up.
+    retry: (failureCount, error) => {
+      const code = (error as { data?: { code?: string } })?.data?.code;
+      return code !== "UNAUTHORIZED" && failureCount < 3;
+    },
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+  });
+  // We could not find out whether the visitor is signed in. Never treat that
+  // as "signed out" (that is what used to bounce people to /login at random).
+  const sessionUnknown = !session && sessionCheckFailed;
   const {
     data: tenantList,
     isLoading: tenantListLoading,
@@ -579,7 +602,6 @@ function RootLayout() {
 
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  useTheme();
   const [showPalette, setShowPalette] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showTenantPicker, setShowTenantPicker] = useState(false);
@@ -596,7 +618,73 @@ function RootLayout() {
   // already attached to the first requests child routes fire (their effects
   // run before any effect here would).
   setBusinessId(currentBusinessId);
+  // Light or dark follows the clock in India rather than a manual toggle, so
+  // every surface — app and public pages alike — matches the working day of
+  // the businesses using it.
+  useIndiaTimeTheme();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Desktop rail state. Persisted because a collapsed sidebar is a workspace
+  // preference — having it spring back open on every reload would defeat it.
+  // Mobile ignores this entirely and keeps using the slide-in drawer.
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(NAV_COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(NAV_COLLAPSED_KEY, navCollapsed ? "1" : "0");
+    } catch {
+      // Private mode / storage disabled — the rail still works, just per-session.
+    }
+  }, [navCollapsed]);
+
+  // Which nav groups are expanded. Absent from the map means open, so a fresh
+  // install shows the full menu and collapsing is an explicit choice.
+  const [closedSections, setClosedSections] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(NAV_SECTIONS_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(NAV_SECTIONS_KEY, JSON.stringify(closedSections));
+    } catch {
+      // Non-fatal: groups just reset next session.
+    }
+  }, [closedSections]);
+
+  const activeSection = useMemo(() => {
+    for (const section of navSections) {
+      for (const item of section.items) {
+        const hit =
+          "exact" in item && item.exact
+            ? pathname === item.to
+            : pathname === item.to || pathname.startsWith(`${item.to}/`);
+        if (hit) return section.label;
+      }
+    }
+    return null;
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!activeSection) return;
+    setClosedSections((prev) =>
+      prev[activeSection] ? { ...prev, [activeSection]: false } : prev,
+    );
+  }, [activeSection]);
+
+  const toggleSection = useCallback((label: string) => {
+    setClosedSections((prev) => ({ ...prev, [label]: !prev[label] }));
+  }, []);
 
   const selectTenantMutation = trpc.tenant.select.useMutation({
     onSuccess: () => {
@@ -641,7 +729,99 @@ function RootLayout() {
       description: "Keyboard shortcuts",
       scope: "global",
     },
-    // ── Navigation shortcuts (Alt+Shift+Key) ──
+    // ── Navigation: press G, then the key ──
+    //
+    // Sequences rather than Alt+Shift chords: Alt+Shift is the Windows
+    // input-language switcher, so on any machine with a second keyboard
+    // layout installed those chords never reach the page. The Alt+Shift
+    // bindings below are kept as aliases for anyone already using them; the
+    // shortcuts dialog dedupes by description and shows the sequence.
+    {
+      key: "d",
+      leader: "g",
+      handler: () => navigate({ to: "/" }),
+      description: "Dashboard",
+      scope: "navigation",
+    },
+    {
+      key: "i",
+      leader: "g",
+      handler: () => navigate({ to: "/invoices" }),
+      description: "Invoices",
+      scope: "navigation",
+    },
+    {
+      key: "q",
+      leader: "g",
+      handler: () => navigate({ to: "/quotations" }),
+      description: "Quotations",
+      scope: "navigation",
+    },
+    {
+      key: "c",
+      leader: "g",
+      handler: () => navigate({ to: "/credit-notes" }),
+      description: "Credit Notes",
+      scope: "navigation",
+    },
+    {
+      key: "p",
+      leader: "g",
+      handler: () => navigate({ to: "/parties" }),
+      description: "Parties",
+      scope: "navigation",
+    },
+    {
+      key: "t",
+      leader: "g",
+      handler: () => navigate({ to: "/items" }),
+      description: "Items",
+      scope: "navigation",
+    },
+    {
+      key: "m",
+      leader: "g",
+      handler: () => navigate({ to: "/payments" }),
+      description: "Payments",
+      scope: "navigation",
+    },
+    {
+      key: "b",
+      leader: "g",
+      handler: () => navigate({ to: "/cash-and-bank" }),
+      description: "Cash & Bank",
+      scope: "navigation",
+    },
+    {
+      key: "e",
+      leader: "g",
+      handler: () => navigate({ to: "/expenses" }),
+      description: "Expenses",
+      scope: "navigation",
+    },
+    {
+      key: "g",
+      leader: "g",
+      handler: () => navigate({ to: "/gst" }),
+      description: "GST Returns",
+      scope: "navigation",
+    },
+    {
+      key: "r",
+      leader: "g",
+      handler: () => navigate({ to: "/reports" }),
+      description: "Business Reports",
+      scope: "navigation",
+    },
+    {
+      key: "s",
+      leader: "g",
+      handler: () => navigate({ to: "/settings" }),
+      description: "Settings",
+      scope: "navigation",
+    },
+
+    // ── Aliases: Alt+Shift+Key ──
     {
       key: "d",
       alt: true,
@@ -769,13 +949,7 @@ function RootLayout() {
     selectedTenantPlan !== null && selectedTenantPlan !== undefined;
 
   // Single consolidated redirect — priority order matters
-  const publicPaths = [
-    "/login",
-    "/auth/verify",
-    "/auth/complete-profile",
-    "/auth/verify-email-change",
-    "/invite",
-  ];
+  const publicPaths = AUTH_PUBLIC_PATHS;
   // Logged-out visitors to "/" on the web see the public landing page; the
   // desktop app has no marketing page and goes straight to login.
   const showsLandingPage = pathname === "/" && !isDesktop();
@@ -786,6 +960,7 @@ function RootLayout() {
   useEffect(() => {
     if (showsMarketingPage) return;
     if (sessionLoading || sessionFetching) return;
+    if (sessionUnknown) return;
 
     // Priority 1: Not authenticated → login
     // (the web root shows the public landing page instead).
@@ -802,6 +977,12 @@ function RootLayout() {
       if (pathname !== "/auth/complete-profile") {
         navigate({ to: "/auth/complete-profile" });
       }
+      return;
+    }
+
+    // Already signed in: the login and register pages have nothing to do.
+    if (pathname === "/login" || pathname === "/register") {
+      navigate({ to: "/", replace: true });
       return;
     }
 
@@ -824,6 +1005,7 @@ function RootLayout() {
       "/onboarding",
       "/business/create",
       "/login",
+      "/register",
       "/auth/verify",
     ].some((p) => pathname.startsWith(p));
 
@@ -882,6 +1064,7 @@ function RootLayout() {
   }, [
     sessionLoading,
     sessionFetching,
+    sessionUnknown,
     session,
     businesses,
     navigate,
@@ -920,8 +1103,30 @@ function RootLayout() {
 
   if (showsMarketingPage) return <Outlet />;
 
-  // Loading session
-  if (sessionLoading) return loadingSpinner;
+  // Loading session. Sign-in pages don't need the answer to render; if the
+  // visitor turns out to be signed in, the effect above moves them on.
+  if (sessionLoading) {
+    return publicPaths.some((p) => pathname.startsWith(p)) ? <Outlet /> : loadingSpinner;
+  }
+
+  // Couldn't check the session (server unreachable): offer a retry instead
+  // of pretending the visitor is signed out.
+  if (sessionUnknown) {
+    if (showsLandingPage) return <LandingPage />;
+    if (publicPaths.some((p) => pathname.startsWith(p))) return <Outlet />;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-0 px-4">
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <Logo className="w-10 h-10" />
+          <p className="text-base font-semibold text-text-primary">We couldn't reach Fintranzact</p>
+          <p className="text-sm text-text-tertiary">Check your internet connection and try again.</p>
+          <button type="button" className="btn-primary mt-2" onClick={() => refetchSession()} disabled={sessionFetching}>
+            {sessionFetching ? "Retrying…" : "Try again"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Not authenticated
   if (!session?.user) {
@@ -1007,76 +1212,47 @@ function RootLayout() {
 
   if (shouldShowBusinessPicker) {
     return (
-      <div className="min-h-screen bg-surface-1 px-4 py-10 md:px-6">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-8 flex items-center gap-3">
-            <Logo className="w-10 h-10" />
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-text-tertiary">
-                Welcome back
-              </p>
-              <h1 className="text-2xl font-semibold text-text-primary">
-                Choose a company
-              </h1>
-            </div>
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {businesses.map((business) => {
-              const initials = business.name
-                .split(" ")
-                .map((word: string) => word[0])
-                .slice(0, 2)
-                .join("")
-                .toUpperCase();
-
-              return (
-                <button
-                  key={business.id}
-                  type="button"
-                  onClick={() => {
-                    setBusinessId(business.id);
-                    setCurrentBusinessId(business.id);
-                    sessionStorage.setItem("selectedBusinessId", business.id);
-                    queryClient.invalidateQueries();
-                  }}
-                  className="group rounded-2xl border border-border-light bg-surface-0 p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md"
-                >
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-sm font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
-                        {initials}
-                      </div>
-                      <div>
-                        <p className="text-base font-semibold text-text-primary">
-                          {business.name}
-                        </p>
-                        <p className="text-xs text-text-tertiary">
-                          {business.gstRegistrationType === "unregistered"
-                            ? "Unregistered"
-                            : "GST enabled"}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="rounded-full border border-border-light bg-surface-1 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                      Open
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 text-sm text-text-secondary">
-                    <p>{business.city || "Location not set"}</p>
-                    <p>
-                      {business.phone ||
-                        business.email ||
-                        "No contact details yet"}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <BusinessPicker
+        businesses={businesses}
+        userName={session.user.name || session.user.email.split("@")[0]}
+        role={session.role ?? null}
+        tenantName={session.tenantName ?? "Organization"}
+        canSwitchTenant={(tenantList?.length ?? 0) > 1 || !!canCreateOrg}
+        onSwitchTenant={() => setShowTenantPicker(true)}
+        canCreate={!!canCreateBiz && canAccess(session.role, "Business", "manage")}
+        onCreate={() => navigate({ to: "/business/create" })}
+        onSelect={(id) => {
+          setBusinessId(id);
+          setCurrentBusinessId(id);
+          sessionStorage.setItem("selectedBusinessId", id);
+          queryClient.invalidateQueries();
+        }}
+        onSignOut={() => logoutMutation.mutate()}
+        signingOut={logoutMutation.isPending}
+        tenantPicker={
+          showTenantPicker ? (
+            <TenantPicker
+              tenants={tenantList ?? []}
+              onSelect={(tenantId) => {
+                setShowTenantPicker(false);
+                selectTenantMutation.mutate({ tenantId });
+              }}
+              onCreateNew={
+                canCreateOrg
+                  ? async () => {
+                    setShowTenantPicker(false);
+                    await createOrgMutation.mutateAsync();
+                    await utils.auth.me.refetch();
+                    await utils.tenant.list.refetch();
+                    await utils.business.list.refetch();
+                  }
+                  : undefined
+              }
+              onClose={() => setShowTenantPicker(false)}
+            />
+          ) : null
+        }
+      />
     );
   }
 
@@ -1141,21 +1317,95 @@ function RootLayout() {
         {!isOnboarding && (
           <aside
             className={cn(
-              "w-56 shrink-0 border-r border-border-light flex flex-col bg-surface-0 overflow-hidden",
+              // Navy brand sidebar in both themes (light text on #0f1b3d).
+              "w-60 shrink-0 border-r border-white/5 flex flex-col overflow-hidden bg-[#0f1b3d] text-[#c3cee6] dark:bg-[#0b1226]",
               // On mobile: fixed drawer that slides in/out
               "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0",
+              // Desktop only: collapse to an icon rail. The drawer keeps its
+              // full width on mobile, where there is no room for a rail.
+              "md:transition-[width] md:duration-200",
+              navCollapsed ? "md:w-[64px]" : "md:w-60",
               sidebarOpen ? "translate-x-0" : "-translate-x-full",
             )}
           >
-            {/* Logo + Org switcher */}
-            <div className="px-4 py-4 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <Logo className="w-8 h-8" />
-                <span className="font-semibold text-[15px] tracking-tight text-text-primary">
+            {/* Brand + rail toggle. Collapsed, the two stack so neither needs
+                absolute positioning inside the scroll container. */}
+            <div
+              className={cn(
+                "py-4 shrink-0 flex gap-2",
+                navCollapsed
+                  ? "px-4 justify-between md:px-0 md:flex-col md:items-center md:gap-3"
+                  : "px-4 items-center justify-between",
+              )}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Logo variant="light" className="w-8 h-8 shrink-0" />
+                <span
+                  className={cn(
+                    "font-display font-extrabold text-[17px] tracking-tight text-white truncate",
+                    navCollapsed && "md:hidden",
+                  )}
+                >
                   Fintranzact
                 </span>
               </div>
+
+              {/* Desktop only — the mobile drawer closes by tapping the backdrop */}
+              <Tooltip label="Expand sidebar" disabled={!navCollapsed}>
+                <button
+                  type="button"
+                  onClick={() => setNavCollapsed((v) => !v)}
+                  className={cn(
+                    "hidden md:flex items-center justify-center w-7 h-7 rounded-lg shrink-0",
+                    "text-[#9fb0d6] hover:text-white hover:bg-white/10 transition-colors",
+                  )}
+                  aria-label={navCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-expanded={!navCollapsed}
+                >
+                  <Icon
+                    icon={navCollapsed ? PanelLeftOpenIcon : PanelLeftCloseIcon}
+                    size={16}
+                  />
+                </button>
+              </Tooltip>
             </div>
+
+            {/* Business switcher — the company this workspace is showing */}
+            {businesses && businesses.length > 0 && (
+              <div className={cn("shrink-0 pb-2", navCollapsed ? "px-3 md:px-2" : "px-3")}>
+                <div className={cn(navCollapsed && "md:hidden")}>
+                  <BusinessSwitcher
+                    variant="sidebar"
+                    businesses={businesses.map((b) => ({ id: b.id, name: b.name }))}
+                    activeBusinessId={currentBusinessId ?? businesses[0].id}
+                    subtitle={
+                      activeBusiness?.gstin
+                        ? `GSTIN ${activeBusiness.gstin}`
+                        : activeBusiness?.city || "Not GST registered"
+                    }
+                    onSwitch={handleBusinessSwitch}
+                    onCreateNew={
+                      canCreateBiz && canAccess(session?.role, "Business", "manage")
+                        ? () => navigate({ to: "/business/create" })
+                        : undefined
+                    }
+                  />
+                </div>
+                {/* Collapsed rail: the tile expands the sidebar to switch */}
+                {navCollapsed && (
+                  <Tooltip label={activeBusiness?.name ?? "Business"}>
+                    <button
+                      type="button"
+                      onClick={() => setNavCollapsed(false)}
+                      className="mx-auto hidden h-9 w-9 place-items-center rounded-[9px] bg-brand-600 text-[13px] font-extrabold text-white md:grid"
+                      aria-label={`Business: ${activeBusiness?.name ?? ""}. Expand sidebar to switch`}
+                    >
+                      {(activeBusiness?.name ?? "B").charAt(0).toUpperCase()}
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+            )}
 
             {/* Nav sections */}
             <nav
@@ -1187,76 +1437,173 @@ function RootLayout() {
                   section.label === "COMPLIANCE" && !isGstRegistered
                     ? "REPORTS"
                     : section.label;
+                // Collapsed, the rail is too narrow for a text heading, so
+                // groups read as a hairline rule instead of disappearing.
+                const base = cn(
+                  "flex items-center rounded-[9px] text-[13.5px] transition-colors",
+                  navCollapsed
+                    ? "mx-2 px-0 py-2 md:justify-center gap-2.5 md:gap-0"
+                    : "mx-2 px-3 py-[7px] gap-2.5",
+                );
+
+                // A collapsed rail has no room for headings or disclosure
+                // arrows, so there the group is just a rule and every item
+                // stays reachable.
+                const isRail = navCollapsed;
+                const closed = !isRail && !!closedSections[section.label];
+                const panelId = `nav-section-${section.label.toLowerCase()}`;
+
                 return (
                   <div key={section.label}>
-                    <p className="px-3 pt-5 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-tertiary">
-                      {sectionLabel}
-                    </p>
+                    {isRail ? (
+                      <div
+                        className="mx-3 my-2 border-t border-white/10 md:block hidden"
+                        role="separator"
+                        aria-label={sectionLabel}
+                      />
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        // The <nav> closes the mobile drawer on click; opening
+                        // a group is navigation *within* the menu, not a
+                        // destination, so it must not dismiss it.
+                        e.stopPropagation();
+                        toggleSection(section.label);
+                      }}
+                      aria-expanded={!closed}
+                      aria-controls={panelId}
+                      className={cn(
+                        "w-full flex items-center justify-between gap-2 px-3 pt-5 pb-1.5",
+                        "text-[10px] font-bold uppercase tracking-widest text-[#7f90b5]",
+                        "hover:text-[#c3cee6] transition-colors",
+                        isRail && "md:hidden",
+                      )}
+                    >
+                      <span className="truncate">{sectionLabel}</span>
+                      <Icon
+                        icon={ArrowDown01Icon}
+                        size={12}
+                        className={cn(
+                          "shrink-0 transition-transform duration-150",
+                          closed && "-rotate-90",
+                        )}
+                      />
+                    </button>
+
+                    <div id={panelId} hidden={closed}>
                     {visibleItems.map((item) => (
-                      <Link
+                      <Tooltip
                         key={item.to}
-                        to={item.to}
-                        className="flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors"
-                        activeProps={{
-                          className:
-                            "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors bg-brand-600/10 text-brand-700 font-medium",
-                        }}
-                        inactiveProps={{
-                          className:
-                            "flex items-center gap-2.5 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors text-text-secondary hover:bg-surface-2 hover:text-text-primary",
-                        }}
-                        activeOptions={{
-                          exact:
-                            "exact" in item ? (item.exact as boolean) : false,
-                        }}
+                        label={item.label}
+                        disabled={!navCollapsed}
                       >
-                        <Icon icon={item.icon} size={16} />
-                        {item.label}
-                      </Link>
+                        <Link
+                          to={item.to}
+                          className={base}
+                          activeProps={{
+                            className: cn(
+                              base,
+                              "bg-brand-600 text-white font-semibold shadow-[0_4px_12px_-6px_rgba(59,94,170,.9)]",
+                            ),
+                          }}
+                          inactiveProps={{
+                            className: cn(
+                              base,
+                              "text-[#c3cee6] hover:bg-white/[.07] hover:text-white",
+                            ),
+                          }}
+                          activeOptions={{
+                            exact:
+                              "exact" in item ? (item.exact as boolean) : false,
+                          }}
+                        >
+                          <Icon icon={item.icon} size={16} className="shrink-0" />
+                          <span className={cn("truncate", navCollapsed && "md:hidden")}>
+                            {item.label}
+                          </span>
+                        </Link>
+                      </Tooltip>
                     ))}
+                    </div>
                   </div>
                 );
               })}
             </nav>
 
-            {/* Sidebar footer: org name + version */}
-            <div className="shrink-0 border-t border-border-light">
-              {hasMultipleTenants ? (
-                <button
-                  type="button"
-                  onClick={() => setShowTenantPicker(true)}
-                  className="w-full px-4 py-2.5 text-left group"
+            {/* Sidebar footer: settings, then the signed-in user */}
+            <div className="shrink-0 border-t border-white/10 px-2 py-2">
+              <Tooltip label="Settings" disabled={!navCollapsed}>
+                <Link
+                  to="/settings"
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-[9px] py-2 text-[13.5px] transition-colors",
+                    navCollapsed ? "px-3 md:justify-center md:px-0" : "px-3",
+                  )}
+                  activeProps={{ className: "bg-brand-600 text-white font-semibold" }}
+                  inactiveProps={{ className: "text-[#c3cee6] hover:bg-white/[.07] hover:text-white" }}
                 >
-                  <p className="flex items-center gap-1.5 text-[11px] font-medium text-text-tertiary/60 group-hover:text-text-secondary transition-colors">
-                    <span className="truncate">{tenantName}</span>
-                    <Icon
-                      icon={UnfoldMoreIcon}
-                      size={10}
-                      className="text-text-tertiary/40 group-hover:text-text-secondary transition-colors"
-                    />
-                  </p>
-                  <p className="text-[10px] text-text-tertiary/30 mt-0.5 tabular-nums">
-                    v{__APP_VERSION__}
-                  </p>
-                </button>
-              ) : (
-                <div className="px-4 py-2.5">
-                  <p className="text-[11px] text-text-tertiary/50 truncate select-none">
-                    {tenantName}
-                  </p>
-                  <p className="text-[10px] text-text-tertiary/30 mt-0.5 select-none tabular-nums">
-                    v{__APP_VERSION__}
-                  </p>
+                  <Icon icon={Settings01Icon} size={16} className="shrink-0" />
+                  <span className={cn(navCollapsed && "md:hidden")}>Settings</span>
+                </Link>
+              </Tooltip>
+
+              <div
+                className={cn(
+                  "mt-1 flex items-center gap-2.5 rounded-[9px] px-2 py-2",
+                  navCollapsed && "md:flex-col md:px-0",
+                )}
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#243c77] text-[11px] font-bold text-white">
+                  {initials}
+                </span>
+                <div className={cn("min-w-0 flex-1", navCollapsed && "md:hidden")}>
+                  <p className="truncate text-[13px] font-semibold text-white">{displayName}</p>
+                  {hasMultipleTenants || canCreateOrg ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowTenantPicker(true)}
+                      className="flex max-w-full items-center gap-1 text-[11px] text-[#9fb0d6] hover:text-white"
+                      aria-label={`Switch organization — currently ${tenantName}`}
+                    >
+                      <span className="truncate">
+                        {session.role ? `${formatRole(session.role)} · ` : ""}
+                        {tenantName}
+                      </span>
+                      <Icon icon={UnfoldMoreIcon} size={11} className="shrink-0" />
+                    </button>
+                  ) : (
+                    <p className="truncate text-[11px] text-[#9fb0d6]">
+                      {session.role ? `${formatRole(session.role)} · ` : ""}
+                      {tenantName}
+                    </p>
+                  )}
                 </div>
-              )}
+                <Tooltip label="Sign out">
+                  <button
+                    type="button"
+                    onClick={() => logoutMutation.mutate()}
+                    disabled={logoutMutation.isPending}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#9fb0d6] transition-colors hover:bg-white/10 hover:text-white"
+                    aria-label="Sign out"
+                  >
+                    <Icon icon={Logout01Icon} size={15} />
+                  </button>
+                </Tooltip>
+              </div>
+              <p className={cn("px-2 text-[10px] tabular-nums text-[#7f90b5]", navCollapsed && "md:text-center md:px-0")}>
+                v{__APP_VERSION__}
+              </p>
             </div>
           </aside>
         )}
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col bg-surface-1 md:ml-0">
+        <main className="flex-1 min-w-0 flex flex-col bg-surface-1 md:ml-0">
           {/* Top bar */}
-          <div className="h-14 border-b border-border-light flex items-center gap-2 px-4 md:px-6 shrink-0 bg-surface-0">
+          <div className="h-16 border-b border-border-light flex items-center gap-2 px-4 md:px-6 shrink-0 bg-surface-0">
             {/* Hamburger — mobile only, hidden during onboarding */}
             {!isOnboarding && (
               <button
@@ -1279,8 +1626,23 @@ function RootLayout() {
               </div>
             )}
 
-            {/* Theme + shortcuts */}
-            <ThemeToggle />
+            {/* Search — opens the command palette (also ⌘K / Ctrl+K) */}
+            {!isOnboarding && (
+              <button
+                type="button"
+                onClick={() => setShowPalette(true)}
+                className="flex h-10 min-w-0 items-center gap-2.5 rounded-xl border border-border-light bg-surface-1 px-3 text-sm text-text-tertiary transition-colors hover:border-border-color sm:w-72 lg:w-96"
+                aria-label="Search and jump to"
+              >
+                <Icon icon={Search01Icon} size={17} className="shrink-0" />
+                <span className="hidden flex-1 truncate text-left sm:block">Search or jump to…</span>
+                <kbd className="hidden rounded-md border border-border-light px-1.5 py-0.5 font-sans text-[11px] font-semibold sm:block">
+                  ⌘K
+                </kbd>
+              </button>
+            )}
+
+            {/* Shortcuts */}
             <button
               onClick={() => setShowShortcuts(true)}
               className="flex items-center justify-center w-8 h-8 rounded-lg text-sm text-text-tertiary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
@@ -1290,63 +1652,44 @@ function RootLayout() {
               <span className="font-mono text-xs">?</span>
             </button>
 
-            {/* Settings gear */}
-            <button
-              onClick={() => navigate({ to: "/settings" })}
-              className="flex items-center justify-center w-8 h-8 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
-              aria-label="Settings"
-              title="Settings"
-            >
-              <Icon icon={Settings01Icon} size={15} />
-            </button>
-
-            {/* Business switcher + User info — pushed to the right */}
-            <div className="ml-auto flex items-center gap-3 min-w-0">
-              {/* Business switcher */}
-              {businesses && businesses.length > 0 && (
-                <BusinessSwitcher
-                  businesses={businesses.map((b) => ({
-                    id: b.id,
-                    name: b.name,
-                  }))}
-                  activeBusinessId={currentBusinessId ?? businesses[0].id}
-                  onSwitch={handleBusinessSwitch}
-                  onCreateNew={
-                    canCreateBiz &&
-                      canAccess(session?.role, "Business", "manage")
-                      ? () => {
-                        navigate({ to: "/business/create" });
-                      }
-                      : undefined
-                  }
+            <div className="ml-auto flex items-center gap-2 sm:gap-3 min-w-0">
+              {!isOnboarding && (
+                <NotificationsBell
+                  businessId={currentBusinessId ?? businesses?.[0]?.id ?? null}
+                  canSeeInvoices={canAccess(session?.role, "Invoice", "read")}
+                  canSeeItems={canAccess(session?.role, "Item", "read")}
+                  isGstRegistered={isGstRegistered}
                 />
               )}
+              {!isOnboarding && canAccess(session?.role, "Invoice", "create") && (
+                <Link
+                  to="/invoices"
+                  search={{ create: "1" }}
+                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-3 text-sm font-bold text-white shadow-[0_8px_18px_-8px_rgba(59,94,170,.7)] transition hover:bg-brand-700 sm:px-4"
+                  aria-label="New invoice"
+                >
+                  <Icon icon={Add01Icon} size={16} strokeWidth={2.2} />
+                  <span className="hidden sm:inline">New invoice</span>
+                </Link>
+              )}
 
-              {/* Avatar + name + role */}
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center text-brand-700 dark:text-brand-300 text-[10px] font-semibold shrink-0">
-                  {initials}
-                </div>
-                <span className="hidden sm:block text-sm font-medium text-text-primary truncate max-w-[120px]">
-                  {displayName}
-                </span>
-                {session.role && (
-                  <span className="hidden sm:block shrink-0">
-                    <RoleBadge role={session.role} />
+              {/* No sidebar during onboarding, so the account controls live here */}
+              {isOnboarding && (
+                <>
+                  <span className="hidden sm:block text-sm font-medium text-text-primary truncate max-w-[160px]">
+                    {displayName}
                   </span>
-                )}
-              </div>
-
-              {/* Logout */}
-              <button
-                onClick={() => logoutMutation.mutate()}
-                disabled={logoutMutation.isPending}
-                className="flex items-center justify-center w-7 h-7 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
-                aria-label="Sign out"
-                title="Sign out"
-              >
-                <Icon icon={Logout01Icon} size={14} />
-              </button>
+                  <button
+                    onClick={() => logoutMutation.mutate()}
+                    disabled={logoutMutation.isPending}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
+                    aria-label="Sign out"
+                    title="Sign out"
+                  >
+                    <Icon icon={Logout01Icon} size={14} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -1395,65 +1738,226 @@ function RootLayout() {
   );
 }
 
-// ── Theme Toggle ───────────────────────────────────────────────
+// ── Business picker ───────────────────────────────────────────
 
-type Theme = "light" | "dark" | "system";
-
-function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-
-  const next: Record<Theme, Theme> = {
-    system: "light",
-    light: "dark",
-    dark: "system",
-  };
-  const icons: Record<Theme, React.ReactNode> = {
-    system: <Icon icon={ComputerIcon} size={16} />,
-    light: <Icon icon={Sun03Icon} size={16} />,
-    dark: <Icon icon={Moon02Icon} size={16} />,
-  };
-  const labels: Record<Theme, string> = {
-    system: "System theme",
-    light: "Light mode",
-    dark: "Dark mode",
-  };
-
-  return (
-    <button
-      onClick={() => setTheme(next[theme])}
-      className="flex items-center justify-center w-8 h-8 rounded-lg text-text-tertiary hover:bg-surface-1 transition-colors border border-border-light"
-      aria-label={labels[theme]}
-      title={labels[theme]}
-    >
-      {icons[theme]}
-    </button>
-  );
-}
-
-// ── Role Badge ────────────────────────────────────────────────
-
-const roleStyles: Record<string, string> = {
-  owner: "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300",
-  admin:
-    "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  member: "bg-surface-2 text-text-secondary",
-  seller: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  accountant:
-    "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+type PickerBusiness = {
+  id: string;
+  name: string;
+  gstin?: string | null;
+  gstRegistrationType?: string | null;
+  city?: string | null;
+  state?: string | null;
+  phone?: string | null;
+  email?: string | null;
 };
 
-function RoleBadge({ role }: { role: string }) {
-  const style = roleStyles[role] ?? "bg-surface-2 text-text-secondary";
-  const label = formatRole(role);
+const REGISTRATION_LABELS: Record<string, string> = {
+  regular: "Regular taxpayer",
+  composition: "Composition scheme",
+  unregistered: "Unregistered",
+  sez: "SEZ unit",
+  casual: "Casual taxpayer",
+};
+
+const TILE_TONES = [
+  "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300",
+  "bg-orange-50 text-orange-800 dark:bg-orange-950 dark:text-orange-300",
+  "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+];
+
+function businessInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter((w) => /[A-Za-z0-9]/.test(w[0] ?? ""))
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
+
+/** Full-page "Choose a company" screen shown when no business is selected. */
+function BusinessPicker({
+  businesses,
+  userName,
+  role,
+  tenantName,
+  canSwitchTenant,
+  onSwitchTenant,
+  canCreate,
+  onCreate,
+  onSelect,
+  onSignOut,
+  signingOut,
+  tenantPicker,
+}: {
+  businesses: PickerBusiness[];
+  userName: string;
+  role: string | null;
+  tenantName: string;
+  canSwitchTenant: boolean;
+  onSwitchTenant: () => void;
+  canCreate: boolean;
+  onCreate: () => void;
+  onSelect: (id: string) => void;
+  onSignOut: () => void;
+  signingOut: boolean;
+  tenantPicker: React.ReactNode;
+}) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const visible = businesses.filter(
+    (b) => !q || [b.name, b.gstin, b.city, b.state].filter(Boolean).join(" ").toLowerCase().includes(q),
+  );
+  const firstName = userName.trim().split(/\s+/)[0];
+  const userInitials = businessInitials(userName) || "U";
+
   return (
-    <span
-      className={cn(
-        "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 leading-none",
-        style,
-      )}
-    >
-      {label}
-    </span>
+    <div className="min-h-screen bg-surface-1">
+      <header className="bg-[#0f1b3d] text-white">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 md:px-8">
+          <Logo variant="light" className="h-8 w-8 shrink-0" />
+          <span className="hidden font-display text-lg font-extrabold sm:block">Fintranzact</span>
+          {canSwitchTenant ? (
+            <button
+              type="button"
+              onClick={onSwitchTenant}
+              className="ml-2 flex h-9 min-w-0 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[13.5px] font-semibold transition hover:bg-white/10 sm:ml-4"
+              aria-label={`Switch organization — currently ${tenantName}`}
+            >
+              <span className="hidden font-medium text-[#9fb0d6] md:inline">Organization</span>
+              <span className="truncate">{tenantName}</span>
+              <Icon icon={UnfoldMoreIcon} size={14} className="shrink-0" />
+            </button>
+          ) : (
+            <span className="ml-2 truncate text-[13.5px] font-semibold text-[#c3cee6] sm:ml-4">{tenantName}</span>
+          )}
+          <div className="ml-auto flex items-center gap-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 text-xs font-bold">
+              {userInitials}
+            </span>
+            <span className="hidden leading-tight sm:block">
+              <span className="block text-[13.5px] font-semibold">{userName}</span>
+              {role && <span className="block text-[11.5px] text-[#9fb0d6]">{formatRole(role)}</span>}
+            </span>
+            <button
+              type="button"
+              onClick={onSignOut}
+              disabled={signingOut}
+              className="flex h-9 items-center gap-1.5 rounded-[9px] border border-white/15 px-3 text-[13px] font-semibold text-[#c3cee6] transition hover:bg-white/10 hover:text-white disabled:opacity-60"
+            >
+              <Icon icon={Logout01Icon} size={15} />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-4 py-10 md:px-8 md:py-12">
+        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-300">
+              Welcome back{firstName ? `, ${firstName}` : ""}
+            </p>
+            <h1 className="mt-2 font-display text-3xl font-extrabold tracking-[-0.025em] text-[#0f1b3d] dark:text-white md:text-[34px]">
+              Choose a company
+            </h1>
+            <p className="mt-1.5 text-[15px] text-text-tertiary">
+              {businesses.length} {businesses.length === 1 ? "company" : "companies"} in {tenantName}. Pick one to open its books.
+            </p>
+          </div>
+          {businesses.length > 3 && (
+            <label className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-border-color bg-surface-0 px-3.5 text-text-tertiary focus-within:border-brand-500 focus-within:ring-[3px] focus-within:ring-brand-500/20 md:w-[340px]">
+              <Icon icon={Search01Icon} size={18} className="shrink-0" />
+              <span className="sr-only">Search companies</span>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name, GSTIN or city"
+                className="h-full min-w-0 flex-1 bg-transparent text-[14.5px] text-text-primary outline-none placeholder:text-text-tertiary"
+              />
+            </label>
+          )}
+        </div>
+
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {visible.map((b) => {
+            const gst = b.gstRegistrationType !== "unregistered" && !!b.gstin;
+            const place = [b.city, b.state].filter(Boolean).join(", ") || "Location not set";
+            const contact = b.phone || b.email || "No contact details yet";
+            const tone = TILE_TONES[businesses.indexOf(b) % TILE_TONES.length];
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => onSelect(b.id)}
+                aria-label={`Open ${b.name}`}
+                className="group flex min-w-0 flex-col gap-4 rounded-[18px] border border-border-light bg-surface-0 p-5 text-left transition hover:-translate-y-0.5 hover:border-brand-500 hover:shadow-[0_18px_36px_-22px_rgba(15,27,61,.45)] focus-visible:border-brand-500"
+              >
+                <div className="flex items-center gap-3.5">
+                  <span className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-[14px] font-display text-base font-extrabold", tone)}>
+                    {businessInitials(b.name)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[17px] font-bold text-text-primary">{b.name}</span>
+                    <span
+                      className={cn(
+                        "mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold",
+                        gst
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                          : "bg-surface-2 text-text-secondary",
+                      )}
+                    >
+                      {gst ? "GST registered" : "Not GST registered"}
+                    </span>
+                  </span>
+                </div>
+                <div className="space-y-2 text-[13.5px] text-text-secondary">
+                  <p className="flex items-center gap-2">
+                    <Icon icon={File01Icon} size={16} className="shrink-0 text-text-tertiary" />
+                    <span className="truncate">{b.gstin ? `GSTIN ${b.gstin}` : "No GSTIN"}</span>
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <Icon icon={Location01Icon} size={16} className="shrink-0 text-text-tertiary" />
+                    <span className="truncate">{place}</span>
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <Icon icon={Call02Icon} size={16} className="shrink-0 text-text-tertiary" />
+                    <span className="truncate">{contact}</span>
+                  </p>
+                </div>
+                <span className="mt-auto flex items-center justify-between border-t border-border-light pt-3.5">
+                  <span className="text-[12.5px] text-text-tertiary">
+                    {REGISTRATION_LABELS[b.gstRegistrationType ?? ""] ?? (gst ? "GST registered" : "Unregistered")}
+                  </span>
+                  <span className="inline-flex h-8 items-center rounded-[9px] bg-brand-50 px-3.5 text-[13.5px] font-bold text-brand-700 transition group-hover:bg-brand-600 group-hover:text-white dark:bg-brand-950 dark:text-brand-300">
+                    Open →
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+
+          {canCreate && !q && (
+            <button
+              type="button"
+              onClick={onCreate}
+              className="flex min-h-[232px] flex-col items-center justify-center gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-border-color p-5 text-center text-text-secondary transition hover:border-brand-500 hover:text-brand-700"
+            >
+              <span className="grid h-12 w-12 place-items-center rounded-[14px] bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300">
+                <Icon icon={PlusSignIcon} size={22} />
+              </span>
+              <span className="text-base font-bold text-text-primary">Add a business</span>
+              <span className="text-[13px] text-text-tertiary">Another GSTIN, branch or company</span>
+            </button>
+          )}
+        </div>
+
+        {visible.length === 0 && (
+          <p className="mt-6 text-sm text-text-tertiary">No company matches “{query}”.</p>
+        )}
+      </main>
+      {tenantPicker}
+    </div>
   );
 }
 
@@ -1488,6 +1992,8 @@ function ShortcutsDialog({
 
   function formatKey(h: (typeof hotkeys)[0]): string[] {
     const keys: string[] = [];
+    // A sequence reads "G then D", not a simultaneous chord.
+    if (h.leader) keys.push(h.leader.toUpperCase(), "then");
     if (h.ctrl) keys.push("⌘");
     if (h.alt) keys.push("Alt");
     if (h.shift) keys.push("⇧");
@@ -1497,7 +2003,7 @@ function ShortcutsDialog({
 
   const scopeLabels: Record<string, string> = {
     global: "Global",
-    navigation: "Navigation (Alt+Shift + Key)",
+    navigation: "Navigation (press G, then the key)",
     parties: "Parties",
     items: "Items",
     payments: "Payments",

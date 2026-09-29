@@ -1,4 +1,34 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  ArrowRight01Icon,
+  BankIcon,
+  Book02Icon,
+  Building03Icon,
+  ChartBarLineIcon,
+  ChartIncreaseIcon,
+  CloudUploadIcon,
+  Coins01Icon,
+  ComputerIcon,
+  CreditCardIcon,
+  DeliveryTruck01Icon,
+  FileEditIcon,
+  GitCompareIcon,
+  Invoice01Icon,
+  Link01Icon,
+  PackageIcon,
+  QrCodeIcon,
+  RepeatIcon,
+  ReturnRequestIcon,
+  SecurityCheckIcon,
+  ShoppingBag01Icon,
+  Store01Icon,
+  TaxesIcon,
+  Tick02Icon,
+  UserGroupIcon,
+  Wallet01Icon,
+} from "@hugeicons/core-free-icons";
+import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
+import { cn } from "@/lib/utils";
 import {
   CtaBand,
   MarketingLayout,
@@ -72,6 +102,45 @@ const FEATURE_GROUPS: Array<{
   },
 ];
 
+const GROUP_ICONS: Record<string, IconSvgElement> = {
+  "Sales & billing": Invoice01Icon,
+  "GST compliance": TaxesIcon,
+  "Accounting & banking": BankIcon,
+  "Inventory & fulfilment": PackageIcon,
+  "Teams & platform": UserGroupIcon,
+};
+
+const ITEM_ICONS: Record<string, IconSvgElement> = {
+  "GST invoices": Invoice01Icon,
+  "Quotations & proforma": FileEditIcon,
+  "Delivery challans": DeliveryTruck01Icon,
+  "Credit notes & returns": ReturnRequestIcon,
+  "Recurring invoices": RepeatIcon,
+  "Point of sale": Store01Icon,
+  "e-Invoicing": QrCodeIcon,
+  "e-Way bills": DeliveryTruck01Icon,
+  "GSTR-1 & GSTR-3B": TaxesIcon,
+  "GSTR-2B reconciliation": GitCompareIcon,
+  "Input tax credit": Coins01Icon,
+  Payments: CreditCardIcon,
+  Expenses: Wallet01Icon,
+  "Cash & bank": BankIcon,
+  "Bank reconciliation": GitCompareIcon,
+  "Journal entries": Book02Icon,
+  Reports: ChartBarLineIcon,
+  "Items & variants": PackageIcon,
+  "Stock tracking": ChartIncreaseIcon,
+  Shipments: DeliveryTruck01Icon,
+  "Online store": ShoppingBag01Icon,
+  "Multiple businesses": Building03Icon,
+  "Roles & permissions": SecurityCheckIcon,
+  "Web, desktop & mobile": ComputerIcon,
+  "API & integrations": Link01Icon,
+  "Data import & backup": CloudUploadIcon,
+};
+
+const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
 function FeaturesPage() {
   return (
     <MarketingLayout title="Features">
@@ -79,26 +148,71 @@ function FeaturesPage() {
         eyebrow="Features"
         title="Everything you need to bill, file and grow"
         subtitle="Invoicing, GST compliance, accounting and inventory in one connected system, built for Indian businesses."
-      />
+      >
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Link
+            to="/register"
+            className="inline-flex h-[52px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
+          >
+            Start free — no card needed
+            <Icon icon={ArrowRight01Icon} size={18} strokeWidth={2} />
+          </Link>
+          <Link
+            to="/pricing"
+            className="inline-flex h-[52px] items-center rounded-xl border border-[#cfd8ea] bg-white px-6 text-base font-semibold text-[#0f1b3d] transition hover:border-brand-300 dark:border-white/15 dark:bg-white/5 dark:text-white"
+          >
+            See pricing
+          </Link>
+        </div>
+      </PageHero>
 
-      <div className="mx-auto max-w-6xl space-y-16 px-4 py-16 md:px-6 md:py-20">
-        {FEATURE_GROUPS.map((group) => (
-          <section key={group.title} className="grid gap-8 md:grid-cols-3">
-            <div>
-              <h2 className="text-xl font-semibold md:text-2xl">{group.title}</h2>
-              <p className="mt-2 text-sm text-text-tertiary">{group.intro}</p>
+      <nav
+        aria-label="Feature areas"
+        className="sticky top-[72px] z-10 border-b border-border-light bg-surface-0/90 backdrop-blur"
+      >
+        <div className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 py-3 md:px-6">
+          {FEATURE_GROUPS.map((group) => (
+            <a
+              key={group.title}
+              href={`#${slug(group.title)}`}
+              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border-light bg-surface-0 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-brand-300 hover:text-text-primary"
+            >
+              <Icon icon={GROUP_ICONS[group.title] ?? Invoice01Icon} size={16} className="text-brand-600 dark:text-brand-300" />
+              {group.title}
+            </a>
+          ))}
+        </div>
+      </nav>
+
+      {FEATURE_GROUPS.map((group, gi) => (
+        <section
+          key={group.title}
+          id={slug(group.title)}
+          className={cn("scroll-mt-32", gi % 2 === 1 && "bg-surface-1")}
+        >
+          <div className="mx-auto grid max-w-6xl gap-10 px-4 py-20 md:px-6 lg:grid-cols-3 lg:py-24">
+            <div className="lg:sticky lg:top-40 lg:self-start">
+              <IconCircle icon={GROUP_ICONS[group.title] ?? Invoice01Icon} size="lg" />
+              <h2 className="mt-5 font-display text-3xl font-extrabold tracking-[-0.025em] text-[#0f1b3d] dark:text-white">
+                {group.title}
+              </h2>
+              <p className="mt-3 text-base leading-relaxed text-text-secondary">{group.intro}</p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 md:col-span-2">
+            <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
               {group.items.map((item) => (
-                <div key={item.name} className="card p-5">
-                  <h3 className="text-sm font-semibold">{item.name}</h3>
-                  <p className="mt-1.5 text-sm text-text-tertiary">{item.body}</p>
-                </div>
+                <article
+                  key={item.name}
+                  className="rounded-2xl border border-border-light bg-surface-0 p-6 transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_18px_40px_-18px_rgba(15,27,61,.28)] dark:hover:border-brand-800"
+                >
+                  <IconCircle icon={ITEM_ICONS[item.name] ?? Tick02Icon} size="md" />
+                  <h3 className="mt-4 text-base font-bold text-text-primary">{item.name}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-text-tertiary">{item.body}</p>
+                </article>
               ))}
             </div>
-          </section>
-        ))}
-      </div>
+          </div>
+        </section>
+      ))}
 
       <CtaBand />
     </MarketingLayout>

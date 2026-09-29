@@ -31,7 +31,15 @@ describe("ToastContainer — goey-toast host", () => {
     act(() => {
       toast.success("Invoice saved", "INV-0023 has been saved successfully.");
     });
-    await waitFor(() => expect(screen.getByText("Invoice saved")).toBeInTheDocument());
+    // The visible title is filled in by goey-toast's enter animation, which
+    // does not reliably run under jsdom on CI. The toaster's polite live
+    // region announces the same title synchronously, so assert on that.
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("status").some((el) => el.textContent?.includes("Invoice saved")),
+      ).toBe(true),
+    );
+    expect(document.body.querySelector("[data-sonner-toast]")).not.toBeNull();
   });
 
   it("switches the toaster to the dark theme when the app is in dark mode", async () => {

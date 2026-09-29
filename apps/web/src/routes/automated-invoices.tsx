@@ -451,7 +451,7 @@ function AutomatedInvoicesPage() {
         }
       />
 
-      {/* Plan Usage Bar */}
+      {/* Plan Usage Bar — the limit comes from the organization's plan */}
       {planUsage && (
         <div className="card mb-5 px-4 py-3">
           <div className="flex items-center justify-between mb-2">
@@ -459,22 +459,26 @@ function AutomatedInvoicesPage() {
               Automated Runs This Month
             </span>
             <span className="text-sm tabular-nums text-text-secondary">
-              {planUsage.runsThisMonth} / 5
+              {planUsage.limit === null
+                ? `${planUsage.runsThisMonth} · Unlimited`
+                : `${planUsage.runsThisMonth} / ${planUsage.limit}`}
             </span>
           </div>
-          <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all duration-300",
-                planUsage.runsThisMonth >= 5
-                  ? "bg-red-500"
-                  : planUsage.runsThisMonth >= 4
-                    ? "bg-amber-500"
-                    : "bg-brand-600"
-              )}
-              style={{ width: `${Math.min(100, (planUsage.runsThisMonth / 5) * 100)}%` }}
-            />
-          </div>
+          {planUsage.limit !== null && (
+            <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all duration-300",
+                  planUsage.runsThisMonth >= planUsage.limit
+                    ? "bg-red-500"
+                    : planUsage.runsThisMonth >= planUsage.limit * 0.8
+                      ? "bg-amber-500"
+                      : "bg-brand-600"
+                )}
+                style={{ width: `${Math.min(100, (planUsage.runsThisMonth / Math.max(1, planUsage.limit)) * 100)}%` }}
+              />
+            </div>
+          )}
           <p className="text-xs text-text-tertiary mt-1.5">
             {planUsage.totalTemplates} template{planUsage.totalTemplates !== 1 ? "s" : ""} configured
           </p>

@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { PLAN_OPTIONS, type PlanId } from "@/lib/plans";
+import { usePlans, type PlanId } from "@/lib/plans";
 
 import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/Icon";
@@ -13,12 +13,13 @@ function PlanSelectionPage() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
   const [selectedPlan, setSelectedPlan] = useState<PlanId>("forever_free");
+  const { plans } = usePlans();
 
   const selectedLabel = useMemo(
     () =>
-      PLAN_OPTIONS.find((plan) => plan.id === selectedPlan)?.name ??
+      plans.find((plan) => plan.id === selectedPlan)?.name ??
       "Forever Free",
-    [selectedPlan],
+    [plans, selectedPlan],
   );
 
   const updatePlanMutation = trpc.tenant.updatePlan.useMutation({
@@ -54,7 +55,7 @@ function PlanSelectionPage() {
 
         <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
           <div className="grid gap-4 md:grid-cols-3">
-            {PLAN_OPTIONS.map((plan) => (
+            {plans.map((plan) => (
               <button
                 key={plan.id}
                 type="button"
@@ -97,28 +98,14 @@ function PlanSelectionPage() {
               {selectedLabel}
             </div>
             <div className="mt-4 rounded-xl border border-border-light bg-surface-1 p-4 text-sm text-text-secondary">
-              {selectedPlan === "forever_free" ? (
-                <>
-                  <div className="font-semibold text-text-primary mb-1">
-                    Forever Free includes:
-                  </div>
-                  <ul className="space-y-2">
-                    <li>• Unlimited businesses, teams, and invoices</li>
-                    <li>• Full invoice and accounting features</li>
-                    <li>• Unlimited API and integrations</li>
-                  </ul>
-                </>
-              ) : (
-                <>
-                  <div className="font-semibold text-text-primary mb-1">
-                    This plan is best for scaling teams.
-                  </div>
-                  <p>
-                    Upgrade later after your business grows and needs extra
-                    automation or premium controls.
-                  </p>
-                </>
-              )}
+              <div className="font-semibold text-text-primary mb-1">
+                {selectedLabel} includes:
+              </div>
+              <ul className="space-y-2">
+                {(plans.find((plan) => plan.id === selectedPlan)?.features ?? []).map((feature) => (
+                  <li key={feature}>• {feature}</li>
+                ))}
+              </ul>
             </div>
 
             <button

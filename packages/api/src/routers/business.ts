@@ -18,16 +18,132 @@ import {
   payments,
   expenses,
   users,
+  eInvoiceConfigs,
+  ewayBillConfigs,
 } from "@fintranzact/db";
-import { createBusinessSchema, updateBusinessSchema, updateSequenceNumberSchema, uploadBusinessLogoSchema } from "@fintranzact/shared";
+import { createBusinessSchema, updateBusinessSchema, updateSequenceNumberSchema, uploadBusinessLogoSchema, uploadBusinessSignatureSchema } from "@fintranzact/shared";
 import { router, tenantProcedure, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { validateLogoDataUrl } from "../lib/validate-logo.js";
 import { enforceBusinessLimit, enforceDataExport, getLimits } from "../lib/plan-limits.js";
 import { seedChartOfAccounts } from "../lib/coa-seed.js";
-import { encryptCarrierCredentials, decryptCarrierCredentials } from "../lib/field-encryption.js";
+import {
+  encryptCarrierCredentials,
+  decryptCarrierCredentials,
+  encryptEInvoiceConfig,
+  encryptEwbConfig,
+} from "../lib/field-encryption.js";
 
+
+/**
+ * Persist the per-business compliance portal credentials captured during
+ * business setup.
+ *
+ * WHY THIS LIVES HERE:
+ * e-Invoice (IRP) and E-Way Bill (NIC) each authenticate with a taxpayer
+ * username/password that belongs to the individual GSTIN, so they have to be
+ * stored per business rather than in server env. The GSP client id/secret is
+ * the other half of the credential pair, but it is issued once per deployment
+ * — those stay in env (NIC_EWB_CLIENT_ID / NIC_EWB_CLIENT_SECRET) and the
+ * columns here are left null so the routers fall back to them.
+ *
+ * Both portals key their config off the GSTIN, so nothing is written for a
+ * business without one. Passwords are encrypted at rest (AES-256-GCM).
+ */
+async function saveComplianceCredentials(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any, // Drizzle transaction or db instance
+  businessId: string,
+  input: {
+    gstin?: string | null;
+    eInvoiceEnabled?: boolean;
+    eWayBillEnabled?: boolean;
+    eInvoiceUsername?: string | null;
+    eInvoicePassword?: string | null;
+    eWayBillUsername?: string | null;
+    eWayBillPassword?: string | null;
+  },
+) {
+  const gstin = input.gstin?.trim();
+  if (!gstin) return;
+
+  if (input.eInvoiceUsername && input.eInvoicePassword) {
+    const enc = encryptEInvoiceConfig({
+      clientId: null,
+      clientSecret: null,
+      username: input.eInvoiceUsername,
+      password: input.eInvoicePassword,
+    });
+
+    await tx
+      .insert(eInvoiceConfigs)
+      .values({
+        businessId,
+        gstin,
+        clientId: enc.clientId,
+        clientSecret: enc.clientSecret,
+        username: enc.username,
+        password: enc.password,
+        isEnabled: input.eInvoiceEnabled ?? false,
+      })
+      .onConflictDoUpdate({
+        target: eInvoiceConfigs.businessId,
+        set: {
+          gstin,
+          username: enc.username,
+          password: enc.password,
+          ...(input.eInvoiceEnabled === undefined
+            ? {}
+            : { isEnabled: input.eInvoiceEnabled }),
+          updatedAt: new Date(),
+        },
+      });
+  }
+
+  if (input.eWayBillUsername && input.eWayBillPassword) {
+    const enc = encryptEwbConfig({
+      clientId: null,
+      clientSecret: null,
+      username: input.eWayBillUsername,
+      password: input.eWayBillPassword,
+    });
+
+    await tx
+      .insert(ewayBillConfigs)
+      .values({
+        businessId,
+        gstin,
+        clientId: enc.clientId,
+        clientSecret: enc.clientSecret,
+        username: enc.username,
+        password: enc.password,
+        isEnabled: input.eWayBillEnabled ?? false,
+      })
+      .onConflictDoUpdate({
+        target: ewayBillConfigs.businessId,
+        set: {
+          gstin,
+          username: enc.username,
+          password: enc.password,
+          ...(input.eWayBillEnabled === undefined
+            ? {}
+            : { isEnabled: input.eWayBillEnabled }),
+          updatedAt: new Date(),
+        },
+      });
+  }
+}
+
+/**
+ * An "Assessee of Other Territory" is registered under GST state code 97 —
+ * the offshore area beyond territorial waters (continental shelf / EEZ).
+ * Supplies to and from it are always inter-state, and every place-of-supply
+ * decision in the app is a stateCode comparison, so the flag has to be
+ * reflected in stateCode to have any effect at all. Enforced here rather than
+ * trusting the client, since API callers set the flag too.
+ */
+const OTHER_TERRITORY_STATE = { code: "97", name: "Other Territory" } as const;
 
 async function requireTenantAdmin(userId: string, tenantId: string) {
   const [membership] = await controlDb
@@ -286,9 +402,23 @@ export const businessRouter = router({
   create: tenantProcedure.input(createBusinessSchema).mutation(async ({ input, ctx }) => {
     await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
     await enforceBusinessLimit(ctx.tenantId!, ctx.db);
+    // Portal credentials live in their own tables, not on the businesses row.
+    const {
+      eInvoiceUsername,
+      eInvoicePassword,
+      eWayBillUsername,
+      eWayBillPassword,
+      ...businessInput
+    } = input;
+
+    if (businessInput.assesseeOfOtherTerritory) {
+      businessInput.stateCode = OTHER_TERRITORY_STATE.code;
+      businessInput.state = OTHER_TERRITORY_STATE.name;
+    }
+
     const biz = await ctx.db.transaction(async (tx) => {
       const [biz] = await tx.insert(businesses).values({
-        ...input,
+        ...businessInput,
         eWayBillThreshold:
           input.eWayBillThreshold == null
             ? null
@@ -339,6 +469,18 @@ export const businessRouter = router({
       // the same transaction so a partial failure rolls back cleanly.
       await seedChartOfAccounts(tx, biz.id);
 
+      // Compliance portal logins captured in the setup wizard. Same
+      // transaction, so a business never exists with half-written credentials.
+      await saveComplianceCredentials(tx, biz.id, {
+        gstin: input.gstin,
+        eInvoiceEnabled: input.eInvoiceEnabled,
+        eWayBillEnabled: input.eWayBillEnabled,
+        eInvoiceUsername,
+        eInvoicePassword,
+        eWayBillUsername,
+        eWayBillPassword,
+      });
+
       return biz;
     });
 
@@ -362,6 +504,16 @@ export const businessRouter = router({
 
       // Encrypt carrier credentials if present in the update payload
       const data = { ...input.data } as Record<string, unknown>;
+
+      // Portal credentials belong to e_invoice_configs / eway_bill_configs.
+      const eInvoiceUsername = data.eInvoiceUsername as string | undefined;
+      const eInvoicePassword = data.eInvoicePassword as string | undefined;
+      const eWayBillUsername = data.eWayBillUsername as string | undefined;
+      const eWayBillPassword = data.eWayBillPassword as string | undefined;
+      delete data.eInvoiceUsername;
+      delete data.eInvoicePassword;
+      delete data.eWayBillUsername;
+      delete data.eWayBillPassword;
       if ("annualTurnover" in data) {
         data.annualTurnover =
           data.annualTurnover == null ? null : String(data.annualTurnover);
@@ -376,11 +528,27 @@ export const businessRouter = router({
         );
       }
 
+      if (data.assesseeOfOtherTerritory === true) {
+        data.stateCode = OTHER_TERRITORY_STATE.code;
+        data.state = OTHER_TERRITORY_STATE.name;
+      }
+
       const [biz] = await ctx.db
         .update(businesses)
         .set({ ...data, updatedAt: new Date() })
         .where(eq(businesses.id, input.id))
         .returning();
+
+      await saveComplianceCredentials(ctx.db, biz.id, {
+        // Fall back to the stored GSTIN when the update did not include one.
+        gstin: (input.data.gstin ?? biz.gstin) as string | null,
+        eInvoiceEnabled: input.data.eInvoiceEnabled,
+        eWayBillEnabled: input.data.eWayBillEnabled,
+        eInvoiceUsername,
+        eInvoicePassword,
+        eWayBillUsername,
+        eWayBillPassword,
+      });
 
       logAudit(ctx.db, {
         businessId: biz.id,
@@ -437,6 +605,76 @@ export const businessRouter = router({
       });
 
       return { logoUpdatedAt: biz.logoUpdatedAt };
+    }),
+
+  // Authorised-signatory image. Mirrors uploadLogo exactly — same data-URL
+  // envelope, same magic-byte revalidation, same bytea storage — because it
+  // lands in the same place on the rendered document.
+  uploadSignature: tenantProcedure
+    .input(z.object({ id: z.string().uuid(), data: uploadBusinessSignatureSchema }))
+    .mutation(async ({ input, ctx }) => {
+      await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+
+      const { bytes, mime: actualMime } = validateLogoDataUrl(input.data.dataUrl);
+
+      const [biz] = await ctx.db
+        .update(businesses)
+        .set({
+          signatureData: bytes,
+          signatureMimeType: actualMime,
+          signatureWidth: input.data.width,
+          signatureHeight: input.data.height,
+          signatureUpdatedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(businesses.id, input.id))
+        .returning({ id: businesses.id, signatureUpdatedAt: businesses.signatureUpdatedAt });
+
+      if (!biz) throw new TRPCError({ code: "NOT_FOUND", message: "Business not found" });
+
+      logAudit(ctx.db, {
+        businessId: biz.id,
+        userId: ctx.user.id,
+        action: "business.uploadSignature",
+        entityType: "business",
+        entityId: biz.id,
+        metadata: { bytes: bytes.length, mime: actualMime, width: input.data.width, height: input.data.height },
+        ipAddress: ctx.ipAddress,
+      });
+
+      return { signatureUpdatedAt: biz.signatureUpdatedAt };
+    }),
+
+  deleteSignature: tenantProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+
+      const [biz] = await ctx.db
+        .update(businesses)
+        .set({
+          signatureData: null,
+          signatureMimeType: null,
+          signatureWidth: null,
+          signatureHeight: null,
+          signatureUpdatedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(businesses.id, input.id))
+        .returning({ id: businesses.id });
+
+      if (!biz) throw new TRPCError({ code: "NOT_FOUND", message: "Business not found" });
+
+      logAudit(ctx.db, {
+        businessId: biz.id,
+        userId: ctx.user.id,
+        action: "business.deleteSignature",
+        entityType: "business",
+        entityId: biz.id,
+        ipAddress: ctx.ipAddress,
+      });
+
+      return { ok: true };
     }),
 
   deleteLogo: tenantProcedure

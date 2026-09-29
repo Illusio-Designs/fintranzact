@@ -1,7 +1,7 @@
 import { eq, and, ilike, or, sql, desc, asc, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { parties, invoices, payments, expenses, items, invoiceItems } from "@fintranzact/db";
-import { createPartySchema, updatePartySchema, paginationSchema, money } from "@fintranzact/shared";
+import { createPartySchema, updatePartySchema, paginationSchema, money, panFromGstin } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
@@ -170,6 +170,8 @@ export const partyRouter = router({
     requireCan(ctx.ability, "create", "Party");
     const [party] = await ctx.db.insert(parties).values({
       ...input,
+      // A GSTIN embeds the PAN, so fill it in when the caller left it blank.
+      pan: input.pan || panFromGstin(input.gstin) || input.pan,
       businessId: ctx.businessId,
       // Handle optional date fields
       contactPersonDob: input.contactPersonDob ? new Date(input.contactPersonDob) : null,
@@ -193,9 +195,12 @@ export const partyRouter = router({
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Party");
       const { contactPersonDob, ...rest } = input.data;
+      // A new GSTIN without a PAN fills the PAN only if the party has none yet.
+      const derivedPan = rest.pan === undefined ? panFromGstin(rest.gstin) : null;
       const [party] = await ctx.db.update(parties)
         .set({
           ...rest,
+          ...(derivedPan ? { pan: sql`coalesce(nullif(${parties.pan}, ''), ${derivedPan})` } : {}),
           ...(contactPersonDob ? { contactPersonDob: new Date(contactPersonDob) } : {}),
           updatedAt: new Date(),
         })

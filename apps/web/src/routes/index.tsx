@@ -9,20 +9,15 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
 } from "recharts";
 import { trpc, getBusinessId } from "@/lib/trpc";
 import { formatCurrency, cn, formatDateShort, formatMonthYearShort } from "@/lib/utils";
-import { StatCard } from "@/components/ui/StatCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PillTabs } from "@/components/ui/Tabs";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { useDateRange, getGranularity } from "@/hooks/useDateRange";
-import { Icon, IconCircle, type IconCircleTone, type IconSvgElement } from "@/components/ui/Icon";
-import { WidgetHeader } from "@/components/ui/WidgetHeader";
+import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
 import { Alert02Icon, Analytics01Icon, ArrowDown01Icon, ArrowUp01Icon, Award01Icon, Cancel01Icon, ChartBarLineIcon, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineData01Icon, Coins01Icon, CreditCardIcon, FireIcon, Invoice01Icon, Invoice03Icon, MoneyReceive01Icon, MoneySend01Icon, PackageIcon, PieChartIcon, SproutIcon, Rocket01Icon, ShoppingCart01Icon, StarIcon, Target02Icon, UserGroupIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 
 // ─── Milestone banner ─────────────────────────────────────────────────────────
@@ -368,7 +363,7 @@ const tooltipStyle = {
 const INVOICE_STATUS_COLORS: Record<string, string> = {
   paid: "#10b981",
   partial: "#f59e0b",
-  sent: "#3b5eaa",
+  sent: "var(--chart-1)",
   overdue: "#ef4444",
   draft: "#94a3b8",
   cancelled: "#d1d5db",
@@ -383,20 +378,46 @@ const INVOICE_STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-const EXPENSE_COLORS = [
-  "#3b5eaa",
-  "#10b981",
-  "#f59e0b",
-  "#ef4444",
-  "#8b5cf6",
-  "#ec4899",
-  "#06b6d4",
-];
 
 // Recharts ResponsiveContainer types are incompatible with React 19's stricter ReactNode
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderResponsive(children: React.ReactElement, width: string, height: string) {
   return <ResponsiveContainer width={width as any} height={height as any}>{children as any}</ResponsiveContainer>;
+}
+
+// ─── Panel primitives ─────────────────────────────────────────────────────────
+
+/** Card surface used by every dashboard section. */
+const PANEL = "rounded-2xl border border-border-light bg-surface-0";
+
+function PanelHeader({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon?: IconSvgElement;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-5 pt-4">
+      <h2 className="flex items-center gap-2 text-[15px] font-bold text-text-primary">
+        {icon && <Icon icon={icon} size={17} className="text-brand-600 dark:text-brand-300" />}
+        {title}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+/** Colour swatch + label, for chart legends. */
+function LegendKey({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+      <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: color }} />
+      {label}
+    </span>
+  );
 }
 
 // ─── Chart card wrapper ───────────────────────────────────────────────────────
@@ -407,16 +428,18 @@ function ChartCard({
   height = 260,
   children,
   responsive = true,
+  legend,
 }: {
   title: string;
   icon: IconSvgElement;
   height?: number;
   children: React.ReactElement;
   responsive?: boolean;
+  legend?: React.ReactNode;
 }) {
   return (
-    <div className="card overflow-hidden">
-      <WidgetHeader title={title} icon={icon} />
+    <div className={cn(PANEL, "overflow-hidden")}>
+      <PanelHeader title={title} icon={icon}>{legend}</PanelHeader>
       <div className="px-4 py-4" style={{ height }}>
         {responsive
           ? renderResponsive(children, "100%", "100%")
@@ -469,14 +492,23 @@ function SalesTrendChart({
 
   if (!hasData) {
     return (
-      <ChartCard title="Sales & Collections" icon={ChartBarLineIcon} responsive={false}>
+      <ChartCard title="Sales & collections" icon={ChartBarLineIcon} responsive={false}>
         <ChartEmpty />
       </ChartCard>
     );
   }
 
   return (
-    <ChartCard title="Sales & Collections" icon={ChartBarLineIcon}>
+    <ChartCard
+      title="Sales & collections"
+      icon={ChartBarLineIcon}
+      legend={
+        <div className="flex gap-4">
+          <LegendKey color="var(--chart-1)" label="Invoiced" />
+          <LegendKey color="var(--chart-2)" label="Collected" />
+        </div>
+      }
+    >
       <BarChart data={mapped} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
         <XAxis
@@ -496,10 +528,43 @@ function SalesTrendChart({
           {...tooltipStyle}
           formatter={(value: any) => formatCurrency(String(value))}
         />
-        <Bar dataKey="invoiced" name="Invoiced" fill="#3b5eaa" radius={[3, 3, 0, 0]} maxBarSize={28} />
-        <Bar dataKey="collected" name="Collected" fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={28} />
+        <Bar dataKey="invoiced" name="Invoiced" fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={26} />
+        <Bar dataKey="collected" name="Collected" fill="var(--chart-2)" radius={[4, 4, 0, 0]} maxBarSize={26} />
       </BarChart>
     </ChartCard>
+  );
+}
+
+/**
+ * A share-of-total breakdown: one segmented bar plus a labelled row per part,
+ * so identity never rests on colour alone.
+ */
+function Breakdown({
+  items,
+}: {
+  items: Array<{ key: string; label: string; color: string; value: number; amount: string; detail: string }>;
+}) {
+  const total = items.reduce((sum, i) => sum + i.value, 0);
+  return (
+    <div className="px-5 pb-5 pt-4">
+      <div className="flex h-3 gap-[2px] overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
+        {items.map((i) =>
+          i.value > 0 ? (
+            <span key={i.key} style={{ width: `${(i.value / total) * 100}%`, background: i.color }} />
+          ) : null,
+        )}
+      </div>
+      <ul className="mt-4 space-y-3">
+        {items.map((i) => (
+          <li key={i.key} className="flex items-center gap-3 text-sm">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: i.color }} />
+            <span className="flex-1 truncate text-text-secondary">{i.label}</span>
+            <span className="font-semibold tabular-nums text-text-primary">{i.amount}</span>
+            <span className="w-16 text-right text-xs tabular-nums text-text-tertiary">{i.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -509,73 +574,37 @@ function InvoiceStatusChart({ fromDate, toDate }: { fromDate?: string; toDate?: 
     toDate,
   }, { placeholderData: keepPreviousData });
 
-  const total = data ? data.reduce((sum, d) => sum + d.count, 0) : 0;
-
   if (!data || data.length === 0) {
     return (
-      <ChartCard title="Invoice Status" icon={Invoice03Icon} responsive={false}>
+      <ChartCard title="Invoice status" icon={Invoice03Icon} responsive={false}>
         <ChartEmpty />
       </ChartCard>
     );
   }
 
+  const total = data.reduce((sum, d) => sum + d.count, 0);
+
   return (
-    <div className="card overflow-hidden">
-      <WidgetHeader title="Invoice Status" icon={Invoice03Icon} />
-      <div className="px-4 py-4" style={{ height: 260 }}>
-        <div className="flex flex-col h-full">
-          {/* Donut with center label */}
-          <div className="relative flex-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data.map(d => ({ ...d, label: INVOICE_STATUS_LABELS[d.status] || d.status }))}
-                  dataKey="count"
-                  nameKey="label"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={52}
-                  outerRadius={76}
-                  paddingAngle={2}
-                >
-                  {data.map((entry) => (
-                    <Cell
-                      key={entry.status}
-                      fill={INVOICE_STATUS_COLORS[entry.status] ?? "#94a3b8"}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  {...tooltipStyle}
-                  formatter={(value: any, name: any) => [value, name]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-center">
-                <span className="block text-lg font-bold tabular-nums text-text-primary">{total}</span>
-                <span className="block text-[10px] text-text-tertiary">invoices</span>
-              </div>
-            </div>
-          </div>
-          {/* Legend */}
-          <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 pb-1">
-            {data.map((entry) => (
-              <span key={entry.status} className="flex items-center gap-1 text-[11px] text-text-secondary">
-                <span
-                  className="inline-block rounded-full"
-                  style={{
-                    width: 8,
-                    height: 8,
-                    background: INVOICE_STATUS_COLORS[entry.status] ?? "#94a3b8",
-                  }}
-                />
-                {INVOICE_STATUS_LABELS[entry.status] || entry.status} ({entry.count})
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
+    <div className={cn(PANEL, "flex flex-col overflow-hidden")}>
+      <PanelHeader title="Invoice status" icon={Invoice03Icon}>
+        <span className="text-xs tabular-nums text-text-tertiary">{total} invoices</span>
+      </PanelHeader>
+      <Breakdown
+        items={data.map((d) => ({
+          key: d.status,
+          label: INVOICE_STATUS_LABELS[d.status] || d.status,
+          color: INVOICE_STATUS_COLORS[d.status] ?? "#94a3b8",
+          value: d.count,
+          amount: formatCurrency(d.total),
+          detail: `${d.count} inv.`,
+        }))}
+      />
+      <Link
+        to="/invoices"
+        className="mt-auto border-t border-border-light px-5 py-3 text-[13px] font-semibold text-brand-700 hover:bg-surface-1 dark:text-brand-300"
+      >
+        View all invoices →
+      </Link>
     </div>
   );
 }
@@ -591,10 +620,10 @@ function TopSellingChart({ fromDate, toDate }: { fromDate?: string; toDate?: str
 
   if (!raw || raw.length === 0) {
     return (
-      <div className="card overflow-hidden">
-        <WidgetHeader title="Top Selling" icon={PackageIcon}>
+      <div className={cn(PANEL, "overflow-hidden")}>
+        <PanelHeader title="Top Selling" icon={PackageIcon}>
           <PillTabs tabs={TOP_SELLING_TABS} value={itemType} onChange={setItemType} size="sm" />
-        </WidgetHeader>
+        </PanelHeader>
         <div className="px-4 py-4" style={{ height: 260 }}>
           <ChartEmpty />
         </div>
@@ -611,13 +640,13 @@ function TopSellingChart({ fromDate, toDate }: { fromDate?: string; toDate?: str
   }));
 
   const chartData = [...data].reverse(); // bottom-to-top for horizontal bar
-  const barColor = itemType === "service" ? "#8b5cf6" : "#6366f1"; // purple for services, indigo for products/all
+  const barColor = "var(--chart-1)";
 
   return (
-    <div className="card overflow-hidden">
-      <WidgetHeader title="Top Selling" icon={PackageIcon}>
+    <div className={cn(PANEL, "overflow-hidden")}>
+      <PanelHeader title="Top Selling" icon={PackageIcon}>
         <PillTabs tabs={TOP_SELLING_TABS} value={itemType} onChange={setItemType} size="sm" />
-      </WidgetHeader>
+      </PanelHeader>
       <div className="px-4 py-4" style={{ height: 260 }}>
         {renderResponsive(
           <BarChart
@@ -649,7 +678,7 @@ function TopSellingChart({ fromDate, toDate }: { fromDate?: string; toDate?: str
                 return [formatCurrency(String(value)) + (item ? ` (${item.qty.toLocaleString()} ${item.unit})` : ""), "Revenue"];
               }}
             />
-            <Bar dataKey="amount" name="Revenue" fill={barColor} radius={[0, 3, 3, 0]} maxBarSize={18} label={{ position: "right", fontSize: 10, fill: "var(--text-tertiary)", formatter: (v: any) => v >= 100000 ? `${(Number(v) / 100000).toFixed(1)}L` : `${(Number(v) / 1000).toFixed(0)}K` }} />
+            <Bar dataKey="amount" name="Revenue" fill={barColor} radius={[0, 4, 4, 0]} maxBarSize={18} label={{ position: "right", fontSize: 10, fill: "var(--text-tertiary)", formatter: (v: any) => v >= 100000 ? `${(Number(v) / 100000).toFixed(1)}L` : `${(Number(v) / 1000).toFixed(0)}K` }} />
           </BarChart>,
           "100%", "100%"
         )}
@@ -716,7 +745,7 @@ function TopCustomersChart({ fromDate, toDate }: { fromDate?: string; toDate?: s
             return [formatCurrency(String(value)) + (customer ? ` (${customer.invoices} invoices)` : ""), "Revenue"];
           }}
         />
-        <Bar dataKey="revenue" name="Revenue" fill="#10b981" radius={[0, 3, 3, 0]} maxBarSize={18} label={{ position: "right", fontSize: 10, fill: "var(--text-tertiary)", formatter: (v: any) => v >= 100000 ? `${(Number(v) / 100000).toFixed(1)}L` : `${(Number(v) / 1000).toFixed(0)}K` }} />
+        <Bar dataKey="revenue" name="Revenue" fill="var(--chart-1)" radius={[0, 4, 4, 0]} maxBarSize={18} label={{ position: "right", fontSize: 10, fill: "var(--text-tertiary)", formatter: (v: any) => v >= 100000 ? `${(Number(v) / 100000).toFixed(1)}L` : `${(Number(v) / 1000).toFixed(0)}K` }} />
       </BarChart>
     </ChartCard>
   );
@@ -733,11 +762,11 @@ function ChartEmpty() {
 // ─── Payment mode breakdown ───────────────────────────────────────────────────
 
 const PAYMENT_MODE_COLORS: Record<string, string> = {
-  cash: "#10b981",
-  bank: "#3b5eaa",
-  upi: "#f59e0b",
-  cheque: "#8b5cf6",
-  other: "#94a3b8",
+  bank: "var(--chart-1)",
+  upi: "var(--chart-2)",
+  cash: "var(--chart-3)",
+  cheque: "var(--chart-4)",
+  other: "var(--chart-5)",
 };
 const PAYMENT_MODE_LABELS: Record<string, string> = {
   cash: "Cash",
@@ -755,7 +784,7 @@ function PaymentModeWidget({ fromDate, toDate }: { fromDate?: string; toDate?: s
 
   if (!data || data.length === 0) {
     return (
-      <ChartCard title="Payment Modes" icon={CreditCardIcon} responsive={false}>
+      <ChartCard title="Payment modes" icon={CreditCardIcon} responsive={false}>
         <ChartEmpty />
       </ChartCard>
     );
@@ -764,66 +793,23 @@ function PaymentModeWidget({ fromDate, toDate }: { fromDate?: string; toDate?: s
   const grandTotal = data.reduce((s, d) => s + parseFloat(d.total), 0);
 
   return (
-    <div className="card overflow-hidden">
-      <WidgetHeader title="Payment Modes" icon={CreditCardIcon} />
-      <div className="px-4 py-4" style={{ height: 260 }}>
-        <div className="flex flex-col h-full">
-          {/* Donut */}
-          <div className="relative flex-1">
-            {renderResponsive(
-              <PieChart>
-                <Pie
-                  data={data.map((d) => ({
-                    ...d,
-                    name: PAYMENT_MODE_LABELS[d.mode] ?? d.mode,
-                    value: parseFloat(d.total),
-                  }))}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={76}
-                  paddingAngle={2}
-                >
-                  {data.map((entry) => (
-                    <Cell
-                      key={entry.mode}
-                      fill={PAYMENT_MODE_COLORS[entry.mode] ?? "#94a3b8"}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  {...tooltipStyle}
-                  formatter={(value: any) => formatCurrency(String(value))}
-                />
-              </PieChart>,
-              "100%", "100%"
-            )}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-center">
-                <span className="block text-xs font-bold tabular-nums text-text-primary">{formatCurrency(String(grandTotal))}</span>
-                <span className="block text-[10px] text-text-tertiary">total</span>
-              </div>
-            </div>
-          </div>
-          {/* Legend */}
-          <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 pb-1">
-            {data.map((entry) => {
-              const pct = grandTotal > 0 ? Math.round((parseFloat(entry.total) / grandTotal) * 100) : 0;
-              return (
-                <span key={entry.mode} className="flex items-center gap-1 text-[11px] text-text-secondary">
-                  <span
-                    className="inline-block rounded-full shrink-0"
-                    style={{ width: 8, height: 8, background: PAYMENT_MODE_COLORS[entry.mode] ?? "#94a3b8" }}
-                  />
-                  {PAYMENT_MODE_LABELS[entry.mode] ?? entry.mode} ({pct}%)
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+    <div className={cn(PANEL, "overflow-hidden")}>
+      <PanelHeader title="Payment modes" icon={CreditCardIcon}>
+        <span className="text-xs tabular-nums text-text-tertiary">{formatCurrency(String(grandTotal))} received</span>
+      </PanelHeader>
+      <Breakdown
+        items={data.map((d) => {
+          const value = parseFloat(d.total);
+          return {
+            key: d.mode,
+            label: PAYMENT_MODE_LABELS[d.mode] ?? d.mode,
+            color: PAYMENT_MODE_COLORS[d.mode] ?? "var(--chart-5)",
+            value,
+            amount: formatCurrency(d.total),
+            detail: grandTotal > 0 ? `${Math.round((value / grandTotal) * 100)}%` : "0%",
+          };
+        })}
+      />
     </div>
   );
 }
@@ -838,7 +824,7 @@ function CollectionEfficiencyWidget({ fromDate, toDate }: { fromDate?: string; t
 
   if (!data || data.invoiceCount === 0) {
     return (
-      <div className="card px-5 py-4">
+      <div className={cn(PANEL, "px-5 py-4")}>
         <div className="flex items-center gap-2.5">
           <IconCircle icon={Coins01Icon} tone="success" size="sm" />
           <p className="text-sm font-semibold text-text-primary">Collection Efficiency</p>
@@ -858,7 +844,7 @@ function CollectionEfficiencyWidget({ fromDate, toDate }: { fromDate?: string; t
   else if (pct < 80) barColor = "bg-amber-500";
 
   return (
-    <div className="card px-5 py-4 flex flex-col gap-3">
+    <div className={cn(PANEL, "px-5 py-4 flex flex-col gap-3")}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <IconCircle icon={Coins01Icon} tone="success" size="sm" />
@@ -918,10 +904,10 @@ function ExpenseCategoryWidget({ fromDate, toDate }: { fromDate?: string; toDate
   const chartData = [...data.categories].reverse(); // bottom-to-top for horizontal bar
 
   return (
-    <div className="card overflow-hidden">
-      <WidgetHeader title="Expenses by Category" icon={PieChartIcon}>
+    <div className={cn(PANEL, "overflow-hidden")}>
+      <PanelHeader title="Expenses by Category" icon={PieChartIcon}>
         <span className="text-[11px] text-text-tertiary tabular-nums">{formatCurrency(data.grandTotal)} total</span>
-      </WidgetHeader>
+      </PanelHeader>
       <div className="px-4 py-4" style={{ height: 260 }}>
         {renderResponsive(
           <BarChart
@@ -960,14 +946,11 @@ function ExpenseCategoryWidget({ fromDate, toDate }: { fromDate?: string; toDate
             <Bar
               dataKey="amount"
               name="Amount"
-              radius={[0, 3, 3, 0]}
+              fill="var(--chart-1)"
+              radius={[0, 4, 4, 0]}
               maxBarSize={18}
               label={{ position: "right", fontSize: 10, fill: "var(--text-tertiary)", formatter: (v: any) => v >= 100000 ? `${(Number(v) / 100000).toFixed(1)}L` : `${(Number(v) / 1000).toFixed(0)}K` }}
-            >
-              {chartData.map((_, i) => (
-                <Cell key={i} fill={EXPENSE_COLORS[i % EXPENSE_COLORS.length]} />
-              ))}
-            </Bar>
+            />
           </BarChart>,
           "100%", "100%"
         )}
@@ -1007,8 +990,8 @@ function MonthlyComparisonWidget() {
   ];
 
   return (
-    <div className="card overflow-hidden">
-      <WidgetHeader title="Month on Month" icon={Analytics01Icon} />
+    <div className={cn(PANEL, "overflow-hidden")}>
+      <PanelHeader title="Month on Month" icon={Analytics01Icon} />
       <div className="px-4 py-3">
         {/* Header row */}
         <div className="grid grid-cols-4 gap-2 mb-2 text-[11px] font-medium text-text-tertiary">
@@ -1056,33 +1039,201 @@ function SummaryCards({
   };
   periodLabel: string;
 }) {
-  const cards: Array<{ label: string; value: string; color: string; icon: IconSvgElement; tone: IconCircleTone }> = [
-    { label: "Sales", value: data.totalSales, color: "text-emerald-600", icon: ChartLineData01Icon, tone: "success" },
-    { label: "Purchases", value: data.totalPurchases, color: "text-blue-600", icon: ShoppingCart01Icon, tone: "info" },
-    { label: "Receivable", value: data.receivable, color: "text-amber-600", icon: MoneyReceive01Icon, tone: "warning" },
-    { label: "Payable", value: data.payable, color: "text-red-600", icon: MoneySend01Icon, tone: "danger" },
-    { label: "Cash Position", value: data.cashInHand, color: "text-emerald-600", icon: Wallet01Icon, tone: "cyan" },
-    { label: "Expenses", value: data.totalExpenses, color: "text-text-primary", icon: Invoice01Icon, tone: "purple" },
+  const grossProfit = parseFloat(data.totalSales) - parseFloat(data.totalPurchases);
+  const netProfit = grossProfit - parseFloat(data.totalExpenses);
+
+  const hero: Array<{ label: string; value: string; note: string; icon: IconSvgElement }> = [
+    { label: "Sales", value: data.totalSales, note: periodLabel, icon: ChartLineData01Icon },
+    { label: "Purchases", value: data.totalPurchases, note: periodLabel, icon: ShoppingCart01Icon },
+    { label: "To collect", value: data.receivable, note: "Receivable today", icon: MoneyReceive01Icon },
+    { label: "To pay", value: data.payable, note: "Payable today", icon: MoneySend01Icon },
+  ];
+  const secondary: Array<{ label: string; value: number; icon: IconSvgElement; signed?: boolean }> = [
+    { label: "Cash position", value: parseFloat(data.cashInHand), icon: Wallet01Icon },
+    { label: "Expenses", value: parseFloat(data.totalExpenses), icon: Invoice01Icon },
+    { label: "Gross profit", value: grossProfit, icon: grossProfit >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon, signed: true },
+    { label: "Net profit", value: netProfit, icon: netProfit >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon, signed: true },
   ];
 
   return (
-    <div className="mb-6">
-      <p className="text-[11px] font-medium text-text-tertiary mb-2">{periodLabel} — Receivable & Payable are current totals</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {cards.map((c) => (
-          <StatCard
-            key={c.label}
-            label={c.label}
-            value={formatCurrency(c.value)}
-            valueColor={c.color}
-            icon={c.icon}
-            iconTone={c.tone}
-            className="truncate"
-          />
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {hero.map((c) => (
+          <div key={c.label} className={cn(PANEL, "p-4 sm:p-5")}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[13px] font-semibold text-text-tertiary">{c.label}</span>
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300">
+                <Icon icon={c.icon} size={18} />
+              </span>
+            </div>
+            <p className="mt-2.5 font-display text-[17px] font-extrabold leading-tight tracking-[-0.02em] tabular-nums text-text-primary sm:text-[22px] xl:text-[26px]">
+              {formatCurrency(c.value)}
+            </p>
+            <p className="mt-1 truncate text-xs text-text-tertiary">{c.note}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {secondary.map((c) => (
+          <div key={c.label} className={cn(PANEL, "flex items-center gap-3 px-4 py-3")}>
+            <Icon
+              icon={c.icon}
+              size={18}
+              className={cn(
+                "shrink-0",
+                c.signed
+                  ? c.value >= 0
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-red-600 dark:text-red-400"
+                  : "text-text-tertiary",
+              )}
+            />
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-text-tertiary">{c.label}</p>
+              <p
+                className={cn(
+                  "truncate text-[13.5px] font-bold tabular-nums sm:text-[15px]",
+                  c.signed
+                    ? c.value >= 0
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : "text-red-600 dark:text-red-400"
+                    : "text-text-primary",
+                )}
+              >
+                {formatCurrency(String(c.value))}
+              </p>
+            </div>
+          </div>
         ))}
       </div>
     </div>
   );
+}
+
+// ─── Recent invoices ──────────────────────────────────────────────────────────
+
+const STATUS_BADGE: Record<string, string> = {
+  paid: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  partial: "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  sent: "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300",
+  overdue: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+};
+
+function RecentInvoices() {
+  const { data, isError } = trpc.invoice.list.useQuery(
+    { type: "sale", page: 1, limit: 6, sortBy: "date", sortDir: "desc" },
+    { placeholderData: keepPreviousData, retry: false },
+  );
+  // Roles without invoice access simply don't get this panel.
+  if (isError) return null;
+  const rows = data?.data ?? [];
+
+  return (
+    <div className={cn(PANEL, "overflow-hidden")}>
+      <PanelHeader title="Recent invoices" icon={Invoice01Icon}>
+        <Link to="/invoices" className="text-[13px] font-semibold text-brand-700 hover:underline dark:text-brand-300">
+          See all
+        </Link>
+      </PanelHeader>
+      {rows.length === 0 ? (
+        <p className="px-5 py-10 text-center text-sm text-text-tertiary">No sales invoices yet</p>
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[520px] text-sm">
+            <thead>
+              <tr className="bg-surface-1 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-text-tertiary">
+                <th scope="col" className="px-5 py-2 font-semibold">Invoice</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Party</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Date</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Amount</th>
+                <th scope="col" className="px-5 py-2 text-right font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((inv) => (
+                <tr key={inv.id} className="border-t border-border-light hover:bg-surface-1">
+                  <td className="px-5 py-3">
+                    <Link
+                      to="/invoices"
+                      search={{ id: inv.id }}
+                      className="font-semibold text-brand-700 hover:underline dark:text-brand-300"
+                    >
+                      {inv.invoiceNumber}
+                    </Link>
+                  </td>
+                  <td className="max-w-[220px] truncate px-3 py-3 font-medium text-text-primary">{inv.partyName ?? "—"}</td>
+                  <td className="px-3 py-3 text-text-secondary">{formatDateShort(new Date(inv.invoiceDate))}</td>
+                  <td className="px-3 py-3 text-right font-semibold tabular-nums text-text-primary">{formatCurrency(inv.totalAmount)}</td>
+                  <td className="px-5 py-3 text-right">
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                        STATUS_BADGE[inv.status] ?? "bg-surface-2 text-text-secondary",
+                      )}
+                    >
+                      {INVOICE_STATUS_LABELS[inv.status] ?? inv.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── GST this month ───────────────────────────────────────────────────────────
+
+/** Current month's GSTR-3B position: output tax, eligible ITC, net payable. */
+function GstThisMonth() {
+  const now = new Date();
+  const { data, isError } = trpc.gst.gstr3b.useQuery(
+    { year: now.getFullYear(), month: now.getMonth() + 1 },
+    { staleTime: 5 * 60 * 1000, retry: false },
+  );
+  if (isError || !data) return null;
+  const output = data.taxPayable.igst + data.taxPayable.cgst + data.taxPayable.sgst;
+  // GSTR-3B for this month is due on the 20th of next month.
+  const due = new Date(now.getFullYear(), now.getMonth() + 1, 20);
+
+  return (
+    <div className="rounded-2xl bg-[#0f1b3d] p-5 text-white dark:bg-[#111c3a] dark:ring-1 dark:ring-[#2a3a63]">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[15px] font-bold">GST this month</h2>
+        <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold">
+          3B due {formatDateShort(due)}
+        </span>
+      </div>
+      <dl className="mt-3 space-y-2 text-[13.5px] text-[#c3cee6]">
+        <div className="flex justify-between">
+          <dt>Output GST</dt>
+          <dd className="font-semibold tabular-nums text-white">{formatCurrency(String(output))}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt>Input tax credit</dt>
+          <dd className="font-semibold tabular-nums text-white">− {formatCurrency(String(data.itc.total))}</dd>
+        </div>
+        <div className="flex justify-between border-t border-white/15 pt-2">
+          <dt>Net payable</dt>
+          <dd className="text-base font-bold tabular-nums text-white">{formatCurrency(String(Math.max(0, data.netTax.total)))}</dd>
+        </div>
+      </dl>
+      <Link
+        to="/gst"
+        className="mt-4 flex h-10 items-center justify-center rounded-xl bg-white text-sm font-bold text-[#0f1b3d] transition hover:bg-brand-50"
+      >
+        Open GST returns
+      </Link>
+    </div>
+  );
+}
+
+function greeting(hour: number) {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -1182,6 +1333,12 @@ function DashboardPage() {
 
   const myTargets: TargetProgress[] = myTargetsRaw ?? [];
 
+  // Current business, for the greeting and the GST panel (cached by the shell).
+  const { data: businesses } = trpc.business.list.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
+  const activeBusiness = businesses?.find((b) => b.id === getBusinessId()) ?? businesses?.[0];
+  const isGstRegistered =
+    !!activeBusiness && (activeBusiness.gstRegistrationType !== "unregistered" || !!activeBusiness.gstin);
+
   const businessId = getBusinessId() ?? "default";
   const totalAllTimeInvoices = allTimeBreakdown
     ? allTimeBreakdown.reduce((sum, s) => sum + s.count, 0)
@@ -1217,37 +1374,42 @@ function DashboardPage() {
     );
   }
 
-  // Compute gross & net profit from summary data
-  const grossProfit = parseFloat(data.totalSales) - parseFloat(data.totalPurchases);
-  const netProfit = grossProfit - parseFloat(data.totalExpenses);
-
   // Find overdue invoices from status breakdown
   const overdueEntry = statusBreakdown?.find((s) => s.status === "overdue");
   const overdueCount = overdueEntry?.count ?? 0;
   const overdueAmount = overdueEntry?.total ?? "0";
 
+  const firstName = session?.user?.name?.trim().split(/\s+/)[0];
+  const businessName = businesses?.find((b) => b.id === getBusinessId())?.name ?? businesses?.[0]?.name;
+
   return (
-    <div>
-      <PageHeader
-        title="Dashboard"
-        actions={
-          <div className="flex items-center gap-3">
-            <DateRangeBar
-              preset={preset}
-              onPresetChange={handlePresetChange}
-              customFrom={customFrom}
-              customTo={customTo}
-              onCustomChange={setCustomRange}
-            />
-            <Link to="/invoices" search={{ create: "1" }} className="btn-primary">
-              + New Invoice
-            </Link>
-          </div>
-        }
-      />
+    <div className="min-w-0 space-y-5">
+      {/* Greeting + period + primary action */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-[#0f1b3d] dark:text-white sm:text-[28px]">
+            {greeting(new Date().getHours())}
+            {firstName ? `, ${firstName}` : ""}
+          </h1>
+          <p className="mt-1 text-sm text-text-tertiary">
+            {businessName ? `${businessName} · ` : ""}
+            {periodLabel}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <DateRangeBar
+            variant="segmented"
+            preset={preset}
+            onPresetChange={handlePresetChange}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomChange={setCustomRange}
+          />
+        </div>
+      </div>
 
       {showJoinBanner && joinedOrg && (
-        <div className="mb-4 px-4 py-3 rounded-xl bg-brand-600/[0.06] border border-brand-600/20 flex items-center justify-between">
+        <div className="px-4 py-3 rounded-xl bg-brand-600/[0.06] border border-brand-600/20 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-brand-700 dark:text-brand-400">
               You've joined {joinedOrg}!
@@ -1265,7 +1427,10 @@ function DashboardPage() {
         </div>
       )}
 
-      <div style={{ opacity: isPending ? 0.6 : 1, transition: "opacity 0.15s ease" }}>
+      <div
+        className="space-y-5"
+        style={{ opacity: isPending ? 0.6 : 1, transition: "opacity 0.15s ease" }}
+      >
         {milestone && (
           <MilestoneBanner message={milestone.message} milestoneKey={milestone.key} />
         )}
@@ -1275,71 +1440,59 @@ function DashboardPage() {
           <TargetsWidget targets={myTargets} />
         )}
 
-        <SummaryCards data={data} periodLabel={periodLabel} />
-
-        {/* Profit indicator cards */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="card px-4 py-3 flex items-center gap-3">
-            <IconCircle icon={grossProfit >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon} tone={grossProfit >= 0 ? "success" : "danger"} />
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium text-text-tertiary mb-1">Gross Profit</p>
-              <p className={cn(
-                "text-lg font-bold tabular-nums",
-                grossProfit >= 0 ? "text-emerald-600" : "text-red-600"
-              )}>
-                {formatCurrency(String(grossProfit))}
-              </p>
-            </div>
-          </div>
-          <div className="card px-4 py-3 flex items-center gap-3">
-            <IconCircle icon={netProfit >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon} tone={netProfit >= 0 ? "success" : "danger"} />
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium text-text-tertiary mb-1">Net Profit</p>
-              <p className={cn(
-                "text-lg font-bold tabular-nums",
-                netProfit >= 0 ? "text-emerald-600" : "text-red-600"
-              )}>
-                {formatCurrency(String(netProfit))}
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* Overdue invoices alert */}
         {overdueCount > 0 && (
-          <div className="mb-4 px-4 py-3 rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <IconCircle icon={Alert02Icon} tone="danger" size="md" />
-              <div>
-                <p className="text-sm font-medium text-red-700 dark:text-red-400">
-                  {overdueCount} overdue invoice{overdueCount > 1 ? "s" : ""} totaling {formatCurrency(overdueAmount)}
-                </p>
-                <p className="text-xs text-red-600/70 dark:text-red-400/60">Past due date with outstanding balance</p>
-              </div>
-            </div>
-            <Link to="/invoices" className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 shrink-0">
-              View →
+          <div
+            role="status"
+            className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900 dark:bg-red-950/40"
+          >
+            <Icon icon={Alert02Icon} size={19} className="shrink-0 text-red-600 dark:text-red-400" />
+            <p className="flex-1 text-sm text-red-800 dark:text-red-300">
+              <span className="font-semibold">
+                {overdueCount} overdue invoice{overdueCount > 1 ? "s" : ""}
+              </span>{" "}
+              — {formatCurrency(overdueAmount)} past the due date.
+            </p>
+            <Link
+              to="/invoices"
+              className="shrink-0 text-sm font-semibold text-red-700 hover:underline dark:text-red-300"
+            >
+              Review →
             </Link>
           </div>
         )}
 
-        {/* Charts grid — all charts respect the selected period */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <SalesTrendChart fromDate={from} toDate={to} granularity={granularity} />
+        <SummaryCards data={data} periodLabel={periodLabel} />
+
+        {/* Trend + status */}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="min-w-0 xl:col-span-2">
+            <SalesTrendChart fromDate={from} toDate={to} granularity={granularity} />
+          </div>
           <InvoiceStatusChart fromDate={from} toDate={to} />
+        </div>
+
+        {/* Recent activity + money position */}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="min-w-0 xl:col-span-2">
+            <RecentInvoices />
+          </div>
+          <div className="min-w-0 space-y-4">
+            {isGstRegistered && <GstThisMonth />}
+            <CollectionEfficiencyWidget fromDate={from} toDate={to} />
+          </div>
+        </div>
+
+        {/* Who and what */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <TopSellingChart fromDate={from} toDate={to} />
           <TopCustomersChart fromDate={from} toDate={to} />
         </div>
 
-        {/* Analytics widgets — period-scoped */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        {/* Money in and out */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <PaymentModeWidget fromDate={from} toDate={to} />
           <ExpenseCategoryWidget fromDate={from} toDate={to} />
-        </div>
-
-        {/* Efficiency + comparison row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-          <CollectionEfficiencyWidget fromDate={from} toDate={to} />
           <MonthlyComparisonWidget />
         </div>
       </div>

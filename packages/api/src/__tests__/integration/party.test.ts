@@ -173,6 +173,33 @@ describe("party.create", () => {
     expect(result!.creditPeriodDays).toBe(30);
   });
 
+  it("fills PAN from the GSTIN when no PAN is given", async () => {
+    const result = await callerRamesh.party.create({
+      type: "supplier",
+      name: "GSTIN Only Supplier",
+      gstin: "24AAPFU0939F1ZV",
+    });
+
+    expect(result!.pan).toBe("AAPFU0939F");
+  });
+
+  it("keeps an explicitly supplied PAN even when it differs from the GSTIN", async () => {
+    const result = await callerRamesh.party.create({
+      type: "supplier",
+      name: "Explicit PAN Supplier",
+      gstin: "24AAPFU0939F1ZV",
+      pan: "ABCDE1234F",
+    });
+
+    expect(result!.pan).toBe("ABCDE1234F");
+  });
+
+  it("rejects a malformed PAN — Zod validation guard", async () => {
+    await expect(
+      callerRamesh.party.create({ type: "customer", name: "Bad PAN", pan: "12345" })
+    ).rejects.toThrow();
+  });
+
   it("businessId is auto-set from middleware context — not from user input", async () => {
     const result = await callerRamesh.party.create({
       type: "customer",
@@ -438,6 +465,25 @@ describe("party.update", () => {
     expect(result!.name).toBe("Updated Party Name");
     expect(result!.phone).toBe("9111111111");
     expect(result!.id).toBe(partyToUpdate.id);
+  });
+
+  it("adding a GSTIN fills an empty PAN", async () => {
+    const result = await callerRamesh.party.update({
+      id: partyToUpdate.id,
+      data: { gstin: "27AABCR0000R1ZM" },
+    });
+
+    expect(result!.pan).toBe("AABCR0000R");
+  });
+
+  it("a new GSTIN does not overwrite a PAN the party already has", async () => {
+    const result = await callerRamesh.party.update({
+      id: partyToUpdate.id,
+      data: { gstin: "24AAPFU0939F1ZV" },
+    });
+
+    expect(result!.gstin).toBe("24AAPFU0939F1ZV");
+    expect(result!.pan).toBe("AABCR0000R");
   });
 
   it("businessId cannot be changed via update — stays scoped to the original business", async () => {

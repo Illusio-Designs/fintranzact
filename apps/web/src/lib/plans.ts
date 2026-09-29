@@ -1,51 +1,38 @@
 /**
- * Plan catalogue shown on the public pricing page and during sign-up plan
- * selection. Keep both in sync by editing only this list.
+ * Plans shown on the public pricing page, the home page and sign-up plan
+ * selection. They are fetched from the API's public `plan.list` endpoint, so
+ * prices, features and limits come from the backend that enforces them.
  */
+import {
+  formatPlanPrice,
+  PLAN_LIMITS,
+  PLANS,
+  type PlanId,
+  type PlanInfo,
+  type PlanLimits,
+} from "@fintranzact/shared";
+import { trpc } from "@/lib/trpc";
 
-export type PlanId = "forever_free" | "free" | "pro" | "business" | "enterprise";
+export type { PlanId, PlanInfo, PlanLimits };
+export { formatPlanLimit, formatPlanPrice } from "@fintranzact/shared";
 
-export const PLAN_OPTIONS: Array<{
-  id: PlanId;
-  name: string;
-  tagline: string;
-  price: string;
-  features: string[];
-  highlight?: boolean;
-}> = [
-  {
-    id: "forever_free",
-    name: "Forever Free",
-    tagline: "Unlimited for life",
-    price: "₹0",
-    features: [
-      "Unlimited invoices, parties, and payments",
-      "Unlimited businesses and team members",
-      "Unlimited API access",
-      "No branding or paywall",
-    ],
-    highlight: true,
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    tagline: "Best for growing teams",
-    price: "Custom",
-    features: [
-      "Advanced automation and workflows",
-      "Priority support",
-      "Expanded collaboration",
-    ],
-  },
-  {
-    id: "business",
-    name: "Business",
-    tagline: "Scale without limits",
-    price: "Custom",
-    features: [
-      "Multi-tenant controls",
-      "Premium reporting",
-      "Dedicated onboarding",
-    ],
-  },
-];
+export type PlanOption = PlanInfo & { price: string; limits: PlanLimits };
+
+/**
+ * Shown only while the first request is in flight (and if it fails), so the
+ * page never renders empty. It is the same catalogue the API serves.
+ */
+export const FALLBACK_PLANS: PlanOption[] = PLANS.map((plan) => ({
+  ...plan,
+  price: formatPlanPrice(plan),
+  limits: PLAN_LIMITS[plan.id],
+}));
+
+/** Plans from the backend (`plan.list`), in display order. */
+export function usePlans(): { plans: PlanOption[]; isLoading: boolean } {
+  const query = trpc.plan.list.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+  return { plans: query.data ?? FALLBACK_PLANS, isLoading: query.isLoading };
+}

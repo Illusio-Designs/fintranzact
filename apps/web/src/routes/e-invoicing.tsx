@@ -371,7 +371,7 @@ function SettingsTab() {
     if (configData && !loaded) {
       setForm({
         gstin: configData.gstin,
-        clientId: configData.clientId,
+        clientId: configData.clientId ?? "", // null when supplied from server env
         clientSecret: "", // Don't pre-fill masked values
         username: configData.username,
         password: "", // Don't pre-fill masked values

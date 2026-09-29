@@ -96,6 +96,7 @@ export interface InvoicePDFData {
   // Uint8Array is accepted too because worker_threads structured-clone
   // may strip the Buffer subclass on transfer.
   logoBuffer?: Buffer | Uint8Array;
+  signatureBuffer?: Buffer | Uint8Array;
 }
 
 export type PDFFormat = "a5" | "a4" | "thermal";
@@ -815,6 +816,9 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
     .text(data.businessName, bottomRight + 4, sigY + 11, { width: bottomRightW - 8 });
 
   const sigLineY = sigY + 50;
+  // Signature image drops into the gap above the rule, scaled to fit so a
+  // tall or wide scan never overruns the line.
+  drawLogo(doc, data.signatureBuffer, bottomRight + 4, sigY + 24, bottomRightW - 16, 24);
   hLine(doc, bottomRight + 4, sigLineY, bottomRightW - 12, cBorder);
   doc.fontSize(7).fillColor(cMuted).font("NotoSans")
     .text("Authorized Signatory", bottomRight + 4, sigLineY + 3, { width: bottomRightW - 8 });
@@ -1208,6 +1212,7 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
     .text(data.businessName, sigColX, sigTopY + 10, { width: sigColW });
 
   const sigLineY = sigTopY + 36;
+  drawLogo(doc, data.signatureBuffer, sigColX, sigTopY + 20, sigColW - 8, 15);
   hLine(doc, sigColX, sigLineY, sigColW - 4, cBorder);
   doc.fontSize(6.5).fillColor(cMuted).font("NotoSans")
     .text("Authorized Signatory", sigColX, sigLineY + 3, { width: sigColW });

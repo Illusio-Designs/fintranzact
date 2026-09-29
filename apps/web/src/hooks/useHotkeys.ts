@@ -5,10 +5,26 @@ export interface HotkeyDef {
   ctrl?: boolean;
   shift?: boolean;
   alt?: boolean;
+  /**
+   * Two-key sequence: press this key, then `key` (e.g. leader "g" + "d").
+   *
+   * WHY SEQUENCES EXIST HERE:
+   * Alt+Shift+<key> is unusable as a primary navigation chord. On Windows,
+   * Alt+Shift is the OS input-language switcher, so on any machine with more
+   * than one keyboard layout installed the combination never reaches the
+   * page. On macOS, Option+<key> emits a different character entirely
+   * ("d" becomes "∂"), so `event.key` no longer matches the definition.
+   * A leader sequence has neither problem and is what most keyboard-driven
+   * apps use. The Alt+Shift bindings are kept as aliases.
+   */
+  leader?: string;
   handler: () => void;
   description: string;
   scope?: string;
 }
+
+/** How long a pressed leader key waits for its follow-up. */
+const LEADER_TIMEOUT_MS = 1500;
 
 // Module-level registry so CommandPalette (and other consumers) can read all
 // currently registered hotkeys.
@@ -56,6 +72,26 @@ export function useShortcutFlash() {
   return { flash, dismiss };
 }
 
+// ── Leader-sequence state ────────────────────────────────────────────────────
+// Module-level so the sequence survives across the several components that
+// each register their own hotkeys.
+let pendingLeader: string | null = null;
+let leaderTimer: number | null = null;
+
+function clearLeader() {
+  pendingLeader = null;
+  if (leaderTimer !== null) {
+    window.clearTimeout(leaderTimer);
+    leaderTimer = null;
+  }
+}
+
+function armLeader(key: string) {
+  clearLeader();
+  pendingLeader = key;
+  leaderTimer = window.setTimeout(clearLeader, LEADER_TIMEOUT_MS);
+}
+
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!target) return false;
   const el = target as HTMLElement;
@@ -79,7 +115,51 @@ export function useHotkeys(hotkeys: HotkeyDef[]): void {
     defs.forEach((d) => hotkeyRegistry.push(d));
 
     const handler = (e: KeyboardEvent) => {
+      const bare = !e.ctrlKey && !e.metaKey && !e.altKey;
+      const typing = isTypingTarget(e.target);
+      const pressed = e.key.toLowerCase();
+
+      // ── Leader sequences ────────────────────────────────────────────
+      // Resolve a pending leader first, so "g" then "d" cannot also be read
+      // as two independent single-key shortcuts.
+      if (pendingLeader && bare && !typing) {
+        const armed = pendingLeader;
+        clearLeader();
+        const match = hotkeysRef.current.find(
+          (d) =>
+            d.leader &&
+            d.leader.toLowerCase() === armed &&
+            d.key.toLowerCase() === pressed,
+        );
+        if (match) {
+          e.preventDefault();
+          emitFlash(match);
+          match.handler();
+          return;
+        }
+        // Unknown follow-up: fall through and treat it as a normal key.
+      }
+
+      if (bare && !typing) {
+        const isLeader = hotkeysRef.current.some(
+          (d) => d.leader && d.leader.toLowerCase() === pressed,
+        );
+        // Only arm when no plain single-key shortcut claims this key, so
+        // existing bindings keep working.
+        const claimedOutright = hotkeysRef.current.some(
+          (d) => !d.leader && !d.ctrl && !d.alt && !d.shift && d.key.toLowerCase() === pressed,
+        );
+        if (isLeader && !claimedOutright) {
+          e.preventDefault();
+          armLeader(pressed);
+          return;
+        }
+      }
+
       for (const def of hotkeysRef.current) {
+        // Sequence definitions are handled above, never as a bare key.
+        if (def.leader) continue;
+
         const keyMatch = e.key.toLowerCase() === def.key.toLowerCase();
         if (!keyMatch) continue;
 

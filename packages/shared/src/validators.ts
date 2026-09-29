@@ -147,6 +147,13 @@ export const createBusinessSchema = z.object({
   lutArn: z.string().max(100).optional().or(z.literal("")),
   eInvoiceEnabled: z.boolean().default(false),
   eWayBillEnabled: z.boolean().default(false),
+
+  // Taxpayer API credentials for the compliance portals. Optional: the feature
+  // toggles work without them, and they can be filled in later from Settings.
+  eInvoiceUsername: z.string().max(100).optional().or(z.literal("")),
+  eInvoicePassword: z.string().max(200).optional().or(z.literal("")),
+  eWayBillUsername: z.string().max(100).optional().or(z.literal("")),
+  eWayBillPassword: z.string().max(200).optional().or(z.literal("")),
   assesseeOfOtherTerritory: z.boolean().default(false),
   gstReturnPeriodicity: z.enum(["monthly", "quarterly"]).default("monthly"),
   eWayBillThreshold: z.coerce
@@ -185,6 +192,10 @@ export const uploadBusinessLogoSchema = z.object({
   height: z.number().int().positive().max(4000),
 });
 
+// Signature upload: same envelope as the logo (PNG/JPEG data URL, ~1MB
+// decoded). Server re-checks magic bytes on the decoded bytes.
+export const uploadBusinessSignatureSchema = uploadBusinessLogoSchema;
+
 export const updateSequenceNumberSchema = z.object({
   documentType: z.enum(["invoice", "payment", "quotation", "credit_note", "delivery_challan", "proforma"]),
   newNumber: z.number().int().min(1),
@@ -207,13 +218,23 @@ export type BankTransactionType = (typeof bankTransactionTypes)[number];
 export const partyTypes = ["customer", "supplier"] as const;
 export type PartyType = (typeof partyTypes)[number];
 
+export const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+export const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+
+/** Characters 3-12 of a valid GSTIN are the holder's PAN; null otherwise. */
+export function panFromGstin(gstin: string | null | undefined): string | null {
+  if (!gstin) return null;
+  const normalized = gstin.trim().toUpperCase();
+  return GSTIN_REGEX.test(normalized) ? normalized.slice(2, 12) : null;
+}
+
 export const createPartySchema = z.object({
   type: z.enum(partyTypes),
   name: z.string().min(1).max(200),
   phone: z.string().max(15).optional(),
   email: z.string().email().optional().or(z.literal("")),
-  gstin: z.string().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/).optional().or(z.literal("")),
-  pan: z.string().optional().or(z.literal("")),
+  gstin: z.string().regex(GSTIN_REGEX).optional().or(z.literal("")),
+  pan: z.string().regex(PAN_REGEX).optional().or(z.literal("")),
   billingAddress: z.string().max(500).optional(),
   shippingAddress: z.string().max(500).optional(),
   city: z.string().max(100).optional(),
@@ -729,8 +750,10 @@ export const bankCategorizationRuleSchema = z.object({
 
 export const eInvoiceConfigSchema = z.object({
   gstin: z.string().length(15),
-  clientId: z.string().min(1).max(200),
-  clientSecret: z.string().min(1).max(500),
+  // GSP client credentials are deployment-level; when omitted the server falls
+  // back to its configured environment values.
+  clientId: z.string().max(200).optional().or(z.literal("")),
+  clientSecret: z.string().max(500).optional().or(z.literal("")),
   username: z.string().min(1).max(100),
   password: z.string().min(1).max(200),
   isSandbox: z.boolean().default(true),

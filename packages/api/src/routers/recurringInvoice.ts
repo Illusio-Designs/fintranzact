@@ -12,6 +12,7 @@ import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { generateInvoiceFromTemplate, computeNextRunDate } from "../lib/recurring-invoice-generator.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
+import { recurringRunLimit } from "../lib/plan-limits.js";
 
 export const recurringInvoiceRouter = router({
   list: viewerProcedure
@@ -352,7 +353,9 @@ export const recurringInvoiceRouter = router({
         .from(recurringInvoiceTemplates)
         .where(eq(recurringInvoiceTemplates.businessId, ctx.businessId));
 
-      return { runsThisMonth: count, totalTemplates: templates };
+      const limit = await recurringRunLimit(ctx.tenantId);
+      // null = unlimited on this plan
+      return { runsThisMonth: count, totalTemplates: templates, limit: Number.isFinite(limit) ? limit : null };
     }),
 
   suggestions: viewerProcedure.query(async ({ ctx }) => {

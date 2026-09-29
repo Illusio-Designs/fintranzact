@@ -2,6 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { InputField } from "@/components/ui/FormField";
 import { Combobox } from "@/components/ui/Combobox";
+import { COUNTRIES } from "@/components/ui/PhoneInput";
 import { Listbox } from "@/components/ui/Listbox";
 import { Select } from "@/components/ui/Select";
 import { toast } from "@/hooks/useToast";
@@ -9,8 +10,18 @@ import { GstinInput } from "./GstinInput";
 import { PanInput } from "./PanInput";
 import { PincodeInput } from "./PincodeInput";
 import { INDIAN_STATES } from "@/lib/indian-states";
-import { LogoUploader } from "./LogoUploader";
+import { LogoUploader, type PendingImage } from "./LogoUploader";
 
+import { PhoneInput } from "@/components/ui/PhoneInput";
+import { Icon } from "@/components/ui/Icon";
+import { Logo } from "@/components/ui/Logo";
+import { cn } from "@/lib/utils";
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  InformationCircleIcon,
+  Tick02Icon,
+} from "@hugeicons/core-free-icons";
 const GST_REG_OPTIONS = [
   { value: "unregistered", label: "Not GST Registered" },
   { value: "regular", label: "GST Regular" },
@@ -132,15 +143,16 @@ export function validateBusinessStep(
           errors.gstin = "Invalid GSTIN format";
         }
       }
-      break;
 
-    case 2:
+      // PAN sits with GSTIN on this step — the GSTIN embeds it.
       if (!values.pan.trim()) {
         errors.pan = "PAN is required";
       } else if (!panPattern.test(values.pan)) {
         errors.pan = "Invalid PAN format";
       }
+      break;
 
+    case 2:
       if (
         values.tan.trim() &&
         values.responsiblePersonPan.trim() &&
@@ -148,8 +160,6 @@ export function validateBusinessStep(
       ) {
         errors.responsiblePersonPan = "Invalid PAN format";
       }
-      break;
-
       break;
 
     default:
@@ -240,6 +250,15 @@ function BusinessCard({
     </div>
   );
 }
+
+/** Short descriptions shown in the onboarding stepper, one per wizard step. */
+const WIZARD_STEP_HINTS: Array<{ sub: string; intro: string }> = [
+  { sub: "Name, contact and address", intro: "The basics that appear on your invoices." },
+  { sub: "GSTIN and filing", intro: "Add your GST registration and how you file returns." },
+  { sub: "TAN and TDS", intro: "TAN and TDS details if you deduct tax at source." },
+  { sub: "Prefixes, logo and signature", intro: "How your documents are numbered and branded. You can change all of it later." },
+  { sub: "Check and confirm", intro: "Make sure everything looks right before we create your business." },
+];
 
 export function BusinessForm({
   existing,
@@ -353,6 +372,20 @@ export function BusinessForm({
     existing?.eWayBillEnabled ?? false,
   );
 
+  // Compliance portal logins. Stored in e_invoice_configs / eway_bill_configs,
+  // never sent back to the client, so these always start blank — leaving them
+  // blank on an edit keeps whatever is already saved.
+  // Logo and signature picked during creation. There is no business id to
+  // upload against yet, so they ride along in state and get sent the moment
+  // the create mutation returns one.
+  const [pendingLogo, setPendingLogo] = useState<PendingImage | null>(null);
+  const [pendingSignature, setPendingSignature] = useState<PendingImage | null>(null);
+
+  const [eInvoiceUsername, setEInvoiceUsername] = useState("");
+  const [eInvoicePassword, setEInvoicePassword] = useState("");
+  const [eWayBillUsername, setEWayBillUsername] = useState("");
+  const [eWayBillPassword, setEWayBillPassword] = useState("");
+
   const [assesseeOfOtherTerritory, setAssesseeOfOtherTerritory] =
     useState(existing?.assesseeOfOtherTerritory ?? false);
 
@@ -381,6 +414,8 @@ export function BusinessForm({
   const hasTan = tan.trim() !== "";
 
   const [currentStep, setCurrentStep] = useState(0);
+  // Furthest step reached, so finished steps can be revisited from the step list.
+  const [maxStep, setMaxStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const utils = trpc.useUtils();
@@ -390,15 +425,40 @@ export function BusinessForm({
     label: s.name,
   }));
 
+  const countryOptions = COUNTRIES.map((c) => ({
+    value: c.name,
+    label: c.name,
+  }));
+
   const wizardSteps = [
     "Business details",
     "GST details",
     "Corporate Tax details",
+    "Documents & branding",
     "Review & create",
   ];
 
+  const uploadLogoMutation = trpc.business.uploadLogo.useMutation();
+  const uploadSignatureMutation = trpc.business.uploadSignature.useMutation();
+
   const createMutation = trpc.business.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async (biz) => {
+      // Branding images were picked before the row existed; send them now.
+      // Failures here must not undo a successful creation, so they only warn.
+      try {
+        if (pendingLogo) {
+          await uploadLogoMutation.mutateAsync({ id: biz.id, data: pendingLogo });
+        }
+        if (pendingSignature) {
+          await uploadSignatureMutation.mutateAsync({ id: biz.id, data: pendingSignature });
+        }
+      } catch (err) {
+        toast.error(
+          "Business created, but the logo or signature did not upload",
+          err instanceof Error ? err.message : "Add it later from Settings.",
+        );
+      }
+
       toast.success("Business created successfully");
       utils.business.list.invalidate();
       onDone(name);
@@ -429,6 +489,120 @@ export function BusinessForm({
   ].includes(businessType);
 
   const isLlp = businessType === "llp";
+
+  // Document defaults (prefixes, round-off, standard T&C). During onboarding
+  // these get their own step just before the review. In edit mode the wizard
+  // never advances past step 0, so they render there instead.
+  const documentDefaultsSection = (
+    <>
+      <div>
+        <h3 className="text-sm font-semibold text-text-primary">
+          Document defaults
+        </h3>
+
+        <p className="text-xs text-text-tertiary mt-1 mb-4">
+          These prefixes are used as defaults when creating documents.
+        </p>
+
+        <div className="grid grid-cols-2 gap-4">
+          <InputField
+            label="Invoice Prefix"
+            value={invoicePrefix}
+            onChange={(e) => setInvoicePrefix(e.target.value)}
+          />
+
+          <InputField
+            label="Payment Prefix"
+            value={paymentPrefix}
+            onChange={(e) => setPaymentPrefix(e.target.value)}
+          />
+
+          <InputField
+            label="Quotation Prefix"
+            value={quotationPrefix}
+            onChange={(e) => setQuotationPrefix(e.target.value)}
+          />
+
+          <InputField
+            label="Credit Note Prefix"
+            value={creditNotePrefix}
+            onChange={(e) => setCreditNotePrefix(e.target.value)}
+          />
+
+          <InputField
+            label="Delivery Challan Prefix"
+            value={deliveryChallanPrefix}
+            onChange={(e) =>
+              setDeliveryChallanPrefix(e.target.value)
+            }
+          />
+
+          <InputField
+            label="Proforma Invoice Prefix"
+            value={proformaPrefix}
+            onChange={(e) => setProformaPrefix(e.target.value)}
+          />
+
+          <InputField
+            label="Debit Note Prefix"
+            value={debitNotePrefix}
+            onChange={(e) => setDebitNotePrefix(e.target.value)}
+          />
+
+          <InputField
+            label="Sales Return Prefix"
+            value={salesReturnPrefix}
+            onChange={(e) => setSalesReturnPrefix(e.target.value)}
+          />
+
+          <InputField
+            label="Purchase Return Prefix"
+            value={purchaseReturnPrefix}
+            onChange={(e) => setPurchaseReturnPrefix(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border-light p-4">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={defaultRoundOff}
+            onChange={(e) => setDefaultRoundOff(e.target.checked)}
+            className="switch"
+          />
+
+          <div>
+            <p className="text-sm font-medium text-text-primary">
+              Enable default round-off
+            </p>
+
+            <p className="text-xs text-text-tertiary">
+              Apply round-off by default on supported documents.
+            </p>
+          </div>
+        </label>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-text-secondary mb-2">
+          Default Terms & Conditions
+        </label>
+
+        <textarea
+          value={defaultTermsAndConditions}
+          onChange={(e) =>
+            setDefaultTermsAndConditions(e.target.value)
+          }
+          rows={4}
+          maxLength={2000}
+          className="input w-full resize-y"
+          placeholder="Enter default terms and conditions..."
+        />
+      </div>
+    </>
+  );
 
   const stepContent = (() => {
     switch (currentStep) {
@@ -470,10 +644,10 @@ export function BusinessForm({
                 options={BUSINESS_TYPE_OPTIONS}
               />
 
-              <InputField
+              <PhoneInput
                 label="Phone"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={setPhone}
                 required
                 error={errors.phone}
               />
@@ -515,15 +689,10 @@ export function BusinessForm({
                 onChange={(e) => setLandmark(e.target.value)}
               />
 
-              <InputField
-                label="Country of Operations"
-                value={countryOfOperations}
-                onChange={(e) => setCountryOfOperations(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
+              {/* Pincode pairs with Landmark to close out the address block.
+                  Entering it looks up and fills City, State and Country on the
+                  row below, so those are usually confirmations rather than
+                  data entry. All of them stay editable. */}
               <PincodeInput
                 value={pincode}
                 onChange={setPincode}
@@ -532,10 +701,16 @@ export function BusinessForm({
                 onCityStateResolved={(resolvedCity, resolvedState) => {
                   if (!city.trim()) setCity(resolvedCity);
                   if (!stateName.trim()) setStateName(resolvedState);
+                  // A resolved Indian PIN implies the country too.
+                  if (!countryOfOperations.trim()) {
+                    setCountryOfOperations("India");
+                  }
                 }}
                 error={errors.pincode}
               />
+            </div>
 
+            <div className="grid grid-cols-3 gap-4">
               <InputField
                 label="City"
                 value={city}
@@ -552,6 +727,15 @@ export function BusinessForm({
                 placeholder="Select state..."
                 required
                 error={errors.stateName}
+              />
+
+              <Combobox
+                label="Country"
+                value={countryOfOperations}
+                onChange={setCountryOfOperations}
+                options={countryOptions}
+                placeholder="Select country..."
+                required
               />
             </div>
 
@@ -574,112 +758,7 @@ export function BusinessForm({
               />
             </div>
 
-            <div>
-              <h3 className="text-sm font-semibold text-text-primary">
-                Document defaults
-              </h3>
-
-              <p className="text-xs text-text-tertiary mt-1 mb-4">
-                These prefixes are used as defaults when creating documents.
-              </p>
-
-              <div className="grid grid-cols-2 gap-4">
-                <InputField
-                  label="Invoice Prefix"
-                  value={invoicePrefix}
-                  onChange={(e) => setInvoicePrefix(e.target.value)}
-                />
-
-                <InputField
-                  label="Payment Prefix"
-                  value={paymentPrefix}
-                  onChange={(e) => setPaymentPrefix(e.target.value)}
-                />
-
-                <InputField
-                  label="Quotation Prefix"
-                  value={quotationPrefix}
-                  onChange={(e) => setQuotationPrefix(e.target.value)}
-                />
-
-                <InputField
-                  label="Credit Note Prefix"
-                  value={creditNotePrefix}
-                  onChange={(e) => setCreditNotePrefix(e.target.value)}
-                />
-
-                <InputField
-                  label="Delivery Challan Prefix"
-                  value={deliveryChallanPrefix}
-                  onChange={(e) =>
-                    setDeliveryChallanPrefix(e.target.value)
-                  }
-                />
-
-                <InputField
-                  label="Proforma Invoice Prefix"
-                  value={proformaPrefix}
-                  onChange={(e) => setProformaPrefix(e.target.value)}
-                />
-
-                <InputField
-                  label="Debit Note Prefix"
-                  value={debitNotePrefix}
-                  onChange={(e) => setDebitNotePrefix(e.target.value)}
-                />
-
-                <InputField
-                  label="Sales Return Prefix"
-                  value={salesReturnPrefix}
-                  onChange={(e) => setSalesReturnPrefix(e.target.value)}
-                />
-
-                <InputField
-                  label="Purchase Return Prefix"
-                  value={purchaseReturnPrefix}
-                  onChange={(e) => setPurchaseReturnPrefix(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border-light p-4">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  role="switch"
-                  checked={defaultRoundOff}
-                  onChange={(e) => setDefaultRoundOff(e.target.checked)}
-                  className="switch"
-                />
-
-                <div>
-                  <p className="text-sm font-medium text-text-primary">
-                    Enable default round-off
-                  </p>
-
-                  <p className="text-xs text-text-tertiary">
-                    Apply round-off by default on supported documents.
-                  </p>
-                </div>
-              </label>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-2">
-                Default Terms & Conditions
-              </label>
-
-              <textarea
-                value={defaultTermsAndConditions}
-                onChange={(e) =>
-                  setDefaultTermsAndConditions(e.target.value)
-                }
-                rows={4}
-                maxLength={2000}
-                className="input w-full resize-y"
-                placeholder="Enter default terms and conditions..."
-              />
-            </div>
+            {!onboardingMode && documentDefaultsSection}
           </div>
         );
 
@@ -734,6 +813,12 @@ export function BusinessForm({
                 />
               )}
 
+              <PanInput
+                value={pan}
+                onChange={setPan}
+                error={errors.pan}
+              />
+
             </div>
 
 
@@ -748,23 +833,39 @@ export function BusinessForm({
                     Assessee of Other Territory
                   </p>
                   <p className="text-xs text-text-tertiary mt-1">
-                    Specify whether the business is an assessee of another territory.
+                    For businesses operating offshore — beyond India&apos;s
+                    territorial waters, on the continental shelf or in the
+                    exclusive economic zone. Sets the GST state code to 97
+                    (Other Territory), so every supply is treated as
+                    inter-state and charged IGST.
                   </p>
                 </div>
                 <input
                   type="checkbox"
                   role="switch"
                   checked={assesseeOfOtherTerritory}
-                  onChange={(e) =>
-                    setAssesseeOfOtherTerritory(e.target.checked)
-                  }
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setAssesseeOfOtherTerritory(on);
+
+                    // The flag IS the state code: an Other Territory assessee
+                    // is registered under 97, which is what the invoice engine
+                    // compares against to pick IGST vs CGST+SGST.
+                    if (on) {
+                      setStateName("Other Territory");
+                      setStateCode("97");
+                    } else if (stateCode === "97") {
+                      setStateName("");
+                      setStateCode("");
+                    }
+                  }}
                   className="switch"
                 />
               </label>
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-text-primary">
-                  GST/VAT Return Periodicity
+                  GST Return Periodicity
                 </label>
                 <Select
                   value={gstReturnPeriodicity}
@@ -779,21 +880,6 @@ export function BusinessForm({
                   <option value="quarterly">Quarterly (QRMP)</option>
                 </Select>
               </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-text-primary">
-                  E-Way Bill Threshold (₹)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={eWayBillThreshold}
-                  onChange={(e) => setEWayBillThreshold(e.target.value)}
-                  placeholder="Optional"
-                  className="w-full rounded-xl border border-border-light bg-surface px-3 py-2 text-sm text-text-primary"
-                />
-              </div>
             </div>
 
             <div className="space-y-3">
@@ -801,12 +887,20 @@ export function BusinessForm({
                 Compliance features
               </h3>
 
-              <label className="flex items-center justify-between gap-4">
+              <label
+                className={`flex items-center justify-between rounded-xl border border-border-light p-4 ${gstRegType === "regular"
+                  ? "cursor-pointer"
+                  : "cursor-not-allowed opacity-60"
+                  }`}
+              >
                 <div>
-                  <p className="font-medium">Enable e-Invoice</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm font-medium text-text-primary">
+                    Enable e-Invoice
+                  </p>
+
+                  <p className="text-xs text-text-tertiary mt-1">
                     {gstRegType === "regular"
-                      ? "Enable e-Invoice functionality for this business."
+                      ? "Generate IRN and signed QR codes through the IRP. Mandatory above ₹5 crore annual turnover. IRP credentials are added later in Settings → e-Invoicing."
                       : "Available only when GST Registration is set to Regular."}
                   </p>
                 </div>
@@ -821,6 +915,33 @@ export function BusinessForm({
                 />
               </label>
 
+              {eInvoiceEnabled && (
+                <div className="rounded-xl border border-border-light border-t-0 rounded-t-none -mt-3 p-4 pt-5 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <InputField
+                      label="Portal ID"
+                      value={eInvoiceUsername}
+                      onChange={(e) => setEInvoiceUsername(e.target.value)}
+                      placeholder="API user ID"
+                      autoComplete="off"
+                    />
+
+                    <InputField
+                      label="Portal Password"
+                      value={eInvoicePassword}
+                      onChange={(e) => setEInvoicePassword(e.target.value)}
+                      type="password"
+                      placeholder={existing ? "Leave blank to keep current" : "API password"}
+                      autoComplete="new-password"
+                    />
+                  </div>
+
+                  <p className="text-xs text-text-tertiary">
+                    The API user you created on the e-Invoice (IRP) portal for this GSTIN. Stored encrypted; the GSP client key is configured on the server.
+                  </p>
+                </div>
+              )}
+
               <label className="flex items-center justify-between rounded-xl border border-border-light p-4 cursor-pointer">
                 <div>
                   <p className="text-sm font-medium text-text-primary">
@@ -828,7 +949,8 @@ export function BusinessForm({
                   </p>
 
                   <p className="text-xs text-text-tertiary mt-1">
-                    Enable E-Way Bill functionality for this business.
+                    Generate E-Way Bills for goods movement. Required on
+                    consignments above ₹50,000.
                   </p>
                 </div>
 
@@ -842,6 +964,54 @@ export function BusinessForm({
                   className="switch"
                 />
               </label>
+
+              {eWayBillEnabled && (
+                <div className="rounded-xl border border-border-light border-t-0 rounded-t-none -mt-3 p-4 pt-5 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <InputField
+                      label="Portal ID"
+                      value={eWayBillUsername}
+                      onChange={(e) => setEWayBillUsername(e.target.value)}
+                      placeholder="API user ID"
+                      autoComplete="off"
+                    />
+
+                    <InputField
+                      label="Portal Password"
+                      value={eWayBillPassword}
+                      onChange={(e) => setEWayBillPassword(e.target.value)}
+                      type="password"
+                      placeholder={existing ? "Leave blank to keep current" : "API password"}
+                      autoComplete="new-password"
+                    />
+                  </div>
+
+                  <p className="text-xs text-text-tertiary">
+                    The API user you created on the NIC E-Way Bill portal for
+                    this GSTIN. Stored encrypted; the GSP client key is
+                    configured on the server.
+                  </p>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-text-primary">
+                      E-Way Bill Threshold (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={eWayBillThreshold}
+                      onChange={(e) => setEWayBillThreshold(e.target.value)}
+                      placeholder="50000"
+                      className="w-full rounded-xl border border-border-light bg-surface px-3 py-2 text-sm text-text-primary"
+                    />
+                    <p className="text-xs text-text-tertiary">
+                      Consignment value at which an E-Way Bill becomes
+                      required. Leave blank to use the statutory ₹50,000.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -858,7 +1028,7 @@ export function BusinessForm({
                 Corporate Tax Details
               </h3>
               <p className="text-xs text-text-tertiary mt-1">
-                Add PAN, tax deduction and corporate registration details.
+                Add tax deduction and corporate registration details.
               </p>
             </div>
 
@@ -868,12 +1038,6 @@ export function BusinessForm({
               </h3>
 
               <div className="grid grid-cols-1 gap-4">
-                <PanInput
-                  value={pan}
-                  onChange={setPan}
-                  error={errors.pan}
-                />
-
                 <InputField
                   label="TAN"
                   value={tan}
@@ -985,7 +1149,49 @@ export function BusinessForm({
         );
 
       // ==========================================================
-      // STEP 4 — REVIEW
+      // STEP 4 — DOCUMENTS & BRANDING
+      // ==========================================================
+      case 3:
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-text-primary">
+                Documents &amp; branding
+              </h3>
+
+              <p className="text-xs text-text-tertiary mt-1">
+                How every document this business issues is numbered and
+                branded. All of it stays editable from Settings.
+              </p>
+            </div>
+
+            {documentDefaultsSection}
+
+            {/* During creation there is no business id yet, so these run in
+                deferred mode: the picked image is held here and uploaded as
+                soon as the business row exists. */}
+            <LogoUploader
+              kind="logo"
+              businessId={existing?.id}
+              logoUpdatedAt={existing?.logoUpdatedAt}
+              hasLogo={!!existing?.logoMimeType}
+              pending={pendingLogo}
+              onPendingChange={setPendingLogo}
+            />
+
+            <LogoUploader
+              kind="signature"
+              businessId={existing?.id}
+              logoUpdatedAt={existing?.signatureUpdatedAt}
+              hasLogo={!!existing?.signatureMimeType}
+              pending={pendingSignature}
+              onPendingChange={setPendingSignature}
+            />
+          </div>
+        );
+
+      // ==========================================================
+      // STEP 5 — REVIEW
       // ==========================================================
       default:
         return (
@@ -1177,7 +1383,7 @@ export function BusinessForm({
 
             <div className="rounded-xl border border-border-light bg-surface-2 p-4">
               <p className="font-medium text-text-primary mb-3">
-                Document defaults
+                Documents &amp; branding
               </p>
 
               <ul className="space-y-2">
@@ -1192,6 +1398,16 @@ export function BusinessForm({
                 <li>Purchase Return: {purchaseReturnPrefix}</li>
                 <li>
                   Round-off: {defaultRoundOff ? "Enabled" : "Disabled"}
+                </li>
+                <li>
+                  Logo:{" "}
+                  {pendingLogo || existing?.logoMimeType ? "Added" : "Not added"}
+                </li>
+                <li>
+                  Signature:{" "}
+                  {pendingSignature || existing?.signatureMimeType
+                    ? "Added"
+                    : "Not added"}
                 </li>
               </ul>
             </div>
@@ -1259,7 +1475,9 @@ export function BusinessForm({
     setErrors({});
 
     if (onboardingMode && currentStep < wizardSteps.length - 1) {
-      setCurrentStep((step) => step + 1);
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
+      setMaxStep((m) => Math.max(m, nextStep));
       return;
     }
 
@@ -1329,6 +1547,14 @@ export function BusinessForm({
 
       eInvoiceEnabled,
       eWayBillEnabled,
+
+      // Blank means "leave whatever is stored alone" — the server only writes
+      // a credential pair when both halves are present.
+      eInvoiceUsername: eInvoiceUsername.trim() || undefined,
+      eInvoicePassword: eInvoicePassword || undefined,
+      eWayBillUsername: eWayBillUsername.trim() || undefined,
+      eWayBillPassword: eWayBillPassword || undefined,
+
       assesseeOfOtherTerritory,
       gstReturnPeriodicity,
       eWayBillThreshold:
@@ -1354,6 +1580,115 @@ export function BusinessForm({
   }
 
   const isLastStep = currentStep === wizardSteps.length - 1;
+
+  if (onboardingMode && !existing) {
+    return (
+      <div className="overflow-hidden rounded-[22px] border border-border-light bg-surface-0 shadow-[0_40px_100px_-40px_rgba(15,27,61,.45)] lg:flex">
+        <aside className="flex flex-col bg-[#0f1b3d] px-7 py-8 text-white lg:w-[292px] lg:shrink-0">
+          <div className="flex items-center gap-2.5">
+            <Logo className="h-[30px] w-[30px]" />
+            <span className="font-display text-[17px] font-extrabold">Fintranzact</span>
+          </div>
+          <h2 className="mt-7 font-display text-[22px] font-extrabold leading-tight">Set up your business</h2>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-[#9fb0d6]">
+            Four quick steps. You can change any of this later in Settings.
+          </p>
+          <ol className="mt-7 flex gap-3 overflow-x-auto lg:flex-col lg:gap-0 lg:overflow-visible">
+            {wizardSteps.map((title, i) => {
+              const done = i < currentStep;
+              const current = i === currentStep;
+              const reachable = i <= maxStep;
+              return (
+                <li key={title} className="flex shrink-0 gap-3.5">
+                  <div className="flex flex-col items-center">
+                    <button
+                      type="button"
+                      disabled={!reachable || current}
+                      onClick={() => {
+                        setErrors({});
+                        setCurrentStep(i);
+                      }}
+                      aria-current={current ? "step" : undefined}
+                      aria-label={`Step ${i + 1}: ${title}${done ? " (done)" : ""}`}
+                      className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-extrabold transition",
+                        done && "border-brand-600 bg-brand-600 text-white",
+                        current && "border-brand-600 bg-white text-[#0f1b3d]",
+                        !done && !current && "border-white/25 text-[#8fa3cf]",
+                        reachable && !current && "cursor-pointer hover:border-brand-300",
+                      )}
+                    >
+                      {done ? <Icon icon={Tick02Icon} size={16} strokeWidth={2.75} /> : i + 1}
+                    </button>
+                    {i < wizardSteps.length - 1 && (
+                      <span
+                        className={cn(
+                          "hidden h-10 w-0.5 rounded-full lg:block",
+                          i < currentStep ? "bg-brand-600" : "bg-white/15",
+                        )}
+                      />
+                    )}
+                  </div>
+                  <div className="pt-1.5">
+                    <p className={cn("text-sm font-bold", done || current ? "text-white" : "text-[#8fa3cf]")}>{title}</p>
+                    <p className="mt-0.5 hidden text-xs text-[#8fa3cf] lg:block">{WIZARD_STEP_HINTS[i]?.sub}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+          <div className="mt-auto hidden gap-2.5 rounded-xl border border-white/10 bg-white/[0.06] p-3.5 text-xs leading-relaxed text-[#b9c6e4] lg:mt-10 lg:flex">
+            <Icon icon={InformationCircleIcon} size={18} className="shrink-0 text-[#a9bde6]" />
+            <span>Your details stay private and appear only on your own invoices.</span>
+          </div>
+        </aside>
+
+        <form onSubmit={handleSubmit} className="flex min-w-0 flex-1 flex-col">
+          <div className="border-b border-border-light px-6 pb-4 pt-6 md:px-8">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-600 dark:text-brand-300">
+              Step {currentStep + 1} of {wizardSteps.length}
+            </p>
+            <h3 className="mt-1.5 font-display text-[22px] font-extrabold text-[#0f1b3d] dark:text-white">
+              {wizardSteps[currentStep]}
+            </h3>
+            <p className="mt-1 text-sm text-text-tertiary">{WIZARD_STEP_HINTS[currentStep]?.intro}</p>
+          </div>
+          <div className="h-1 bg-surface-2">
+            <div
+              className="h-1 bg-brand-600 transition-[width] duration-300"
+              style={{ width: `${((currentStep + 1) / wizardSteps.length) * 100}%` }}
+            />
+          </div>
+
+          <div className="flex-1 px-6 py-6 md:px-8">{stepContent}</div>
+
+          <div className="flex items-center justify-between gap-3 border-t border-border-light px-6 py-4 md:px-8">
+            {currentStep > 0 ? (
+              <button
+                type="button"
+                className="btn-secondary h-11 px-5"
+                onClick={() => {
+                  setErrors({});
+                  setCurrentStep((step) => step - 1);
+                }}
+              >
+                <Icon icon={ArrowLeft01Icon} size={16} strokeWidth={2} />
+                Back
+              </button>
+            ) : (
+              <span className="text-[13px] text-text-tertiary">
+                Fields marked <span className="text-red-500">*</span> are required
+              </span>
+            )}
+            <button type="submit" disabled={isPending} className="btn-primary h-11 px-6">
+              {isPending ? "Saving..." : isLastStep ? "Create business" : "Continue"}
+              {!isPending && <Icon icon={ArrowRight01Icon} size={16} strokeWidth={2} />}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="card p-6">

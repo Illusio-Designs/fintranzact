@@ -7,7 +7,7 @@
 import { eq, and, sql, gte, lte } from "drizzle-orm";
 import { getTenantDb, controlDb, tenants, recurringInvoiceTemplates, recurringInvoiceRuns } from "@fintranzact/db";
 import { generateInvoiceFromTemplate } from "./recurring-invoice-generator.js";
-import { RECURRING_RUNS_PER_MONTH_FREE } from "./plan-limits.js";
+import { RECURRING_RUNS_PER_MONTH_FREE, getLimits } from "./plan-limits.js";
 
 const TICK_MS = 60_000; // 60 seconds
 const MAX_CATCHUP = 12; // Max invoices per template per tick to prevent runaway loops
@@ -23,14 +23,14 @@ async function tick() {
     } else {
       // Multi-tenant: iterate all active tenants
       const activeTenants = await controlDb
-        .select({ id: tenants.id })
+        .select({ id: tenants.id, plan: tenants.plan })
         .from(tenants)
         .where(eq(tenants.status, "active"));
 
       for (const tenant of activeTenants) {
         try {
           const db = await getTenantDb(tenant.id);
-          await processDueTemplates(db);
+          await processDueTemplates(db, getLimits(tenant.plan ?? "free").recurringRunsPerMonth);
         } catch (err) {
           console.error(`[recurring-scheduler] tenant ${tenant.id} error:`, err);
         }
@@ -41,7 +41,15 @@ async function tick() {
   }
 }
 
-export async function processDueTemplates(db: Awaited<ReturnType<typeof getTenantDb>>) {
+/**
+ * @param runsPerMonth successful runs allowed per business per calendar month
+ *   (the tenant's plan limit; Infinity = unlimited). Self-hosted installs use
+ *   the original free-plan allowance.
+ */
+export async function processDueTemplates(
+  db: Awaited<ReturnType<typeof getTenantDb>>,
+  runsPerMonth: number = RECURRING_RUNS_PER_MONTH_FREE,
+) {
   // Find active templates that are due, using FOR UPDATE SKIP LOCKED
   // to prevent duplicate processing in multi-instance deployments.
   const dueTemplates = await db.transaction(async (tx) => {
@@ -63,25 +71,28 @@ export async function processDueTemplates(db: Awaited<ReturnType<typeof getTenan
     while (currentNextRunDate <= new Date() && catchupCount < MAX_CATCHUP) {
       try {
         // Check plan limit: count successful runs this month for this business
+        const limited = Number.isFinite(runsPerMonth);
         const monthStart = new Date();
         monthStart.setDate(1);
         monthStart.setHours(0, 0, 0, 0);
 
-        const [{ count }] = await db.select({ count: sql<number>`count(*)::int` })
-          .from(recurringInvoiceRuns)
-          .where(and(
-            eq(recurringInvoiceRuns.businessId, tpl.businessId),
-            eq(recurringInvoiceRuns.status, "success"),
-            gte(recurringInvoiceRuns.executedAt, monthStart),
-          ));
+        const [{ count }] = limited
+          ? await db.select({ count: sql<number>`count(*)::int` })
+            .from(recurringInvoiceRuns)
+            .where(and(
+              eq(recurringInvoiceRuns.businessId, tpl.businessId),
+              eq(recurringInvoiceRuns.status, "success"),
+              gte(recurringInvoiceRuns.executedAt, monthStart),
+            ))
+          : [{ count: 0 }];
 
-        if (count >= RECURRING_RUNS_PER_MONTH_FREE) {
+        if (limited && count >= runsPerMonth) {
           // Record skipped run
           await db.insert(recurringInvoiceRuns).values({
             templateId: tpl.id,
             businessId: tpl.businessId,
             status: "skipped_limit",
-            errorMessage: `Monthly limit of ${RECURRING_RUNS_PER_MONTH_FREE} runs reached`,
+            errorMessage: `Monthly limit of ${runsPerMonth} runs reached`,
           });
           // Still advance nextRunDate so we don't retry every tick
           const { computeNextRunDate } = await import("./recurring-invoice-generator.js");

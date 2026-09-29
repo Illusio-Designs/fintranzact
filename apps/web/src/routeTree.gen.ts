@@ -16,6 +16,7 @@ import { Route as ShipmentsRouteImport } from './routes/shipments'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SalesReturnsRouteImport } from './routes/sales-returns'
 import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as RefundPolicyRouteImport } from './routes/refund-policy'
 import { Route as QuotationsRouteImport } from './routes/quotations'
 import { Route as ProformaInvoicesRouteImport } from './routes/proforma-invoices'
@@ -23,6 +24,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PosRouteImport } from './routes/pos'
 import { Route as PaymentsRouteImport } from './routes/payments'
+import { Route as PartnersRouteImport } from './routes/partners'
 import { Route as PartiesRouteImport } from './routes/parties'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
@@ -85,6 +87,11 @@ const ReportsRoute = ReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RefundPolicyRoute = RefundPolicyRouteImport.update({
   id: '/refund-policy',
   path: '/refund-policy',
@@ -118,6 +125,11 @@ const PosRoute = PosRouteImport.update({
 const PaymentsRoute = PaymentsRouteImport.update({
   id: '/payments',
   path: '/payments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnersRoute = PartnersRouteImport.update({
+  id: '/partners',
+  path: '/partners',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PartiesRoute = PartiesRouteImport.update({
@@ -273,6 +285,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/pos': typeof PosRoute
   '/pricing': typeof PricingRoute
@@ -280,6 +293,7 @@ export interface FileRoutesByFullPath {
   '/proforma-invoices': typeof ProformaInvoicesRoute
   '/quotations': typeof QuotationsRoute
   '/refund-policy': typeof RefundPolicyRoute
+  '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
   '/sales-returns': typeof SalesReturnsRoute
   '/settings': typeof SettingsRoute
@@ -315,6 +329,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/pos': typeof PosRoute
   '/pricing': typeof PricingRoute
@@ -322,6 +337,7 @@ export interface FileRoutesByTo {
   '/proforma-invoices': typeof ProformaInvoicesRoute
   '/quotations': typeof QuotationsRoute
   '/refund-policy': typeof RefundPolicyRoute
+  '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
   '/sales-returns': typeof SalesReturnsRoute
   '/settings': typeof SettingsRoute
@@ -358,6 +374,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/pos': typeof PosRoute
   '/pricing': typeof PricingRoute
@@ -365,6 +382,7 @@ export interface FileRoutesById {
   '/proforma-invoices': typeof ProformaInvoicesRoute
   '/quotations': typeof QuotationsRoute
   '/refund-policy': typeof RefundPolicyRoute
+  '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
   '/sales-returns': typeof SalesReturnsRoute
   '/settings': typeof SettingsRoute
@@ -402,6 +420,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
+    | '/partners'
     | '/payments'
     | '/pos'
     | '/pricing'
@@ -409,6 +428,7 @@ export interface FileRouteTypes {
     | '/proforma-invoices'
     | '/quotations'
     | '/refund-policy'
+    | '/register'
     | '/reports'
     | '/sales-returns'
     | '/settings'
@@ -444,6 +464,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
+    | '/partners'
     | '/payments'
     | '/pos'
     | '/pricing'
@@ -451,6 +472,7 @@ export interface FileRouteTypes {
     | '/proforma-invoices'
     | '/quotations'
     | '/refund-policy'
+    | '/register'
     | '/reports'
     | '/sales-returns'
     | '/settings'
@@ -486,6 +508,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
+    | '/partners'
     | '/payments'
     | '/pos'
     | '/pricing'
@@ -493,6 +516,7 @@ export interface FileRouteTypes {
     | '/proforma-invoices'
     | '/quotations'
     | '/refund-policy'
+    | '/register'
     | '/reports'
     | '/sales-returns'
     | '/settings'
@@ -529,6 +553,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
   PartiesRoute: typeof PartiesRoute
+  PartnersRoute: typeof PartnersRoute
   PaymentsRoute: typeof PaymentsRoute
   PosRoute: typeof PosRoute
   PricingRoute: typeof PricingRoute
@@ -536,6 +561,7 @@ export interface RootRouteChildren {
   ProformaInvoicesRoute: typeof ProformaInvoicesRoute
   QuotationsRoute: typeof QuotationsRoute
   RefundPolicyRoute: typeof RefundPolicyRoute
+  RegisterRoute: typeof RegisterRoute
   ReportsRoute: typeof ReportsRoute
   SalesReturnsRoute: typeof SalesReturnsRoute
   SettingsRoute: typeof SettingsRoute
@@ -601,6 +627,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/refund-policy': {
       id: '/refund-policy'
       path: '/refund-policy'
@@ -648,6 +681,13 @@ declare module '@tanstack/react-router' {
       path: '/payments'
       fullPath: '/payments'
       preLoaderRoute: typeof PaymentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partners': {
+      id: '/partners'
+      path: '/partners'
+      fullPath: '/partners'
+      preLoaderRoute: typeof PartnersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/parties': {
@@ -857,6 +897,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
   PartiesRoute: PartiesRoute,
+  PartnersRoute: PartnersRoute,
   PaymentsRoute: PaymentsRoute,
   PosRoute: PosRoute,
   PricingRoute: PricingRoute,
@@ -864,6 +905,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProformaInvoicesRoute: ProformaInvoicesRoute,
   QuotationsRoute: QuotationsRoute,
   RefundPolicyRoute: RefundPolicyRoute,
+  RegisterRoute: RegisterRoute,
   ReportsRoute: ReportsRoute,
   SalesReturnsRoute: SalesReturnsRoute,
   SettingsRoute: SettingsRoute,

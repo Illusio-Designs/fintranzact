@@ -28,8 +28,8 @@ function decryptNullable(value: string | null | undefined): string | null {
 // ── E-Invoice Config ────────────────────────────────────────────────────────
 
 export interface EInvoiceConfigSensitiveFields {
-  clientId: string;
-  clientSecret: string;
+  clientId: string | null;
+  clientSecret: string | null;
   username: string;
   password: string;
   authToken?: string | null;
@@ -44,8 +44,8 @@ export function encryptEInvoiceConfig<T extends EInvoiceConfigSensitiveFields>(
 ): T {
   return {
     ...config,
-    clientId: encryptField(config.clientId),
-    clientSecret: encryptField(config.clientSecret),
+    clientId: encryptNullable(config.clientId),
+    clientSecret: encryptNullable(config.clientSecret),
     username: encryptField(config.username),
     password: encryptField(config.password),
     authToken: encryptNullable(config.authToken),
@@ -60,12 +60,35 @@ export function decryptEInvoiceConfig<T extends EInvoiceConfigSensitiveFields>(
 ): T {
   return {
     ...config,
-    clientId: decryptField(config.clientId),
-    clientSecret: decryptField(config.clientSecret),
+    clientId: decryptNullable(config.clientId),
+    clientSecret: decryptNullable(config.clientSecret),
     username: decryptField(config.username),
     password: decryptField(config.password),
     authToken: decryptNullable(config.authToken),
   };
+}
+
+// ── E-Way Bill Config ───────────────────────────────────────────────────────
+
+/**
+ * NIC E-Way Bill credentials have the same shape as the IRP ones: per-business
+ * taxpayer username/password, with optional deployment-level GSP client
+ * credentials that fall back to environment variables when null.
+ */
+export type EwbConfigSensitiveFields = EInvoiceConfigSensitiveFields;
+
+/** Encrypt sensitive NIC EWB credential fields before writing to DB. */
+export function encryptEwbConfig<T extends EwbConfigSensitiveFields>(
+  config: T,
+): T {
+  return encryptEInvoiceConfig(config);
+}
+
+/** Decrypt sensitive NIC EWB credential fields after reading from DB. */
+export function decryptEwbConfig<T extends EwbConfigSensitiveFields>(
+  config: T,
+): T {
+  return decryptEInvoiceConfig(config);
 }
 
 // ── Carrier Credentials ─────────────────────────────────────────────────────
