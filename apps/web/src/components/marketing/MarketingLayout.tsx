@@ -13,23 +13,7 @@ import { CONTACT_EMAIL, DOCS_URL, SiteHeader } from "./SiteHeader";
 
 export { CONTACT_EMAIL, DOCS_URL, SECURITY_EMAIL } from "./SiteHeader";
 
-/** Paths served by the marketing layout instead of the app shell. */
-export const MARKETING_PATHS = [
-  "/features",
-  "/pricing",
-  "/about",
-  "/contact",
-  "/partners",
-  "/privacy",
-  "/terms",
-  "/refund-policy",
-  "/widgets",
-];
-
-export function isMarketingPath(pathname: string) {
-  const path = pathname.replace(/\/+$/, "") || "/";
-  return MARKETING_PATHS.includes(path);
-}
+export { MARKETING_PATHS, isMarketingPath } from "@/lib/public-paths";
 
 const FOOTER_COLUMNS: Array<{
   title: string;

@@ -41,6 +41,16 @@ async function getTenantPlan(tenantId: string): Promise<string> {
 }
 
 /**
+ * Recurring-invoice runs a tenant may make per month, per business. Hosted
+ * (multi-tenant) deployments use the organization's plan; a self-hosted
+ * single-tenant install keeps the original free-plan allowance.
+ */
+export async function recurringRunLimit(tenantId: string | null): Promise<number> {
+  if (!tenantId || process.env.MULTI_TENANT !== "true") return RECURRING_RUNS_PER_MONTH_FREE;
+  return getLimits(await getTenantPlan(tenantId)).recurringRunsPerMonth;
+}
+
+/**
  * A user's effective plan is the best plan across the orgs they own, or null
  * when they own none. It starts from the plans actually owned (not an assumed
  * default), so owning only legacy "free" orgs keeps the free limits.

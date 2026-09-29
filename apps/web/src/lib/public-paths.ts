@@ -1,0 +1,35 @@
+/**
+ * Which paths are public. Kept free of UI imports so low-level modules (the
+ * tRPC client) can use it without pulling in the marketing components.
+ */
+
+/** Paths served by the marketing layout instead of the app shell. */
+export const MARKETING_PATHS = [
+  "/features",
+  "/pricing",
+  "/about",
+  "/contact",
+  "/partners",
+  "/privacy",
+  "/terms",
+  "/refund-policy",
+  "/widgets",
+];
+
+/** Sign-in and invite pages a signed-out visitor may open. */
+export const AUTH_PUBLIC_PATHS = [
+  "/login",
+  "/auth/verify",
+  "/auth/complete-profile",
+  "/auth/verify-email-change",
+  "/invite",
+];
+
+export function isMarketingPath(pathname: string) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return MARKETING_PATHS.includes(path);
+}
+
+export function isAuthPublicPath(pathname: string) {
+  return AUTH_PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+}
