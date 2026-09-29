@@ -21,7 +21,6 @@ import {
   Add01Icon,
   Alert02Icon,
   BankIcon,
-  ChartLineData01Icon,
   CreditCardIcon,
   DashboardSquare01Icon,
   DeliveryTruck01Icon,
@@ -49,6 +48,13 @@ import {
   Location01Icon,
   Call02Icon,
   PlusSignIcon,
+  BookOpen01Icon,
+  QrCodeIcon,
+  Route01Icon,
+  DocumentValidationIcon,
+  Analytics01Icon,
+  Coins01Icon,
+  CheckListIcon,
 } from "@hugeicons/core-free-icons";
 import { getRegisteredHotkeys } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
@@ -127,6 +133,12 @@ const ROLE_ABILITIES: Record<string, Set<string>> = {
     "Report:read",
     "GstReport:read",
     "Business:read",
+    // Mirrors the API: accountants manage the books and read compliance docs
+    "Account:read",
+    "BankReconciliation:read",
+    "ITC:read",
+    "EInvoice:read",
+    "EWayBill:read",
   ]),
 };
 
@@ -147,6 +159,11 @@ const NAV_SECTIONS_KEY = "fintranzact:nav-sections";
 
 // ── Sidebar nav structure ──────────────────────────────────────
 
+/**
+ * Sidebar menu, grouped the way accountants think about their books
+ * (Tally-style): masters under Accounts and Inventory, every transaction
+ * under Vouchers, and read-outs under Reports.
+ */
 const navSections = [
   {
     label: "OVERVIEW",
@@ -162,7 +179,52 @@ const navSections = [
     ],
   },
   {
-    label: "SALES",
+    label: "ACCOUNTS",
+    items: [
+      {
+        to: "/parties",
+        label: "Parties",
+        icon: UserIcon,
+        resource: "Party",
+        action: "read",
+      },
+      {
+        to: "/cash-and-bank",
+        label: "Cash & Bank",
+        icon: BankIcon,
+        resource: "BankAccount",
+        action: "read",
+      },
+      {
+        to: "/bank-reconciliation",
+        label: "Bank Reconciliation",
+        icon: CheckListIcon,
+        resource: "BankReconciliation",
+        action: "read",
+      },
+    ],
+  },
+  {
+    label: "INVENTORY",
+    items: [
+      {
+        to: "/items",
+        label: "Items",
+        icon: PackageIcon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/shipments",
+        label: "Shipments",
+        icon: ShippingTruck01Icon,
+        resource: "Invoice",
+        action: "read",
+      },
+    ],
+  },
+  {
+    label: "VOUCHERS",
     items: [
       {
         to: "/invoices",
@@ -175,6 +237,20 @@ const navSections = [
         to: "/quotations",
         label: "Quotations",
         icon: FileEditIcon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/proforma-invoices",
+        label: "Proforma Invoices",
+        icon: FileValidationIcon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/delivery-challans",
+        label: "Delivery Challans",
+        icon: DeliveryTruck01Icon,
         resource: "Invoice",
         action: "read",
       },
@@ -193,17 +269,24 @@ const navSections = [
         action: "read",
       },
       {
-        to: "/delivery-challans",
-        label: "Delivery Challans",
-        icon: DeliveryTruck01Icon,
-        resource: "Invoice",
+        to: "/payments",
+        label: "Payments",
+        icon: CreditCardIcon,
+        resource: "Payment",
         action: "read",
       },
       {
-        to: "/proforma-invoices",
-        label: "Proforma Invoices",
-        icon: FileValidationIcon,
-        resource: "Invoice",
+        to: "/expenses",
+        label: "Expenses",
+        icon: ReceiptDollarIcon,
+        resource: "Expense",
+        action: "read",
+      },
+      {
+        to: "/journal-entries",
+        label: "Journal Entries",
+        icon: BookOpen01Icon,
+        resource: "Account",
         action: "read",
       },
       {
@@ -223,65 +306,15 @@ const navSections = [
     ],
   },
   {
-    label: "CONTACTS",
+    label: "REPORTS",
     items: [
       {
-        to: "/parties",
-        label: "Parties",
-        icon: UserIcon,
-        resource: "Party",
+        to: "/reports",
+        label: "Reports",
+        icon: Analytics01Icon,
+        resource: "Report",
         action: "read",
       },
-    ],
-  },
-  {
-    label: "INVENTORY",
-    items: [
-      {
-        to: "/items",
-        label: "Items",
-        icon: PackageIcon,
-        resource: "Item",
-        action: "read",
-      },
-    ],
-  },
-  {
-    label: "MONEY",
-    items: [
-      {
-        to: "/payments",
-        label: "Payments",
-        icon: CreditCardIcon,
-        resource: "Payment",
-        action: "read",
-      },
-      {
-        to: "/cash-and-bank",
-        label: "Cash & Bank",
-        icon: BankIcon,
-        resource: "BankAccount",
-        action: "read",
-      },
-      {
-        to: "/expenses",
-        label: "Expenses",
-        icon: ReceiptDollarIcon,
-        resource: "Expense",
-        action: "read",
-      },
-      {
-        to: "/shipments",
-        label: "Shipments",
-        icon: ShippingTruck01Icon,
-        resource: "Invoice",
-        action: "read",
-      },
-    ],
-  },
-  {
-    label: "COMPLIANCE",
-    items: [
       {
         to: "/gst",
         label: "__REPORTS__",
@@ -292,7 +325,7 @@ const navSections = [
       {
         to: "/gstr2b",
         label: "GSTR-2B Recon",
-        icon: ChartLineData01Icon,
+        icon: DocumentValidationIcon,
         resource: "GstReport",
         action: "read",
         gstOnly: true,
@@ -300,25 +333,26 @@ const navSections = [
       {
         to: "/itc",
         label: "Input Tax Credit",
-        icon: ChartLineData01Icon,
+        icon: Coins01Icon,
         resource: "ITC",
+        action: "read",
+        gstOnly: true,
+      },
+      {
+        to: "/e-invoicing",
+        label: "e-Invoicing",
+        icon: QrCodeIcon,
+        resource: "EInvoice",
         action: "read",
         gstOnly: true,
       },
       {
         to: "/eway-bills",
         label: "E-Way Bills",
-        icon: ChartLineData01Icon,
+        icon: Route01Icon,
         resource: "EWayBill",
         action: "read",
         gstOnly: true,
-      },
-      {
-        to: "/reports",
-        label: "Reports",
-        icon: ChartLineData01Icon,
-        resource: "Report",
-        action: "read",
       },
     ],
   },
@@ -1433,10 +1467,7 @@ function RootLayout() {
                     return item;
                   });
                 if (visibleItems.length === 0) return null;
-                const sectionLabel =
-                  section.label === "COMPLIANCE" && !isGstRegistered
-                    ? "REPORTS"
-                    : section.label;
+                const sectionLabel = section.label;
                 // Collapsed, the rail is too narrow for a text heading, so
                 // groups read as a hairline rule instead of disappearing.
                 const base = cn(
