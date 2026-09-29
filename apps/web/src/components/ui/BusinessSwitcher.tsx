@@ -8,6 +8,11 @@ interface BusinessSwitcherProps {
   activeBusinessId: string;
   onSwitch: (id: string) => void;
   onCreateNew?: () => void;
+  /** "sidebar": a card on the navy sidebar, with a second line (e.g. GSTIN). */
+  variant?: "default" | "sidebar";
+  subtitle?: string;
+  /** Sidebar collapsed to an icon rail: show only the initial tile. */
+  collapsed?: boolean;
 }
 
 export function BusinessSwitcher({
@@ -15,7 +20,11 @@ export function BusinessSwitcher({
   activeBusinessId,
   onSwitch,
   onCreateNew,
+  variant = "default",
+  subtitle,
+  collapsed = false,
 }: BusinessSwitcherProps) {
+  const sidebar = variant === "sidebar";
   const [open, setOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
@@ -106,7 +115,7 @@ export function BusinessSwitcher({
   const activeInitial = activeBusiness.name.charAt(0).toUpperCase();
 
   return (
-    <div ref={containerRef} className="relative shrink-0">
+    <div ref={containerRef} className={cn("relative shrink-0", sidebar && "w-full")}>
       {/* Trigger */}
       <button
         ref={triggerRef}
@@ -115,20 +124,53 @@ export function BusinessSwitcher({
         aria-expanded={open}
         onClick={toggle}
         onKeyDown={handleKeyDown}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-text-secondary hover:bg-surface-1 hover:text-text-primary transition-colors cursor-pointer select-none"
+        aria-label={`Business: ${activeBusiness.name}. Switch business`}
+        className={cn(
+          "w-full flex items-center gap-2.5 transition-colors cursor-pointer select-none",
+          sidebar
+            ? cn(
+                "rounded-xl text-white",
+                collapsed
+                  ? "justify-center p-0 hover:opacity-90"
+                  : "border border-white/10 bg-white/[.05] px-2.5 py-2 hover:bg-white/10",
+              )
+            : "px-3 py-2 rounded-lg text-text-secondary hover:bg-surface-1 hover:text-text-primary",
+        )}
       >
         {/* Avatar */}
-        <span className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center text-xs font-semibold shrink-0">
-          {activeInitial}
+        <span
+          className={cn(
+            "rounded-lg bg-brand-600 text-white flex items-center justify-center font-semibold shrink-0",
+            sidebar ? "w-8 h-8 text-[13px] font-extrabold rounded-[9px]" : "w-7 h-7 text-xs",
+          )}
+        >
+          {sidebar ? businessInitials(activeBusiness.name) : activeInitial}
         </span>
 
         {/* Business name */}
-        <span className="flex-1 min-w-0 text-left text-[13px] font-medium text-text-primary truncate">
-          {activeBusiness.name}
-        </span>
+        {!(sidebar && collapsed) && (
+          <span className="flex-1 min-w-0 text-left">
+            <span
+              className={cn(
+                "block truncate text-[13px]",
+                sidebar ? "font-bold text-white" : "font-medium text-text-primary",
+              )}
+            >
+              {activeBusiness.name}
+            </span>
+            {sidebar && subtitle && (
+              <span className="block truncate text-[11px] text-[#9fb0d6]">{subtitle}</span>
+            )}
+          </span>
+        )}
 
         {/* Chevron up-down */}
-        <ChevronUpDownIcon />
+        {!(sidebar && collapsed) &&
+          (sidebar ? (
+            <Icon icon={UnfoldMoreIcon} size={14} className="shrink-0 text-[#9fb0d6]" />
+          ) : (
+            <ChevronUpDownIcon />
+          ))}
       </button>
 
       {/* Popover — opens downward */}
@@ -136,7 +178,10 @@ export function BusinessSwitcher({
         <div
           ref={menuRef}
           role="menu"
-          className="absolute right-0 top-full mt-1 z-50 min-w-[220px] rounded-lg border border-border-light bg-surface-0 shadow-dropdown animate-scale-in overflow-hidden"
+          className={cn(
+            "absolute top-full mt-1 z-50 min-w-[220px] rounded-lg border border-border-light bg-surface-0 shadow-dropdown animate-scale-in overflow-hidden",
+            sidebar ? (collapsed ? "left-0 w-60" : "left-0 right-0") : "right-0",
+          )}
         >
           {/* Business list */}
           <div className="max-h-48 overflow-y-auto py-1">
@@ -213,6 +258,18 @@ export function BusinessSwitcher({
         </div>
       )}
     </div>
+  );
+}
+
+function businessInitials(name: string) {
+  return (
+    name
+      .split(/\s+/)
+      .filter((w) => /[A-Za-z0-9]/.test(w[0] ?? ""))
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase() || name.charAt(0).toUpperCase()
   );
 }
 

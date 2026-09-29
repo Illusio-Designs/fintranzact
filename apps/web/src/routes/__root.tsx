@@ -45,10 +45,15 @@ import {
   UnfoldMoreIcon,
   UserIcon,
   Search01Icon,
+  File01Icon,
+  Location01Icon,
+  Call02Icon,
+  PlusSignIcon,
 } from "@hugeicons/core-free-icons";
 import { getRegisteredHotkeys } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
+import { NotificationsBell } from "@/components/NotificationsBell";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { LandingPage } from "@/components/LandingPage";
 import { AUTH_PUBLIC_PATHS, isMarketingPath } from "@/lib/public-paths";
@@ -1207,76 +1212,47 @@ function RootLayout() {
 
   if (shouldShowBusinessPicker) {
     return (
-      <div className="min-h-screen bg-surface-1 px-4 py-10 md:px-6">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-8 flex items-center gap-3">
-            <Logo className="w-10 h-10" />
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-text-tertiary">
-                Welcome back
-              </p>
-              <h1 className="text-2xl font-semibold text-text-primary">
-                Choose a company
-              </h1>
-            </div>
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {businesses.map((business) => {
-              const initials = business.name
-                .split(" ")
-                .map((word: string) => word[0])
-                .slice(0, 2)
-                .join("")
-                .toUpperCase();
-
-              return (
-                <button
-                  key={business.id}
-                  type="button"
-                  onClick={() => {
-                    setBusinessId(business.id);
-                    setCurrentBusinessId(business.id);
-                    sessionStorage.setItem("selectedBusinessId", business.id);
-                    queryClient.invalidateQueries();
-                  }}
-                  className="group rounded-2xl border border-border-light bg-surface-0 p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md"
-                >
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-sm font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
-                        {initials}
-                      </div>
-                      <div>
-                        <p className="text-base font-semibold text-text-primary">
-                          {business.name}
-                        </p>
-                        <p className="text-xs text-text-tertiary">
-                          {business.gstRegistrationType === "unregistered"
-                            ? "Unregistered"
-                            : "GST enabled"}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="rounded-full border border-border-light bg-surface-1 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                      Open
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 text-sm text-text-secondary">
-                    <p>{business.city || "Location not set"}</p>
-                    <p>
-                      {business.phone ||
-                        business.email ||
-                        "No contact details yet"}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <BusinessPicker
+        businesses={businesses}
+        userName={session.user.name || session.user.email.split("@")[0]}
+        role={session.role ?? null}
+        tenantName={session.tenantName ?? "Organization"}
+        canSwitchTenant={(tenantList?.length ?? 0) > 1 || !!canCreateOrg}
+        onSwitchTenant={() => setShowTenantPicker(true)}
+        canCreate={!!canCreateBiz && canAccess(session.role, "Business", "manage")}
+        onCreate={() => navigate({ to: "/business/create" })}
+        onSelect={(id) => {
+          setBusinessId(id);
+          setCurrentBusinessId(id);
+          sessionStorage.setItem("selectedBusinessId", id);
+          queryClient.invalidateQueries();
+        }}
+        onSignOut={() => logoutMutation.mutate()}
+        signingOut={logoutMutation.isPending}
+        tenantPicker={
+          showTenantPicker ? (
+            <TenantPicker
+              tenants={tenantList ?? []}
+              onSelect={(tenantId) => {
+                setShowTenantPicker(false);
+                selectTenantMutation.mutate({ tenantId });
+              }}
+              onCreateNew={
+                canCreateOrg
+                  ? async () => {
+                    setShowTenantPicker(false);
+                    await createOrgMutation.mutateAsync();
+                    await utils.auth.me.refetch();
+                    await utils.tenant.list.refetch();
+                    await utils.business.list.refetch();
+                  }
+                  : undefined
+              }
+              onClose={() => setShowTenantPicker(false)}
+            />
+          ) : null
+        }
+      />
     );
   }
 
@@ -1393,6 +1369,43 @@ function RootLayout() {
                 </button>
               </Tooltip>
             </div>
+
+            {/* Business switcher — the company this workspace is showing */}
+            {businesses && businesses.length > 0 && (
+              <div className={cn("shrink-0 pb-2", navCollapsed ? "px-3 md:px-2" : "px-3")}>
+                <div className={cn(navCollapsed && "md:hidden")}>
+                  <BusinessSwitcher
+                    variant="sidebar"
+                    businesses={businesses.map((b) => ({ id: b.id, name: b.name }))}
+                    activeBusinessId={currentBusinessId ?? businesses[0].id}
+                    subtitle={
+                      activeBusiness?.gstin
+                        ? `GSTIN ${activeBusiness.gstin}`
+                        : activeBusiness?.city || "Not GST registered"
+                    }
+                    onSwitch={handleBusinessSwitch}
+                    onCreateNew={
+                      canCreateBiz && canAccess(session?.role, "Business", "manage")
+                        ? () => navigate({ to: "/business/create" })
+                        : undefined
+                    }
+                  />
+                </div>
+                {/* Collapsed rail: the tile expands the sidebar to switch */}
+                {navCollapsed && (
+                  <Tooltip label={activeBusiness?.name ?? "Business"}>
+                    <button
+                      type="button"
+                      onClick={() => setNavCollapsed(false)}
+                      className="mx-auto hidden h-9 w-9 place-items-center rounded-[9px] bg-brand-600 text-[13px] font-extrabold text-white md:grid"
+                      aria-label={`Business: ${activeBusiness?.name ?? ""}. Expand sidebar to switch`}
+                    >
+                      {(activeBusiness?.name ?? "B").charAt(0).toUpperCase()}
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+            )}
 
             {/* Nav sections */}
             <nav
@@ -1519,63 +1532,70 @@ function RootLayout() {
               })}
             </nav>
 
-            {/* Sidebar footer: org name + version */}
-            <div className="shrink-0 border-t border-white/10">
-              {hasMultipleTenants ? (
-                // Collapsed: the org name has nowhere to go, so the switcher
-                // becomes an icon button carrying the name as its tooltip.
-                <Tooltip label={tenantName} disabled={!navCollapsed}>
-                  <button
-                    type="button"
-                    onClick={() => setShowTenantPicker(true)}
-                    className={cn(
-                      "w-full py-2.5 text-left group",
-                      navCollapsed ? "px-4 md:px-0 md:flex md:justify-center" : "px-4",
-                    )}
-                    aria-label={`Switch organization — currently ${tenantName}`}
-                  >
-                    <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#c3cee6] group-hover:text-white transition-colors">
-                      <span className={cn("truncate", navCollapsed && "md:hidden")}>
+            {/* Sidebar footer: settings, then the signed-in user */}
+            <div className="shrink-0 border-t border-white/10 px-2 py-2">
+              <Tooltip label="Settings" disabled={!navCollapsed}>
+                <Link
+                  to="/settings"
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-[9px] py-2 text-[13.5px] transition-colors",
+                    navCollapsed ? "px-3 md:justify-center md:px-0" : "px-3",
+                  )}
+                  activeProps={{ className: "bg-brand-600 text-white font-semibold" }}
+                  inactiveProps={{ className: "text-[#c3cee6] hover:bg-white/[.07] hover:text-white" }}
+                >
+                  <Icon icon={Settings01Icon} size={16} className="shrink-0" />
+                  <span className={cn(navCollapsed && "md:hidden")}>Settings</span>
+                </Link>
+              </Tooltip>
+
+              <div
+                className={cn(
+                  "mt-1 flex items-center gap-2.5 rounded-[9px] px-2 py-2",
+                  navCollapsed && "md:flex-col md:px-0",
+                )}
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#243c77] text-[11px] font-bold text-white">
+                  {initials}
+                </span>
+                <div className={cn("min-w-0 flex-1", navCollapsed && "md:hidden")}>
+                  <p className="truncate text-[13px] font-semibold text-white">{displayName}</p>
+                  {hasMultipleTenants || canCreateOrg ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowTenantPicker(true)}
+                      className="flex max-w-full items-center gap-1 text-[11px] text-[#9fb0d6] hover:text-white"
+                      aria-label={`Switch organization — currently ${tenantName}`}
+                    >
+                      <span className="truncate">
+                        {session.role ? `${formatRole(session.role)} · ` : ""}
                         {tenantName}
                       </span>
-                      <Icon
-                        icon={UnfoldMoreIcon}
-                        size={navCollapsed ? 14 : 10}
-                        className="text-[#7f90b5] group-hover:text-white transition-colors shrink-0"
-                      />
-                    </p>
-                    <p
-                      className={cn(
-                        "text-[10px] text-[#7f90b5] mt-0.5 tabular-nums",
-                        navCollapsed && "md:hidden",
-                      )}
-                    >
-                      v{__APP_VERSION__}
-                    </p>
-                  </button>
-                </Tooltip>
-              ) : (
-                <Tooltip label={`${tenantName} · v${__APP_VERSION__}`} disabled={!navCollapsed}>
-                  <div
-                    className={cn(
-                      "py-2.5",
-                      navCollapsed ? "px-4 md:px-0 md:text-center" : "px-4",
-                    )}
-                  >
-                    <p
-                      className={cn(
-                        "text-[12px] font-semibold text-[#c3cee6] truncate select-none",
-                        navCollapsed && "md:hidden",
-                      )}
-                    >
+                      <Icon icon={UnfoldMoreIcon} size={11} className="shrink-0" />
+                    </button>
+                  ) : (
+                    <p className="truncate text-[11px] text-[#9fb0d6]">
+                      {session.role ? `${formatRole(session.role)} · ` : ""}
                       {tenantName}
                     </p>
-                    <p className="text-[10px] text-[#7f90b5] mt-0.5 select-none tabular-nums">
-                      v{__APP_VERSION__}
-                    </p>
-                  </div>
+                  )}
+                </div>
+                <Tooltip label="Sign out">
+                  <button
+                    type="button"
+                    onClick={() => logoutMutation.mutate()}
+                    disabled={logoutMutation.isPending}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#9fb0d6] transition-colors hover:bg-white/10 hover:text-white"
+                    aria-label="Sign out"
+                  >
+                    <Icon icon={Logout01Icon} size={15} />
+                  </button>
                 </Tooltip>
-              )}
+              </div>
+              <p className={cn("px-2 text-[10px] tabular-nums text-[#7f90b5]", navCollapsed && "md:text-center md:px-0")}>
+                v{__APP_VERSION__}
+              </p>
             </div>
           </aside>
         )}
@@ -1632,63 +1652,44 @@ function RootLayout() {
               <span className="font-mono text-xs">?</span>
             </button>
 
-            {/* Settings gear */}
-            <button
-              onClick={() => navigate({ to: "/settings" })}
-              className="flex items-center justify-center w-8 h-8 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
-              aria-label="Settings"
-              title="Settings"
-            >
-              <Icon icon={Settings01Icon} size={15} />
-            </button>
-
-            {/* Business switcher + User info — pushed to the right */}
-            <div className="ml-auto flex items-center gap-3 min-w-0">
-              {/* Business switcher */}
-              {businesses && businesses.length > 0 && (
-                <BusinessSwitcher
-                  businesses={businesses.map((b) => ({
-                    id: b.id,
-                    name: b.name,
-                  }))}
-                  activeBusinessId={currentBusinessId ?? businesses[0].id}
-                  onSwitch={handleBusinessSwitch}
-                  onCreateNew={
-                    canCreateBiz &&
-                      canAccess(session?.role, "Business", "manage")
-                      ? () => {
-                        navigate({ to: "/business/create" });
-                      }
-                      : undefined
-                  }
+            <div className="ml-auto flex items-center gap-2 sm:gap-3 min-w-0">
+              {!isOnboarding && (
+                <NotificationsBell
+                  businessId={currentBusinessId ?? businesses?.[0]?.id ?? null}
+                  canSeeInvoices={canAccess(session?.role, "Invoice", "read")}
+                  canSeeItems={canAccess(session?.role, "Item", "read")}
+                  isGstRegistered={isGstRegistered}
                 />
               )}
+              {!isOnboarding && canAccess(session?.role, "Invoice", "create") && (
+                <Link
+                  to="/invoices"
+                  search={{ create: "1" }}
+                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-3 text-sm font-bold text-white shadow-[0_8px_18px_-8px_rgba(59,94,170,.7)] transition hover:bg-brand-700 sm:px-4"
+                  aria-label="New invoice"
+                >
+                  <Icon icon={Add01Icon} size={16} strokeWidth={2.2} />
+                  <span className="hidden sm:inline">New invoice</span>
+                </Link>
+              )}
 
-              {/* Avatar + name + role */}
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center text-brand-700 dark:text-brand-300 text-[10px] font-semibold shrink-0">
-                  {initials}
-                </div>
-                <span className="hidden sm:block text-sm font-medium text-text-primary truncate max-w-[120px]">
-                  {displayName}
-                </span>
-                {session.role && (
-                  <span className="hidden sm:block shrink-0">
-                    <RoleBadge role={session.role} />
+              {/* No sidebar during onboarding, so the account controls live here */}
+              {isOnboarding && (
+                <>
+                  <span className="hidden sm:block text-sm font-medium text-text-primary truncate max-w-[160px]">
+                    {displayName}
                   </span>
-                )}
-              </div>
-
-              {/* Logout */}
-              <button
-                onClick={() => logoutMutation.mutate()}
-                disabled={logoutMutation.isPending}
-                className="flex items-center justify-center w-7 h-7 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
-                aria-label="Sign out"
-                title="Sign out"
-              >
-                <Icon icon={Logout01Icon} size={14} />
-              </button>
+                  <button
+                    onClick={() => logoutMutation.mutate()}
+                    disabled={logoutMutation.isPending}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-1 transition-colors border border-border-light shrink-0"
+                    aria-label="Sign out"
+                    title="Sign out"
+                  >
+                    <Icon icon={Logout01Icon} size={14} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -1737,30 +1738,226 @@ function RootLayout() {
   );
 }
 
-// ── Role Badge ────────────────────────────────────────────────
+// ── Business picker ───────────────────────────────────────────
 
-const roleStyles: Record<string, string> = {
-  owner: "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300",
-  admin:
-    "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  member: "bg-surface-2 text-text-secondary",
-  seller: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  accountant:
-    "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+type PickerBusiness = {
+  id: string;
+  name: string;
+  gstin?: string | null;
+  gstRegistrationType?: string | null;
+  city?: string | null;
+  state?: string | null;
+  phone?: string | null;
+  email?: string | null;
 };
 
-function RoleBadge({ role }: { role: string }) {
-  const style = roleStyles[role] ?? "bg-surface-2 text-text-secondary";
-  const label = formatRole(role);
+const REGISTRATION_LABELS: Record<string, string> = {
+  regular: "Regular taxpayer",
+  composition: "Composition scheme",
+  unregistered: "Unregistered",
+  sez: "SEZ unit",
+  casual: "Casual taxpayer",
+};
+
+const TILE_TONES = [
+  "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300",
+  "bg-orange-50 text-orange-800 dark:bg-orange-950 dark:text-orange-300",
+  "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+];
+
+function businessInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter((w) => /[A-Za-z0-9]/.test(w[0] ?? ""))
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
+
+/** Full-page "Choose a company" screen shown when no business is selected. */
+function BusinessPicker({
+  businesses,
+  userName,
+  role,
+  tenantName,
+  canSwitchTenant,
+  onSwitchTenant,
+  canCreate,
+  onCreate,
+  onSelect,
+  onSignOut,
+  signingOut,
+  tenantPicker,
+}: {
+  businesses: PickerBusiness[];
+  userName: string;
+  role: string | null;
+  tenantName: string;
+  canSwitchTenant: boolean;
+  onSwitchTenant: () => void;
+  canCreate: boolean;
+  onCreate: () => void;
+  onSelect: (id: string) => void;
+  onSignOut: () => void;
+  signingOut: boolean;
+  tenantPicker: React.ReactNode;
+}) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const visible = businesses.filter(
+    (b) => !q || [b.name, b.gstin, b.city, b.state].filter(Boolean).join(" ").toLowerCase().includes(q),
+  );
+  const firstName = userName.trim().split(/\s+/)[0];
+  const userInitials = businessInitials(userName) || "U";
+
   return (
-    <span
-      className={cn(
-        "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 leading-none",
-        style,
-      )}
-    >
-      {label}
-    </span>
+    <div className="min-h-screen bg-surface-1">
+      <header className="bg-[#0f1b3d] text-white">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 md:px-8">
+          <Logo variant="light" className="h-8 w-8 shrink-0" />
+          <span className="hidden font-display text-lg font-extrabold sm:block">Fintranzact</span>
+          {canSwitchTenant ? (
+            <button
+              type="button"
+              onClick={onSwitchTenant}
+              className="ml-2 flex h-9 min-w-0 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[13.5px] font-semibold transition hover:bg-white/10 sm:ml-4"
+              aria-label={`Switch organization — currently ${tenantName}`}
+            >
+              <span className="hidden font-medium text-[#9fb0d6] md:inline">Organization</span>
+              <span className="truncate">{tenantName}</span>
+              <Icon icon={UnfoldMoreIcon} size={14} className="shrink-0" />
+            </button>
+          ) : (
+            <span className="ml-2 truncate text-[13.5px] font-semibold text-[#c3cee6] sm:ml-4">{tenantName}</span>
+          )}
+          <div className="ml-auto flex items-center gap-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 text-xs font-bold">
+              {userInitials}
+            </span>
+            <span className="hidden leading-tight sm:block">
+              <span className="block text-[13.5px] font-semibold">{userName}</span>
+              {role && <span className="block text-[11.5px] text-[#9fb0d6]">{formatRole(role)}</span>}
+            </span>
+            <button
+              type="button"
+              onClick={onSignOut}
+              disabled={signingOut}
+              className="flex h-9 items-center gap-1.5 rounded-[9px] border border-white/15 px-3 text-[13px] font-semibold text-[#c3cee6] transition hover:bg-white/10 hover:text-white disabled:opacity-60"
+            >
+              <Icon icon={Logout01Icon} size={15} />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-4 py-10 md:px-8 md:py-12">
+        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-300">
+              Welcome back{firstName ? `, ${firstName}` : ""}
+            </p>
+            <h1 className="mt-2 font-display text-3xl font-extrabold tracking-[-0.025em] text-[#0f1b3d] dark:text-white md:text-[34px]">
+              Choose a company
+            </h1>
+            <p className="mt-1.5 text-[15px] text-text-tertiary">
+              {businesses.length} {businesses.length === 1 ? "company" : "companies"} in {tenantName}. Pick one to open its books.
+            </p>
+          </div>
+          {businesses.length > 3 && (
+            <label className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-border-color bg-surface-0 px-3.5 text-text-tertiary focus-within:border-brand-500 focus-within:ring-[3px] focus-within:ring-brand-500/20 md:w-[340px]">
+              <Icon icon={Search01Icon} size={18} className="shrink-0" />
+              <span className="sr-only">Search companies</span>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name, GSTIN or city"
+                className="h-full min-w-0 flex-1 bg-transparent text-[14.5px] text-text-primary outline-none placeholder:text-text-tertiary"
+              />
+            </label>
+          )}
+        </div>
+
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {visible.map((b) => {
+            const gst = b.gstRegistrationType !== "unregistered" && !!b.gstin;
+            const place = [b.city, b.state].filter(Boolean).join(", ") || "Location not set";
+            const contact = b.phone || b.email || "No contact details yet";
+            const tone = TILE_TONES[businesses.indexOf(b) % TILE_TONES.length];
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => onSelect(b.id)}
+                aria-label={`Open ${b.name}`}
+                className="group flex min-w-0 flex-col gap-4 rounded-[18px] border border-border-light bg-surface-0 p-5 text-left transition hover:-translate-y-0.5 hover:border-brand-500 hover:shadow-[0_18px_36px_-22px_rgba(15,27,61,.45)] focus-visible:border-brand-500"
+              >
+                <div className="flex items-center gap-3.5">
+                  <span className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-[14px] font-display text-base font-extrabold", tone)}>
+                    {businessInitials(b.name)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[17px] font-bold text-text-primary">{b.name}</span>
+                    <span
+                      className={cn(
+                        "mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold",
+                        gst
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                          : "bg-surface-2 text-text-secondary",
+                      )}
+                    >
+                      {gst ? "GST registered" : "Not GST registered"}
+                    </span>
+                  </span>
+                </div>
+                <div className="space-y-2 text-[13.5px] text-text-secondary">
+                  <p className="flex items-center gap-2">
+                    <Icon icon={File01Icon} size={16} className="shrink-0 text-text-tertiary" />
+                    <span className="truncate">{b.gstin ? `GSTIN ${b.gstin}` : "No GSTIN"}</span>
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <Icon icon={Location01Icon} size={16} className="shrink-0 text-text-tertiary" />
+                    <span className="truncate">{place}</span>
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <Icon icon={Call02Icon} size={16} className="shrink-0 text-text-tertiary" />
+                    <span className="truncate">{contact}</span>
+                  </p>
+                </div>
+                <span className="mt-auto flex items-center justify-between border-t border-border-light pt-3.5">
+                  <span className="text-[12.5px] text-text-tertiary">
+                    {REGISTRATION_LABELS[b.gstRegistrationType ?? ""] ?? (gst ? "GST registered" : "Unregistered")}
+                  </span>
+                  <span className="inline-flex h-8 items-center rounded-[9px] bg-brand-50 px-3.5 text-[13.5px] font-bold text-brand-700 transition group-hover:bg-brand-600 group-hover:text-white dark:bg-brand-950 dark:text-brand-300">
+                    Open →
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+
+          {canCreate && !q && (
+            <button
+              type="button"
+              onClick={onCreate}
+              className="flex min-h-[232px] flex-col items-center justify-center gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-border-color p-5 text-center text-text-secondary transition hover:border-brand-500 hover:text-brand-700"
+            >
+              <span className="grid h-12 w-12 place-items-center rounded-[14px] bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300">
+                <Icon icon={PlusSignIcon} size={22} />
+              </span>
+              <span className="text-base font-bold text-text-primary">Add a business</span>
+              <span className="text-[13px] text-text-tertiary">Another GSTIN, branch or company</span>
+            </button>
+          )}
+        </div>
+
+        {visible.length === 0 && (
+          <p className="mt-6 text-sm text-text-tertiary">No company matches “{query}”.</p>
+        )}
+      </main>
+      {tenantPicker}
+    </div>
   );
 }
 

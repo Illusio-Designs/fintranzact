@@ -14,6 +14,8 @@ interface DateRangeBarProps {
   onExport?: () => void;
   exporting?: boolean;
   className?: string;
+  /** "segmented": the presets sit in one bordered control (dashboard header). */
+  variant?: "pills" | "segmented";
 }
 
 export function DateRangeBar({
@@ -25,24 +27,38 @@ export function DateRangeBar({
   onExport,
   exporting,
   className,
+  variant = "pills",
 }: DateRangeBarProps) {
-  return (
-    <div className={cn("flex items-center gap-2 flex-wrap", className)}>
-      {DATE_PRESETS.map((p) => (
+  const segmented = variant === "segmented";
+  const presetButtons = DATE_PRESETS.map((p) => (
         <button
           key={p.value}
           type="button"
           onClick={() => onPresetChange(p.value)}
+          aria-pressed={preset === p.value}
           className={cn(
-            "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-            preset === p.value
-              ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400"
-              : "text-text-tertiary hover:text-text-secondary hover:bg-surface-2"
+            "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap",
+            segmented
+              ? preset === p.value
+                ? "bg-brand-600 text-white shadow-sm"
+                : "text-text-secondary hover:text-text-primary hover:bg-surface-2"
+              : preset === p.value
+                ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400"
+                : "text-text-tertiary hover:text-text-secondary hover:bg-surface-2"
           )}
         >
           {p.label}
         </button>
-      ))}
+      ));
+  return (
+    <div className={cn("flex items-center gap-2 flex-wrap", className)}>
+      {segmented ? (
+        <div className="flex max-w-full flex-wrap gap-0.5 rounded-xl border border-border-light bg-surface-0 p-1">
+          {presetButtons}
+        </div>
+      ) : (
+        presetButtons
+      )}
 
       {preset === "custom" && onCustomChange && (
         <div className="flex items-center gap-2 ml-1">
