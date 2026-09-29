@@ -1318,7 +1318,7 @@ function RootLayout() {
           <aside
             className={cn(
               // Navy brand sidebar in both themes (light text on #0f1b3d).
-              "w-60 shrink-0 border-r border-white/5 flex flex-col overflow-hidden bg-[#0f1b3d] text-[#c3cee6] dark:bg-[#0b1226]",
+              "w-60 shrink-0 border-r border-white/5 flex flex-col overflow-hidden bg-[#0f1b3d] text-[#c3cee6] dark:border-white/10",
               // On mobile: fixed drawer that slides in/out
               "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0",
               // Desktop only: collapse to an icon rail. The drawer keeps its

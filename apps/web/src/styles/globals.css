@@ -25,16 +25,18 @@
   --chart-5: #e87ba4;
 }
 
+/* Navy dark theme, matching the brand sidebar. Cards (surface-0) sit lighter
+   than the page (surface-1); every text colour clears 4.5:1 on cards. */
 .dark {
-  --surface-0: #141417;
-  --surface-1: #1a1a1f;
-  --surface-2: #232329;
-  --surface-3: #2c2c35;
-  --text-primary: #e4e4e8;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
-  --border-color: #2c2c35;
-  --border-light: #232329;
+  --surface-0: #141c2f;
+  --surface-1: #0b1120;
+  --surface-2: #1b2438;
+  --surface-3: #233049;
+  --text-primary: #e6ebf5;
+  --text-secondary: #b4c0d8;
+  --text-tertiary: #95a3c0;
+  --border-color: #2f3d5c;
+  --border-light: #233049;
   --chart-1: #6f8fd8;
   --chart-2: #d95926;
   --chart-3: #199e70;
