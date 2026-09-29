@@ -45,8 +45,8 @@ function makeBearerReq(token: string, xClient = "desktop"): Request {
     method: "GET",
     headers: new Headers({
       "authorization": `Bearer ${token}`,
-      "x-hisaabo-client": xClient,
-      "x-requested-with": "hisaabo",
+      "x-fintranzact-client": xClient,
+      "x-requested-with": "fintranzact",
     }),
   });
 }
@@ -57,7 +57,7 @@ function makeCookieReq(sessionId: string): Request {
     method: "GET",
     headers: new Headers({
       "cookie": `session_id=${sessionId}`,
-      "x-requested-with": "hisaabo",
+      "x-requested-with": "fintranzact",
     }),
   });
 }

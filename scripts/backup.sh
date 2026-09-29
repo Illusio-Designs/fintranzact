@@ -8,9 +8,9 @@
 set -euo pipefail
 
 # ── Config ─────────────────────────────────────────────────────────
-DB_USER="${DB_USER:-hisaabo}"
+DB_USER="${DB_USER:-fintranzact}"
 PGHOST="${PGHOST:-localhost}"
-BACKUP_DIR="/var/backups/hisaabo"
+BACKUP_DIR="/var/backups/fintranzact"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 R2_BUCKET="${R2_BUCKET:-hisaabo-backups}"
 R2_REMOTE="r2:${R2_BUCKET}"

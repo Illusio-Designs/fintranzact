@@ -38,7 +38,7 @@ function commonOptions() {
     transformer: superjson,
     async headers() {
       const headers: Record<string, string> = {
-        "X-Requested-With": "hisaabo",
+        "X-Requested-With": "fintranzact",
       };
       if (currentBusinessId) {
         headers["x-business-id"] = currentBusinessId;
@@ -46,7 +46,7 @@ function commonOptions() {
       if (desktop) {
         // Signals the server to skip Turnstile. Spoofable by design — see
         // auth router for the trade-off documentation.
-        headers["x-hisaabo-client"] = "desktop";
+        headers["x-fintranzact-client"] = "desktop";
         // Await the access token — issues a new one transparently if
         // the cached one has expired or is within the 30s refresh window.
         const token = await ensureAccessToken();

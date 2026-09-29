@@ -255,7 +255,7 @@ Add to `packages/api/package.json`:
 ### `helpers/db.ts` — Test database bootstrap
 
 ```
-TEST_DATABASE_URL=postgresql://hisaabo:hisaabo_dev@localhost:5433/hisaabo_test
+TEST_DATABASE_URL=postgresql://fintranzact:fintranzact_dev@localhost:5433/fintranzact_test
 ```
 
 The helper exports:
@@ -984,17 +984,17 @@ Add to root `package.json`:
 services:
   postgres-test:
     image: postgres:16-alpine
-    container_name: hisaabo-db-test
+    container_name: fintranzact-db-test
     ports:
       - "5433:5432"
     environment:
-      POSTGRES_USER: hisaabo
-      POSTGRES_PASSWORD: hisaabo_dev
-      POSTGRES_DB: hisaabo_test
+      POSTGRES_USER: fintranzact
+      POSTGRES_PASSWORD: fintranzact_dev
+      POSTGRES_DB: fintranzact_test
     tmpfs:
       - /var/lib/postgresql/data   # in-memory, dies with container
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hisaabo"]
+      test: ["CMD-SHELL", "pg_isready -U fintranzact"]
       interval: 2s
       timeout: 2s
       retries: 10
@@ -1043,9 +1043,9 @@ test-api:
     postgres:
       image: postgres:16-alpine
       env:
-        POSTGRES_USER: hisaabo
-        POSTGRES_PASSWORD: hisaabo_dev
-        POSTGRES_DB: hisaabo_test
+        POSTGRES_USER: fintranzact
+        POSTGRES_PASSWORD: fintranzact_dev
+        POSTGRES_DB: fintranzact_test
       ports:
         - 5433:5432
       options: >-
@@ -1054,7 +1054,7 @@ test-api:
         --health-timeout 5s
         --health-retries 5
   env:
-    TEST_DATABASE_URL: postgresql://hisaabo:hisaabo_dev@localhost:5433/hisaabo_test
+    TEST_DATABASE_URL: postgresql://fintranzact:fintranzact_dev@localhost:5433/fintranzact_test
     NODE_ENV: test
   steps:
     - uses: actions/checkout@v4
@@ -1067,7 +1067,7 @@ test-api:
     - name: Push test schema
       run: pnpm --filter @hisaabo/db db:push
       env:
-        DATABASE_URL: postgresql://hisaabo:hisaabo_dev@localhost:5433/hisaabo_test
+        DATABASE_URL: postgresql://fintranzact:fintranzact_dev@localhost:5433/fintranzact_test
     - name: Run API tests
       run: pnpm --filter @hisaabo/api test
 ```
@@ -1134,9 +1134,9 @@ test-e2e:
     postgres:
       image: postgres:16-alpine
       env:
-        POSTGRES_USER: hisaabo
-        POSTGRES_PASSWORD: hisaabo_dev
-        POSTGRES_DB: hisaabo_e2e
+        POSTGRES_USER: fintranzact
+        POSTGRES_PASSWORD: fintranzact_dev
+        POSTGRES_DB: fintranzact_e2e
       ports:
         - 5432:5432
       options: >-
@@ -1156,13 +1156,13 @@ test-e2e:
     - name: Seed E2E database
       run: pnpm db:push && node scripts/seed-e2e.js
       env:
-        DATABASE_URL: postgresql://hisaabo:hisaabo_dev@localhost:5432/hisaabo_e2e
+        DATABASE_URL: postgresql://fintranzact:fintranzact_dev@localhost:5432/fintranzact_e2e
     - name: Install Playwright browsers
       run: pnpm exec playwright install --with-deps chromium
     - name: Run E2E tests
       run: pnpm --filter @hisaabo/web test:e2e
       env:
-        DATABASE_URL: postgresql://hisaabo:hisaabo_dev@localhost:5432/hisaabo_e2e
+        DATABASE_URL: postgresql://fintranzact:fintranzact_dev@localhost:5432/fintranzact_e2e
     - name: Upload Playwright report
       uses: actions/upload-artifact@v4
       if: failure()

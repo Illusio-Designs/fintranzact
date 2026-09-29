@@ -1,6 +1,7 @@
 import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import { createHash } from "crypto";
 import { logger } from "./lib/logger.js";
+import { getClientKind } from "./lib/client-headers.js";
 import { controlDb } from "@hisaabo/db";
 import { sessions, users, apiKeys, accessTokens } from "@hisaabo/db";
 import { eq, gt, and } from "drizzle-orm";
@@ -169,7 +170,7 @@ export async function createContext(opts: FetchCreateContextFnOptions) {
       // Legacy desktop clients (pre-access-token) also use this path.
       // Log a warning so we can track adoption of the new access-token flow.
       const sessionId = rawBearerToken;
-      const clientHeader = opts.req.headers.get("x-hisaabo-client");
+      const clientHeader = getClientKind(opts.req.headers);
       if (clientHeader === "desktop") {
         // Desktop client sending a refresh token directly — not an access token.
         // This is the legacy path; warn so we can observe roll-out.

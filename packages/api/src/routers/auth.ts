@@ -10,6 +10,7 @@ import { router, publicProcedure, protectedProcedure } from "../trpc.js";
 import { emailService } from "../lib/email.js";
 import { invalidateSessionCache, getSessionIdFromRequest, revokeAllUserSessions } from "../context.js";
 import { verifyTurnstile } from "../lib/turnstile.js";
+import { getClientKind } from "../lib/client-headers.js";
 import { enforceSessionLimit } from "../lib/plan-limits.js";
 
 // TTL for short-lived access tokens (15 minutes)
@@ -62,7 +63,7 @@ function getClientIpFromRequest(req: Request): string | null {
 /**
  * Tauri desktop clients can't solve Cloudflare Turnstile challenges — the
  * widget rejects the `tauri.localhost` / `tauri://localhost` host. The web
- * bundle running inside Tauri sets `X-Hisaabo-Client: desktop` and we skip
+ * bundle running inside Tauri sets `X-Fintranzact-Client: desktop` (or legacy `X-Hisaabo-Client`) and we skip
  * the Turnstile gate here.
  *
  * Trade-off: the header is client-supplied and therefore spoofable. A
@@ -73,20 +74,20 @@ function getClientIpFromRequest(req: Request): string | null {
  * If abuse materialises, add per-IP rate limiting on these endpoints.
  */
 function isDesktopClient(req: Request): boolean {
-  return req.headers.get("x-hisaabo-client") === "desktop";
+  return getClientKind(req.headers) === "desktop";
 }
 
 /**
  * Returns true when the session being minted will be consumed as a Bearer
  * token rather than a cookie. Mobile and desktop clients carry
- * `X-Hisaabo-Client: mobile | desktop`; they never rely on Set-Cookie.
+ * `X-Fintranzact-Client: mobile | desktop` (legacy `X-Hisaabo-Client` also accepted); they never rely on Set-Cookie.
  *
  * We use the client header (not the presence of an Authorization header) as
  * the signal because at session creation time there IS no existing Bearer
  * token yet — the whole point is we are minting the very first one.
  */
 function isBearerClient(req: Request): boolean {
-  const client = req.headers.get("x-hisaabo-client");
+  const client = getClientKind(req.headers);
   return client === "mobile" || client === "desktop";
 }
 
@@ -540,7 +541,7 @@ export const authRouter = router({
   // ── Magic link: verify ───────────────────────────────────────
   verifyMagicLink: publicProcedure.input(magicLinkVerifySchema).mutation(async ({ input, ctx }) => {
     // Determine authMethod once, before the transaction, using the same
-    // x-hisaabo-client signal as login/register.
+    // client-kind header signal as login/register.
     const magicLinkAuthMethod: "cookie" | "bearer" = isBearerClient(ctx.req) ? "bearer" : "cookie";
     const tokenH = hashToken(input.token);
 

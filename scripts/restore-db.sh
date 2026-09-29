@@ -11,19 +11,19 @@
 # Examples:
 #   restore-db.sh tenant_acme                           # latest dump
 #   restore-db.sh tenant_acme dump_tenant_acme_20260414_030000.sql.gz
-#   restore-db.sh hisaabo                               # restore control DB
+#   restore-db.sh fintranzact                               # restore control DB
 #
 # Env vars:
-#   PGHOST, PGUSER, PGPASSWORD     — PostgreSQL connection (defaults: localhost, hisaabo)
+#   PGHOST, PGUSER, PGPASSWORD     — PostgreSQL connection (defaults: localhost, fintranzact)
 #   BACKUP_ENCRYPTION_KEY           — Decryption key (if backups are encrypted)
-#   BACKUP_DIR                      — Backup directory (default: /var/backups/hisaabo)
+#   BACKUP_DIR                      — Backup directory (default: /var/backups/fintranzact)
 set -euo pipefail
 
 DB_NAME="${1:-}"
 DUMP_FILE="${2:-}"
-DB_USER="${PGUSER:-${DB_USER:-hisaabo}}"
+DB_USER="${PGUSER:-${DB_USER:-fintranzact}}"
 HOST="${PGHOST:-localhost}"
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/hisaabo}"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/fintranzact}"
 
 if [ -z "$DB_NAME" ]; then
   echo "Usage: restore-db.sh <database-name> [dump-file]" >&2
