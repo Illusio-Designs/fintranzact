@@ -5,6 +5,8 @@ import { TurnstileModal } from "@/components/ui/TurnstileModal";
 import { isDesktop } from "@/lib/isDesktop";
 import { Logo } from "@/components/ui/Logo";
 import { saveDesktopToken } from "@/lib/desktop-session";
+import { Icon } from "@/components/ui/Icon";
+import { AlertCircleIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 
 /* ─── Turnstile type (declared in TurnstileModal) ──────────────────────── */
 declare global {
@@ -366,10 +368,10 @@ function BrandPanel() {
 
           <div style={{ display: "flex", gap: 20 }}>
             {[
-              { n: "GST Ready", icon: "✓" },
-              { n: "100% Free", icon: "✓" },
-              { n: "Secure & Private", icon: "✓" },
-            ].map(({ n, icon }) => (
+              { n: "GST Ready" },
+              { n: "100% Free" },
+              { n: "Secure & Private" },
+            ].map(({ n }) => (
               <div
                 key={n}
                 style={{
@@ -396,7 +398,7 @@ function BrandPanel() {
                     flexShrink: 0,
                   }}
                 >
-                  {icon}
+                  <Icon icon={Tick02Icon} size={11} strokeWidth={2.5} />
                 </span>
                 {n}
               </div>
@@ -843,21 +845,7 @@ function ErrorBanner({ message }: { message: string }) {
         animation: "form-enter 0.25s ease-out",
       }}
     >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ flexShrink: 0, marginTop: 1 }}
-      >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="12" />
-        <line x1="12" y1="16" x2="12.01" y2="16" />
-      </svg>
+      <Icon icon={AlertCircleIcon} size={16} className="mt-px" />
       {message}
     </div>
   );

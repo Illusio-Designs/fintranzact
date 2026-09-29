@@ -1,3 +1,6 @@
+import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "./Icon";
+
 interface PaginationProps {
   page: number;
   totalPages: number;
@@ -21,9 +24,10 @@ export function Pagination({ page, totalPages, onPageChange, total, pageSize }: 
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          className="px-2.5 py-1 rounded-md font-medium text-text-secondary hover:bg-surface-2 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-1 pl-1.5 pr-3 py-1 rounded-full font-medium text-text-secondary hover:bg-surface-2 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
-          ← Prev
+          <Icon icon={ArrowLeft01Icon} size={14} />
+          Prev
         </button>
         <span className="px-2 py-1 text-text-tertiary tabular-nums">
           {page} / {totalPages}
@@ -31,9 +35,10 @@ export function Pagination({ page, totalPages, onPageChange, total, pageSize }: 
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
-          className="px-2.5 py-1 rounded-md font-medium text-text-secondary hover:bg-surface-2 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full font-medium text-text-secondary hover:bg-surface-2 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
-          Next →
+          Next
+          <Icon icon={ArrowRight01Icon} size={14} />
         </button>
       </div>
     </div>

@@ -9,6 +9,9 @@ import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "@/hooks/useToast";
 import { Spinner } from "@/components/ui/Spinner";
+import { Icon } from "@/components/ui/Icon";
+import { Upload04Icon } from "@hugeicons/core-free-icons";
+import { Select } from "@/components/ui/Select";
 
 export const Route = createFileRoute("/gstr2b")({
   component: GSTR2BPage,
@@ -167,9 +170,7 @@ function UploadSection({
         ) : (
           <>
             <div className="w-10 h-10 rounded-xl bg-surface-2 flex items-center justify-center mx-auto mb-3">
-              <svg className="w-5 h-5 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-              </svg>
+              <Icon icon={Upload04Icon} size={20} className="text-text-tertiary" />
             </div>
             <p className="text-sm font-medium text-text-primary mb-1">
               Drop your GSTR-2B file here
@@ -340,7 +341,7 @@ function ReconciliationSection({
 
       {/* Filter */}
       <div className="flex items-center gap-3 mb-4">
-        <select
+        <Select
           className="input w-44 text-sm"
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
@@ -349,7 +350,7 @@ function ReconciliationSection({
           {STATUS_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {isLoading && <div className="py-8 flex justify-center"><Spinner /></div>}
@@ -699,7 +700,7 @@ function GSTR2BPage() {
 
       {/* Period selector */}
       <div className="flex items-center gap-3 mb-6">
-        <select
+        <Select
           className="input w-40"
           value={month}
           onChange={(e) => setMonth(Number(e.target.value))}
@@ -708,8 +709,8 @@ function GSTR2BPage() {
           {months.map((m, i) => (
             <option key={i} value={i + 1}>{m}</option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
           className="input w-28"
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
@@ -718,7 +719,7 @@ function GSTR2BPage() {
           {years.map((y) => (
             <option key={y} value={y}>{y}</option>
           ))}
-        </select>
+        </Select>
         <span className="text-xs text-text-tertiary ml-2">
           Return period: {months[month - 1]} {year}
         </span>

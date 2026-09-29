@@ -21,6 +21,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PillTabs } from "@/components/ui/Tabs";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { useDateRange, getGranularity } from "@/hooks/useDateRange";
+import { Icon, IconCircle, type IconCircleTone, type IconSvgElement } from "@/components/ui/Icon";
+import { WidgetHeader } from "@/components/ui/WidgetHeader";
+import { Alert02Icon, Analytics01Icon, ArrowDown01Icon, ArrowUp01Icon, Award01Icon, Cancel01Icon, ChartBarLineIcon, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineData01Icon, Coins01Icon, CreditCardIcon, FireIcon, Invoice01Icon, Invoice03Icon, MoneyReceive01Icon, MoneySend01Icon, PackageIcon, PieChartIcon, SproutIcon, Rocket01Icon, ShoppingCart01Icon, StarIcon, Target02Icon, UserGroupIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 
 // ─── Milestone banner ─────────────────────────────────────────────────────────
 
@@ -97,27 +100,16 @@ function MilestoneBanner({
     <div className="mb-4 animate-milestone-enter">
       <div className="px-4 py-3 rounded-xl border border-brand-200 bg-brand-50 dark:bg-brand-950/20 dark:border-brand-800/50 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <svg
-            className="w-4 h-4 text-brand-600 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-          </svg>
+          <IconCircle icon={Award01Icon} tone="solid" size="sm" />
           <p className="text-sm text-brand-700 dark:text-brand-300">{message}</p>
         </div>
         <button
           type="button"
           onClick={dismiss}
-          className="shrink-0 p-1 rounded-lg text-brand-500 hover:text-brand-700 hover:bg-brand-100 dark:hover:bg-brand-900/40 transition-colors"
+          className="shrink-0 p-1.5 rounded-full text-brand-500 hover:text-brand-700 hover:bg-brand-100 dark:hover:bg-brand-900/40 transition-colors"
           aria-label="Dismiss"
         >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <Icon icon={Cancel01Icon} size={16} />
         </button>
       </div>
     </div>
@@ -191,13 +183,13 @@ function getTier(pct: number): TargetTier {
   return "seed";
 }
 
-const TIER_META: Record<TargetTier, { icon: string; message: string }> = {
-  seed: { icon: "\uD83C\uDF31", message: "Just getting started" },
-  growing: { icon: "\uD83D\uDCC8", message: "Building momentum" },
-  fire: { icon: "\uD83D\uDD25", message: "On fire!" },
-  close: { icon: "\u2B50", message: "Almost there!" },
-  near: { icon: "\uD83D\uDE80", message: "So close!" },
-  achieved: { icon: "\uD83C\uDFC6", message: "Target achieved!" },
+const TIER_META: Record<TargetTier, { icon: IconSvgElement; message: string }> = {
+  seed: { icon: SproutIcon, message: "Just getting started" },
+  growing: { icon: ChartIncreaseIcon, message: "Building momentum" },
+  fire: { icon: FireIcon, message: "On fire!" },
+  close: { icon: StarIcon, message: "Almost there!" },
+  near: { icon: Rocket01Icon, message: "So close!" },
+  achieved: { icon: Award01Icon, message: "Target achieved!" },
 };
 
 function getBarFillClass(tier: TargetTier): string {
@@ -241,10 +233,8 @@ function TargetAchievementBanner({ target }: { target: TargetProgress }) {
   return (
     <div className="mb-3 target-achieve-banner">
       <div className="px-4 py-3 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800/50 flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2.5">
-          <span className="text-lg leading-none shrink-0" role="img" aria-label="Trophy">
-            {"\uD83C\uDFC6"}
-          </span>
+        <div className="flex items-center gap-2.5">
+          <IconCircle icon={Award01Icon} tone="success" size="sm" />
           <div>
             <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
               Target Achieved!
@@ -257,12 +247,10 @@ function TargetAchievementBanner({ target }: { target: TargetProgress }) {
         <button
           type="button"
           onClick={dismiss}
-          className="shrink-0 p-1 rounded-lg text-emerald-500 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+          className="shrink-0 p-1.5 rounded-full text-emerald-500 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
           aria-label="Dismiss achievement notification"
         >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <Icon icon={Cancel01Icon} size={16} />
         </button>
       </div>
     </div>
@@ -318,8 +306,8 @@ function TargetRow({ target }: { target: TargetProgress }) {
         <span className="text-[11px] text-text-tertiary">
           {daysLeft === 0 ? "Last day" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} remaining`}
         </span>
-        <span className={cn("text-[11px] font-medium", msgColor)}>
-          <span aria-hidden="true">{meta.icon} </span>
+        <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium", msgColor)}>
+          <Icon icon={meta.icon} size={12} />
           {meta.message}
         </span>
       </div>
@@ -346,10 +334,8 @@ function TargetsWidget({ targets }: { targets: TargetProgress[] }) {
 
       <div className="card px-4 py-4">
         {/* Widget header */}
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-base leading-none" role="img" aria-label="Target">
-            {"\uD83C\uDFAF"}
-          </span>
+        <div className="flex items-center gap-2.5 mb-4">
+          <IconCircle icon={Target02Icon} size="sm" />
           <h3 className="text-sm font-semibold text-text-primary">Your Targets</h3>
         </div>
 
@@ -417,20 +403,20 @@ function renderResponsive(children: React.ReactElement, width: string, height: s
 
 function ChartCard({
   title,
+  icon,
   height = 260,
   children,
   responsive = true,
 }: {
   title: string;
+  icon: IconSvgElement;
   height?: number;
   children: React.ReactElement;
   responsive?: boolean;
 }) {
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border-light">
-        <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
-      </div>
+      <WidgetHeader title={title} icon={icon} />
       <div className="px-4 py-4" style={{ height }}>
         {responsive
           ? renderResponsive(children, "100%", "100%")
@@ -483,14 +469,14 @@ function SalesTrendChart({
 
   if (!hasData) {
     return (
-      <ChartCard title="Sales & Collections" responsive={false}>
+      <ChartCard title="Sales & Collections" icon={ChartBarLineIcon} responsive={false}>
         <ChartEmpty />
       </ChartCard>
     );
   }
 
   return (
-    <ChartCard title="Sales & Collections">
+    <ChartCard title="Sales & Collections" icon={ChartBarLineIcon}>
       <BarChart data={mapped} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
         <XAxis
@@ -527,7 +513,7 @@ function InvoiceStatusChart({ fromDate, toDate }: { fromDate?: string; toDate?: 
 
   if (!data || data.length === 0) {
     return (
-      <ChartCard title="Invoice Status" responsive={false}>
+      <ChartCard title="Invoice Status" icon={Invoice03Icon} responsive={false}>
         <ChartEmpty />
       </ChartCard>
     );
@@ -535,9 +521,7 @@ function InvoiceStatusChart({ fromDate, toDate }: { fromDate?: string; toDate?: 
 
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border-light">
-        <h3 className="text-sm font-semibold text-text-primary">Invoice Status</h3>
-      </div>
+      <WidgetHeader title="Invoice Status" icon={Invoice03Icon} />
       <div className="px-4 py-4" style={{ height: 260 }}>
         <div className="flex flex-col h-full">
           {/* Donut with center label */}
@@ -608,10 +592,9 @@ function TopSellingChart({ fromDate, toDate }: { fromDate?: string; toDate?: str
   if (!raw || raw.length === 0) {
     return (
       <div className="card overflow-hidden">
-        <div className="px-5 py-3 border-b border-border-light flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-text-primary">Top Selling</h3>
+        <WidgetHeader title="Top Selling" icon={PackageIcon}>
           <PillTabs tabs={TOP_SELLING_TABS} value={itemType} onChange={setItemType} size="sm" />
-        </div>
+        </WidgetHeader>
         <div className="px-4 py-4" style={{ height: 260 }}>
           <ChartEmpty />
         </div>
@@ -632,10 +615,9 @@ function TopSellingChart({ fromDate, toDate }: { fromDate?: string; toDate?: str
 
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border-light flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-text-primary">Top Selling</h3>
+      <WidgetHeader title="Top Selling" icon={PackageIcon}>
         <PillTabs tabs={TOP_SELLING_TABS} value={itemType} onChange={setItemType} size="sm" />
-      </div>
+      </WidgetHeader>
       <div className="px-4 py-4" style={{ height: 260 }}>
         {renderResponsive(
           <BarChart
@@ -690,7 +672,7 @@ function TopCustomersChart({ fromDate, toDate }: { fromDate?: string; toDate?: s
 
   if (!raw || raw.length === 0) {
     return (
-      <ChartCard title="Top Customers" responsive={false}>
+      <ChartCard title="Top Customers" icon={UserGroupIcon} responsive={false}>
         <ChartEmpty />
       </ChartCard>
     );
@@ -705,7 +687,7 @@ function TopCustomersChart({ fromDate, toDate }: { fromDate?: string; toDate?: s
   const chartData = [...data].reverse();
 
   return (
-    <ChartCard title="Top Customers" height={260}>
+    <ChartCard title="Top Customers" icon={UserGroupIcon} height={260}>
       <BarChart
         layout="vertical"
         data={chartData}
@@ -773,7 +755,7 @@ function PaymentModeWidget({ fromDate, toDate }: { fromDate?: string; toDate?: s
 
   if (!data || data.length === 0) {
     return (
-      <ChartCard title="Payment Modes" responsive={false}>
+      <ChartCard title="Payment Modes" icon={CreditCardIcon} responsive={false}>
         <ChartEmpty />
       </ChartCard>
     );
@@ -783,9 +765,7 @@ function PaymentModeWidget({ fromDate, toDate }: { fromDate?: string; toDate?: s
 
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border-light">
-        <h3 className="text-sm font-semibold text-text-primary">Payment Modes</h3>
-      </div>
+      <WidgetHeader title="Payment Modes" icon={CreditCardIcon} />
       <div className="px-4 py-4" style={{ height: 260 }}>
         <div className="flex flex-col h-full">
           {/* Donut */}
@@ -859,8 +839,11 @@ function CollectionEfficiencyWidget({ fromDate, toDate }: { fromDate?: string; t
   if (!data || data.invoiceCount === 0) {
     return (
       <div className="card px-5 py-4">
-        <p className="text-[11px] font-medium text-text-tertiary mb-1">Collection Efficiency</p>
-        <p className="text-sm text-text-tertiary mt-2">No invoices for this period</p>
+        <div className="flex items-center gap-2.5">
+          <IconCircle icon={Coins01Icon} tone="success" size="sm" />
+          <p className="text-sm font-semibold text-text-primary">Collection Efficiency</p>
+        </div>
+        <p className="text-sm text-text-tertiary mt-3">No invoices for this period</p>
       </div>
     );
   }
@@ -876,16 +859,17 @@ function CollectionEfficiencyWidget({ fromDate, toDate }: { fromDate?: string; t
 
   return (
     <div className="card px-5 py-4 flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-medium text-text-tertiary">Collection Efficiency</p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <IconCircle icon={Coins01Icon} tone="success" size="sm" />
+          <p className="text-sm font-semibold text-text-primary">Collection Efficiency</p>
+        </div>
         {delta !== null && (
           <span className={cn(
             "flex items-center gap-0.5 text-[11px] font-medium tabular-nums shrink-0",
             isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
           )}>
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d={isUp ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
-            </svg>
+            <Icon icon={isUp ? ArrowUp01Icon : ArrowDown01Icon} size={12} strokeWidth={2.25} />
             {Math.abs(delta)}pp vs prev
           </span>
         )}
@@ -924,7 +908,7 @@ function ExpenseCategoryWidget({ fromDate, toDate }: { fromDate?: string; toDate
 
   if (!data || data.categories.length === 0) {
     return (
-      <ChartCard title="Expenses by Category" responsive={false}>
+      <ChartCard title="Expenses by Category" icon={PieChartIcon} responsive={false}>
         <ChartEmpty />
       </ChartCard>
     );
@@ -935,10 +919,9 @@ function ExpenseCategoryWidget({ fromDate, toDate }: { fromDate?: string; toDate
 
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border-light flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-text-primary">Expenses by Category</h3>
+      <WidgetHeader title="Expenses by Category" icon={PieChartIcon}>
         <span className="text-[11px] text-text-tertiary tabular-nums">{formatCurrency(data.grandTotal)} total</span>
-      </div>
+      </WidgetHeader>
       <div className="px-4 py-4" style={{ height: 260 }}>
         {renderResponsive(
           <BarChart
@@ -1011,9 +994,7 @@ function MonthlyComparisonWidget() {
         "flex items-center gap-0.5 text-[11px] font-semibold tabular-nums",
         isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
       )}>
-        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d={isUp ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
-        </svg>
+        <Icon icon={isUp ? ArrowUp01Icon : ArrowDown01Icon} size={12} strokeWidth={2.25} />
         {Math.abs(pct)}%
       </span>
     );
@@ -1027,9 +1008,7 @@ function MonthlyComparisonWidget() {
 
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border-light">
-        <h3 className="text-sm font-semibold text-text-primary">Month on Month</h3>
-      </div>
+      <WidgetHeader title="Month on Month" icon={Analytics01Icon} />
       <div className="px-4 py-3">
         {/* Header row */}
         <div className="grid grid-cols-4 gap-2 mb-2 text-[11px] font-medium text-text-tertiary">
@@ -1077,13 +1056,13 @@ function SummaryCards({
   };
   periodLabel: string;
 }) {
-  const cards = [
-    { label: "Sales", value: data.totalSales, color: "text-emerald-600" },
-    { label: "Purchases", value: data.totalPurchases, color: "text-blue-600" },
-    { label: "Receivable", value: data.receivable, color: "text-amber-600" },
-    { label: "Payable", value: data.payable, color: "text-red-600" },
-    { label: "Cash Position", value: data.cashInHand, color: "text-emerald-600" },
-    { label: "Expenses", value: data.totalExpenses, color: "text-text-primary" },
+  const cards: Array<{ label: string; value: string; color: string; icon: IconSvgElement; tone: IconCircleTone }> = [
+    { label: "Sales", value: data.totalSales, color: "text-emerald-600", icon: ChartLineData01Icon, tone: "success" },
+    { label: "Purchases", value: data.totalPurchases, color: "text-blue-600", icon: ShoppingCart01Icon, tone: "info" },
+    { label: "Receivable", value: data.receivable, color: "text-amber-600", icon: MoneyReceive01Icon, tone: "warning" },
+    { label: "Payable", value: data.payable, color: "text-red-600", icon: MoneySend01Icon, tone: "danger" },
+    { label: "Cash Position", value: data.cashInHand, color: "text-emerald-600", icon: Wallet01Icon, tone: "cyan" },
+    { label: "Expenses", value: data.totalExpenses, color: "text-text-primary", icon: Invoice01Icon, tone: "purple" },
   ];
 
   return (
@@ -1096,6 +1075,8 @@ function SummaryCards({
             label={c.label}
             value={formatCurrency(c.value)}
             valueColor={c.color}
+            icon={c.icon}
+            iconTone={c.tone}
             className="truncate"
           />
         ))}
@@ -1298,33 +1279,37 @@ function DashboardPage() {
 
         {/* Profit indicator cards */}
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="card px-4 py-3">
-            <p className="text-[11px] font-medium text-text-tertiary mb-1">Gross Profit</p>
-            <p className={cn(
-              "text-lg font-bold tabular-nums",
-              grossProfit >= 0 ? "text-emerald-600" : "text-red-600"
-            )}>
-              {formatCurrency(String(grossProfit))}
-            </p>
+          <div className="card px-4 py-3 flex items-center gap-3">
+            <IconCircle icon={grossProfit >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon} tone={grossProfit >= 0 ? "success" : "danger"} />
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-text-tertiary mb-1">Gross Profit</p>
+              <p className={cn(
+                "text-lg font-bold tabular-nums",
+                grossProfit >= 0 ? "text-emerald-600" : "text-red-600"
+              )}>
+                {formatCurrency(String(grossProfit))}
+              </p>
+            </div>
           </div>
-          <div className="card px-4 py-3">
-            <p className="text-[11px] font-medium text-text-tertiary mb-1">Net Profit</p>
-            <p className={cn(
-              "text-lg font-bold tabular-nums",
-              netProfit >= 0 ? "text-emerald-600" : "text-red-600"
-            )}>
-              {formatCurrency(String(netProfit))}
-            </p>
+          <div className="card px-4 py-3 flex items-center gap-3">
+            <IconCircle icon={netProfit >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon} tone={netProfit >= 0 ? "success" : "danger"} />
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-text-tertiary mb-1">Net Profit</p>
+              <p className={cn(
+                "text-lg font-bold tabular-nums",
+                netProfit >= 0 ? "text-emerald-600" : "text-red-600"
+              )}>
+                {formatCurrency(String(netProfit))}
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Overdue invoices alert */}
         {overdueCount > 0 && (
           <div className="mb-4 px-4 py-3 rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-              </svg>
+            <div className="flex items-center gap-3">
+              <IconCircle icon={Alert02Icon} tone="danger" size="md" />
               <div>
                 <p className="text-sm font-medium text-red-700 dark:text-red-400">
                   {overdueCount} overdue invoice{overdueCount > 1 ? "s" : ""} totaling {formatCurrency(overdueAmount)}

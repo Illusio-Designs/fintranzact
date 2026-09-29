@@ -19,6 +19,8 @@
 import { Combobox } from "@/components/ui/Combobox";
 import { InputField } from "@/components/ui/FormField";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/Icon";
+import { Alert02Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import {
   type UiUnitVariant,
   recomputeSingleRow,
@@ -115,9 +117,7 @@ export function UnitVariantEditor({
                 )}
                 aria-label="Remove alternate unit"
               >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M4 4l8 8M12 4l-8 8" />
-                </svg>
+                <Icon icon={Cancel01Icon} size={14} />
               </button>
             </div>
 
@@ -139,7 +139,7 @@ export function UnitVariantEditor({
                 {staleDerived && (
                   <span className="text-amber-600 dark:text-amber-400 ml-1">
                     {" · "}
-                    <span aria-hidden="true">⚠</span> base changed ·{" "}
+                    <Icon icon={Alert02Icon} size={12} className="inline -mt-0.5" /> base changed ·{" "}
                     <button
                       type="button"
                       onClick={() => recompute(i)}

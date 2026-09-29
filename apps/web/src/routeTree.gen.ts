@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WidgetsRouteImport } from './routes/widgets'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StoreOrdersRouteImport } from './routes/store-orders'
 import { Route as ShipmentsRouteImport } from './routes/shipments'
@@ -49,6 +50,11 @@ import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthPlanSelectionRouteImport } from './routes/auth/plan-selection'
 import { Route as AuthCompleteProfileRouteImport } from './routes/auth/complete-profile'
 
+const WidgetsRoute = WidgetsRouteImport.update({
+  id: '/widgets',
+  path: '/widgets',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -280,6 +286,7 @@ export interface FileRoutesByFullPath {
   '/shipments': typeof ShipmentsRoute
   '/store-orders': typeof StoreOrdersRoute
   '/terms': typeof TermsRoute
+  '/widgets': typeof WidgetsRoute
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -321,6 +328,7 @@ export interface FileRoutesByTo {
   '/shipments': typeof ShipmentsRoute
   '/store-orders': typeof StoreOrdersRoute
   '/terms': typeof TermsRoute
+  '/widgets': typeof WidgetsRoute
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -363,6 +371,7 @@ export interface FileRoutesById {
   '/shipments': typeof ShipmentsRoute
   '/store-orders': typeof StoreOrdersRoute
   '/terms': typeof TermsRoute
+  '/widgets': typeof WidgetsRoute
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
@@ -406,6 +415,7 @@ export interface FileRouteTypes {
     | '/shipments'
     | '/store-orders'
     | '/terms'
+    | '/widgets'
     | '/auth/complete-profile'
     | '/auth/plan-selection'
     | '/auth/verify'
@@ -447,6 +457,7 @@ export interface FileRouteTypes {
     | '/shipments'
     | '/store-orders'
     | '/terms'
+    | '/widgets'
     | '/auth/complete-profile'
     | '/auth/plan-selection'
     | '/auth/verify'
@@ -488,6 +499,7 @@ export interface FileRouteTypes {
     | '/shipments'
     | '/store-orders'
     | '/terms'
+    | '/widgets'
     | '/auth/complete-profile'
     | '/auth/plan-selection'
     | '/auth/verify'
@@ -530,6 +542,7 @@ export interface RootRouteChildren {
   ShipmentsRoute: typeof ShipmentsRoute
   StoreOrdersRoute: typeof StoreOrdersRoute
   TermsRoute: typeof TermsRoute
+  WidgetsRoute: typeof WidgetsRoute
   AuthCompleteProfileRoute: typeof AuthCompleteProfileRoute
   AuthPlanSelectionRoute: typeof AuthPlanSelectionRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
@@ -539,6 +552,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/widgets': {
+      id: '/widgets'
+      path: '/widgets'
+      fullPath: '/widgets'
+      preLoaderRoute: typeof WidgetsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -850,6 +870,7 @@ const rootRouteChildren: RootRouteChildren = {
   ShipmentsRoute: ShipmentsRoute,
   StoreOrdersRoute: StoreOrdersRoute,
   TermsRoute: TermsRoute,
+  WidgetsRoute: WidgetsRoute,
   AuthCompleteProfileRoute: AuthCompleteProfileRoute,
   AuthPlanSelectionRoute: AuthPlanSelectionRoute,
   AuthVerifyRoute: AuthVerifyRoute,

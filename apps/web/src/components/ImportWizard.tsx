@@ -2,6 +2,9 @@ import { useState, useRef, useCallback } from "react";
 import Papa from "papaparse";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { Spinner } from "@/components/ui/Spinner";
+import { Select } from "@/components/ui/Select";
+import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
+import { Alert02Icon, ArrowRight01Icon, BankIcon, Cancel01Icon, ChartBarLineIcon, CheckmarkBadge01Icon, CheckmarkCircle02Icon, InformationCircleIcon, Invoice01Icon, MinusSignCircleIcon, PackageIcon, Tick02Icon, Upload04Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
@@ -334,15 +337,15 @@ const EXPECTED_HEADERS: Record<EntityKey, string[]> = {
 // FILE_TYPES descriptor for the single-drop-zone UI
 const FILE_TYPES: Array<{
   key: EntityKey;
-  icon: string;
+  icon: IconSvgElement;
   label: string;
   description: string;
   required: boolean;
 }> = [
-  { key: "invoices", icon: "📋", label: "Sales Summary", description: "Invoices with party names, amounts, dates", required: true },
-  { key: "parties", icon: "👥", label: "Party Balance", description: "Customer/supplier details with phone, address", required: false },
-  { key: "items", icon: "📦", label: "Rate List", description: "Product catalog with prices", required: false },
-  { key: "cashBank", icon: "🏦", label: "Cash & Bank Statement", description: "Payment transactions with dates and modes", required: false },
+  { key: "invoices", icon: Invoice01Icon, label: "Sales Summary", description: "Invoices with party names, amounts, dates", required: true },
+  { key: "parties", icon: UserGroupIcon, label: "Party Balance", description: "Customer/supplier details with phone, address", required: false },
+  { key: "items", icon: PackageIcon, label: "Rate List", description: "Product catalog with prices", required: false },
+  { key: "cashBank", icon: BankIcon, label: "Cash & Bank Statement", description: "Payment transactions with dates and modes", required: false },
 ];
 
 // Parse a GST Sales Report CSV using its own expected headers
@@ -594,13 +597,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
                 )}
               >
                 {done ? (
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <Icon icon={Tick02Icon} size={14} />
                 ) : (
                   idx
                 )}
@@ -726,19 +723,7 @@ function DropZone({
           <div className="flex flex-col items-center gap-1.5 py-6 px-4 text-center">
             {parsedFile ? (
               <>
-                <svg
-                  className="w-8 h-8 text-brand-500"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-                  />
-                </svg>
+                <Icon icon={CheckmarkBadge01Icon} size={32} className="text-brand-500" />
                 <p className="text-sm font-medium text-brand-700">
                   {parsedFile.fileName}
                 </p>
@@ -749,19 +734,7 @@ function DropZone({
               </>
             ) : (
               <>
-                <svg
-                  className="w-8 h-8 text-text-tertiary"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
-                  />
-                </svg>
+                <Icon icon={Upload04Icon} size={32} className="text-text-tertiary" />
                 <p className="text-sm text-text-secondary">
                   Drop CSV or click to browse
                 </p>
@@ -819,7 +792,7 @@ function MappingPanel({
                   <span className="text-red-500 ml-0.5">*</span>
                 )}
               </span>
-              <select
+              <Select
                 value={selectedHeader}
                 onChange={(e) =>
                   onChange({ ...mapping, [field.key]: e.target.value })
@@ -837,7 +810,7 @@ function MappingPanel({
                     {h}
                   </option>
                 ))}
-              </select>
+              </Select>
               <span className="text-xs text-text-tertiary truncate font-mono">
                 {previewValue || (selectedHeader ? "(empty)" : "")}
               </span>
@@ -953,30 +926,10 @@ function ImportStepRow({
             <Spinner size="sm" className="text-brand-500" />
           )}
           {status === "done" && (
-            <svg
-              className="w-5 h-5 text-green-500"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <Icon icon={CheckmarkCircle02Icon} size={20} className="text-green-500" />
           )}
           {status === "skipped" && (
-            <svg
-              className="w-5 h-5 text-text-tertiary"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <Icon icon={MinusSignCircleIcon} size={20} className="text-text-tertiary" />
           )}
         </div>
         <div className="flex-1 min-w-0">
@@ -2144,13 +2097,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                 </div>
                 {state.source === src.key && (
                   <div className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center shrink-0">
-                    <svg className="w-3 h-3 text-white" viewBox="0 0 20 20" fill="currentColor">
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                    <Icon icon={Tick02Icon} size={12} className="text-white" />
                   </div>
                 )}
               </div>
@@ -2176,14 +2123,10 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
             <details className="group rounded-xl border border-border-light overflow-hidden">
               <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none hover:bg-surface-1 transition-colors">
                 <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <Icon icon={InformationCircleIcon} size={16} className="text-brand-600 dark:text-brand-400 shrink-0" />
                   <span className="text-sm font-medium text-text-primary">How to export from myBillBook</span>
                 </div>
-                <svg className="w-4 h-4 text-text-tertiary transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
+                <Icon icon={ArrowRight01Icon} size={16} className="text-text-tertiary transition-transform group-open:rotate-90" />
               </summary>
               <div className="px-4 pb-4 pt-1 border-t border-border-light bg-surface-1/50">
                 <p className="text-xs text-text-tertiary mb-3">
@@ -2192,7 +2135,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                 <div className="space-y-2.5">
                   {[
                     {
-                      icon: "📋",
+                      icon: Invoice01Icon,
                       name: "Sales Summary",
                       path: "Reports → Sales Summary Report → Download CSV",
                       what: "Invoice numbers, dates, parties, totals, payment status",
@@ -2200,7 +2143,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       badgeColor: "text-red-600 dark:text-red-400 bg-red-600/[0.08]",
                     },
                     {
-                      icon: "📊",
+                      icon: ChartBarLineIcon,
                       name: "GST Sales Report",
                       path: "Reports → GST Report → Sales → Download CSV",
                       what: "Line items per invoice — items sold, quantities, prices, GST breakdown",
@@ -2208,7 +2151,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       badgeColor: "text-amber-600 dark:text-amber-400 bg-amber-600/[0.08]",
                     },
                     {
-                      icon: "👥",
+                      icon: UserGroupIcon,
                       name: "All Party Balance",
                       path: "Parties → ⋮ Menu → Download Report → All Party Balance CSV",
                       what: "Customer details — phone numbers, addresses, GSTIN, balances",
@@ -2216,7 +2159,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       badgeColor: "text-brand-600 dark:text-brand-400 bg-brand-600/[0.08]",
                     },
                     {
-                      icon: "📦",
+                      icon: PackageIcon,
                       name: "Stock Summary",
                       path: "Items → ⋮ Menu → Download Report → Stock Summary CSV",
                       what: "Product catalog with units, categories, prices, current stock",
@@ -2224,7 +2167,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       badgeColor: "text-brand-600 dark:text-brand-400 bg-brand-600/[0.08]",
                     },
                     {
-                      icon: "🏦",
+                      icon: BankIcon,
                       name: "Cash & Bank Statement",
                       path: "Cash & Bank → Select each account → Download CSV",
                       what: "Payment transactions with dates, modes (Cash/UPI/Bank), invoice linkage",
@@ -2233,7 +2176,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                     },
                   ].map((file) => (
                     <div key={file.name} className="flex gap-3">
-                      <span className="text-base shrink-0 mt-0.5">{file.icon}</span>
+                      <IconCircle icon={file.icon} size="sm" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-semibold text-text-primary">{file.name}</span>
@@ -2284,9 +2227,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                   {isProcessing ? (
                     <Spinner size="sm" className="text-brand-500" />
                   ) : (
-                    <svg className="w-6 h-6 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
+                    <Icon icon={Upload04Icon} size={24} className="text-text-tertiary" />
                   )}
                 </div>
                 <div>
@@ -2343,7 +2284,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       )}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="text-base">{ft.icon}</span>
+                        <IconCircle icon={ft.icon} size="sm" />
                         <div>
                           <p className="text-sm font-medium text-text-primary">{ft.label}</p>
                           <p className="text-[11px] text-text-tertiary">{ft.description}</p>
@@ -2356,7 +2297,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                         return (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-emerald-600 font-medium tabular-nums">
-                            ✓ {fileCount} file{fileCount !== 1 ? "s" : ""} · {rowCount.toLocaleString()} rows
+                            <Icon icon={Tick02Icon} size={14} className="inline -mt-0.5" /> {fileCount} file{fileCount !== 1 ? "s" : ""} · {rowCount.toLocaleString()} rows
                           </span>
                           <button
                             type="button"
@@ -2364,9 +2305,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                             className="text-text-tertiary hover:text-red-500 transition-colors"
                             aria-label="Remove"
                           >
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                              <path d="M4 4l8 8M12 4l-8 8" />
-                            </svg>
+                            <Icon icon={Cancel01Icon} size={14} />
                           </button>
                         </div>
                         );
@@ -2381,7 +2320,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                 {gstReportFile ? (
                   <div className="flex items-center justify-between px-4 py-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-600/[0.05]">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-base">📊</span>
+                      <IconCircle icon={ChartBarLineIcon} size="sm" />
                       <div>
                         <p className="text-sm font-medium text-text-primary">GST Sales Report</p>
                         <p className="text-[11px] text-text-tertiary">Line items per invoice — items, quantities, prices, GST</p>
@@ -2389,7 +2328,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-emerald-600 font-medium tabular-nums">
-                        ✓ {gstFileCount} file{gstFileCount !== 1 ? "s" : ""} · {gstReportFile.rows.length.toLocaleString()} line items
+                        <Icon icon={Tick02Icon} size={14} className="inline -mt-0.5" /> {gstFileCount} file{gstFileCount !== 1 ? "s" : ""} · {gstReportFile.rows.length.toLocaleString()} line items
                       </span>
                       <button
                         type="button"
@@ -2397,16 +2336,14 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                         className="text-text-tertiary hover:text-red-500 transition-colors"
                         aria-label="Remove"
                       >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                          <path d="M4 4l8 8M12 4l-8 8" />
-                        </svg>
+                        <Icon icon={Cancel01Icon} size={14} />
                       </button>
                     </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between px-4 py-2.5 rounded-lg border border-border-light">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-base">📊</span>
+                      <IconCircle icon={ChartBarLineIcon} size="sm" />
                       <div>
                         <p className="text-sm font-medium text-text-primary">GST Sales Report</p>
                         <p className="text-[11px] text-text-tertiary">Line items per invoice — items, quantities, prices, GST</p>
@@ -2614,10 +2551,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
             <div className="rounded-xl border border-amber-300 dark:border-amber-700 overflow-hidden bg-amber-50/50 dark:bg-amber-950/20">
               <div className="px-4 py-3 bg-amber-100/60 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800">
                 <div className="flex items-center gap-2">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-amber-600 shrink-0">
-                    <path d="M8 1l7 13H1L8 1z" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                    <path d="M8 6v3M8 11.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                  </svg>
+                  <Icon icon={Alert02Icon} size={16} className="text-amber-600 shrink-0" />
                   <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">
                     {unitConflicts.length} item{unitConflicts.length > 1 ? "s" : ""} sold in multiple units — conversion factors needed
                   </span>
@@ -2818,9 +2752,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                 <div className="absolute inset-0 rounded-full bg-emerald-100 dark:bg-emerald-900/40 animate-ping opacity-20" />
                 {/* Checkmark */}
                 <div className="relative w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center animate-scale-in">
-                  <svg className="w-8 h-8 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
+                  <Icon icon={Tick02Icon} size={32} className="text-emerald-600" />
                 </div>
                 {/* Confetti-like particles */}
                 <div className="absolute -top-2 left-1/2 w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: "0.1s" }} />

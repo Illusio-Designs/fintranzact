@@ -13,6 +13,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Listbox } from "@/components/ui/Listbox";
+import { DateInput } from "@/components/ui/DateInput";
+import { Icon } from "@/components/ui/Icon";
+import { Alert02Icon, Download04Icon, PencilEdit02Icon, StarIcon } from "@hugeicons/core-free-icons";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -20,6 +23,7 @@ import { toast } from "@/hooks/useToast";
 import { getDatePreset } from "@/hooks/useDateRange";
 import type { GatewayChargeConfig } from "@fintranzact/shared";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/cash-and-bank")({
   component: CashAndBankPage,
 });
@@ -326,9 +330,7 @@ function CashAndBankPage() {
                               </Badge>
                             )}
                             {account.isDefault && (
-                              <svg className="w-3 h-3 text-amber-500 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
+                              <Icon icon={StarIcon} size={12} className="text-amber-500 shrink-0" />
                             )}
                           </div>
                           <p className="text-xs text-text-tertiary mt-0.5">
@@ -349,9 +351,7 @@ function CashAndBankPage() {
                       }}
                       aria-label="Edit account"
                     >
-                      <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
+                      <Icon icon={PencilEdit02Icon} size={14} />
                     </button>
                   </div>
                 ))}
@@ -419,8 +419,7 @@ function CashAndBankPage() {
 
                 {datePreset === "custom" && (
                   <div className="flex items-center gap-2 ml-2">
-                    <input
-                      type="date"
+                    <DateInput
                       value={formatDateInput(dateRange.fromDate)}
                       onChange={(e) =>
                         setDateRange((prev) => ({
@@ -431,8 +430,7 @@ function CashAndBankPage() {
                       className="input py-1 text-xs w-32"
                     />
                     <span className="text-text-tertiary text-xs">to</span>
-                    <input
-                      type="date"
+                    <DateInput
                       value={formatDateInput(dateRange.toDate)}
                       onChange={(e) =>
                         setDateRange((prev) => ({
@@ -452,11 +450,9 @@ function CashAndBankPage() {
                     className="btn-secondary text-xs px-3 py-1.5 ml-auto shrink-0 flex items-center gap-1.5"
                   >
                     {exporting ? (
-                      <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      <Spinner size="xs" />
                     ) : (
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3" />
-                      </svg>
+                      <Icon icon={Download04Icon} size={14} />
                     )}
                     {exporting ? "Preparing..." : "Export CSV"}
                   </button>
@@ -540,7 +536,7 @@ function CashAndBankPage() {
                   {/* Infinite scroll loading indicator */}
                   {txnFetching && allTxns.length > 0 && (
                     <div className="flex items-center justify-center py-3 border-t border-border-light">
-                      <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+                      <Spinner size="sm" className="text-brand-600" />
                       <span className="ml-2 text-xs text-text-tertiary">Loading more...</span>
                     </div>
                   )}
@@ -1162,9 +1158,10 @@ function EditAccountSlideOver({
               <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
                 <input
                   type="checkbox"
+                  role="switch"
                   checked={autoSettle}
                   onChange={(e) => setAutoSettle(e.target.checked)}
-                  className="rounded"
+                  className="switch"
                 />
                 Auto-settle to bank
               </label>
@@ -1182,9 +1179,7 @@ function EditAccountSlideOver({
             />
             {openingBalanceChanged && (
               <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
-                <svg className="w-3.5 h-3.5 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+                <Icon icon={Alert02Icon} size={14} className="mt-0.5 shrink-0" />
                 Changing the opening balance will affect the calculated running balance for all transactions.
               </p>
             )}
@@ -1194,9 +1189,10 @@ function EditAccountSlideOver({
             <label className="flex items-center gap-3 cursor-pointer py-2">
               <input
                 type="checkbox"
+                role="switch"
                 checked={isDefault}
                 onChange={(e) => setIsDefault(e.target.checked)}
-                className="rounded w-4 h-4"
+                className="switch"
               />
               <div>
                 <p className="text-sm font-medium text-text-primary">Set as default account</p>
@@ -1470,9 +1466,10 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
             <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
               <input
                 type="checkbox"
+                role="switch"
                 checked={autoSettle}
                 onChange={(e) => setAutoSettle(e.target.checked)}
-                className="rounded"
+                className="switch"
               />
               Auto-settle to bank
             </label>
@@ -1491,9 +1488,10 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
         <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
           <input
             type="checkbox"
+            role="switch"
             checked={isDefault}
             onChange={(e) => setIsDefault(e.target.checked)}
-            className="rounded"
+            className="switch"
           />
           Set as default account
         </label>

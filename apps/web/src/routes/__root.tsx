@@ -15,6 +15,35 @@ import { ShortcutIndicator } from "@/components/ui/ShortcutIndicator";
 import { Modal } from "@/components/ui/Modal";
 import { BusinessSwitcher } from "@/components/ui/BusinessSwitcher";
 import { Logo } from "@/components/ui/Logo";
+import { Icon } from "@/components/ui/Icon";
+import {
+  Add01Icon,
+  Alert02Icon,
+  BankIcon,
+  ChartLineData01Icon,
+  ComputerIcon,
+  CreditCardIcon,
+  DashboardSquare01Icon,
+  DeliveryTruck01Icon,
+  FileEditIcon,
+  FileSyncIcon,
+  FileValidationIcon,
+  Invoice01Icon,
+  Logout01Icon,
+  Menu01Icon,
+  Moon02Icon,
+  NoteRemoveIcon,
+  PackageIcon,
+  ReceiptDollarIcon,
+  ReturnRequestIcon,
+  Settings01Icon,
+  ShippingTruck01Icon,
+  ShoppingCart01Icon,
+  Sun03Icon,
+  TaxesIcon,
+  UnfoldMoreIcon,
+  UserIcon,
+} from "@hugeicons/core-free-icons";
 import { getRegisteredHotkeys } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
@@ -24,6 +53,7 @@ import { isMarketingPath } from "@/components/marketing/MarketingLayout";
 import { isDesktop } from "@/lib/isDesktop";
 import { clearDesktopToken } from "@/lib/desktop-session";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createRootRoute({
   component: RootLayout,
   errorComponent: RootError,
@@ -34,19 +64,7 @@ function RootError({ error }: { error: Error }) {
     <div className="min-h-screen flex items-center justify-center bg-surface-1 p-8">
       <div className="max-w-md text-center">
         <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-950 flex items-center justify-center mx-auto mb-4">
-          <svg
-            className="w-6 h-6 text-red-600"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
-            />
-          </svg>
+          <Icon icon={Alert02Icon} size={24} className="text-red-600" />
         </div>
         <h1 className="text-lg font-semibold text-text-primary mb-2">
           Something went wrong
@@ -126,7 +144,7 @@ const navSections = [
       {
         to: "/",
         label: "Dashboard",
-        icon: DashboardIcon,
+        icon: DashboardSquare01Icon,
         exact: true,
         resource: "Report",
         action: "read",
@@ -139,56 +157,56 @@ const navSections = [
       {
         to: "/invoices",
         label: "Invoices",
-        icon: InvoiceIcon,
+        icon: Invoice01Icon,
         resource: "Invoice",
         action: "read",
       },
       {
         to: "/quotations",
         label: "Quotations",
-        icon: QuotationIcon,
+        icon: FileEditIcon,
         resource: "Invoice",
         action: "read",
       },
       {
         to: "/sales-returns",
         label: "Sales Returns",
-        icon: SalesReturnIcon,
+        icon: ReturnRequestIcon,
         resource: "Invoice",
         action: "read",
       },
       {
         to: "/credit-notes",
         label: "Credit Notes",
-        icon: CreditNoteIcon,
+        icon: NoteRemoveIcon,
         resource: "Invoice",
         action: "read",
       },
       {
         to: "/delivery-challans",
         label: "Delivery Challans",
-        icon: DeliveryIcon,
+        icon: DeliveryTruck01Icon,
         resource: "Invoice",
         action: "read",
       },
       {
         to: "/proforma-invoices",
         label: "Proforma Invoices",
-        icon: ProformaIcon,
+        icon: FileValidationIcon,
         resource: "Invoice",
         action: "read",
       },
       {
         to: "/store-orders",
         label: "Store Orders",
-        icon: StoreOrdersIcon,
+        icon: ShoppingCart01Icon,
         resource: "Store",
         action: "read",
       },
       {
         to: "/automated-invoices",
         label: "Recurring Invoices",
-        icon: AutomatedInvoiceIcon,
+        icon: FileSyncIcon,
         resource: "RecurringInvoice",
         action: "read",
       },
@@ -200,7 +218,7 @@ const navSections = [
       {
         to: "/parties",
         label: "Parties",
-        icon: PartyIcon,
+        icon: UserIcon,
         resource: "Party",
         action: "read",
       },
@@ -212,7 +230,7 @@ const navSections = [
       {
         to: "/items",
         label: "Items",
-        icon: ItemIcon,
+        icon: PackageIcon,
         resource: "Item",
         action: "read",
       },
@@ -224,7 +242,7 @@ const navSections = [
       {
         to: "/payments",
         label: "Payments",
-        icon: PaymentIcon,
+        icon: CreditCardIcon,
         resource: "Payment",
         action: "read",
       },
@@ -238,14 +256,14 @@ const navSections = [
       {
         to: "/expenses",
         label: "Expenses",
-        icon: ExpenseIcon,
+        icon: ReceiptDollarIcon,
         resource: "Expense",
         action: "read",
       },
       {
         to: "/shipments",
         label: "Shipments",
-        icon: ShipmentsIcon,
+        icon: ShippingTruck01Icon,
         resource: "Invoice",
         action: "read",
       },
@@ -257,14 +275,14 @@ const navSections = [
       {
         to: "/gst",
         label: "__REPORTS__",
-        icon: GSTIcon,
+        icon: TaxesIcon,
         resource: "GstReport",
         action: "read",
       }, // label set dynamically based on GST status
       {
         to: "/gstr2b",
         label: "GSTR-2B Recon",
-        icon: ReportsIcon,
+        icon: ChartLineData01Icon,
         resource: "GstReport",
         action: "read",
         gstOnly: true,
@@ -272,7 +290,7 @@ const navSections = [
       {
         to: "/itc",
         label: "Input Tax Credit",
-        icon: ReportsIcon,
+        icon: ChartLineData01Icon,
         resource: "ITC",
         action: "read",
         gstOnly: true,
@@ -280,7 +298,7 @@ const navSections = [
       {
         to: "/eway-bills",
         label: "E-Way Bills",
-        icon: ReportsIcon,
+        icon: ChartLineData01Icon,
         resource: "EWayBill",
         action: "read",
         gstOnly: true,
@@ -288,7 +306,7 @@ const navSections = [
       {
         to: "/reports",
         label: "Reports",
-        icon: ReportsIcon,
+        icon: ChartLineData01Icon,
         resource: "Report",
         action: "read",
       },
@@ -338,7 +356,7 @@ function NoOrgScreen() {
 
         {invitesLoading ? (
           <div className="text-center py-4">
-            <div className="w-5 h-5 mx-auto border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+            <Spinner size="md" className="text-brand-600 mx-auto" />
           </div>
         ) : pendingInvites && pendingInvites.length > 0 ? (
           <>
@@ -378,7 +396,7 @@ function NoOrgScreen() {
                   </div>
                   {acceptByIdMutation.isPending &&
                     acceptByIdMutation.variables?.invitationId === inv.id && (
-                      <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                      <Spinner size="sm" className="text-brand-600 shrink-0" />
                     )}
                 </button>
               ))}
@@ -515,19 +533,7 @@ function TenantPicker({
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-dashed border-border-medium hover:border-brand-400 hover:bg-brand-600/5 transition-colors text-left group"
             >
               <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center text-text-secondary group-hover:text-brand-600 shrink-0">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 4.5v15m7.5-7.5h-15"
-                  />
-                </svg>
+                <Icon icon={Add01Icon} size={16} />
               </div>
               <span className="text-sm font-medium text-text-secondary group-hover:text-brand-700 transition-colors">
                 Create new organization
@@ -907,7 +913,7 @@ function RootLayout() {
     <div className="min-h-screen flex items-center justify-center bg-surface-0">
       <div className="flex flex-col items-center gap-3">
         <Logo className="w-10 h-10" />
-        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <Spinner size="md" className="text-brand-600" />
       </div>
     </div>
   );
@@ -949,7 +955,7 @@ function RootLayout() {
         <div className="min-h-screen flex items-center justify-center bg-surface-0">
           <div className="flex flex-col items-center gap-3">
             <Logo className="w-10 h-10" />
-            <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+            <Spinner size="md" className="text-brand-600" />
           </div>
         </div>
       );
@@ -1204,7 +1210,7 @@ function RootLayout() {
                             "exact" in item ? (item.exact as boolean) : false,
                         }}
                       >
-                        <item.icon />
+                        <Icon icon={item.icon} size={16} />
                         {item.label}
                       </Link>
                     ))}
@@ -1223,20 +1229,11 @@ function RootLayout() {
                 >
                   <p className="flex items-center gap-1.5 text-[11px] font-medium text-text-tertiary/60 group-hover:text-text-secondary transition-colors">
                     <span className="truncate">{tenantName}</span>
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="shrink-0 text-text-tertiary/40 group-hover:text-text-secondary transition-colors"
-                    >
-                      <path d="M8 9l4-4 4 4" />
-                      <path d="M16 15l-4 4-4-4" />
-                    </svg>
+                    <Icon
+                      icon={UnfoldMoreIcon}
+                      size={10}
+                      className="text-text-tertiary/40 group-hover:text-text-secondary transition-colors"
+                    />
                   </p>
                   <p className="text-[10px] text-text-tertiary/30 mt-0.5 tabular-nums">
                     v{__APP_VERSION__}
@@ -1268,17 +1265,7 @@ function RootLayout() {
                 onClick={() => setSidebarOpen(true)}
                 aria-label="Open navigation menu"
               >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 18 18"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                >
-                  <path d="M2 4.5h14M2 9h14M2 13.5h14" />
-                </svg>
+                <Icon icon={Menu01Icon} size={18} />
               </button>
             )}
 
@@ -1310,19 +1297,7 @@ function RootLayout() {
               aria-label="Settings"
               title="Settings"
             >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.75}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
+              <Icon icon={Settings01Icon} size={15} />
             </button>
 
             {/* Business switcher + User info — pushed to the right */}
@@ -1370,7 +1345,7 @@ function RootLayout() {
                 aria-label="Sign out"
                 title="Sign out"
               >
-                <LogoutIcon />
+                <Icon icon={Logout01Icon} size={14} />
               </button>
             </div>
           </div>
@@ -1433,9 +1408,9 @@ function ThemeToggle() {
     dark: "system",
   };
   const icons: Record<Theme, React.ReactNode> = {
-    system: <MonitorIcon />,
-    light: <SunIcon />,
-    dark: <MoonIcon />,
+    system: <Icon icon={ComputerIcon} size={16} />,
+    light: <Icon icon={Sun03Icon} size={16} />,
+    dark: <Icon icon={Moon02Icon} size={16} />,
   };
   const labels: Record<Theme, string> = {
     system: "System theme",
@@ -1581,394 +1556,5 @@ function ShortcutsDialog({
           ))}
       </div>
     </Modal>
-  );
-}
-
-// ── SVG Icons ──────────────────────────────────────────────────
-
-function DashboardIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="1.5" y="1.5" width="5" height="5" rx="1" />
-      <rect x="9.5" y="1.5" width="5" height="5" rx="1" />
-      <rect x="1.5" y="9.5" width="5" height="5" rx="1" />
-      <rect x="9.5" y="9.5" width="5" height="5" rx="1" />
-    </svg>
-  );
-}
-
-function InvoiceIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z" />
-      <path d="M5 6h6M5 8.5h4" />
-    </svg>
-  );
-}
-
-function QuotationIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z" />
-      <path d="M5 6h4M5 8.5h3" />
-      <path d="M10.5 10l1.5-1.5-1.5-1.5" />
-    </svg>
-  );
-}
-
-function CreditNoteIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z" />
-      <path d="M5 8.5h6" />
-    </svg>
-  );
-}
-
-function DeliveryIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M1.5 9.5h8V3.5H1.5v6z" />
-      <path d="M9.5 5.5h2.5l2 2.5v1.5h-4.5V5.5z" />
-      <circle cx="4" cy="11.5" r="1.2" />
-      <circle cx="11.5" cy="11.5" r="1.2" />
-    </svg>
-  );
-}
-
-function ProformaIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z" />
-      <path d="M5 6h6M5 8.5h3" />
-      <path d="M9.5 10.5l1.5 1 2-2" />
-    </svg>
-  );
-}
-
-function PartyIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="8" cy="5" r="2.5" />
-      <path d="M3 13.5c0-2.5 2.2-4 5-4s5 1.5 5 4" />
-    </svg>
-  );
-}
-
-function ItemIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M2 4l6-2.5L14 4v8l-6 2.5L2 12V4z" />
-      <path d="M8 6.5V14.5M2 4l6 2.5L14 4" />
-    </svg>
-  );
-}
-
-function PaymentIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" />
-      <path d="M1.5 7h13" />
-    </svg>
-  );
-}
-
-function BankIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M1.5 13.5h13M1.5 6.5h13" />
-      <path d="M8 2.5l6 4H2l6-4z" />
-      <path d="M3.5 6.5v7M6.5 6.5v7M9.5 6.5v7M12.5 6.5v7" />
-    </svg>
-  );
-}
-
-function GSTIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M2 13V3a1 1 0 011-1h10a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1z" />
-      <path d="M5 6h6M5 8.5h4M5 11h2" />
-    </svg>
-  );
-}
-
-function SalesReturnIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z" />
-      <path d="M6 6l-2 2 2 2" />
-      <path d="M4 8h5.5a1.5 1.5 0 000-3H9" />
-    </svg>
-  );
-}
-
-function ExpenseIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="1.5" width="10" height="13" rx="1" />
-      <path d="M6 5h4M6 8h4M6 11h2" />
-    </svg>
-  );
-}
-
-function ShipmentsIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M1 5.5h8v7H1z" />
-      <path d="M9 7h3.5l2 2.5V12.5H9V7z" />
-      <circle cx="3.5" cy="13" r="1.2" />
-      <circle cx="11.5" cy="13" r="1.2" />
-      <path d="M3.5 5.5V3a1 1 0 011-1h3a1 1 0 011 1v2.5" />
-    </svg>
-  );
-}
-
-function AutomatedInvoiceIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="2" y="1.5" width="8" height="11" rx="1" />
-      <path d="M5 5h2M5 7.5h2" />
-      <path d="M12.5 7.5a3 3 0 11-1-2.2" />
-      <path d="M11.5 3v2.3h2.3" />
-    </svg>
-  );
-}
-
-function ReportsIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M2 12.5V4l3 3 3-3.5L11 6l3-3" />
-      <path d="M2 14.5h12" />
-    </svg>
-  );
-}
-
-function StoreOrdersIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M1.5 2.5h13l-1.5 6h-10z" />
-      <circle cx="5.5" cy="13" r="1.2" />
-      <circle cx="10.5" cy="13" r="1.2" />
-      <path d="M5.5 11.8V9.5M10.5 11.8V9.5" />
-    </svg>
-  );
-}
-
-function SunIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    >
-      <circle cx="8" cy="8" r="3" />
-      <path d="M8 1.5v2M8 12.5v2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M1.5 8h2M12.5 8h2M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    >
-      <path d="M13.5 8.5a5.5 5.5 0 01-7-7 5.5 5.5 0 107 7z" />
-    </svg>
-  );
-}
-
-function MonitorIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    >
-      <rect x="1.5" y="2.5" width="13" height="9" rx="1.5" />
-      <path d="M5.5 14h5M8 11.5v2.5" />
-    </svg>
-  );
-}
-
-function LogoutIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3" />
-      <path d="M11 11l3-3-3-3" />
-      <path d="M14 8H6" />
-    </svg>
   );
 }

@@ -306,9 +306,9 @@ describe("QuickItemCreate", () => {
 
     await userEvent.type(screen.getByPlaceholderText("Item name"), "Test Item");
 
-    // Select a unit from the dropdown
-    const unitSelect = screen.getByDisplayValue("Select unit...");
-    await userEvent.selectOptions(unitSelect, "pcs");
+    // Pick a unit from the custom dropdown
+    await userEvent.click(screen.getByRole("combobox", { name: /unit/i }));
+    await userEvent.click(screen.getByRole("option", { name: /pcs/i }));
 
     const btn = screen.getByText("Create & Select");
     expect(btn).toBeEnabled();
@@ -316,7 +316,7 @@ describe("QuickItemCreate", () => {
 
   it('unit select starts with "Select unit..." placeholder', () => {
     render(<QuickItemCreate {...defaultProps} />);
-    expect(screen.getByDisplayValue("Select unit...")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /unit/i })).toHaveTextContent("Select unit...");
   });
 
   it("renders exactly one asterisk per required field (Name, Unit = 2 total)", () => {

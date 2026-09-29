@@ -1,4 +1,6 @@
 import { POSStore, usePOSSelector, computeCartTotals } from "./state";
+import { Icon } from "@/components/ui/Icon";
+import { Delete02Icon } from "@hugeicons/core-free-icons";
 
 interface Props {
   store: POSStore;
@@ -92,7 +94,7 @@ export function Cart({ store }: Props) {
                       onClick={() => store.removeLine(li.lineId)}
                       aria-label={`Remove ${li.itemName} from cart`}
                     >
-                      <TrashIcon />
+                      <Icon icon={Delete02Icon} size={16} />
                       Remove
                     </button>
                   </div>
@@ -124,27 +126,5 @@ export function Cart({ store }: Props) {
         </div>
       </div>
     </div>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      width="16"
-      height="16"
-      aria-hidden="true"
-    >
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-      <path d="M10 11v6M14 11v6" />
-      <path d="M9 6V4a2 2 0 012-2h2a2 2 0 012 2v2" />
-    </svg>
   );
 }

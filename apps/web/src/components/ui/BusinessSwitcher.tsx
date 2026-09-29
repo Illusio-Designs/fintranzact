@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
+import { Add01Icon, Tick02Icon, UnfoldMoreIcon } from "@hugeicons/core-free-icons";
+import { Icon } from "./Icon";
 
 interface BusinessSwitcherProps {
   businesses: Array<{ id: string; name: string }>;
@@ -218,57 +220,18 @@ export function BusinessSwitcher({
 
 function ChevronUpDownIcon() {
   return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="shrink-0 text-text-tertiary"
-      aria-hidden="true"
-    >
-      <path d="M8 9l4-4 4 4" />
-      <path d="M16 15l-4 4-4-4" />
-    </svg>
+    <Icon icon={UnfoldMoreIcon} size={14} className="text-text-tertiary" />
   );
 }
 
 function CheckIcon() {
   return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="shrink-0 text-brand-600"
-      aria-hidden="true"
-    >
-      <path d="M5 13l4 4L19 7" />
-    </svg>
+    <Icon icon={Tick02Icon} size={14} className="text-brand-600" />
   );
 }
 
 function PlusIcon() {
   return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 5v14M5 12h14" />
-    </svg>
+    <Icon icon={Add01Icon} size={10} strokeWidth={2.5} />
   );
 }

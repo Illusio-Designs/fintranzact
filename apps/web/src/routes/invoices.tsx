@@ -17,6 +17,7 @@ import { LinkButton } from "@/components/ui/LinkButton";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { DocumentCreator } from "@/components/DocumentCreator";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { Select } from "@/components/ui/Select";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -26,7 +27,10 @@ import { useInfiniteList } from "@/hooks/useInfiniteList";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { RecordPaymentPanel } from "@/components/RecordPaymentPanel";
+import { Icon } from "@/components/ui/Icon";
+import { Cash01Icon, Delete02Icon, Download04Icon, File01Icon, FlashIcon, SentIcon } from "@hugeicons/core-free-icons";
 
+import { Spinner } from "@/components/ui/Spinner";
 const invoicesSearchSchema = z.object({
   id: z.string().uuid().optional(),
   create: z.string().optional(),
@@ -149,11 +153,9 @@ function DownloadPDFButton({
         className="p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition-colors disabled:opacity-50"
       >
         {loading ? (
-          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <Spinner size="sm" />
         ) : (
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-          </svg>
+          <Icon icon={Download04Icon} size={16} />
         )}
       </button>
       {open && (
@@ -234,7 +236,7 @@ function CreateShipmentForm({ invoiceId, partyId, onCreated }: { invoiceId: stri
   return (
     <div className="mt-2 p-3 rounded-lg border border-border-light bg-surface-1 space-y-2">
       <div className="grid grid-cols-2 gap-2">
-        <select
+        <Select
           value={mode}
           onChange={(e) => setMode(e.target.value)}
           className="text-xs border border-border-light rounded-lg px-2 py-1.5 bg-surface-0 text-text-primary focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -244,7 +246,7 @@ function CreateShipmentForm({ invoiceId, partyId, onCreated }: { invoiceId: stri
           <option value="courier">Courier</option>
           <option value="transport">Transport</option>
           <option value="post">Post</option>
-        </select>
+        </Select>
         <input
           type="text"
           value={carrier}
@@ -1025,7 +1027,7 @@ function InvoicesPage() {
                 className="btn-secondary inline-flex items-center gap-2"
                 title="Open the fullscreen cashier register in this tab"
               >
-                <span aria-hidden="true">⚡</span>
+                <Icon icon={FlashIcon} size={16} />
                 Switch to POS
               </a>
             )}
@@ -1078,20 +1080,7 @@ function InvoicesPage() {
       ) : !list.items.length && !isFetching ? (
         <EmptyState
           icon={
-            <svg
-              className="w-6 h-6 text-text-tertiary"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
+            <Icon icon={File01Icon} size={24} className="text-text-tertiary" />
           }
           title="No invoices found"
           description={`No ${type === "sale" ? "sales" : "purchase"} invoices${status ? ` with status "${status}"` : ""}.`}
@@ -1192,9 +1181,7 @@ function InvoicesPage() {
                                 title={inv.status === "unfulfilled" ? "Mark fulfilled" : "Mark as sent"}
                                 className="p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
                               >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                                </svg>
+                                <Icon icon={SentIcon} size={16} />
                               </button>
                             )}
                             {inv.status !== "draft" &&
@@ -1213,9 +1200,7 @@ function InvoicesPage() {
                                   title="Record payment"
                                   className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-600/[0.08] transition-colors"
                                 >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
-                                  </svg>
+                                  <Icon icon={Cash01Icon} size={16} />
                                 </button>
                               )}
                             {(inv.status === "draft" || inv.status === "unfulfilled") && (
@@ -1226,9 +1211,7 @@ function InvoicesPage() {
                                 title="Delete invoice"
                                 className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
                               >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                </svg>
+                                <Icon icon={Delete02Icon} size={16} />
                               </button>
                             )}
                           </div>

@@ -7,6 +7,8 @@ import {
 import { PLAN_OPTIONS } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
+import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/Icon";
 export const Route = createFileRoute("/pricing")({
   component: PricingPage,
 });
@@ -63,9 +65,7 @@ function PricingPage() {
               <ul className="mt-6 flex-1 space-y-2.5 text-sm">
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex gap-2">
-                    <span className="text-brand-600" aria-hidden>
-                      ✓
-                    </span>
+                    <Icon icon={CheckmarkCircle02Icon} size={18} className="text-brand-600" />
                     <span className="text-text-secondary">{feature}</span>
                   </li>
                 ))}

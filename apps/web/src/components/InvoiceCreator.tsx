@@ -3,7 +3,12 @@ import { trpc } from "@/lib/trpc";
 import { formatCurrency, todayISODate, toISOString } from "@/lib/utils";
 import { apiUrl } from "@/lib/api-url";
 import { getBusinessId } from "@/lib/trpc";
+import { Select } from "@/components/ui/Select";
+import { DateInput } from "@/components/ui/DateInput";
+import { Icon } from "@/components/ui/Icon";
+import { Cancel01Icon, Download04Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons";
 
+import { Spinner } from "@/components/ui/Spinner";
 interface LineItem {
   id: string;
   itemId?: string;
@@ -224,9 +229,7 @@ export function InvoiceCreator({ type, onClose }: Props) {
             </p>
           </div>
           <button onClick={onClose} aria-label="Close" className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] transition-colors" style={{ color: "var(--text-tertiary)" }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <path d="M4 4l8 8M12 4l-8 8" />
-            </svg>
+            <Icon icon={Cancel01Icon} size={16} />
           </button>
         </div>
 
@@ -242,30 +245,27 @@ export function InvoiceCreator({ type, onClose }: Props) {
                 >
                   {type === "sale" ? "Customer" : "Supplier"} *
                 </label>
-                <select
+                <Select
                   id="invoice-party-select"
                   value={partyId}
                   onChange={(e) => setPartyId(e.target.value)}
                   required
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: "var(--surface-1)", border: "1px solid var(--border-color)", color: "var(--text-primary)" }}
                 >
                   <option value="">Select...</option>
                   {partiesData?.data.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                </Select>
               </div>
               <div>
                 <label htmlFor="invoice-date" className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Invoice date</label>
-                <input id="invoice-date" type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)}
+                <DateInput id="invoice-date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: "var(--surface-1)", border: "1px solid var(--border-color)", color: "var(--text-primary)" }}
                 />
               </div>
               <div>
                 <label htmlFor="invoice-due-date" className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Due date</label>
-                <input id="invoice-due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
+                <DateInput id="invoice-due-date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: "var(--surface-1)", border: "1px solid var(--border-color)", color: "var(--text-primary)" }}
                 />
               </div>
             </div>
@@ -305,16 +305,15 @@ export function InvoiceCreator({ type, onClose }: Props) {
                       style={{ gridTemplateColumns: "1fr 180px 72px 90px 64px 64px 90px 28px" }}
                     >
                       {/* Product selector */}
-                      <select
+                      <Select
                         value={li.itemId || ""}
                         onChange={(e) => selectProduct(li.id, e.target.value)}
                         aria-label="Product"
                         className="w-full px-2 py-1.5 rounded text-xs outline-none"
-                        style={{ background: "var(--surface-1)", border: "1px solid var(--border-color)", color: "var(--text-primary)" }}
                       >
                         <option value="">Custom item</option>
                         {itemsData?.data.map((p) => <option key={p.id} value={p.id}>{p.name}{p.itemMode === "variants" ? " (variants)" : p.itemMode === "alt_units" ? ` (${p.unit})` : ""}</option>)}
-                      </select>
+                      </Select>
 
                       {/* Item name (primary bold line on the invoice) */}
                       <input
@@ -397,9 +396,7 @@ export function InvoiceCreator({ type, onClose }: Props) {
                         aria-label="Remove line item"
                         className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950 text-red-500 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                       >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-                          <path d="M4 4l8 8M12 4l-8 8" />
-                        </svg>
+                        <Icon icon={Cancel01Icon} size={14} />
                       </button>
                     </div>
 
@@ -598,14 +595,13 @@ function VariantSelector({ itemId, selectedVariantId, onSelect }: {
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-[10px] font-medium" style={{ color: "var(--text-tertiary)" }}>Variant:</span>
-      <select
+      <Select
         value={selectedVariantId || ""}
         onChange={(e) => {
           const v = variants.find((v) => v.id === e.target.value);
           if (v) onSelect({ id: v.id, attributeValues: v.attributeValues as Record<string, string>, salePrice: v.salePrice, purchasePrice: v.purchasePrice });
         }}
         className="px-2 py-0.5 rounded text-[10px] outline-none"
-        style={{ background: "var(--surface-1)", border: "1px solid var(--border-color)", color: "var(--text-primary)" }}
       >
         <option value="">Select variant...</option>
         {variants.map((v) => {
@@ -616,7 +612,7 @@ function VariantSelector({ itemId, selectedVariantId, onSelect }: {
             </option>
           );
         })}
-      </select>
+      </Select>
       {!selectedVariantId && (
         <span className="text-[10px] text-amber-600">Please select a variant</span>
       )}
@@ -681,16 +677,12 @@ export function DownloadPDFButton({ invoiceId, invoiceNumber }: { invoiceId: str
         className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950 transition-colors disabled:opacity-50 border border-brand-200 dark:border-brand-800"
       >
         {loading ? (
-          <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <Spinner size="xs" />
         ) : (
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
+          <Icon icon={Download04Icon} size={14} />
         )}
         PDF
-        <svg className="w-3 h-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-        </svg>
+        <Icon icon={ArrowDown01Icon} size={12} className="opacity-60" />
       </button>
       {open && (
         <>

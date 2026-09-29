@@ -3,6 +3,7 @@ import { BusinessForm } from "@/components/settings/BusinessTab";
 import { Logo } from "@/components/ui/Logo";
 import { trpc } from "@/lib/trpc";
 
+import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
 });
@@ -28,7 +29,7 @@ function OnboardingPage() {
       <div className="min-h-screen flex items-center justify-center bg-surface-1">
         <div className="flex flex-col items-center gap-3">
           <Logo className="w-10 h-10" />
-          <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+          <Spinner size="md" className="text-brand-600" />
         </div>
       </div>
     );

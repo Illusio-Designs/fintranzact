@@ -3,40 +3,14 @@ import { trpc } from "@/lib/trpc";
 import { apiUrl } from "@/lib/api-url";
 import { toast } from "@/hooks/useToast";
 import { Spinner } from "@/components/ui/Spinner";
+import { Icon } from "@/components/ui/Icon";
+import { Alert02Icon, Shield01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function UploadIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
-  );
-}
-
-function WarningIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0">
-      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  );
-}
-
-function ShieldIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  );
 }
 
 interface Compatibility {
@@ -161,7 +135,7 @@ export function RestoreOnboarding({ tenantId, onBack }: RestoreOnboardingProps) 
         <div className="card px-6 py-5">
           <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 mb-4">
             <div className="flex items-start gap-2 text-emerald-700 dark:text-emerald-400">
-              <ShieldIcon />
+              <Icon icon={Shield01Icon} size={16} />
               <div className="text-xs">
                 <p className="font-semibold mb-1">Restore complete</p>
                 <p>{importResult.rowsInserted.toLocaleString()} rows imported in {(importResult.durationMs / 1000).toFixed(1)}s.</p>
@@ -178,7 +152,7 @@ export function RestoreOnboarding({ tenantId, onBack }: RestoreOnboardingProps) 
               role="alert"
             >
               <div className="flex items-start gap-2 text-amber-700 dark:text-amber-400">
-                <WarningIcon />
+                <Icon icon={Alert02Icon} size={16} />
                 <div className="text-xs leading-relaxed">
                   <p className="font-semibold mb-1">Best-effort restore</p>
                   <p className="mb-2">
@@ -224,7 +198,7 @@ export function RestoreOnboarding({ tenantId, onBack }: RestoreOnboardingProps) 
         {/* Warning box */}
         <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 mb-5">
           <div className="flex items-start gap-2 text-amber-700 dark:text-amber-400">
-            <WarningIcon />
+            <Icon icon={Alert02Icon} size={16} />
             <div className="text-xs leading-relaxed">
               <span className="font-semibold">Upload a .tar.gz backup</span> previously exported from Fintranzact.
               All data will be imported preserving original IDs. This action cannot be undone.
@@ -248,7 +222,7 @@ export function RestoreOnboarding({ tenantId, onBack }: RestoreOnboardingProps) 
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
           >
-            <UploadIcon />
+            <Icon icon={Upload04Icon} size={20} />
             {selectedFile ? "Change file" : "Select backup file (.gz)"}
           </button>
           {selectedFile && (
@@ -279,7 +253,7 @@ export function RestoreOnboarding({ tenantId, onBack }: RestoreOnboardingProps) 
         {importError && (
           <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 mb-4">
             <div className="flex items-start gap-2 text-red-700 dark:text-red-400">
-              <WarningIcon />
+              <Icon icon={Alert02Icon} size={16} />
               <p className="text-xs">{importError}</p>
             </div>
           </div>
@@ -291,7 +265,7 @@ export function RestoreOnboarding({ tenantId, onBack }: RestoreOnboardingProps) 
           disabled={!canRestore}
           aria-label="Restore from backup"
         >
-          {isUploading ? <Spinner size="sm" /> : <UploadIcon />}
+          {isUploading ? <Spinner size="sm" /> : <Icon icon={Upload04Icon} size={20} />}
           {isUploading ? "Restoring..." : "Restore from backup"}
         </button>
 

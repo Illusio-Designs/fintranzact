@@ -1,5 +1,7 @@
 import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
+import { Alert02Icon, Delete02Icon } from "@hugeicons/core-free-icons";
+import { IconCircle } from "./Icon";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -24,15 +26,22 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Modal open={open} onClose={onCancel} className="max-w-sm">
-      <div className="pb-2">
-        <p className="text-sm font-semibold text-text-primary">
-          {title}
-        </p>
-        {description && (
-          <p className="text-sm mt-2 text-text-secondary">
-            {description}
+      <div className="flex items-start gap-3 pb-2">
+        <IconCircle
+          icon={variant === "danger" ? Delete02Icon : Alert02Icon}
+          tone={variant === "danger" ? "danger" : "brand"}
+          size="lg"
+        />
+        <div className="min-w-0 pt-0.5">
+          <p className="text-sm font-semibold text-text-primary">
+            {title}
           </p>
-        )}
+          {description && (
+            <p className="text-sm mt-1.5 text-text-secondary">
+              {description}
+            </p>
+          )}
+        </div>
       </div>
       <div className="flex items-center justify-end gap-2 pt-4 border-t border-border-light">
         <button

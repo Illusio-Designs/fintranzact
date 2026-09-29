@@ -1,6 +1,10 @@
 import { cn } from "@/lib/utils";
 import { DATE_PRESETS, type DatePreset } from "@/hooks/useDateRange";
+import { Download04Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "./Icon";
+import { DateInput } from "./DateInput";
 
+import { Spinner } from "./Spinner";
 interface DateRangeBarProps {
   preset: DatePreset;
   onPresetChange: (preset: DatePreset) => void;
@@ -42,18 +46,18 @@ export function DateRangeBar({
 
       {preset === "custom" && onCustomChange && (
         <div className="flex items-center gap-2 ml-1">
-          <input
-            type="date"
+          <DateInput
             value={customFrom || ""}
             onChange={(e) => onCustomChange(e.target.value, customTo || "")}
-            className="input py-1 text-xs w-32"
+            aria-label="From date"
+            className="input py-1 text-xs w-36"
           />
           <span className="text-text-tertiary text-xs">to</span>
-          <input
-            type="date"
+          <DateInput
             value={customTo || ""}
             onChange={(e) => onCustomChange(customFrom || "", e.target.value)}
-            className="input py-1 text-xs w-32"
+            aria-label="To date"
+            className="input py-1 text-xs w-36"
           />
         </div>
       )}
@@ -66,14 +70,12 @@ export function DateRangeBar({
         >
           {exporting ? (
             <>
-              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              <Spinner size="xs" />
               Preparing...
             </>
           ) : (
             <>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3" />
-              </svg>
+              <Icon icon={Download04Icon} size={14} />
               Export CSV
             </>
           )}

@@ -10,6 +10,9 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { QuickPartyCreate } from "@/components/QuickPartyCreate";
 import { QuickItemCreate, type QuickItemCreateResult } from "@/components/QuickItemCreate";
+import { DateInput } from "@/components/ui/DateInput";
+import { Icon } from "@/components/ui/Icon";
+import { Delete02Icon, Cancel01Icon, DeliveryTruck01Icon } from "@hugeicons/core-free-icons";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -149,7 +152,7 @@ export function DocumentCreator({
   // Ref the date input so we can move focus there as soon as a customer is
   // picked — otherwise Tab cycles back to the customer combobox in the
   // dialog's focus order.
-  const dateInputRef = useRef<HTMLInputElement>(null);
+  const dateInputId = useId();
 
   // Active business — used to read defaultRoundOff and defaultTermsAndConditions.
   // The list is already cached by __root.tsx; this query is essentially free.
@@ -685,7 +688,7 @@ export function DocumentCreator({
               // doesn't bounce focus back into the (now-selected) combobox
               // and re-open its dropdown.
               if (id) {
-                requestAnimationFrame(() => dateInputRef.current?.focus());
+                requestAnimationFrame(() => document.getElementById(dateInputId)?.focus());
               }
             }}
             options={partyOptions}
@@ -702,9 +705,8 @@ export function DocumentCreator({
           />
           <div>
             <label className="label">Date</label>
-            <input
-              ref={dateInputRef}
-              type="date"
+            <DateInput
+              id={dateInputId}
               value={invoiceDate}
               onChange={(e) => setInvoiceDate(e.target.value)}
               className="input"
@@ -713,8 +715,7 @@ export function DocumentCreator({
           {!["credit_note", "sales_return", "purchase_return"].includes(documentType) && (
             <div>
               <label className="label">Due date</label>
-              <input
-                type="date"
+              <DateInput
                 value={dueDate}
                 onChange={(e) => { setDueDate(e.target.value); setDueDateManuallySet(true); }}
                 className="input"
@@ -759,12 +760,7 @@ export function DocumentCreator({
                   >
                     {/* Trash icon — distinct from the combobox's clear-X
                         which sits next to it inside the product picker. */}
-                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M2.5 4h11" />
-                      <path d="M6.5 4V2.5h3V4" />
-                      <path d="M3.75 4l.75 9a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1l.75-9" />
-                      <path d="M6.5 7v4M9.5 7v4" />
-                    </svg>
+                    <Icon icon={Delete02Icon} size={15} />
                   </button>
                 </div>
 
@@ -1020,9 +1016,7 @@ export function DocumentCreator({
                           className="text-text-tertiary hover:text-red-500 transition-colors p-0.5"
                           aria-label="Remove charge"
                         >
-                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                            <path d="M4 4l8 8M12 4l-8 8" />
-                          </svg>
+                          <Icon icon={Cancel01Icon} size={12} />
                         </button>
                       </>
                     )}
@@ -1053,12 +1047,7 @@ export function DocumentCreator({
                     onClick={() => setCharges([...charges, { label: "Shipping", amount: "" }])}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors border border-dashed border-border-light"
                   >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                      <path d="M1.5 10h8V4H1.5v6z" />
-                      <path d="M9.5 6h2.5l2 2.5V10h-4.5V6z" />
-                      <circle cx="4" cy="11.5" r="1" />
-                      <circle cx="11.5" cy="11.5" r="1" />
-                    </svg>
+                    <Icon icon={DeliveryTruck01Icon} size={12} />
                     Shipping
                   </button>
                 )}

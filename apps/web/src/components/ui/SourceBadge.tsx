@@ -1,4 +1,6 @@
 import { cn } from "@/lib/utils";
+import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "./Icon";
 
 const sourceLabels: Record<string, string> = {
   mybillbook: "myBillBook",
@@ -25,9 +27,7 @@ export function SourceBadge({ source, className }: { source: string | null; clas
         className
       )}
     >
-      <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-        <path d="M2 8h12M8 3l5 5-5 5" />
-      </svg>
+      <Icon icon={ArrowRight02Icon} size={10} strokeWidth={2} />
       {label}
     </span>
   );
