@@ -4,7 +4,7 @@ import {
   MarketingLayout,
   PageHero,
 } from "@/components/marketing/MarketingLayout";
-import { PLAN_OPTIONS } from "@/lib/plans";
+import { PLAN_LIMITS, PLAN_OPTIONS, formatPlanLimit, type PlanId } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 import { EYEBROW, FaqAccordion, HEADING, PricingCards } from "@/components/marketing/sections";
 
@@ -55,45 +55,73 @@ const INCLUDED: Array<[IconSvgElement, string, string]> = [
 ];
 
 type Cell = boolean | string;
-const COMPARE: Array<{ group: string; rows: Array<[string, Cell, Cell, Cell]> }> = [
-  {
-    group: "Billing & GST",
-    rows: [
-      ["Invoices, parties and payments", "Unlimited", "Unlimited", "Unlimited"],
-      ["Quotations, challans and credit notes", true, true, true],
-      ["e-Invoicing and e-Way Bills", true, true, true],
-      ["GSTR-1, GSTR-3B and GSTR-2B", true, true, true],
-      ["No Fintranzact branding on documents", true, true, true],
-    ],
-  },
-  {
-    group: "Books & inventory",
-    rows: [
-      ["Inventory, variants and shipments", true, true, true],
-      ["Cash, bank and reconciliation", true, true, true],
-      ["Financial and tax reports", true, true, true],
-      ["Premium reporting", false, false, true],
-    ],
-  },
-  {
-    group: "Team & platform",
-    rows: [
-      ["Businesses and team members", "Unlimited", "Unlimited", "Unlimited"],
-      ["API access", "Unlimited", "Unlimited", "Unlimited"],
-      ["Advanced automation and workflows", false, true, true],
-      ["Expanded collaboration", false, true, true],
-      ["Multi-tenant controls", false, false, true],
-    ],
-  },
-  {
-    group: "Support",
-    rows: [
-      ["Help centre and email support", true, true, true],
-      ["Priority support", false, true, true],
-      ["Dedicated onboarding", false, false, true],
-    ],
-  },
-];
+
+/**
+ * Comparison rows. The limit rows are read from PLAN_LIMITS — the same values
+ * the API enforces — so this table can never promise more than a plan allows.
+ */
+function buildComparison(): Array<{ group: string; rows: Array<[string, ...Cell[]]> }> {
+  const limits = PLAN_OPTIONS.map((plan) => PLAN_LIMITS[plan.id]);
+  const row = (label: string, pick: (l: (typeof limits)[number]) => Cell): [string, ...Cell[]] => [
+    label,
+    ...limits.map(pick),
+  ];
+  const all = (label: string): [string, ...Cell[]] => [label, ...limits.map(() => true)];
+  // Paid-plan extras: included in the named plan and every plan listed after it.
+  const from = (label: string, planId: PlanId): [string, ...Cell[]] => {
+    const start = PLAN_OPTIONS.findIndex((p) => p.id === planId);
+    return [label, ...PLAN_OPTIONS.map((_, i) => start >= 0 && i >= start)];
+  };
+  return [
+    {
+      group: "Billing & GST",
+      rows: [
+        row("Invoices, parties and payments", () => "Unlimited"),
+        all("Quotations, challans and credit notes"),
+        all("e-Invoicing and e-Way Bills"),
+        all("GSTR-1, GSTR-3B and GSTR-2B"),
+        row("No Fintranzact branding on documents", (l) => !l.pdfBranding),
+      ],
+    },
+    {
+      group: "Books & inventory",
+      rows: [
+        all("Inventory, variants and shipments"),
+        all("Cash, bank and reconciliation"),
+        all("Financial and tax reports"),
+        row("Online store", (l) => l.onlineStore),
+        row("Full data export", (l) => l.dataExport),
+      ],
+    },
+    {
+      group: "Team & limits",
+      rows: [
+        row("Organizations you can own", (l) => formatPlanLimit(l.maxOwnedOrgs)),
+        row("Businesses per organization", (l) => formatPlanLimit(l.maxBusinesses)),
+        row("Team members", (l) => formatPlanLimit(l.maxTeamMembers)),
+        row("Devices signed in at once", (l) => formatPlanLimit(l.maxConcurrentSessions)),
+        row("API keys", (l) => formatPlanLimit(l.maxApiKeys)),
+        row("Recurring invoice runs a month", (l) => formatPlanLimit(l.recurringRunsPerMonth)),
+        row("Audit log history", (l) => formatPlanLimit(l.auditRetentionDays, "days")),
+      ],
+    },
+    {
+      group: "Plan extras",
+      rows: [
+        from("Advanced automation and workflows", "pro"),
+        from("Expanded collaboration", "pro"),
+        from("Multi-tenant controls", "business"),
+        from("Premium reporting", "business"),
+      ],
+    },
+    {
+      group: "Support",
+      rows: [all("Help centre and email support"), from("Priority support", "pro"), from("Dedicated onboarding", "business")],
+    },
+  ];
+}
+
+const COMPARE = buildComparison();
 
 function CellValue({ value }: { value: Cell }) {
   if (value === true) {

@@ -36,7 +36,7 @@ export function PricingCards({ className }: { className?: string }) {
             <p className="mt-1 text-sm text-[#9fb0d6]">{plan.tagline}</p>
             <p className="mt-6">
               <span className="font-display text-5xl font-extrabold">{plan.price}</span>
-              <span className="text-[15px] text-[#9fb0d6]"> / forever</span>
+              <span className="text-[15px] text-[#9fb0d6]">{plan.monthlyPriceInr === 0 ? " / forever" : plan.monthlyPriceInr === null ? "" : " / month"}</span>
             </p>
             <ul className="mt-6 flex-1 space-y-3 text-[15px] text-[#dbe4f5]">
               {plan.features.map((f) => (
@@ -59,7 +59,9 @@ export function PricingCards({ className }: { className?: string }) {
             <p className="text-lg font-bold text-text-primary">{plan.name}</p>
             <p className="mt-1 text-sm text-text-tertiary">{plan.tagline}</p>
             <p className="mt-6 font-display text-[40px] font-extrabold text-[#0f1b3d] dark:text-white">{plan.price}</p>
-            <p className="mt-1 text-[13px] text-text-tertiary">Priced to your team size</p>
+            <p className="mt-1 text-[13px] text-text-tertiary">
+              {plan.monthlyPriceInr === null ? "Priced to your team size" : plan.monthlyPriceInr === 0 ? "Free forever" : "per month"}
+            </p>
             <ul className="mt-5 flex-1 space-y-3 text-[15px] text-text-secondary">
               {plan.features.map((f) => (
                 <li key={f} className="flex gap-2.5">
