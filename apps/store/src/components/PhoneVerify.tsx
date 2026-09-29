@@ -115,7 +115,7 @@ export function PhoneVerify({ slug, accentColor, onVerified, onBack }: PhoneVeri
         credentials: "omit",
         headers: {
           "Content-Type": "application/json",
-          "X-Requested-With": "hisaabo",
+          "X-Requested-With": "fintranzact",
         },
         body: JSON.stringify({ phone: `+91${phone}`, turnstileToken: tokenRef.current }),
       });

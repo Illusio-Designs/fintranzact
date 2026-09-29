@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import path from "path";
@@ -14,16 +14,27 @@ const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "ut
 //   console.log('sha256-'+c.createHash('sha256').update(s).digest('base64'));"
 const THEME_SCRIPT_HASH = "sha256-7v6Dh3op5YztyC/jZCheSbtL3NqCrnIjQcllTk6J6Ug=";
 
-function cspPlugin(): Plugin {
+/** Normalise API_URL to a bare origin for CSP (e.g. "http://localhost:3000"). */
+function toOrigin(value: string | undefined): string | null {
+  if (!value?.trim()) return null;
+  try {
+    return new URL(value.trim()).origin;
+  } catch {
+    return null;
+  }
+}
+
+function cspPlugin(apiOrigin: string | null): Plugin {
   return {
     name: "csp-meta-tag",
     transformIndexHtml: {
       order: "pre",
       handler(html, ctx) {
         const isDev = ctx.server !== undefined;
-        const apiOrigin = process.env.API_URL; // e.g. "${import.meta.env.API_URL}"
+        // When API_URL is set the app calls the API directly (not via the
+        // /api proxy), so its origin must be allowed in dev as well as prod.
         const connectSrc = isDev
-          ? "connect-src 'self' ws:"
+          ? `connect-src 'self' ws:${apiOrigin ? ` ${apiOrigin}` : ""}`
           : apiOrigin
             ? `connect-src 'self' ${apiOrigin}`
             : "connect-src 'self'";
@@ -60,7 +71,13 @@ function getVersion(): string {
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // Read API_URL the same way the client bundle does (process env or .env
+  // files), so the CSP always allows the origin the app will call.
+  const fileEnv = loadEnv(mode, __dirname, ["VITE_", "API_URL"]);
+  const apiOrigin = toOrigin(process.env.API_URL ?? fileEnv.API_URL);
+
+  return {
   // Vite only exposes VITE_* vars to client code by default; the app reads
   // import.meta.env.API_URL (trpc.ts, api-url.ts), so expose it explicitly.
   // Without this, split-host deploys (e.g. Vercel) send API calls to the web
@@ -70,7 +87,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(getVersion()),
   },
   plugins: [
-    cspPlugin(),
+    cspPlugin(apiOrigin),
     TanStackRouterVite(),
     react(),
   ],
@@ -103,4 +120,5 @@ export default defineConfig({
       },
     },
   },
+};
 });

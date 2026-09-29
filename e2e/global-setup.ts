@@ -51,7 +51,7 @@ setup("authenticate", async ({ page, request }) => {
   const createBizRes = await request.post(`${apiUrl}/api/trpc/business.create`, {
     headers: {
       "Content-Type": "application/json",
-      "X-Requested-With": "hisaabo",
+      "X-Requested-With": "fintranzact",
       Cookie: cookieHeader,
     },
     data: {
@@ -84,7 +84,7 @@ setup("authenticate", async ({ page, request }) => {
   const createPartyRes = await request.post(`${apiUrl}/api/trpc/party.create`, {
     headers: {
       "Content-Type": "application/json",
-      "X-Requested-With": "hisaabo",
+      "X-Requested-With": "fintranzact",
       Cookie: cookieHeader,
       "x-business-id": businessId,
     },
@@ -106,7 +106,7 @@ setup("authenticate", async ({ page, request }) => {
   const createItemRes = await request.post(`${apiUrl}/api/trpc/item.create`, {
     headers: {
       "Content-Type": "application/json",
-      "X-Requested-With": "hisaabo",
+      "X-Requested-With": "fintranzact",
       Cookie: cookieHeader,
       "x-business-id": businessId,
     },

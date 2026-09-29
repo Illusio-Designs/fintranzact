@@ -10,7 +10,7 @@ services:
       - "3000:3000"
     env_file: .env.prod
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-hisaabo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hisaabo}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fintranzact}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fintranzact}
       NODE_ENV: production
       PORT: 3000
       UV_THREADPOOL_SIZE: "8"
@@ -31,7 +31,7 @@ services:
       - pgdata:/var/lib/postgresql/data
     env_file: .env.prod
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hisaabo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fintranzact}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -47,9 +47,9 @@ services:
     environment:
       PGHOST: postgres
       PGPORT: "5432"
-      PGUSER: ${POSTGRES_USER:-hisaabo}
+      PGUSER: ${POSTGRES_USER:-fintranzact}
       PGPASSWORD: ${POSTGRES_PASSWORD}
-      DB_USER: ${POSTGRES_USER:-hisaabo}
+      DB_USER: ${POSTGRES_USER:-fintranzact}
       BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
@@ -58,7 +58,7 @@ services:
       BACKUP_CRON: ${BACKUP_CRON:-0 2 * * *}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
     volumes:
-      - backup_data:/var/backups/hisaabo
+      - backup_data:/var/backups/fintranzact
 
 volumes:
   pgdata:

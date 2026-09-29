@@ -10,7 +10,7 @@
  * IMPORTANT: These tests require a real PostgreSQL database. Set TEST_DATABASE_URL
  * in the environment before running:
  *
- *   TEST_DATABASE_URL=postgresql://test:test@localhost:5433/hisaabo_test pnpm test
+ *   TEST_DATABASE_URL=postgresql://test:test@localhost:5433/fintranzact_test pnpm test
  *
  * The docker-compose.test.yml in the root provides a RAM-backed test DB.
  */

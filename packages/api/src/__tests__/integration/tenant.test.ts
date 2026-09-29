@@ -51,7 +51,7 @@ function callerForTenant(
     "content-type": "application/json",
     "cookie": `session_id=${sessionId}`,
     // Satisfies the tRPC CSRF middleware — see `packages/api/src/trpc.ts`.
-    "x-requested-with": "hisaabo",
+    "x-requested-with": "fintranzact",
   });
   const req = new Request("http://localhost:3000/api/trpc/test", { method: "POST", headers });
   return _callerFactory({
@@ -70,7 +70,7 @@ function callerNoTenant(sessionId: string, user: { id: string; email: string; na
     "content-type": "application/json",
     "cookie": `session_id=${sessionId}`,
     // Satisfies the tRPC CSRF middleware — see `packages/api/src/trpc.ts`.
-    "x-requested-with": "hisaabo",
+    "x-requested-with": "fintranzact",
   });
   const req = new Request("http://localhost:3000/api/trpc/test", { method: "POST", headers });
   return _callerFactory({

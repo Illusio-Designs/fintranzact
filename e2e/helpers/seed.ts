@@ -66,7 +66,7 @@ export class SeedApi implements ApiClient {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Requested-With": "hisaabo",
+        "X-Requested-With": "fintranzact",
         Cookie: this.cookies,
         ...headers,
       },
@@ -90,7 +90,7 @@ export class SeedApi implements ApiClient {
       : "";
     const res = await fetch(`${this.baseUrl}/api/trpc/${procedure}${inputParam}`, {
       headers: {
-        "X-Requested-With": "hisaabo",
+        "X-Requested-With": "fintranzact",
         Cookie: this.cookies,
         ...headers,
       },
@@ -365,7 +365,7 @@ export async function registerUser(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Requested-With": "hisaabo",
+      "X-Requested-With": "fintranzact",
     },
     body: JSON.stringify({
       json: {
@@ -399,7 +399,7 @@ export async function acceptInvite(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Requested-With": "hisaabo",
+      "X-Requested-With": "fintranzact",
       Cookie: `session=${sessionCookie}`,
     },
     body: JSON.stringify({ json: { token } }),

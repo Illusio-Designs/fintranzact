@@ -5,6 +5,7 @@ import { getTenantDb, type TenantDatabase, businesses, businessMembers } from "@
 import { eq, and } from "drizzle-orm";
 import { defineAbilityFor, mapDbRole, type AppAbility } from "./lib/permissions.js";
 import { getMaintenanceStatus } from "./lib/maintenance-cache.js";
+import { isFirstPartyRequestedWith } from "./lib/client-headers.js";
 
 // ── Middleware context shape interfaces ────────────────────────
 // These represent the enriched context after each middleware runs.
@@ -59,7 +60,8 @@ export const createCallerFactory = t.createCallerFactory;
 //     cookie jar replays stale `session_id` cookies that must not
 //     trip this check.
 //   - No session cookie: exempt — nothing to protect.
-//   - Otherwise: require `X-Requested-With: hisaabo` or throw
+//   - Otherwise: require `X-Requested-With: fintranzact` (legacy
+//     `hisaabo` still accepted — see lib/client-headers.ts) or throw
 //     TRPCError({code: "FORBIDDEN"}).
 const csrfCheck = t.middleware(({ ctx, next }) => {
   const req = ctx.req;
@@ -80,7 +82,7 @@ const csrfCheck = t.middleware(({ ctx, next }) => {
   }
 
   const xrw = req.headers.get("x-requested-with");
-  if (xrw !== "hisaabo") {
+  if (!isFirstPartyRequestedWith(xrw)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "CSRF validation failed",

@@ -66,19 +66,19 @@ jobs:
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: hisaabo_test
+          POSTGRES_DB: fintranzact_test
         ports:
           - 5433:5432
         options: >-
-          --health-cmd "pg_isready -U test -d hisaabo_test"
+          --health-cmd "pg_isready -U test -d fintranzact_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
           --tmpfs /var/lib/postgresql/data
 
     env:
-      TEST_DATABASE_URL: postgresql://test:test@localhost:5433/hisaabo_test
-      DATABASE_URL: postgresql://test:test@localhost:5433/hisaabo_test
+      TEST_DATABASE_URL: postgresql://test:test@localhost:5433/fintranzact_test
+      DATABASE_URL: postgresql://test:test@localhost:5433/fintranzact_test
 
     steps:
       - uses: actions/checkout@v4
@@ -139,18 +139,18 @@ jobs:
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: hisaabo_test
+          POSTGRES_DB: fintranzact_test
         ports:
           - 5433:5432
         options: >-
-          --health-cmd "pg_isready -U test -d hisaabo_test"
+          --health-cmd "pg_isready -U test -d fintranzact_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
           --tmpfs /var/lib/postgresql/data
 
     env:
-      DATABASE_URL: postgresql://test:test@localhost:5433/hisaabo_test
+      DATABASE_URL: postgresql://test:test@localhost:5433/fintranzact_test
       PORT: 3000
       CORS_ORIGINS: http://localhost:5173
 
@@ -197,4 +197,4 @@ jobs:
         with:
           context: .
           push: false
-          tags: hisaabo-api:test
+          tags: fintranzact-api:test

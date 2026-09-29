@@ -28,7 +28,7 @@ export class ApiHelper {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Requested-With": "hisaabo",
+        "X-Requested-With": "fintranzact",
         Cookie: cookieHeader,
         ...headers,
       },
@@ -62,7 +62,7 @@ export class ApiHelper {
       {
         method: "GET",
         headers: {
-          "X-Requested-With": "hisaabo",
+          "X-Requested-With": "fintranzact",
           Cookie: cookieHeader,
           ...headers,
         },
