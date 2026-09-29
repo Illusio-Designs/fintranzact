@@ -542,14 +542,14 @@ docker build -f Dockerfile.once -t hisaabo-once .
 docker run -v /data/hisaabo:/storage -p 80:80 hisaabo-once
 ```
 
-### Cloudflare Pages (frontends)
+### Vercel (frontends)
 
 | App | Build command | Output directory |
 |---|---|---|
 | Web | `pnpm --filter @fintranzact/web build` | `apps/web/dist` |
 | Store | `pnpm --filter @fintranzact/store build` | `apps/store/dist` |
 
-Set `VITE_API_URL` in Cloudflare Pages environment variables.
+Set `VITE_API_URL` in the Vercel project's environment variables.
 
 ### Desktop and Mobile
 

@@ -23,7 +23,7 @@ This folder contains **internal architecture documents, audit reports, and desig
 - [`usability-audit-mobile.md`](usability-audit-mobile.md) — Mobile app UX findings and recommendations
 
 ### Deployment
-- [`DEPLOYMENT.md`](DEPLOYMENT.md) — Production deployment guide (Docker, ONCE, Cloudflare Pages)
+- [`DEPLOYMENT.md`](DEPLOYMENT.md) — Production deployment guide (Docker, ONCE, Vercel)
 
 ## Feature Reference
 
