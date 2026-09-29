@@ -10,8 +10,11 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WidgetsRouteImport } from './routes/widgets'
+import { Route as WarehousesRouteImport } from './routes/warehouses'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StoreOrdersRouteImport } from './routes/store-orders'
+import { Route as StockTransfersRouteImport } from './routes/stock-transfers'
+import { Route as StockAdjustmentsRouteImport } from './routes/stock-adjustments'
 import { Route as ShipmentsRouteImport } from './routes/shipments'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SalesReturnsRouteImport } from './routes/sales-returns'
@@ -23,6 +26,7 @@ import { Route as ProformaInvoicesRouteImport } from './routes/proforma-invoices
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PosRouteImport } from './routes/pos'
+import { Route as PhysicalStockRouteImport } from './routes/physical-stock'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PartnersRouteImport } from './routes/partners'
 import { Route as PartiesRouteImport } from './routes/parties'
@@ -57,6 +61,11 @@ const WidgetsRoute = WidgetsRouteImport.update({
   path: '/widgets',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WarehousesRoute = WarehousesRouteImport.update({
+  id: '/warehouses',
+  path: '/warehouses',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -65,6 +74,16 @@ const TermsRoute = TermsRouteImport.update({
 const StoreOrdersRoute = StoreOrdersRouteImport.update({
   id: '/store-orders',
   path: '/store-orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StockTransfersRoute = StockTransfersRouteImport.update({
+  id: '/stock-transfers',
+  path: '/stock-transfers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StockAdjustmentsRoute = StockAdjustmentsRouteImport.update({
+  id: '/stock-adjustments',
+  path: '/stock-adjustments',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShipmentsRoute = ShipmentsRouteImport.update({
@@ -120,6 +139,11 @@ const PricingRoute = PricingRouteImport.update({
 const PosRoute = PosRouteImport.update({
   id: '/pos',
   path: '/pos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PhysicalStockRoute = PhysicalStockRouteImport.update({
+  id: '/physical-stock',
+  path: '/physical-stock',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PaymentsRoute = PaymentsRouteImport.update({
@@ -287,6 +311,7 @@ export interface FileRoutesByFullPath {
   '/parties': typeof PartiesRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
+  '/physical-stock': typeof PhysicalStockRoute
   '/pos': typeof PosRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -298,8 +323,11 @@ export interface FileRoutesByFullPath {
   '/sales-returns': typeof SalesReturnsRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
+  '/stock-adjustments': typeof StockAdjustmentsRoute
+  '/stock-transfers': typeof StockTransfersRoute
   '/store-orders': typeof StoreOrdersRoute
   '/terms': typeof TermsRoute
+  '/warehouses': typeof WarehousesRoute
   '/widgets': typeof WidgetsRoute
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
@@ -331,6 +359,7 @@ export interface FileRoutesByTo {
   '/parties': typeof PartiesRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
+  '/physical-stock': typeof PhysicalStockRoute
   '/pos': typeof PosRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -342,8 +371,11 @@ export interface FileRoutesByTo {
   '/sales-returns': typeof SalesReturnsRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
+  '/stock-adjustments': typeof StockAdjustmentsRoute
+  '/stock-transfers': typeof StockTransfersRoute
   '/store-orders': typeof StoreOrdersRoute
   '/terms': typeof TermsRoute
+  '/warehouses': typeof WarehousesRoute
   '/widgets': typeof WidgetsRoute
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
@@ -376,6 +408,7 @@ export interface FileRoutesById {
   '/parties': typeof PartiesRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
+  '/physical-stock': typeof PhysicalStockRoute
   '/pos': typeof PosRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -387,8 +420,11 @@ export interface FileRoutesById {
   '/sales-returns': typeof SalesReturnsRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
+  '/stock-adjustments': typeof StockAdjustmentsRoute
+  '/stock-transfers': typeof StockTransfersRoute
   '/store-orders': typeof StoreOrdersRoute
   '/terms': typeof TermsRoute
+  '/warehouses': typeof WarehousesRoute
   '/widgets': typeof WidgetsRoute
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
@@ -422,6 +458,7 @@ export interface FileRouteTypes {
     | '/parties'
     | '/partners'
     | '/payments'
+    | '/physical-stock'
     | '/pos'
     | '/pricing'
     | '/privacy'
@@ -433,8 +470,11 @@ export interface FileRouteTypes {
     | '/sales-returns'
     | '/settings'
     | '/shipments'
+    | '/stock-adjustments'
+    | '/stock-transfers'
     | '/store-orders'
     | '/terms'
+    | '/warehouses'
     | '/widgets'
     | '/auth/complete-profile'
     | '/auth/plan-selection'
@@ -466,6 +506,7 @@ export interface FileRouteTypes {
     | '/parties'
     | '/partners'
     | '/payments'
+    | '/physical-stock'
     | '/pos'
     | '/pricing'
     | '/privacy'
@@ -477,8 +518,11 @@ export interface FileRouteTypes {
     | '/sales-returns'
     | '/settings'
     | '/shipments'
+    | '/stock-adjustments'
+    | '/stock-transfers'
     | '/store-orders'
     | '/terms'
+    | '/warehouses'
     | '/widgets'
     | '/auth/complete-profile'
     | '/auth/plan-selection'
@@ -510,6 +554,7 @@ export interface FileRouteTypes {
     | '/parties'
     | '/partners'
     | '/payments'
+    | '/physical-stock'
     | '/pos'
     | '/pricing'
     | '/privacy'
@@ -521,8 +566,11 @@ export interface FileRouteTypes {
     | '/sales-returns'
     | '/settings'
     | '/shipments'
+    | '/stock-adjustments'
+    | '/stock-transfers'
     | '/store-orders'
     | '/terms'
+    | '/warehouses'
     | '/widgets'
     | '/auth/complete-profile'
     | '/auth/plan-selection'
@@ -555,6 +603,7 @@ export interface RootRouteChildren {
   PartiesRoute: typeof PartiesRoute
   PartnersRoute: typeof PartnersRoute
   PaymentsRoute: typeof PaymentsRoute
+  PhysicalStockRoute: typeof PhysicalStockRoute
   PosRoute: typeof PosRoute
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -566,8 +615,11 @@ export interface RootRouteChildren {
   SalesReturnsRoute: typeof SalesReturnsRoute
   SettingsRoute: typeof SettingsRoute
   ShipmentsRoute: typeof ShipmentsRoute
+  StockAdjustmentsRoute: typeof StockAdjustmentsRoute
+  StockTransfersRoute: typeof StockTransfersRoute
   StoreOrdersRoute: typeof StoreOrdersRoute
   TermsRoute: typeof TermsRoute
+  WarehousesRoute: typeof WarehousesRoute
   WidgetsRoute: typeof WidgetsRoute
   AuthCompleteProfileRoute: typeof AuthCompleteProfileRoute
   AuthPlanSelectionRoute: typeof AuthPlanSelectionRoute
@@ -585,6 +637,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WidgetsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/warehouses': {
+      id: '/warehouses'
+      path: '/warehouses'
+      fullPath: '/warehouses'
+      preLoaderRoute: typeof WarehousesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -597,6 +656,20 @@ declare module '@tanstack/react-router' {
       path: '/store-orders'
       fullPath: '/store-orders'
       preLoaderRoute: typeof StoreOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stock-transfers': {
+      id: '/stock-transfers'
+      path: '/stock-transfers'
+      fullPath: '/stock-transfers'
+      preLoaderRoute: typeof StockTransfersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stock-adjustments': {
+      id: '/stock-adjustments'
+      path: '/stock-adjustments'
+      fullPath: '/stock-adjustments'
+      preLoaderRoute: typeof StockAdjustmentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/shipments': {
@@ -674,6 +747,13 @@ declare module '@tanstack/react-router' {
       path: '/pos'
       fullPath: '/pos'
       preLoaderRoute: typeof PosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/physical-stock': {
+      id: '/physical-stock'
+      path: '/physical-stock'
+      fullPath: '/physical-stock'
+      preLoaderRoute: typeof PhysicalStockRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/payments': {
@@ -899,6 +979,7 @@ const rootRouteChildren: RootRouteChildren = {
   PartiesRoute: PartiesRoute,
   PartnersRoute: PartnersRoute,
   PaymentsRoute: PaymentsRoute,
+  PhysicalStockRoute: PhysicalStockRoute,
   PosRoute: PosRoute,
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
@@ -910,8 +991,11 @@ const rootRouteChildren: RootRouteChildren = {
   SalesReturnsRoute: SalesReturnsRoute,
   SettingsRoute: SettingsRoute,
   ShipmentsRoute: ShipmentsRoute,
+  StockAdjustmentsRoute: StockAdjustmentsRoute,
+  StockTransfersRoute: StockTransfersRoute,
   StoreOrdersRoute: StoreOrdersRoute,
   TermsRoute: TermsRoute,
+  WarehousesRoute: WarehousesRoute,
   WidgetsRoute: WidgetsRoute,
   AuthCompleteProfileRoute: AuthCompleteProfileRoute,
   AuthPlanSelectionRoute: AuthPlanSelectionRoute,
