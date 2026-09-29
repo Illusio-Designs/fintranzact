@@ -4,5 +4,5 @@
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "cd ../.. && pnpm turbo run build --filter=@hisaabo/web",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
 }
