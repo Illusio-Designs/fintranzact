@@ -85,7 +85,7 @@ export interface InvoicePDFData {
   lineItemHsn?: string[]; // HSN/SAC code per line item (parallel array)
 
   // Freemium branding
-  isPaidPlan?: boolean; // true = no branding, false/undefined = show "Powered by hisaabo.in"
+  isPaidPlan?: boolean; // true = no branding, false/undefined = show "Powered by Fintranzact"
 
   // Payment status for diagonal stamp badge
   status?: string; // invoice status for stamp badge (paid, partial, overdue, cancelled, draft)
@@ -830,7 +830,7 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
       margin, footerY + 4, { width: contentW, align: "center" });
   if (!data.isPaidPlan) {
     doc.fontSize(5.5).font("NotoSans").fillColor("#b0b0b8")
-      .text("Powered by hisaabo.in", margin, footerY + 16, { width: contentW, align: "center" });
+      .text("Powered by Fintranzact", margin, footerY + 16, { width: contentW, align: "center" });
   }
 }
 
@@ -850,10 +850,10 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   const cSecondary = "#374151";
   const cMuted     = "#6b7280";
   const cLight     = "#9ca3af";
-  const cAccent    = "#5b5bd6"; // indigo
+  const cAccent    = "#3b5eaa"; // Fintranzact blue
   const cBorder    = "#e8e8f0";
   const cBg        = "#f4f4f8"; // very light lavender-grey
-  const _cAccentBg = "#ededfb"; // lightest indigo wash
+  const _cAccentBg = "#eef2fa"; // lightest brand-blue wash
 
   const gstMode  = isGstRegistered(data);
   const titleLabel = getInvoiceTitle(data);
@@ -1245,7 +1245,7 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
       { width: contentW, align: "center" });
   if (!data.isPaidPlan) {
     doc.fontSize(5.5).font("NotoSans").fillColor("#b0b0b8")
-      .text("Powered by hisaabo.in", margin, footerY + 14, { width: contentW, align: "center" });
+      .text("Powered by Fintranzact", margin, footerY + 14, { width: contentW, align: "center" });
   }
 }
 
@@ -1452,7 +1452,7 @@ function generateThermalReceipt(doc: InstanceType<typeof PDFDocument>, data: Inv
   y += 8;
   if (!data.isPaidPlan) {
     doc.fontSize(5).font("NotoSans").fillColor("#b0b0b0")
-      .text("hisaabo.in", margin, y, { width: contentW, align: "center" });
+      .text("Fintranzact", margin, y, { width: contentW, align: "center" });
     y += 8;
   } else {
     y += 4;
@@ -1568,7 +1568,7 @@ export function generateInvoicePDF(data: InvoicePDFData, format: PDFFormat = "a5
       Title: `Invoice ${data.invoiceNumber}`,
       Author: data.businessName,
       Subject: `Invoice for ${data.partyName}`,
-      Creator: "Hisaabo",
+      Creator: "Fintranzact",
     },
   });
 

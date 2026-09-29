@@ -382,7 +382,7 @@ const tooltipStyle = {
 const INVOICE_STATUS_COLORS: Record<string, string> = {
   paid: "#10b981",
   partial: "#f59e0b",
-  sent: "#5b5bd6",
+  sent: "#3b5eaa",
   overdue: "#ef4444",
   draft: "#94a3b8",
   cancelled: "#d1d5db",
@@ -398,7 +398,7 @@ const INVOICE_STATUS_LABELS: Record<string, string> = {
 };
 
 const EXPENSE_COLORS = [
-  "#5b5bd6",
+  "#3b5eaa",
   "#10b981",
   "#f59e0b",
   "#ef4444",
@@ -510,7 +510,7 @@ function SalesTrendChart({
           {...tooltipStyle}
           formatter={(value: any) => formatCurrency(String(value))}
         />
-        <Bar dataKey="invoiced" name="Invoiced" fill="#5b5bd6" radius={[3, 3, 0, 0]} maxBarSize={28} />
+        <Bar dataKey="invoiced" name="Invoiced" fill="#3b5eaa" radius={[3, 3, 0, 0]} maxBarSize={28} />
         <Bar dataKey="collected" name="Collected" fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={28} />
       </BarChart>
     </ChartCard>
@@ -752,7 +752,7 @@ function ChartEmpty() {
 
 const PAYMENT_MODE_COLORS: Record<string, string> = {
   cash: "#10b981",
-  bank: "#5b5bd6",
+  bank: "#3b5eaa",
   upi: "#f59e0b",
   cheque: "#8b5cf6",
   other: "#94a3b8",

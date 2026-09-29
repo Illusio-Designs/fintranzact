@@ -91,7 +91,7 @@ function StandaloneHeader() {
       <Logo className="w-9 h-9" />
       <div>
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-text-tertiary">
-          Hisaabo
+          Fintranzact
         </p>
         <p className="text-sm font-medium text-text-primary">
           Organization setup

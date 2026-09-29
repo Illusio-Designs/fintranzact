@@ -331,7 +331,7 @@ function NoOrgScreen() {
         <div className="flex items-center justify-center gap-2.5 mb-6">
           <Logo className="w-9 h-9" />
           <span className="font-semibold text-lg tracking-tight text-text-primary">
-            Hisaabo
+            Fintranzact
           </span>
         </div>
 
@@ -1134,7 +1134,7 @@ function RootLayout() {
               <div className="flex items-center gap-2.5">
                 <Logo className="w-8 h-8" />
                 <span className="font-semibold text-[15px] tracking-tight text-text-primary">
-                  Hisaabo
+                  Fintranzact
                 </span>
               </div>
             </div>
@@ -1275,7 +1275,7 @@ function RootLayout() {
               <div className="flex items-center gap-2.5 mr-2">
                 <Logo className="w-7 h-7" />
                 <span className="font-semibold text-[15px] tracking-tight text-text-primary">
-                  Hisaabo
+                  Fintranzact
                 </span>
               </div>
             )}

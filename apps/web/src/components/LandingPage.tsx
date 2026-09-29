@@ -49,7 +49,7 @@ export function LandingPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
           <Link to="/" className="flex items-center gap-2.5">
             <Logo className="h-8 w-8" />
-            <span className="text-base font-semibold tracking-tight">Hisaabo</span>
+            <span className="text-base font-semibold tracking-tight">Fintranzact</span>
           </Link>
 
           <nav className="flex items-center gap-2">
@@ -77,7 +77,7 @@ export function LandingPage() {
           className="relative overflow-hidden text-white"
           style={{
             background:
-              "linear-gradient(135deg, #24245e 0%, #363690 35%, #5b5bd6 75%, #4343a8 100%)",
+              "linear-gradient(135deg, #182850 0%, #243c77 35%, #3b5eaa 75%, #2a437f 100%)",
           }}
         >
           <div className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
@@ -161,7 +161,7 @@ export function LandingPage() {
 
       <footer className="border-t border-border-light">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-text-tertiary md:flex-row md:items-center md:justify-between md:px-6">
-          <span>© {year} Hisaabo. All rights reserved.</span>
+          <span>© {year} Fintranzact. All rights reserved.</span>
           <Link to="/login" search={{ mode: "login" }} className="hover:text-text-primary">
             Log in to your account
           </Link>

@@ -102,7 +102,7 @@ function OnboardingPage() {
           </h1>
 
           <p className="mt-1 text-sm text-text-tertiary">
-            Complete your business details before entering the Hisaabo
+            Complete your business details before entering the Fintranzact
             dashboard.
           </p>
         </div>
@@ -138,7 +138,7 @@ function StandaloneHeader() {
 
       <div>
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-text-tertiary">
-          Hisaabo
+          Fintranzact
         </p>
 
         <p className="text-sm font-medium text-text-primary">
