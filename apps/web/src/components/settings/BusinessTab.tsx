@@ -11,6 +11,16 @@ import { PincodeInput } from "./PincodeInput";
 import { INDIAN_STATES } from "@/lib/indian-states";
 import { LogoUploader } from "./LogoUploader";
 
+import { PhoneInput } from "@/components/ui/PhoneInput";
+import { Icon } from "@/components/ui/Icon";
+import { Logo } from "@/components/ui/Logo";
+import { cn } from "@/lib/utils";
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  InformationCircleIcon,
+  Tick02Icon,
+} from "@hugeicons/core-free-icons";
 const GST_REG_OPTIONS = [
   { value: "unregistered", label: "Not GST Registered" },
   { value: "regular", label: "GST Regular" },
@@ -241,6 +251,14 @@ function BusinessCard({
   );
 }
 
+/** Short descriptions shown in the onboarding stepper, one per wizard step. */
+const WIZARD_STEP_HINTS: Array<{ sub: string; intro: string }> = [
+  { sub: "Name, contact and address", intro: "The basics that appear on your invoices." },
+  { sub: "GSTIN and filing", intro: "Add your GST registration and how you file returns." },
+  { sub: "PAN, TAN and TDS", intro: "Your PAN, plus TAN and TDS details if you deduct tax." },
+  { sub: "Check and confirm", intro: "Make sure everything looks right before we create your business." },
+];
+
 export function BusinessForm({
   existing,
   onDone,
@@ -381,6 +399,8 @@ export function BusinessForm({
   const hasTan = tan.trim() !== "";
 
   const [currentStep, setCurrentStep] = useState(0);
+  // Furthest step reached, so finished steps can be revisited from the step list.
+  const [maxStep, setMaxStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const utils = trpc.useUtils();
@@ -470,10 +490,10 @@ export function BusinessForm({
                 options={BUSINESS_TYPE_OPTIONS}
               />
 
-              <InputField
+              <PhoneInput
                 label="Phone"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={setPhone}
                 required
                 error={errors.phone}
               />
@@ -1259,7 +1279,9 @@ export function BusinessForm({
     setErrors({});
 
     if (onboardingMode && currentStep < wizardSteps.length - 1) {
-      setCurrentStep((step) => step + 1);
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
+      setMaxStep((m) => Math.max(m, nextStep));
       return;
     }
 
@@ -1354,6 +1376,115 @@ export function BusinessForm({
   }
 
   const isLastStep = currentStep === wizardSteps.length - 1;
+
+  if (onboardingMode && !existing) {
+    return (
+      <div className="overflow-hidden rounded-[22px] border border-border-light bg-surface-0 shadow-[0_40px_100px_-40px_rgba(15,27,61,.45)] lg:flex">
+        <aside className="flex flex-col bg-[#0f1b3d] px-7 py-8 text-white lg:w-[292px] lg:shrink-0">
+          <div className="flex items-center gap-2.5">
+            <Logo className="h-[30px] w-[30px]" />
+            <span className="font-display text-[17px] font-extrabold">Fintranzact</span>
+          </div>
+          <h2 className="mt-7 font-display text-[22px] font-extrabold leading-tight">Set up your business</h2>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-[#9fb0d6]">
+            Four quick steps. You can change any of this later in Settings.
+          </p>
+          <ol className="mt-7 flex gap-3 overflow-x-auto lg:flex-col lg:gap-0 lg:overflow-visible">
+            {wizardSteps.map((title, i) => {
+              const done = i < currentStep;
+              const current = i === currentStep;
+              const reachable = i <= maxStep;
+              return (
+                <li key={title} className="flex shrink-0 gap-3.5">
+                  <div className="flex flex-col items-center">
+                    <button
+                      type="button"
+                      disabled={!reachable || current}
+                      onClick={() => {
+                        setErrors({});
+                        setCurrentStep(i);
+                      }}
+                      aria-current={current ? "step" : undefined}
+                      aria-label={`Step ${i + 1}: ${title}${done ? " (done)" : ""}`}
+                      className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-extrabold transition",
+                        done && "border-brand-600 bg-brand-600 text-white",
+                        current && "border-brand-600 bg-white text-[#0f1b3d]",
+                        !done && !current && "border-white/25 text-[#8fa3cf]",
+                        reachable && !current && "cursor-pointer hover:border-brand-300",
+                      )}
+                    >
+                      {done ? <Icon icon={Tick02Icon} size={16} strokeWidth={2.75} /> : i + 1}
+                    </button>
+                    {i < wizardSteps.length - 1 && (
+                      <span
+                        className={cn(
+                          "hidden h-10 w-0.5 rounded-full lg:block",
+                          i < currentStep ? "bg-brand-600" : "bg-white/15",
+                        )}
+                      />
+                    )}
+                  </div>
+                  <div className="pt-1.5">
+                    <p className={cn("text-sm font-bold", done || current ? "text-white" : "text-[#8fa3cf]")}>{title}</p>
+                    <p className="mt-0.5 hidden text-xs text-[#8fa3cf] lg:block">{WIZARD_STEP_HINTS[i]?.sub}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+          <div className="mt-auto hidden gap-2.5 rounded-xl border border-white/10 bg-white/[0.06] p-3.5 text-xs leading-relaxed text-[#b9c6e4] lg:mt-10 lg:flex">
+            <Icon icon={InformationCircleIcon} size={18} className="shrink-0 text-[#a9bde6]" />
+            <span>Your details stay private and appear only on your own invoices.</span>
+          </div>
+        </aside>
+
+        <form onSubmit={handleSubmit} className="flex min-w-0 flex-1 flex-col">
+          <div className="border-b border-border-light px-6 pb-4 pt-6 md:px-8">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-600 dark:text-brand-300">
+              Step {currentStep + 1} of {wizardSteps.length}
+            </p>
+            <h3 className="mt-1.5 font-display text-[22px] font-extrabold text-[#0f1b3d] dark:text-white">
+              {wizardSteps[currentStep]}
+            </h3>
+            <p className="mt-1 text-sm text-text-tertiary">{WIZARD_STEP_HINTS[currentStep]?.intro}</p>
+          </div>
+          <div className="h-1 bg-surface-2">
+            <div
+              className="h-1 bg-brand-600 transition-[width] duration-300"
+              style={{ width: `${((currentStep + 1) / wizardSteps.length) * 100}%` }}
+            />
+          </div>
+
+          <div className="flex-1 px-6 py-6 md:px-8">{stepContent}</div>
+
+          <div className="flex items-center justify-between gap-3 border-t border-border-light px-6 py-4 md:px-8">
+            {currentStep > 0 ? (
+              <button
+                type="button"
+                className="btn-secondary h-11 px-5"
+                onClick={() => {
+                  setErrors({});
+                  setCurrentStep((step) => step - 1);
+                }}
+              >
+                <Icon icon={ArrowLeft01Icon} size={16} strokeWidth={2} />
+                Back
+              </button>
+            ) : (
+              <span className="text-[13px] text-text-tertiary">
+                Fields marked <span className="text-red-500">*</span> are required
+              </span>
+            )}
+            <button type="submit" disabled={isPending} className="btn-primary h-11 px-6">
+              {isPending ? "Saving..." : isLastStep ? "Create business" : "Continue"}
+              {!isPending && <Icon icon={ArrowRight01Icon} size={16} strokeWidth={2} />}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="card p-6">

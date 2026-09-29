@@ -10,7 +10,6 @@ import {
   Database01Icon,
   Download04Icon,
   Invoice01Icon,
-  MinusSignIcon,
   PackageIcon,
   QrCodeIcon,
   SecurityCheckIcon,
@@ -23,7 +22,7 @@ import {
 import { MarketingLayout, CONTACT_EMAIL } from "@/components/marketing/MarketingLayout";
 import { Icon, type IconSvgElement } from "@/components/ui/Icon";
 import { Logo } from "@/components/ui/Logo";
-import { PLAN_OPTIONS } from "@/lib/plans";
+import { EYEBROW, FaqAccordion, HEADING, PricingCards } from "@/components/marketing/sections";
 import { cn } from "@/lib/utils";
 
 /**
@@ -33,8 +32,6 @@ import { cn } from "@/lib/utils";
  */
 
 const NAVY = "bg-[#0f1b3d]";
-const HEADING = "font-display font-extrabold tracking-[-0.025em] text-[#0f1b3d] dark:text-white";
-const EYEBROW = "text-[13px] font-bold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-300";
 
 const INDUSTRIES = [
   "Retail & kirana",
@@ -795,65 +792,7 @@ function Pricing() {
         <h2 className={cn(HEADING, "mt-3 text-center text-3xl md:text-[40px]")}>
           Start free. Upgrade when your team grows.
         </h2>
-        <div className="mt-12 grid items-stretch gap-6 md:grid-cols-3">
-          {PLAN_OPTIONS.map((plan) =>
-            plan.highlight ? (
-              <div
-                key={plan.id}
-                className={cn(
-                  NAVY,
-                  "relative flex flex-col rounded-[22px] p-8 text-white shadow-[0_30px_60px_-30px_rgba(15,27,61,.6)] ring-1 ring-transparent dark:bg-[#16213f] dark:ring-[#2a3a63]",
-                )}
-              >
-                <span className="absolute -top-3 left-8 rounded-full bg-brand-600 px-3 py-1 text-xs font-extrabold text-white">
-                  Most popular
-                </span>
-                <p className="text-lg font-bold">{plan.name}</p>
-                <p className="mt-1 text-sm text-[#9fb0d6]">{plan.tagline}</p>
-                <p className="mt-6">
-                  <span className="font-display text-5xl font-extrabold">{plan.price}</span>
-                  <span className="text-[15px] text-[#9fb0d6]"> / forever</span>
-                </p>
-                <ul className="mt-6 flex-1 space-y-3 text-[15px] text-[#dbe4f5]">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex gap-2.5">
-                      <Icon icon={CheckmarkCircle02Icon} size={20} className="text-[#a9bde6]" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to="/login"
-                  search={{ mode: "register" }}
-                  className="mt-7 flex h-[52px] items-center justify-center rounded-xl bg-white text-base font-bold text-brand-900 transition hover:bg-brand-50"
-                >
-                  Start free
-                </Link>
-              </div>
-            ) : (
-              <div key={plan.id} className="flex flex-col rounded-[22px] border border-border-light bg-surface-0 p-8">
-                <p className="text-lg font-bold text-text-primary">{plan.name}</p>
-                <p className="mt-1 text-sm text-text-tertiary">{plan.tagline}</p>
-                <p className="mt-6 font-display text-[40px] font-extrabold text-[#0f1b3d] dark:text-white">{plan.price}</p>
-                <p className="mt-1 text-[13px] text-text-tertiary">Priced to your team size</p>
-                <ul className="mt-5 flex-1 space-y-3 text-[15px] text-text-secondary">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex gap-2.5">
-                      <Icon icon={CheckmarkCircle02Icon} size={20} className="text-brand-600 dark:text-brand-300" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to="/contact"
-                  className="mt-7 flex h-[52px] items-center justify-center rounded-xl border border-[#cfd8ea] text-base font-bold text-[#0f1b3d] transition hover:border-brand-300 dark:border-white/15 dark:text-white"
-                >
-                  Talk to us
-                </Link>
-              </div>
-            ),
-          )}
-        </div>
+        <PricingCards className="mt-12" />
       </div>
     </section>
   );
@@ -862,7 +801,6 @@ function Pricing() {
 // ─── FAQ ──────────────────────────────────────────────────────────────────────
 
 function Faq() {
-  const [open, setOpen] = useState(0);
   return (
     <section>
       <div className="mx-auto grid max-w-6xl gap-14 px-4 py-24 md:px-6 lg:grid-cols-3">
@@ -878,36 +816,7 @@ function Faq() {
           </p>
         </div>
         <div className="lg:col-span-2">
-          {FAQS.map((f, i) => {
-            const isOpen = open === i;
-            const id = `faq-${i}`;
-            return (
-              <div key={f.q} className="border-b border-border-light">
-                <button
-                  type="button"
-                  aria-expanded={isOpen}
-                  aria-controls={id}
-                  onClick={() => setOpen(isOpen ? -1 : i)}
-                  className="flex w-full items-center justify-between gap-4 py-5 text-left text-[17px] font-bold text-text-primary"
-                >
-                  {f.q}
-                  <span
-                    className={cn(
-                      "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full transition",
-                      isOpen ? "bg-brand-600 text-white" : "bg-surface-2 text-text-primary",
-                    )}
-                  >
-                    <Icon icon={isOpen ? MinusSignIcon : Add01Icon} size={16} strokeWidth={2} />
-                  </span>
-                </button>
-                {isOpen && (
-                  <p id={id} className="pb-5 pr-14 text-[15px] leading-relaxed text-text-secondary">
-                    {f.a}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+          <FaqAccordion items={FAQS} />
         </div>
       </div>
     </section>

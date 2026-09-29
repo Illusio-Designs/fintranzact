@@ -36,7 +36,6 @@ export function isMarketingPath(pathname: string) {
 const NAV_LINKS = [
   { to: "/features", label: "Features" },
   { to: "/pricing", label: "Pricing" },
-  { to: "/widgets", label: "Widgets" },
   { to: "/about", label: "About" },
   { to: "/contact", label: "Contact" },
 ] as const;
@@ -50,7 +49,6 @@ const FOOTER_COLUMNS: Array<{
     links: [
       { label: "Features", to: "/features" },
       { label: "Pricing", to: "/pricing" },
-      { label: "Widgets", to: "/widgets" },
       { label: "Help & docs", href: DOCS_URL },
     ],
   },

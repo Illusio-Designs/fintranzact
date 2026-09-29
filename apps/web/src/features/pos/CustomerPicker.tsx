@@ -2,6 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 
+import { PhoneInput } from "@/components/ui/PhoneInput";
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -67,11 +68,11 @@ export function CustomerPicker({ open, onClose, onPick, walkIn }: Props) {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
             />
-            <input
-              className="w-full px-3 py-2 rounded border border-border bg-surface-2 text-sm"
+            <PhoneInput
+              aria-label="Phone (optional)"
               placeholder="Phone (optional)"
               value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value)}
+              onChange={setNewPhone}
             />
             <div className="flex gap-2 justify-end">
               <button className="btn-secondary" onClick={() => setCreating(false)}>
