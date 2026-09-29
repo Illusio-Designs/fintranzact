@@ -1,5 +1,5 @@
 {
-  "name": "@hisaabo/web",
+  "name": "@fintranzact/web",
   "version": "0.9.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "test:a11y": "vitest run --reporter=verbose --testNamePattern=ACCESSIBILITY"
   },
   "dependencies": {
-    "@hisaabo/shared": "workspace:*",
+    "@fintranzact/shared": "workspace:*",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-router": "^1.160.0",
     "@tauri-apps/api": "^2.1.0",
@@ -30,7 +30,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@hisaabo/api": "workspace:*",
+    "@fintranzact/api": "workspace:*",
     "@tanstack/router-plugin": "^1.160.0",
     "@testing-library/jest-dom": "^6.0.0",
     "@testing-library/react": "^16.0.0",

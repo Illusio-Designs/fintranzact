@@ -18,7 +18,7 @@
  * API response, because correctness lies in the transactional side-effects.
  *
  * RUNNING:
- *   pnpm --filter @hisaabo/api test -- --testPathPattern gateway
+ *   pnpm --filter @fintranzact/api test -- --testPathPattern gateway
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -27,7 +27,7 @@ import {
   bankAccounts,
   bankTransactions,
   expenses,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   createTestWorld,
   type TestWorld,

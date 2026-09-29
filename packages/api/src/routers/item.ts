@@ -1,7 +1,7 @@
 import { eq, and, ilike, sql, desc, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { items, itemVariants, invoiceItems, invoices, parties, stockAdjustments } from "@hisaabo/db";
-import { createItemSchema, updateItemSchema, paginationSchema, itemTypes, itemModes, itemVariantSchema, money } from "@hisaabo/shared";
+import { items, itemVariants, invoiceItems, invoices, parties, stockAdjustments } from "@fintranzact/db";
+import { createItemSchema, updateItemSchema, paginationSchema, itemTypes, itemModes, itemVariantSchema, money } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";

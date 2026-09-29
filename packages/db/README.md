@@ -1,4 +1,4 @@
-# @hisaabo/db
+# @fintranzact/db
 
 The Fintranzact database layer. Drizzle ORM schema definitions, PostgreSQL client setup, and migration tooling for both the control database (auth and tenants) and tenant databases (all business data).
 
@@ -64,14 +64,14 @@ In self-hosted mode (`MULTI_TENANT=false`), both databases are the same PostgreS
 ### `src/client.ts` — single-tenant (self-hosted)
 
 ```typescript
-import { db } from "@hisaabo/db";
+import { db } from "@fintranzact/db";
 // db is a Drizzle instance connected to DATABASE_URL
 ```
 
 ### `src/control-client.ts` — control database
 
 ```typescript
-import { controlDb } from "@hisaabo/db";
+import { controlDb } from "@fintranzact/db";
 // controlDb is a Drizzle instance for the control schema
 // In self-hosted mode, points to the same DATABASE_URL
 // In multi-tenant mode, points to CONTROL_DATABASE_URL
@@ -80,7 +80,7 @@ import { controlDb } from "@hisaabo/db";
 ### `src/tenant-pool.ts` — dynamic tenant connections (cloud)
 
 ```typescript
-import { getTenantDb } from "@hisaabo/db";
+import { getTenantDb } from "@fintranzact/db";
 const db = await getTenantDb(tenantId);
 ```
 
@@ -142,10 +142,10 @@ All monetary values in the tenant schema use `NUMERIC(15,2)`:
 totalAmount: numeric("total_amount", { precision: 15, scale: 2 }).notNull(),
 ```
 
-In TypeScript, Drizzle returns these as strings (not `number`). Use the `money` module from `@hisaabo/shared` for all arithmetic:
+In TypeScript, Drizzle returns these as strings (not `number`). Use the `money` module from `@fintranzact/shared` for all arithmetic:
 
 ```typescript
-import { money } from "@hisaabo/shared";
+import { money } from "@fintranzact/shared";
 
 const total = money.add(subtotal, taxAmount);  // Returns "1050.00"
 const tax   = money.percent("1000.00", 5);     // Returns "50.00"

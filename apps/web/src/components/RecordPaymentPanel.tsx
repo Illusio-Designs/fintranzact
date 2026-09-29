@@ -6,8 +6,8 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { PartyCombobox } from "@/components/ui/PartyCombobox";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { InputField, TextareaField } from "@/components/ui/FormField";
-import { calculateGatewayCharge } from "@hisaabo/shared";
-import type { GatewayChargeConfig } from "@hisaabo/shared";
+import { calculateGatewayCharge } from "@fintranzact/shared";
+import type { GatewayChargeConfig } from "@fintranzact/shared";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

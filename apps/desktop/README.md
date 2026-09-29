@@ -1,4 +1,4 @@
-# @hisaabo/desktop
+# @fintranzact/desktop
 
 A native desktop wrapper for the Hisaabo web app. Built with Tauri v2, it ships a lightweight executable (macOS, Windows, Linux) that embeds the `apps/web` React app in a native webview with a proper window frame, system tray, and native OS integration.
 
@@ -49,11 +49,11 @@ cd apps/desktop
 cargo tauri dev
 ```
 
-This runs `pnpm --filter @hisaabo/web dev` (the `beforeDevCommand` in `tauri.conf.json`) and opens a native window pointed at `http://localhost:5173`. The API server must be running separately:
+This runs `pnpm --filter @fintranzact/web dev` (the `beforeDevCommand` in `tauri.conf.json`) and opens a native window pointed at `http://localhost:5173`. The API server must be running separately:
 
 ```bash
 # Terminal 1 — start the API
-pnpm --filter @hisaabo/api dev
+pnpm --filter @fintranzact/api dev
 
 # Terminal 2 — start the desktop app (starts web automatically)
 cd apps/desktop && cargo tauri dev
@@ -68,7 +68,7 @@ cd apps/desktop
 cargo tauri build
 ```
 
-This runs `pnpm --filter @hisaabo/web build` first (the `beforeBuildCommand`), then bundles the built web output into the native binary.
+This runs `pnpm --filter @fintranzact/web build` first (the `beforeBuildCommand`), then bundles the built web output into the native binary.
 
 ### Output artifacts
 

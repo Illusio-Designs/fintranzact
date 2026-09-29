@@ -1,4 +1,4 @@
-# @hisaabo/docs
+# @fintranzact/docs
 
 The user documentation site for Fintranzact. Built with [Starlight](https://starlight.astro.build/) on top of Astro 5, it covers everything a business owner or self-hoster needs to know: getting started, invoicing workflows, GST compliance, team setup, and deployment.
 
@@ -13,7 +13,7 @@ Published at [docs.fintranzact.com](https://docs.fintranzact.com).
 
 ```bash
 # From monorepo root
-pnpm --filter @hisaabo/docs dev
+pnpm --filter @fintranzact/docs dev
 
 # Or from this directory
 pnpm dev
@@ -26,14 +26,14 @@ The site starts at `http://localhost:4321` by default.
 ## Building
 
 ```bash
-pnpm --filter @hisaabo/docs build
+pnpm --filter @fintranzact/docs build
 # Output: apps/docs/dist/
 ```
 
 Preview the production build:
 
 ```bash
-pnpm --filter @hisaabo/docs preview
+pnpm --filter @fintranzact/docs preview
 ```
 
 ---
@@ -88,7 +88,7 @@ Deploy `apps/docs/dist/` as a static site. The site is configured for `https://d
 
 | Setting | Value |
 |---|---|
-| Build command | `pnpm --filter @hisaabo/docs build` |
+| Build command | `pnpm --filter @fintranzact/docs build` |
 | Output directory | `apps/docs/dist` |
 | Node.js version | 20 |
 
@@ -97,6 +97,6 @@ Deploy `apps/docs/dist/` as a static site. The site is configured for `https://d
 ## Type checking
 
 ```bash
-pnpm --filter @hisaabo/docs typecheck
+pnpm --filter @fintranzact/docs typecheck
 # Runs: astro check
 ```

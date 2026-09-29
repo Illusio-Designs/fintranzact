@@ -30,7 +30,7 @@
 import { describe, it, expect, afterAll, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { sessions, accessTokens } from "@hisaabo/db";
+import { sessions, accessTokens } from "@fintranzact/db";
 import { randomBytes } from "node:crypto";
 
 import { createUser, createTenant, addMember } from "./helpers/fixtures.js";

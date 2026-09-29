@@ -121,7 +121,7 @@ See the [MCP Server setup guide](/ai/mcp-server/) for full installation and conf
 
 ```bash
 # 1. Install CLI and authenticate
-npm install -g @hisaabo/cli
+npm install -g @fintranzact/cli
 hisaabo login
 hisaabo whoami --json   # copy token, tenantId, businessId from output
 ```
@@ -133,7 +133,7 @@ Then add this to your Claude Desktop `claude_desktop_config.json`:
   "mcpServers": {
     "hisaabo": {
       "command": "npx",
-      "args": ["@hisaabo/mcp"],
+      "args": ["@fintranzact/mcp"],
       "env": {
         "HISAABO_API_URL": "https://your-hisaabo-instance.com",
         "HISAABO_API_KEY": "sess_...",
@@ -176,7 +176,7 @@ The Fintranzact CLI (`hisaabo`) is built with [Ink 5](https://github.com/vadimde
 ### Quick start
 
 ```bash
-npm install -g @hisaabo/cli
+npm install -g @fintranzact/cli
 
 # Authenticate (interactive prompt for URL, email, password)
 hisaabo login
@@ -282,12 +282,12 @@ AI agent workflows that batch-process large datasets should spread requests over
 
 ### Type-safe client
 
-If your agent is written in TypeScript, import the `AppRouter` type from `@hisaabo/api` for end-to-end type safety without any code generation step:
+If your agent is written in TypeScript, import the `AppRouter` type from `@fintranzact/api` for end-to-end type safety without any code generation step:
 
 ```typescript
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import SuperJSON from "superjson";
-import type { AppRouter } from "@hisaabo/api";
+import type { AppRouter } from "@fintranzact/api";
 
 // Get these values from: hisaabo whoami --json
 const client = createTRPCClient<AppRouter>({

@@ -11,7 +11,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { eq, and } from "drizzle-orm";
-import { controlDb, tenantMembers, tenants } from "@hisaabo/db";
+import { controlDb, tenantMembers, tenants } from "@fintranzact/db";
 import { router, protectedProcedure } from "../trpc.js";
 import { signExportToken } from "../lib/exportToken.js";
 import { logger } from "../lib/logger.js";

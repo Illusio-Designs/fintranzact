@@ -22,7 +22,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { invoices, eInvoiceConfigs } from "@hisaabo/db";
+import { invoices, eInvoiceConfigs } from "@fintranzact/db";
 import {
   createTestWorld,
   createParty,

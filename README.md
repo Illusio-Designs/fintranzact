@@ -115,7 +115,7 @@ None of these require new API development. The surface area already exists. Ever
 
 **MCP Server**
 
-The `@hisaabo/mcp` package exposes your entire business as tools, resources, and prompt templates to any MCP-compatible AI agent.
+The `@fintranzact/mcp` package exposes your entire business as tools, resources, and prompt templates to any MCP-compatible AI agent.
 
 Built-in prompt templates:
 
@@ -135,7 +135,7 @@ Add to Claude Desktop's `claude_desktop_config.json`:
   "mcpServers": {
     "hisaabo": {
       "command": "npx",
-      "args": ["@hisaabo/mcp"],
+      "args": ["@fintranzact/mcp"],
       "env": {
         "HISAABO_API_URL": "https://your-hisaabo-instance.com",
         "HISAABO_API_KEY": "sess_...",
@@ -150,7 +150,7 @@ Add to Claude Desktop's `claude_desktop_config.json`:
 **CLI**
 
 ```bash
-npm install -g @hisaabo/cli
+npm install -g @fintranzact/cli
 hisaabo login --api-url https://your-hisaabo-instance.com
 
 hisaabo dashboard --json | jq '{revenue, outstanding, overdueCount}'
@@ -343,7 +343,7 @@ Fintranzact is not a side project. It is production-hardened financial software.
 |                                                              |
 |  apps/desktop        packages/cli       packages/mcp         |
 |  Tauri v2            Terminal CLI        MCP Server           |
-|  (wraps web)         (@hisaabo/cli)     (Claude, AI agents)  |
+|  (wraps web)         (@fintranzact/cli)     (Claude, AI agents)  |
 +----------------------------+---------------------------------+
                              | tRPC (typed) + REST (store)
                              | x-business-id header
@@ -435,7 +435,7 @@ curl -X POST ${import.meta.env.API_URL}/api/trpc/auth.register \
 ### 3. Connect AI to your Fintranzact instance
 
 ```bash
-npm install -g @hisaabo/cli
+npm install -g @fintranzact/cli
 hisaabo login --api-url https://your-hisaabo-instance.com
 hisaabo whoami --json  # Copy token, tenantId, businessId
 ```
@@ -459,8 +459,8 @@ hisaabo/
 │   ├── api/          # Hono + tRPC server (20+ routers, 200+ procedures)
 │   ├── db/           # Drizzle ORM schema + PostgreSQL client
 │   ├── shared/       # Zod validators, TypeScript types, money module, HSN master
-│   ├── cli/          # Terminal CLI (@hisaabo/cli on npm)
-│   └── mcp/          # MCP server for AI agents (@hisaabo/mcp on npm)
+│   ├── cli/          # Terminal CLI (@fintranzact/cli on npm)
+│   └── mcp/          # MCP server for AI agents (@fintranzact/mcp on npm)
 ├── docs/             # Architecture docs, research, roadmaps
 ├── nginx/            # Production nginx configuration
 ├── docker-compose.yml        # Local development
@@ -499,20 +499,20 @@ hisaabo/
 ### Run a single package
 
 ```bash
-pnpm --filter @hisaabo/api dev      # API server only
-pnpm --filter @hisaabo/web dev      # Web app only
-pnpm --filter @hisaabo/mobile dev   # Mobile (Expo Go)
-pnpm --filter @hisaabo/store dev    # Online store only
+pnpm --filter @fintranzact/api dev      # API server only
+pnpm --filter @fintranzact/web dev      # Web app only
+pnpm --filter @fintranzact/mobile dev   # Mobile (Expo Go)
+pnpm --filter @fintranzact/store dev    # Online store only
 ```
 
 ### Testing
 
 ```bash
 # Run all tests (1,844 tests)
-pnpm --filter @hisaabo/api test
+pnpm --filter @fintranzact/api test
 
 # Watch mode during development
-pnpm --filter @hisaabo/api test:watch
+pnpm --filter @fintranzact/api test:watch
 ```
 
 ### Mobile on WSL + Windows
@@ -546,8 +546,8 @@ docker run -v /data/hisaabo:/storage -p 80:80 hisaabo-once
 
 | App | Build command | Output directory |
 |---|---|---|
-| Web | `pnpm --filter @hisaabo/web build` | `apps/web/dist` |
-| Store | `pnpm --filter @hisaabo/store build` | `apps/store/dist` |
+| Web | `pnpm --filter @fintranzact/web build` | `apps/web/dist` |
+| Store | `pnpm --filter @fintranzact/store build` | `apps/store/dist` |
 
 Set `VITE_API_URL` in Cloudflare Pages environment variables.
 
@@ -558,7 +558,7 @@ Set `VITE_API_URL` in Cloudflare Pages environment variables.
 cd apps/desktop && cargo tauri build
 
 # Android APK
-pnpm --filter @hisaabo/mobile build:apk
+pnpm --filter @fintranzact/mobile build:apk
 ```
 
 Full production guide: [docs.fintranzact.com/self-hosting](https://docs.fintranzact.com/getting-started/self-hosting)
@@ -625,7 +625,7 @@ Contributions are welcome. Before opening a PR:
 pnpm typecheck   # Must pass
 pnpm lint        # Must pass (oxlint --deny-warnings)
 pnpm build       # Must pass
-pnpm --filter @hisaabo/api test  # 1,844 tests must pass
+pnpm --filter @fintranzact/api test  # 1,844 tests must pass
 ```
 
 Key guidelines:

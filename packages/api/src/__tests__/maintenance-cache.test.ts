@@ -9,7 +9,7 @@
  *
  * The module under test reads one row from the control DB's `system_config`
  * table, keyed by `"maintenance"`, and memoises the parsed value for 30s.
- * We mock `@hisaabo/db` so the tests can verify cache hits, TTL expiry,
+ * We mock `@fintranzact/db` so the tests can verify cache hits, TTL expiry,
  * invalidation, and the default-when-missing path in microseconds without
  * a real Postgres connection.
  */
@@ -17,7 +17,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // ── Mock setup ────────────────────────────────────────────────────────────────
-// The cache module imports `controlDb` and `systemConfig` from `@hisaabo/db`.
+// The cache module imports `controlDb` and `systemConfig` from `@fintranzact/db`.
 // We stub the Drizzle fluent-chain so each call sequence resolves to whatever
 // the test queued via `mockLimit.mockResolvedValueOnce(...)`. Resetting both
 // the mock history and the module registry between tests ensures every test
@@ -28,7 +28,7 @@ const mockWhere = vi.fn(() => ({ limit: mockLimit }));
 const mockFrom = vi.fn(() => ({ where: mockWhere }));
 const mockSelect = vi.fn(() => ({ from: mockFrom }));
 
-vi.mock("@hisaabo/db", () => ({
+vi.mock("@fintranzact/db", () => ({
   controlDb: { select: mockSelect },
   // systemConfig is only referenced as a table token in eq(); an empty object
   // is enough because the drizzle-orm `eq` call is also mocked below.

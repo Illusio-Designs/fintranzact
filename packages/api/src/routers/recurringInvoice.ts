@@ -3,10 +3,10 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
   recurringInvoiceTemplates, recurringInvoiceRuns, parties, invoices,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   createRecurringInvoiceSchema, updateRecurringInvoiceSchema, paginationSchema,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";

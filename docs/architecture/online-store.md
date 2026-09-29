@@ -138,7 +138,7 @@ This means:
 - Client-side hydration for cart interactivity.
 - Bundle target under 50KB gzipped (no TanStack Router, no tRPC client -- just fetch + React).
 
-The store app is a separate Vite entry (`apps/store`) in the monorepo. It shares `@hisaabo/shared` for validators and types but has no dependency on `@hisaabo/api` or `@tanstack/react-query`.
+The store app is a separate Vite entry (`apps/store`) in the monorepo. It shares `@fintranzact/shared` for validators and types but has no dependency on `@fintranzact/api` or `@tanstack/react-query`.
 
 For Phase 2, this can be upgraded to full SSR (Hono + React server components or a prerender step) without changing the API contract.
 
@@ -366,7 +366,7 @@ The core challenge is resolving a public slug to a tenantId + businessId without
 ```typescript
 // packages/api/src/store/middleware.ts
 
-import { getTenantDb, controlDb, tenants, businesses } from "@hisaabo/db";
+import { getTenantDb, controlDb, tenants, businesses } from "@fintranzact/db";
 import type { Context, Next } from "hono";
 
 // Cache: slug -> { tenantId, businessId, tenantDb }  (TTL 5 min)
@@ -1138,7 +1138,7 @@ Admin App                               API Server                          Data
 
 3. **Invoice numbering follows the existing atomic pattern.** The order placement handler calls the same `SELECT ... FOR UPDATE` + increment pattern used in the invoice router. This is extracted to a shared function.
 
-4. **Tax calculation uses the existing `calcInvoiceTotals`.** The store API handler imports `calcLineItem` and `calcInvoiceTotals` from `@hisaabo/shared`. The store price (or sale price if no store price) is used as the unit price. The item's `taxPercent` and `taxInclusive` flags are respected.
+4. **Tax calculation uses the existing `calcInvoiceTotals`.** The store API handler imports `calcLineItem` and `calcInvoiceTotals` from `@fintranzact/shared`. The store price (or sale price if no store price) is used as the unit price. The item's `taxPercent` and `taxInclusive` flags are respected.
 
 ### 9.3 Business Rejects Order
 
@@ -1232,7 +1232,7 @@ The order placement limit is per phone number to prevent spam. The phone number 
 
 ### 11.3 Input Validation
 
-All store API inputs are validated with Zod schemas (defined in `@hisaabo/shared`):
+All store API inputs are validated with Zod schemas (defined in `@fintranzact/shared`):
 
 ```typescript
 // In packages/shared/src/validators.ts
@@ -1397,7 +1397,7 @@ When item images are added:
 3. Add `store_slug_registry` to control schema (multi-tenant).
 4. Implement public store Hono routes: catalog, info, order placement.
 5. Implement `storeRouter` tRPC procedures: settings, bulk toggle, order management.
-6. Add `placeStoreOrderSchema` and related validators to `@hisaabo/shared`.
+6. Add `placeStoreOrderSchema` and related validators to `@fintranzact/shared`.
 
 **Week 2: Admin UI**
 7. Create `StoreTab` in settings (enable/disable, slug, theme).

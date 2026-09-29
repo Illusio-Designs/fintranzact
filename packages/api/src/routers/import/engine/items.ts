@@ -1,4 +1,4 @@
-import { items } from "@hisaabo/db";
+import { items } from "@fintranzact/db";
 import { and, eq, isNull } from "drizzle-orm";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalItem } from "../types.js";

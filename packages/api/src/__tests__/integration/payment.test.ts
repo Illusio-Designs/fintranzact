@@ -26,12 +26,12 @@
  *     The query uses notInArray — "unfulfilled", "sent", "partial" are returned.
  *
  * RUNNING:
- *   pnpm --filter @hisaabo/api test -- --testPathPattern integration
+ *   pnpm --filter @fintranzact/api test -- --testPathPattern integration
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { invoices, payments, bankAccounts, bankTransactions } from "@hisaabo/db";
+import { invoices, payments, bankAccounts, bankTransactions } from "@fintranzact/db";
 import {
   createTestWorld,
   createParty,
@@ -161,7 +161,7 @@ describe("payment.create", () => {
     const caller = callerForRamesh();
     const db = getTenantTestDb();
 
-    const { businesses } = await import("@hisaabo/db");
+    const { businesses } = await import("@fintranzact/db");
 
     const [bizBefore] = await db.select({ nextNum: businesses.nextPaymentNumber })
       .from(businesses)

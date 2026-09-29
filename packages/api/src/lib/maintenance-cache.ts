@@ -1,4 +1,4 @@
-import { controlDb, systemConfig } from "@hisaabo/db";
+import { controlDb, systemConfig } from "@fintranzact/db";
 import { eq } from "drizzle-orm";
 
 export interface MaintenanceStatus {

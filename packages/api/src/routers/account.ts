@@ -1,8 +1,8 @@
 import { eq, and, asc } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { chartOfAccounts } from "@hisaabo/db";
-import { createAccountSchema, updateAccountSchema } from "@hisaabo/shared";
+import { chartOfAccounts } from "@fintranzact/db";
+import { createAccountSchema, updateAccountSchema } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 

@@ -10,8 +10,8 @@
  */
 
 import { eq, and, inArray } from "drizzle-orm";
-import { bankAccounts, bankTransactions, expenses, paymentGatewayConfigs } from "@hisaabo/db";
-import { calculateGatewayCharge, money } from "@hisaabo/shared";
+import { bankAccounts, bankTransactions, expenses, paymentGatewayConfigs } from "@fintranzact/db";
+import { calculateGatewayCharge, money } from "@fintranzact/shared";
 import type { TenantDatabase } from "../trpc.js";
 
 /**

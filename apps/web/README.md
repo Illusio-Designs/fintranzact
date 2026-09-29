@@ -1,4 +1,4 @@
-# @hisaabo/web
+# @fintranzact/web
 
 The main admin dashboard for Fintranzact. A React 19 single-page application that gives business owners and their teams full access to invoicing, inventory, parties, payments, GST reports, and settings.
 
@@ -31,7 +31,7 @@ The desktop app (`apps/desktop`) wraps this app in a Tauri v2 shell with no code
 
 ```bash
 # From the monorepo root
-pnpm --filter @hisaabo/web dev
+pnpm --filter @fintranzact/web dev
 ```
 
 The dev server starts at `http://localhost:5173`. All `/api` requests are proxied to `http://localhost:3000` via the Vite config — you need the API running before the web app is useful.
@@ -50,7 +50,7 @@ pnpm dev               # API + web + store in parallel
 
 ```bash
 # From monorepo root
-pnpm --filter @hisaabo/web build
+pnpm --filter @fintranzact/web build
 
 # Or from this directory
 pnpm build
@@ -66,7 +66,7 @@ Deploy the `dist/` folder to Cloudflare Pages (or any static host):
 
 | Setting | Value |
 |---|---|
-| Build command | `pnpm --filter @hisaabo/web build` |
+| Build command | `pnpm --filter @fintranzact/web build` |
 | Output directory | `apps/web/dist` |
 | Node.js version | 20 |
 
@@ -113,7 +113,7 @@ apps/web/
 
 ### tRPC client
 
-The web app imports the `AppRouter` type from `@hisaabo/api` (a devDependency — only types are used, no runtime import) and uses `createTRPCReact` to get fully typed query and mutation hooks:
+The web app imports the `AppRouter` type from `@fintranzact/api` (a devDependency — only types are used, no runtime import) and uses `createTRPCReact` to get fully typed query and mutation hooks:
 
 ```typescript
 import { trpc } from "@/lib/trpc";
@@ -159,7 +159,7 @@ Dark mode is toggled by setting `data-theme="dark"` on the `<html>` element.
 ## Type checking
 
 ```bash
-pnpm --filter @hisaabo/web typecheck
+pnpm --filter @fintranzact/web typecheck
 ```
 
 The `tsconfig.json` extends the monorepo base config and enables strict mode. `routeTree.gen.ts` is excluded from the typecheck to avoid transient errors during development.

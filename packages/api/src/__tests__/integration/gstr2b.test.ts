@@ -17,7 +17,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
-import { gstr2bRecords, invoices } from "@hisaabo/db";
+import { gstr2bRecords, invoices } from "@fintranzact/db";
 import {
   createTestWorld,
   createParty,

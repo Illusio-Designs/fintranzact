@@ -27,8 +27,8 @@
 import { config } from "dotenv";
 config({ path: "../../.env" });
 
-import { controlDb, tenants, getTenantDb } from "@hisaabo/db";
-import { encryptField, isEncrypted } from "@hisaabo/db";
+import { controlDb, tenants, getTenantDb } from "@fintranzact/db";
+import { encryptField, isEncrypted } from "@fintranzact/db";
 import { eq } from "drizzle-orm";
 
 const EXECUTE = process.argv.includes("--execute");
@@ -111,7 +111,7 @@ async function encryptTenantDb(tenantId: string, tenantSlug: string): Promise<En
     return stats;
   }
 
-  const { eInvoiceConfigs, businesses } = await import("@hisaabo/db");
+  const { eInvoiceConfigs, businesses } = await import("@fintranzact/db");
 
   // ── e_invoice_configs ──────────────────────────────────────────────────
   const configs = await db.select().from(eInvoiceConfigs);

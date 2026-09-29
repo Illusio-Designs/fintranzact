@@ -16,7 +16,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { sessions, tenantMembers, invitations, magicLinkTokens } from "@hisaabo/db";
+import { sessions, tenantMembers, invitations, magicLinkTokens } from "@fintranzact/db";
 import { createHash, randomUUID } from "crypto";
 import {
   createUser,

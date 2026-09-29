@@ -35,7 +35,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build API docs
-        run: pnpm --filter @hisaabo/api-docs build
+        run: pnpm --filter @fintranzact/api-docs build
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

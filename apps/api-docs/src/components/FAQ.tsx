@@ -27,7 +27,7 @@ const FAQ_ITEMS: FAQItem[] = [
   },
   {
     question: "How are monetary values represented?",
-    answer: "All money values are strings (e.g., `\"12500.00\"`) backed by PostgreSQL `NUMERIC(15,2)`. Never use JavaScript `parseFloat` or `Number()` for arithmetic — you'll lose precision. The `@hisaabo/shared` package exports a `money` module with safe arithmetic functions. When sending values to the API, always use string format: `\"1250.00\"`, not `1250`.",
+    answer: "All money values are strings (e.g., `\"12500.00\"`) backed by PostgreSQL `NUMERIC(15,2)`. Never use JavaScript `parseFloat` or `Number()` for arithmetic — you'll lose precision. The `@fintranzact/shared` package exports a `money` module with safe arithmetic functions. When sending values to the API, always use string format: `\"1250.00\"`, not `1250`.",
     relatedGroups: [],
     personas: ["developer", "agent-builder"],
   },
@@ -67,7 +67,7 @@ const FAQ_ITEMS: FAQItem[] = [
   // --- Agent Builder ---
   {
     question: "How do I connect an AI agent via MCP?",
-    answer: "Install `@hisaabo/mcp` and add it to your Claude Desktop `claude_desktop_config.json` with your `HISAABO_API_URL`, `HISAABO_API_KEY`, `HISAABO_TENANT_ID`, and `HISAABO_BUSINESS_ID`. The MCP server exposes every API endpoint as a callable tool, plus 6 built-in prompt templates (morning_briefing, party_deep_dive, gst_filing_prep, collection_follow_up, inventory_health, month_close).",
+    answer: "Install `@fintranzact/mcp` and add it to your Claude Desktop `claude_desktop_config.json` with your `HISAABO_API_URL`, `HISAABO_API_KEY`, `HISAABO_TENANT_ID`, and `HISAABO_BUSINESS_ID`. The MCP server exposes every API endpoint as a callable tool, plus 6 built-in prompt templates (morning_briefing, party_deep_dive, gst_filing_prep, collection_follow_up, inventory_health, month_close).",
     relatedGroups: ["api-keys"],
     personas: ["agent-builder"],
   },

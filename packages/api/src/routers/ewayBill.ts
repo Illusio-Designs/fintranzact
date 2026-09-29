@@ -37,12 +37,12 @@ import {
   items,
   parties,
   businesses,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   generateEwayBillSchema,
   cancelEwayBillSchema,
   updateEwbVehicleSchema,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { EWBClient, computeValidUpto } from "../lib/ewb-client.js";

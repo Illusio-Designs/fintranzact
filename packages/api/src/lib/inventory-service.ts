@@ -7,7 +7,7 @@ import {
   warehouses,
   warehouseLocations,
   inventorySettings,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 
 type InventoryDb = any;
 type QuantityExpression = string | SQL<string>;

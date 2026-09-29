@@ -1057,7 +1057,7 @@ Priority: CLI flags > env vars > config file > defaults.
 
 ```
 apps/cli/
-  package.json                 # @hisaabo/cli
+  package.json                 # @fintranzact/cli
   src/
     index.ts                   # Entry point, CLI parser setup
     commands/
@@ -1111,7 +1111,7 @@ apps/cli/
       prompt.ts                # Interactive prompts, party/item search
       errors.ts                # Error classification and display
       cache.ts                 # Completion cache, party/item name cache
-    types.ts                   # CLI-specific types (extends @hisaabo/shared)
+    types.ts                   # CLI-specific types (extends @fintranzact/shared)
   bin/
     hisaabo                    # Shebang entry: #!/usr/bin/env node
   tsconfig.json
@@ -1126,7 +1126,7 @@ The CLI talks to the same Hono+tRPC API as the web app. Two options:
 
 ```typescript
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import type { AppRouter } from "@hisaabo/api";
+import type { AppRouter } from "@fintranzact/api";
 import SuperJSON from "superjson";
 
 const trpc = createTRPCClient<AppRouter>({
@@ -1165,7 +1165,7 @@ const response = await fetch(`${config.server}/api/trpc/invoice.list`, {
 });
 ```
 
-Option A is strongly preferred since the existing monorepo already has `@hisaabo/api` available as a devDependency for type imports.
+Option A is strongly preferred since the existing monorepo already has `@fintranzact/api` available as a devDependency for type imports.
 
 ### 8.4 Auth Flow
 

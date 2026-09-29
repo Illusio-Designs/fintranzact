@@ -22,14 +22,14 @@ COPY packages/db/ packages/db/
 COPY packages/api/ packages/api/
 
 # Build the API (tsup bundles server.ts + pdf-worker via tsup.config.ts)
-RUN pnpm --filter @hisaabo/api build
+RUN pnpm --filter @fintranzact/api build
 
 # Bundle the migration runner into a standalone JS file (no tsx needed at runtime).
 # External: node_modules (resolved at runtime), built-ins handled by node.
 # Output goes to packages/db/dist/migrate.mjs alongside the migration SQL dirs.
 # Entry is migrate-cli.ts (thin wrapper) — migrate.ts itself has no top-level
 # side effects so importing it from application code does NOT run migrations.
-RUN pnpm --filter @hisaabo/db exec esbuild src/migrate-cli.ts \
+RUN pnpm --filter @fintranzact/db exec esbuild src/migrate-cli.ts \
       --bundle --platform=node --format=esm \
       --target=node22 \
       --outfile=dist/migrate.mjs \

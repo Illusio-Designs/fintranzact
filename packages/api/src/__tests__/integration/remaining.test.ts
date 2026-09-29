@@ -28,7 +28,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createHash } from "crypto";
 import { eq } from "drizzle-orm";
-import { apiKeys } from "@hisaabo/db";
+import { apiKeys } from "@fintranzact/db";
 import {
   createTestWorld,
   createInvoiceWithItems,

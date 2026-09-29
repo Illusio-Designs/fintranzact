@@ -11,7 +11,7 @@
  * SETUP: Requires the test database to be running. Start it with:
  *   docker compose -f docker-compose.test.yml up -d
  * Then run tests with:
- *   pnpm --filter @hisaabo/api test
+ *   pnpm --filter @fintranzact/api test
  *
  * Test organisation mirrors the router's procedure names. Each describe block
  * maps 1:1 to a procedure; test names capture intent, not implementation.

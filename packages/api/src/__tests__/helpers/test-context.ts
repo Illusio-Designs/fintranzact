@@ -16,7 +16,7 @@
  */
 
 import type { Context } from "../../context.js";
-import type { TenantDatabase } from "@hisaabo/db";
+import type { TenantDatabase } from "@fintranzact/db";
 import type { AppAbility } from "../../lib/permissions.js";
 
 /**

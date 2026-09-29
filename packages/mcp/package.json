@@ -1,25 +1,25 @@
 {
-  "name": "@hisaabo/mcp",
+  "name": "@fintranzact/mcp",
   "version": "0.9.0",
   "description": "Fintranzact MCP server — expose Fintranzact tools (invoices, parties, items, reports) to LLMs via the Model Context Protocol.",
   "keywords": [
-    "hisaabo",
+    "fintranzact",
     "mcp",
     "model-context-protocol",
     "claude",
     "llm",
     "invoicing"
   ],
-  "homepage": "https://github.com/hisaabo/hisaabo/tree/main/packages/mcp#readme",
+  "homepage": "https://github.com/Illusio-Designs/fintranzact/tree/main/packages/mcp#readme",
   "bugs": {
-    "url": "https://github.com/hisaabo/hisaabo/issues"
+    "url": "https://github.com/Illusio-Designs/fintranzact/issues"
   },
   "license": "SEE LICENSE IN LICENSE",
   "private": false,
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/hisaabo/hisaabo.git",
+    "url": "https://github.com/Illusio-Designs/fintranzact.git",
     "directory": "packages/mcp"
   },
   "bin": {

@@ -3,8 +3,8 @@ import { createTestWorld, createInvoiceWithItems, createPayment, createExpense, 
 import { createTestCaller } from "../helpers/create-test-caller.js";
 import { getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { seedChartOfAccounts } from "../../lib/coa-seed.js";
-import { money } from "@hisaabo/shared";
-import { chartOfAccounts } from "@hisaabo/db";
+import { money } from "@fintranzact/shared";
+import { chartOfAccounts } from "@fintranzact/db";
 import { eq } from "drizzle-orm";
 
 let world: TestWorld;

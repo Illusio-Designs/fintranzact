@@ -9,9 +9,9 @@
 
 import { TRPCError } from "@trpc/server";
 import { eq, and, gt, isNull, count } from "drizzle-orm";
-import { controlDb, tenants, tenantMembers, invitations } from "@hisaabo/db";
+import { controlDb, tenants, tenantMembers, invitations } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
-import { businesses } from "@hisaabo/db";
+import { businesses } from "@fintranzact/db";
 
 // ── Plan limit definitions ────────────────────────────────────────────────────
 
@@ -211,7 +211,7 @@ export async function enforceApiKeyLimit(tenantId: string): Promise<void> {
   }
   if (limits.maxApiKeys === Infinity) return;
 
-  const { apiKeys } = await import("@hisaabo/db");
+  const { apiKeys } = await import("@fintranzact/db");
   const [{ count: keyCount }] = await controlDb
     .select({ count: count() })
     .from(apiKeys)
@@ -239,7 +239,7 @@ export async function enforceApiKeyLimit(tenantId: string): Promise<void> {
 type ControlTxLike = Parameters<Parameters<typeof controlDb.transaction>[0]>[0];
 
 export async function enforceSessionLimit(userId: string, parentTx?: ControlTxLike): Promise<void> {
-  const { sessions } = await import("@hisaabo/db");
+  const { sessions } = await import("@fintranzact/db");
   const { asc } = await import("drizzle-orm");
   const db = parentTx ?? controlDb;
 

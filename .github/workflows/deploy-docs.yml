@@ -32,7 +32,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build docs
-        run: pnpm --filter @hisaabo/docs build
+        run: pnpm --filter @fintranzact/docs build
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

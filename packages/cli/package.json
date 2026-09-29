@@ -1,25 +1,25 @@
 {
-  "name": "@hisaabo/cli",
+  "name": "@fintranzact/cli",
   "version": "0.9.0",
   "description": "Fintranzact command-line interface — manage invoices, parties, items, payments, and reports from your terminal.",
   "keywords": [
-    "hisaabo",
+    "fintranzact",
     "cli",
     "invoicing",
     "gst",
     "khatabook",
     "vyaapaar"
   ],
-  "homepage": "https://github.com/hisaabo/hisaabo/tree/main/packages/cli#readme",
+  "homepage": "https://github.com/Illusio-Designs/fintranzact/tree/main/packages/cli#readme",
   "bugs": {
-    "url": "https://github.com/hisaabo/hisaabo/issues"
+    "url": "https://github.com/Illusio-Designs/fintranzact/issues"
   },
   "license": "SEE LICENSE IN LICENSE",
   "private": false,
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/hisaabo/hisaabo.git",
+    "url": "https://github.com/Illusio-Designs/fintranzact.git",
     "directory": "packages/cli"
   },
   "bin": {

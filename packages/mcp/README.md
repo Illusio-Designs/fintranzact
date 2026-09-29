@@ -1,4 +1,4 @@
-# @hisaabo/mcp
+# @fintranzact/mcp
 
 The Fintranzact MCP server. Connect Fintranzact invoicing data to Claude Desktop, OpenClaw, or any MCP-compatible AI agent. 130+ tools covering every business operation.
 
@@ -14,7 +14,7 @@ The Fintranzact MCP server. Connect Fintranzact invoicing data to Claude Desktop
 **Step 1: Get your credentials**
 
 ```bash
-npm install -g @hisaabo/cli
+npm install -g @fintranzact/cli
 hisaabo login --api-url https://your-hisaabo-instance.com
 hisaabo whoami --json
 ```
@@ -30,7 +30,7 @@ Open `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
   "mcpServers": {
     "hisaabo": {
       "command": "npx",
-      "args": ["@hisaabo/mcp"],
+      "args": ["@fintranzact/mcp"],
       "env": {
         "HISAABO_API_URL": "https://your-hisaabo-instance.com",
         "HISAABO_API_KEY": "sess_...",
@@ -329,13 +329,13 @@ The server uses stdio transport (stdin/stdout), which is the standard for MCP se
 
 ```bash
 # From monorepo root
-pnpm --filter @hisaabo/mcp dev
+pnpm --filter @fintranzact/mcp dev
 
 # Build
-pnpm --filter @hisaabo/mcp build
+pnpm --filter @fintranzact/mcp build
 
 # Type-check
-pnpm --filter @hisaabo/mcp typecheck
+pnpm --filter @fintranzact/mcp typecheck
 ```
 
 For local development, set `HISAABO_API_URL=http://localhost:3000` and use a session token from a local login.

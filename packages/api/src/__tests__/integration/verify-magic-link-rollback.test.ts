@@ -33,7 +33,7 @@
 import { describe, it, expect, afterAll, vi, beforeEach } from "vitest";
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { users, magicLinkTokens } from "@hisaabo/db";
+import { users, magicLinkTokens } from "@fintranzact/db";
 import { getControlDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createTestContext } from "../helpers/test-context.js";
 import { createCallerFactory } from "../../trpc.js";

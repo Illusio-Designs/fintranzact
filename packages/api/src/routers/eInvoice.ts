@@ -24,12 +24,12 @@ import {
   parties,
   businesses,
   items,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   eInvoiceConfigSchema,
   cancelEInvoiceSchema,
   paginationSchema,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import type { TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";

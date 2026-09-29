@@ -20,7 +20,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { bankAccounts, parties, businesses } from "@hisaabo/db";
+import { bankAccounts, parties, businesses } from "@fintranzact/db";
 import {
   createUser,
   createTenant,

@@ -8,7 +8,7 @@ import type { Options } from "tsup";
 // would otherwise bundle them, causing CJS→ESM issues (dotenv require('fs')).
 const shared: Partial<Options> = {
   format: ["esm"],
-  noExternal: ["@hisaabo/db", "@hisaabo/shared"],
+  noExternal: ["@fintranzact/db", "@fintranzact/shared"],
   external: ["dotenv", "postgres"],
 };
 

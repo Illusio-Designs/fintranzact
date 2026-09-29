@@ -30,13 +30,13 @@
  *   - afterAll cleans up via truncateAllTables().
  *
  * RUNNING:
- *   pnpm --filter @hisaabo/api test -- --testPathPattern integration
+ *   pnpm --filter @fintranzact/api test -- --testPathPattern integration
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { invoices, invoiceItems, items, businesses } from "@hisaabo/db";
-import { calcLineItem, calcInvoiceTotals } from "@hisaabo/shared";
+import { invoices, invoiceItems, items, businesses } from "@fintranzact/db";
+import { calcLineItem, calcInvoiceTotals } from "@fintranzact/shared";
 import {
   createTestWorld,
   createItem,
@@ -368,7 +368,7 @@ describe("invoice.create", () => {
     const caller = callerForRamesh();
     const db = getTenantTestDb();
 
-    const { parties } = await import("@hisaabo/db");
+    const { parties } = await import("@fintranzact/db");
 
     // Read party opening balance before invoice
     const [partyBefore] = await db.select({ openingBalance: parties.openingBalance })

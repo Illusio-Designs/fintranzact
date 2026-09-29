@@ -14,11 +14,11 @@ import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import tarStream from "tar-stream";
 import { eq, getTableColumns } from "drizzle-orm";
-import type { TenantDatabase } from "@hisaabo/db";
-import { businesses } from "@hisaabo/db";
+import type { TenantDatabase } from "@fintranzact/db";
+import { businesses } from "@fintranzact/db";
 import { TABLE_REGISTRY } from "./tableRegistry.js";
-import { ROW_SCHEMAS, manifestSchema } from "@hisaabo/shared/selfExport";
-import type { Manifest } from "@hisaabo/shared/selfExport";
+import { ROW_SCHEMAS, manifestSchema } from "@fintranzact/shared/selfExport";
+import type { Manifest } from "@fintranzact/shared/selfExport";
 import type { Logger } from "./logger.js";
 import {
   APP_VERSION,

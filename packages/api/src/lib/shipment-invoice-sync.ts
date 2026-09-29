@@ -16,8 +16,8 @@
  */
 
 import { eq, and } from "drizzle-orm";
-import { invoices } from "@hisaabo/db";
-import { money } from "@hisaabo/shared";
+import { invoices } from "@fintranzact/db";
+import { money } from "@fintranzact/shared";
 import { TRPCError } from "@trpc/server";
 import type { TenantDatabase } from "../trpc.js";
 

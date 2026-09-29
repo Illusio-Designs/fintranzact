@@ -5,7 +5,7 @@
  * This is the ONLY way to set maintenance mode — there is no API mutation.
  *
  * USAGE:
- *   pnpm --filter @hisaabo/api maintenance
+ *   pnpm --filter @fintranzact/api maintenance
  *   npx tsx packages/api/src/bin/maintenance.ts
  */
 
@@ -14,7 +14,7 @@ config({ path: "../../.env" });
 
 import * as p from "@clack/prompts";
 import color from "picocolors";
-import { controlDb, systemConfig } from "@hisaabo/db";
+import { controlDb, systemConfig } from "@fintranzact/db";
 import { eq } from "drizzle-orm";
 
 // ── Types ───────────────────────────────────────────────────────

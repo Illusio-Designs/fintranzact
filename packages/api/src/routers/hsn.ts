@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../trpc.js";
-import { hsnSearchSchema } from "@hisaabo/shared";
+import { hsnSearchSchema } from "@fintranzact/shared";
 import { searchHsn, isValidHsn, validateHsnForTurnover } from "../lib/hsn-data.js";
 
 export const hsnRouter = router({

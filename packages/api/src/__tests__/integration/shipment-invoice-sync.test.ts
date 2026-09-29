@@ -25,8 +25,8 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { invoices, shipments } from "@hisaabo/db";
-import { invoiceChargeSchema } from "@hisaabo/shared";
+import { invoices, shipments } from "@fintranzact/db";
+import { invoiceChargeSchema } from "@fintranzact/shared";
 import {
   createTestWorld,
   createInvoiceWithItems,

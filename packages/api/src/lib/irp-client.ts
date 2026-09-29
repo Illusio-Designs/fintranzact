@@ -14,7 +14,7 @@
 
 import { createHash, createCipheriv, createDecipheriv, publicEncrypt, constants, randomBytes } from "crypto";
 import { eq } from "drizzle-orm";
-import { eInvoiceConfigs, encryptField } from "@hisaabo/db";
+import { eInvoiceConfigs, encryptField } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 
 // ── NIC IRP endpoints ─────────────────────────────────────────────────────────

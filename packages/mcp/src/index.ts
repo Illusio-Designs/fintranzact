@@ -16,7 +16,7 @@
  *     "mcpServers": {
  *       "hisaabo": {
  *         "command": "npx",
- *         "args": ["@hisaabo/mcp"],
+ *         "args": ["@fintranzact/mcp"],
  *         "env": {
  *           "HISAABO_API_URL": "http://localhost:3000",
  *           "HISAABO_API_KEY": "<session-id-from-hisaabo-login>",

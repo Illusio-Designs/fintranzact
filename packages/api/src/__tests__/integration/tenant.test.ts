@@ -19,7 +19,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
-import { sessions, tenantMembers } from "@hisaabo/db";
+import { sessions, tenantMembers } from "@fintranzact/db";
 import {
   createUser,
   createTenant,
