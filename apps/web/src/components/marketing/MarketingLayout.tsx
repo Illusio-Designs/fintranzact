@@ -19,6 +19,7 @@ export const MARKETING_PATHS = [
   "/pricing",
   "/about",
   "/contact",
+  "/partners",
   "/privacy",
   "/terms",
   "/refund-policy",
@@ -47,6 +48,7 @@ const FOOTER_COLUMNS: Array<{
     links: [
       { label: "About us", to: "/about" },
       { label: "Contact", to: "/contact" },
+      { label: "Partner with us", to: "/partners" },
     ],
   },
   {

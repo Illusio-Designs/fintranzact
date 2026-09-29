@@ -161,7 +161,8 @@ const MENUS: MegaMenu[] = [
         links: [
           { label: "Help & docs", icon: BookOpen01Icon, href: DOCS_URL },
           { label: "About Fintranzact", icon: Building03Icon, to: "/about" },
-          { label: "Contact support", icon: HeadphonesIcon, to: "/contact" },
+          { label: "Contact us", icon: HeadphonesIcon, to: "/contact" },
+          { label: "Partner with us", icon: UserGroupIcon, to: "/partners" },
           { label: "Email us", icon: Mail01Icon, href: `mailto:${CONTACT_EMAIL}` },
         ],
       },
@@ -185,7 +186,7 @@ const NAV: NavItem[] = [
   { kind: "link", label: "Pricing", to: "/pricing" },
   { kind: "menu", menu: MENUS[1] },
   { kind: "link", label: "About", to: "/about" },
-  { kind: "link", label: "Contact", to: "/contact" },
+  { kind: "link", label: "Partner with us", to: "/partners" },
   { kind: "menu", menu: MENUS[2] },
 ];
 
@@ -308,7 +309,7 @@ function MegaPanel({ menu, onNavigate }: { menu: MegaMenu; onNavigate: () => voi
   const hasPromo = Boolean(menu.promo);
   const [first, ...rest] = menu.columns;
   return (
-    <div className="mx-auto max-w-6xl px-4 md:px-6">
+    <div className="mx-auto max-w-7xl px-4 md:px-6">
       <div
         className={cn(
           "overflow-hidden rounded-b-2xl border border-t-0 border-border-light bg-surface-0 shadow-[0_30px_60px_-30px_rgba(15,27,61,.35)]",
@@ -392,7 +393,7 @@ function RegionPill() {
         aria-expanded={open}
         aria-label="Region: India, English"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-10 items-center gap-2 rounded-full border border-border-light px-3 text-[13px] font-bold text-text-primary transition hover:border-border-medium"
+        className="flex h-10 items-center gap-2 whitespace-nowrap rounded-full border border-border-light px-3 text-[13px] font-bold text-text-primary transition hover:border-border-medium"
       >
         <IN className="h-[18px] w-[18px] rounded-full object-cover shadow-[0_0_0_1px_rgba(0,0,0,0.08)] [clip-path:circle(50%)]" aria-hidden="true" />
         IN-EN
@@ -433,7 +434,7 @@ function NavTrigger({
       onClick={onToggle}
       onMouseEnter={onHover}
       className={cn(
-        "flex items-center gap-1 rounded-md px-3 py-2.5 text-[15px] font-medium transition hover:text-text-primary",
+        "flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-2.5 text-[14px] font-medium transition hover:text-text-primary xl:px-3 xl:text-[15px]",
         open ? "text-brand-700 dark:text-white" : "text-text-secondary",
       )}
     >
@@ -494,8 +495,8 @@ export function SiteHeader() {
       className="sticky top-0 z-20 border-b border-border-light bg-surface-0/95 backdrop-blur"
       onMouseLeave={scheduleClose}
     >
-      <div className="mx-auto flex h-[72px] max-w-6xl items-center gap-4 px-4 md:px-6">
-        <Link to="/" className="flex items-center gap-2.5" onMouseEnter={() => hoverOpen(null)}>
+      <div className="mx-auto flex h-[72px] max-w-7xl items-center gap-4 px-4 md:px-6">
+        <Link to="/" className="flex shrink-0 items-center gap-2.5" onMouseEnter={() => hoverOpen(null)}>
           <Logo className="h-[34px] w-[34px]" />
           <span className="font-display text-[19px] font-extrabold tracking-tight text-[#0f1b3d] dark:text-white">
             Fintranzact
@@ -519,7 +520,7 @@ export function SiteHeader() {
                 to={item.to}
                 onMouseEnter={() => hoverOpen(null)}
                 className={cn(
-                  "rounded-md px-3 py-2.5 text-[15px] font-medium transition hover:text-text-primary",
+                  "whitespace-nowrap rounded-md px-2 py-2.5 text-[14px] font-medium transition hover:text-text-primary xl:px-3 xl:text-[15px]",
                   pathname === item.to ? "text-text-primary" : "text-text-secondary",
                 )}
               >
@@ -529,19 +530,19 @@ export function SiteHeader() {
           )}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2 lg:ml-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-2">
           <RegionPill />
           <Link
             to="/login"
             search={{ mode: "login" }}
-            className="hidden h-11 items-center px-3 text-[15px] font-semibold text-text-secondary hover:text-text-primary sm:inline-flex"
+            className="hidden h-11 items-center whitespace-nowrap px-3 text-[15px] font-semibold text-text-secondary hover:text-text-primary sm:inline-flex"
           >
             Log in
           </Link>
           <Link
             to="/login"
             search={{ mode: "register" }}
-            className="inline-flex h-11 items-center rounded-[10px] bg-brand-600 px-5 text-[15px] font-semibold text-white shadow-[0_6px_16px_-6px_rgba(59,94,170,.6)] transition hover:bg-brand-700"
+            className="inline-flex h-11 items-center whitespace-nowrap rounded-[10px] bg-brand-600 px-5 text-[15px] font-semibold text-white shadow-[0_6px_16px_-6px_rgba(59,94,170,.6)] transition hover:bg-brand-700"
           >
             Start free
           </Link>
