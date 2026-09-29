@@ -120,7 +120,10 @@ function OnboardingPage() {
         <BusinessForm
           onboardingMode
           onDone={() => {
-            navigate({ to: "/auth/plan-selection" });
+            // Plan is chosen right after signup. Go to the dashboard; the
+            // plan gate in __root.tsx still redirects to /auth/plan-selection
+            // if this tenant has no plan yet, so it is never shown twice.
+            navigate({ to: "/" });
           }}
         />
       </div>
