@@ -102,7 +102,7 @@ function OnboardingPage() {
           </h1>
 
           <p className="mt-1 text-sm text-text-tertiary">
-            Complete your business details before entering the Hisaabo
+            Complete your business details before entering the Fintranzact
             dashboard.
           </p>
         </div>
@@ -120,7 +120,10 @@ function OnboardingPage() {
         <BusinessForm
           onboardingMode
           onDone={() => {
-            navigate({ to: "/auth/plan-selection" });
+            // Plan is chosen right after signup. Go to the dashboard; the
+            // plan gate in __root.tsx still redirects to /auth/plan-selection
+            // if this tenant has no plan yet, so it is never shown twice.
+            navigate({ to: "/" });
           }}
         />
       </div>
@@ -135,7 +138,7 @@ function StandaloneHeader() {
 
       <div>
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-text-tertiary">
-          Hisaabo
+          Fintranzact
         </p>
 
         <p className="text-sm font-medium text-text-primary">

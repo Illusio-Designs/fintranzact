@@ -1687,9 +1687,9 @@ function PriceHistoryTab({
               <Line
                 type="monotone"
                 dataKey="price"
-                stroke="#5b5bd6"
+                stroke="#3b5eaa"
                 strokeWidth={2}
-                dot={{ r: 3, fill: "#5b5bd6", strokeWidth: 0 }}
+                dot={{ r: 3, fill: "#3b5eaa", strokeWidth: 0 }}
                 activeDot={{ r: 5 }}
               />
             </LineChart>

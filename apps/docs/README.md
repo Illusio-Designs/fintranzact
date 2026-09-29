@@ -1,6 +1,6 @@
 # @hisaabo/docs
 
-The user documentation site for Hisaabo. Built with [Starlight](https://starlight.astro.build/) on top of Astro 5, it covers everything a business owner or self-hoster needs to know: getting started, invoicing workflows, GST compliance, team setup, and deployment.
+The user documentation site for Fintranzact. Built with [Starlight](https://starlight.astro.build/) on top of Astro 5, it covers everything a business owner or self-hoster needs to know: getting started, invoicing workflows, GST compliance, team setup, and deployment.
 
 [![Astro](https://img.shields.io/badge/Astro-5-FF5D01?logo=astro&logoColor=white)](https://astro.build/)
 [![Starlight](https://img.shields.io/badge/Starlight-0.34-7C3AED?logo=astro&logoColor=white)](https://starlight.astro.build/)
@@ -45,7 +45,7 @@ All documentation content lives in `src/content/docs/`. Starlight uses MDX files
 ```
 src/content/docs/
 ├── index.mdx                     # Homepage
-├── getting-started/              # What is Hisaabo, self-hosting setup, first business, data import
+├── getting-started/              # What is Fintranzact, self-hosting setup, first business, data import
 ├── invoicing/                    # Creating invoices, quotations, challans, credit notes, PDFs
 ├── parties/                      # Adding customers and suppliers, ledger, GSTIN
 ├── items/                        # Products, services, inventory, variants, units
@@ -70,7 +70,7 @@ src/content/docs/
    ```mdx
    ---
    title: "Recording a Payment"
-   description: "How to record payments against invoices in Hisaabo"
+   description: "How to record payments against invoices in Fintranzact"
    ---
    ```
 3. If the file should appear in the sidebar, it is auto-generated from the directory. No manual sidebar update required — Starlight picks it up automatically from the `autogenerate` config in `astro.config.mjs`.

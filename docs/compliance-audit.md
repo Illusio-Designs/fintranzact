@@ -1,4 +1,4 @@
-# Hisaabo Compliance Audit Report
+# Fintranzact Compliance Audit Report
 
 **Assessment Date**: 2026-03-28
 **Auditor**: ComplianceAuditor (internal self-assessment)
@@ -8,8 +8,8 @@
 ## Important Disclaimers
 
 - This is a **self-assessment**, not a third-party certification or government attestation.
-- Hisaabo is **not a certified GST software** recognized under any government scheme. It is a business management tool that generates data in formats compatible with GST filing. All reports must be reviewed by the business owner or their chartered accountant before filing with the GST portal.
-- Hisaabo does **not file returns automatically**. It generates GSTR-1 and GSTR-3B data that the user or their CA then submits via the GST portal or offline utility.
+- Fintranzact is **not a certified GST software** recognized under any government scheme. It is a business management tool that generates data in formats compatible with GST filing. All reports must be reviewed by the business owner or their chartered accountant before filing with the GST portal.
+- Fintranzact does **not file returns automatically**. It generates GSTR-1 and GSTR-3B data that the user or their CA then submits via the GST portal or offline utility.
 - Self-hosted deployments place full responsibility for data backup, server security, and regulatory compliance on the operator. The application provides tooling (backup scripts, HTTPS configuration guidance) but cannot enforce their use.
 
 ---
@@ -73,7 +73,7 @@ GAPS:
 - Remediation: Add `exportType` enum to invoice schema and branch logic in `generateGSTR1`.
 - Effort: 5-7 days.
 
-**Gap 1.1.3 (MEDIUM)**: Composition scheme GSTR-4 is not generated. The documentation acknowledges this. Composition businesses can use Hisaabo for record-keeping but must prepare GSTR-4 manually.
+**Gap 1.1.3 (MEDIUM)**: Composition scheme GSTR-4 is not generated. The documentation acknowledges this. Composition businesses can use Fintranzact for record-keeping but must prepare GSTR-4 manually.
 - Current state: Not implemented.
 - Recommendation: Add a prominent disclaimer in the UI when `gstRegistrationType === "composition"` explaining GSTR-4 must be filed separately.
 
@@ -322,7 +322,7 @@ Stock quantities correctly use `NUMERIC(15,3)` (three decimal places) to support
 
 **Evidence**: `packages/shared/src/money.ts`, `toPaise` (line 12), `fromPaise` (line 17).
 
-**Findings**: `toPaise` uses `Math.round()` which implements "round half away from zero" (also known as "commercial rounding"). This is the standard rounding method for Indian GST. The `Math.round()` behavior is consistent with the CGST Act's rounding requirement of rounding to the nearest rupee (CGST Act Section 170), though Hisaabo retains paise precision at the line-item level.
+**Findings**: `toPaise` uses `Math.round()` which implements "round half away from zero" (also known as "commercial rounding"). This is the standard rounding method for Indian GST. The `Math.round()` behavior is consistent with the CGST Act's rounding requirement of rounding to the nearest rupee (CGST Act Section 170), though Fintranzact retains paise precision at the line-item level.
 
 ### 4.4 Tax-Inclusive Price Calculation
 

@@ -19,6 +19,8 @@ import { getRegisteredHotkeys } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
+import { LandingPage } from "@/components/LandingPage";
+import { isDesktop } from "@/lib/isDesktop";
 import { clearDesktopToken } from "@/lib/desktop-session";
 
 export const Route = createRootRoute({
@@ -329,7 +331,7 @@ function NoOrgScreen() {
         <div className="flex items-center justify-center gap-2.5 mb-6">
           <Logo className="w-9 h-9" />
           <span className="font-semibold text-lg tracking-tight text-text-primary">
-            Hisaabo
+            Fintranzact
           </span>
         </div>
 
@@ -762,11 +764,17 @@ function RootLayout() {
     "/auth/verify-email-change",
     "/invite",
   ];
+  // Logged-out visitors to "/" on the web see the public landing page; the
+  // desktop app has no marketing page and goes straight to login.
+  const showsLandingPage = pathname === "/" && !isDesktop();
+
   useEffect(() => {
     if (sessionLoading || sessionFetching) return;
 
     // Priority 1: Not authenticated → login
+    // (the web root shows the public landing page instead).
     if (!session?.user) {
+      if (showsLandingPage) return;
       if (!publicPaths.some((p) => pathname.startsWith(p))) {
         navigate({ to: "/login" });
       }
@@ -899,6 +907,7 @@ function RootLayout() {
 
   // Not authenticated
   if (!session?.user) {
+    if (showsLandingPage) return <LandingPage />;
     const isPublic = publicPaths.some((p) => pathname.startsWith(p));
     if (!isPublic) return null; // redirect in flight
     return <Outlet />;
@@ -1125,7 +1134,7 @@ function RootLayout() {
               <div className="flex items-center gap-2.5">
                 <Logo className="w-8 h-8" />
                 <span className="font-semibold text-[15px] tracking-tight text-text-primary">
-                  Hisaabo
+                  Fintranzact
                 </span>
               </div>
             </div>
@@ -1266,7 +1275,7 @@ function RootLayout() {
               <div className="flex items-center gap-2.5 mr-2">
                 <Logo className="w-7 h-7" />
                 <span className="font-semibold text-[15px] tracking-tight text-text-primary">
-                  Hisaabo
+                  Fintranzact
                 </span>
               </div>
             )}

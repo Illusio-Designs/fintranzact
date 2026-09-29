@@ -82,7 +82,7 @@ function SettingsPage() {
     if (onboardingPath === "restore" && isOwner && session?.tenantId) {
       return (
         <div>
-          <PageHeader title="Restore from backup" description="Import a previously exported Hisaabo backup" />
+          <PageHeader title="Restore from backup" description="Import a previously exported Fintranzact backup" />
           <RestoreOnboarding
             tenantId={session.tenantId}
             onBack={() => setOnboardingPath("choose")}
@@ -164,7 +164,7 @@ function SettingsPage() {
             </span>
             <div>
               <p className="text-sm font-medium text-text-primary">Restore from a backup</p>
-              <p className="text-xs text-text-tertiary mt-0.5">Import a previously exported Hisaabo backup to restore all your data</p>
+              <p className="text-xs text-text-tertiary mt-0.5">Import a previously exported Fintranzact backup to restore all your data</p>
             </div>
           </button>
         </div>

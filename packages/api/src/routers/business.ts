@@ -289,6 +289,11 @@ export const businessRouter = router({
           input.eWayBillThreshold == null
             ? null
             : String(input.eWayBillThreshold),
+        annualTurnover:
+          input.annualTurnover == null ? null : String(input.annualTurnover),
+        ...(input.financialYearStartDate
+          ? { financialYearStart: fyStartMonth(input.financialYearStartDate) }
+          : {}),
         createdByUserId: ctx.user.id,
       }).returning();
 
@@ -349,6 +354,14 @@ export const businessRouter = router({
 
       // Encrypt carrier credentials if present in the update payload
       const data = { ...input.data } as Record<string, unknown>;
+      if ("annualTurnover" in data) {
+        data.annualTurnover =
+          data.annualTurnover == null ? null : String(data.annualTurnover);
+      }
+      if (typeof data.financialYearStartDate === "string") {
+        // Keep the month column (used by GST/dashboard FY maths) in sync.
+        data.financialYearStart = fyStartMonth(data.financialYearStartDate);
+      }
       if ("carrierCredentials" in data && data.carrierCredentials) {
         data.carrierCredentials = encryptCarrierCredentials(
           data.carrierCredentials as Parameters<typeof encryptCarrierCredentials>[0],
@@ -664,4 +677,9 @@ function toCsv<T extends Record<string, unknown>>(data: T[], fields: string[]): 
     }).join(",")
   );
   return [header, ...rows].join("\n");
+}
+
+/** Month (1-12) of a YYYY-MM-DD financial year start date. */
+function fyStartMonth(date: string): number {
+  return Number(date.slice(5, 7));
 }

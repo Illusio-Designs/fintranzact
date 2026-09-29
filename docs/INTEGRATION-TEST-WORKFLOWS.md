@@ -1,4 +1,4 @@
-# Hisaabo Integration Test Workflow Tree
+# Fintranzact Integration Test Workflow Tree
 
 **Version**: 1.0
 **Date**: 2026-03-31
@@ -2421,7 +2421,7 @@ STEP 2: Start container with DATABASE_URL
   ACTION: docker run -e DATABASE_URL=... -p 3000:3000 hisaabo-api
   ASSERT:
     - Entrypoint runs migrations: "[entrypoint] Running database migrations..."
-    - Server starts: "[entrypoint] Starting Hisaabo API server on port 3000..."
+    - Server starts: "[entrypoint] Starting Fintranzact API server on port 3000..."
     - HEALTHCHECK passes: GET /health returns 200
 
 STEP 3: Health check endpoint
@@ -2459,7 +2459,7 @@ STEP 2: First boot (fresh data dir)
     - flock acquired: "[postgres] Lock acquired - we own PostgreSQL"
     - Database created: "hisaabo" database exists
     - Migrations run: "[api] Running database migrations..."
-    - API starts: "[api] Starting Hisaabo API on port 3000..."
+    - API starts: "[api] Starting Fintranzact API on port 3000..."
     - GET /health returns 200
 
 STEP 3: Persistent data across restarts
@@ -2668,7 +2668,7 @@ STEP 16: Bank transfer to same account
 ```
 describe("Invoice State Machine Validation")
 
-NOTE: The Hisaabo invoice router does NOT enforce a strict state machine.
+NOTE: The Fintranzact invoice router does NOT enforce a strict state machine.
 The updateStatus endpoint accepts ANY status transition. This is by
 design (flexibility for Indian business workflows). However, the
 PAYMENT system implicitly drives status via amountPaid thresholds:

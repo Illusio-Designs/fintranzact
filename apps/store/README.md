@@ -1,6 +1,6 @@
 # @hisaabo/store
 
-The public-facing online storefront for Hisaabo businesses. A lightweight React 19 SPA that customers visit to browse a business's catalog and place orders — no login required.
+The public-facing online storefront for Fintranzact businesses. A lightweight React 19 SPA that customers visit to browse a business's catalog and place orders — no login required.
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
@@ -10,9 +10,9 @@ The public-facing online storefront for Hisaabo businesses. A lightweight React 
 
 ## What this app does
 
-Every Hisaabo business can enable a public storefront at `store.hisaabo.in/<slug>`. The store app reads the business slug from the URL path, fetches the catalog from the API, and renders a mobile-first product listing with cart and checkout.
+Every Fintranzact business can enable a public storefront at `store.hisaabo.in/<slug>`. The store app reads the business slug from the URL path, fetches the catalog from the API, and renders a mobile-first product listing with cart and checkout.
 
-When a customer places an order, the API creates an unfulfilled invoice in the business's Hisaabo account. The business owner then fulfills and marks it from the web dashboard.
+When a customer places an order, the API creates an unfulfilled invoice in the business's Fintranzact account. The business owner then fulfills and marks it from the web dashboard.
 
 **Features:**
 - Product catalog with category grouping and custom sort order

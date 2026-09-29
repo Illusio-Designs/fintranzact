@@ -1,4 +1,4 @@
-# Hisaabo Workflow Map
+# Fintranzact Workflow Map
 
 **Version**: 1.0
 **Date**: 2026-03-28
@@ -10,7 +10,7 @@
 
 ## About This Document
 
-This document maps every workflow in the Hisaabo application — verified against actual source code in `packages/api/src/routers/`, `apps/web/src/routes/`, `apps/mobile/app/`, and `apps/store/src/`. Every step, branch, failure mode, and role constraint listed here was confirmed from reading the code, not inferred from descriptions.
+This document maps every workflow in the Fintranzact application — verified against actual source code in `packages/api/src/routers/`, `apps/web/src/routes/`, `apps/mobile/app/`, and `apps/store/src/`. Every step, branch, failure mode, and role constraint listed here was confirmed from reading the code, not inferred from descriptions.
 
 **Role definitions** (from `packages/api/src/lib/permissions.ts`):
 
@@ -187,7 +187,7 @@ The lock is a local UX gate, not a new auth session. The session token remains i
 2. Biometric store reads three SecureStore keys: `hisaabo_biometric_enabled`, `hisaabo_pin_hash`, `hisaabo_setup_prompted`.
 3. If `biometricEnabled === true` or `pinEnabled === true` AND token exists → `authGate = "locked"`.
 4. `LockScreen` component renders as the only visible content.
-5. `LockScreen` calls `useBiometricStore.authenticate()` → `LocalAuthentication.authenticateAsync({ promptMessage: "Unlock Hisaabo", cancelLabel: "Use PIN" })`.
+5. `LockScreen` calls `useBiometricStore.authenticate()` → `LocalAuthentication.authenticateAsync({ promptMessage: "Unlock Fintranzact", cancelLabel: "Use PIN" })`.
 6. On success → `useBiometricStore.unlock()` (sets `isLocked: false`) → `verifyTokenAndProceed()` → `auth.me` called.
 7. If server session valid → `authGate = "ready"` → app renders.
 8. If server session expired → `logout()` called → `authGate = "login"` → user redirected to login screen.

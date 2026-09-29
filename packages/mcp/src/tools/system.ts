@@ -14,7 +14,7 @@ export function registerSystemTools(server: McpServer, client: HisaaboClient) {
   server.tool(
     "system_maintenance_status",
     [
-      "Check if the Hisaabo API is currently under maintenance.",
+      "Check if the Fintranzact API is currently under maintenance.",
       "Returns maintenance status including whether it is active, the operator message, and estimated end time.",
       "When maintenance is active, all data operations will be unavailable — retry after the estimated end time.",
     ].join(" "),

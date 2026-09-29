@@ -1,4 +1,4 @@
-# Cross-Tenant Isolation Audit — Hisaabo API
+# Cross-Tenant Isolation Audit — Fintranzact API
 
 **Date**: 2026-03-26
 **Auditor**: Security Engineer Agent

@@ -1,4 +1,4 @@
-# Online Store Architecture for Hisaabo
+# Online Store Architecture for Fintranzact
 
 **Status**: Proposed
 **Date**: 2026-03-25
@@ -27,11 +27,11 @@
 
 ## 1. Executive Summary
 
-The online store is a public-facing storefront that lets Hisaabo businesses sell directly to customers via a unique URL. Orders placed on the store become draft invoices inside the business's Hisaabo account. The store is a read-heavy, public surface with fundamentally different requirements from the authenticated admin app: it must be fast, SEO-friendly, and completely isolated from private business data.
+The online store is a public-facing storefront that lets Fintranzact businesses sell directly to customers via a unique URL. Orders placed on the store become draft invoices inside the business's Fintranzact account. The store is a read-heavy, public surface with fundamentally different requirements from the authenticated admin app: it must be fast, SEO-friendly, and completely isolated from private business data.
 
 **Key constraints that shaped this design:**
 
-- Hisaabo is multi-tenant with per-tenant databases (`getTenantDb`). The store must resolve a public slug to a tenant + business without authentication.
+- Fintranzact is multi-tenant with per-tenant databases (`getTenantDb`). The store must resolve a public slug to a tenant + business without authentication.
 - The existing invoice pipeline (atomic numbering, `calcInvoiceTotals`, stock adjustment) is battle-tested. Orders should flow through it, not around it.
 - The project uses an O'Saasy license where multi-tenancy is cloud-only. The online store must work in both self-hosted (single-tenant) and cloud (multi-tenant) modes.
 - Quality bar is extremely high. The store page must load in under 1 second on a 4G Indian mobile connection.
@@ -1322,7 +1322,7 @@ New indexes added:
 The `source` field on invoices already supports this pattern. Future integrations:
 
 ```
-source = "online_store"     -- Hisaabo's own store
+source = "online_store"     -- Fintranzact's own store
 source = "shopify"          -- Shopify webhook
 source = "woocommerce"      -- WooCommerce webhook
 source = "amazon"           -- Amazon Seller API

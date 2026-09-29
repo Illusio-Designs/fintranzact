@@ -43,7 +43,7 @@ export async function dashboardCommand(opts: { json?: boolean }): Promise<void> 
     const fy = currentFY();
 
     console.log();
-    console.log(` Hisaabo Dashboard` + " ".repeat(Math.max(2, width - 30)) + (cfg.businessName ?? ""));
+    console.log(` Fintranzact Dashboard` + " ".repeat(Math.max(2, width - 30)) + (cfg.businessName ?? ""));
     console.log(` FY ${fy} (01 Apr ${fy.split("-")[0]} - 31 Mar 20${fy.split("-")[1]})`);
     console.log(` ${"═".repeat(width)}`);
     console.log();

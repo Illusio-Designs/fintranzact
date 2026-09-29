@@ -2,7 +2,7 @@
 
 > **Looking for product documentation?** Visit [`apps/docs/`](../apps/docs/) (the Starlight site at [docs.hisaabo.in](https://docs.hisaabo.in)) or [`apps/api-docs/`](../apps/api-docs/) (the API reference at [api-docs.hisaabo.in](https://api-docs.hisaabo.in)).
 
-This folder contains **internal architecture documents, audit reports, and design plans** for Hisaabo contributors. These are not user-facing — they document design decisions, security posture, and implementation plans.
+This folder contains **internal architecture documents, audit reports, and design plans** for Fintranzact contributors. These are not user-facing — they document design decisions, security posture, and implementation plans.
 
 ## Contents
 
@@ -179,7 +179,7 @@ Unmapped unit codes are collected and returned in the response so no data is sil
 
 ### Item Import
 
-`normalizeUnit()` maps 45+ MyBillBook unit codes to Hisaabo's internal unit enum. Unmapped codes are tracked and surfaced to the importer so no data is silently dropped.
+`normalizeUnit()` maps 45+ MyBillBook unit codes to Fintranzact's internal unit enum. Unmapped codes are tracked and surfaced to the importer so no data is silently dropped.
 
 ### Web App
 

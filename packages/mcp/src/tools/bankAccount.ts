@@ -67,7 +67,7 @@ export function registerBankAccountTools(server: McpServer, client: HisaaboClien
       "Create a new bank account or cash account for the business.",
       "Use account_type='cash' for a physical cash register/petty cash account.",
       "Use account_type='savings' or 'current' for bank accounts.",
-      "opening_balance sets the starting balance (e.g. the balance when you started using Hisaabo).",
+      "opening_balance sets the starting balance (e.g. the balance when you started using Fintranzact).",
       "Set is_default=true to make this the default account for payment recording.",
     ].join(" "),
     {

@@ -16,10 +16,10 @@
     --border: #1f1f35;
     --border-mid: #2a2a42;
     --border-light: #3d3d5c;
-    --brand: #6366f1;
-    --brand-light: #818cf8;
-    --brand-dim: rgba(99, 102, 241, 0.12);
-    --brand-dim-strong: rgba(99, 102, 241, 0.2);
+    --brand: #3b5eaa;
+    --brand-light: #8fa6d6;
+    --brand-dim: rgba(59, 94, 170, 0.12);
+    --brand-dim-strong: rgba(59, 94, 170, 0.2);
     --text-primary: #f0f0f5;
     --text-secondary: #9ca3af;
     --text-tertiary: #6b7280;
@@ -125,7 +125,7 @@
   .token.atrule,
   .token.attr-value,
   .token.keyword {
-    color: #818cf8;
+    color: #8fa6d6;
   }
 
   .token.function,
@@ -345,7 +345,7 @@
      Selection highlight
      ============================ */
   ::selection {
-    background: rgba(99, 102, 241, 0.3);
+    background: rgba(59, 94, 170, 0.3);
     color: var(--text-primary);
   }
 }

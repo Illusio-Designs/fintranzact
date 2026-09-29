@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { TurnstileModal } from "@/components/ui/TurnstileModal";
 import { isDesktop } from "@/lib/isDesktop";
+import { Logo } from "@/components/ui/Logo";
 import { saveDesktopToken } from "@/lib/desktop-session";
 
 /* ─── Turnstile type (declared in TurnstileModal) ──────────────────────── */
@@ -26,11 +27,22 @@ declare global {
   }
 }
 
+type AuthMode = "register" | "login";
+
 export const Route = createFileRoute("/login")({
+  // ?mode=login | register lets the public landing page open the right tab.
+  // Other params (e.g. invite=1&error=… from the invite flow) pass through.
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { mode?: AuthMode; invite?: string; error?: string } => ({
+    ...(search.mode === "login" || search.mode === "register"
+      ? { mode: search.mode }
+      : {}),
+    ...(typeof search.invite === "string" ? { invite: search.invite } : {}),
+    ...(typeof search.error === "string" ? { error: search.error } : {}),
+  }),
   component: LoginPage,
 });
-
-type AuthMode = "register" | "login";
 
 /* ─── Pure-CSS animation keyframes injected once ─────────────────────────── */
 const KEYFRAMES = `
@@ -167,7 +179,7 @@ function BrandPanel() {
     <div
       className="hidden lg:flex flex-col relative overflow-hidden"
       style={{
-        background: "linear-gradient(135deg, #24245e 0%, #363690 30%, #5b5bd6 65%, #4343a8 100%)",
+        background: "linear-gradient(135deg, #182850 0%, #243c77 30%, #3b5eaa 65%, #2a437f 100%)",
         minHeight: "100vh",
         flex: "0 0 52%",
       }}
@@ -201,7 +213,7 @@ function BrandPanel() {
             width: "70%",
             height: "70%",
             borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(91,91,214,0.45) 0%, transparent 65%)",
+            background: "radial-gradient(circle, rgba(59, 94, 170,0.45) 0%, transparent 65%)",
             animation: "mesh-drift-2 22s ease-in-out infinite",
             filter: "blur(60px)",
           }}
@@ -258,27 +270,7 @@ function BrandPanel() {
         {/* Top: logo lockup */}
         <div>
           <div className="flex items-center gap-3 mb-16">
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                background: "rgba(255,255,255,0.15)",
-                border: "1px solid rgba(255,255,255,0.2)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backdropFilter: "blur(8px)",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25)",
-              }}
-            >
-              <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                <rect x="2" y="2" width="8" height="8" rx="2" fill="white" opacity="0.9" />
-                <rect x="12" y="2" width="8" height="8" rx="2" fill="white" opacity="0.6" />
-                <rect x="2" y="12" width="8" height="8" rx="2" fill="white" opacity="0.6" />
-                <rect x="12" y="12" width="8" height="8" rx="2" fill="#fbbf24" opacity="0.9" />
-              </svg>
-            </div>
+            <Logo variant="light" className="h-11 w-11 shrink-0 drop-shadow-lg" />
             <span
               style={{
                 fontSize: 22,
@@ -288,7 +280,7 @@ function BrandPanel() {
                 letterSpacing: "-0.03em",
               }}
             >
-              Hisaabo
+              Fintranzact
             </span>
           </div>
 
@@ -369,14 +361,14 @@ function BrandPanel() {
               animation: "tagline-reveal 1.2s ease-out forwards",
             }}
           >
-            Hisaab, pakka.
+            Your Trustable Accounting Partner
           </p>
 
           <div style={{ display: "flex", gap: 20 }}>
             {[
               { n: "GST Ready", icon: "✓" },
               { n: "100% Free", icon: "✓" },
-              { n: "Open Source", icon: "✓" },
+              { n: "Secure & Private", icon: "✓" },
             ].map(({ n, icon }) => (
               <div
                 key={n}
@@ -422,30 +414,11 @@ function MobileBrandStrip() {
     <div
       className="lg:hidden flex items-center gap-3 px-6 py-5"
       style={{
-        background: "linear-gradient(135deg, #24245e, #5b5bd6)",
+        background: "linear-gradient(135deg, #182850, #3b5eaa)",
         borderBottom: "1px solid rgba(255,255,255,0.08)",
       }}
     >
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          background: "rgba(255,255,255,0.15)",
-          border: "1px solid rgba(255,255,255,0.2)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        <svg width="18" height="18" viewBox="0 0 22 22" fill="none">
-          <rect x="2" y="2" width="8" height="8" rx="2" fill="white" opacity="0.9" />
-          <rect x="12" y="2" width="8" height="8" rx="2" fill="white" opacity="0.6" />
-          <rect x="2" y="12" width="8" height="8" rx="2" fill="white" opacity="0.6" />
-          <rect x="12" y="12" width="8" height="8" rx="2" fill="#fbbf24" opacity="0.9" />
-        </svg>
-      </div>
+      <Logo variant="light" className="h-9 w-9 shrink-0" />
       <div>
         <div
           style={{
@@ -456,7 +429,7 @@ function MobileBrandStrip() {
             letterSpacing: "-0.03em",
           }}
         >
-          Hisaabo
+          Fintranzact
         </div>
         <div
           style={{
@@ -467,7 +440,7 @@ function MobileBrandStrip() {
             textTransform: "uppercase",
           }}
         >
-          Hisaab, pakka.
+          Your Trustable Accounting Partner
         </div>
       </div>
     </div>
@@ -514,7 +487,8 @@ function Field({
 
 /* ─── Main page ───────────────────────────────────────────────────────────── */
 function LoginPage() {
-  const [mode, setMode] = useState<AuthMode>("register");
+  const { mode: initialMode } = Route.useSearch();
+  const [mode, setMode] = useState<AuthMode>(initialMode ?? "register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");

@@ -1,4 +1,4 @@
-# Analytics Design -- Hisaabo
+# Analytics Design -- Fintranzact
 
 **Status**: Proposed
 **Date**: 2026-03-29

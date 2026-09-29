@@ -1,4 +1,4 @@
-# Hisaabo Workflow Optimization Report
+# Fintranzact Workflow Optimization Report
 
 **Analysis date**: 2026-03-28
 **Platforms analyzed**: Web (React 19 + TanStack Router), Mobile (Expo / React Native)
