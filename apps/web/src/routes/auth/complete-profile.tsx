@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatRole } from "@/lib/roles";
 import { Logo } from "@/components/ui/Logo";
+import { Icon } from "@/components/ui/Icon";
+import { Add01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 
 export const Route = createFileRoute("/auth/complete-profile")({
   component: CompleteProfilePage,
@@ -212,9 +214,7 @@ function CompleteProfilePage() {
                 className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-border-light hover:border-border-medium hover:bg-surface-1 transition-colors text-left group"
               >
                 <div className="w-10 h-10 rounded-lg bg-surface-2 flex items-center justify-center text-text-secondary shrink-0">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
+                  <Icon icon={Add01Icon} size={20} />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-text-primary">
@@ -233,9 +233,7 @@ function CompleteProfilePage() {
         {step === "done" && (
           <div className="text-center py-4">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <svg className="w-6 h-6 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
+              <Icon icon={Tick02Icon} size={24} className="text-emerald-600" />
             </div>
             <h1 className="text-xl font-semibold text-text-primary">
               Welcome, {name}!

@@ -2,6 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Logo } from "@/components/ui/Logo";
+import { Icon } from "@/components/ui/Icon";
+import { Cancel01Icon, Loading03Icon } from "@hugeicons/core-free-icons";
 import { isDesktop } from "@/lib/isDesktop";
 import { saveDesktopToken } from "@/lib/desktop-session";
 
@@ -105,9 +107,7 @@ function VerifyPage() {
         {error ? (
           <>
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
-              <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon icon={Cancel01Icon} size={24} className="text-red-600 dark:text-red-400" />
             </div>
             <h1 className="text-lg font-semibold text-text-primary mb-2">
               Link expired or invalid
@@ -147,10 +147,7 @@ function VerifyPage() {
         ) : (
           <>
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-brand-100 dark:bg-brand-600/20 flex items-center justify-center">
-              <svg className="w-6 h-6 text-brand-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+              <Icon icon={Loading03Icon} size={24} className="text-brand-600 animate-spin" />
             </div>
             <h1 className="text-lg font-semibold text-text-primary mb-1">
               Verifying your link...

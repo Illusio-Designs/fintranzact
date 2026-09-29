@@ -34,7 +34,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, within, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 
@@ -184,11 +184,12 @@ describe("InvoiceCreator — invoice creation form with real-time GST calculatio
       expect(screen.getAllByPlaceholderText("Item name *")).toHaveLength(2);
     });
 
-    it("renders the party dropdown pre-populated with parties from the API so the user can immediately select a customer", () => {
+    it("renders the party dropdown pre-populated with parties from the API so the user can immediately select a customer", async () => {
       renderCreator("sale");
 
-      const partySelect = screen.getByRole("combobox", { name: /customer/i });
-      expect(within(partySelect).getByText("Ramesh Traders")).toBeInTheDocument();
+      // The custom select lists its options once opened.
+      await userEvent.click(screen.getByRole("combobox", { name: /customer/i }));
+      expect(screen.getByRole("option", { name: "Ramesh Traders" })).toBeInTheDocument();
     });
   });
 

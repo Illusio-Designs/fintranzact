@@ -6,6 +6,8 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { PartyCombobox } from "@/components/ui/PartyCombobox";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { InputField, TextareaField } from "@/components/ui/FormField";
+import { Icon } from "@/components/ui/Icon";
+import { Tick02Icon, MinusSignIcon } from "@hugeicons/core-free-icons";
 import { calculateGatewayCharge } from "@hisaabo/shared";
 import type { GatewayChargeConfig } from "@hisaabo/shared";
 
@@ -548,14 +550,10 @@ export function RecordPaymentPanel({
                               )}
                             >
                               {isFullyPaid && (
-                                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className="text-white">
-                                  <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
+                                <Icon icon={Tick02Icon} size={11} className="text-white" />
                               )}
                               {isPartial && (
-                                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className="text-brand-600">
-                                  <path d="M3 6H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                </svg>
+                                <Icon icon={MinusSignIcon} size={11} className="text-brand-600" />
                               )}
                             </button>
                           </div>

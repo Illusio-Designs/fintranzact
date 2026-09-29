@@ -15,6 +15,8 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { SegmentedControl } from "@/components/ui/Tabs";
+import { Icon } from "@/components/ui/Icon";
+import { AlertCircleIcon, ArrowRight01Icon, Copy01Icon, Delete02Icon, PencilEdit02Icon, Tick02Icon, UnavailableIcon } from "@hugeicons/core-free-icons";
 
 export const Route = createFileRoute("/journal-entries")({
   component: JournalEntriesPage,
@@ -372,16 +374,12 @@ function JournalEntriesPage() {
               {hasTotals && (
                 isBalanced ? (
                   <span className="flex items-center gap-1 text-emerald-600">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Icon icon={Tick02Icon} size={16} />
                     Balanced
                   </span>
                 ) : (
                   <span className="flex items-center gap-1 text-red-500">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" />
-                    </svg>
+                    <Icon icon={AlertCircleIcon} size={16} />
                     Unbalanced ({formatCurrency(Math.abs(totalDebit - totalCredit))})
                   </span>
                 )
@@ -474,19 +472,7 @@ function JournalEntriesPage() {
                         className="mt-6 p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors shrink-0"
                         aria-label="Remove line"
                       >
-                        <svg
-                          className="w-3.5 h-3.5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
+                        <Icon icon={Delete02Icon} size={14} />
                       </button>
                     )}
                   </div>
@@ -791,22 +777,7 @@ function EntryRow({
       >
         {/* Expand chevron */}
         <td className="w-8 text-center">
-          <svg
-            className={cn(
-              "w-3.5 h-3.5 text-text-tertiary transition-transform inline-block",
-              isExpanded && "rotate-90"
-            )}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
+          <Icon icon={ArrowRight01Icon} size={14} className={cn("text-text-tertiary transition-transform inline-block", isExpanded && "rotate-90")} />
         </td>
 
         {/* Entry number */}
@@ -878,19 +849,7 @@ function EntryRow({
                 aria-label="Edit entry"
                 title="Edit"
               >
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                  />
-                </svg>
+                <Icon icon={PencilEdit02Icon} size={14} />
               </button>
               <button
                 onClick={onVoid}
@@ -898,19 +857,7 @@ function EntryRow({
                 aria-label="Void entry"
                 title="Void"
               >
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                  />
-                </svg>
+                <Icon icon={UnavailableIcon} size={14} />
               </button>
               <button
                 onClick={onSaveAsTemplate}
@@ -918,19 +865,7 @@ function EntryRow({
                 aria-label="Save as template"
                 title="Save as template"
               >
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
-                  />
-                </svg>
+                <Icon icon={Copy01Icon} size={14} />
               </button>
             </div>
           )}
@@ -1081,19 +1016,7 @@ function TemplatesTab({
                     className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
                     aria-label="Delete template"
                   >
-                    <svg
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
+                    <Icon icon={Delete02Icon} size={14} />
                   </button>
                 </div>
               </td>

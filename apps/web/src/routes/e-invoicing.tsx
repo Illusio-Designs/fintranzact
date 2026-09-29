@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { InputField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { Spinner } from "@/components/ui/Spinner";
+import { Select } from "@/components/ui/Select";
 import { SearchInput } from "@/components/ui/SearchInput";
 
 export const Route = createFileRoute("/e-invoicing")({
@@ -284,7 +285,7 @@ function DashboardTab() {
             <label className="text-xs font-medium text-text-secondary block mb-1">
               Cancel Reason
             </label>
-            <select
+            <Select
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value as CancelReason)}
               className="input w-full text-sm"
@@ -292,7 +293,7 @@ function DashboardTab() {
               {CANCEL_REASONS.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <InputField
             label="Remarks (optional)"
@@ -497,9 +498,10 @@ function SettingsTab() {
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
+              role="switch"
               checked={form.isSandbox}
               onChange={(e) => setField("isSandbox", e.target.checked)}
-              className="w-4 h-4 rounded border-border-light text-brand-600"
+              className="switch"
             />
             <div>
               <span className="text-sm font-medium text-text-primary">Use Sandbox (Testing)</span>
@@ -512,9 +514,10 @@ function SettingsTab() {
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
+              role="switch"
               checked={form.isEnabled}
               onChange={(e) => setField("isEnabled", e.target.checked)}
-              className="w-4 h-4 rounded border-border-light text-brand-600"
+              className="switch"
             />
             <div>
               <span className="text-sm font-medium text-text-primary">Enable E-Invoicing</span>

@@ -2,6 +2,9 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Modal } from "@/components/ui/Modal";
 import { Listbox } from "@/components/ui/Listbox";
+import { DateInput } from "@/components/ui/DateInput";
+import { Icon } from "@/components/ui/Icon";
+import { Delete02Icon, PencilEdit02Icon, Target02Icon } from "@hugeicons/core-free-icons";
 import { toast } from "@/hooks/useToast";
 import { cn, formatCurrency, formatDate, formatDateInput, toISOString, toISOStringEndOfDay } from "@/lib/utils";
 
@@ -173,14 +176,14 @@ function TargetCard({
               title="Edit target"
               onClick={() => onEdit(target)}
             >
-              <PencilIcon />
+              <Icon icon={PencilEdit02Icon} size={14} />
             </button>
             <button
               className="btn-icon w-7 h-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
               title="Delete target"
               onClick={() => onDelete(target.id)}
             >
-              <TrashIcon />
+              <Icon icon={Delete02Icon} size={14} />
             </button>
           </div>
         )}
@@ -443,8 +446,7 @@ function TargetFormModal({
             <label className="label">
               Start date <span className="text-red-600">*</span>
             </label>
-            <input
-              type="date"
+            <DateInput
               className="input"
               required
               value={periodStart}
@@ -455,8 +457,7 @@ function TargetFormModal({
             <label className="label">
               End date <span className="text-red-600">*</span>
             </label>
-            <input
-              type="date"
+            <DateInput
               className="input"
               required
               value={periodEnd}
@@ -607,7 +608,7 @@ export function SalesTargetsTab() {
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
-              className="w-3.5 h-3.5 rounded border-border accent-brand-600"
+              className="w-3.5 h-3.5 rounded border-border"
               checked={showActiveOnly}
               onChange={(e) => setShowActiveOnly(e.target.checked)}
             />
@@ -624,7 +625,7 @@ export function SalesTargetsTab() {
             </div>
           ) : typedTargets.length === 0 ? (
             <div className="py-8 text-center">
-              <TargetIcon className="w-8 h-8 mx-auto text-text-tertiary mb-3" />
+              <Icon icon={Target02Icon} size={32} className="mx-auto text-text-tertiary mb-3" />
               <p className="text-sm text-text-secondary">No targets set</p>
               {canManage && (
                 <p className="text-xs text-text-tertiary mt-1">
@@ -656,35 +657,5 @@ export function SalesTargetsTab() {
         members={sellerMembers}
       />
     </>
-  );
-}
-
-// ── Icons ──────────────────────────────────────────────────────
-
-function PencilIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2" />
-    </svg>
-  );
-}
-
-function TargetIcon({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="6" />
-      <circle cx="12" cy="12" r="2" />
-    </svg>
   );
 }

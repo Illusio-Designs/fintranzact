@@ -206,9 +206,9 @@ test.describe("Quick Item Create", () => {
     const submitBtn = modal.getByRole("button", { name: /Create & Select/i });
     await expect(submitBtn).toBeDisabled();
 
-    // Select a unit from the dropdown (the SelectField renders a native <select>)
-    const unitSelect = modal.locator("select");
-    await unitSelect.selectOption("pcs");
+    // Pick a unit from the custom dropdown (SelectField renders a listbox)
+    await modal.getByRole("combobox", { name: /unit/i }).click();
+    await page.getByRole("option", { name: /^pcs$/i }).click();
 
     // Optionally fill a price
     const priceInput = modal.locator('input[type="number"]').first();
@@ -270,8 +270,8 @@ test.describe("Quick Item Create", () => {
     await expect(submitBtn).toBeDisabled();
 
     // Select unit -> enabled
-    const unitSelect = modal.locator("select");
-    await unitSelect.selectOption("pcs");
+    await modal.getByRole("combobox", { name: /unit/i }).click();
+    await page.getByRole("option", { name: /^pcs$/i }).click();
     await expect(submitBtn).toBeEnabled();
 
     // Close without creating

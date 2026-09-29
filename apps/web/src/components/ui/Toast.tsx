@@ -1,88 +1,34 @@
-import { createPortal } from "react-dom";
-import { cn } from "@/lib/utils";
-import { useToastListener } from "@/hooks/useToast";
+import { useEffect, useState } from "react";
+import { GooeyToaster } from "goey-toast";
+import "goey-toast/styles.css";
 
-function SuccessIcon() {
-  return (
-    <svg className="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-  );
+/** Follows the `.dark` class that useTheme toggles on <html>. */
+function useResolvedTheme(): "light" | "dark" {
+  const read = () =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light";
+  const [theme, setTheme] = useState<"light" | "dark">(read);
+  useEffect(() => {
+    const observer = new MutationObserver(() => setTheme(read()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+  return theme;
 }
 
-function ErrorIcon() {
-  return (
-    <svg className="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  );
-}
-
-function InfoIcon() {
-  return (
-    <svg className="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 1 1 0 20A10 10 0 0 1 12 2z" />
-    </svg>
-  );
-}
-
-const variantStyles = {
-  success: {
-    icon: <SuccessIcon />,
-    iconClass: "text-emerald-600",
-    iconBg: "bg-emerald-50 dark:bg-emerald-950",
-  },
-  error: {
-    icon: <ErrorIcon />,
-    iconClass: "text-red-600",
-    iconBg: "bg-red-50 dark:bg-red-950",
-  },
-  info: {
-    icon: <InfoIcon />,
-    iconClass: "text-blue-600",
-    iconBg: "bg-blue-50 dark:bg-blue-950",
-  },
-};
-
+/**
+ * App-wide toast host. Mount once (main.tsx); trigger toasts with
+ * `toast()` from "@/hooks/useToast".
+ */
 export function ToastContainer(): React.JSX.Element {
-  const { toasts, dismiss } = useToastListener();
-
-  return createPortal(
-    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-[360px] pointer-events-none">
-      {toasts.map((t) => {
-        const v = variantStyles[t.variant];
-        return (
-          <div
-            key={t.id}
-            className="card shadow-toast animate-toast-in pointer-events-auto flex items-start gap-3 px-4 py-3"
-          >
-            <div className={cn("flex items-center justify-center w-7 h-7 rounded-lg shrink-0 mt-0.5", v.iconBg, v.iconClass)}>
-              {v.icon}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary">
-                {t.title}
-              </p>
-              {t.description && (
-                <p className="text-xs mt-0.5 text-text-tertiary">
-                  {t.description}
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              className="btn-icon shrink-0 -mr-1"
-              onClick={() => dismiss(t.id)}
-              aria-label="Dismiss"
-            >
-              <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        );
-      })}
-    </div>,
-    document.body
+  const theme = useResolvedTheme();
+  return (
+    <GooeyToaster
+      position="top-right"
+      theme={theme}
+      duration={4000}
+      closeButton="top-right"
+      preset="smooth"
+      showTimestamp={false}
+    />
   );
 }

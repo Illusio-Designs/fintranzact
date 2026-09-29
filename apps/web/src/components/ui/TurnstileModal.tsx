@@ -16,6 +16,8 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { SecurityCheckIcon } from "@hugeicons/core-free-icons";
+import { Icon } from "./Icon";
 
 declare global {
   interface Window {
@@ -134,11 +136,8 @@ export function TurnstileModal({ open, onVerified, onClose }: TurnstileModalProp
       >
         {/* Header */}
         <div className="px-6 pt-6 pb-2 text-center">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-brand-50 dark:bg-brand-950 flex items-center justify-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand-600">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <path d="M9 12l2 2 4-4" />
-            </svg>
+          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-brand-50 dark:bg-brand-950 flex items-center justify-center">
+            <Icon icon={SecurityCheckIcon} size={22} className="text-brand-600" />
           </div>
           <h2 id="turnstile-title" className="text-base font-semibold text-text-primary">
             Quick verification

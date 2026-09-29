@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { IconCircle, type IconCircleTone, type IconSvgElement } from "./Icon";
 
 interface StatCardProps {
   label: string;
@@ -10,6 +11,9 @@ interface StatCardProps {
   subItems?: { label: string; value: string }[];
   size?: "sm" | "md" | "lg";
   className?: string;
+  /** Optional Hugeicon shown in a round chip above the label. */
+  icon?: IconSvgElement;
+  iconTone?: IconCircleTone;
 }
 
 export function StatCard({
@@ -22,7 +26,10 @@ export function StatCard({
   subItems,
   size = "sm",
   className,
+  icon,
+  iconTone = "brand",
 }: StatCardProps) {
+  const chip = icon ? <IconCircle icon={icon} tone={iconTone} className="mb-2.5" /> : null;
   if (size === "lg") {
     return (
       <div
@@ -32,6 +39,7 @@ export function StatCard({
           className,
         )}
       >
+        {chip}
         <p className={cn("text-[11px] font-semibold uppercase tracking-wider text-text-tertiary", labelColor)}>
           {label}
         </p>
@@ -66,6 +74,7 @@ export function StatCard({
           className,
         )}
       >
+        {chip}
         <p className={cn("text-xs font-medium text-text-tertiary mb-1", labelColor)}>{label}</p>
         <p
           className={cn(
@@ -98,6 +107,7 @@ export function StatCard({
         className,
       )}
     >
+      {chip}
       <p className={cn("text-xs text-text-tertiary mb-1", labelColor)}>{label}</p>
       <p
         className={cn(

@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatRole } from "@/lib/roles";
 import { Logo } from "@/components/ui/Logo";
+import { Icon } from "@/components/ui/Icon";
+import { Cancel01Icon, Tick02Icon, Loading03Icon } from "@hugeicons/core-free-icons";
 
 export const Route = createFileRoute("/invite/$token")({
   component: InviteAcceptPage,
@@ -101,9 +103,7 @@ function InviteAcceptPage() {
         {error ? (
           <>
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
-              <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon icon={Cancel01Icon} size={24} className="text-red-600 dark:text-red-400" />
             </div>
             <h1 className="text-lg font-semibold text-text-primary mb-2 text-center">
               Could not accept invitation
@@ -120,9 +120,7 @@ function InviteAcceptPage() {
           /* ���─ Org choice: continue with invited org or create own ── */
           <>
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <svg className="w-6 h-6 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
+              <Icon icon={Tick02Icon} size={24} className="text-emerald-600" />
             </div>
             <h1 className="text-lg font-semibold text-text-primary mb-1 text-center">
               You've joined {accepted.tenantName}!
@@ -172,10 +170,7 @@ function InviteAcceptPage() {
           /* ── Loading/accepting ── */
           <div className="text-center">
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-brand-100 dark:bg-brand-600/20 flex items-center justify-center">
-              <svg className="w-6 h-6 text-brand-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+              <Icon icon={Loading03Icon} size={24} className="text-brand-600 animate-spin" />
             </div>
             <h1 className="text-lg font-semibold text-text-primary mb-1">
               Accepting your invitation...

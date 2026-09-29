@@ -15,6 +15,9 @@ import { Combobox } from "@/components/ui/Combobox";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { toast } from "@/hooks/useToast";
 import { useDateRange } from "@/hooks/useDateRange";
+import { Icon } from "@/components/ui/Icon";
+import { Download04Icon } from "@hugeicons/core-free-icons";
+import { Select } from "@/components/ui/Select";
 
 export const Route = createFileRoute("/gst")({
   component: GSTReportsPage,
@@ -85,7 +88,7 @@ function GSTReportsPage() {
       {/* Period selector — only shown for GST tabs */}
       {(activeTab === "gstr1" || activeTab === "gstr3b") && (
         <div className="flex items-center gap-3 mb-6">
-          <select
+          <Select
             className="input w-40"
             value={month}
             onChange={(e) => setMonth(Number(e.target.value))}
@@ -93,8 +96,8 @@ function GSTReportsPage() {
             {months.map((m, i) => (
               <option key={i} value={i + 1}>{m}</option>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
             className="input w-28"
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
@@ -102,7 +105,7 @@ function GSTReportsPage() {
             {years.map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
-          </select>
+          </Select>
 
           <div className="ml-4">
             <SegmentedControl
@@ -1370,7 +1373,7 @@ function PartyLedgerView() {
                       </>
                     ) : (
                       <>
-                        <DownloadIcon className="w-3.5 h-3.5" />
+                        <Icon icon={Download04Icon} size={14} />
                         Export CSV
                       </>
                     )}
@@ -1387,7 +1390,7 @@ function PartyLedgerView() {
                       </>
                     ) : (
                       <>
-                        <DownloadIcon className="w-3.5 h-3.5" />
+                        <Icon icon={Download04Icon} size={14} />
                         Export PDF
                       </>
                     )}
@@ -1528,7 +1531,7 @@ function TallyExportView() {
               </>
             ) : (
               <>
-                <DownloadIcon className="w-4 h-4" />
+                <Icon icon={Download04Icon} size={16} />
                 Download Tally Export
               </>
             )}
@@ -1641,7 +1644,7 @@ function GSTR9View() {
       <div className="card px-4 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
         <div>
           <p className="text-xs text-text-tertiary mb-1 font-medium uppercase tracking-wide">Financial Year</p>
-          <select
+          <Select
             className="input w-44"
             value={financialYear}
             onChange={(e) => setFinancialYear(Number(e.target.value))}
@@ -1649,7 +1652,7 @@ function GSTR9View() {
             {fyOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="sm:ml-auto">
           <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 px-4 py-2">
@@ -1912,7 +1915,7 @@ function GSTR9View() {
                 </>
               ) : (
                 <>
-                  <DownloadIcon className="w-4 h-4" />
+                  <Icon icon={Download04Icon} size={16} />
                   Download Portal JSON (GSTN)
                 </>
               )}
@@ -1996,13 +1999,6 @@ function fmtStr(s: string): string {
   return formatCurrency(parseFloat(s) || 0);
 }
 
-function DownloadIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3" />
-    </svg>
-  );
-}
 
 function ReportSkeleton() {
   return (

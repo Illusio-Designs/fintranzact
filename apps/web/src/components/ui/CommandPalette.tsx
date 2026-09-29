@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { KbdShortcut } from "./KbdShortcut";
+import { ArrowTurnBackwardIcon, Search01Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "./Icon";
 
 interface CommandItem {
   id: string;
@@ -169,19 +171,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): React.JS
               aria-selected={false}
             >
               <div className="flex flex-col items-center gap-2">
-                <svg
-                  className="w-8 h-8 opacity-30"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
+                <Icon icon={Search01Icon} size={32} className="opacity-30" />
                 <span>No results for &ldquo;{query}&rdquo;</span>
               </div>
             </li>
@@ -259,20 +249,7 @@ function SearchIcon({
   className?: string;
 }) {
   return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-      />
-    </svg>
+    <Icon icon={Search01Icon} className={className} />
   );
 }
 
@@ -282,19 +259,6 @@ function EnterIcon({
   className?: string;
 }) {
   return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
-      />
-    </svg>
+    <Icon icon={ArrowTurnBackwardIcon} className={className} />
   );
 }

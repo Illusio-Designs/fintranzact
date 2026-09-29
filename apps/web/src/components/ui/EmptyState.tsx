@@ -13,7 +13,7 @@ export function EmptyState({ icon, title, description, encouragement, action }: 
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3">
       {icon && (
-        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-surface-2">
+        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-surface-2 text-text-tertiary">
           {icon}
         </div>
       )}

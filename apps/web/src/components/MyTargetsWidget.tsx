@@ -1,5 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { cn, formatCurrency } from "@/lib/utils";
+import { Icon } from "@/components/ui/Icon";
+import { Target02Icon } from "@hugeicons/core-free-icons";
 
 interface TargetProgress {
   current: number;
@@ -129,7 +131,7 @@ export function MyTargetsWidget() {
   return (
     <div className="card overflow-hidden">
       <div className="px-4 py-3 border-b border-border-light flex items-center gap-2">
-        <TargetIcon className="w-4 h-4 text-brand-600 shrink-0" />
+        <Icon icon={Target02Icon} size={16} className="text-brand-600 shrink-0" />
         <h3 className="text-sm font-semibold text-text-primary">My Targets</h3>
         {targets && targets.length > 0 && (
           <span className="ml-auto text-[11px] px-1.5 py-0.5 rounded bg-brand-600/[0.08] text-brand-700 dark:text-brand-400 font-medium">
@@ -153,24 +155,5 @@ export function MyTargetsWidget() {
         )}
       </div>
     </div>
-  );
-}
-
-function TargetIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="6" />
-      <circle cx="12" cy="12" r="2" />
-    </svg>
   );
 }
