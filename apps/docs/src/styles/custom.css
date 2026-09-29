@@ -1,10 +1,10 @@
-/* ── Hisaabo brand theme for Starlight ────────────────────────── */
+/* ── Fintranzact brand theme for Starlight ────────────────────────── */
 
 /* Light mode */
 :root {
-  --sl-color-accent-low: #eef2ff;
-  --sl-color-accent: #6366f1;
-  --sl-color-accent-high: #312e81;
+  --sl-color-accent-low: #eef2fa;
+  --sl-color-accent: #3b5eaa;
+  --sl-color-accent-high: #182850;
   --sl-color-white: #1a1a2e;
   --sl-color-gray-1: #3f3f5a;
   --sl-color-gray-2: #585878;
@@ -25,9 +25,9 @@
 
 /* Dark mode */
 :root[data-theme="dark"] {
-  --sl-color-accent-low: #1e1b4b;
-  --sl-color-accent: #818cf8;
-  --sl-color-accent-high: #e0e7ff;
+  --sl-color-accent-low: #182850;
+  --sl-color-accent: #8fa6d6;
+  --sl-color-accent-high: #dce4f4;
   --sl-color-white: #f8f8fc;
   --sl-color-gray-1: #d0d0e0;
   --sl-color-gray-2: #a0a0b8;

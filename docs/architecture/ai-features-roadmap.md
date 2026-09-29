@@ -90,7 +90,7 @@ For businesses with an online store, transform basic product photos into profess
 ### 8. AI Customer Service (OpenClaw)
 - Deploy customer-facing agents for online store
 - Handle order status, payment reminders, product questions
-- Reads from Hisaabo catalog and order data via MCP
+- Reads from Fintranzact catalog and order data via MCP
 
 ## Implementation Priority
 

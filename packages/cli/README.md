@@ -4,7 +4,6 @@ Terminal-first invoicing and business management for Indian businesses. Manage i
 
 [![npm](https://img.shields.io/npm/v/@hisaabo/cli?logo=npm&logoColor=white&label=@hisaabo/cli)](https://www.npmjs.com/package/@hisaabo/cli)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![License: O'Saasy](https://img.shields.io/badge/license-O'Saasy-blue)](https://github.com/hisaabo/hisaabo/blob/main/LICENSE)
 
 **What this does:** Run `hisaabo invoice list --this-month` and get a formatted table of every invoice your business issued this month. Run `hisaabo gst r3b --quarter Q4` and get your GSTR-3B numbers ready for filing. Pipe any command to `jq` or a spreadsheet with `--json`, `--format csv`, or `--format tsv`.
 
@@ -30,7 +29,7 @@ You'll be prompted for email and password, then asked to pick a business if you 
 hisaabo login --api-url https://your-hisaabo-instance.com --token hisaabo_key_abc123...
 ```
 
-Generate API keys at Settings > API Keys in the Hisaabo web app.
+Generate API keys at Settings > API Keys in the Fintranzact web app.
 
 **Verify your session:**
 

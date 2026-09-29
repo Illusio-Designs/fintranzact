@@ -24,7 +24,7 @@
 
 ## 1. Executive Summary
 
-Hisaabo's current UI shows every user the same admin-centric dashboard, full navigation, and all action buttons regardless of their role. A `seller` doing field sales sees bank balances and GST reports they cannot meaningfully act on. An `accountant` sees invoice creation prominently when their job is payment reconciliation. This mismatch increases cognitive load and exposes UI affordances for actions the API will reject.
+Fintranzact's current UI shows every user the same admin-centric dashboard, full navigation, and all action buttons regardless of their role. A `seller` doing field sales sees bank balances and GST reports they cannot meaningfully act on. An `accountant` sees invoice creation prominently when their job is payment reconciliation. This mismatch increases cognitive load and exposes UI affordances for actions the API will reject.
 
 The goal is for each role to open the app and immediately see what they need to do today — no noise, no denied-action dead ends.
 

@@ -1,8 +1,8 @@
-# CLI and MCP Server Architecture for Hisaabo
+# CLI and MCP Server Architecture for Fintranzact
 
 ## Overview
 
-This document describes the design for two new packages that make Hisaabo accessible
+This document describes the design for two new packages that make Fintranzact accessible
 to AI agents and terminal workflows:
 
 - `packages/cli` — A `hisaabo` command-line tool for humans and automation scripts
@@ -94,7 +94,7 @@ process and network hop.
 The MCP server runs as a **standalone process** that talks to the API over HTTP.
 Reasons:
 
-1. **Self-hosted deployments**: Users run Hisaabo behind Docker or a VPS. An MCP
+1. **Self-hosted deployments**: Users run Fintranzact behind Docker or a VPS. An MCP
    server embedded in the API container means Claude Desktop needs access to the API
    container's stdio — which is not how Docker deployments work. A standalone MCP
    server can run on the user's local machine, pointing at `HISAABO_API_URL`.
@@ -627,7 +627,7 @@ import { importPartiesCommand, importItemsCommand } from "../commands/import/ind
 
 const program = new Command()
   .name("hisaabo")
-  .description("Hisaabo CLI — Invoicing and business management")
+  .description("Fintranzact CLI — Invoicing and business management")
   .version("0.1.0");
 
 // Auth commands (login, logout, whoami, switch) are registered directly here.

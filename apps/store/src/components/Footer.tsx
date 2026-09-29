@@ -115,13 +115,13 @@ export function Footer({ config }: FooterProps) {
             <p className="text-xs" style={{ color: "var(--store-muted)" }}>
               Powered by{" "}
               <a
-                href="https://hisaabo.in"
+                href="https://fintranzact-web.vercel.app"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold hover:underline"
                 style={{ color: "var(--store-text-secondary)" }}
               >
-                Hisaabo
+                Fintranzact
               </a>
             </p>
           </div>
@@ -232,7 +232,7 @@ function PrivacyPolicy({
       </h2>
 
       <p className="text-sm mb-4" style={{ color: "var(--store-text-secondary)" }}>
-        This store is powered by Hisaabo.{" "}
+        This store is powered by Fintranzact.{" "}
         <strong style={{ color: "var(--store-text)" }}>{businessName}</strong> ("we", "us")
         operates this online store.
       </p>
@@ -259,13 +259,13 @@ function PrivacyPolicy({
           <li>
             Your data is stored securely by{" "}
             <a
-              href="https://hisaabo.in"
+              href="https://fintranzact-web.vercel.app"
               target="_blank"
               rel="noopener noreferrer"
               className="underline"
               style={{ color: "var(--store-accent)" }}
             >
-              Hisaabo
+              Fintranzact
             </a>
           </li>
         </ul>
@@ -346,13 +346,13 @@ function TermsOfService({
       <p className="text-xs mt-5" style={{ color: "var(--store-muted)" }}>
         Powered by{" "}
         <a
-          href="https://hisaabo.in"
+          href="https://fintranzact-web.vercel.app"
           target="_blank"
           rel="noopener noreferrer"
           className="underline"
           style={{ color: "var(--store-accent)" }}
         >
-          Hisaabo
+          Fintranzact
         </a>
       </p>
     </div>

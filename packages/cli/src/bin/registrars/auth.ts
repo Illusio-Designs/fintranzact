@@ -82,7 +82,7 @@ export function registerAuthCommands(program: Command): void {
 
   program
     .command("login")
-    .description("Authenticate and configure your Hisaabo server")
+    .description("Authenticate and configure your Fintranzact server")
     .option("--api-url <url>", "Server URL")
     .option("--email <email>", "Email address")
     .option("--password <password>", "Password (visible in shell history — prefer interactive prompt)")
@@ -94,7 +94,7 @@ export function registerAuthCommands(program: Command): void {
       if (opts.token) {
         if (!apiUrl) {
           const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-          console.log("\n  Hisaabo CLI\n  " + "─".repeat(11) + "\n");
+          console.log("\n  Fintranzact CLI\n  " + "─".repeat(11) + "\n");
           const u = await ask(rl, "  Server URL [http://localhost:3000]: ");
           rl.close();
           apiUrl = u.trim() || "http://localhost:3000";
@@ -109,7 +109,7 @@ export function registerAuthCommands(program: Command): void {
 
       if (!apiUrl || !email || !password) {
         const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        console.log("\n  Hisaabo CLI\n  " + "─".repeat(11) + "\n");
+        console.log("\n  Fintranzact CLI\n  " + "─".repeat(11) + "\n");
         if (!apiUrl) {
           const u = await ask(rl, "  Server URL [http://localhost:3000]: ");
           apiUrl = u.trim() || "http://localhost:3000";

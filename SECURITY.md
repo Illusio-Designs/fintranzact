@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Hisaabo, **please report it responsibly**. Do not open a public GitHub issue.
+If you discover a security vulnerability in Fintranzact, **please report it responsibly**. Do not open a public GitHub issue.
 
 **Email:** security@hisaabo.in
 

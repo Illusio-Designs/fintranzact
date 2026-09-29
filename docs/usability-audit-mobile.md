@@ -1,4 +1,4 @@
-# Hisaabo Mobile App — Usability Audit
+# Fintranzact Mobile App — Usability Audit
 
 **Auditor:** UX Researcher Agent
 **Date:** 2026-03-26

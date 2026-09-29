@@ -4,15 +4,14 @@ import starlight from "@astrojs/starlight";
 export default defineConfig({
   integrations: [
     starlight({
-      title: "Hisaabo Docs",
-      description: "Documentation for Hisaabo — self-hosted invoicing for Indian businesses",
+      title: "Fintranzact Docs",
+      description: "Documentation for Fintranzact — your trustable accounting partner for Indian businesses",
       logo: {
         light: "./src/assets/logo-light.svg",
         dark: "./src/assets/logo-dark.svg",
         replacesTitle: false,
       },
       social: [
-        { icon: "github", label: "GitHub", href: "https://github.com/hisaabo/hisaabo" },
       ],
       components: {
         ThemeSelect: "./src/components/overrides/ThemeSelect.astro",
@@ -23,7 +22,7 @@ export default defineConfig({
         {
           label: "Getting Started",
           items: [
-            { label: "What is Hisaabo?", slug: "getting-started" },
+            { label: "What is Fintranzact?", slug: "getting-started" },
             { label: "Self-Hosting Setup", slug: "getting-started/self-hosting" },
             { label: "Create Your Business", slug: "getting-started/create-business" },
             { label: "Import Data", slug: "getting-started/import-data" },

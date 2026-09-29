@@ -1,6 +1,6 @@
-# Contributing to Hisaabo
+# Contributing to Fintranzact
 
-Thanks for your interest in contributing. Hisaabo is an open-source invoicing app built for Indian SMBs, and we welcome contributions of all kinds.
+Thanks for your interest in contributing. Fintranzact is an open-source invoicing app built for Indian SMBs, and we welcome contributions of all kinds.
 
 ## Getting Started
 

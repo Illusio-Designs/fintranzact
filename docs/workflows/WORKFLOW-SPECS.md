@@ -1,4 +1,4 @@
-# Hisaabo Workflow Specifications
+# Fintranzact Workflow Specifications
 
 **Version**: 1.0
 **Date**: 2026-04-04

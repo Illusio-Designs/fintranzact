@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Hisaabo MCP Server
+ * Fintranzact MCP Server
  *
- * Exposes Hisaabo invoicing data and operations as MCP tools and resources.
+ * Exposes Fintranzact invoicing data and operations as MCP tools and resources.
  * Designed for use with Claude Desktop, OpenClaw, and any MCP-compatible host.
  *
  * Required environment variables:
- *   HISAABO_API_URL     — Base URL of the Hisaabo API (default: http://localhost:3000)
+ *   HISAABO_API_URL     — Base URL of the Fintranzact API (default: http://localhost:3000)
  *   HISAABO_API_KEY       — Session ID obtained from `hisaabo login` (Bearer token)
  *   HISAABO_TENANT_ID   — Tenant (organization) UUID
  *   HISAABO_BUSINESS_ID — Active business UUID

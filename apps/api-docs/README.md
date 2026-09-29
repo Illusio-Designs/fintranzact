@@ -1,12 +1,12 @@
 # @hisaabo/api-docs
 
-The Hisaabo API reference site. A Stripe-style interactive documentation site that documents every tRPC procedure and REST endpoint available in the Hisaabo API, with request/response examples, authentication guides, and error code references.
+The Fintranzact API reference site. A Stripe-style interactive documentation site that documents every tRPC procedure and REST endpoint available in the Fintranzact API, with request/response examples, authentication guides, and error code references.
 
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4-38BDF8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
-Published at [api.hisaabo.in](${import.meta.env.API_URL ?? 'https://api.hisaabo.in'}).
+API reference for the Fintranzact API.
 
 ---
 

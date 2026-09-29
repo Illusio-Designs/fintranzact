@@ -1,5 +1,5 @@
 import type { EndpointGroup } from "./types";
-const API_BASE_URL = (import.meta.env.API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.API_URL || (typeof window !== "undefined" ? window.location.origin : "https://fintranzact-production.up.railway.app")).replace(/\/$/, "");
 
 export const partyEndpoints: EndpointGroup = {
   id: "parties",
@@ -124,7 +124,7 @@ resp = httpx.get(
       method: "mutation",
       path: "party.create",
       title: "Create Party",
-      description: "Create a new customer or supplier. GSTIN is validated with the official 15-character format regex. Opening balance represents the amount already owed before using Hisaabo.",
+      description: "Create a new customer or supplier. GSTIN is validated with the official 15-character format regex. Opening balance represents the amount already owed before using Fintranzact.",
       auth: "business",
       requiredRole: "member",
       input: [
@@ -204,7 +204,7 @@ resp = httpx.post(
       },
       gotchas: [
         "GSTIN is validated against the regex `^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$`. Pass an empty string `\"\"` to clear it.",
-        "`openingBalance` represents money already owed before starting to use Hisaabo. Use a negative value if the party has a credit balance.",
+        "`openingBalance` represents money already owed before starting to use Fintranzact. Use a negative value if the party has a credit balance.",
         "An audit log entry is created for party creation.",
       ],
     },

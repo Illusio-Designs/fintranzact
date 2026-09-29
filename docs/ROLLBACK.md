@@ -1,6 +1,6 @@
 # Migration Rollback Procedures
 
-Emergency reference for rolling back Drizzle ORM migrations in Hisaabo. Drizzle does not generate down/rollback migrations. This document provides reverse SQL for each migration and instructions for backup-based recovery.
+Emergency reference for rolling back Drizzle ORM migrations in Fintranzact. Drizzle does not generate down/rollback migrations. This document provides reverse SQL for each migration and instructions for backup-based recovery.
 
 **Last updated**: 2026-04-14
 **Applies to**: migrations 0000 through 0009

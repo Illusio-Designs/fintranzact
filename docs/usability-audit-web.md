@@ -1,4 +1,4 @@
-# Hisaabo Web App — Usability Audit
+# Fintranzact Web App — Usability Audit
 
 **Date**: 2026-03-26
 **Auditor**: UX Researcher Agent
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Hisaabo is a well-structured invoicing application with solid foundational UX patterns: toast notifications for every mutation, confirm dialogs on destructive actions, skeleton loading states, and keyboard shortcuts for power users. The core flows are functional. However, several issues create friction for non-technical Indian SMB users — primarily around discoverability of complex features, ambiguous terminology, the party ledger balance sign convention, and mobile/tablet usability.
+Fintranzact is a well-structured invoicing application with solid foundational UX patterns: toast notifications for every mutation, confirm dialogs on destructive actions, skeleton loading states, and keyboard shortcuts for power users. The core flows are functional. However, several issues create friction for non-technical Indian SMB users — primarily around discoverability of complex features, ambiguous terminology, the party ledger balance sign convention, and mobile/tablet usability.
 
 **Issue count by severity:**
 - Critical: 4

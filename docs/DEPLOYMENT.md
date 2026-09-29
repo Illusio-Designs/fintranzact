@@ -1,4 +1,4 @@
-# Hisaabo Deployment Guide
+# Fintranzact Deployment Guide
 
 ## Architecture Overview
 
@@ -69,12 +69,12 @@
 | `DATABASE_URL` | Yes | PostgreSQL connection string | `postgresql://user:pass@host:5432/hisaabo` |
 | `PORT` | No | API port (default 3000) | `3000` |
 | `NODE_ENV` | Yes | Environment | `production` |
-| `CORS_ORIGINS` | Yes | Comma-separated allowed origins | `https://app.hisaabo.in,https://store.hisaabo.in` |
-| `APP_URL` | Yes | Frontend URL (for magic links) | `https://app.hisaabo.in` |
+| `CORS_ORIGINS` | Yes | Comma-separated allowed origins | `https://fintranzact-web.vercel.app,https://store.hisaabo.in` |
+| `APP_URL` | Yes | Frontend URL (for magic links) | `https://fintranzact-web.vercel.app` |
 | `ENCRYPTION_KEY` | Yes | AES-256-GCM key for field-level encryption (64-char hex). Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` | `a1b2c3...` |
 | `ENCRYPTION_KEY_PREVIOUS` | No | Previous encryption key — set only during key rotation | |
 | `RESEND_API_KEY` | Yes | Email service API key (magic links, invites) | `re_xxx` |
-| `EMAIL_FROM` | No | From address for emails | `Hisaabo <noreply@hisaabo.in>` |
+| `EMAIL_FROM` | No | From address for emails | `Fintranzact <noreply@hisaabo.in>` |
 | `MULTI_TENANT` | No | Enable multi-tenancy | `true` |
 | `CONTROL_DATABASE_URL` | No | Separate control DB (multi-tenant only) | `postgresql://...` |
 

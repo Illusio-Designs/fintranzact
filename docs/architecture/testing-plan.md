@@ -1,4 +1,4 @@
-# Testing Architecture Plan — Hisaabo Monorepo
+# Testing Architecture Plan — Fintranzact Monorepo
 
 **Date:** 2026-03-26
 **Scope:** Three parallel test suites (API, Web, Mobile) plus CI integration
@@ -39,7 +39,7 @@ The repo already uses `docker-compose.yml` for the dev database. Add a `docker-c
 
 ### Schema isolation within the test database
 
-The Hisaabo data model has two schema layers:
+The Fintranzact data model has two schema layers:
 
 1. **Control schema** (`packages/db/src/control-schema.ts`) — users, sessions, tenants, tenant_members, invitations. Lives in the main DB.
 2. **Tenant schema** (`packages/db/src/tenant-schema.ts`) — businesses, parties, items, invoices, payments, expenses, etc. In self-hosted mode this is the same DB; in cloud mode it is per-tenant.

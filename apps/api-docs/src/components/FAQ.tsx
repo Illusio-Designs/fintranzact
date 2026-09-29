@@ -15,7 +15,7 @@ const FAQ_ITEMS: FAQItem[] = [
   // --- Universal ---
   {
     question: "How does authentication work?",
-    answer: "Hisaabo uses session-based auth. Call `auth.login` or `auth.register` to get a session. Web clients receive an HttpOnly `session_id` cookie (30-day expiry, SameSite=Lax) that's sent automatically. Mobile and server clients use the returned `sessionToken` as a Bearer token in the `Authorization` header. No JWTs — sessions are stored server-side and revokable instantly.",
+    answer: "Fintranzact uses session-based auth. Call `auth.login` or `auth.register` to get a session. Web clients receive an HttpOnly `session_id` cookie (30-day expiry, SameSite=Lax) that's sent automatically. Mobile and server clients use the returned `sessionToken` as a Bearer token in the `Authorization` header. No JWTs — sessions are stored server-side and revokable instantly.",
     relatedGroups: ["auth"],
     personas: ["developer", "agent-builder"],
   },
@@ -99,7 +99,7 @@ const FAQ_ITEMS: FAQItem[] = [
   },
   {
     question: "How do I reconcile bank statements?",
-    answer: "1) Upload the CSV via `bankRecon.uploadCSV` — Hisaabo auto-detects the bank format (10 Indian banks supported). 2) Confirm column mapping via `bankRecon.confirmMapping`. 3) The system runs 4-tier auto-matching: exact (amount + date + ref), strong (amount + 2-day window), narration parse (UPI ID, cheque number), partial (amount only, 7-day window). 4) Review unmatched items and `confirmMatch`, `createExpense`, or `ignoreLine`.",
+    answer: "1) Upload the CSV via `bankRecon.uploadCSV` — Fintranzact auto-detects the bank format (10 Indian banks supported). 2) Confirm column mapping via `bankRecon.confirmMapping`. 3) The system runs 4-tier auto-matching: exact (amount + date + ref), strong (amount + 2-day window), narration parse (UPI ID, cheque number), partial (amount only, 7-day window). 4) Review unmatched items and `confirmMatch`, `createExpense`, or `ignoreLine`.",
     relatedGroups: ["bank-recon"],
     personas: ["ca-accountant"],
   },
@@ -258,7 +258,7 @@ export function FAQSection() {
         </h2>
       </div>
       <p className="text-[13px] mb-5" style={{ color: "var(--text-tertiary)" }}>
-        Common questions about integrating with the Hisaabo API.
+        Common questions about integrating with the Fintranzact API.
       </p>
 
       {/* Filter tabs */}

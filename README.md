@@ -1,11 +1,7 @@
-# Hisaabo
+# Fintranzact
 
 > Agent-native financial operating system for India.
 
-[![CI](https://github.com/hisaabo/hisaabo/actions/workflows/ci.yml/badge.svg)](https://github.com/hisaabo/hisaabo/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/hisaabo/hisaabo/graph/badge.svg)](https://codecov.io/gh/hisaabo/hisaabo)
-[![Release](https://img.shields.io/github/v/release/hisaabo/hisaabo?include_prereleases&label=release)](https://github.com/hisaabo/hisaabo/releases)
-[![License: O'Saasy](https://img.shields.io/badge/license-O'Saasy-blue)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-1844_passing-brightgreen)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
@@ -15,15 +11,12 @@
 [![tRPC](https://img.shields.io/badge/tRPC-11-2596BE?logo=trpc&logoColor=white)](https://trpc.io/)
 [![Drizzle](https://img.shields.io/badge/Drizzle-0.38-C5F74F?logo=drizzle&logoColor=black)](https://orm.drizzle.team/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?logo=docker&logoColor=white)](https://ghcr.io/hisaabo/hisaabo)
-[![@hisaabo/cli](https://img.shields.io/npm/v/@hisaabo/cli?logo=npm&logoColor=white&label=@hisaabo/cli)](https://www.npmjs.com/package/@hisaabo/cli)
-[![@hisaabo/mcp](https://img.shields.io/npm/v/@hisaabo/mcp?logo=npm&logoColor=white&label=@hisaabo/mcp)](https://www.npmjs.com/package/@hisaabo/mcp)
 
-**Hisaab, pakka.** (Honest accounting.)
+**Your Trustable Accounting Partner.**
 
-Hisaabo is not accounting software with an AI add-on. It is a financial operating system where humans and AI agents operate on the same structured primitives -- creating invoices, reconciling bank statements, filing GST returns, closing books. The web dashboard, mobile app, CLI, and MCP server are all equal clients of the same API. There is no "AI layer." The entire system is the AI interface. In practice, this means your books update themselves, your GST returns are always ready, and your team never shares bank credentials again.
+Fintranzact is not accounting software with an AI add-on. It is a financial operating system where humans and AI agents operate on the same structured primitives -- creating invoices, reconciling bank statements, filing GST returns, closing books. The web dashboard, mobile app, CLI, and MCP server are all equal clients of the same API. There is no "AI layer." The entire system is the AI interface. In practice, this means your books update themselves, your GST returns are always ready, and your team never shares bank credentials again.
 
-Open source. Self-hostable. Free forever. Built India-first.
+Secure. Reliable. Built India-first.
 
 ---
 
@@ -40,11 +33,11 @@ This combination did not exist two years ago. It does now.
 
 ---
 
-## What is Hisaabo?
+## What is Fintranzact?
 
 Every accounting tool built in the last 30 years follows the same pattern: a database, a forms-based UI, and maybe an API bolted on later. AI gets added as a chat widget that reads from the same database humans already see.
 
-Hisaabo inverts this. The system is built as a set of structured financial operations -- 200+ typed tRPC endpoints -- that any client can execute. The React dashboard is one client. The Expo mobile app is another. The CLI is another. An MCP-connected AI agent is another. They all have identical capabilities, identical permissions, identical audit trails.
+Fintranzact inverts this. The system is built as a set of structured financial operations -- 200+ typed tRPC endpoints -- that any client can execute. The React dashboard is one client. The Expo mobile app is another. The CLI is another. An MCP-connected AI agent is another. They all have identical capabilities, identical permissions, identical audit trails.
 
 This means an AI agent does not "read your screen" or "fill in forms." It calls the same `invoice.create` procedure your accountant does, with the same validation, the same GST logic, the same atomic invoice numbering. The result is deterministic, auditable, and indistinguishable from human input.
 
@@ -54,7 +47,7 @@ That is what makes this a financial operating system, not an accounting app.
 
 ## Financial Actions
 
-Every accounting workflow reduces to a small set of deterministic financial actions. Hisaabo does not expose spreadsheets and forms. It exposes these operations directly.
+Every accounting workflow reduces to a small set of deterministic financial actions. Fintranzact does not expose spreadsheets and forms. It exposes these operations directly.
 
 | Action | What happens |
 |---|---|
@@ -68,7 +61,7 @@ Every accounting workflow reduces to a small set of deterministic financial acti
 
 Every action is: deterministic (same input, same output), auditable (traced to a user or agent), and executable identically by a human clicking a button or an AI agent calling an endpoint.
 
-Unlike AI tools that generate suggestions, Hisaabo executes validated financial operations with guaranteed accounting correctness. This is the design constraint that makes everything else possible.
+Unlike AI tools that generate suggestions, Fintranzact executes validated financial operations with guaranteed accounting correctness. This is the design constraint that makes everything else possible.
 
 ---
 
@@ -78,7 +71,7 @@ This is not "AI-powered accounting." This is accounting infrastructure that AI a
 
 **How it works:**
 
-The entire Hisaabo API is a set of typed, validated procedures. Every capability -- from creating an invoice to generating GSTR-3B -- is a structured tool with defined inputs, outputs, and side effects. There is no screen-scraping, no form-filling, no prompt-engineering around a UI.
+The entire Fintranzact API is a set of typed, validated procedures. Every capability -- from creating an invoice to generating GSTR-3B -- is a structured tool with defined inputs, outputs, and side effects. There is no screen-scraping, no form-filling, no prompt-engineering around a UI.
 
 ```
                  +------------------+
@@ -172,11 +165,11 @@ hisaabo bank recon --account "HDFC Current" --format csv > brs.csv
 
 ## Controlled Financial Access
 
-The adoption wedge for Hisaabo is not features. It is trust.
+The adoption wedge for Fintranzact is not features. It is trust.
 
 Right now, Indian businesses share bank passwords over WhatsApp so their CA can download statements. Articled clerks have unscoped access to every client's data. There is no audit trail for who changed what. This is the status quo for millions of businesses.
 
-Hisaabo replaces this with structured access control:
+Fintranzact replaces this with structured access control:
 
 | Layer | What it enforces |
 |---|---|
@@ -191,23 +184,23 @@ This is what gets CAs to adopt. Not a better spreadsheet -- a system where acces
 
 ---
 
-## Why Hisaabo?
+## Why Fintranzact?
 
 ### If you run a CA firm
 
 You manage 30-100 clients. Each one sends you bank statements in a different format. You chase GST data over WhatsApp the week before filing. Some clients share their net banking credentials in plain text messages. Your articled clerks spend 80% of their time on data entry that should not exist.
 
-Hisaabo gives you a single platform where every client is a separate business with role-based access. You log in once and see all your clients. Bank statements import with auto-detection for 10 Indian banks. GSTR-1 and GSTR-3B auto-generate from invoice data. Trial Balance, P&L, and Balance Sheet derive automatically. When you need depreciation entries or year-end adjustments, journal entries are there. When you need to hand off to Tally for audit, there is a clean XML export.
+Fintranzact gives you a single platform where every client is a separate business with role-based access. You log in once and see all your clients. Bank statements import with auto-detection for 10 Indian banks. GSTR-1 and GSTR-3B auto-generate from invoice data. Trial Balance, P&L, and Balance Sheet derive automatically. When you need depreciation entries or year-end adjustments, journal entries are there. When you need to hand off to Tally for audit, there is a clean XML export.
 
 ### If you run a business
 
-**If you use a paper bahi khata** -- you are one lost register away from losing years of records. Hisaabo digitises your entire operation in an afternoon, runs on your phone, and costs nothing.
+**If you use a paper bahi khata** -- you are one lost register away from losing years of records. Fintranzact digitises your entire operation in an afternoon, runs on your phone, and costs nothing.
 
-**If you use Tally** -- you paid Rs. 18,000-54,000 for a license that only works on Windows, on one machine, with no mobile app. Hisaabo runs on any device with a browser, and your CA can access it from their own office.
+**If you use Tally** -- you paid Rs. 18,000-54,000 for a license that only works on Windows, on one machine, with no mobile app. Fintranzact runs on any device with a browser, and your CA can access it from their own office.
 
-**If you use myBillBook or Vyapar** -- you started with a "free" plan that paywalls essential features behind Rs. 3,000-10,000/year. Your data lives on their servers. If you stop paying, you lose access to your own records. Hisaabo has no feature gates.
+**If you use myBillBook or Vyapar** -- you started with a "free" plan that paywalls essential features behind Rs. 3,000-10,000/year. Your data lives on their servers. If you stop paying, you lose access to your own records. Fintranzact has no feature gates.
 
-**If you use Zoho Books** -- you are paying a monthly SaaS subscription designed for companies ten times your size. Hisaabo is built India-first: GST logic is foundational, not bolted on.
+**If you use Zoho Books** -- you are paying a monthly SaaS subscription designed for companies ten times your size. Fintranzact is built India-first: GST logic is foundational, not bolted on.
 
 ---
 
@@ -245,11 +238,11 @@ Public storefront at `store.hisaabo.in/your-slug`. Phone verification for orders
 
 ## For CA Firms
 
-### How Hisaabo works for your practice
+### How Fintranzact works for your practice
 
 **Onboarding a new client (30 minutes)**
 
-1. Add the client as a new business in your Hisaabo instance
+1. Add the client as a new business in your Fintranzact instance
 2. Configure their GST registration (regular, composition, or unregistered), financial year, and state
 3. Chart of Accounts seeds automatically with 40 standard Indian accounts
 4. Invite the client with Seller or Admin access -- they can create invoices from their phone
@@ -258,7 +251,7 @@ Public storefront at `store.hisaabo.in/your-slug`. Phone verification for orders
 **Monthly workflow**
 
 1. Client creates invoices and records payments through the app or their phone
-2. You import their bank statement CSV -- Hisaabo auto-detects the bank and matches 70%+ of transactions
+2. You import their bank statement CSV -- Fintranzact auto-detects the bank and matches 70%+ of transactions
 3. Review unmatched items: create expenses, flag timing differences, or match manually
 4. GSTR-1 auto-generates from invoice data -- review, export JSON, upload to portal
 5. GSTR-3B auto-calculates outward supplies, ITC, and net tax payable
@@ -274,7 +267,7 @@ Public storefront at `store.hisaabo.in/your-slug`. Phone verification for orders
 
 **What changes for your practice**
 
-| Before Hisaabo | After Hisaabo |
+| Before Fintranzact | After Fintranzact |
 |---|---|
 | Clients share bank passwords over WhatsApp | Clients upload statements themselves, or you import CSV directly |
 | Articled clerks type bank entries into Tally manually | 4-tier auto-matching handles 70%+ of entries |
@@ -287,7 +280,7 @@ Public storefront at `store.hisaabo.in/your-slug`. Phone verification for orders
 
 ## Gets Smarter With Every Firm
 
-Hisaabo is not a static tool. It is a system that compounds.
+Fintranzact is not a static tool. It is a system that compounds.
 
 **Transaction patterns improve auto-categorization.** When a CA categorizes "NEFT-SALARY" as a salary expense for one business, that rule applies across similar transactions. Every manual categorization trains the matching engine.
 
@@ -295,13 +288,13 @@ Hisaabo is not a static tool. It is a system that compounds.
 
 **Bank reconciliation accuracy compounds.** As more bank statements flow through the system, narration parsing patterns improve. New UPI formats, changed NEFT descriptions, updated bank CSV layouts -- each resolved case makes the next one faster.
 
-**This is a data moat, not a feature.** Every firm on the platform makes the platform better for every other firm. A new entrant building accounting software from scratch starts at zero. Hisaabo starts with the accumulated intelligence of every transaction ever reconciled.
+**This is a data moat, not a feature.** Every firm on the platform makes the platform better for every other firm. A new entrant building accounting software from scratch starts at zero. Fintranzact starts with the accumulated intelligence of every transaction ever reconciled.
 
 ---
 
 ## Production Quality
 
-Hisaabo is not a side project. It is production-hardened financial software.
+Fintranzact is not a side project. It is production-hardened financial software.
 
 | Dimension | What is in place |
 |---|---|
@@ -318,11 +311,9 @@ Hisaabo is not a side project. It is production-hardened financial software.
 
 ## Compared to Alternatives
 
-| | Hisaabo | Tally Prime | Zoho Books | myBillBook | Vyapar |
+| | Fintranzact | Tally Prime | Zoho Books | myBillBook | Vyapar |
 |---|---|---|---|---|---|
 | **Price** | Free | Rs. 18K-54K | Rs. 749-2,499/mo | Rs. 2,999-9,999/yr | Rs. 2,499-7,999/yr |
-| **Open source** | Yes | No | No | No | No |
-| **Self-hostable** | Yes | Desktop only | No | No | No |
 | **Full accounting (CoA, TB, BS, P&L, CF)** | Yes | Yes | Yes | No | No |
 | **Journal entries** | Yes | Yes | Yes | No | No |
 | **GST returns (1, 3B, 9, 2B recon)** | Yes | Yes | Yes | Basic | Basic |
@@ -408,7 +399,7 @@ Three paths depending on what you want to do.
 **Prerequisites:** Node.js 20+, pnpm 9+, Docker
 
 ```bash
-git clone https://github.com/hisaabo/hisaabo.git
+git clone https://github.com/Illusio-Designs/fintranzact.git
 cd hisaabo
 pnpm install
 
@@ -441,7 +432,7 @@ curl -X POST ${import.meta.env.API_URL}/api/trpc/auth.register \
   -d '{"json":{"email":"you@yourshop.in","name":"Your Name","password":"strongpass123","confirmPassword":"strongpass123"}}'
 ```
 
-### 3. Connect AI to your Hisaabo instance
+### 3. Connect AI to your Fintranzact instance
 
 ```bash
 npm install -g @hisaabo/cli
@@ -582,8 +573,8 @@ Copy `.env.example` to `.env`. Key variables:
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://hisaabo:pass@localhost:5432/hisaabo` |
 | `PORT` | API server port | `3000` |
-| `CORS_ORIGINS` | Allowed origins (comma-separated) | `https://app.hisaabo.in` |
-| `APP_URL` | Frontend URL (for magic link emails) | `https://app.hisaabo.in` |
+| `CORS_ORIGINS` | Allowed origins (comma-separated) | `https://fintranzact-web.vercel.app` |
+| `APP_URL` | Frontend URL (for magic link emails) | `https://fintranzact-web.vercel.app` |
 | `NODE_ENV` | Environment | `production` |
 | `RESEND_API_KEY` | Email sending (optional in dev) | |
 | `MULTI_TENANT` | Enable multi-tenant cloud mode | `false` |
@@ -605,7 +596,7 @@ Everything listed in Features above is shipped and tested. The full accounting l
 
 ### Future
 
-- **Direct GST filing via GSP** -- File GSTR-1 and GSTR-3B directly from Hisaabo without the GST portal
+- **Direct GST filing via GSP** -- File GSTR-1 and GSTR-3B directly from Fintranzact without the GST portal
 - **Agent ecosystem** -- Third-party tax, audit, and compliance agents built on the MCP server
 - **IMS integration** -- Invoice Management System support as it matures
 - **Multi-currency support** -- For export-oriented businesses
@@ -619,7 +610,7 @@ See [docs/architecture/gst-accounting-roadmap.md](docs/architecture/gst-accounti
 | Resource | URL |
 |---|---|
 | User documentation | [docs.hisaabo.in](https://docs.hisaabo.in) |
-| API reference | [api.hisaabo.in](${import.meta.env.VITE_API_URL ?? 'https://api.hisaabo.in'}) |
+| API reference | [api.hisaabo.in](${import.meta.env.VITE_API_URL ?? 'https://fintranzact-production.up.railway.app'}) |
 | Self-hosting guide | [docs.hisaabo.in/getting-started/self-hosting](https://docs.hisaabo.in/getting-started/self-hosting) |
 | Contributing guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Security policy | [SECURITY.md](SECURITY.md) |
@@ -649,8 +640,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
 ## License
 
-[O'Saasy License (v1.0)](LICENSE) -- Free to use, self-host, and modify. You cannot offer Hisaabo as a competing hosted service.
+Fintranzact is proprietary software. © Fintranzact. All rights reserved. Unauthorised copying, distribution or hosting is not permitted.
 
 ---
 
-Built with care in India. *Hisaab, pakka.*
+Built with care in India. *Your Trustable Accounting Partner.*

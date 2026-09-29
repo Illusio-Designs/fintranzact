@@ -1,5 +1,5 @@
 import type { EndpointGroup } from "./types";
-const API_BASE_URL = (import.meta.env.API_URL || (typeof window !== "undefined" ? window.location.origin : "https://api.hisaabo.in")).replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.API_URL || (typeof window !== "undefined" ? window.location.origin : "https://fintranzact-production.up.railway.app")).replace(/\/$/, "");
 
 export const importEndpoints: EndpointGroup = {
   id: "import",
@@ -11,7 +11,7 @@ export const importEndpoints: EndpointGroup = {
       method: "mutation",
       path: "import.importParties",
       title: "Import Parties",
-      description: "Bulk import customers and suppliers from an external source. Each row is transformed through a source-specific adapter (e.g. MyBillBook, Hisaabo) to normalize field names and formats. Validates all rows against the canonical party schema before importing. Deduplicates by name — existing parties are updated, new ones are created.",
+      description: "Bulk import customers and suppliers from an external source. Each row is transformed through a source-specific adapter (e.g. MyBillBook, Fintranzact) to normalize field names and formats. Validates all rows against the canonical party schema before importing. Deduplicates by name — existing parties are updated, new ones are created.",
       auth: "business",
       requiredRole: "admin",
       input: [

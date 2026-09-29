@@ -10,7 +10,7 @@ import { FAQSection } from "./components/FAQ";
 import { allEndpointGroups, allSections } from "./content";
 import { Link } from "react-router-dom";
 
-const BASE_URL = import.meta.env.API_URL ?? "https://api.hisaabo.in";
+const BASE_URL = import.meta.env.API_URL ?? "https://fintranzact-production.up.railway.app";
 
 const QUICK_START_CODE = `import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
@@ -197,7 +197,7 @@ function OverviewPage() {
             <div
               className="absolute -top-16 -left-16 w-64 h-64 rounded-full pointer-events-none"
               style={{
-                background: "radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%)",
+                background: "radial-gradient(circle, rgba(59, 94, 170, 0.08) 0%, transparent 70%)",
                 filter: "blur(40px)",
               }}
               aria-hidden="true"
@@ -232,13 +232,13 @@ function OverviewPage() {
               className="text-[32px] lg:text-[36px] font-bold mb-4 leading-tight relative"
               style={{ color: "var(--text-primary)", letterSpacing: "-0.03em" }}
             >
-              Hisaabo API Reference
+              Fintranzact API Reference
             </h1>
             <p
               className="text-[15px] lg:text-[16px] leading-[1.7] max-w-[560px] relative"
               style={{ color: "var(--text-secondary)" }}
             >
-              Complete reference for the Hisaabo tRPC API. Every capability available to
+              Complete reference for the Fintranzact tRPC API. Every capability available to
               the web dashboard, mobile app, and AI agents — documented with code examples in
               JavaScript, cURL, and Python.
             </p>
@@ -538,8 +538,8 @@ function OverviewPage() {
                         to={`/group/${group.id}`}
                         className="group-card block p-4 rounded-lg relative"
                         style={{
-                          background: isHighlighted ? "rgba(99, 102, 241, 0.06)" : "var(--bg-card)",
-                          border: `1px solid ${isHighlighted ? "rgba(99, 102, 241, 0.2)" : "var(--border-mid)"}`,
+                          background: isHighlighted ? "rgba(59, 94, 170, 0.06)" : "var(--bg-card)",
+                          border: `1px solid ${isHighlighted ? "rgba(59, 94, 170, 0.2)" : "var(--border-mid)"}`,
                         }}
                       >
                         {isHighlighted && (

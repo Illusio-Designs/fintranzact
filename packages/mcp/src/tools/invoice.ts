@@ -1,5 +1,5 @@
 /**
- * Invoice tools — the core of Hisaabo's invoicing workflow.
+ * Invoice tools — the core of Fintranzact's invoicing workflow.
  *
  * Tools registered:
  *   invoice_list          — search and filter invoices with pagination
