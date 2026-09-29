@@ -151,6 +151,8 @@ exceptions:
       # Plan choice is a step of the web signup flow (/auth/plan-selection);
       # mobile users pick a plan on the web.
       - tenant.updatePlan
+      # Public plan catalogue feeds the web pricing and sign-up pages only.
+      - plan.list
 
       # --- Chart of Accounts ---
       # Accounting management is a desktop/CA workflow.
@@ -278,6 +280,8 @@ exceptions:
       - tenant.peekInvitation
       # Plan choice is part of web signup; scripts must not change billing plans.
       - tenant.updatePlan
+      # Public plan catalogue feeds the web pricing and sign-up pages only.
+      - plan.list
 
       # --- Business ---
       # Plan limit check — CLI doesn't create businesses.
@@ -362,6 +366,8 @@ exceptions:
       - tenant.peekInvitation
       # Plan choice is part of web signup; agents must not change billing plans.
       - tenant.updatePlan
+      # Public plan catalogue feeds the web pricing and sign-up pages only.
+      - plan.list
 
       # --- Backup & Restore ---
       # Tenant-level backup/restore requires file I/O; not an MCP workflow.
