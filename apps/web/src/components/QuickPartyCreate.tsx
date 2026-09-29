@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import type { PartyType } from "@fintranzact/shared";
 
+import { PhoneInput } from "@/components/ui/PhoneInput";
 export interface QuickPartyCreateProps {
   open: boolean;
   onClose: () => void;
@@ -90,13 +91,12 @@ export function QuickPartyCreate({
           }}
         />
 
-        <InputField
+        <PhoneInput
           label="Phone"
           required
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={setPhone}
           placeholder="Phone number"
-          type="tel"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();

@@ -11,6 +11,7 @@ import { PincodeInput } from "./PincodeInput";
 import { INDIAN_STATES } from "@/lib/indian-states";
 import { LogoUploader } from "./LogoUploader";
 
+import { PhoneInput } from "@/components/ui/PhoneInput";
 const GST_REG_OPTIONS = [
   { value: "unregistered", label: "Not GST Registered" },
   { value: "regular", label: "GST Regular" },
@@ -470,10 +471,10 @@ export function BusinessForm({
                 options={BUSINESS_TYPE_OPTIONS}
               />
 
-              <InputField
+              <PhoneInput
                 label="Phone"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={setPhone}
                 required
                 error={errors.phone}
               />

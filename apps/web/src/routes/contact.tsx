@@ -2,30 +2,37 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import {
   CONTACT_EMAIL,
+  CtaBand,
   DOCS_URL,
   MarketingLayout,
   PageHero,
   SECURITY_EMAIL,
 } from "@/components/marketing/MarketingLayout";
+import { ArrowRight01Icon, BookOpen01Icon, Mail01Icon, SecurityCheckIcon, SentIcon } from "@hugeicons/core-free-icons";
+import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
+import { InputField, TextareaField } from "@/components/ui/FormField";
 
 export const Route = createFileRoute("/contact")({
   component: ContactPage,
 });
 
-const CHANNELS: Array<{ title: string; body: string; label: string; href: string }> = [
+const CHANNELS: Array<{ icon: IconSvgElement; title: string; body: string; label: string; href: string }> = [
   {
+    icon: Mail01Icon,
     title: "Sales & support",
     body: "Questions about plans, pricing or using Fintranzact.",
     label: CONTACT_EMAIL,
     href: `mailto:${CONTACT_EMAIL}`,
   },
   {
+    icon: BookOpen01Icon,
     title: "Help centre",
     body: "Step-by-step guides for invoicing, GST, banking and more.",
     label: "Browse the docs",
     href: DOCS_URL,
   },
   {
+    icon: SecurityCheckIcon,
     title: "Security",
     body: "Report a vulnerability or ask about how we protect your data.",
     label: SECURITY_EMAIL,
@@ -55,64 +62,82 @@ function ContactPage() {
         subtitle="Talk to us about plans, onboarding or anything else. We usually reply within one business day."
       />
 
-      <section className="mx-auto grid max-w-6xl gap-10 px-4 py-16 md:grid-cols-5 md:px-6">
-        <div className="space-y-4 md:col-span-2">
-          {CHANNELS.map((channel) => (
-            <div key={channel.title} className="card p-5">
-              <h2 className="font-semibold">{channel.title}</h2>
-              <p className="mt-1 text-sm text-text-tertiary">{channel.body}</p>
-              <a
-                href={channel.href}
-                className="mt-3 inline-block text-sm font-semibold text-brand-600 hover:underline"
-                {...(channel.href.startsWith("http")
-                  ? { target: "_blank", rel: "noopener noreferrer" }
-                  : {})}
-              >
-                {channel.label}
-              </a>
-            </div>
-          ))}
-        </div>
+      <section className="bg-surface-1">
+        <div className="mx-auto grid max-w-6xl items-start gap-8 px-4 py-20 md:px-6 lg:grid-cols-5">
+          <div className="space-y-4 lg:col-span-2">
+            {CHANNELS.map((channel) => (
+              <div key={channel.title} className="flex gap-4 rounded-2xl border border-border-light bg-surface-0 p-6">
+                <IconCircle icon={channel.icon} size="lg" />
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-text-primary">{channel.title}</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-text-tertiary">{channel.body}</p>
+                  <a
+                    href={channel.href}
+                    className="mt-3 inline-flex items-center gap-1 break-all text-sm font-semibold text-brand-600 hover:underline dark:text-brand-300"
+                    {...(channel.href.startsWith("http")
+                      ? { target: "_blank", rel: "noopener noreferrer" }
+                      : {})}
+                  >
+                    {channel.label}
+                    <Icon icon={ArrowRight01Icon} size={14} strokeWidth={2} />
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
 
-        <form onSubmit={handleSubmit} className="card space-y-4 p-6 md:col-span-3">
-          <h2 className="text-lg font-semibold">Send us a message</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="font-medium">Name</span>
-              <input
-                className="input mt-1 w-full"
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-[22px] border border-border-light bg-surface-0 p-7 shadow-[0_24px_60px_-34px_rgba(15,27,61,.35)] md:p-9 lg:col-span-3"
+          >
+            <h2 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-[#0f1b3d] dark:text-white">
+              Send us a message
+            </h2>
+            <p className="mt-1.5 text-sm text-text-tertiary">
+              Fill this in and your email app opens with the message ready to send.
+            </p>
+            <div className="mt-7 grid gap-5 sm:grid-cols-2">
+              <InputField
+                label="Name"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoComplete="name"
+                placeholder="Your full name"
               />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">Email</span>
-              <input
-                className="input mt-1 w-full"
+              <InputField
+                label="Email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
+                placeholder="you@yourcompany.com"
               />
-            </label>
-          </div>
-          <label className="block text-sm">
-            <span className="font-medium">Message</span>
-            <textarea
-              className="input mt-1 min-h-32 w-full"
+            </div>
+            <TextareaField
+              label="Message"
               required
+              className="mt-5 min-h-36"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              placeholder="How can we help?"
             />
-          </label>
-          <button type="submit" className="btn-primary">
-            Send message
-          </button>
-        </form>
+            <button
+              type="submit"
+              className="mt-7 inline-flex h-[52px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
+            >
+              <Icon icon={SentIcon} size={18} />
+              Send message
+            </button>
+          </form>
+        </div>
       </section>
+
+      <CtaBand
+        title="Prefer to try it yourself?"
+        body="Create a free account and send your first GST invoice in minutes."
+      />
     </MarketingLayout>
   );
 }

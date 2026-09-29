@@ -26,6 +26,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, ArrowRight01Icon, ArrowRight02Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
+import { PhoneInput } from "@/components/ui/PhoneInput";
 export const Route = createFileRoute("/parties")({
   component: PartiesPage,
 });
@@ -1245,12 +1246,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
             onChange={(e) => setName(e.target.value)}
             placeholder="Full name or business name"
           />
-          <InputField
-            label="Phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+91 98765 43210"
-          />
+          <PhoneInput label="Phone" value={phone} onChange={setPhone} />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <InputField
