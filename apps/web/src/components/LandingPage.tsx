@@ -212,8 +212,7 @@ function Hero() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              to="/login"
-              search={{ mode: "register" }}
+              to="/register"
               className="inline-flex h-[54px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
             >
               Start free — no card needed
@@ -838,8 +837,7 @@ function FinalCta() {
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
-              to="/login"
-              search={{ mode: "register" }}
+              to="/register"
               className="inline-flex h-[54px] items-center rounded-xl bg-white px-7 text-base font-bold text-brand-900 transition hover:bg-brand-50"
             >
               Create free account

@@ -48,8 +48,7 @@ export function PricingCards({ className }: { className?: string }) {
               ))}
             </ul>
             <Link
-              to="/login"
-              search={{ mode: "register" }}
+              to="/register"
               className="mt-7 flex h-[52px] items-center justify-center rounded-xl bg-white text-base font-bold text-brand-900 transition hover:bg-brand-50"
             >
               Start free

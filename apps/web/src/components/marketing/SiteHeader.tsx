@@ -534,14 +534,12 @@ export function SiteHeader() {
           <RegionPill />
           <Link
             to="/login"
-            search={{ mode: "login" }}
             className="hidden h-11 items-center whitespace-nowrap px-3 text-[15px] font-semibold text-text-secondary hover:text-text-primary sm:inline-flex"
           >
             Log in
           </Link>
           <Link
-            to="/login"
-            search={{ mode: "register" }}
+            to="/register"
             className="inline-flex h-11 items-center whitespace-nowrap rounded-[10px] bg-brand-600 px-5 text-[15px] font-semibold text-white shadow-[0_6px_16px_-6px_rgba(59,94,170,.6)] transition hover:bg-brand-700"
           >
             Start free
@@ -593,7 +591,6 @@ export function SiteHeader() {
           )}
           <Link
             to="/login"
-            search={{ mode: "login" }}
             className="block rounded-md px-2 py-3 text-[15px] font-medium text-text-secondary hover:bg-surface-1"
           >
             Log in
