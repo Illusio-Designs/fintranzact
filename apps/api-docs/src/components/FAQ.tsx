@@ -137,7 +137,7 @@ const FAQ_ITEMS: FAQItem[] = [
   },
   {
     question: "How do I manage my online store?",
-    answer: "Configure your storefront at `store.hisaabo.in/your-slug` via `store.updateSettings` (logo, colors, minimum order amount, shipping methods). Toggle which items appear in the store via `store.bulkToggleItems`. Set store-specific pricing via `store.updateItemStoreSettings`. Orders arrive with phone verification — confirm them via `store.confirmOrder`, which auto-creates the invoice.",
+    answer: "Configure your storefront at `store.fintranzact.com/your-slug` via `store.updateSettings` (logo, colors, minimum order amount, shipping methods). Toggle which items appear in the store via `store.bulkToggleItems`. Set store-specific pricing via `store.updateItemStoreSettings`. Orders arrive with phone verification — confirm them via `store.confirmOrder`, which auto-creates the invoice.",
     relatedGroups: ["store"],
     personas: ["business-owner"],
   },

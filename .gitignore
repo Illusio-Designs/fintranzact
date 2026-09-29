@@ -60,3 +60,8 @@ test-results
 
 # Debug dumps
 *-dump.json
+
+# Never commit real env files or env backups (examples are allowed)
+.env.*
+!.env.example
+!.env.prod.example

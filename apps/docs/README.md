@@ -5,7 +5,7 @@ The user documentation site for Fintranzact. Built with [Starlight](https://star
 [![Astro](https://img.shields.io/badge/Astro-5-FF5D01?logo=astro&logoColor=white)](https://astro.build/)
 [![Starlight](https://img.shields.io/badge/Starlight-0.34-7C3AED?logo=astro&logoColor=white)](https://starlight.astro.build/)
 
-Published at [docs.hisaabo.in](https://docs.hisaabo.in).
+Published at [docs.fintranzact.com](https://docs.fintranzact.com).
 
 ---
 
@@ -84,7 +84,7 @@ For a new top-level section, add an `autogenerate` entry to `astro.config.mjs`:
 
 ## Deployment
 
-Deploy `apps/docs/dist/` as a static site. The site is configured for `https://docs.hisaabo.in` in `astro.config.mjs`. Cloudflare Pages is the recommended host:
+Deploy `apps/docs/dist/` as a static site. The site is configured for `https://docs.fintranzact.com` in `astro.config.mjs`. Cloudflare Pages is the recommended host:
 
 | Setting | Value |
 |---|---|

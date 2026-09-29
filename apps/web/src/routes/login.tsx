@@ -537,7 +537,7 @@ function LoginPage() {
 
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async (data) => {
-      // Desktop uses Bearer auth (cookies can't span tauri.localhost ↔ api.hisaabo.in).
+      // Desktop uses Bearer auth (cookies can't span tauri.localhost ↔ api.fintranzact.com).
       // The server returns sessionToken in the response body in addition to
       // setting the cookie; we persist it into the OS keychain for reuse.
       // saveDesktopToken is a no-op on web, where the HttpOnly cookie is

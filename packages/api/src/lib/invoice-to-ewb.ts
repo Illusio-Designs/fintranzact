@@ -1,9 +1,9 @@
 /**
- * invoice-to-ewb.ts — Map a Hisaabo invoice to NIC E-Way Bill generation payload.
+ * invoice-to-ewb.ts — Map a Fintranzact invoice to NIC E-Way Bill generation payload.
  *
  * WHY THIS FILE EXISTS:
  * The NIC EWB API expects a very specific JSON shape with numeric codes (state
- * codes, transport mode codes, etc.) whereas Hisaabo stores human-readable text.
+ * codes, transport mode codes, etc.) whereas Fintranzact stores human-readable text.
  * This module isolates that transformation so the router stays clean.
  *
  * Key mappings:
@@ -185,7 +185,7 @@ function mapUnit(unit: string | null): string {
 // ── Main mapper ───────────────────────────────────────────────────────────────
 
 /**
- * Map a Hisaabo invoice to the NIC EWB generation payload.
+ * Map a Fintranzact invoice to the NIC EWB generation payload.
  *
  * @param invoice      - invoice header (type, numbers, dates, GSTIN, address)
  * @param lineItems    - invoice line items

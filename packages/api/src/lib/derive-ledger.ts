@@ -2,7 +2,7 @@
  * derive-ledger.ts — Virtual double-entry journal engine.
  *
  * WHY THIS FILE EXISTS:
- * Hisaabo stores invoices, payments and expenses as operational records.
+ * Fintranzact stores invoices, payments and expenses as operational records.
  * The accounting layer needs to present these as balanced double-entry journal
  * entries mapped against the Chart of Accounts, WITHOUT storing duplicate rows.
  *

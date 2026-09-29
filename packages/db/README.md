@@ -1,6 +1,6 @@
 # @hisaabo/db
 
-The Hisaabo database layer. Drizzle ORM schema definitions, PostgreSQL client setup, and migration tooling for both the control database (auth and tenants) and tenant databases (all business data).
+The Fintranzact database layer. Drizzle ORM schema definitions, PostgreSQL client setup, and migration tooling for both the control database (auth and tenants) and tenant databases (all business data).
 
 [![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-0.36-C5F74F?logo=drizzle&logoColor=black)](https://orm.drizzle.team/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
@@ -9,7 +9,7 @@ The Hisaabo database layer. Drizzle ORM schema definitions, PostgreSQL client se
 
 ## Overview
 
-Hisaabo uses two logical databases:
+Fintranzact uses two logical databases:
 
 | Database | Purpose | Schema file |
 |---|---|---|

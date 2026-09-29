@@ -344,4 +344,4 @@ For local development, set `HISAABO_API_URL=http://localhost:3000` and use a ses
 
 ## Full Documentation
 
-[docs.hisaabo.in/ai/mcp-server](https://docs.hisaabo.in/ai/mcp-server/) — Setup guide, all tools with input/output schemas, security considerations, and integration examples.
+[docs.fintranzact.com/ai/mcp-server](https://docs.fintranzact.com/ai/mcp-server/) — Setup guide, all tools with input/output schemas, security considerations, and integration examples.

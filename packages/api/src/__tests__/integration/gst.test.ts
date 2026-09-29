@@ -2,7 +2,7 @@
  * gst.test.ts — Integration tests for gstRouter (GSTR-1, GSTR-3B)
  *
  * WHY THIS FILE EXISTS:
- * The GST reports are the primary compliance output of Hisaabo. Incorrect
+ * The GST reports are the primary compliance output of Fintranzact. Incorrect
  * classification of invoices (B2B vs B2C) or tax type (CGST+SGST vs IGST) can
  * result in incorrect returns filed with the government. We verify:
  *

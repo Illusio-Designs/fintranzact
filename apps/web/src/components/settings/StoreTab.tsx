@@ -12,7 +12,7 @@ import { PhoneInput } from "./PhoneInput";
 
 const IS_DEV = import.meta.env.DEV;
 // Self-hosted installs can override via VITE_STORE_DOMAIN (e.g. "store.mycompany.com")
-const STORE_DOMAIN = import.meta.env.VITE_STORE_DOMAIN || (IS_DEV ? "localhost:5174" : "store.hisaabo.in");
+const STORE_DOMAIN = import.meta.env.VITE_STORE_DOMAIN || (IS_DEV ? "localhost:5174" : "store.fintranzact.com");
 const STORE_PROTOCOL = IS_DEV ? "http" : "https";
 const STORE_PREFIX = `${STORE_DOMAIN}/`;
 

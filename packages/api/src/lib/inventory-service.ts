@@ -341,7 +341,7 @@ export async function getStockBalance(
 }
 
 /**
- * Keep Hisaabo's existing aggregate stockQuantity fields synchronized.
+ * Keep Fintranzact's existing aggregate stockQuantity fields synchronized.
  *
  * This is deliberately separate from warehouse-aware stock_balances.
  * Existing invoice/POS/report code still depends on these fields.

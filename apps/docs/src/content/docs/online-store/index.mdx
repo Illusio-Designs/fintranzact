@@ -11,7 +11,7 @@ The **Online Store** feature lets you publish a public storefront where customer
 
 1. You enable the store in Settings and choose a URL slug (for example, `myshop`).
 2. You choose which items to display in the store and set store prices and categories.
-3. Customers visit `https://store.hisaabo.in/myshop` and browse your products.
+3. Customers visit `https://store.fintranzact.com/myshop` and browse your products.
 4. They add items to their cart, fill in their name, phone, delivery address, and submit the order.
 5. You receive the order in Fintranzact's store orders view.
 6. You confirm, prepare, and dispatch the order.
@@ -109,9 +109,7 @@ The customer's name and phone become the party for the invoice. If a party with 
 
 ## Bot protection
 
-For production stores, it is strongly recommended to configure **Cloudflare Turnstile** to prevent bot orders. Set the `TURNSTILE_SECRET_KEY` and `VITE_TURNSTILE_SITE_KEY` environment variables. See [Self-Hosting Setup](/getting-started/self-hosting) for where to get these keys.
-
-Without Turnstile, the checkout form is accessible to automated scripts.
+Every Fintranzact store is protected by **Cloudflare Turnstile**, which blocks automated bot orders at checkout. There is nothing for you to configure.
 
 ## Frequently asked questions
 
@@ -125,4 +123,4 @@ No. Each business has one store. If you need multiple storefronts, create additi
 The `checkSlug` API checks uniqueness across all businesses in your Fintranzact instance. If it is taken and you are the owner of the other business, change that business's slug in its settings.
 
 **Can I customise the store's appearance beyond the accent colour?**
-The storefront template is currently fixed. If you are self-hosting, you can modify the React components in `packages/web` to customise the layout. CSS-level customisation is limited to the accent colour through the settings.
+The storefront template is currently fixed. Customisation is limited to the accent colour, tagline and logo in your store settings.

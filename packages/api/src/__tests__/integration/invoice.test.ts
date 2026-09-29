@@ -2,7 +2,7 @@
  * Integration tests for the invoice router.
  *
  * WHY THIS FILE EXISTS:
- * The invoice router is the most business-critical path in Hisaabo — it
+ * The invoice router is the most business-critical path in Fintranzact — it
  * simultaneously validates party/item ownership, auto-increments the invoice
  * counter atomically, computes fixed-point totals, adjusts item stock, and
  * writes an audit log entry. A single bug in any of these steps can corrupt

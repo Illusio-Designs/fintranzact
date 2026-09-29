@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ─── Hisaabo version bump ─────────────────────────────────────────────────
+# ─── Fintranzact version bump ─────────────────────────────────────────────────
 # Usage: pnpm release <version>
 # Example: pnpm release 0.5.0
 #

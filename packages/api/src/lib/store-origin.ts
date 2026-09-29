@@ -32,9 +32,9 @@ import type { Context } from "hono";
 import { logger } from "./logger.js";
 
 export interface StoreOriginOptions {
-  /** Explicit allow-list of exact origins (e.g., `https://store.hisaabo.in`). */
+  /** Explicit allow-list of exact origins (e.g., `https://store.fintranzact.com`). */
   allowedOrigins: string[];
-  /** Subdomain wildcards — an entry `hisaabo.in` allows any `*.hisaabo.in` host. */
+  /** Subdomain wildcards — an entry `fintranzact.com` allows any `*.fintranzact.com` host. */
   allowedSubdomainsOf?: string[];
   /** When true, allow any `http://localhost:*` origin (dev / self-hosted). */
   allowLocalhost?: boolean;
@@ -63,7 +63,7 @@ export function parseOriginLike(value: string | undefined | null): string | null
 
 /**
  * Explicit subdomain-match helper. Accepts `host` and a `parent` domain
- * (e.g., `hisaabo.in`). Returns true only when `host` is exactly `parent`
+ * (e.g., `fintranzact.com`). Returns true only when `host` is exactly `parent`
  * OR a sub-label of `parent`. Critically, `example.com.attacker.com` does
  * NOT match `example.com` because we require `host` to END with
  * `.${parent}` and NOT contain a stray label after `parent`.
@@ -79,7 +79,7 @@ export function isSubdomainOf(host: string, parent: string): boolean {
 }
 
 /**
- * Low-level predicate — given an origin string like `https://store.hisaabo.in`
+ * Low-level predicate — given an origin string like `https://store.fintranzact.com`
  * and a config, decide whether it is allow-listed.
  */
 export function isOriginAllowed(
@@ -153,7 +153,7 @@ export function isAllowedStoreOrigin(
 /**
  * Read `CORS_ORIGINS` (comma-separated) and `STORE_ALLOWED_ORIGINS`
  * (optional, comma-separated) and merge them into an exact-match list.
- * Both vars may list full origins (e.g., `https://store.hisaabo.in`).
+ * Both vars may list full origins (e.g., `https://store.fintranzact.com`).
  */
 function deriveAllowedOriginsFromEnv(): string[] {
   const out: string[] = [];
@@ -165,7 +165,7 @@ function deriveAllowedOriginsFromEnv(): string[] {
 
 /**
  * `STORE_ALLOWED_SUBDOMAINS_OF` — comma-separated parent domains that
- * accept any subdomain (e.g., `hisaabo.in` covers custom-domain
+ * accept any subdomain (e.g., `fintranzact.com` covers custom-domain
  * storefronts mapped under the SaaS zone).
  */
 function deriveAllowedSubdomainsFromEnv(): string[] {

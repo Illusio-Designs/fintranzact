@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ─── Hisaabo release tag ──────────────────────────────────────────────────
+# ─── Fintranzact release tag ──────────────────────────────────────────────────
 # Usage: pnpm release:tag
 #
 # Reads the version from root package.json, creates a git tag, and pushes

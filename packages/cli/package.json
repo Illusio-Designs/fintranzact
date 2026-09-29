@@ -45,12 +45,9 @@
     "commander": "^13.0.0",
     "conf": "^13.0.0",
     "open": "^10.1.0",
-    "superjson": "^2.2.0",
-    "zod": "^3.24.0"
+    "superjson": "^2.2.0"
   },
   "devDependencies": {
-    "@hisaabo/api": "workspace:*",
-    "@hisaabo/shared": "workspace:*",
     "@types/node": "^22.0.0",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",

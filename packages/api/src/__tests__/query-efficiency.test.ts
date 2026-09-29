@@ -1,5 +1,5 @@
 /**
- * Tests for query efficiency patterns in the Hisaabo API routers.
+ * Tests for query efficiency patterns in the Fintranzact API routers.
  *
  * WHY THIS FILE EXISTS:
  * N+1 query bugs are invisible until production load hits. A router that looks

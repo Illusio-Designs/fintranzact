@@ -1,6 +1,6 @@
 # @hisaabo/web
 
-The main admin dashboard for Hisaabo. A React 19 single-page application that gives business owners and their teams full access to invoicing, inventory, parties, payments, GST reports, and settings.
+The main admin dashboard for Fintranzact. A React 19 single-page application that gives business owners and their teams full access to invoicing, inventory, parties, payments, GST reports, and settings.
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)

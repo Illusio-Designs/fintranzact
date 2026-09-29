@@ -1,5 +1,5 @@
 #!/bin/bash
-# ── Hisaabo Backup Sidecar Entrypoint ───────────────────────────
+# ── Fintranzact Backup Sidecar Entrypoint ───────────────────────────
 # Configures rclone for R2/S3 and sets up cron-based backups.
 set -euo pipefail
 

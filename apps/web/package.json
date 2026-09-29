@@ -26,16 +26,15 @@
     "react": "^19.0.0",
     "react-dom": "^19.2.4",
     "recharts": "^3.8.1",
-    "superjson": "^2.2.0"
+    "superjson": "^2.2.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@hisaabo/api": "workspace:*",
-    "@tanstack/router-devtools": "^1.160.0",
     "@tanstack/router-plugin": "^1.160.0",
     "@testing-library/jest-dom": "^6.0.0",
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.0.0",
-    "@types/jszip": "^3.4.1",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

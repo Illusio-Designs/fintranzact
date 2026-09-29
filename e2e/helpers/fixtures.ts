@@ -1,5 +1,5 @@
 /**
- * fixtures.ts — Custom Playwright test fixtures for Hisaabo E2E tests.
+ * fixtures.ts — Custom Playwright test fixtures for Fintranzact E2E tests.
  *
  * Provides:
  *   - Authenticated page (via storageState from global-setup)

@@ -1,6 +1,6 @@
 # Internal Development Documents
 
-> **Looking for product documentation?** Visit [`apps/docs/`](../apps/docs/) (the Starlight site at [docs.hisaabo.in](https://docs.hisaabo.in)) or [`apps/api-docs/`](../apps/api-docs/) (the API reference at [api-docs.hisaabo.in](https://api-docs.hisaabo.in)).
+> **Looking for product documentation?** Visit [`apps/docs/`](../apps/docs/) (the Starlight site at [docs.fintranzact.com](https://docs.fintranzact.com)) or [`apps/api-docs/`](../apps/api-docs/) (the API reference at [api-docs.fintranzact.com](https://api-docs.fintranzact.com)).
 
 This folder contains **internal architecture documents, audit reports, and design plans** for Fintranzact contributors. These are not user-facing — they document design decisions, security posture, and implementation plans.
 
