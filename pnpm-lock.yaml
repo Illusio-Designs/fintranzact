@@ -41,7 +41,7 @@ importers:
         specifier: ^7.0.0
         version: 7.13.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
     devDependencies:
-      '@hisaabo/api':
+      '@fintranzact/api':
         specifier: workspace:*
         version: link:../../packages/api
       '@tailwindcss/vite':
@@ -93,7 +93,7 @@ importers:
       '@expo/vector-icons':
         specifier: ~15.1.1
         version: 15.1.1(expo-font@55.0.6)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
-      '@hisaabo/shared':
+      '@fintranzact/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@react-native-community/datetimepicker':
@@ -190,7 +190,7 @@ importers:
         specifier: ^5.0.0
         version: 5.0.12(@types/react@19.2.14)(immer@11.1.4)(react@19.2.0)(use-sync-external-store@1.6.0(react@19.2.0))
     devDependencies:
-      '@hisaabo/api':
+      '@fintranzact/api':
         specifier: workspace:*
         version: link:../../packages/api
       '@testing-library/react-native':
@@ -245,7 +245,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@hisaabo/shared':
+      '@fintranzact/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@hugeicons/core-free-icons':
@@ -303,7 +303,7 @@ importers:
         specifier: ^3.24.0
         version: 3.25.76
     devDependencies:
-      '@hisaabo/api':
+      '@fintranzact/api':
         specifier: workspace:*
         version: link:../../packages/api
       '@tanstack/router-plugin':
@@ -366,10 +366,10 @@ importers:
       '@casl/ability':
         specifier: ^6.8.0
         version: 6.8.0
-      '@hisaabo/db':
+      '@fintranzact/db':
         specifier: workspace:*
         version: link:../db
-      '@hisaabo/shared':
+      '@fintranzact/shared':
         specifier: workspace:*
         version: link:../shared
       '@hono/node-server':

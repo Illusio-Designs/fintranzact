@@ -7,7 +7,7 @@ import { Combobox } from "@/components/ui/Combobox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
-import { calcLineItem, calcInvoiceTotals, money } from "@hisaabo/shared";
+import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { QuickPartyCreate } from "@/components/QuickPartyCreate";
 import { QuickItemCreate, type QuickItemCreateResult } from "@/components/QuickItemCreate";
 import { DateInput } from "@/components/ui/DateInput";

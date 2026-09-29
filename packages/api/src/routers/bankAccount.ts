@@ -1,7 +1,7 @@
 import { eq, and, sql, desc, asc } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { bankAccounts, bankTransactions, paymentGatewayConfigs } from "@hisaabo/db";
+import { bankAccounts, bankTransactions, paymentGatewayConfigs } from "@fintranzact/db";
 import {
   createBankAccountSchema,
   updateBankAccountSchema,
@@ -10,7 +10,7 @@ import {
   paginationSchema,
   createPaymentGatewayConfigSchema,
   money,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";

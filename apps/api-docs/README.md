@@ -1,4 +1,4 @@
-# @hisaabo/api-docs
+# @fintranzact/api-docs
 
 The Fintranzact API reference site. A Stripe-style interactive documentation site that documents every tRPC procedure and REST endpoint available in the Fintranzact API, with request/response examples, authentication guides, and error code references.
 
@@ -14,7 +14,7 @@ API reference for the Fintranzact API.
 
 ```bash
 # From monorepo root
-pnpm --filter @hisaabo/api-docs dev
+pnpm --filter @fintranzact/api-docs dev
 
 # Or from this directory
 pnpm dev
@@ -27,7 +27,7 @@ The site starts at `http://localhost:5175` (or the next available port).
 ## Building
 
 ```bash
-pnpm --filter @hisaabo/api-docs build
+pnpm --filter @fintranzact/api-docs build
 # Output: apps/api-docs/dist/
 ```
 
@@ -59,7 +59,7 @@ Deploy `apps/api-docs/dist/` as a static site:
 
 | Setting | Value |
 |---|---|
-| Build command | `pnpm --filter @hisaabo/api-docs build` |
+| Build command | `pnpm --filter @fintranzact/api-docs build` |
 | Output directory | `apps/api-docs/dist` |
 | Node.js version | 20 |
 
@@ -67,6 +67,6 @@ Deploy `apps/api-docs/dist/` as a static site:
 
 ## Relationship to the API
 
-This site imports `@hisaabo/api` as a devDependency to access TypeScript types and router structure. It does not call the live API — all content is statically defined in `src/content/`. When you add or change a procedure in `packages/api`, update the corresponding content file here in the same PR.
+This site imports `@fintranzact/api` as a devDependency to access TypeScript types and router structure. It does not call the live API — all content is statically defined in `src/content/`. When you add or change a procedure in `packages/api`, update the corresponding content file here in the same PR.
 
 The `App.tsx` component renders the sidebar navigation (from `src/content/index.ts`), the endpoint detail panel, and syntax-highlighted code examples via Prism.js.

@@ -1,6 +1,6 @@
 import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import { items, itemVariants } from "@hisaabo/db";
+import { items, itemVariants } from "@fintranzact/db";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";

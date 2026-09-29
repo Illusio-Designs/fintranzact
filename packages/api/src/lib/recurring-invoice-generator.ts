@@ -7,8 +7,8 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import {
   invoices, invoiceItems, items, itemVariants, businesses, parties,
   recurringInvoiceTemplates, recurringInvoiceRuns,
-} from "@hisaabo/db";
-import { calcLineItem, calcInvoiceTotals } from "@hisaabo/shared";
+} from "@fintranzact/db";
+import { calcLineItem, calcInvoiceTotals } from "@fintranzact/shared";
 import type { TenantDatabase } from "../trpc.js";
 
 interface TemplateRow {

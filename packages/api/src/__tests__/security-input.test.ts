@@ -31,7 +31,7 @@ import {
   createInvoiceSchema,
   createPaymentSchema,
   createApiKeySchema,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { escapeLike } from "../lib/escape-like.js";
 import { getLimits } from "../lib/plan-limits.js";
 

@@ -24,7 +24,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
-import { invoices, items as itemsTable } from "@hisaabo/db";
+import { invoices, items as itemsTable } from "@fintranzact/db";
 import {
   createTestWorld,
   createItem,

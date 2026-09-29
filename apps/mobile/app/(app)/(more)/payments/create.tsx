@@ -19,8 +19,8 @@ import { makeStyles } from "../../../../src/lib/makeStyles";
 import { useColors } from "../../../../src/contexts/ThemeContext";
 import { haptic } from "../../../../src/lib/haptics";
 import { DatePickerField } from "../../../../src/components/ui";
-import { calculateGatewayCharge } from "@hisaabo/shared";
-import type { GatewayChargeConfig } from "@hisaabo/shared";
+import { calculateGatewayCharge } from "@fintranzact/shared";
+import type { GatewayChargeConfig } from "@fintranzact/shared";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

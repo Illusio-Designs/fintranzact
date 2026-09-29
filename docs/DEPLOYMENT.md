@@ -3,7 +3,7 @@
 ## Architecture Overview
 
 ```
-                  Cloudflare Pages           Cloudflare Pages
+                  Vercel                     Vercel          
                   +--------------+           +--------------+
    Users -------> | apps/web     |           | apps/store   |
                   | (React SPA)  |           | (Store SPA)  |
@@ -44,19 +44,19 @@
 
 | Workflow | Trigger paths | Action |
 |---|---|---|
-| `deploy-web.yml` | `apps/web/**`, `packages/shared/**`, `packages/api/src/index.ts` | Build web SPA, deploy to Cloudflare Pages |
-| `deploy-store.yml` | `apps/store/**` | Build store SPA, deploy to Cloudflare Pages |
 | `deploy-api.yml` | `packages/api/**`, `packages/db/**`, `packages/shared/**`, `Dockerfile` | Build Docker image, push to GHCR |
+
+The web and store frontends are deployed by Vercel's Git integration (see `apps/web/vercel.json`), not by a GitHub workflow.
 
 ## Environment Variables
 
-### Cloudflare Pages (Web App)
+### Vercel (Web App)
 
 | Variable | Description | Example |
 |---|---|---|
 | `API_URL` | API server URL (build-time) | `${import.meta.env.API_URL}` |
 
-### Cloudflare Pages (Store)
+### Vercel (Store)
 
 | Variable | Description | Example |
 |---|---|---|
@@ -80,13 +80,7 @@
 
 ### GitHub Actions Secrets
 
-| Secret | Used by | Description |
-|---|---|---|
-| `CLOUDFLARE_API_TOKEN` | deploy-web, deploy-store | Cloudflare API token with Pages edit permission |
-| `CLOUDFLARE_ACCOUNT_ID` | deploy-web, deploy-store | Cloudflare account ID |
-| `API_URL` | deploy-web, deploy-store | API URL injected at build time |
-
-Note: `GITHUB_TOKEN` is provided automatically by GitHub Actions for GHCR pushes.
+No extra secrets are needed: `GITHUB_TOKEN` is provided automatically by GitHub Actions for GHCR pushes. Frontend build variables such as `API_URL` are set in the Vercel project settings.
 
 ## Self-Hosting with Docker Compose
 

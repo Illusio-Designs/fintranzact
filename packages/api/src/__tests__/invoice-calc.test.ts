@@ -3,7 +3,7 @@
  *
  * WHY THIS FILE EXISTS:
  * The invoice router (routers/invoice.ts) uses calcLineItem and calcInvoiceTotals
- * from @hisaabo/shared to compute totals before inserting them into the database.
+ * from @fintranzact/shared to compute totals before inserting them into the database.
  * These tests verify the complete calculation chain that an invoice create/update
  * call would execute, including stock adjustment logic.
  *
@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { calcLineItem } from "@hisaabo/shared";
+import { calcLineItem } from "@fintranzact/shared";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Invoice number formatting — padded to 5 digits

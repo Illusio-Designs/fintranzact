@@ -18,7 +18,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
-import { invoices, bankAccounts, paymentAllocations } from "@hisaabo/db";
+import { invoices, bankAccounts, paymentAllocations } from "@fintranzact/db";
 import {
   createTestWorld,
   createBankAccount,

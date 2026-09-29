@@ -8,8 +8,8 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { Icon } from "@/components/ui/Icon";
 import { Tick02Icon, MinusSignIcon } from "@hugeicons/core-free-icons";
-import { calculateGatewayCharge } from "@hisaabo/shared";
-import type { GatewayChargeConfig } from "@hisaabo/shared";
+import { calculateGatewayCharge } from "@fintranzact/shared";
+import type { GatewayChargeConfig } from "@fintranzact/shared";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

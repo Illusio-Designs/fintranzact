@@ -1,5 +1,5 @@
-import { units } from "@hisaabo/shared";
-import type { Unit } from "@hisaabo/shared";
+import { units } from "@fintranzact/shared";
+import type { Unit } from "@fintranzact/shared";
 
 // Map MyBillBook (and common variant) unit codes to our canonical units
 const mapping: Record<string, Unit> = {

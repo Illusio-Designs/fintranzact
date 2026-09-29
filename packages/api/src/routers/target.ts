@@ -1,7 +1,7 @@
 import { eq, and, sql, desc, gte, lte, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { salesTargets, invoices, invoiceItems } from "@hisaabo/db";
+import { salesTargets, invoices, invoiceItems } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";

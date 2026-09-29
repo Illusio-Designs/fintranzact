@@ -266,7 +266,7 @@ The PIN hash uses a 32-bit integer XOR hash (not cryptographically strong). The 
 - **Item with variants**: When a variant item is selected on web (ItemCreator), the user picks a specific variant (attribute combination). `variantId` is sent in the line item; `conversionFactor` is set to `"1"` (variants have no conversion factor).
 - **Item with alt units**: User can select a non-base unit from `item.unitVariants`. `selectedUnit` and `conversionFactor` are sent. Stock is decremented in base unit equivalents.
 - **Simple text line item (no itemId)**: User types a description with no item linked. No stock adjustment is made. `itemId` is null in the database.
-- **Invoice discount**: Applied as either a flat amount or a percentage of subtotal. Calculation handled by `calcInvoiceTotals()` in `@hisaabo/shared`.
+- **Invoice discount**: Applied as either a flat amount or a percentage of subtotal. Calculation handled by `calcInvoiceTotals()` in `@fintranzact/shared`.
 - **Draft status**: A `status: "draft"` invoice can be created by choosing to save as draft. Draft invoices: not included in receivables balance, not counted in sales totals.
 - **Purchase vs sale**: `type: "purchase"` increments stock instead of decrementing. Party type should be supplier.
 

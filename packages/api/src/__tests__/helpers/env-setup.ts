@@ -3,7 +3,7 @@
  *
  * WHY THIS FILE EXISTS:
  * vitest setupFiles run before any test module is imported. That means the
- * process.env mutations below take effect before @hisaabo/db creates its
+ * process.env mutations below take effect before @fintranzact/db creates its
  * postgres.js clients (which happen at module evaluation time). This is the
  * ONLY safe place to redirect DB connections for tests — anywhere later and
  * the production clients are already open.

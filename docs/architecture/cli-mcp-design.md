@@ -35,16 +35,16 @@ If each package has its own HTTP layer, credential handling and error translatio
 get duplicated. The two packages will inevitably drift.
 
 ### Decision
-Introduce `packages/client` — a zero-dependency (except `@hisaabo/shared`) typed
+Introduce `packages/client` — a zero-dependency (except `@fintranzact/shared`) typed
 HTTP client. It is **not** a tRPC client. It calls the tRPC HTTP endpoints directly
 using `fetch`, avoiding the `@trpc/client` dependency and its React-Query coupling.
 
-The `AppRouter` type from `@hisaabo/api` is imported as a **devDependency only**
+The `AppRouter` type from `@fintranzact/api` is imported as a **devDependency only**
 (type-level import) so that the client package never pulls in Hono, PDFKit, Argon2,
 etc. at runtime.
 
 ### Consequences
-- CLI and MCP have one import: `import { HisaaboClient } from "@hisaabo/client"`.
+- CLI and MCP have one import: `import { HisaaboClient } from "@fintranzact/client"`.
 - Adding a new API procedure means adding one method to `HisaaboClient` — one change
   propagates to both consumers.
 - A third consumer (e.g., a webhook processor) gets the same client for free.
@@ -68,7 +68,7 @@ Keep them separate (`packages/cli` and `packages/mcp`). The reasons:
    CLI pulls in `commander` and `cli-table3`. These dependencies have no overlap and
    should not be bundled together.
 2. **Distribution path**: The CLI is published as `hisaabo` on npm, installable via
-   `npm install -g hisaabo`. The MCP server is published as `@hisaabo/mcp`, invoked
+   `npm install -g hisaabo`. The MCP server is published as `@fintranzact/mcp`, invoked
    via `npx`. Different publish targets.
 3. **Version cadence**: A new CLI flag does not require bumping the MCP server version
    and vice versa. Independent versioning keeps changelogs clean.
@@ -216,7 +216,7 @@ The error is returned as the tool's `content` array with `isError: true`.
 The `message` field in each error type is a plain English sentence that an agent
 can include in its response to the user without transformation.
 
-Zod validation errors from `@hisaabo/shared` (which the CLI also uses before
+Zod validation errors from `@fintranzact/shared` (which the CLI also uses before
 sending) are translated to `validation_failed` with a per-field message map.
 
 ### Consequences
@@ -360,7 +360,7 @@ hisaabo/
 
 ```json
 {
-  "name": "@hisaabo/client",
+  "name": "@fintranzact/client",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -371,25 +371,25 @@ hisaabo/
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hisaabo/shared": "workspace:*",
+    "@fintranzact/shared": "workspace:*",
     "superjson": "^2.2.0"
   },
   "devDependencies": {
-    "@hisaabo/api": "workspace:*",
+    "@fintranzact/api": "workspace:*",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"
   }
 }
 ```
 
-Note: `@hisaabo/api` is a devDependency only. Its `AppRouter` type is imported with
+Note: `@fintranzact/api` is a devDependency only. Its `AppRouter` type is imported with
 `import type` — it is erased at compile time and never appears in the runtime bundle.
 
 ### `src/client.ts` — skeleton
 
 ```typescript
 import superjson from "superjson";
-import type { AppRouter } from "@hisaabo/api";
+import type { AppRouter } from "@fintranzact/api";
 import type { inferRouterOutputs, inferRouterInputs } from "@trpc/server";
 
 // tRPC input/output inference from the router type — no runtime dependency on @trpc/server.
@@ -524,7 +524,7 @@ export function invoiceProcedures(client: HisaaboClient) {
 
 ```json
 {
-  "name": "@hisaabo/cli",
+  "name": "@fintranzact/cli",
   "version": "0.1.0",
   "private": false,
   "type": "module",
@@ -537,8 +537,8 @@ export function invoiceProcedures(client: HisaaboClient) {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hisaabo/client": "workspace:*",
-    "@hisaabo/shared": "workspace:*",
+    "@fintranzact/client": "workspace:*",
+    "@fintranzact/shared": "workspace:*",
     "commander": "^12.0.0",
     "inquirer": "^10.0.0",
     "cli-table3": "^0.6.5",
@@ -727,7 +727,7 @@ This is a deliberate non-negotiable. AI agents that invoke the CLI subprocess
 
 ```json
 {
-  "name": "@hisaabo/mcp",
+  "name": "@fintranzact/mcp",
   "version": "0.1.0",
   "private": false,
   "type": "module",
@@ -740,8 +740,8 @@ This is a deliberate non-negotiable. AI agents that invoke the CLI subprocess
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hisaabo/client": "workspace:*",
-    "@hisaabo/shared": "workspace:*",
+    "@fintranzact/client": "workspace:*",
+    "@fintranzact/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {
@@ -758,7 +758,7 @@ This is a deliberate non-negotiable. AI agents that invoke the CLI subprocess
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { HisaaboClient } from "@hisaabo/client";
+import { HisaaboClient } from "@fintranzact/client";
 import { registerTools } from "./server.js";
 
 // All config comes from environment variables — no file system dependency.
@@ -789,7 +789,7 @@ function requireEnv(name: string): string {
 ```typescript
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { HisaaboClient } from "@hisaabo/client";
+import type { HisaaboClient } from "@fintranzact/client";
 import { registerInvoiceTools } from "./tools/invoice.js";
 import { registerPartyTools } from "./tools/party.js";
 import { registerItemTools } from "./tools/item.js";
@@ -840,14 +840,14 @@ export function registerTools(server: McpServer, client: HisaaboClient) {
 ### MCP Tool Definitions
 
 The MCP SDK uses Zod schemas for input validation. The schemas below are derived
-from `@hisaabo/shared` validators, constrained further for MCP consumption.
+from `@fintranzact/shared` validators, constrained further for MCP consumption.
 
 #### `src/tools/invoice.ts`
 
 ```typescript
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { HisaaboClient } from "@hisaabo/client";
+import type { HisaaboClient } from "@fintranzact/client";
 import { MAX_PAGE_SIZE } from "../lib/pagination.js";
 import { wrapTool } from "../lib/errors.js";
 
@@ -1198,7 +1198,7 @@ export function registerResources(server: McpServer, client: HisaaboClient) {
 
 ```typescript
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { HisaaboError } from "@hisaabo/client";
+import type { HisaaboError } from "@fintranzact/client";
 
 type ToolHandler<T> = (input: T) => Promise<CallToolResult>;
 
@@ -1278,7 +1278,7 @@ the cookie. This is the only required change to the existing API.
 ### MCP server startup
 
 ```
-npx @hisaabo/mcp
+npx @fintranzact/mcp
 # env: HISAABO_API_KEY, HISAABO_TENANT_ID, HISAABO_BUSINESS_ID, HISAABO_API_URL
 
 All requests set: Authorization: Bearer $HISAABO_API_KEY
@@ -1298,7 +1298,7 @@ if any are missing. It does not attempt a lazy login.
   "mcpServers": {
     "hisaabo": {
       "command": "npx",
-      "args": ["@hisaabo/mcp"],
+      "args": ["@fintranzact/mcp"],
       "env": {
         "HISAABO_API_URL": "http://localhost:3000",
         "HISAABO_API_KEY": "<session-id-from-hisaabo-login>",
@@ -1521,8 +1521,8 @@ includes an inline copy of the HTTP client in `src/client.ts`. When `packages/cl
 is built, replace the import in `src/client.ts` with:
 
 ```typescript
-export { HisaaboClient, HisaaboApiError, formatHisaaboError } from "@hisaabo/client";
-export type { HisaaboError, ClientConfig, /* domain types */ } from "@hisaabo/client";
+export { HisaaboClient, HisaaboApiError, formatHisaaboError } from "@fintranzact/client";
+export type { HisaaboError, ClientConfig, /* domain types */ } from "@fintranzact/client";
 ```
 
 The inline client is architecturally identical to the design in ADR-001.

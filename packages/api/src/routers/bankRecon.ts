@@ -24,7 +24,7 @@ import {
   payments,
   expenses,
   bankTransactions,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   bankReconColumnMappingSchema,
   confirmBankMappingSchema,
@@ -32,7 +32,7 @@ import {
   paginationSchema,
   createExpenseSchema,
   money,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure, type TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";

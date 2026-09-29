@@ -3,7 +3,7 @@
  * resolution logic that crashed production.
  *
  * BACKGROUND:
- *   packages/api/tsup.config.ts inlines @hisaabo/db into packages/api/dist/.
+ *   packages/api/tsup.config.ts inlines @fintranzact/db into packages/api/dist/.
  *   Before the fix, migrate.ts used `resolve(__dirname, "..", "drizzle-tenant")`
  *   which pointed at /app/packages/api/drizzle-tenant/ (nonexistent) inside
  *   the bundled runtime, causing the first user's magic-link verify to crash
@@ -28,7 +28,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildMigrationsDirCandidates,
   pickExistingMigrationsDir,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 
 const SUB = "drizzle-tenant";
 
@@ -59,7 +59,7 @@ describe("buildMigrationsDirCandidates", () => {
   });
 
   it("includes the api/dist → db hop as a fallback for the bundled-API layout", () => {
-    // This is the production-crash case: @hisaabo/db inlined into api/dist,
+    // This is the production-crash case: @fintranzact/db inlined into api/dist,
     // __dirname = /app/packages/api/dist. The hop `/app/packages/api/dist/../../db`
     // resolves to `/app/packages/db` — matches where the Dockerfile ships
     // migrations.

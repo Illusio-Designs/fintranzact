@@ -35,7 +35,7 @@ import {
   chartOfAccounts,
   journalEntries,
   journalEntryLines,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import { buildBusinessDateFilter } from "./business-date.js";
 
 // ── Public types ────────────────────────────────────────────────

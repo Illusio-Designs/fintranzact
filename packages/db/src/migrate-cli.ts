@@ -7,7 +7,7 @@
  * migration runner as a side effect.
  *
  * Invoked via:
- *   - pnpm --filter @hisaabo/db migrate         (dev / CI, via tsx)
+ *   - pnpm --filter @fintranzact/db migrate         (dev / CI, via tsx)
  *   - node packages/db/dist/migrate.mjs         (Docker runtime, esbuild bundle)
  */
 

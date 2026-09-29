@@ -1720,7 +1720,7 @@ export const warehousePermissionsRelations = relations(
 // which is a row-insertion timestamp and unrelated to the business event.
 //
 // When adding a new document table with a user-entered date, register it here
-// and prefer the `buildBusinessDateFilter` helper in `@hisaabo/api` over
+// and prefer the `buildBusinessDateFilter` helper in `@fintranzact/api` over
 // hand-written `gte`/`lte` on the column.
 
 export type BusinessDateTable =

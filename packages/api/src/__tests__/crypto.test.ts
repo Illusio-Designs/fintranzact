@@ -25,7 +25,7 @@ import {
   getKeyVersion,
   encryptDbPassword,
   decryptDbPassword,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   encryptEInvoiceConfig,
   decryptEInvoiceConfig,

@@ -1,5 +1,5 @@
 import { gte, lte, type SQL, type SQLWrapper } from "drizzle-orm";
-import { businessDateColumnFor, type BusinessDateTable } from "@hisaabo/db";
+import { businessDateColumnFor, type BusinessDateTable } from "@fintranzact/db";
 
 /**
  * A value accepted as the lower or upper bound of a business-date range.

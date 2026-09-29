@@ -1,4 +1,4 @@
-import { auditLog } from "@hisaabo/db";
+import { auditLog } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 
 export async function logAudit(

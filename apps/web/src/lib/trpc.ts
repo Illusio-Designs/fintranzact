@@ -2,7 +2,7 @@ import { createTRPCReact } from "@trpc/react-query";
 import { httpBatchLink, splitLink, httpLink } from "@trpc/client";
 import { QueryClient, QueryCache } from "@tanstack/react-query";
 import superjson from "superjson";
-import type { AppRouter } from "@hisaabo/api";
+import type { AppRouter } from "@fintranzact/api";
 import { isDesktop } from "./isDesktop";
 import { ensureAccessToken } from "./desktop-session";
 

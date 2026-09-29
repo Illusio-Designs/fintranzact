@@ -11,7 +11,7 @@
  * and null/undefined fields.
  */
 
-import { encryptField, decryptField } from "@hisaabo/db";
+import { encryptField, decryptField } from "@fintranzact/db";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 

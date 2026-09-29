@@ -7,7 +7,7 @@
  *   - web-only:      Must NOT import ForMobile (content is desktop/web only)
  *   - shared:        Platform-agnostic reference — no blocks expected
  *
- * Run: pnpm --filter @hisaabo/docs check:platform
+ * Run: pnpm --filter @fintranzact/docs check:platform
  */
 
 import { readFileSync, readdirSync, statSync } from "fs";

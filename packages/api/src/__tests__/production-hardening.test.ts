@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { money } from "@hisaabo/shared";
+import { money } from "@fintranzact/shared";
 
 // =============================================================================
 // 1. DOCUMENT COUNTER ISOLATION
@@ -39,7 +39,7 @@ describe("P1: Document counter isolation — each document type has its own coun
     // Import the factory to access the bizColumns mapping indirectly.
     // The test verifies that creating a DocumentRouterConfig for debit_note
     // will use a different counter than credit_note.
-    const { businesses } = await import("@hisaabo/db");
+    const { businesses } = await import("@fintranzact/db");
 
     // Verify that distinct columns exist for each document type
     expect(businesses.debitNotePrefix).toBeDefined();
@@ -57,7 +57,7 @@ describe("P1: Document counter isolation — each document type has its own coun
   });
 
   it("default prefixes are distinct across document types", async () => {
-    const { businesses } = await import("@hisaabo/db");
+    const { businesses } = await import("@fintranzact/db");
     // Verify defaults via column config
     const cnDefault = (businesses.creditNotePrefix as any).default;
     const dnDefault = (businesses.debitNotePrefix as any).default;
@@ -289,7 +289,7 @@ describe("P1: PDF worker semaphore", () => {
 // =============================================================================
 describe("P1: Partial indexes on soft-delete columns", () => {
   it("invoices table has partial index for active records", async () => {
-    const schema = await import("@hisaabo/db");
+    const schema = await import("@fintranzact/db");
     // The Drizzle table definition should include the partial indexes.
     // We verify the table config includes our new indexes by checking
     // that the table has a deletedAt column (prerequisite for partial indexes).

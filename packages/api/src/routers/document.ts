@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { invoices, invoiceItems } from "@hisaabo/db";
-import { convertDocumentSchema, createInvoiceSchema, type DocumentType } from "@hisaabo/shared";
+import { invoices, invoiceItems } from "@fintranzact/db";
+import { convertDocumentSchema, createInvoiceSchema, type DocumentType } from "@fintranzact/shared";
 import { router, memberProcedure, createCallerFactory } from "../trpc.js";
 import { createDocumentRouter } from "../lib/document-router-factory.js";
 import { logAudit } from "../lib/audit.js";

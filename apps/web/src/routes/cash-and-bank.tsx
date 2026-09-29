@@ -21,7 +21,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { useDebounce } from "@/hooks/useDebounce";
 import { toast } from "@/hooks/useToast";
 import { getDatePreset } from "@/hooks/useDateRange";
-import type { GatewayChargeConfig } from "@hisaabo/shared";
+import type { GatewayChargeConfig } from "@fintranzact/shared";
 
 export const Route = createFileRoute("/cash-and-bank")({
   component: CashAndBankPage,

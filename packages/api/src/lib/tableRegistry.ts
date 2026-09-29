@@ -35,7 +35,7 @@ import {
   auditLog,
   gstr2bUploads,
   gstr2bRecords,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 
 /**
  * Describes how a table is scoped to a set of business IDs during export.

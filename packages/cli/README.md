@@ -1,8 +1,8 @@
-# @hisaabo/cli
+# @fintranzact/cli
 
 Terminal-first invoicing and business management for Indian businesses. Manage invoices, parties, items, payments, expenses, GST reports, and more -- all from the command line.
 
-[![npm](https://img.shields.io/npm/v/@hisaabo/cli?logo=npm&logoColor=white&label=@hisaabo/cli)](https://www.npmjs.com/package/@hisaabo/cli)
+[![npm](https://img.shields.io/npm/v/@fintranzact/cli?logo=npm&logoColor=white&label=@fintranzact/cli)](https://www.npmjs.com/package/@fintranzact/cli)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 
 **What this does:** Run `hisaabo invoice list --this-month` and get a formatted table of every invoice your business issued this month. Run `hisaabo gst r3b --quarter Q4` and get your GSTR-3B numbers ready for filing. Pipe any command to `jq` or a spreadsheet with `--json`, `--format csv`, or `--format tsv`.
@@ -12,7 +12,7 @@ Terminal-first invoicing and business management for Indian businesses. Manage i
 ## Quick Start
 
 ```bash
-npm install -g @hisaabo/cli
+npm install -g @fintranzact/cli
 ```
 
 **Log in interactively:**
@@ -316,13 +316,13 @@ All subsequent commands operate on the active business. The `dashboard`, `invoic
 pnpm install
 
 # Run the CLI in dev mode (no build step needed)
-pnpm --filter @hisaabo/cli dev -- invoice list
+pnpm --filter @fintranzact/cli dev -- invoice list
 
 # Build
-pnpm --filter @hisaabo/cli build
+pnpm --filter @fintranzact/cli build
 
 # Type-check
-pnpm --filter @hisaabo/cli typecheck
+pnpm --filter @fintranzact/cli typecheck
 ```
 
 For local development, point at your local API:

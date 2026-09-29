@@ -30,7 +30,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { businesses, itcLedgerEntries, itcUtilizations } from "@hisaabo/db";
+import { businesses, itcLedgerEntries, itcUtilizations } from "@fintranzact/db";
 import {
   createTestWorld,
   createParty,
@@ -45,7 +45,7 @@ import {
   closeTestDb,
 } from "../helpers/test-db.js";
 import { seedChartOfAccounts } from "../../lib/coa-seed.js";
-import { money } from "@hisaabo/shared";
+import { money } from "@fintranzact/shared";
 
 // ── Fixture ──────────────────────────────────────────────────────────────────
 

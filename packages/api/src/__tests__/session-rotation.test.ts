@@ -37,7 +37,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // vi.mock is hoisted above top-level `const` declarations.
 // ─────────────────────────────────────────────────────────────────────────
 
-vi.mock("@hisaabo/db", () => {
+vi.mock("@fintranzact/db", () => {
   const returning = vi.fn();
   const where = vi.fn(() => ({ returning }));
   const del = vi.fn(() => ({ where }));
@@ -58,7 +58,7 @@ vi.mock("../context.js", () => ({
 // Import AFTER mocks are registered — vitest hoists the vi.mock calls
 // above imports, but the helper below needs the mocked module graph.
 import { rotateSessionsOnPrivilegeEvent } from "../lib/session-rotation.js";
-import { controlDb } from "@hisaabo/db";
+import { controlDb } from "@fintranzact/db";
 import { revokeAllUserSessions, invalidateSessionCache } from "../context.js";
 
 // Extract the mock handles from the mocked module. The cast through

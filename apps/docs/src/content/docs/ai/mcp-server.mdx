@@ -23,7 +23,7 @@ Log in to your Fintranzact dashboard and run the CLI `whoami` command to get all
 
 ```bash
 # Install the CLI first (one-time)
-npm install -g @hisaabo/cli
+npm install -g @fintranzact/cli
 
 # Authenticate
 hisaabo login
@@ -73,7 +73,7 @@ Add the `hisaabo` entry using the values from `hisaabo whoami --json`:
   "mcpServers": {
     "hisaabo": {
       "command": "npx",
-      "args": ["@hisaabo/mcp"],
+      "args": ["@fintranzact/mcp"],
       "env": {
         "HISAABO_API_URL": "https://your-hisaabo-instance.com",
         "HISAABO_API_KEY": "sess_VbK2mQ9xP4nR7wA1...",
@@ -259,7 +259,7 @@ See [Integrations](/ai/integrations/) for detailed implementation guides for eac
 
 - A Fintranzact account ([sign up](https://fintranzact-web.vercel.app/login?mode=register))
 - Node.js 20+ on the machine where the MCP client (Claude Desktop) runs
-- The Fintranzact CLI installed (`npm install -g @hisaabo/cli`) for getting credentials
+- The Fintranzact CLI installed (`npm install -g @fintranzact/cli`) for getting credentials
 
 ---
 
@@ -321,7 +321,7 @@ hisaabo login
   "mcpServers": {
     "hisaabo": {
       "command": "npx",
-      "args": ["@hisaabo/mcp"],
+      "args": ["@fintranzact/mcp"],
       "env": {
         "HISAABO_API_URL": "https://your-hisaabo-instance.com",
         "HISAABO_API_KEY": "sess_VbK2mQ9xP4nR7wA1...",
@@ -358,7 +358,7 @@ OpenClaw agents connect to stdio-based MCP servers by launching them as a subpro
 mcp_servers:
   - name: hisaabo
     command: npx
-    args: ["@hisaabo/mcp"]
+    args: ["@fintranzact/mcp"]
     env:
       HISAABO_API_URL: "https://your-hisaabo-instance.com"
       HISAABO_API_KEY: "sess_VbK2mQ9xP4nR7wA1..."

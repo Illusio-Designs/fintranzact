@@ -1,5 +1,5 @@
 {
-  "name": "@hisaabo/api-docs",
+  "name": "@fintranzact/api-docs",
   "version": "0.9.0",
   "private": true,
   "scripts": {
@@ -15,7 +15,7 @@
     "react-router-dom": "^7.0.0"
   },
   "devDependencies": {
-    "@hisaabo/api": "workspace:*",
+    "@fintranzact/api": "workspace:*",
     "@tailwindcss/vite": "^4.0.0",
     "@types/prismjs": "^1.26.0",
     "@types/react": "~19.2.0",

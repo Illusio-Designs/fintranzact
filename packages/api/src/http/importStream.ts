@@ -18,7 +18,7 @@ import { createGunzip } from "node:zlib";
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import type { Hono } from "hono";
-import { getTenantDb, businesses } from "@hisaabo/db";
+import { getTenantDb, businesses } from "@fintranzact/db";
 import { count as sqlCount } from "drizzle-orm";
 import { verifyImportToken } from "../lib/importToken.js";
 import { importTenantBackup } from "../lib/importEngine.js";

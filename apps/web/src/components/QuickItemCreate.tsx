@@ -3,7 +3,7 @@ import { Modal } from "@/components/ui/Modal";
 import { InputField, SelectField } from "@/components/ui/FormField";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
-import { units, type Unit } from "@hisaabo/shared";
+import { units, type Unit } from "@fintranzact/shared";
 
 export interface QuickItemCreateResult {
   id: string;

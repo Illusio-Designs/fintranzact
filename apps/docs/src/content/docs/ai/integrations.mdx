@@ -401,7 +401,7 @@ description: "Customer service agent for Fintranzact online store"
 mcp_servers:
   - name: hisaabo
     command: npx
-    args: ["@hisaabo/mcp"]
+    args: ["@fintranzact/mcp"]
     env:
       HISAABO_API_URL: "https://your-hisaabo-instance.com"
       HISAABO_API_KEY: "sess_..."
@@ -444,7 +444,7 @@ schedule: "0 9 * * 1"  # Every Monday at 9 AM
 mcp_servers:
   - name: hisaabo
     command: npx
-    args: ["@hisaabo/mcp"]
+    args: ["@fintranzact/mcp"]
     env:
       HISAABO_API_URL: "https://your-hisaabo-instance.com"
       HISAABO_API_KEY: "sess_..."
@@ -482,7 +482,7 @@ description: "CA agent with read-only access to client businesses"
 mcp_servers:
   - name: client-sharma-traders
     command: npx
-    args: ["@hisaabo/mcp"]
+    args: ["@fintranzact/mcp"]
     env:
       HISAABO_API_URL: "https://your-hisaabo-instance.com"
       HISAABO_API_KEY: "sess_client1_token..."
@@ -490,7 +490,7 @@ mcp_servers:
       HISAABO_BUSINESS_ID: "sharma-traders-business-uuid"
   - name: client-gupta-enterprises
     command: npx
-    args: ["@hisaabo/mcp"]
+    args: ["@fintranzact/mcp"]
     env:
       HISAABO_API_URL: "https://your-hisaabo-instance.com"
       HISAABO_API_KEY: "sess_client2_token..."
@@ -498,7 +498,7 @@ mcp_servers:
       HISAABO_BUSINESS_ID: "gupta-enterprises-business-uuid"
   - name: client-vinod-sons
     command: npx
-    args: ["@hisaabo/mcp"]
+    args: ["@fintranzact/mcp"]
     env:
       HISAABO_API_URL: "https://your-hisaabo-instance.com"
       HISAABO_API_KEY: "sess_client3_token..."
@@ -521,7 +521,7 @@ The CA can now ask: "What's the combined GST liability for all three clients thi
 
 If you have a use case not covered here, the [API for AI agents](/ai/#api-for-ai-agents) section of the overview shows how to call the Fintranzact tRPC API directly from any language.
 
-For TypeScript integrations, import `AppRouter` from `@hisaabo/api` as a devDependency for full end-to-end type safety — your editor will autocomplete every field, every filter, every response shape.
+For TypeScript integrations, import `AppRouter` from `@fintranzact/api` as a devDependency for full end-to-end type safety — your editor will autocomplete every field, every filter, every response shape.
 
 For read-heavy integrations (reporting, dashboards, syncs), use the CLI's `--json` output and pipe it into your processing layer. It is simpler, more debuggable, and easier to maintain than building an API client from scratch.
 

@@ -9,13 +9,13 @@ import {
   chartOfAccounts,
   journalEntries,
   journalEntryLines,
-} from "@hisaabo/db";
+} from "@fintranzact/db";
 import {
   markItcBlockedSchema,
   markItcEligibleSchema,
   recordItcUtilizationSchema,
   money,
-} from "@hisaabo/shared";
+} from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 

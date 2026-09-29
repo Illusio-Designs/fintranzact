@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { units } from "@hisaabo/shared";
+import { units } from "@fintranzact/shared";
 
 // ── Money string: allows integers ("0", "100"), decimals ("10.50"), and negatives ──
 const moneyString = z
