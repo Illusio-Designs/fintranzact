@@ -1,14 +1,28 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, count, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
-import { controlDb, getTenantDb, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts } from "@fintranzact/db";
+import { and, asc, count, desc, eq, gte, ilike, inArray, max, or, sql } from "drizzle-orm";
+import { controlDb, getTenantDb, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts, roadmapItems } from "@fintranzact/db";
 import { ensureReferralCode, getPartnerStats } from "../lib/partner-program.js";
 import { emailService } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
 import { PLAN_DEFAULTS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema } from "@fintranzact/shared";
+import {
+  roadmapStatuses,
+  roadmapListSchema,
+  roadmapCreateSchema,
+  roadmapUpdateSchema,
+  roadmapDeleteSchema,
+  roadmapReorderSchema,
+  roadmapLaunchStages,
+  type RoadmapStatus,
+  type RoadmapLaunchStage,
+  type RoadmapPriority,
+  type RoadmapBilling,
+} from "@fintranzact/shared";
 import { getPlanCatalog, invalidatePlanCatalog } from "../lib/plan-catalog.js";
 import { router, protectedProcedure } from "../trpc.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { ensureRoadmapSeeded } from "../lib/roadmap.js";
 import { isPlatformAdmin } from "../lib/platform-admin.js";
 
 /**
@@ -470,4 +484,110 @@ export const platformRouter = router({
       if (!row) throw new TRPCError({ code: "BAD_REQUEST", message: "Only a pending payout can be removed" });
       return row;
     }),
+
+  // ── Upcoming features (roadmap) ──────────────────────────────
+
+  /** The roadmap board, in board order, with a count per status and every category in use. */
+  roadmapList: platformAdminProcedure.input(roadmapListSchema).query(async ({ input }) => {
+    await ensureRoadmapSeeded();
+    const term = input.search ? `%${escapeLike(input.search)}%` : null;
+    const searchFilter = term
+      ? or(ilike(roadmapItems.title, term), ilike(roadmapItems.description, term), ilike(roadmapItems.category, term))
+      : undefined;
+    const categoryFilter = input.category ? ilike(roadmapItems.category, escapeLike(input.category)) : undefined;
+    const stageFilter = input.launchStage ? eq(roadmapItems.launchStage, input.launchStage) : undefined;
+    // Status counts follow the other filters, not the status itself, so the
+    // columns/tabs stay meaningful; stage counts likewise ignore the stage.
+    const baseFilter = and(searchFilter, categoryFilter, stageFilter);
+    const [rows, byStatus, byStage, categories] = await Promise.all([
+      controlDb
+        .select()
+        .from(roadmapItems)
+        .where(and(baseFilter, input.status ? eq(roadmapItems.status, input.status) : undefined))
+        .orderBy(
+          // Before-launch work first, then high → medium → low, then the admins' own order.
+          sql`CASE WHEN ${roadmapItems.launchStage} = 'before_launch' THEN 0 ELSE 1 END`,
+          sql`CASE ${roadmapItems.priority} WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END`,
+          asc(roadmapItems.sortOrder),
+          asc(roadmapItems.createdAt),
+        ),
+      controlDb.select({ status: roadmapItems.status, n: count() }).from(roadmapItems).where(baseFilter).groupBy(roadmapItems.status),
+      controlDb
+        .select({ stage: roadmapItems.launchStage, n: count() })
+        .from(roadmapItems)
+        .where(and(searchFilter, categoryFilter, input.status ? eq(roadmapItems.status, input.status) : undefined))
+        .groupBy(roadmapItems.launchStage),
+      controlDb.selectDistinct({ category: roadmapItems.category }).from(roadmapItems).orderBy(asc(roadmapItems.category)),
+    ]);
+    return {
+      data: rows.map(roadmapForAdmin),
+      counts: Object.fromEntries(roadmapStatuses.map((s) => [s, byStatus.find((b) => b.status === s)?.n ?? 0])) as Record<
+        RoadmapStatus,
+        number
+      >,
+      stageCounts: Object.fromEntries(roadmapLaunchStages.map((s) => [s, byStage.find((b) => b.stage === s)?.n ?? 0])) as Record<
+        RoadmapLaunchStage,
+        number
+      >,
+      categories: categories.map((c) => c.category),
+    };
+  }),
+
+  /** Add a feature to the board, at the end. */
+  roadmapCreate: platformAdminProcedure.input(roadmapCreateSchema).mutation(async ({ input, ctx }) => {
+    const [last] = await controlDb.select({ n: max(roadmapItems.sortOrder) }).from(roadmapItems);
+    const [row] = await controlDb
+      .insert(roadmapItems)
+      .values({ ...input, sortOrder: (last?.n ?? -1) + 1, createdByUserId: ctx.user.id })
+      .returning();
+    return roadmapForAdmin(row!);
+  }),
+
+  /** Edit a feature: any of its fields, its status, or ticks on its checklist. */
+  roadmapUpdate: platformAdminProcedure.input(roadmapUpdateSchema).mutation(async ({ input }) => {
+    const { id, ...changes } = input;
+    const set = Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)) as Partial<
+      typeof roadmapItems.$inferInsert
+    >;
+    if (set.priceNote === "") set.priceNote = null;
+    const [row] = await controlDb
+      .update(roadmapItems)
+      .set({ ...set, updatedAt: new Date() })
+      .where(eq(roadmapItems.id, id))
+      .returning();
+    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Feature not found" });
+    return roadmapForAdmin(row);
+  }),
+
+  /** Remove a feature from the board. */
+  roadmapDelete: platformAdminProcedure.input(roadmapDeleteSchema).mutation(async ({ input }) => {
+    const [row] = await controlDb.delete(roadmapItems).where(eq(roadmapItems.id, input.id)).returning({ id: roadmapItems.id });
+    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Feature not found" });
+    return row;
+  }),
+
+  /** Put features in a new order; the first id is shown first. */
+  roadmapReorder: platformAdminProcedure.input(roadmapReorderSchema).mutation(async ({ input }) => {
+    const ids = [...new Set(input.ids)];
+    const list = sql`ARRAY[${sql.join(ids.map((id) => sql`${id}`), sql`, `)}]::uuid[]`;
+    // One statement: each id's position in the list (from 0) becomes its sort order.
+    const updated = await controlDb.execute(sql`
+      UPDATE roadmap_items SET sort_order = v.ord - 1
+      FROM unnest(${list}) WITH ORDINALITY AS v(id, ord)
+      WHERE roadmap_items.id = v.id
+      RETURNING roadmap_items.id`);
+    return { count: updated.length };
+  }),
 });
+
+function roadmapForAdmin(row: typeof roadmapItems.$inferSelect) {
+  return {
+    ...row,
+    status: row.status as RoadmapStatus,
+    priority: row.priority as RoadmapPriority,
+    launchStage: row.launchStage as RoadmapLaunchStage,
+    billing: row.billing as RoadmapBilling,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}

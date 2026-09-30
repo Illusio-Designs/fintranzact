@@ -57,6 +57,13 @@
       "when": 1790774896775,
       "tag": "0007_plans_and_partners",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790799841738,
+      "tag": "0008_roadmap_items",
+      "breakpoints": true
     }
   ]
 }

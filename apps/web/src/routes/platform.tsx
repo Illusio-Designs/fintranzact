@@ -8,6 +8,7 @@ import {
   DashboardSquare01Icon,
   Logout01Icon,
   Menu01Icon,
+  Rocket01Icon,
   Search01Icon,
   UserGroupIcon,
   UserShield01Icon,
@@ -38,9 +39,10 @@ import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
 import { Spinner } from "@/components/ui/Spinner";
 import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
+import { RoadmapView } from "@/components/platform/RoadmapView";
 
-type View = "overview" | "organisations" | "plans" | "partners";
-const VIEWS: View[] = ["overview", "organisations", "plans", "partners"];
+type View = "overview" | "organisations" | "plans" | "partners" | "roadmap";
+const VIEWS: View[] = ["overview", "organisations", "plans", "partners", "roadmap"];
 
 export const Route = createFileRoute("/platform")({
   validateSearch: (search: Record<string, unknown>): { view?: View } => ({
@@ -54,6 +56,7 @@ const NAV: { view: View; label: string; icon: typeof Building03Icon }[] = [
   { view: "organisations", label: "Organisations", icon: Building03Icon },
   { view: "plans", label: "Plans", icon: CreditCardIcon },
   { view: "partners", label: "Partners", icon: UserGroupIcon },
+  { view: "roadmap", label: "Upcoming features", icon: Rocket01Icon },
 ];
 
 const PLAN_ORDER = ["forever_free", "free", "pro", "business", "enterprise"] as const;
@@ -130,6 +133,7 @@ function PlatformAdminPage() {
       {view === "organisations" ? <OrganisationsView onOpen={setSelectedId} /> : null}
       {view === "plans" ? <PlansView /> : null}
       {view === "partners" ? <PartnersView /> : null}
+      {view === "roadmap" ? <RoadmapView /> : null}
       <OrganisationPanel id={selectedId} onClose={() => setSelectedId(null)} />
     </AdminShell>
   );

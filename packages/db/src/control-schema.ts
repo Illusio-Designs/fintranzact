@@ -276,6 +276,41 @@ export const partnerPayouts = pgTable("partner_payouts", {
   uniqueIndex("partner_payouts_period_idx").on(t.partnerId, t.period),
 ]);
 
+// ── Upcoming features (platform admin roadmap) ─────────────────
+// The operators' own board of what is planned and being built. Not shown to
+// customers. Seeded with the starting roadmap the first time it is opened.
+
+export const roadmapItems = pgTable("roadmap_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  /** Plain text with light markdown: paragraphs, "- " bullets, "### " headings, **bold**. */
+  description: text("description").default("").notNull(),
+  /** Free text; the console suggests Payroll, Inventory, GST, Mobile, Platform, Other. */
+  category: text("category").notNull(),
+  /** idea | planned | in_progress | done | dropped */
+  status: text("status").default("idea").notNull(),
+  /** high | medium | low */
+  priority: text("priority").default("medium").notNull(),
+  /** before_launch | after_launch */
+  launchStage: text("launch_stage").default("after_launch").notNull(),
+  /** Phase number within the category (Payroll phase 1, 2…). */
+  phase: integer("phase"),
+  /** Position on the board; lower first. */
+  sortOrder: integer("sort_order").default(0).notNull(),
+  /** Target month, "2026-11". */
+  target: text("target"),
+  /** included | paid_add_on */
+  billing: text("billing").default("included").notNull(),
+  priceNote: text("price_note"),
+  /** Sub-tasks: [{ text, done }] */
+  checklist: jsonb("checklist").$type<{ text: string; done: boolean }[]>().default([]).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+}, (t) => [
+  index("roadmap_items_status_idx").on(t.status, t.sortOrder),
+]);
+
 // ── Relations ──────────────────────────────────────────────────
 
 export const tenantsRelations = relations(tenants, ({ many }) => ({

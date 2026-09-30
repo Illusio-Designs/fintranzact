@@ -252,6 +252,12 @@ exceptions:
       - platform.recordPayout
       - platform.updatePayout
       - platform.deletePayout
+      # Upcoming features board: operators only, in the web admin console.
+      - platform.roadmapList
+      - platform.roadmapCreate
+      - platform.roadmapUpdate
+      - platform.roadmapDelete
+      - platform.roadmapReorder
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
       # Public contact/partner forms and the emailed email-change confirmation
@@ -509,6 +515,12 @@ exceptions:
       - platform.recordPayout
       - platform.updatePayout
       - platform.deletePayout
+      # Upcoming features board: operators only, in the web admin console.
+      - platform.roadmapList
+      - platform.roadmapCreate
+      - platform.roadmapUpdate
+      - platform.roadmapDelete
+      - platform.roadmapReorder
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
       # Public contact/partner forms and the emailed email-change confirmation
@@ -730,6 +742,12 @@ exceptions:
       - platform.recordPayout
       - platform.updatePayout
       - platform.deletePayout
+      # Upcoming features board: operators only, in the web admin console.
+      - platform.roadmapList
+      - platform.roadmapCreate
+      - platform.roadmapUpdate
+      - platform.roadmapDelete
+      - platform.roadmapReorder
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
       # Public contact/partner forms and the emailed email-change confirmation

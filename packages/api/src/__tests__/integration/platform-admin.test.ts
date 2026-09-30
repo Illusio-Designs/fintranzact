@@ -78,6 +78,16 @@ describe("platform access", () => {
     await expect(callerFor(owner).platform.overview()).rejects.toThrow(/Platform admin access only/);
   });
 
+  it("refuses the upcoming-features board to anyone but platform admins", async () => {
+    const other = callerFor(owner).platform;
+    const id = "00000000-0000-4000-8000-000000000000";
+    await expect(other.roadmapList()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(other.roadmapCreate({ title: "New feature", category: "Payroll" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(other.roadmapUpdate({ id, status: "done" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(other.roadmapDelete({ id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(other.roadmapReorder({ ids: [id] })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   it("refuses a listed email that has not been verified", async () => {
     const squatter = await createUser({ email: "second.admin@fintranzact.com", emailVerified: false });
     process.env.PLATFORM_ADMIN_EMAILS = "second.admin@fintranzact.com";
