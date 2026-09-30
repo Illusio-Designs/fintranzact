@@ -276,7 +276,7 @@ describe("partial fulfilment", () => {
     const fulfilled = await caller().salesOrder.list({ fulfilment: "fulfilled", page: 1, limit: 50 } as never);
     expect(fulfilled.data.map((r: { id: string }) => r.id)).toContain(done.id);
     expect(fulfilled.data.map((r: { id: string }) => r.id)).not.toContain(open.id);
-    expect(fulfilled.data.every((r: { fulfilmentStatus: string }) => r.fulfilmentStatus === "fulfilled")).toBe(true);
+    expect(fulfilled.data.every((r: { fulfilmentStatus: string | null }) => r.fulfilmentStatus === "fulfilled")).toBe(true);
   });
 });
 

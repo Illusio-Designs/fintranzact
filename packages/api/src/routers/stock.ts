@@ -57,7 +57,7 @@ function qty(n: number) {
   return n.toFixed(3);
 }
 
-async function assertWarehouses(tx: Tx, businessId: string, ids: string[]) {
+export async function assertWarehouses(tx: Tx, businessId: string, ids: string[]) {
   const rows = await tx
     .select({ id: warehouses.id, status: warehouses.status })
     .from(warehouses)
@@ -71,7 +71,7 @@ async function assertWarehouses(tx: Tx, businessId: string, ids: string[]) {
 }
 
 /** Non-admin members need an explicit per-warehouse grant. */
-async function assertWarehousePermission(
+export async function assertWarehousePermission(
   tx: Tx,
   ctx: { businessId: string; role: string; user: { id: string } },
   warehouseIds: string[],

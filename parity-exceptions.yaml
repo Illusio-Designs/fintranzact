@@ -33,6 +33,17 @@ exceptions:
       - stockGroup.move
       - stockGroup.delete
       - inventoryReports.stockGroupSummary
+      # Bills of material and the manufacturing journal are web screens for now.
+      - manufacturing.boms
+      - manufacturing.bom
+      - manufacturing.bomCreate
+      - manufacturing.bomUpdate
+      - manufacturing.bomDelete
+      - manufacturing.plan
+      - manufacturing.manufacture
+      - manufacturing.journals
+      - manufacturing.journal
+      - manufacturing.cancel
       # Inventory settings (negative stock, valuation), the entry-form stock check
       # and the inventory reports are web screens for now.
       - stock.availability
@@ -358,6 +369,17 @@ exceptions:
       - stockGroup.move
       - stockGroup.delete
       - inventoryReports.stockGroupSummary
+      # Bills of material and the manufacturing journal are web screens for now.
+      - manufacturing.boms
+      - manufacturing.bom
+      - manufacturing.bomCreate
+      - manufacturing.bomUpdate
+      - manufacturing.bomDelete
+      - manufacturing.plan
+      - manufacturing.manufacture
+      - manufacturing.journals
+      - manufacturing.journal
+      - manufacturing.cancel
       # Inventory settings (negative stock, valuation), the entry-form stock check
       # and the inventory reports are web screens for now.
       - stock.availability
@@ -517,6 +539,17 @@ exceptions:
       - stockGroup.move
       - stockGroup.delete
       - inventoryReports.stockGroupSummary
+      # Bills of material and the manufacturing journal are web screens for now.
+      - manufacturing.boms
+      - manufacturing.bom
+      - manufacturing.bomCreate
+      - manufacturing.bomUpdate
+      - manufacturing.bomDelete
+      - manufacturing.plan
+      - manufacturing.manufacture
+      - manufacturing.journals
+      - manufacturing.journal
+      - manufacturing.cancel
       # Inventory settings (negative stock, valuation), the entry-form stock check
       # and the inventory reports are web screens for now.
       - stock.availability

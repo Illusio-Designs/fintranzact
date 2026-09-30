@@ -20,10 +20,11 @@ type Db = any;
 
 const dateString = z.string().datetime();
 
-/** Movements that take goods out to a customer (not transfers or corrections). */
+/** Movements that take goods out to a customer (not transfers, corrections
+ *  or components used up in manufacturing). */
 const OUTWARD_TYPES = ["SALE", "DELIVERY_CHALLAN", "PURCHASE_RETURN"];
 /** Movements that bring goods in and so start their age. */
-const INWARD_TYPES = ["PURCHASE", "GOODS_RECEIPT_NOTE", "OPENING", "UNPLACED_STOCK", "SALES_RETURN", "ADJUSTMENT"];
+const INWARD_TYPES = ["PURCHASE", "GOODS_RECEIPT_NOTE", "OPENING", "UNPLACED_STOCK", "SALES_RETURN", "ADJUSTMENT", "PRODUCTION", "BY_PRODUCT"];
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -66,7 +67,14 @@ async function loadUnits(db: Db, businessId: string): Promise<UnitRow[]> {
 }
 
 /** A human label for where a movement came from. */
-function referenceLabel(row: { reference_type: string; movement_type: string; document_type: string | null; document_number: string | null; reason: string | null }) {
+function referenceLabel(row: { reference_type: string; movement_type: string; document_type: string | null; document_number: string | null; reason: string | null; journal_number?: string | null }) {
+  if (row.reference_type === "MANUFACTURING" || row.reference_type === "MANUFACTURING_CANCEL") {
+    const number = row.journal_number ? ` ${row.journal_number}` : "";
+    if (row.reference_type === "MANUFACTURING_CANCEL") return `Manufacturing${number} cancelled`;
+    if (row.movement_type === "PRODUCTION") return `Manufactured — journal${number}`;
+    if (row.movement_type === "BY_PRODUCT") return `By-product of manufacturing — journal${number}`;
+    return `Used in manufacturing — journal${number}`;
+  }
   if (row.document_number) {
     const kind: Record<string, string> = {
       invoice: row.movement_type.startsWith("PURCHASE") ? "Purchase" : "Sale",
@@ -132,13 +140,15 @@ export const inventoryReportsRouter = router({
         SELECT m.id, m.movement_date AS date, m.movement_type, m.reference_type, m.reference_id,
                m.quantity::text AS quantity, w.name AS warehouse,
                d.invoice_number AS document_number, d.document_type::text AS document_type,
-               p.name AS party, a.reason
+               p.name AS party, a.reason, mj.journal_number
         FROM stock_movements m
         JOIN warehouses w ON w.id = m.warehouse_id
         LEFT JOIN invoices d ON d.id = m.reference_id
           AND (m.reference_type LIKE 'INVOICE%' OR m.reference_type LIKE 'DOCUMENT%')
         LEFT JOIN parties p ON p.id = d.party_id
         LEFT JOIN stock_adjustments a ON a.id = m.reference_id AND m.reference_type = 'STOCK_ADJUSTMENT'
+        LEFT JOIN manufacturing_journals mj ON mj.id = m.reference_id
+          AND m.reference_type IN ('MANUFACTURING', 'MANUFACTURING_CANCEL')
         WHERE m.business_id = ${ctx.businessId} AND m.item_id = ${input.itemId} AND ${variant}
           ${warehouse}
           AND m.movement_date >= ${input.fromDate} AND m.movement_date <= ${input.toDate}
@@ -149,7 +159,7 @@ export const inventoryReportsRouter = router({
       `)) as Array<{
         id: string; date: string; movement_type: string; reference_type: string; reference_id: string | null;
         quantity: string; warehouse: string; document_number: string | null; document_type: string | null;
-        party: string | null; reason: string | null;
+        party: string | null; reason: string | null; journal_number: string | null;
       }>;
 
       let balance = parseFloat(opening?.qty ?? "0");

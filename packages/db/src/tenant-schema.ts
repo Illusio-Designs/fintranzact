@@ -905,6 +905,111 @@ export const physicalStockCounts = pgTable("physical_stock_counts", {
   index("physical_counts_business_idx").on(t.businessId, t.createdAt),
 ]);
 
+// ── Bill of materials ─────────────────────────────────────────
+// What it takes to make an item (Tally's BOM): components per `outputQuantity`
+// of the finished item, plus any by-products or scrap it gives off.
+// Quantities are in each item's base unit.
+
+export const boms = pgTable("boms", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  outputQuantity: numeric("output_quantity", { precision: 15, scale: 3 }).default("1").notNull(),
+  // The BOM the manufacture form picks first for this item.
+  isDefault: boolean("is_default").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("boms_business_idx").on(t.businessId),
+  index("boms_item_idx").on(t.businessId, t.itemId),
+]);
+
+export const bomComponents = pgTable("bom_components", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bomId: uuid("bom_id").notNull().references(() => boms.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  // Needed per the BOM's output quantity, before wastage.
+  quantity: numeric("quantity", { precision: 15, scale: 3 }).notNull(),
+  unit: text("unit"),
+  // Extra consumed on top of `quantity`, e.g. 5 = 5% more.
+  wastagePercent: numeric("wastage_percent", { precision: 6, scale: 2 }).default("0").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+}, (t) => [
+  index("bom_components_bom_idx").on(t.bomId),
+  index("bom_components_item_idx").on(t.itemId),
+]);
+
+export const bomByProducts = pgTable("bom_by_products", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bomId: uuid("bom_id").notNull().references(() => boms.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  // Given off per the BOM's output quantity.
+  quantity: numeric("quantity", { precision: 15, scale: 3 }).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+}, (t) => [
+  index("bom_by_products_bom_idx").on(t.bomId),
+]);
+
+// ── Manufacturing journal ─────────────────────────────────────
+// One production run: components leave the source warehouse, the finished
+// item (and any by-products) arrive in the destination warehouse. The stock
+// itself moves through stock_movements (reference MANUFACTURING); this is the
+// voucher and its costing. Cancelling reverses the movements.
+
+export const manufacturingJournals = pgTable("manufacturing_journals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  journalNumber: text("journal_number").notNull(),
+  journalDate: timestamp("journal_date", { withTimezone: true }).notNull(),
+  bomId: uuid("bom_id").references(() => boms.id, { onDelete: "set null" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  quantity: numeric("quantity", { precision: 15, scale: 3 }).notNull(),
+  sourceWarehouseId: uuid("source_warehouse_id").notNull().references(() => warehouses.id, { onDelete: "cascade" }),
+  destinationWarehouseId: uuid("destination_warehouse_id").notNull().references(() => warehouses.id, { onDelete: "cascade" }),
+  componentsCost: numeric("components_cost", { precision: 15, scale: 2 }).default("0").notNull(),
+  additionalCosts: jsonb("additional_costs").$type<Array<{ label: string; amount: string }>>().default([]).notNull(),
+  additionalCostTotal: numeric("additional_cost_total", { precision: 15, scale: 2 }).default("0").notNull(),
+  // Cost of the finished quantity: components + additional costs.
+  totalCost: numeric("total_cost", { precision: 15, scale: 2 }).default("0").notNull(),
+  unitCost: numeric("unit_cost", { precision: 15, scale: 4 }).default("0").notNull(),
+  notes: text("notes"),
+  status: text("status").default("posted").notNull(), // posted | cancelled
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledByUserId: uuid("cancelled_by_user_id"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("manufacturing_journals_number_idx").on(t.businessId, t.journalNumber),
+  index("manufacturing_journals_date_idx").on(t.businessId, t.journalDate),
+  index("manufacturing_journals_item_idx").on(t.itemId),
+]);
+
+export const manufacturingJournalLines = pgTable("manufacturing_journal_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  journalId: uuid("journal_id").notNull().references(() => manufacturingJournals.id, { onDelete: "cascade" }),
+  kind: text("kind").default("component").notNull(), // component | by_product
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  // What the BOM called for at this production quantity (null without a BOM line).
+  standardQuantity: numeric("standard_quantity", { precision: 15, scale: 3 }),
+  // What was actually consumed (components) or given off (by-products).
+  quantity: numeric("quantity", { precision: 15, scale: 3 }).notNull(),
+  unitCost: numeric("unit_cost", { precision: 15, scale: 4 }).default("0").notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+}, (t) => [
+  index("manufacturing_journal_lines_journal_idx").on(t.journalId),
+]);
+
 // ── Stock Balances ────────────────────────────────────────────
 // Current stock state per business, warehouse, location and item/variant.
 // This table stores the latest inventory balance, not the movement history.

@@ -11,6 +11,10 @@
  *   still counts.
  * - Purchase cost = the line's taxable value (after discount, before GST — the
  *   GST is input credit, not cost) per base unit.
+ * - Manufactured stock counts as an inward at its production cost (components
+ *   consumed at their valuation rate plus additional costs, from the
+ *   manufacturing journal), alongside purchases. A cancelled run stops counting
+ *   from the date it was cancelled.
  * - "weighted_average": average cost of all purchases up to the date, with
  *   opening stock counted at the item's purchase price.
  * - "fifo": what is left is assumed to be the most recent purchases; anything
@@ -55,7 +59,7 @@ export async function getValuationMethod(db: Db, businessId: string): Promise<Va
   return row?.method === "fifo" ? "fifo" : "weighted_average";
 }
 
-type Purchase = { qty: number; value: number };
+type Purchase = { qty: number; value: number; date: number };
 
 export async function valueStock(
   db: Db,
@@ -65,7 +69,7 @@ export async function valueStock(
 ): Promise<StockValuation> {
   const valuationMethod = method ?? (await getValuationMethod(db, businessId));
 
-  const [unitRows, purchaseRows] = await Promise.all([
+  const [unitRows, purchaseRows, productionRows] = await Promise.all([
     db.execute(sql`
       WITH units AS (
         SELECT i.id AS item_id, NULL::uuid AS variant_id,
@@ -108,7 +112,8 @@ export async function valueStock(
       SELECT COALESCE(li.item_id, v.item_id) AS "itemId", li.variant_id AS "variantId",
              (li.quantity::numeric
                * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END)::text AS qty,
-             (li.total_amount::numeric - li.tax_amount::numeric)::text AS value
+             (li.total_amount::numeric - li.tax_amount::numeric)::text AS value,
+             i.invoice_date AS date
       FROM invoice_items li
       JOIN invoices i ON i.id = li.invoice_id
       LEFT JOIN item_variants v ON v.id = li.variant_id
@@ -118,18 +123,39 @@ export async function valueStock(
         AND i.invoice_date <= ${asOf.toISOString()}
         AND COALESCE(li.item_id, v.item_id) IS NOT NULL
       ORDER BY i.invoice_date DESC, i.created_at DESC, li.sort_order DESC
-    `) as Promise<Array<{ itemId: string; variantId: string | null; qty: string; value: string }>>,
+    `) as Promise<Array<{ itemId: string; variantId: string | null; qty: string; value: string; date: string | Date }>>,
+    // Production runs: the finished quantity at the run's total cost.
+    db.execute(sql`
+      SELECT m.item_id AS "itemId", m.variant_id AS "variantId",
+             m.quantity::text AS qty,
+             COALESCE(mj.total_cost::numeric, m.quantity::numeric * COALESCE(m.unit_cost::numeric, 0))::text AS value,
+             m.movement_date AS date
+      FROM stock_movements m
+      LEFT JOIN manufacturing_journals mj ON mj.id = m.reference_id
+      WHERE m.business_id = ${businessId}
+        AND m.reference_type = 'MANUFACTURING' AND m.movement_type = 'PRODUCTION'
+        AND m.movement_date <= ${asOf.toISOString()}
+        AND NOT EXISTS (
+          SELECT 1 FROM stock_movements r
+          WHERE r.business_id = m.business_id AND r.reference_id = m.reference_id
+            AND r.reference_type = 'MANUFACTURING_CANCEL'
+            AND r.movement_date <= ${asOf.toISOString()}
+        )
+    `) as Promise<Array<{ itemId: string; variantId: string | null; qty: string; value: string; date: string | Date }>>,
   ]);
 
   const purchases = new Map<string, Purchase[]>();
-  for (const p of purchaseRows) {
+  for (const p of [...purchaseRows, ...productionRows]) {
     const qty = parseFloat(p.qty);
     if (!(qty > 0)) continue;
     const key = unitKey(p.itemId, p.variantId);
     const list = purchases.get(key) ?? [];
-    list.push({ qty, value: parseFloat(p.value) });
+    list.push({ qty, value: parseFloat(p.value), date: new Date(p.date).getTime() });
     purchases.set(key, list);
   }
+  // Newest first, for FIFO. The sort is stable, so purchases on the same
+  // date keep their order.
+  for (const list of purchases.values()) list.sort((a, b) => b.date - a.date);
 
   const units = new Map<string, UnitValuation>();
   let total = 0;
