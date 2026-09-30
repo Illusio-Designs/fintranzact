@@ -22,6 +22,7 @@ import {
   StockAgeingReport,
   StockLedgerReport,
 } from "@/components/reports/InventoryReports";
+import { PriceListReport } from "@/components/reports/PriceListReport";
 export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
@@ -42,6 +43,7 @@ type ReportId =
   | "stock-ageing"
   | "reorder-status"
   | "dead-stock"
+  | "price-list"
   | "item-wise-sales"
   | "payment-summary"
   | "tax-summary"
@@ -82,6 +84,7 @@ const REPORT_GROUPS: Array<{ label: string; reports: ReportDef[] }> = [
       { id: "stock-ageing", label: "Stock Ageing", description: "How long current stock has been held", tabular: true },
       { id: "reorder-status", label: "Reorder Status", description: "Items at or below their reorder level, with a suggested order", tabular: true },
       { id: "dead-stock", label: "Dead Stock", description: "Stock that hasn't sold in a while", tabular: true },
+      { id: "price-list", label: "Price List", description: "Each item's price on every price level, with MRP", tabular: true },
       { id: "item-wise-sales", label: "Item-wise Sales", description: "Sales quantity and value per item", tabular: true },
     ],
   },
@@ -2928,6 +2931,8 @@ function ReportsPage() {
         return <ReorderStatusReport />;
       case "dead-stock":
         return <DeadStockReport />;
+      case "price-list":
+        return <PriceListReport asOf={toDate} />;
       case "payment-summary":
         return <PaymentSummaryReport fromDate={fromDate} toDate={toDate} />;
       case "tax-summary":

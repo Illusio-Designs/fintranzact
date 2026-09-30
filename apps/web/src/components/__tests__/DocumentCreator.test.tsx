@@ -32,8 +32,10 @@ import userEvent from "@testing-library/user-event";
 // reference normal top-level vars inside them. vi.hoisted() is the
 // official escape hatch — it runs BEFORE the hoisted factories so the
 // references are available at mock-initialisation time.
-const { invoiceCreateMutate, quotationCreateMutate, invalidateStub, businessListQuery } =
+const { invoiceCreateMutate, quotationCreateMutate, invalidateStub, businessListQuery, pricingResolveFetch } =
   vi.hoisted(() => ({
+    // Price level lookups; rejects by default so lines keep the item price.
+    pricingResolveFetch: vi.fn((): Promise<unknown> => Promise.reject(new Error("no pricing"))),
     invoiceCreateMutate: vi.fn(),
     quotationCreateMutate: vi.fn(),
     invalidateStub: vi.fn(),
@@ -199,6 +201,7 @@ vi.mock("@/lib/trpc", () => ({
         shippingSummary: { invalidate: invalidateStub },
       },
       item: { list: { invalidate: invalidateStub } },
+      pricing: { resolve: { fetch: pricingResolveFetch } },
     }),
   },
 }));
@@ -856,5 +859,86 @@ describe("DocumentCreator — T&C pre-fill from business default", () => {
     // Terms should remain empty — editData returns null (mocked), so setTerms
     // stays at "" and the hydration effect is blocked by prefillId guard.
     expect(termsTextarea.value).toBe("");
+  });
+});
+
+describe("DocumentCreator — price levels", () => {
+  const resolved = (unitPrice: string, extra: Record<string, unknown> = {}) => ({
+    priceLevel: { id: "lvl-1", name: "Wholesale" },
+    lines: [{ itemId: "item-1", variantId: null, unit: null, unitPrice, discountPercent: null, netPrice: unitPrice, source: "level", minQuantity: "0", mrp: null, ...extra }],
+  });
+
+  beforeEach(() => {
+    pricingResolveFetch.mockReset();
+  });
+  afterEach(() => {
+    pricingResolveFetch.mockReset();
+    pricingResolveFetch.mockImplementation(() => Promise.reject(new Error("no pricing")));
+  });
+
+  it("fills the price from the party's price level when an item is picked", async () => {
+    pricingResolveFetch.mockResolvedValue(resolved("900.00"));
+    renderCreator();
+    const user = userEvent.setup();
+    await pickParty(user);
+    await pickSteelRod(user);
+
+    const priceInput = screen.getAllByLabelText("Unit price")[0] as HTMLInputElement;
+    await waitFor(() => expect(priceInput.value).toBe("900"));
+    expect(screen.getByText("Wholesale")).toBeInTheDocument();
+    expect(pricingResolveFetch).toHaveBeenCalledWith(
+      expect.objectContaining({ partyId: "party-1", lines: [expect.objectContaining({ itemId: "item-1", quantity: "1" })] }),
+    );
+  });
+
+  it("keeps a price the user typed when the quantity changes", async () => {
+    pricingResolveFetch.mockResolvedValue(resolved("900.00"));
+    renderCreator();
+    const user = userEvent.setup();
+    await pickSteelRod(user);
+    const priceInput = screen.getAllByLabelText("Unit price")[0] as HTMLInputElement;
+    await waitFor(() => expect(priceInput.value).toBe("900"));
+
+    fireEvent.change(priceInput, { target: { value: "950" } });
+    pricingResolveFetch.mockResolvedValue(resolved("850.00"));
+    const qty = screen.getAllByLabelText(/quantity/i)[0] as HTMLInputElement;
+    fireEvent.change(qty, { target: { value: "20" } });
+
+    await waitFor(() => expect(pricingResolveFetch).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(priceInput.value).toBe("950");
+  });
+
+  it("re-prices a level price when the quantity reaches a slab", async () => {
+    pricingResolveFetch.mockResolvedValue(resolved("900.00"));
+    renderCreator();
+    const user = userEvent.setup();
+    await pickSteelRod(user);
+    const priceInput = screen.getAllByLabelText("Unit price")[0] as HTMLInputElement;
+    await waitFor(() => expect(priceInput.value).toBe("900"));
+
+    pricingResolveFetch.mockResolvedValue(resolved("850.00"));
+    const qty = screen.getAllByLabelText(/quantity/i)[0] as HTMLInputElement;
+    fireEvent.change(qty, { target: { value: "20" } });
+    await waitFor(() => expect(priceInput.value).toBe("850"));
+  });
+
+  it("warns when the price is above the MRP", async () => {
+    pricingResolveFetch.mockResolvedValue(resolved("1000.00", { source: "item", mrp: "950.00" }));
+    renderCreator();
+    const user = userEvent.setup();
+    await pickSteelRod(user);
+    expect(await screen.findByText(/above the MRP 950.00/)).toBeInTheDocument();
+  });
+
+  it("leaves purchase documents alone", async () => {
+    pricingResolveFetch.mockResolvedValue(resolved("1.00"));
+    renderCreator({ invoiceType: "purchase" });
+    const user = userEvent.setup();
+    const combobox = screen.getByPlaceholderText("Select product or custom item");
+    await user.click(combobox);
+    await user.click(await screen.findByRole("option", { name: /steel rod/i }));
+    await new Promise((r) => setTimeout(r, 350));
+    expect(pricingResolveFetch).not.toHaveBeenCalled();
   });
 });
