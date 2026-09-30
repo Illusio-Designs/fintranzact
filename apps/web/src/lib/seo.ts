@@ -4,6 +4,7 @@
  */
 import { HELP_PAGE_PATHS, MARKETING_PATHS, SOLUTION_PAGE_PATHS } from "./public-paths";
 import { DEVELOPER_PAGE_PATHS } from "./developer-paths";
+import { FEATURE_PAGE_PATHS } from "./feature-slugs";
 
 /**
  * The production web origin, used when VITE_SITE_URL is not set. It is the
@@ -31,6 +32,7 @@ export function resolveSiteUrl(value: string | undefined | null): string {
  */
 export const INDEXABLE_PATH_LISTS: ReadonlyArray<readonly string[]> = [
   MARKETING_PATHS,
+  FEATURE_PAGE_PATHS,
   SOLUTION_PAGE_PATHS,
   HELP_PAGE_PATHS,
   DEVELOPER_PAGE_PATHS,

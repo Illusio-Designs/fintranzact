@@ -55,6 +55,15 @@ export function isSolutionPath(pathname: string) {
 }
 // ────────────────────────────────────────────────────────────────
 
+// ── Feature pages ───────────────────────────────────────────────
+/** /features (in MARKETING_PATHS) and any /features/<slug> (an unknown slug shows a not-found page). */
+export function isFeaturePath(pathname: string) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return path === "/features" || path.startsWith("/features/");
+}
+export { FEATURE_PAGE_PATHS, FEATURE_SLUGS } from "./feature-slugs";
+// ────────────────────────────────────────────────────────────────
+
 // ── Help centre ─────────────────────────────────────────────────
 /** The help centre: /help and every /help/<article> page (see lib/help-paths.ts). */
 export { HELP_PAGE_PATHS, isHelpPath } from "./help-paths";
@@ -72,7 +81,13 @@ export const AUTH_PUBLIC_PATHS = [
 
 export function isMarketingPath(pathname: string) {
   const path = pathname.replace(/\/+$/, "") || "/";
-  return MARKETING_PATHS.includes(path) || isSolutionPath(path) || isHelpPath(path) || isDeveloperPath(path);
+  return (
+    MARKETING_PATHS.includes(path) ||
+    isFeaturePath(path) ||
+    isSolutionPath(path) ||
+    isHelpPath(path) ||
+    isDeveloperPath(path)
+  );
 }
 
 export function isAuthPublicPath(pathname: string) {

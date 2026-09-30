@@ -50,7 +50,6 @@ import { Route as Gstr2bRouteImport } from './routes/gstr2b'
 import { Route as GstRouteImport } from './routes/gst'
 import { Route as GoodsReceiptNotesRouteImport } from './routes/goods-receipt-notes'
 import { Route as FindAPartnerRouteImport } from './routes/find-a-partner'
-import { Route as FeaturesRouteImport } from './routes/features'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as EwayBillsRouteImport } from './routes/eway-bills'
 import { Route as EInvoicingRouteImport } from './routes/e-invoicing'
@@ -65,10 +64,12 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SolutionsIndexRouteImport } from './routes/solutions/index'
 import { Route as HelpIndexRouteImport } from './routes/help/index'
+import { Route as FeaturesIndexRouteImport } from './routes/features/index'
 import { Route as SolutionsSlugRouteImport } from './routes/solutions/$slug'
 import { Route as InviteTokenRouteImport } from './routes/invite/$token'
 import { Route as ITokenRouteImport } from './routes/i/$token'
 import { Route as HelpSplatRouteImport } from './routes/help/$'
+import { Route as FeaturesSlugRouteImport } from './routes/features/$slug'
 import { Route as BusinessCreateRouteImport } from './routes/business/create'
 import { Route as AuthVerifyEmailChangeRouteImport } from './routes/auth/verify-email-change'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
@@ -285,11 +286,6 @@ const FindAPartnerRoute = FindAPartnerRouteImport.update({
   path: '/find-a-partner',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FeaturesRoute = FeaturesRouteImport.update({
-  id: '/features',
-  path: '/features',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ExpensesRoute = ExpensesRouteImport.update({
   id: '/expenses',
   path: '/expenses',
@@ -367,6 +363,11 @@ const HelpIndexRoute = HelpIndexRouteImport.update({
   path: '/help/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FeaturesIndexRoute = FeaturesIndexRouteImport.update({
+  id: '/features/',
+  path: '/features/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DevelopersFaqLazyRoute = DevelopersFaqLazyRouteImport.update({
   id: '/developers/faq',
   path: '/developers/faq',
@@ -408,6 +409,11 @@ const ITokenRoute = ITokenRouteImport.update({
 const HelpSplatRoute = HelpSplatRouteImport.update({
   id: '/help/$',
   path: '/help/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeaturesSlugRoute = FeaturesSlugRouteImport.update({
+  id: '/features/$slug',
+  path: '/features/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BusinessCreateRoute = BusinessCreateRouteImport.update({
@@ -465,7 +471,6 @@ export interface FileRoutesByFullPath {
   '/e-invoicing': typeof EInvoicingRoute
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
-  '/features': typeof FeaturesRoute
   '/find-a-partner': typeof FindAPartnerRoute
   '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
@@ -510,6 +515,7 @@ export interface FileRoutesByFullPath {
   '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
+  '/features/$slug': typeof FeaturesSlugRoute
   '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -517,6 +523,7 @@ export interface FileRoutesByFullPath {
   '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
   '/developers/conventions': typeof DevelopersConventionsLazyRoute
   '/developers/faq': typeof DevelopersFaqLazyRoute
+  '/features/': typeof FeaturesIndexRoute
   '/help/': typeof HelpIndexRoute
   '/solutions/': typeof SolutionsIndexRoute
   '/developers/': typeof DevelopersIndexLazyRoute
@@ -536,7 +543,6 @@ export interface FileRoutesByTo {
   '/e-invoicing': typeof EInvoicingRoute
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
-  '/features': typeof FeaturesRoute
   '/find-a-partner': typeof FindAPartnerRoute
   '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
@@ -581,6 +587,7 @@ export interface FileRoutesByTo {
   '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
+  '/features/$slug': typeof FeaturesSlugRoute
   '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -588,6 +595,7 @@ export interface FileRoutesByTo {
   '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
   '/developers/conventions': typeof DevelopersConventionsLazyRoute
   '/developers/faq': typeof DevelopersFaqLazyRoute
+  '/features': typeof FeaturesIndexRoute
   '/help': typeof HelpIndexRoute
   '/solutions': typeof SolutionsIndexRoute
   '/developers': typeof DevelopersIndexLazyRoute
@@ -608,7 +616,6 @@ export interface FileRoutesById {
   '/e-invoicing': typeof EInvoicingRoute
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
-  '/features': typeof FeaturesRoute
   '/find-a-partner': typeof FindAPartnerRoute
   '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
@@ -653,6 +660,7 @@ export interface FileRoutesById {
   '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
+  '/features/$slug': typeof FeaturesSlugRoute
   '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -660,6 +668,7 @@ export interface FileRoutesById {
   '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
   '/developers/conventions': typeof DevelopersConventionsLazyRoute
   '/developers/faq': typeof DevelopersFaqLazyRoute
+  '/features/': typeof FeaturesIndexRoute
   '/help/': typeof HelpIndexRoute
   '/solutions/': typeof SolutionsIndexRoute
   '/developers/': typeof DevelopersIndexLazyRoute
@@ -681,7 +690,6 @@ export interface FileRouteTypes {
     | '/e-invoicing'
     | '/eway-bills'
     | '/expenses'
-    | '/features'
     | '/find-a-partner'
     | '/goods-receipt-notes'
     | '/gst'
@@ -726,6 +734,7 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
+    | '/features/$slug'
     | '/help/$'
     | '/i/$token'
     | '/invite/$token'
@@ -733,6 +742,7 @@ export interface FileRouteTypes {
     | '/developers/authentication'
     | '/developers/conventions'
     | '/developers/faq'
+    | '/features/'
     | '/help/'
     | '/solutions/'
     | '/developers/'
@@ -752,7 +762,6 @@ export interface FileRouteTypes {
     | '/e-invoicing'
     | '/eway-bills'
     | '/expenses'
-    | '/features'
     | '/find-a-partner'
     | '/goods-receipt-notes'
     | '/gst'
@@ -797,6 +806,7 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
+    | '/features/$slug'
     | '/help/$'
     | '/i/$token'
     | '/invite/$token'
@@ -804,6 +814,7 @@ export interface FileRouteTypes {
     | '/developers/authentication'
     | '/developers/conventions'
     | '/developers/faq'
+    | '/features'
     | '/help'
     | '/solutions'
     | '/developers'
@@ -823,7 +834,6 @@ export interface FileRouteTypes {
     | '/e-invoicing'
     | '/eway-bills'
     | '/expenses'
-    | '/features'
     | '/find-a-partner'
     | '/goods-receipt-notes'
     | '/gst'
@@ -868,6 +878,7 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
+    | '/features/$slug'
     | '/help/$'
     | '/i/$token'
     | '/invite/$token'
@@ -875,6 +886,7 @@ export interface FileRouteTypes {
     | '/developers/authentication'
     | '/developers/conventions'
     | '/developers/faq'
+    | '/features/'
     | '/help/'
     | '/solutions/'
     | '/developers/'
@@ -895,7 +907,6 @@ export interface RootRouteChildren {
   EInvoicingRoute: typeof EInvoicingRoute
   EwayBillsRoute: typeof EwayBillsRoute
   ExpensesRoute: typeof ExpensesRoute
-  FeaturesRoute: typeof FeaturesRoute
   FindAPartnerRoute: typeof FindAPartnerRoute
   GoodsReceiptNotesRoute: typeof GoodsReceiptNotesRoute
   GstRoute: typeof GstRoute
@@ -940,6 +951,7 @@ export interface RootRouteChildren {
   AuthVerifyRoute: typeof AuthVerifyRoute
   AuthVerifyEmailChangeRoute: typeof AuthVerifyEmailChangeRoute
   BusinessCreateRoute: typeof BusinessCreateRoute
+  FeaturesSlugRoute: typeof FeaturesSlugRoute
   HelpSplatRoute: typeof HelpSplatRoute
   ITokenRoute: typeof ITokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
@@ -947,6 +959,7 @@ export interface RootRouteChildren {
   DevelopersAuthenticationLazyRoute: typeof DevelopersAuthenticationLazyRoute
   DevelopersConventionsLazyRoute: typeof DevelopersConventionsLazyRoute
   DevelopersFaqLazyRoute: typeof DevelopersFaqLazyRoute
+  FeaturesIndexRoute: typeof FeaturesIndexRoute
   HelpIndexRoute: typeof HelpIndexRoute
   SolutionsIndexRoute: typeof SolutionsIndexRoute
   DevelopersIndexLazyRoute: typeof DevelopersIndexLazyRoute
@@ -1229,13 +1242,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FindAPartnerRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/features': {
-      id: '/features'
-      path: '/features'
-      fullPath: '/features'
-      preLoaderRoute: typeof FeaturesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/expenses': {
       id: '/expenses'
       path: '/expenses'
@@ -1341,6 +1347,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HelpIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/features/': {
+      id: '/features/'
+      path: '/features'
+      fullPath: '/features/'
+      preLoaderRoute: typeof FeaturesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/developers/faq': {
       id: '/developers/faq'
       path: '/developers/faq'
@@ -1388,6 +1401,13 @@ declare module '@tanstack/react-router' {
       path: '/help/$'
       fullPath: '/help/$'
       preLoaderRoute: typeof HelpSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/features/$slug': {
+      id: '/features/$slug'
+      path: '/features/$slug'
+      fullPath: '/features/$slug'
+      preLoaderRoute: typeof FeaturesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/business/create': {
@@ -1455,7 +1475,6 @@ const rootRouteChildren: RootRouteChildren = {
   EInvoicingRoute: EInvoicingRoute,
   EwayBillsRoute: EwayBillsRoute,
   ExpensesRoute: ExpensesRoute,
-  FeaturesRoute: FeaturesRoute,
   FindAPartnerRoute: FindAPartnerRoute,
   GoodsReceiptNotesRoute: GoodsReceiptNotesRoute,
   GstRoute: GstRoute,
@@ -1500,6 +1519,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthVerifyRoute: AuthVerifyRoute,
   AuthVerifyEmailChangeRoute: AuthVerifyEmailChangeRoute,
   BusinessCreateRoute: BusinessCreateRoute,
+  FeaturesSlugRoute: FeaturesSlugRoute,
   HelpSplatRoute: HelpSplatRoute,
   ITokenRoute: ITokenRoute,
   InviteTokenRoute: InviteTokenRoute,
@@ -1507,6 +1527,7 @@ const rootRouteChildren: RootRouteChildren = {
   DevelopersAuthenticationLazyRoute: DevelopersAuthenticationLazyRoute,
   DevelopersConventionsLazyRoute: DevelopersConventionsLazyRoute,
   DevelopersFaqLazyRoute: DevelopersFaqLazyRoute,
+  FeaturesIndexRoute: FeaturesIndexRoute,
   HelpIndexRoute: HelpIndexRoute,
   SolutionsIndexRoute: SolutionsIndexRoute,
   DevelopersIndexLazyRoute: DevelopersIndexLazyRoute,
