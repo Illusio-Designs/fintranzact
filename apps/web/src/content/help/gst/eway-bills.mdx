@@ -33,10 +33,9 @@ In the sidebar, under **Reports**, click **E-Way Bills**. The menu item appears 
 
 The credentials are stored encrypted. The GSP client key comes from the Fintranzact server. If no credentials can be found at all, every action fails with *"E-Way Bill API credentials are not configured. Add your E-Way Bill portal ID and password in business settings, or contact your administrator."*
 
-The same step also has an **E-Way Bill Threshold (₹)** field (*"Leave blank to use the statutory ₹50,000"*).
+The same step also has an **E-Way Bill Threshold (₹)** field (*"Leave blank to use the statutory ₹50,000"*). Generation refuses invoices whose total is below this value, and the **E-Way Bills** page shows it in its description.
 
 :::caution[Current behaviour to be aware of]
-- **The threshold setting isn't applied yet.** Generation always requires the invoice total to be at least **₹50,000**, whatever you enter in **E-Way Bill Threshold (₹)**.
 - **There's no sandbox/production switch for e-way bills in the app.** A connection saved from business settings is created in NIC's **sandbox** (test) mode. Before you rely on the EWB numbers for real consignments, check with whoever runs your Fintranzact server that the connection points to production.
 :::
 
@@ -63,7 +62,7 @@ Before calling NIC, Fintranzact checks that:
 
 - the invoice exists and isn't **cancelled**
 - it has at least one line item, and at least one line is **goods**. Service-only invoices are refused with *"E-Way Bill can only be generated for invoices containing goods (not service-only)"*. A line with no linked item counts as goods.
-- the invoice total (including GST) is at least **₹50,000**
+- the invoice total (including GST) is at least your **E-Way Bill Threshold (₹)**, or **₹50,000** if the field is blank
 - the invoice doesn't already have a **Generated** or **Active** EWB
 
 Both **sale** invoices (outward supply) and **purchase** invoices (inward supply) are accepted. A party without a GSTIN is sent as `URP` (unregistered person). Each line is sent with the item's HSN code, so fill in HSN codes on your items. A line whose item has no HSN is sent with an empty HSN.
@@ -159,7 +158,7 @@ The API has a validity-extension call (`ewayBill.extend`). It's allowed only fro
 
 <ForCA>
 :::tip[Points to check for clients]
-- The ₹50,000 check uses the **invoice total including GST**, and it can't be lowered or raised from settings yet.
+- The threshold check (₹50,000 unless the business sets its own **E-Way Bill Threshold (₹)**) uses the **whole invoice total including GST**. It doesn't leave out service lines or exempt goods on a mixed invoice, so such an invoice can pass the check even when Rule 138 wouldn't require an EWB. Generating one anyway is allowed.
 - Service-only invoices are blocked. A mixed goods and services invoice is allowed, and all of its lines are sent.
 - Confirm the client's EWB connection isn't still in sandbox mode. The app has no toggle for it.
 - Cancelling an EWB doesn't cancel the invoice. If the supply itself was called off, cancel the invoice too so that it drops out of GSTR-1.
@@ -171,8 +170,8 @@ The API has a validity-extension call (`ewayBill.extend`). It's allowed only fro
 **Where do I get the Invoice ID the form asks for?**
 It's the invoice's internal UUID, not the number printed on the invoice. Invoice links in the web app look like `/invoices?id=…`; copy the part after `id=`.
 
-**Why am I told the invoice is below the ₹50,000 threshold when my setting says ₹25,000?**
-The **E-Way Bill Threshold (₹)** field in business settings isn't used during generation yet. Fintranzact always applies ₹50,000 to the invoice total.
+**Why am I told the invoice is below the threshold?**
+Generation needs the invoice total, including GST, to reach the **E-Way Bill Threshold (₹)** in business settings, or ₹50,000 when that field is blank. Lower the threshold if you need EWBs for smaller consignments.
 
 **Can I generate an EWB for a purchase invoice?**
 Yes. The same rules apply, and the bill is sent as an inward supply with the supplier's details as the "from" side.

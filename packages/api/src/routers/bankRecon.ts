@@ -11,7 +11,7 @@
  * Permission checks use requireCan() from @casl-based permissions.
  */
 
-import { eq, and, sql, desc, isNull, or, ilike, asc } from "drizzle-orm";
+import { eq, and, sql, desc, isNull, or, ilike, asc, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -705,6 +705,23 @@ export const bankReconRouter = router({
       }
 
       const newExpense = await ctx.db.transaction(async (tx) => {
+        // Claim the line inside the transaction: a concurrent request for the
+        // same line blocks on this row and then finds it no longer unmatched,
+        // so the expense and withdrawal are recorded exactly once.
+        const [claimed] = await tx
+          .update(bankStatementLines)
+          .set({ matchStatus: "created" })
+          .where(and(
+            eq(bankStatementLines.id, input.lineId),
+            eq(bankStatementLines.businessId, ctx.businessId),
+            eq(bankStatementLines.matchStatus, "unmatched"),
+          ))
+          .returning({ id: bankStatementLines.id });
+
+        if (!claimed) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Line is already matched or ignored" });
+        }
+
         const [exp] = await tx.insert(expenses).values({
           ...input.expense,
           bankAccountId: importRecord.bankAccountId,
@@ -1242,9 +1259,46 @@ export const bankReconRouter = router({
     }),
 });
 
-// ── Private helpers ───────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-type Db = TenantDatabase;
+// A db handle or a transaction.
+type Db = Pick<TenantDatabase, "select" | "update">;
+
+/**
+ * Put statement lines reconciled against a deleted expense (or against the
+ * withdrawal it recorded) back to unmatched, so the line can be reconciled
+ * again, and refresh their imports' counts. Called by expense.delete.
+ */
+export async function reopenLinesMatchedTo(
+  db: Db,
+  businessId: string,
+  refs: { expenseId: string; bankTransactionId?: string | null },
+) {
+  const reopened = await db
+    .update(bankStatementLines)
+    .set({
+      matchStatus: "unmatched",
+      matchConfidence: null,
+      matchedPaymentId: null,
+      matchedExpenseId: null,
+      matchedBankTransactionId: null,
+    })
+    .where(and(
+      eq(bankStatementLines.businessId, businessId),
+      inArray(bankStatementLines.matchStatus, ["auto_matched", "manual_matched", "created"]),
+      refs.bankTransactionId
+        ? or(
+            eq(bankStatementLines.matchedExpenseId, refs.expenseId),
+            eq(bankStatementLines.matchedBankTransactionId, refs.bankTransactionId),
+          )
+        : eq(bankStatementLines.matchedExpenseId, refs.expenseId),
+    ))
+    .returning({ importId: bankStatementLines.importId });
+
+  for (const importId of new Set(reopened.map((l) => l.importId))) {
+    await updateImportCounts(db, importId);
+  }
+}
 
 async function updateImportCounts(db: Db, importId: string) {
   const [counts] = await db

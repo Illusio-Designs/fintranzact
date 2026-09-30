@@ -169,7 +169,11 @@ export function mapInvoiceToIRP(
     throw new Error("Business GSTIN is required for e-invoicing");
   }
   const regType = party.gstRegistrationType?.toLowerCase() ?? null;
-  const isExport = regType === "overseas";
+  // An export is a supply to a recipient without an Indian GSTIN. A party
+  // typed "overseas" that does hold one (the GSTIN lookup maps IRP taxpayer
+  // type NRT, a non-resident taxable person registered here, to "overseas")
+  // is an ordinary registered buyer: B2B, taxed by its state.
+  const isExport = regType === "overseas" && !party.gstin;
   const isSez = regType === "sez";
 
   if (!party.gstin && !isExport) {
@@ -178,10 +182,11 @@ export function mapInvoiceToIRP(
 
   const sellerStateCode = business.stateCode ?? "00";
   // Place of supply: the buyer's state. Fall back to the GSTIN's 2-digit
-  // state prefix, then to the seller's state. Exports use "96" (Other Country).
+  // state prefix, then to the seller's state (a blank state code counts as
+  // missing). Exports use "96" (Other Country).
   const buyerStateCode = isExport
     ? "96"
-    : party.stateCode ?? party.gstin?.slice(0, 2) ?? sellerStateCode;
+    : party.stateCode || party.gstin?.slice(0, 2) || sellerStateCode;
   // Supplies to SEZ units and exports are zero-rated inter-state supplies
   // (IGST Act s.16) — IGST applies even when the SEZ is in the seller's state.
   const isInterState = isExport || isSez || sellerStateCode !== buyerStateCode;

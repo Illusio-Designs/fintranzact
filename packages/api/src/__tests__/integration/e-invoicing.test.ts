@@ -524,6 +524,32 @@ describe("mapInvoiceToIRP", () => {
       expect(r.ValDtls.IgstVal).toBe(1800);
       expect(mapInvoiceToIRP(inv, line("0"), overseas, seller).TranDtls.SupTyp).toBe("EXPWOP");
     });
+
+    // Regression: the GSTIN lookup maps IRP taxpayer type NRT (a non-resident
+    // taxable person, registered in India with a GSTIN) to "overseas", and
+    // every "overseas" party was sent as an export — POS 96, PIN 999999, but
+    // with a real GSTIN as the buyer.
+    it("an overseas-typed buyer holding a GSTIN is B2B, not an export", () => {
+      const nrt = buyer({
+        gstin: "27AABCN0000R1ZM", stateCode: "27", pincode: "400002", gstRegistrationType: "overseas",
+      });
+      const r = mapInvoiceToIRP(inv, line(), nrt, seller);
+      expect(r.TranDtls.SupTyp).toBe("B2B");
+      expect(r.BuyerDtls.Gstin).toBe("27AABCN0000R1ZM");
+      expect(r.BuyerDtls.Pos).toBe("27");
+      expect(r.BuyerDtls.Stcd).toBe("27");
+      expect(r.BuyerDtls.Pin).toBe(400002);
+      expect(r.ValDtls.CgstVal).toBe(900);
+      expect(r.ValDtls.SgstVal).toBe(900);
+      expect(r.ValDtls.IgstVal).toBe(0);
+    });
+
+    it("treats a blank party state code as missing when deriving place of supply", () => {
+      const r = mapInvoiceToIRP(inv, line(), buyer({ stateCode: "" }), seller);
+      expect(r.BuyerDtls.Pos).toBe("29");
+      expect(r.BuyerDtls.Stcd).toBe("29");
+      expect(r.ValDtls.IgstVal).toBe(1800);
+    });
   });
 
   it("throws if business has no GSTIN", () => {
@@ -616,6 +642,41 @@ describe("eInvoice.generate", () => {
     await expect(
       caller.eInvoice.generate({ invoiceId: invoice.id }),
     ).rejects.toThrow("GSTIN");
+  });
+
+  // Regression: generate rejected every party without a GSTIN, so an export
+  // to an overseas buyer could never be e-invoiced and the EXPWP mapping
+  // (Gstin "URP", POS 96) was unreachable.
+  it("generates an IRN for an export to an overseas buyer without a GSTIN", async () => {
+    const mockModule = await import("../../lib/irp-client.js") as unknown as {
+      __mockGenerateIRN: ReturnType<typeof vi.fn>;
+    };
+    const db = getTenantTestDb();
+    await setupEInvoiceConfig();
+    const caller = callerForRamesh();
+
+    const overseas = await createParty(db, world.business1.id, {
+      name: "Acme Imports LLC",
+      type: "customer",
+      gstin: null,
+      gstRegistrationType: "overseas",
+      openingBalance: "0.00",
+    });
+    const { invoice } = await createInvoiceWithItems(
+      db,
+      world.business1.id,
+      overseas.id,
+      [{ description: "Handicrafts", quantity: "2", unitPrice: "5000.00", taxPercent: "18" }],
+    );
+
+    mockModule.__mockGenerateIRN.mockClear();
+    const result = await caller.eInvoice.generate({ invoiceId: invoice.id });
+
+    expect(result!.eInvoiceStatus).toBe("generated");
+    const payload = mockModule.__mockGenerateIRN.mock.calls[0]![0];
+    expect(payload.TranDtls.SupTyp).toBe("EXPWP");
+    expect(payload.BuyerDtls.Gstin).toBe("URP");
+    expect(payload.BuyerDtls.Pos).toBe("96");
   });
 
   it("marks invoice as failed when IRP returns 400 error", async () => {

@@ -572,7 +572,8 @@ export const invoiceRouter = router({
           if (!inv) return;
 
           const [party] = await db.select().from(parties).where(eq(parties.id, inv.partyId)).limit(1);
-          if (!party?.gstin) return; // B2C — skip
+          // B2C — skip. Exports to overseas buyers (no GSTIN) are e-invoiced.
+          if (!party || (!party.gstin && party.gstRegistrationType !== "overseas")) return;
 
           const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
           if (!biz) return;

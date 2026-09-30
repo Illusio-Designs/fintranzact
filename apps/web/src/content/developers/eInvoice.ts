@@ -244,7 +244,7 @@ print("IRN:", result["irn"])`,
       gotchas: [
         "Requires `EInvoice:manage` permission. Admin role only.",
         "E-invoicing must be enabled (`isEnabled: true`) — returns PRECONDITION_FAILED otherwise.",
-        "Only B2B invoices (customer has a GSTIN) can be e-invoiced. B2C invoices return BAD_REQUEST.",
+        "Only B2B invoices (customer has a GSTIN) and exports (customer's gstRegistrationType is 'overseas') can be e-invoiced. Other B2C invoices return BAD_REQUEST.",
         "Returns BAD_REQUEST if an IRN is already generated ('generated' status) or if the e-invoice was previously cancelled.",
         "The invoice status is set to 'pending' before calling IRP. If IRP fails with a retryable error, status stays 'pending'. Non-retryable errors set status to 'failed'.",
         "The signed QR code can be printed on the invoice PDF — it contains the IRN and is verifiable by the buyer.",

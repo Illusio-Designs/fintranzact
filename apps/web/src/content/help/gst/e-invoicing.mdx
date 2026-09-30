@@ -31,7 +31,7 @@ The menu item only appears when the business is GST-registered, meaning its GST 
 The IRP rejects an invoice when it's missing required data, so check these first:
 
 - **Your business**: the GSTIN, legal name, address, city, pincode and 2-digit state code are filled in under **Settings → Business**.
-- **The customer**: the party has a **GSTIN**. E-invoicing is B2B only, so invoices to parties without a GSTIN are never submitted. Also fill in the party's state code, pincode and billing address.
+- **The customer**: the party has a **GSTIN**, or its GST registration type is **Overseas** (an export). Invoices to other parties without a GSTIN are B2C and are never submitted. Also fill in the party's state code, pincode and billing address.
 - **Items**: every item has an HSN/SAC code. A line whose item has no HSN is sent with HSN `9999`, which the IRP may reject.
 - **IRP API user**: create an API user for your GSTIN on the e-invoice portal. Fintranzact signs in with that user.
 
@@ -99,7 +99,15 @@ Automatic submission only happens when an invoice is created. Invoices saved bef
 | Items | Item name, HSN (or `9999`), goods/service flag, quantity, unit converted to a GST unit code (`OTH` if unknown), unit price, discount, GST rate, tax split |
 | Totals | Taxable value, CGST/SGST/IGST, other charges, round-off, invoice total. Reverse charge is flagged if set on the invoice. |
 
-Tax goes as CGST + SGST when your state code matches the party's, and as IGST otherwise.
+Tax goes as CGST + SGST when your state code matches the party's, and as IGST otherwise. If the party has no state code, the first two digits of its GSTIN are used.
+
+The supply type comes from the party's GST registration type:
+
+| Party | Supply type | Notes |
+|---|---|---|
+| **SEZ unit / developer** | `SEZWP` when the invoice charges GST, `SEZWOP` when it doesn't (under LUT) | Always IGST, even in your own state |
+| **Overseas** without a GSTIN | `EXPWP` when the invoice charges GST, `EXPWOP` when it doesn't | Always IGST. The buyer is sent as `URP` with place of supply `96` and pincode `999999`. |
+| Anyone else with a GSTIN, including an overseas party that holds one | `B2B` | |
 
 ## The Dashboard
 

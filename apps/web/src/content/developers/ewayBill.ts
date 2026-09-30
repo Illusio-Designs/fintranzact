@@ -11,7 +11,7 @@ export const ewayBillEndpoints: EndpointGroup = {
       method: "mutation",
       path: "ewayBill.generate",
       title: "Generate E-Way Bill",
-      description: "Generate a new E-Way Bill for a goods invoice. Validates that the invoice belongs to the business, contains at least one goods item (not service-only), has a total above Rs. 50,000, and does not already have an active EWB. Submits to the NIC E-Way Bill API and stores the EWB number, validity period, and transport details.",
+      description: "Generate a new E-Way Bill for a goods invoice. Validates that the invoice belongs to the business, contains at least one goods item (not service-only), has a total (including GST) of at least the business's E-Way Bill threshold (Rs. 50,000 when not set), and does not already have an active EWB. Submits to the NIC E-Way Bill API and stores the EWB number, validity period, and transport details.",
       auth: "business",
       requiredRole: "admin",
       input: [
@@ -92,7 +92,7 @@ print("EWB:", ewb["ewbNumber"], "Valid:", ewb["validUpto"])`,
       gotchas: [
         "Requires `EWayBill:manage` permission. Admin role only.",
         "NIC E-Way Bill API credentials must be configured via environment variables (NIC_EWB_CLIENT_ID, NIC_EWB_CLIENT_SECRET, NIC_EWB_USERNAME, NIC_EWB_PASSWORD). Returns PRECONDITION_FAILED if not set.",
-        "Minimum invoice total is Rs. 50,000 — returns BAD_REQUEST for lower amounts.",
+        "Minimum invoice total is the business's `eWayBillThreshold` (Rs. 50,000 when not set) — returns BAD_REQUEST for lower amounts.",
         "Service-only invoices cannot have E-Way Bills — at least one line item must be a 'product' type.",
         "Returns CONFLICT if an active/generated EWB already exists for this invoice.",
         "Validity is computed based on distance: 100 km/day for regular vehicles, 75 km/day for over-dimensional cargo. Minimum 1 day validity.",
