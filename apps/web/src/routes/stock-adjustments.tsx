@@ -120,7 +120,14 @@ function StockAdjustmentsPage() {
                     return (
                       <tr key={a.id}>
                         <td className="whitespace-nowrap text-text-secondary">{formatDate(a.date)}</td>
-                        <td className="font-medium text-text-primary">{a.itemName}</td>
+                        <td className="font-medium text-text-primary">
+                          {a.itemName}
+                          {a.batchNumber && (
+                            <span className="block text-xs font-normal text-text-tertiary">
+                              Batch {a.batchNumber}{a.expiryDate ? ` · exp ${formatDate(a.expiryDate)}` : ""}
+                            </span>
+                          )}
+                        </td>
                         <td className="text-text-secondary">{a.warehouseName ?? "—"}</td>
                         <td
                           className={cn(
@@ -165,9 +172,11 @@ function StockAdjustmentsPage() {
                   warehouseId,
                   reason: finalReason,
                   date: toISOString(date),
-                  lines: ready.map((l) => ({
+                  lines: ready.map(({ batchId, newBatch, ...l }) => ({
                     ...l,
                     quantity: direction === "remove" ? `-${l.quantity}` : l.quantity,
+                    // Stock taken out comes from a batch; stock added goes into one.
+                    ...(direction === "remove" ? (batchId ? { batchId } : {}) : (newBatch ? { newBatch } : {})),
                   })),
                 })
               }
@@ -208,6 +217,7 @@ function StockAdjustmentsPage() {
             onChange={setLines}
             warehouseId={warehouseId || undefined}
             quantityLabel={direction === "remove" ? "Remove" : "Add"}
+            batchMode={direction === "remove" ? "out" : "in"}
           />
         </div>
       </SlideOver>

@@ -111,7 +111,7 @@ function StockTransfersPage() {
                       </td>
                       <td className="max-w-[420px]">
                         <p className="truncate text-text-secondary">
-                          {t.lines.map((l) => `${l.name} × ${formatQty(l.quantity, l.unit)}`).join(", ")}
+                          {t.lines.map((l) => `${l.name}${l.batchNumber ? ` (${l.batchNumber})` : ""} × ${formatQty(l.quantity, l.unit)}`).join(", ")}
                         </p>
                         {t.lineCount > 1 && <p className="text-xs text-text-tertiary">{t.lineCount} items</p>}
                       </td>
@@ -146,7 +146,7 @@ function StockTransfersPage() {
                   sourceWarehouseId: from,
                   destinationWarehouseId: to,
                   date: toISOString(date),
-                  lines: ready,
+                  lines: ready.map(({ newBatch: _newBatch, ...l }) => l),
                 })
               }
             >
@@ -161,7 +161,7 @@ function StockTransfersPage() {
             <WarehouseSelect label="To" value={to} onChange={setTo} exclude={from} required />
           </div>
           <InputField label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <StockLinesEditor lines={lines} onChange={setLines} warehouseId={from || undefined} />
+          <StockLinesEditor lines={lines} onChange={setLines} warehouseId={from || undefined} batchMode="out" />
         </div>
       </SlideOver>
     </div>

@@ -14,6 +14,7 @@ import { Alert02Icon, Analytics01Icon, ArrowRight01Icon, Cash01Icon, Download04I
 
 import { Spinner } from "@/components/ui/Spinner";
 import {
+  BatchStockReport,
   DeadStockReport,
   GodownSummaryReport,
   MovementSummaryReport,
@@ -47,6 +48,9 @@ type ReportId =
   | "stock-ledger"
   | "stock-movement"
   | "godown-summary"
+  | "batch-stock"
+  | "expiring-batches"
+  | "expired-stock"
   | "stock-group-summary"
   | "stock-ageing"
   | "reorder-status"
@@ -94,6 +98,9 @@ const REPORT_GROUPS: Array<{ label: string; reports: ReportDef[] }> = [
       { id: "stock-movement", label: "Movement Summary", description: "Opening, inward, outward and closing stock per item", tabular: true },
       { id: "stock-group-summary", label: "Stock Group Summary", description: "Stock quantity and value per stock group, with drill-down to items", tabular: true },
       { id: "godown-summary", label: "Godown Summary", description: "Stock held and its value in each warehouse", tabular: true },
+      { id: "batch-stock", label: "Batch-wise Stock", description: "Stock per batch and warehouse, with expiry dates", tabular: true },
+      { id: "expiring-batches", label: "Expiring Soon", description: "Batches that expire in the next N days", tabular: true },
+      { id: "expired-stock", label: "Expired Stock", description: "Batches past their expiry that are still in stock", tabular: true },
       { id: "stock-ageing", label: "Stock Ageing", description: "How long current stock has been held", tabular: true },
       { id: "reorder-status", label: "Reorder Status", description: "Items at or below their reorder level, with a suggested order", tabular: true },
       { id: "dead-stock", label: "Dead Stock", description: "Stock that hasn't sold in a while", tabular: true },
@@ -2963,6 +2970,12 @@ function ReportsPage() {
         return <StockGroupSummaryReport toDate={toDate} />;
       case "godown-summary":
         return <GodownSummaryReport />;
+      case "batch-stock":
+        return <BatchStockReport status="all" />;
+      case "expiring-batches":
+        return <BatchStockReport status="expiring" />;
+      case "expired-stock":
+        return <BatchStockReport status="expired" />;
       case "stock-ageing":
         return <StockAgeingReport />;
       case "reorder-status":

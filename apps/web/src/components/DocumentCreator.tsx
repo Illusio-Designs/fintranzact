@@ -17,6 +17,7 @@ import { WarehouseSelect, formatQty, useWarehouses } from "@/components/inventor
 import { useLevelPricing } from "@/components/pricing/useLevelPricing";
 import { Select } from "@/components/ui/Select";
 import { useDeliveryMethods } from "@/lib/delivery-methods";
+import { BatchInFields, BatchOutSelect, batchInPayload } from "@/components/inventory/BatchFields";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -84,6 +85,20 @@ interface LineItem {
   availableUnits?: UnitOption[];
   /** On a return made against an invoice: the quantity that invoice had. */
   sourceQuantity?: string;
+  /** The item keeps stock per batch: the line names its batch. */
+  trackBatches?: boolean;
+  trackExpiry?: boolean;
+  /** Picked (outward) or saved batch. Empty on an outward line = earliest expiry first. */
+  batchId?: string;
+  /** Inward: batch typed in — matched to an existing batch or created. */
+  batchNumber?: string;
+  mfgDate?: string;
+  expiryDate?: string;
+  batchMrp?: string;
+  /** Outward: the user allowed an expired batch to go out. */
+  allowExpired?: boolean;
+  /** Editing: the batch the line was saved with. */
+  savedBatchId?: string;
 }
 
 interface Charge {
@@ -392,6 +407,16 @@ export function DocumentCreator({
         conversionFactor: li.conversionFactor && parseFloat(li.conversionFactor) !== 1 ? li.conversionFactor : undefined,
         // A return can't send back more than its invoice had.
         sourceQuantity: RETURN_TYPES.includes(documentType) && !editInvoiceId ? String(parseFloat(li.quantity)) : undefined,
+        // A saved batch stays on the line (a return made from an invoice
+        // brings its goods back into the batch they went out of).
+        batchId: li.batchId || undefined,
+        savedBatchId: li.batchId || undefined,
+        batchNumber: li.batch?.batchNumber ?? undefined,
+        expiryDate: li.batch?.expiryDate ?? undefined,
+        mfgDate: li.batch?.mfgDate ?? undefined,
+        batchMrp: li.batch?.mrp ?? undefined,
+        // Sending expired stock back to the supplier is what purchase returns are for.
+        allowExpired: documentType === "purchase_return" && !!li.batchId ? true : undefined,
       })));
     }
   }, [editData]);
@@ -670,10 +695,22 @@ export function DocumentCreator({
               selectedUnit: undefined,
               conversionFactor: undefined,
               availableUnits: allUnits.length > 1 ? allUnits : undefined,
+              trackBatches: product.itemType !== "service" && !!product.trackBatches,
+              trackExpiry: !!product.trackExpiry,
+              batchId: undefined,
+              batchNumber: undefined,
+              mfgDate: undefined,
+              expiryDate: undefined,
+              batchMrp: undefined,
+              allowExpired: undefined,
             }
           : li
       )
     );
+  }
+
+  function updateBatch(id: string, patch: Partial<LineItem>) {
+    setItems((prev) => prev.map((li) => (li.id === id ? { ...li, ...patch } : li)));
   }
 
   function addLine() {
@@ -781,6 +818,11 @@ export function DocumentCreator({
         discountPercent: li.discountPercent,
         selectedUnit: li.selectedUnit || undefined,
         conversionFactor: li.conversionFactor || undefined,
+        ...(direction === 1 || (direction === 0 && li.batchId)
+          ? batchInPayload(li)
+          : li.batchId
+            ? { batchId: li.batchId, ...(li.allowExpired ? { allowExpired: true } : {}) }
+            : {}),
       };
     });
 
@@ -1277,6 +1319,32 @@ export function DocumentCreator({
                         placeholder={positive(li.rejectedQuantity) ? "Damaged, short expiry…" : "Nothing rejected"}
                       />
                     </div>
+                  </div>
+                )}
+
+                {/* Batch: typed in on the way in, picked (or earliest expiry
+                    first) on the way out. Only for items that track batches. */}
+                {li.itemId && direction !== 0 && (li.trackBatches || li.batchId) && (
+                  <div className="rounded-lg border border-border-light bg-surface-0 px-3 py-2">
+                    {direction === 1 ? (
+                      <BatchInFields
+                        itemId={li.itemId}
+                        trackExpiry={!!li.trackExpiry}
+                        value={li}
+                        onChange={(patch) => updateBatch(li.id, patch)}
+                      />
+                    ) : (
+                      <BatchOutSelect
+                        itemId={li.itemId}
+                        warehouseId={warehouseId || null}
+                        date={invoiceDate}
+                        needed={(parseFloat(li.quantity || "0") + parseFloat(li.freeQuantity || "0")) * parseFloat(li.conversionFactor || "1") || 0}
+                        batchId={li.batchId ?? ""}
+                        allowExpired={!!li.allowExpired}
+                        onChange={(patch) => updateBatch(li.id, patch)}
+                        savedBatch={isEditing && li.savedBatchId ? { id: li.savedBatchId, label: li.batchNumber ?? "Saved batch" } : null}
+                      />
+                    )}
                   </div>
                 )}
 

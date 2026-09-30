@@ -36,6 +36,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ArrowDown01Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
 import { StockGroupFilter, StockGroupPicker } from "@/components/inventory/StockGroups";
+import { BatchTrackingFields, ItemBatchesPanel, type BatchInValue } from "@/components/inventory/BatchFields";
 
 import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/items")({
@@ -548,6 +549,9 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [taxInclusive, setTaxInclusive] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("0");
   const [lowStockAlert, setLowStockAlert] = useState("");
+  const [trackBatches, setTrackBatches] = useState(false);
+  const [trackExpiry, setTrackExpiry] = useState(false);
+  const [openingBatch, setOpeningBatch] = useState<BatchInValue>({});
   const [unit, setUnit] = useState("pcs");
   const [unitVariants, setUnitVariants] = useState<UiUnitVariant[]>([]);
   const [variantAttributes, setVariantAttributes] = useState<string[]>([]);
@@ -658,6 +662,9 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
     setTaxInclusive(false);
     setStockQuantity("0");
     setLowStockAlert("");
+    setTrackBatches(false);
+    setTrackExpiry(false);
+    setOpeningBatch({});
     setUnit("pcs");
     setUnitVariants([]);
     setVariantAttributes([]);
@@ -698,6 +705,16 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
       taxInclusive,
       stockQuantity: effectiveMode === "variants" ? "0" : stockQuantity,
       lowStockAlert: lowStockAlert || undefined,
+      ...(itemType === "product" ? { trackBatches, trackExpiry: trackBatches && trackExpiry } : {}),
+      ...(itemType === "product" && trackBatches && effectiveMode !== "variants" && openingBatch.batchNumber?.trim()
+        ? {
+            openingBatch: {
+              batchNumber: openingBatch.batchNumber.trim(),
+              expiryDate: openingBatch.expiryDate || undefined,
+              mfgDate: openingBatch.mfgDate || undefined,
+            },
+          }
+        : {}),
       unit: unit as any,
       unitVariants: effectiveMode === "alt_units" && validUnitVariants.length > 0 ? validUnitVariants : undefined,
       variantAttributes: effectiveMode === "variants" && variantAttributes.length > 0 ? variantAttributes : undefined,
@@ -878,6 +895,22 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                   placeholder="Alert threshold"
                 />
               </div>
+            </Disclosure>
+          )}
+
+          {itemType === "product" && (
+            <Disclosure label="Batches & expiry" count={trackBatches ? 1 : 0}>
+              <BatchTrackingFields
+                trackBatches={trackBatches}
+                trackExpiry={trackExpiry}
+                onChange={(p) => {
+                  if (p.trackBatches !== undefined) setTrackBatches(p.trackBatches);
+                  if (p.trackExpiry !== undefined) setTrackExpiry(p.trackExpiry);
+                }}
+                openingStock={derivedMode === "variants" ? "0" : stockQuantity}
+                openingBatch={openingBatch}
+                onOpeningBatchChange={(p) => setOpeningBatch((b) => ({ ...b, ...p }))}
+              />
             </Disclosure>
           )}
 
@@ -1110,6 +1143,8 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
   const [taxInclusive, setTaxInclusive] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("0");
   const [lowStockAlert, setLowStockAlert] = useState("");
+  const [trackBatches, setTrackBatches] = useState(false);
+  const [trackExpiry, setTrackExpiry] = useState(false);
   const [unit, setUnit] = useState("pcs");
   const [unitVariants, setUnitVariants] = useState<UiUnitVariant[]>([]);
   const [itemMode, setItemMode] = useState<ItemMode>("simple");
@@ -1139,6 +1174,8 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
     setTaxInclusive(item.taxInclusive ?? false);
     setStockQuantity(item.stockQuantity ?? "0");
     setLowStockAlert(item.lowStockAlert ?? "");
+    setTrackBatches(item.trackBatches ?? false);
+    setTrackExpiry(item.trackExpiry ?? false);
     setUnit(item.unit ?? "pcs");
     setUnitVariants((item.unitVariants as any[]) ?? []);
     setItemMode((item.itemMode as ItemMode) ?? "simple");
@@ -1261,6 +1298,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         taxPercent,
         taxInclusive,
         lowStockAlert: lowStockAlert || undefined,
+        ...(itemType === "product" ? { trackBatches, trackExpiry: trackBatches && trackExpiry } : {}),
         unit: unit as any,
         unitVariants: itemMode === "alt_units" && validVariants.length > 0 ? validVariants : undefined,
       },
@@ -1456,6 +1494,24 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
                   placeholder="Alert threshold"
                 />
               </div>
+            </Disclosure>
+          )}
+
+          {itemType === "product" && (
+            <Disclosure label="Batches & expiry" count={trackBatches ? 1 : 0}>
+              <BatchTrackingFields
+                trackBatches={trackBatches}
+                trackExpiry={trackExpiry}
+                onChange={(p) => {
+                  if (p.trackBatches !== undefined) setTrackBatches(p.trackBatches);
+                  if (p.trackExpiry !== undefined) setTrackExpiry(p.trackExpiry);
+                }}
+              />
+              {item?.trackBatches && !trackBatches && (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                  Existing batches are kept; new entries won't ask for one.
+                </p>
+              )}
             </Disclosure>
           )}
 
@@ -2187,6 +2243,11 @@ function ItemDetailPanel({
                 </tbody>
               </table>
             </div>
+
+            {/* Batches (items that track batches) */}
+            {item.trackBatches && item.itemMode !== "variants" && (
+              <ItemBatchesPanel itemId={item.id} unit={item.unit} />
+            )}
 
             {/* Variants table */}
             {item.itemMode === "variants" && item.variants && item.variants.length > 0 && (
