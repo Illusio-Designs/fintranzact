@@ -8,6 +8,15 @@ vi.mock("@fintranzact/db", async () => {
   return { ...actual, controlDb: { select: () => chain } };
 });
 
+// No platform-admin edits: each plan has its built-in limits.
+vi.mock("../lib/plan-catalog.js", async () => {
+  const { PLAN_DEFAULTS } = await vi.importActual<typeof import("@fintranzact/shared")>("@fintranzact/shared");
+  return {
+    getPlanLimits: async (plan: string) =>
+      (PLAN_DEFAULTS[plan as keyof typeof PLAN_DEFAULTS] ?? PLAN_DEFAULTS.free).limits,
+  };
+});
+
 import { recurringRunLimit, RECURRING_RUNS_PER_MONTH_FREE } from "../lib/plan-limits.js";
 
 describe("recurringRunLimit — monthly recurring-invoice runs by plan", () => {

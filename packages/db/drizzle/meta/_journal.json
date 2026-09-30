@@ -225,6 +225,13 @@
       "when": 1790759718567,
       "tag": "0031_share_links",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790774898433,
+      "tag": "0032_plans_and_partners",
+      "breakpoints": true
     }
   ]
 }

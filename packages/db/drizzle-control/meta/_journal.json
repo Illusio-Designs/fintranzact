@@ -50,6 +50,13 @@
       "when": 1790759719437,
       "tag": "0006_share_links",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790774896775,
+      "tag": "0007_plans_and_partners",
+      "breakpoints": true
     }
   ]
 }
