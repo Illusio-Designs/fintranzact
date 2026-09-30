@@ -4,6 +4,9 @@
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "cd ../.. && pnpm turbo run build --filter=@fintranzact/web",
   "outputDirectory": "dist",
+  "git": {
+    "deploymentEnabled": false
+  },
   "rewrites": [
     {
       "source": "/api/:path*",
