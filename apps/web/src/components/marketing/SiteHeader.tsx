@@ -163,6 +163,7 @@ const MENUS: MegaMenu[] = [
           { label: "About Fintranzact", icon: Building03Icon, to: "/about" },
           { label: "Contact us", icon: HeadphonesIcon, to: "/contact" },
           { label: "Partner with us", icon: UserGroupIcon, to: "/partners" },
+          { label: "Find a partner", icon: UserGroupIcon, to: "/find-a-partner" },
           { label: "Email us", icon: Mail01Icon, href: `mailto:${CONTACT_EMAIL}` },
         ],
       },

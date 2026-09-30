@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
 import { invalidateSessionCache, getSessionIdFromRequest } from "../context.js";
 import { emailService } from "../lib/email.js";
+import { isSelfServePlan } from "../lib/plan-catalog.js";
 import { effectiveOwnerPlan, enforceTeamMemberLimit, enforceOrgCreationLimit, getLimits } from "../lib/plan-limits.js";
 
 function hashInvitationToken(token: string): string {
@@ -32,8 +33,6 @@ function generateSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) + "-" + nanoid(6);
 }
 
-const SELF_SERVE_PLANS: string[] = ["forever_free", "free"];
-
 export const tenantRouter = router({
   updatePlan: protectedProcedure
     .input(z.object({
@@ -54,10 +53,10 @@ export const tenantRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "No organization selected to update." });
       }
 
-      // Owners can pick a free plan themselves; paid plans are set up by a
-      // platform admin (platform.setPlan) once the plan is arranged.
+      // Owners can pick a free (₹0) plan that is on offer themselves; paid
+      // plans are set up by a platform admin (platform.setPlan).
       const [current] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-      if (!SELF_SERVE_PLANS.includes(input.plan) && current?.plan !== input.plan) {
+      if (current?.plan !== input.plan && !(await isSelfServePlan(input.plan))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Paid plans are set up by the Fintranzact team. Contact us to upgrade." });
       }
 
@@ -159,7 +158,7 @@ export const tenantRouter = router({
     const bestPlan = effectiveOwnerPlan(ownedOrgs);
     if (bestPlan === null) return true;
 
-    const limits = getLimits(bestPlan);
+    const limits = await getLimits(bestPlan);
     return limits.maxOwnedOrgs === Infinity || ownedOrgs.length < limits.maxOwnedOrgs;
   }),
 

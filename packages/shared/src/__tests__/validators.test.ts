@@ -34,7 +34,10 @@ import {
   createExpenseSchema,
   // Pagination
   paginationSchema,
+  mergePartyShippingAddresses,
+  MAX_ADDITIONAL_SHIPPING_ADDRESSES,
 } from "../validators.js";
+import { nextPartnerBadge, normalizeReferralCode, partnerBadgeFor } from "../partners.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // loginSchema
@@ -969,5 +972,47 @@ describe("panFromGstin — the PAN is characters 3-12 of a GSTIN", () => {
     expect(panFromGstin("")).toBeNull();
     expect(panFromGstin(undefined)).toBeNull();
     expect(panFromGstin(null)).toBeNull();
+  });
+});
+
+describe("mergePartyShippingAddresses", () => {
+  it("keeps the target's default and every other address once", () => {
+    expect(
+      mergePartyShippingAddresses(
+        { shippingAddress: "A Road", additionalShippingAddresses: [{ address: "B Road" }] },
+        { shippingAddress: "a  road", additionalShippingAddresses: [{ address: "C Road", label: "Branch" }, { address: "b road" }] },
+      ),
+    ).toEqual({ shippingAddress: "A Road", additionalShippingAddresses: [{ address: "B Road" }, { address: "C Road", label: "Branch" }] });
+  });
+
+  it("takes the source's default when the target has none", () => {
+    expect(mergePartyShippingAddresses({ shippingAddress: "" }, { shippingAddress: "X Road" }))
+      .toEqual({ shippingAddress: "X Road", additionalShippingAddresses: null });
+  });
+
+  it("stays within the extra-address limit", () => {
+    const many = Array.from({ length: 15 }, (_, i) => ({ address: `Shop ${i}` }));
+    const more = Array.from({ length: 15 }, (_, i) => ({ address: `Store ${i}` }));
+    const result = mergePartyShippingAddresses({ additionalShippingAddresses: many }, { additionalShippingAddresses: more });
+    expect(result.additionalShippingAddresses).toHaveLength(MAX_ADDITIONAL_SHIPPING_ADDRESSES);
+  });
+});
+
+describe("partner badges and referral codes", () => {
+  it("awards badges by paid referrals", () => {
+    expect(partnerBadgeFor(0).id).toBe("registered");
+    expect(partnerBadgeFor(4).id).toBe("registered");
+    expect(partnerBadgeFor(5).id).toBe("silver");
+    expect(partnerBadgeFor(15).id).toBe("gold");
+    expect(partnerBadgeFor(400).id).toBe("platinum");
+    expect(nextPartnerBadge(12)).toMatchObject({ badge: { id: "gold" }, needed: 3 });
+    expect(nextPartnerBadge(40)).toBeNull();
+  });
+
+  it("reads referral codes however they are typed", () => {
+    expect(normalizeReferralCode(" ftz7k2m9q ")).toBe("FTZ-7K2M9Q");
+    expect(normalizeReferralCode("FTZ-7K2M9Q")).toBe("FTZ-7K2M9Q");
+    expect(normalizeReferralCode("friend 2026")).toBe("FRIEND2026");
+    expect(normalizeReferralCode("  ")).toBeNull();
   });
 });

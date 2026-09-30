@@ -14,9 +14,71 @@ function escapeHtml(str: string): string {
 interface EmailService {
   sendMagicLink(to: string, magicLinkUrl: string, deepLinkUrl?: string, isNewUser?: boolean): Promise<void>;
   sendInvitation(to: string, inviteUrl: string, businessName: string, inviterName: string | null): Promise<void>;
+  sendPartnerApproved(to: string, details: PartnerApprovedEmail): Promise<void>;
+}
+
+export interface PartnerApprovedEmail {
+  contactName: string;
+  companyName: string;
+  referralCode: string;
+  signupUrl: string;
+}
+
+function partnerApprovedText(d: PartnerApprovedEmail): string {
+  return [
+    `Hi ${d.contactName},`,
+    "",
+    `${d.companyName} is now a Fintranzact partner.`,
+    "",
+    `Your referral code: ${d.referralCode}`,
+    `Share this sign-up link: ${d.signupUrl}`,
+    "",
+    "Businesses that sign up with your code or link count as your referrals. Your badge and commission",
+    "grow with the number of them on a paid plan.",
+    "",
+    "Welcome aboard,",
+    "The Fintranzact team",
+  ].join("\n");
+}
+
+function partnerApprovedHtml(d: PartnerApprovedEmail): string {
+  const e = escapeHtml;
+  const font = "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;";
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>You're a Fintranzact partner</title></head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f3f4f6;"><tr><td style="padding:40px 16px;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:480px;margin:0 auto;background-color:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
+<tr><td style="height:4px;background:#3B5EAA;font-size:0;line-height:0;">&nbsp;</td></tr>
+<tr><td style="padding:32px 40px 0 40px;${font}">
+<p style="margin:0 0 4px 0;font-size:13px;font-weight:600;color:#3B5EAA;text-transform:uppercase;letter-spacing:.5px;">Partner programme</p>
+<h1 style="margin:0 0 16px 0;font-size:22px;color:#111827;">Welcome aboard, ${e(d.contactName)}</h1>
+<p style="margin:0 0 20px 0;font-size:15px;line-height:22px;color:#374151;">${e(d.companyName)} is now a Fintranzact partner. Businesses that sign up with your code or link count as your referrals, and your badge and commission grow with the number of them on a paid plan.</p>
+</td></tr>
+<tr><td style="padding:0 40px;${font}">
+<table role="presentation" width="100%" style="background-color:#eef2fa;border-radius:10px;"><tr><td style="padding:18px 20px;text-align:center;">
+<p style="margin:0;font-size:12px;font-weight:600;color:#3B5EAA;text-transform:uppercase;letter-spacing:.5px;">Your referral code</p>
+<p style="margin:6px 0 0 0;font-family:Menlo,Consolas,monospace;font-size:26px;font-weight:700;letter-spacing:2px;color:#111827;">${e(d.referralCode)}</p>
+</td></tr></table>
+</td></tr>
+<tr><td style="padding:24px 40px 0 40px;text-align:center;${font}">
+<a href="${e(d.signupUrl)}" style="display:inline-block;padding:12px 22px;background-color:#3B5EAA;color:#ffffff;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;">Your sign-up link</a>
+<p style="margin:10px 0 0 0;font-size:12px;color:#6b7280;word-break:break-all;">${e(d.signupUrl)}</p>
+</td></tr>
+<tr><td style="padding:24px 40px 32px 40px;${font}">
+<p style="margin:0;font-size:14px;line-height:21px;color:#374151;">Questions about your referrals or payouts? Get in touch with the Fintranzact team.</p>
+</td></tr>
+</table></td></tr></table></body></html>`;
 }
 
 class ConsoleEmailService implements EmailService {
+  async sendPartnerApproved(to: string, details: PartnerApprovedEmail): Promise<void> {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[email] FATAL: No email service configured for production. Set RESEND_API_KEY.");
+      throw new Error("Email service not configured");
+    }
+    console.log(`\n[email] Partner approved: ${to}\n${partnerApprovedText(details)}\n`);
+  }
+
   async sendMagicLink(to: string, magicLinkUrl: string, deepLinkUrl?: string, isNewUser?: boolean): Promise<void> {
     if (process.env.NODE_ENV === "production") {
       console.error("[email] FATAL: No email service configured for production. Set RESEND_API_KEY.");
@@ -50,6 +112,24 @@ class ConsoleEmailService implements EmailService {
 }
 
 class ResendEmailService implements EmailService {
+  async sendPartnerApproved(to: string, details: PartnerApprovedEmail): Promise<void> {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: this.fromAddress,
+        to,
+        subject: `You're a Fintranzact partner — your referral code is ${details.referralCode}`,
+        html: partnerApprovedHtml(details),
+        text: partnerApprovedText(details),
+      }),
+    });
+    if (!res.ok) {
+      console.error("[email] Resend partner email failed:", res.status, await res.text().catch(() => ""));
+      throw new Error("Failed to send email");
+    }
+  }
+
   constructor(
     private apiKey: string,
     private fromAddress: string,

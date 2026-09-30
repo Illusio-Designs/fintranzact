@@ -45,6 +45,7 @@ import { Route as InvoicesRouteImport } from './routes/invoices'
 import { Route as Gstr2bRouteImport } from './routes/gstr2b'
 import { Route as GstRouteImport } from './routes/gst'
 import { Route as GoodsReceiptNotesRouteImport } from './routes/goods-receipt-notes'
+import { Route as FindAPartnerRouteImport } from './routes/find-a-partner'
 import { Route as FeaturesRouteImport } from './routes/features'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as EwayBillsRouteImport } from './routes/eway-bills'
@@ -245,6 +246,11 @@ const GoodsReceiptNotesRoute = GoodsReceiptNotesRouteImport.update({
   path: '/goods-receipt-notes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FindAPartnerRoute = FindAPartnerRouteImport.update({
+  id: '/find-a-partner',
+  path: '/find-a-partner',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FeaturesRoute = FeaturesRouteImport.update({
   id: '/features',
   path: '/features',
@@ -355,6 +361,7 @@ export interface FileRoutesByFullPath {
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
   '/features': typeof FeaturesRoute
+  '/find-a-partner': typeof FindAPartnerRoute
   '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
   '/gstr2b': typeof Gstr2bRoute
@@ -412,6 +419,7 @@ export interface FileRoutesByTo {
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
   '/features': typeof FeaturesRoute
+  '/find-a-partner': typeof FindAPartnerRoute
   '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
   '/gstr2b': typeof Gstr2bRoute
@@ -470,6 +478,7 @@ export interface FileRoutesById {
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
   '/features': typeof FeaturesRoute
+  '/find-a-partner': typeof FindAPartnerRoute
   '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
   '/gstr2b': typeof Gstr2bRoute
@@ -529,6 +538,7 @@ export interface FileRouteTypes {
     | '/eway-bills'
     | '/expenses'
     | '/features'
+    | '/find-a-partner'
     | '/goods-receipt-notes'
     | '/gst'
     | '/gstr2b'
@@ -586,6 +596,7 @@ export interface FileRouteTypes {
     | '/eway-bills'
     | '/expenses'
     | '/features'
+    | '/find-a-partner'
     | '/goods-receipt-notes'
     | '/gst'
     | '/gstr2b'
@@ -643,6 +654,7 @@ export interface FileRouteTypes {
     | '/eway-bills'
     | '/expenses'
     | '/features'
+    | '/find-a-partner'
     | '/goods-receipt-notes'
     | '/gst'
     | '/gstr2b'
@@ -701,6 +713,7 @@ export interface RootRouteChildren {
   EwayBillsRoute: typeof EwayBillsRoute
   ExpensesRoute: typeof ExpensesRoute
   FeaturesRoute: typeof FeaturesRoute
+  FindAPartnerRoute: typeof FindAPartnerRoute
   GoodsReceiptNotesRoute: typeof GoodsReceiptNotesRoute
   GstRoute: typeof GstRoute
   Gstr2bRoute: typeof Gstr2bRoute
@@ -999,6 +1012,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GoodsReceiptNotesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/find-a-partner': {
+      id: '/find-a-partner'
+      path: '/find-a-partner'
+      fullPath: '/find-a-partner'
+      preLoaderRoute: typeof FindAPartnerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/features': {
       id: '/features'
       path: '/features'
@@ -1149,6 +1169,7 @@ const rootRouteChildren: RootRouteChildren = {
   EwayBillsRoute: EwayBillsRoute,
   ExpensesRoute: ExpensesRoute,
   FeaturesRoute: FeaturesRoute,
+  FindAPartnerRoute: FindAPartnerRoute,
   GoodsReceiptNotesRoute: GoodsReceiptNotesRoute,
   GstRoute: GstRoute,
   Gstr2bRoute: Gstr2bRoute,

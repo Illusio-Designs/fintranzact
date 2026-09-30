@@ -12,6 +12,7 @@ import {
   GSTIN_REGEX,
   type PartyGstType,
   type GstinStatus,
+  mergePartyShippingAddresses,
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
@@ -462,6 +463,11 @@ export const partyRouter = router({
         if (!target.state && source.state) updates.state = source.state;
         if (!target.pincode && source.pincode) updates.pincode = source.pincode;
         if (!target.category && source.category) updates.category = source.category;
+        // Keep both parties' shipping addresses: the target's default stays,
+        // everything else becomes an extra address.
+        const shipping = mergePartyShippingAddresses(target, source);
+        updates.shippingAddress = shipping.shippingAddress;
+        updates.additionalShippingAddresses = shipping.additionalShippingAddresses;
 
         await tx.update(parties).set(updates).where(eq(parties.id, input.targetId));
 

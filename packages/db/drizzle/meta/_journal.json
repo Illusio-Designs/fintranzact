@@ -229,43 +229,15 @@
     {
       "idx": 32,
       "version": "7",
-      "when": 1790765039909,
-      "tag": "0032_inventory_stock_controls",
+      "when": 1790774898433,
+      "tag": "0032_plans_and_partners",
       "breakpoints": true
     },
     {
       "idx": 33,
       "version": "7",
-      "when": 1790766398063,
-      "tag": "0033_stock_valuation_method",
-      "breakpoints": true
-    },
-    {
-      "idx": 34,
-      "version": "7",
-      "when": 1790770844552,
-      "tag": "0034_orders_and_grn",
-      "breakpoints": true
-    },
-    {
-      "idx": 35,
-      "version": "7",
-      "when": 1790773423532,
-      "tag": "0035_stock_groups",
-      "breakpoints": true
-    },
-    {
-      "idx": 36,
-      "version": "7",
-      "when": 1790773505632,
-      "tag": "0036_bom_manufacturing",
-      "breakpoints": true
-    },
-    {
-      "idx": 37,
-      "version": "7",
-      "when": 1790774555176,
-      "tag": "0037_price_levels",
+      "when": 1790779605517,
+      "tag": "0033_inventory",
       "breakpoints": true
     }
   ]

@@ -33,14 +33,14 @@ import {
   createApiKeySchema,
 } from "@fintranzact/shared";
 import { escapeLike } from "../lib/escape-like.js";
-import { getLimits } from "../lib/plan-limits.js";
+import { PLAN_DEFAULTS } from "@fintranzact/shared";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECURITY — ILIKE wildcard injection (Finding #7) — FIXED
 // ─────────────────────────────────────────────────────────────────────────────
 describe("plan limits — forever free is truly unlimited", () => {
-  it("returns unlimited access for the forever free plan", () => {
-    const limits = getLimits("forever_free");
+  it("gives the forever free plan unlimited access by default", () => {
+    const limits = PLAN_DEFAULTS.forever_free.limits;
 
     expect(limits.maxOwnedOrgs).toBe(Infinity);
     expect(limits.maxBusinesses).toBe(Infinity);

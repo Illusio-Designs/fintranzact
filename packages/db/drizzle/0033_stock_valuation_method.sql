@@ -1,1 +1,0 @@
-ALTER TABLE "inventory_settings" ADD COLUMN "valuation_method" text DEFAULT 'weighted_average' NOT NULL;

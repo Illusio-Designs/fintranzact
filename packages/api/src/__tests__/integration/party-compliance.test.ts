@@ -109,6 +109,47 @@ describe("party GST / MSME / TDS fields", () => {
   });
 });
 
+describe("party.merge keeps shipping addresses", () => {
+  it("adds the merged party's addresses to the survivor as extra ones, without repeats", async () => {
+    const target = await caller.party.create({
+      type: "customer",
+      name: "Sharma Traders",
+      shippingAddress: "12 MG Road, Pune",
+      additionalShippingAddresses: [{ label: "Godown", address: "Plot 4, MIDC Bhosari, Pune" }],
+    });
+    const source = await caller.party.create({
+      type: "customer",
+      name: "Sharma Traders (duplicate)",
+      shippingAddress: "7 Linking Road, Mumbai",
+      additionalShippingAddresses: [
+        { label: "Same godown", address: "  plot 4, MIDC  Bhosari, Pune " },
+        { label: "Nashik branch", address: "22 College Road, Nashik", city: "Nashik" },
+      ],
+    });
+
+    await caller.party.merge({ sourceId: source.id, targetId: target.id });
+
+    const merged = await caller.party.getById({ id: target.id });
+    expect(merged?.shippingAddress).toBe("12 MG Road, Pune");
+    expect(merged?.additionalShippingAddresses).toEqual([
+      { label: "Godown", address: "Plot 4, MIDC Bhosari, Pune" },
+      { address: "7 Linking Road, Mumbai" },
+      { label: "Nashik branch", address: "22 College Road, Nashik", city: "Nashik" },
+    ]);
+  });
+
+  it("gives the survivor the merged party's address when it had none", async () => {
+    const target = await caller.party.create({ type: "customer", name: "No Address Co" });
+    const source = await caller.party.create({ type: "customer", name: "No Address Co.", shippingAddress: "5 FC Road, Pune" });
+
+    await caller.party.merge({ sourceId: source.id, targetId: target.id });
+
+    const merged = await caller.party.getById({ id: target.id });
+    expect(merged?.shippingAddress).toBe("5 FC Road, Pune");
+    expect(merged?.additionalShippingAddresses).toBeNull();
+  });
+});
+
 describe("party.lookupGstin", () => {
   it("returns derived details and a reason when e-invoicing is not set up", async () => {
     const result = await caller.party.lookupGstin({ gstin: GSTIN.toLowerCase() });
