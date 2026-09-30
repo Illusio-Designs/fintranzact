@@ -78,15 +78,25 @@ export interface GSTR1Report {
     cgst: number;
     sgst: number;
     igst: number;
-    rateItems?: GstRateLine[];
+    // The invoices behind the state total — the portal lists B2CL per invoice
+    invoices?: Array<{
+      invoiceNumber: string;
+      invoiceDate: string;
+      totalInvoiceValue: number;
+      taxableValue: number;
+      igst: number;
+      rateItems: GstRateLine[];
+    }>;
   }>;
-  // B2C Small - to unregistered (≤ ₹2.5L or intra-state)
+  // B2C Small - to unregistered (≤ ₹2.5L or intra-state), per rate and place of supply
   b2cSmall: Array<{
     taxRate: number;
     taxableValue: number;
     cgst: number;
     sgst: number;
     igst: number;
+    supplyType?: "INTRA" | "INTER";
+    pos?: string; // 2-digit state code of the place of supply
   }>;
   // HSN summary
   hsn: Array<{
@@ -99,7 +109,7 @@ export interface GSTR1Report {
     igst: number;
     totalValue: number;
   }>;
-  // Credit Notes (sales returns / adjustments reducing output tax)
+  // Credit Notes issued to customers (sales returns / adjustments reducing output tax)
   creditNotes: Array<{
     invoiceNumber: string;
     originalInvoiceNumber?: string;
@@ -109,9 +119,12 @@ export interface GSTR1Report {
     totalAmount: string;
     taxableAmount: string;
     taxAmount: string;
+    cgst?: number;
+    sgst?: number;
+    igst?: number;
     rateItems?: GstRateLine[];
   }>;
-  // Debit Notes (additional charges to buyer, increasing output tax)
+  // Debit Notes issued to customers (additional charges, increasing output tax)
   debitNotes: Array<{
     invoiceNumber: string;
     originalInvoiceNumber?: string;
@@ -121,6 +134,9 @@ export interface GSTR1Report {
     totalAmount: string;
     taxableAmount: string;
     taxAmount: string;
+    cgst?: number;
+    sgst?: number;
+    igst?: number;
     rateItems?: GstRateLine[];
   }>;
   // Totals
@@ -252,7 +268,8 @@ export async function generateGSTR1(
 
   const b2b: GSTR1Report["b2b"] = [];
   const b2cLargeMap = new Map<string, GSTR1Report["b2cLarge"][0]>();
-  const b2cSmallMap = new Map<number, GSTR1Report["b2cSmall"][0]>();
+  const b2cSmallMap = new Map<string, GSTR1Report["b2cSmall"][0]>();
+  const bizStateCode = biz?.stateCode || biz?.gstin?.substring(0, 2) || undefined;
   const hsnSummaryMap = new Map<string, GSTR1Report["hsn"][0]>();
 
   let totalTaxableValue = 0;
@@ -294,24 +311,29 @@ export async function generateGSTR1(
     } else if (!sameState && total > 250000) {
       // B2C Large: inter-state > ₹2.5L
       const state = inv.partyState || "Unknown";
-      const existing = b2cLargeMap.get(state) || { state, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, rateItems: [] };
+      const existing = b2cLargeMap.get(state) || { state, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, invoices: [] };
       existing.taxableValue += taxable;
       existing.igst += igst;
-      for (const line of groupLinesByRate(lineItems, false)) {
-        const sameRate = existing.rateItems?.find((r) => r.rate === line.rate);
-        if (sameRate) {
-          sameRate.taxableValue = round2(sameRate.taxableValue + line.taxableValue);
-          sameRate.igst = round2(sameRate.igst + line.igst);
-        } else {
-          existing.rateItems?.push(line);
-        }
-      }
+      existing.invoices?.push({
+        invoiceNumber: inv.invoiceNumber,
+        invoiceDate: inv.invoiceDate.toISOString(),
+        totalInvoiceValue: total,
+        taxableValue: taxable,
+        igst,
+        rateItems: groupLinesByRate(lineItems, false),
+      });
       b2cLargeMap.set(state, existing);
     } else {
-      // B2C Small
+      // B2C Small: one row per rate and place of supply (the portal needs
+      // intra- and inter-state supplies apart, each with its state)
+      const supplyType = sameState ? "INTRA" : "INTER";
+      const pos = sameState
+        ? bizStateCode
+        : inv.partyStateCode || (inv.partyState ? stateNameToCode(inv.partyState) : undefined);
       for (const li of lineItems) {
         const rate = parseFloat(li.taxPercent);
-        const existing = b2cSmallMap.get(rate) || { taxRate: rate, taxableValue: 0, cgst: 0, sgst: 0, igst: 0 };
+        const key = `${rate}|${supplyType}|${pos ?? ""}`;
+        const existing = b2cSmallMap.get(key) || { taxRate: rate, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, supplyType, pos };
         const itemTaxable = parseFloat(li.totalAmount) - parseFloat(li.taxAmount);
         const itemTax = parseFloat(li.taxAmount);
         existing.taxableValue += itemTaxable;
@@ -321,7 +343,7 @@ export async function generateGSTR1(
         } else {
           existing.igst += itemTax;
         }
-        b2cSmallMap.set(rate, existing);
+        b2cSmallMap.set(key, existing);
       }
     }
 
@@ -352,7 +374,9 @@ export async function generateGSTR1(
     }
   }
 
-  // Fix 2: Fetch credit notes for the period
+  // Fix 2: Fetch credit notes for the period. Only notes issued to customers
+  // (type sale) are outward supplies; a supplier's credit note or goods we
+  // return to a supplier adjust ITC in GSTR-3B instead.
   const rawCreditNotes = await db.select({
     id: invoices.id,
     invoiceNumber: invoices.invoiceNumber,
@@ -369,6 +393,7 @@ export async function generateGSTR1(
     .innerJoin(parties, eq(parties.id, invoices.partyId))
     .where(and(
       eq(invoices.businessId, businessId),
+      eq(invoices.type, "sale"),
       inArray(invoices.documentType, ["credit_note", "sales_return"]),
       sql`${invoices.status} != 'cancelled'`,
       isNull(invoices.deletedAt),
@@ -393,7 +418,8 @@ export async function generateGSTR1(
     .innerJoin(parties, eq(parties.id, invoices.partyId))
     .where(and(
       eq(invoices.businessId, businessId),
-      inArray(invoices.documentType, ["debit_note", "purchase_return"]),
+      eq(invoices.type, "sale"),
+      eq(invoices.documentType, "debit_note"),
       sql`${invoices.status} != 'cancelled'`,
       isNull(invoices.deletedAt),
       ...buildBusinessDateFilter(invoices, { from: startDate, to: endDate }),
@@ -426,6 +452,15 @@ export async function generateGSTR1(
   }
   const noteRateItems = (n: typeof rawCreditNotes[0]) =>
     groupLinesByRate(noteLinesByNote.get(n.id) || [], !!isSameState(n.partyState, n.partyStateCode));
+  const noteTaxSplit = (n: typeof rawCreditNotes[0]) => {
+    const sameState = isSameState(n.partyState, n.partyStateCode);
+    const tax = parseFloat(n.taxAmount);
+    return {
+      cgst: sameState ? splitTax(tax) : 0,
+      sgst: sameState ? splitTax(tax) : 0,
+      igst: sameState ? 0 : tax,
+    };
+  };
 
   const creditNotes: GSTR1Report["creditNotes"] = rawCreditNotes.map((n) => ({
     invoiceNumber: n.invoiceNumber,
@@ -436,6 +471,7 @@ export async function generateGSTR1(
     totalAmount: n.totalAmount,
     taxableAmount: n.subtotal,
     taxAmount: n.taxAmount,
+    ...noteTaxSplit(n),
     rateItems: noteRateItems(n),
   }));
 
@@ -448,6 +484,7 @@ export async function generateGSTR1(
     totalAmount: n.totalAmount,
     taxableAmount: n.subtotal,
     taxAmount: n.taxAmount,
+    ...noteTaxSplit(n),
     rateItems: noteRateItems(n),
   }));
 
@@ -473,6 +510,18 @@ export async function generateGSTR1(
   };
 }
 
+/**
+ * Purchase-side documents that give ITC: tax invoices and debit notes (the
+ * supplier charging more — they add to what we owe, as in the party ledger).
+ */
+const ITC_DOCUMENTS = ["invoice", "debit_note"] as const;
+/**
+ * Purchase-side documents that take ITC back: the supplier's credit notes and
+ * goods returned to the supplier (a purchase return, or a return made from a
+ * purchase invoice). They reduce what we owe, as in the party ledger.
+ */
+const ITC_REVERSING_DOCUMENTS = ["credit_note", "sales_return", "purchase_return"] as const;
+
 export async function generateGSTR3B(
   businessId: string,
   year: number,
@@ -488,6 +537,7 @@ export async function generateGSTR3B(
   const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
 
   const purchaseInvoices = await db.select({
+    documentType: invoices.documentType,
     taxAmount: invoices.taxAmount,
     subtotal: invoices.subtotal,
     partyState: parties.state,
@@ -498,10 +548,11 @@ export async function generateGSTR3B(
     .where(and(
       eq(invoices.businessId, businessId),
       eq(invoices.type, "purchase"),
-      // Only tax invoices carry ITC. Purchase orders (quotation), proformas and
-      // challans share type "purchase" and are converted into an invoice with
-      // the same tax — including them counted the same ITC twice.
-      eq(invoices.documentType, "invoice"),
+      // Only tax invoices and the supplier's credit/debit notes (and returns)
+      // move ITC. Purchase orders, GRNs, quotations, proformas and challans
+      // share type "purchase" and are converted into an invoice with the same
+      // tax — including them counted the same ITC twice.
+      inArray(invoices.documentType, [...ITC_DOCUMENTS, ...ITC_REVERSING_DOCUMENTS]),
       sql`${invoices.status} != 'cancelled'`,
       isNull(invoices.deletedAt),
       ...buildBusinessDateFilter(invoices, { from: startDate, to: endDate }),
@@ -513,7 +564,10 @@ export async function generateGSTR3B(
   let rcmTaxableValue = 0, rcmCgst = 0, rcmSgst = 0, rcmIgst = 0;
 
   for (const inv of purchaseInvoices) {
-    const tax = parseFloat(inv.taxAmount);
+    // A credit note from the supplier or goods sent back reduce ITC (and any
+    // reverse-charge liability) by their tax
+    const sign = (ITC_REVERSING_DOCUMENTS as readonly string[]).includes(inv.documentType) ? -1 : 1;
+    const tax = sign * parseFloat(inv.taxAmount);
     // Prefer state code comparison; fall back to text
     const sameState = (biz?.stateCode && inv.partyStateCode)
       ? biz.stateCode === inv.partyStateCode
@@ -522,7 +576,7 @@ export async function generateGSTR3B(
 
     if (inv.isReverseCharge) {
       // RCM purchases: tracked in 3.1(d) AND generate ITC for the buyer
-      rcmTaxableValue += parseFloat(inv.subtotal);
+      rcmTaxableValue += sign * parseFloat(inv.subtotal);
       if (sameState) {
         const half = splitTax(tax);
         rcmCgst += half;
@@ -544,13 +598,27 @@ export async function generateGSTR3B(
     }
   }
 
+  // Table 3.1(a) is net of the credit and debit notes issued in the period
+  let outTaxable = gstr1.totalTaxableValue;
+  let outIgst = gstr1.totalIgst, outCgst = gstr1.totalCgst, outSgst = gstr1.totalSgst;
+  const notes = [
+    ...gstr1.debitNotes.map((note) => ({ note, sign: 1 })),
+    ...gstr1.creditNotes.map((note) => ({ note, sign: -1 })),
+  ];
+  for (const { note, sign } of notes) {
+    outTaxable += sign * parseFloat(note.taxableAmount);
+    outIgst += sign * (note.igst ?? 0);
+    outCgst += sign * (note.cgst ?? 0);
+    outSgst += sign * (note.sgst ?? 0);
+  }
+
   // Net tax payable = output tax - ITC
   // A negative value indicates ITC credit remaining (e.g. when purchase tax
   // exceeds sales tax for a component). This is correct per GST rules —
   // the excess credit carries forward. Do NOT clamp to zero.
-  const netIgst = gstr1.totalIgst - itcIgst;
-  const netCgst = gstr1.totalCgst - itcCgst;
-  const netSgst = gstr1.totalSgst - itcSgst;
+  const netIgst = outIgst - itcIgst;
+  const netCgst = outCgst - itcCgst;
+  const netSgst = outSgst - itcSgst;
 
   return {
     period: gstr1.period,
@@ -558,10 +626,10 @@ export async function generateGSTR3B(
     businessName: gstr1.businessName,
     outwardSupplies: {
       taxable: {
-        taxableValue: gstr1.totalTaxableValue,
-        igst: gstr1.totalIgst,
-        cgst: gstr1.totalCgst,
-        sgst: gstr1.totalSgst,
+        taxableValue: outTaxable,
+        igst: outIgst,
+        cgst: outCgst,
+        sgst: outSgst,
       },
       zeroRated: { taxableValue: 0, igst: 0, cgst: 0, sgst: 0 },
       exempt: { taxableValue: 0, igst: 0, cgst: 0, sgst: 0 },
@@ -582,9 +650,9 @@ export async function generateGSTR3B(
       total: itcIgst + itcCgst + itcSgst,
     },
     taxPayable: {
-      igst: gstr1.totalIgst,
-      cgst: gstr1.totalCgst,
-      sgst: gstr1.totalSgst,
+      igst: outIgst,
+      cgst: outCgst,
+      sgst: outSgst,
     },
     netTax: {
       igst: netIgst,
@@ -729,27 +797,31 @@ export function gstr1ToPortalJson(
   const b2clMap = new Map<string, { pos: string; inv: Array<Record<string, unknown>> }>();
 
   for (const entry of report.b2cLarge) {
+    if (!entry.invoices || entry.invoices.length === 0) continue;
     const pos = stateNameToCode(entry.state);
     const existing = b2clMap.get(pos) ?? { pos, inv: [] };
-    const lines = entry.rateItems && entry.rateItems.length > 0
-      ? entry.rateItems
-      : [{ rate: deriveRate(entry.taxableValue, entry.igst), taxableValue: entry.taxableValue, igst: entry.igst }];
-    existing.inv.push({
-      txval: entry.taxableValue,
-      iamt: entry.igst,
-      csamt: 0,
-      itms: lines.map((line, idx) => ({
-        num: idx + 1,
-        itm_det: { txval: line.taxableValue, rt: line.rate, iamt: line.igst, csamt: 0 },
-      })),
-    });
+    for (const inv of entry.invoices) {
+      const lines = inv.rateItems.length > 0
+        ? inv.rateItems
+        : [{ rate: deriveRate(inv.taxableValue, inv.igst), taxableValue: inv.taxableValue, igst: inv.igst }];
+      existing.inv.push({
+        inum: inv.invoiceNumber,
+        idt: isoToPortalDate(inv.invoiceDate),
+        val: inv.totalInvoiceValue,
+        itms: lines.map((line, idx) => ({
+          num: idx + 1,
+          itm_det: { txval: line.taxableValue, rt: line.rate, iamt: line.igst, csamt: 0 },
+        })),
+      });
+    }
     b2clMap.set(pos, existing);
   }
 
-  // B2CS: determine INTRA vs INTER from presence of CGST
+  // B2CS: supply type and place of supply from the report; older reports
+  // without them fall back to the presence of CGST and our own state
   const b2cs = report.b2cSmall.map((entry) => ({
-    sply_ty: entry.cgst > 0 ? "INTRA" : "INTER",
-    pos: gstin.substring(0, 2),
+    sply_ty: entry.supplyType ?? (entry.cgst > 0 ? "INTRA" : "INTER"),
+    pos: entry.pos ?? gstin.substring(0, 2),
     typ: "OE",
     txval: entry.taxableValue,
     rt: entry.taxRate,

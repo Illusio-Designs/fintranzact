@@ -458,17 +458,17 @@ describe("GSTR-1 — includes sales_return in credit note section", () => {
   });
 });
 
-// ── GSTR-1 — purchase_return in debit note section ────────────────────────────
+// ── Purchase return — reverses ITC, not an outward debit note ────────────────
 
-describe("GSTR-1 — includes purchase_return in debit note section", () => {
+describe("Purchase return — reverses ITC in GSTR-3B, not a GSTR-1 debit note", () => {
   const PR_YEAR = 2025;
   const PR_MONTH = 12; // December 2025
 
   beforeAll(async () => {
     const tenantDb = getTenantTestDb();
 
-    // Create a purchase_return in the test month so it appears in debit note section
-    // 1 × 800 = 800 subtotal, 12% tax = 96
+    // Goods sent back to an intra-state supplier:
+    // 1 × 800 = 800 subtotal, 12% tax = 96 → CGST 48 + SGST 48 of ITC taken back
     await createInvoiceWithItems(
       tenantDb,
       world.business1.id,
@@ -491,26 +491,36 @@ describe("GSTR-1 — includes purchase_return in debit note section", () => {
     );
   });
 
-  it("purchase_return appears alongside debit notes in ITC reversal", async () => {
-    const caller = createTestCaller({
+  function caller() {
+    return createTestCaller({
       userId: world.ramesh.id,
       email: world.ramesh.email,
       name: world.ramesh.name,
       tenantId: world.tenant1.id,
       businessId: world.business1.id,
     });
+  }
 
-    const report = await caller.gst.gstr1({ year: PR_YEAR, month: PR_MONTH });
+  it("purchase_return is not reported as an outward debit note in GSTR-1", async () => {
+    const report = await caller().gst.gstr1({ year: PR_YEAR, month: PR_MONTH });
 
-    // The purchase_return must appear in the debitNotes array
-    expect(Array.isArray(report.debitNotes)).toBe(true);
-    expect(report.debitNotes.length).toBeGreaterThanOrEqual(1);
+    expect(report.debitNotes).toEqual([]);
+    expect(report.creditNotes).toEqual([]);
 
-    // Each entry must have the expected shape
-    const prEntry = report.debitNotes[0]!;
-    expect(typeof prEntry.invoiceNumber).toBe("string");
-    expect(typeof prEntry.totalAmount).toBe("string");
-    expect(parseFloat(prEntry.totalAmount)).toBeGreaterThan(0);
+    const { json } = await caller().gst.gstr1Json({ year: PR_YEAR, month: PR_MONTH });
+    expect(json.cdnr).toEqual([]);
+  });
+
+  it("purchase_return takes its tax back out of GSTR-3B ITC", async () => {
+    const report = await caller().gst.gstr3b({ year: PR_YEAR, month: PR_MONTH });
+
+    expect(report.itc.cgst).toBeCloseTo(-48, 2);
+    expect(report.itc.sgst).toBeCloseTo(-48, 2);
+    expect(report.itc.igst).toBeCloseTo(0, 2);
+    expect(report.itc.total).toBeCloseTo(-96, 2);
+    // Nothing added to output tax
+    expect(report.taxPayable.cgst).toBeCloseTo(0, 2);
+    expect(report.taxPayable.sgst).toBeCloseTo(0, 2);
   });
 });
 
@@ -899,5 +909,201 @@ describe("GSTR-1 portal JSON — emits the GST rate per rate group", () => {
     expect(note).toBeDefined();
     expect(note!.itms).toHaveLength(1);
     expect(note!.itms[0].itm_det).toEqual({ txval: 2000, rt: 12, iamt: 240, camt: 0, samt: 0, csamt: 0 });
+  });
+});
+
+// ── GSTR-3B — credit and debit notes adjust output tax and ITC ────────────────
+
+describe("GSTR-3B — credit/debit notes adjust outward tax (3.1) and ITC (4)", () => {
+  const NOTE_YEAR = 2026;
+  const NOTE_MONTH = 3; // March 2026
+
+  function caller() {
+    return createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: world.business1.id,
+    });
+  }
+
+  beforeAll(async () => {
+    const tenantDb = getTenantTestDb();
+    const date = new Date(NOTE_YEAR, NOTE_MONTH - 1, 10, 12, 0, 0);
+    // All with party1 (Maharashtra, same state) at 18% → CGST + SGST halves
+    const doc = (
+      amount: string,
+      type: "sale" | "purchase",
+      documentType: "invoice" | "credit_note" | "debit_note" | "sales_return" | "purchase_return"
+        | "sales_order" | "delivery_challan" | "purchase_order" | "goods_receipt_note",
+      invoiceNumber: string,
+    ) =>
+      createInvoiceWithItems(
+        tenantDb, world.business1.id, world.party1.id,
+        [{ description: "Office chairs", quantity: "1", unitPrice: amount, taxPercent: "18.00" }],
+        { type, documentType, invoiceNumber, status: "sent", invoiceDate: date },
+      );
+
+    // Outward: 20,000 invoice + 1,000 debit note − 5,000 credit note − 1,000 sales return
+    await doc("20000.00", "sale", "invoice", "NT-SI-1");
+    await doc("1000.00", "sale", "debit_note", "NT-SDN-1");
+    await doc("5000.00", "sale", "credit_note", "NT-SCN-1");
+    await doc("1000.00", "sale", "sales_return", "NT-SR-1");
+    // Sale-side documents with no tax effect
+    await doc("7000.00", "sale", "sales_order", "NT-SO-1");
+    await doc("7000.00", "sale", "delivery_challan", "NT-DC-1");
+
+    // Inward: 10,000 invoice + 500 supplier debit note − 1,000 supplier credit note − 2,000 returned
+    await doc("10000.00", "purchase", "invoice", "NT-PI-1");
+    await doc("500.00", "purchase", "debit_note", "NT-PDN-1");
+    await doc("1000.00", "purchase", "credit_note", "NT-PCN-1");
+    await doc("2000.00", "purchase", "purchase_return", "NT-PR-1");
+    // Purchase-side documents with no ITC
+    await doc("9000.00", "purchase", "purchase_order", "NT-PO-1");
+    await doc("9000.00", "purchase", "goods_receipt_note", "NT-GRN-1");
+  });
+
+  it("GSTR-1 CDN lists only the notes issued to customers", async () => {
+    const report = await caller().gst.gstr1({ year: NOTE_YEAR, month: NOTE_MONTH });
+
+    expect(report.creditNotes.map((n) => n.invoiceNumber).sort()).toEqual(["NT-SCN-1", "NT-SR-1"]);
+    expect(report.debitNotes.map((n) => n.invoiceNumber)).toEqual(["NT-SDN-1"]);
+    expect(report.b2b.map((i) => i.invoiceNumber)).toEqual(["NT-SI-1"]);
+  });
+
+  it("3.1(a) outward supplies are net of credit and debit notes", async () => {
+    const report = await caller().gst.gstr3b({ year: NOTE_YEAR, month: NOTE_MONTH });
+
+    // 20,000 + 1,000 − 5,000 − 1,000 = 15,000 taxable; 18% = 2,700 tax
+    expect(report.outwardSupplies.taxable.taxableValue).toBeCloseTo(15000, 2);
+    expect(report.outwardSupplies.taxable.cgst).toBeCloseTo(1350, 2);
+    expect(report.outwardSupplies.taxable.sgst).toBeCloseTo(1350, 2);
+    expect(report.outwardSupplies.taxable.igst).toBeCloseTo(0, 2);
+    expect(report.taxPayable.cgst).toBeCloseTo(1350, 2);
+    expect(report.taxPayable.sgst).toBeCloseTo(1350, 2);
+  });
+
+  it("table 4 ITC adds supplier debit notes and takes back credit notes and returns", async () => {
+    const report = await caller().gst.gstr3b({ year: NOTE_YEAR, month: NOTE_MONTH });
+
+    // 1,800 + 90 − 180 − 360 = 1,350 ITC → 675 CGST + 675 SGST
+    expect(report.itc.cgst).toBeCloseTo(675, 2);
+    expect(report.itc.sgst).toBeCloseTo(675, 2);
+    expect(report.itc.igst).toBeCloseTo(0, 2);
+    expect(report.itc.total).toBeCloseTo(1350, 2);
+    expect(report.netTax.total).toBeCloseTo(2700 - 1350, 2);
+  });
+});
+
+// ── GSTR-1 portal JSON — B2CL per invoice, B2CS per supply type and state ─────
+
+describe("GSTR-1 portal JSON — b2cl and b2cs follow the GSTN schema", () => {
+  const B2C_YEAR = 2026;
+  const B2C_MONTH = 4; // April 2026
+
+  beforeAll(async () => {
+    const tenantDb = getTenantTestDb();
+    const date = new Date(B2C_YEAR, B2C_MONTH - 1, 15, 12, 0, 0);
+
+    const kaConsumer = await createParty(tenantDb, world.business1.id, {
+      name: "Bengaluru Walk-in",
+      type: "customer",
+      gstin: null,
+      city: "Bengaluru",
+      state: "Karnataka",
+      stateCode: "29",
+      openingBalance: "0.00",
+    });
+    const mhConsumer = await createParty(tenantDb, world.business1.id, {
+      name: "Pune Walk-in",
+      type: "customer",
+      gstin: null,
+      city: "Pune",
+      state: "Maharashtra",
+      stateCode: "27",
+      openingBalance: "0.00",
+    });
+
+    // B2CL: inter-state to an unregistered buyer, above ₹2.5L — two invoices
+    await createInvoiceWithItems(
+      tenantDb, world.business1.id, kaConsumer.id,
+      [
+        { description: "Sofa set", quantity: "1", unitPrice: "200000.00", taxPercent: "18.00" },
+        { description: "Rugs", quantity: "1", unitPrice: "100000.00", taxPercent: "12.00" },
+      ],
+      { type: "sale", documentType: "invoice", status: "sent", invoiceDate: date, invoiceNumber: "B2CL-1" },
+    );
+    await createInvoiceWithItems(
+      tenantDb, world.business1.id, kaConsumer.id,
+      [{ description: "Dining table", quantity: "1", unitPrice: "250000.00", taxPercent: "5.00" }],
+      { type: "sale", documentType: "invoice", status: "sent", invoiceDate: date, invoiceNumber: "B2CL-2" },
+    );
+
+    // B2CS: 18% both inter-state (Karnataka) and intra-state, plus a 0% intra-state sale
+    await createInvoiceWithItems(
+      tenantDb, world.business1.id, kaConsumer.id,
+      [{ description: "Lamp", quantity: "1", unitPrice: "10000.00", taxPercent: "18.00" }],
+      { type: "sale", documentType: "invoice", status: "sent", invoiceDate: date, invoiceNumber: "B2CS-KA" },
+    );
+    await createInvoiceWithItems(
+      tenantDb, world.business1.id, mhConsumer.id,
+      [
+        { description: "Lamp", quantity: "1", unitPrice: "10000.00", taxPercent: "18.00" },
+        { description: "Fresh flowers", quantity: "1", unitPrice: "1000.00", taxPercent: "0.00" },
+      ],
+      { type: "sale", documentType: "invoice", status: "sent", invoiceDate: date, invoiceNumber: "B2CS-MH" },
+    );
+  });
+
+  function caller() {
+    return createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: world.business1.id,
+    });
+  }
+
+  it("b2cl lists each invoice with inum, idt, val and per-rate itms", async () => {
+    const { json } = await caller().gst.gstr1Json({ year: B2C_YEAR, month: B2C_MONTH });
+
+    expect(json.b2cl).toEqual([
+      {
+        pos: "29",
+        inv: [
+          {
+            inum: "B2CL-1",
+            idt: "15-04-2026",
+            val: 348000,
+            itms: [
+              { num: 1, itm_det: { txval: 100000, rt: 12, iamt: 12000, csamt: 0 } },
+              { num: 2, itm_det: { txval: 200000, rt: 18, iamt: 36000, csamt: 0 } },
+            ],
+          },
+          {
+            inum: "B2CL-2",
+            idt: "15-04-2026",
+            val: 262500,
+            itms: [{ num: 1, itm_det: { txval: 250000, rt: 5, iamt: 12500, csamt: 0 } }],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("b2cs keeps intra- and inter-state supplies apart, with the buyer's state as pos", async () => {
+    const { json } = await caller().gst.gstr1Json({ year: B2C_YEAR, month: B2C_MONTH });
+
+    type B2CS = { sply_ty: string; pos: string; rt: number; txval: number; iamt: number; camt: number; samt: number };
+    const rows = (json.b2cs as B2CS[])
+      .map(({ sply_ty, pos, rt, txval, iamt, camt, samt }) => ({ sply_ty, pos, rt, txval, iamt, camt, samt }))
+      .sort((a, b) => a.rt - b.rt || a.sply_ty.localeCompare(b.sply_ty));
+    expect(rows).toEqual([
+      { sply_ty: "INTRA", pos: "27", rt: 0, txval: 1000, iamt: 0, camt: 0, samt: 0 },
+      { sply_ty: "INTER", pos: "29", rt: 18, txval: 10000, iamt: 1800, camt: 0, samt: 0 },
+      { sply_ty: "INTRA", pos: "27", rt: 18, txval: 10000, iamt: 0, camt: 900, samt: 900 },
+    ]);
   });
 });

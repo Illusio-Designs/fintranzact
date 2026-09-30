@@ -66,7 +66,7 @@ Shown aggregated by state:
 
 All other sales to unregistered parties — intra-state sales of any amount, and small inter-state sales under ₹2,50,000.
 
-Shown aggregated by tax rate:
+Shown aggregated by tax rate and place of supply: intra-state sales form one row per rate, and inter-state sales one row per rate for each destination state (the portal needs them apart):
 
 | Column | Meaning |
 |---|---|
@@ -95,7 +95,7 @@ Items without an HSN code are reported under HSN `0000`. To get accurate HSN sum
 
 ### Credit Notes
 
-All documents with document type `credit_note` issued during the period.
+Sale credit notes and sales returns issued to customers during the period. Credit notes from suppliers and purchase returns are not outward supplies: they reduce ITC in GSTR-3B instead.
 
 | Column | Meaning |
 |---|---|
@@ -110,7 +110,7 @@ All documents with document type `credit_note` issued during the period.
 
 ### Debit Notes
 
-All documents with document type `debit_note` issued during the period. Same structure as credit notes.
+Sale debit notes issued to customers during the period. Same structure as credit notes. A supplier's debit note adds to ITC in GSTR-3B instead.
 
 ## Summary totals
 

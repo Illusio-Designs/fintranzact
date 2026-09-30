@@ -33,11 +33,18 @@ import {
   type GSTR2BRecord,
   type PurchaseInvoice,
 } from "../lib/gstr2b-parser.js";
-import { notOrderDocument } from "../lib/order-fulfilment.js";
+import { buildBusinessDateFilter } from "../lib/business-date.js";
 
 // ── Helpers ───────────────────────────────────────────────────
 
 const ZERO = "0.00";
+
+/**
+ * Purchase documents a supplier reports in its GSTR-1, so the ones that can
+ * appear in our GSTR-2B: tax invoices and the supplier's credit/debit notes.
+ * Orders, GRNs, quotations, proformas, challans and our own returns never do.
+ */
+const GSTR2B_DOCUMENT_TYPES = ["invoice", "credit_note", "debit_note"] as const;
 
 // ── Router ────────────────────────────────────────────────────
 
@@ -91,7 +98,7 @@ export const gstr2bRouter = router({
           and(
             eq(invoices.businessId, ctx.businessId),
             eq(invoices.type, "purchase"),
-            notOrderDocument(),
+            inArray(invoices.documentType, [...GSTR2B_DOCUMENT_TYPES]),
             sql`${invoices.status} != 'cancelled'`,
             isNull(invoices.deletedAt),
           ),
@@ -517,11 +524,10 @@ export const gstr2bRouter = router({
           and(
             eq(invoices.businessId, ctx.businessId),
             eq(invoices.type, "purchase"),
-            notOrderDocument(),
+            inArray(invoices.documentType, [...GSTR2B_DOCUMENT_TYPES]),
             sql`${invoices.status} != 'cancelled'`,
             isNull(invoices.deletedAt),
-            sql`${invoices.invoiceDate} >= ${periodStart}`,
-            sql`${invoices.invoiceDate} <= ${periodEnd}`,
+            ...buildBusinessDateFilter(invoices, { from: periodStart, to: periodEnd }),
             sql`${parties.gstin} IS NOT NULL`,
           ),
         );

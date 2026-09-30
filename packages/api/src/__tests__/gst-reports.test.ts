@@ -1174,21 +1174,30 @@ describe("gstr1ToPortalJson — B2B section", () => {
 
 describe("gstr1ToPortalJson — B2CL section", () => {
   /**
-   * B2C Large invoices are grouped by state code (pos field).
+   * B2C Large invoices are grouped by state code (pos field) and listed
+   * invoice by invoice (inum, idt, val, itms), as the GSTN schema requires.
    * The state name from the report must be mapped to a 2-digit state code.
    */
 
+  const karnatakaB2CL = (): GSTR1Report["b2cLarge"][0] => ({
+    state: "Karnataka",
+    taxableValue: 254237.29,
+    cgst: 0,
+    sgst: 0,
+    igst: 45762.71,
+    invoices: [{
+      invoiceNumber: "INV-00007",
+      invoiceDate: new Date("2025-08-20").toISOString(),
+      totalInvoiceValue: 300000,
+      taxableValue: 254237.29,
+      igst: 45762.71,
+      rateItems: [],
+    }],
+  });
+
   it("groups b2cLarge entries by state into b2cl array", () => {
     const json = gstr1ToPortalJson(
-      makePortalReport({
-        b2cLarge: [{
-          state: "Karnataka",
-          taxableValue: 254237.29,
-          cgst: 0,
-          sgst: 0,
-          igst: 45762.71,
-        }],
-      }),
+      makePortalReport({ b2cLarge: [karnatakaB2CL()] }),
       "27AABCA0000R1ZM", "2025-26", "082025"
     );
     expect((json.b2cl as unknown[]).length).toBe(1);
@@ -1196,46 +1205,72 @@ describe("gstr1ToPortalJson — B2CL section", () => {
 
   it("b2cl entry has pos field (state code)", () => {
     const json = gstr1ToPortalJson(
-      makePortalReport({
-        b2cLarge: [{
-          state: "Karnataka",
-          taxableValue: 254237.29,
-          cgst: 0,
-          sgst: 0,
-          igst: 45762.71,
-        }],
-      }),
+      makePortalReport({ b2cLarge: [karnatakaB2CL()] }),
       "27AABCA0000R1ZM", "2025-26", "082025"
     );
     type B2CLEntry = { pos: string; inv: unknown[] };
     const entry = (json.b2cl as B2CLEntry[])[0];
-    expect(entry.pos).toBeDefined();
-    expect(typeof entry.pos).toBe("string");
+    expect(entry.pos).toBe("29");
   });
 
-  it("b2cl itms carry the GST rate per rate group", () => {
+  it("b2cl inv carries inum, idt and val, with rt derived when there is no rate breakdown", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({ b2cLarge: [karnatakaB2CL()] }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    type B2CLEntry = { inv: Array<Record<string, unknown>> };
+    expect((json.b2cl as B2CLEntry[])[0].inv).toEqual([{
+      inum: "INV-00007",
+      idt: "20-08-2025",
+      val: 300000,
+      itms: [{ num: 1, itm_det: { txval: 254237.29, rt: 18, iamt: 45762.71, csamt: 0 } }],
+    }]);
+  });
+
+  it("b2cl itms carry the GST rate per rate group, one inv per invoice", () => {
     const json = gstr1ToPortalJson(
       makePortalReport({
         b2cLarge: [{
           state: "Karnataka",
-          taxableValue: 300000,
+          taxableValue: 550000,
           cgst: 0,
           sgst: 0,
-          igst: 46000,
-          rateItems: [
-            { rate: 12, taxableValue: 100000, cgst: 0, sgst: 0, igst: 12000 },
-            { rate: 18, taxableValue: 200000, cgst: 0, sgst: 0, igst: 34000 },
+          igst: 58500,
+          invoices: [
+            {
+              invoiceNumber: "INV-00008",
+              invoiceDate: new Date("2025-08-21").toISOString(),
+              totalInvoiceValue: 346000,
+              taxableValue: 300000,
+              igst: 46000,
+              rateItems: [
+                { rate: 12, taxableValue: 100000, cgst: 0, sgst: 0, igst: 12000 },
+                { rate: 18, taxableValue: 200000, cgst: 0, sgst: 0, igst: 34000 },
+              ],
+            },
+            {
+              invoiceNumber: "INV-00009",
+              invoiceDate: new Date("2025-08-22").toISOString(),
+              totalInvoiceValue: 262500,
+              taxableValue: 250000,
+              igst: 12500,
+              rateItems: [{ rate: 5, taxableValue: 250000, cgst: 0, sgst: 0, igst: 12500 }],
+            },
           ],
         }],
       }),
       "27AABCA0000R1ZM", "2025-26", "082025"
     );
-    type B2CLEntry = { pos: string; inv: Array<{ itms: Array<{ num: number; itm_det: Record<string, number> }> }> };
+    type B2CLEntry = { pos: string; inv: Array<{ inum: string; itms: Array<{ num: number; itm_det: Record<string, number> }> }> };
     const entry = (json.b2cl as B2CLEntry[])[0];
     expect(entry.pos).toBe("29");
+    expect(entry.inv.map((i) => i.inum)).toEqual(["INV-00008", "INV-00009"]);
     expect(entry.inv[0].itms).toEqual([
       { num: 1, itm_det: { txval: 100000, rt: 12, iamt: 12000, csamt: 0 } },
       { num: 2, itm_det: { txval: 200000, rt: 18, iamt: 34000, csamt: 0 } },
+    ]);
+    expect(entry.inv[1].itms).toEqual([
+      { num: 1, itm_det: { txval: 250000, rt: 5, iamt: 12500, csamt: 0 } },
     ]);
   });
 });
@@ -1362,6 +1397,25 @@ describe("gstr1ToPortalJson — B2CS section", () => {
     const entry = (json.b2cs as B2CSEntry[])[0];
     expect(entry.txval).toBe(30000);
     expect(entry.rt).toBe(12);
+  });
+});
+
+describe("gstr1ToPortalJson — B2CS supply type and place of supply", () => {
+  it("uses the row's supply type and place of supply (0% intra-state stays INTRA)", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({
+        b2cSmall: [
+          { taxRate: 0, taxableValue: 1000, cgst: 0, sgst: 0, igst: 0, supplyType: "INTRA", pos: "27" },
+          { taxRate: 18, taxableValue: 10000, cgst: 0, sgst: 0, igst: 1800, supplyType: "INTER", pos: "29" },
+        ],
+      }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    type B2CSEntry = { sply_ty: string; pos: string; rt: number };
+    expect((json.b2cs as B2CSEntry[]).map(({ sply_ty, pos, rt }) => ({ sply_ty, pos, rt }))).toEqual([
+      { sply_ty: "INTRA", pos: "27", rt: 0 },
+      { sply_ty: "INTER", pos: "29", rt: 18 },
+    ]);
   });
 });
 

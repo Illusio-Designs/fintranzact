@@ -619,3 +619,50 @@ describe("gstr2b router — inter-state vs intra-state tax split", () => {
     expect(rec!.matchStatus).toBe("matched");
   });
 });
+
+describe("gstr2b router — only documents a supplier reports are expected in 2B", () => {
+  it("missingIn2B lists purchase invoices, not orders, proformas, challans or our returns", async () => {
+    const db = getTenantTestDb();
+    const date = new Date("2026-07-10");
+    const lines = [{ description: "Packing tape", quantity: "10", unitPrice: "100.00", taxPercent: "18.00" }];
+    const doc = (documentType: "invoice" | "quotation" | "proforma" | "delivery_challan" | "purchase_order"
+      | "goods_receipt_note" | "purchase_return", invoiceNumber: string) =>
+      createInvoiceWithItems(db, world.business1.id, supplierParty.id, lines, {
+        type: "purchase", documentType, status: "sent", invoiceDate: date, invoiceNumber,
+      });
+
+    await doc("invoice", "JUL-PI-1");
+    await doc("quotation", "JUL-QT-1");
+    await doc("proforma", "JUL-PF-1");
+    await doc("delivery_challan", "JUL-DC-1");
+    await doc("purchase_order", "JUL-PO-1");
+    await doc("goods_receipt_note", "JUL-GRN-1");
+    await doc("purchase_return", "JUL-PR-1");
+
+    // A 2B for the period that has none of them
+    const caller = callerForRamesh();
+    await caller.gstr2b.upload({
+      returnPeriod: "2026-07",
+      content: JSON.stringify({
+        gstin: "27AABCA0000R1ZM",
+        ret_period: "072026",
+        docdata: {
+          b2b: [{
+            ctin: "27AABCM0000R1ZM",
+            trdnm: "Mumbai Supplies Pvt Ltd",
+            inv: [{
+              inum: "JUL-OTHER-1", dt: "01-07-2026", val: 118, pos: "27", itcavl: "Y", rev: "N", typ: "R",
+              items: [{ num: 1, rt: 18, txval: 100, cgst: 9, sgst: 9, igst: 0, cess: 0 }],
+            }],
+          }],
+        },
+      }),
+      fileName: "gstr2b_072026.json",
+      format: "json",
+    });
+
+    const missing = await caller.gstr2b.missingIn2B({ returnPeriod: "2026-07" });
+    expect(missing.records.map((r) => r.invoiceNumber)).toEqual(["JUL-PI-1"]);
+    expect(missing.total).toBe(1);
+  });
+});

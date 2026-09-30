@@ -20,10 +20,10 @@ Sales orders, purchase orders and goods receipt notes (GRNs) are covered in [Ord
 | **Quotation** | A price quote before the customer agrees | No | No | No | `QTN` |
 | **Proforma Invoice** | A pre-invoice, usually to ask for an advance | No | No | No | `PI` |
 | **Delivery Challan** | Goods sent out without a tax invoice yet | Yes — stock goes **out** | No | No | `DC` |
-| **Credit Note** | Reducing what a party owes (price correction, discount after sale) | No | Yes — **reduces** the balance | GSTR-1 **Credit Notes** section | `CN` |
-| **Debit Note** | Increasing what a party owes | No | Yes — **increases** the balance | GSTR-1 **Debit Notes** section | `DN` |
+| **Credit Note** | Reducing what a party owes (price correction, discount after sale) | No | Yes — **reduces** the balance | Sale: GSTR-1 **Credit Notes** section. Purchase (from a supplier): **reduces** GSTR-3B ITC | `CN` |
+| **Debit Note** | Increasing what a party owes | No | Yes — **increases** the balance | Sale: GSTR-1 **Debit Notes** section. Purchase (from a supplier): **adds** to GSTR-3B ITC | `DN` |
 | **Sales Return** | A customer sends goods back | Yes — stock comes **in** | Yes — **reduces** the balance | GSTR-1 **Credit Notes** section | `SR` |
-| **Purchase Return** | You send goods back to a supplier | Yes — stock goes **out** | Yes — **reduces** the balance | GSTR-1 **Debit Notes** section | `PR` |
+| **Purchase Return** | You send goods back to a supplier | Yes — stock goes **out** | Yes — **reduces** the balance | **Reduces** GSTR-3B ITC (not in GSTR-1) | `PR` |
 
 Numbers run in their own sequence per document type, for example `QTN-00001`, `QTN-00002`. You can change the prefixes and next numbers in [Settings](/help/settings).
 

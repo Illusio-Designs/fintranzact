@@ -111,7 +111,7 @@ After you book the missing purchase invoices, upload the GSTR-2B file again to r
 
 ## Not in 2B tab
 
-This tab lists your purchase invoices **dated in the selected month** whose party has a GSTIN but which didn't match any record in the latest upload: *"Follow up with the supplier to ensure they file their return correctly."* The columns are **Supplier GSTIN**, **Supplier**, **Invoice #**, **Date** and **Amount** (the invoice total). The tab stays empty until a file has been uploaded for the period.
+This tab lists your purchase invoices (and supplier credit and debit notes) **dated in the selected month** whose party has a GSTIN but which didn't match any record in the latest upload. Purchase orders, GRNs, quotations, proformas, challans and purchase returns are left out, because suppliers never report them: *"Follow up with the supplier to ensure they file their return correctly."* The columns are **Supplier GSTIN**, **Supplier**, **Invoice #**, **Date** and **Amount** (the invoice total). The tab stays empty until a file has been uploaded for the period.
 
 ## Upload History tab
 
@@ -130,7 +130,7 @@ Reconciling doesn't change your books or your [ITC ledger](/help/gst/itc). Match
 <ForCA>
 :::tip[Using the reconciliation in a 3B review]
 - Ask the client to record the **supplier's invoice number exactly** as the purchase invoice number. That's the matching key.
-- Treat **Mismatch** rows on inter-state suppliers with care. The book-side tax split is always CGST/SGST, so IGST invoices never match cleanly. Check the total tax instead.
+- The book-side tax split follows the supplier's state (its state code, or its GSTIN when there is none) against yours: IGST when they differ, CGST/SGST when they're the same. A tax **Mismatch** on a supplier usually means its state is saved wrongly in Fintranzact.
 - Records from the `cdnr` section (supplier credit/debit notes) are matched against purchase *invoice* numbers, so they will usually show as **Not in Books**.
 - A record flagged **Blocked** (ITC flag N) on the portal still counts towards **Matched**. Only the ITC amounts exclude it.
 - Manually linking a 2B record to a specific purchase invoice is possible through the API (`gstr2b.linkInvoice`) but not from the page.
