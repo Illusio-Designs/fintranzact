@@ -766,7 +766,7 @@ function MappingPanel({
   const firstRow = parsedFile.rows[0] || {};
 
   return (
-    <div className="rounded-xl border border-border-light overflow-hidden">
+    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
       <div
         className="px-4 py-2.5 flex items-center justify-between bg-surface-1 border-b border-border-light"
       >
@@ -839,7 +839,7 @@ function PreviewTable({
   if (mappedFields.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border-light overflow-hidden">
+    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
       <div
         className="px-4 py-2.5 flex items-center justify-between bg-surface-1 border-b border-border-light"
       >
@@ -916,7 +916,7 @@ function ImportStepRow({
   const [errorsOpen, setErrorsOpen] = useState(false);
 
   return (
-    <div className="rounded-xl border border-border-light overflow-hidden">
+    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3">
         <div className="shrink-0 w-6 h-6 flex items-center justify-center">
           {status === "pending" && (
@@ -2496,7 +2496,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
             />
           ))}
           {gstReportFile && gstReportFile.rows.length > 0 && (
-            <div className="rounded-xl border border-border-light overflow-hidden">
+            <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
               <div className="px-4 py-2.5 flex items-center justify-between bg-surface-1 border-b border-border-light">
                 <span className="text-sm font-semibold text-text-primary">
                   GST Sales Report — Line Items
@@ -2611,7 +2611,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
             </div>
           )}
           {cashBankFile && cashBankFile.rows.length > 0 && (
-            <div className="rounded-xl border border-border-light overflow-hidden">
+            <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
               <div className="px-4 py-2.5 flex items-center justify-between bg-surface-1 border-b border-border-light">
                 <div>
                   <span className="text-sm font-semibold text-text-primary">

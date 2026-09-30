@@ -1,6 +1,6 @@
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { getDefaultWarehouse, recordStockMovement, reverseInvoiceStock } from "../lib/inventory-service.js";
+import { recordStockMovement, resolveInvoiceWarehouse, reverseInvoiceStock } from "../lib/inventory-service.js";
 import {
   invoices,
   invoiceItems,
@@ -21,77 +21,8 @@ import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPClient, IRPError } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
-import { internalBarcodeFor } from "../lib/internal-barcode.js";
+import { ensureBarcodeForStock } from "../lib/barcode-setup.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
-
-/**
- * Give an item (or variant) an in-store barcode if it does not have one.
- *
- * CONCURRENCY:
- * The counter is bumped with a single UPDATE ... RETURNING, so two purchases
- * landing at once each get their own number — the same allocate-then-increment
- * approach the document numbers use. Reading then writing would let both read
- * the same value.
- *
- * Opt-out is per business (`autoGenerateBarcodes`), for shops that only ever
- * scan the supplier's own barcode and do not want a second code on the shelf.
- */
-async function ensureBarcodeForStock(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tx: any,
-  businessId: string,
-  itemId: string,
-  variantId: string | null,
-): Promise<string | null> {
-  const [biz] = await tx
-    .select({ auto: businesses.autoGenerateBarcodes })
-    .from(businesses)
-    .where(eq(businesses.id, businessId))
-    .limit(1);
-  if (!biz?.auto) return null;
-
-  // Only fill a gap; a supplier's printed barcode always wins.
-  if (variantId) {
-    const [variant] = await tx
-      .select({ barcode: itemVariants.barcode })
-      .from(itemVariants)
-      .where(eq(itemVariants.id, variantId))
-      .limit(1);
-    if (!variant || variant.barcode) return null;
-  } else {
-    const [item] = await tx
-      .select({ barcode: items.barcode })
-      .from(items)
-      .where(eq(items.id, itemId))
-      .limit(1);
-    if (!item || item.barcode) return null;
-  }
-
-  const [counter] = await tx
-    .update(businesses)
-    .set({ nextBarcodeNumber: sql`${businesses.nextBarcodeNumber} + 1` })
-    .where(eq(businesses.id, businessId))
-    .returning({ next: businesses.nextBarcodeNumber });
-
-  // RETURNING gives the post-increment value, so the number just reserved is
-  // one below it.
-  const sequence = (counter?.next ?? 2) - 1;
-  const barcode = internalBarcodeFor(sequence);
-
-  if (variantId) {
-    await tx
-      .update(itemVariants)
-      .set({ barcode, updatedAt: new Date() })
-      .where(eq(itemVariants.id, variantId));
-  } else {
-    await tx
-      .update(items)
-      .set({ barcode, updatedAt: new Date() })
-      .where(eq(items.id, itemId));
-  }
-
-  return barcode;
-}
 
 export const invoiceRouter = router({
   list: viewerProcedure
@@ -453,6 +384,15 @@ export const invoiceRouter = router({
         : (input.additionalCharges || "0");
       const roundOff = input.roundOff || "0";
 
+      // Check a picked warehouse before the invoice row references it.
+      if (input.warehouseId && !input.skipStockAdjustment) {
+        await resolveInvoiceWarehouse(tx, {
+          businessId: ctx.businessId,
+          operation: input.type === "sale" ? "sale" : "purchase",
+          warehouseId: input.warehouseId,
+        });
+      }
+
       const [invoice] = await tx.insert(invoices).values({
         businessId: ctx.businessId,
         partyId: input.partyId,
@@ -471,6 +411,7 @@ export const invoiceRouter = router({
         notes: input.notes,
         termsAndConditions: input.termsAndConditions,
         referenceDocumentId: input.referenceDocumentId || null,
+        warehouseId: input.skipStockAdjustment ? null : input.warehouseId ?? null,
         deliveryMethod: input.deliveryMethod || "self_pickup",
         isReverseCharge: input.isReverseCharge ?? false,
         source: input.source ?? null,
@@ -491,9 +432,10 @@ export const invoiceRouter = router({
         const operation = input.type === "sale" ? "sale" : "purchase";
         const movementType = input.type === "sale" ? "SALE" : "PURCHASE";
 
-        const warehouse = await getDefaultWarehouse(tx, {
+        const warehouse = await resolveInvoiceWarehouse(tx, {
           businessId: ctx.businessId,
           operation,
+          warehouseId: input.warehouseId,
         });
 
         for (const li of input.lineItems) {
@@ -867,6 +809,7 @@ export const invoiceRouter = router({
       invoiceDiscountType: z.enum(["amount", "percent"]).optional(),
       roundOff: z.string().regex(/^-?\d+(\.\d{1,2})?$/).optional(),
       lineItems: z.array(invoiceLineItemSchema).min(1).optional(),
+      warehouseId: z.string().uuid().nullish(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Invoice");
@@ -948,6 +891,16 @@ export const invoiceRouter = router({
         }
         if (input.roundOff !== undefined) updates.roundOff = input.roundOff;
 
+        // Moving an invoice's stock to another warehouse means re-posting its
+        // lines, so a warehouse change has to come with them.
+        if (
+          input.warehouseId !== undefined &&
+          (input.warehouseId ?? null) !== existing.warehouseId &&
+          !input.lineItems
+        ) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Send the invoice lines to change its warehouse" });
+        }
+
         // 4. Handle line items — delete old, insert new, recalculate totals
         if (input.lineItems) {
 
@@ -998,10 +951,12 @@ export const invoiceRouter = router({
           const operation = existing.type === "sale" ? "sale" : "purchase";
           const movementType = existing.type === "sale" ? "SALE" : "PURCHASE";
 
-          const warehouse = await getDefaultWarehouse(tx, {
+          const warehouse = await resolveInvoiceWarehouse(tx, {
             businessId: ctx.businessId,
             operation,
+            warehouseId: input.warehouseId !== undefined ? input.warehouseId : existing.warehouseId,
           });
+          if (input.warehouseId !== undefined) updates.warehouseId = input.warehouseId ?? null;
 
           for (const li of input.lineItems) {
             if (!li.itemId && !li.variantId) continue;

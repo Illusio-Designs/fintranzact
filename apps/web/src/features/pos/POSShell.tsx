@@ -67,17 +67,24 @@ export function POSShell({ businessId, walkInPartyId }: Props) {
 
   // ── Scanner ────────────────────────────────────────────────────
   const handleScan = async (code: string) => {
-    // Resolve barcode → first matching catalog tile. pos.catalog already
-    // handles variant/alt-unit expansion and filters by SKU, so a scanned
-    // SKU lands on exactly one tile (or the first of several).
+    // Resolve the code to an item first: it may be a box / carton code that
+    // stands for several pieces, which catalogue search can't know. Then pick
+    // that item's tile from the catalogue for price, tax and unit.
     try {
-      const data = await utils.pos.catalog.fetch({ search: code, page: 1, limit: 1 });
-      const first = data?.tiles?.[0];
-      if (!first) {
+      const hit = await utils.item.lookupByCode.fetch({ code });
+      const search = hit
+        ? (hit.variant?.barcode ?? hit.item.barcode ?? hit.item.sku ?? hit.item.name)
+        : code;
+      const data = await utils.pos.catalog.fetch({ search, page: 1, limit: 20 });
+      const tiles = data?.tiles ?? [];
+      const tile = hit
+        ? tiles.find((t) => t.itemId === hit.item.id && (t.variantId ?? null) === (hit.variant?.id ?? null)) ?? tiles[0]
+        : tiles[0];
+      if (!tile) {
         toast.error("No item found", `Scan: ${code}`);
         return;
       }
-      handlePickItem(first);
+      handlePickItem(tile, hit?.packQty ?? 1);
     } catch (err) {
       toast.error("Scanner lookup failed", err instanceof Error ? err.message : String(err));
     }
@@ -110,14 +117,14 @@ export function POSShell({ businessId, walkInPartyId }: Props) {
   // ── Tile → cart handler ────────────────────────────────────────
   // Matches the tile's composite identity (item + variant OR item + unit)
   // so two different alt-units of the same item don't merge into one line.
-  const handlePickItem = (tile: POSTile) => {
+  const handlePickItem = (tile: POSTile, pieces = 1) => {
     store.addOrBumpLine(
       { itemId: tile.itemId, variantId: tile.variantId, unit: tile.unit },
       {
         itemId: tile.itemId,
         variantId: tile.variantId,
         itemName: tile.displayName,
-        quantity: "1",
+        quantity: String(pieces),
         unit: tile.unit,
         unitPrice: tile.unitPrice,
         taxPercent: tile.taxPercent,
@@ -227,7 +234,7 @@ export function POSShell({ businessId, walkInPartyId }: Props) {
       {/* Main two-pane */}
       <main className="flex-1 flex min-h-0">
         <section className="flex-1 min-w-0 overflow-hidden">
-          <ItemGrid search={search} onPick={handlePickItem} />
+          <ItemGrid search={search} onPick={(t) => handlePickItem(t)} />
         </section>
         <aside className="w-[360px] flex-shrink-0 flex flex-col min-h-0">
           <Cart store={store} />

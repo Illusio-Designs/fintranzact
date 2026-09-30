@@ -68,7 +68,7 @@ export default function RegisterScreen() {
                 value={name}
                 onChangeText={setName}
                 placeholder="Your name"
-                placeholderTextColor="#6b7280"
+                placeholderTextColor="#8390b0"
                 autoCapitalize="words"
                 autoCorrect={false}
                 returnKeyType="next"
@@ -85,7 +85,7 @@ export default function RegisterScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="you@example.com"
-                placeholderTextColor="#6b7280"
+                placeholderTextColor="#8390b0"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -103,7 +103,7 @@ export default function RegisterScreen() {
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Choose a password"
-                placeholderTextColor="#6b7280"
+                placeholderTextColor="#8390b0"
                 secureTextEntry
                 returnKeyType="next"
                 onSubmitEditing={() => confirmPasswordRef.current?.focus()}
@@ -119,7 +119,7 @@ export default function RegisterScreen() {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Repeat your password"
-                placeholderTextColor="#6b7280"
+                placeholderTextColor="#8390b0"
                 secureTextEntry
                 returnKeyType="done"
                 onSubmitEditing={handleRegister}
@@ -152,19 +152,19 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f0f1a" },
+  container: { flex: 1, backgroundColor: "#070c1b" },
   inner: { flex: 1 },
   scrollContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 24, paddingVertical: 32 },
   header: { marginBottom: 32, alignItems: "center" },
   title: { fontSize: 32, fontWeight: "800", color: "#ffffff", letterSpacing: -1 },
-  subtitle: { fontSize: 15, color: "#9ca3af", marginTop: 8 },
+  subtitle: { fontSize: 15, color: "#a3aecb", marginTop: 8 },
   form: { gap: 16 },
   inputGroup: { gap: 6 },
-  label: { fontSize: 13, fontWeight: "600", color: "#d1d5db" },
+  label: { fontSize: 13, fontWeight: "600", color: "#c9d2e8" },
   input: {
-    backgroundColor: "#1a1a2e",
+    backgroundColor: "#0f1730",
     borderWidth: 1,
-    borderColor: "#2d2d44",
+    borderColor: "#212c4d",
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   },
   error: { fontSize: 13, color: "#ef4444", textAlign: "center" },
   button: {
-    backgroundColor: "#6366f1",
+    backgroundColor: "#3b5eaa",
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
@@ -182,5 +182,5 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.6 },
   buttonText: { fontSize: 16, fontWeight: "700", color: "#ffffff" },
   linkButton: { alignItems: "center", marginTop: 12 },
-  linkText: { fontSize: 14, color: "#6366f1" },
+  linkText: { fontSize: 14, color: "#3b5eaa" },
 });

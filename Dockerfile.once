@@ -181,12 +181,12 @@ echo "[pg-ready] Waiting for PostgreSQL (own or delegated)..."
 for i in $(seq 1 60); do
   if pg_isready -h "$SOCKETDIR" -U postgres -q 2>/dev/null; then
     echo "[pg-ready] PostgreSQL is ready on $SOCKETDIR"
-    # Ensure the hisaabo database exists
+    # Ensure the fintranzact database exists
     psql -h "$SOCKETDIR" -U postgres -tc \
-      "SELECT 1 FROM pg_database WHERE datname = 'hisaabo'" \
+      "SELECT 1 FROM pg_database WHERE datname = 'fintranzact'" \
       | grep -q 1 \
-      || createdb -h "$SOCKETDIR" -U postgres hisaabo
-    psql -h "$SOCKETDIR" -U postgres -d hisaabo -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
+      || createdb -h "$SOCKETDIR" -U postgres fintranzact
+    psql -h "$SOCKETDIR" -U postgres -d fintranzact -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
     exit 0
   fi
   sleep 1
@@ -212,7 +212,7 @@ SOCKETDIR="/storage/run"
 # Run migrations (idempotent — safe even if old container is still serving)
 # Advisory lock inside migrate.mjs prevents conflicts during rolling deploys.
 echo "[api] Running database migrations..."
-if ! DATABASE_URL="postgresql://postgres@/hisaabo?host=$SOCKETDIR" \
+if ! DATABASE_URL="postgresql://postgres@/fintranzact?host=$SOCKETDIR" \
   node /app/packages/db/dist/migrate.mjs; then
   echo "[api] FATAL: Migration failed — refusing to start with inconsistent DB"
   exit 1
@@ -220,7 +220,7 @@ fi
 
 # Start API — connects to PG via Unix socket
 echo "[api] Starting Fintranzact API on port ${PORT:-80}..."
-exec env DATABASE_URL="postgresql://postgres@/hisaabo?host=$SOCKETDIR" \
+exec env DATABASE_URL="postgresql://postgres@/fintranzact?host=$SOCKETDIR" \
   node packages/api/dist/server.js
 APIRUN
 RUN chmod +x /etc/s6-overlay/s6-rc.d/api/run
@@ -357,13 +357,13 @@ ARG VERSION=dev
 LABEL org.opencontainers.image.title="Fintranzact"
 LABEL org.opencontainers.image.description="Invoicing and business management — all-in-one (PostgreSQL + API)"
 LABEL org.opencontainers.image.version="${VERSION}"
-LABEL org.opencontainers.image.source="https://github.com/hisaabo/hisaabo"
+LABEL org.opencontainers.image.source="https://github.com/fintranzact/fintranzact"
 
 # ── Environment ──────────────────────────────────────────────
 
 ENV NODE_ENV=production
 ENV PORT=80
-ENV HISAABO_VERSION=${VERSION}
+ENV FINTRANZACT_VERSION=${VERSION}
 # DATABASE_URL is set dynamically in the API run script (Unix socket)
 # ONCE provides: SECRET_KEY_BASE, SMTP_*, VAPID_*
 # Custom env vars (set via ONCE TUI): CORS_ORIGINS, APP_URL, RESEND_API_KEY, EMAIL_FROM, TURNSTILE_SECRET_KEY

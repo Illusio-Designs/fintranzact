@@ -14,7 +14,7 @@ export function Card({ children, style }: Props) {
 const useStyles = makeStyles((colors) => ({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 16,

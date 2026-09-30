@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The Fintranzact CLI (`hisaabo`) brings your entire business management workflow to the terminal. Built with [Ink 5](https://github.com/vadimdemedes/ink) (React for the terminal) and Commander.js, it renders rich interactive tables, colored status badges, and INR-formatted numbers directly in your shell.
+The Fintranzact CLI (`fintranzact`) brings your entire business management workflow to the terminal. Built with [Ink 5](https://github.com/vadimdemedes/ink) (React for the terminal) and Commander.js, it renders rich interactive tables, colored status badges, and INR-formatted numbers directly in your shell.
 
 It is useful for three things: quick lookups without opening a browser, automation scripts and cron jobs, and AI agent workflows that execute shell commands as part of a broader pipeline.
 
@@ -30,7 +30,7 @@ npx @fintranzact/cli <command>
 Verify the installation:
 
 ```bash
-hisaabo --version
+fintranzact --version
 ```
 
 ---
@@ -42,15 +42,15 @@ hisaabo --version
 Generate an API key in the Fintranzact web app under **Settings → API Keys** (available on paid plans), then:
 
 ```bash
-hisaabo login --token hisaabo_key_xxxxxxxxxxxxxxxxxx
+fintranzact login --token fintranzact_key_xxxxxxxxxxxxxxxxxx
 ```
 
-The CLI validates the key, resolves your user and business context, and stores it in `~/.config/hisaabo/config.json`. API keys do not expire unless you set an expiry date during creation.
+The CLI validates the key, resolves your user and business context, and stores it in `~/.config/fintranzact/config.json`. API keys do not expire unless you set an expiry date during creation.
 
 To point the CLI at a specific Fintranzact API URL:
 
 ```bash
-hisaabo login --token hisaabo_key_xxx --api-url https://fintranzact-production.up.railway.app
+fintranzact login --token fintranzact_key_xxx --api-url https://fintranzact-production.up.railway.app
 ```
 
 ### Environment variables (recommended for automation)
@@ -58,9 +58,9 @@ hisaabo login --token hisaabo_key_xxx --api-url https://fintranzact-production.u
 For cron jobs and CI/CD pipelines, set credentials as environment variables instead of logging in:
 
 ```bash
-export HISAABO_API_URL=https://your-hisaabo-instance.com
-export HISAABO_API_KEY=hisaabo_key_xxxxxxxxxxxxxxxxxx
-export HISAABO_BUSINESS_ID=your-business-uuid
+export FINTRANZACT_API_URL=https://your-fintranzact-instance.com
+export FINTRANZACT_API_KEY=fintranzact_key_xxxxxxxxxxxxxxxxxx
+export FINTRANZACT_BUSINESS_ID=your-business-uuid
 ```
 
 ### Business creation and switching
@@ -69,19 +69,19 @@ Create a new business or switch between existing ones:
 
 ```bash
 # List all businesses on your account
-hisaabo business list
+fintranzact business list
 
 # Create a new business (interactive prompts for name, GSTIN, address)
-hisaabo business create
+fintranzact business create
 
 # Switch the active business (interactive picker — arrow keys + Enter)
-hisaabo switch
+fintranzact switch
 
 # Switch non-interactively
-hisaabo switch <business-id>
+fintranzact switch <business-id>
 ```
 
-Switching updates the stored `businessId` in `~/.config/hisaabo/config.json`. All subsequent commands operate on the newly selected business. To override the active business for a single command without switching, pass `--business <id>`.
+Switching updates the stored `businessId` in `~/.config/fintranzact/config.json`. All subsequent commands operate on the newly selected business. To override the active business for a single command without switching, pass `--business <id>`.
 
 **Web app:** Tap the business name in the sidebar to open a popover that lists all your businesses and includes a "Create New Business" option. Selecting a business reloads all data for that context.
 
@@ -91,34 +91,34 @@ Switching updates the stored `businessId` in `~/.config/hisaabo/config.json`. Al
 
 ```bash
 # Register a new account
-hisaabo auth register --email you@example.com --name "Your Name"
+fintranzact auth register --email you@example.com --name "Your Name"
 
 # Complete profile setup after an invite-based registration
-hisaabo auth complete-profile --name "Your Name"
+fintranzact auth complete-profile --name "Your Name"
 
 # Update your display name
-hisaabo auth update-name --name "New Name"
+fintranzact auth update-name --name "New Name"
 
 # Sign out of all active sessions (useful after a credential change)
-hisaabo auth logout-all
+fintranzact auth logout-all
 ```
 
 ---
 
 ## Command Reference
 
-### `hisaabo dashboard`
+### `fintranzact dashboard`
 
 Display key business metrics.
 
 ```bash
-hisaabo dashboard
-hisaabo dashboard --period today
-hisaabo dashboard --period this-week
-hisaabo dashboard --period this-month
-hisaabo dashboard --period last-month
-hisaabo dashboard --period this-year
-hisaabo dashboard --from 2026-01-01 --to 2026-03-31
+fintranzact dashboard
+fintranzact dashboard --period today
+fintranzact dashboard --period this-week
+fintranzact dashboard --period this-month
+fintranzact dashboard --period last-month
+fintranzact dashboard --period this-year
+fintranzact dashboard --from 2026-01-01 --to 2026-03-31
 ```
 
 | Flag | Description |
@@ -147,19 +147,19 @@ Low stock alerts: 3 items
 
 ---
 
-### `hisaabo invoice`
+### `fintranzact invoice`
 
-#### `hisaabo invoice list`
+#### `fintranzact invoice list`
 
 ```bash
-hisaabo invoice list
-hisaabo invoice list --status overdue
-hisaabo invoice list --status paid
-hisaabo invoice list --party "Sharma Traders"
-hisaabo invoice list --from 2026-03-01 --to 2026-03-31
-hisaabo invoice list --status overdue --sort oldest-first
-hisaabo invoice list --type purchase
-hisaabo invoice list --json
+fintranzact invoice list
+fintranzact invoice list --status overdue
+fintranzact invoice list --status paid
+fintranzact invoice list --party "Sharma Traders"
+fintranzact invoice list --from 2026-03-01 --to 2026-03-31
+fintranzact invoice list --status overdue --sort oldest-first
+fintranzact invoice list --type purchase
+fintranzact invoice list --json
 ```
 
 | Flag | Description |
@@ -172,19 +172,19 @@ hisaabo invoice list --json
 | `--limit` | Max results (default 50, max 100) |
 | `--json` | Raw JSON output |
 
-#### `hisaabo invoice get`
+#### `fintranzact invoice get`
 
 ```bash
-hisaabo invoice get BB-12948
-hisaabo invoice get inv_xxxxxxxxxx --json
+fintranzact invoice get BB-12948
+fintranzact invoice get inv_xxxxxxxxxx --json
 ```
 
-#### `hisaabo invoice create`
+#### `fintranzact invoice create`
 
 Interactive wizard when run without flags. Or pass flags for scripting:
 
 ```bash
-hisaabo invoice create \
+fintranzact invoice create \
   --party "Montu Arora" \
   --item "Spinach" --quantity 7.3 --unit kg --price 65 \
   --item "Tomato" --quantity 5 --unit kg --price 40 \
@@ -195,7 +195,7 @@ hisaabo invoice create \
 For complex invoices with many line items, pass a JSON file:
 
 ```bash
-hisaabo invoice create --from-file invoice.json
+fintranzact invoice create --from-file invoice.json
 ```
 
 Where `invoice.json` follows the format:
@@ -213,66 +213,66 @@ Where `invoice.json` follows the format:
 }
 ```
 
-#### `hisaabo invoice pdf`
+#### `fintranzact invoice pdf`
 
 ```bash
 # Download PDF to current directory
-hisaabo invoice pdf BB-12948
+fintranzact invoice pdf BB-12948
 
 # Specify output path
-hisaabo invoice pdf BB-12948 --output /tmp/invoices/
+fintranzact invoice pdf BB-12948 --output /tmp/invoices/
 
 # Thermal (58mm) format
-hisaabo invoice pdf BB-12948 --format thermal
+fintranzact invoice pdf BB-12948 --format thermal
 ```
 
-#### `hisaabo invoice update`
+#### `fintranzact invoice update`
 
 Update fields on an existing invoice. Only draft invoices can be fully edited; sent or paid invoices accept a limited set of changes.
 
 ```bash
-hisaabo invoice update BB-12948 \
+fintranzact invoice update BB-12948 \
   --notes "Updated payment terms: 30 days net" \
   --due-date 2026-04-30
 ```
 
 Pass `--from-file invoice.json` to replace the full invoice body from a JSON file (same format as `invoice create`).
 
-#### `hisaabo invoice delete`
+#### `fintranzact invoice delete`
 
 ```bash
-hisaabo invoice delete BB-12948
+fintranzact invoice delete BB-12948
 ```
 
 Only draft invoices can be deleted. Sent or paid invoices must be cancelled via status update.
 
 ---
 
-### `hisaabo party`
+### `fintranzact party`
 
-#### `hisaabo party list`
+#### `fintranzact party list`
 
 ```bash
-hisaabo party list
-hisaabo party list --type customer
-hisaabo party list --type supplier
-hisaabo party list --search "sharma"
-hisaabo party list --outstanding   # only parties with unpaid balance
-hisaabo party list --json
+fintranzact party list
+fintranzact party list --type customer
+fintranzact party list --type supplier
+fintranzact party list --search "sharma"
+fintranzact party list --outstanding   # only parties with unpaid balance
+fintranzact party list --json
 ```
 
-#### `hisaabo party get`
+#### `fintranzact party get`
 
 ```bash
-hisaabo party get "Sharma Traders"
-hisaabo party get party_xxxxxxxxxx --ledger
-hisaabo party get "Gupta Enterprises" --ledger --from 2026-01-01
+fintranzact party get "Sharma Traders"
+fintranzact party get party_xxxxxxxxxx --ledger
+fintranzact party get "Gupta Enterprises" --ledger --from 2026-01-01
 ```
 
-#### `hisaabo party create`
+#### `fintranzact party create`
 
 ```bash
-hisaabo party create \
+fintranzact party create \
   --name "Mehta & Sons" \
   --type customer \
   --phone 9876543210 \
@@ -281,74 +281,74 @@ hisaabo party create \
   --state Maharashtra
 ```
 
-#### `hisaabo party ledger-report`
+#### `fintranzact party ledger-report`
 
 Full ledger report with opening balance, all transactions, and closing balance for a date range:
 
 ```bash
-hisaabo party ledger-report --party "Gupta Enterprises" --from 2026-04-01 --to 2026-03-31
-hisaabo party ledger-report --party party_xxxxxxxxxx --json
+fintranzact party ledger-report --party "Gupta Enterprises" --from 2026-04-01 --to 2026-03-31
+fintranzact party ledger-report --party party_xxxxxxxxxx --json
 ```
 
-#### `hisaabo party stats`
+#### `fintranzact party stats`
 
 Aggregate transaction statistics (total sales, purchases, payments) for a party:
 
 ```bash
-hisaabo party stats party_xxxxxxxxxx
-hisaabo party stats "Sharma Traders" --json
+fintranzact party stats party_xxxxxxxxxx
+fintranzact party stats "Sharma Traders" --json
 ```
 
-#### `hisaabo party top-items`
+#### `fintranzact party top-items`
 
 Items most frequently bought from or sold to a party, ranked by quantity or value:
 
 ```bash
-hisaabo party top-items party_xxxxxxxxxx
-hisaabo party top-items "Gupta Enterprises" --limit 10 --json
+fintranzact party top-items party_xxxxxxxxxx
+fintranzact party top-items "Gupta Enterprises" --limit 10 --json
 ```
 
-#### `hisaabo party merge`
+#### `fintranzact party merge`
 
 Merge two duplicate party records. All invoices, payments, and ledger entries are reassigned to the target party and the source is deleted.
 
 ```bash
-hisaabo party merge --source party_xxxxxxxxxx --target party_yyyyyyyyyy
+fintranzact party merge --source party_xxxxxxxxxx --target party_yyyyyyyyyy
 ```
 
-#### `hisaabo party delete`
+#### `fintranzact party delete`
 
 ```bash
-hisaabo party delete party_xxxxxxxxxx
+fintranzact party delete party_xxxxxxxxxx
 ```
 
 Fails if the party has any invoices or payments on record.
 
 ---
 
-### `hisaabo item`
+### `fintranzact item`
 
-#### `hisaabo item list`
+#### `fintranzact item list`
 
 ```bash
-hisaabo item list
-hisaabo item list --low-stock
-hisaabo item list --search "rice"
-hisaabo item list --category "Grains"
-hisaabo item list --json
+fintranzact item list
+fintranzact item list --low-stock
+fintranzact item list --search "rice"
+fintranzact item list --category "Grains"
+fintranzact item list --json
 ```
 
-#### `hisaabo item get`
+#### `fintranzact item get`
 
 ```bash
-hisaabo item get "Basmati Rice 25kg"
-hisaabo item get item_xxxxxxxxxx --json
+fintranzact item get "Basmati Rice 25kg"
+fintranzact item get item_xxxxxxxxxx --json
 ```
 
-#### `hisaabo item create`
+#### `fintranzact item create`
 
 ```bash
-hisaabo item create \
+fintranzact item create \
   --name "Mustard Oil 15L" \
   --unit can \
   --price 2100 \
@@ -359,135 +359,135 @@ hisaabo item create \
   --low-stock-threshold 5
 ```
 
-#### `hisaabo item delete`
+#### `fintranzact item delete`
 
 ```bash
-hisaabo item delete item_xxxxxxxxxx
+fintranzact item delete item_xxxxxxxxxx
 ```
 
 Fails if the item appears on any invoice.
 
-#### `hisaabo item stock`
+#### `fintranzact item stock`
 
 Adjust stock quantity:
 
 ```bash
 # Add stock (positive adjustment)
-hisaabo item stock "Basmati Rice 25kg" --adjustment +50 --reason "Purchase from supplier"
+fintranzact item stock "Basmati Rice 25kg" --adjustment +50 --reason "Purchase from supplier"
 
 # Remove stock (negative adjustment)
-hisaabo item stock "Mustard Oil 15L" --adjustment -3 --reason "Damaged in transit"
+fintranzact item stock "Mustard Oil 15L" --adjustment -3 --reason "Damaged in transit"
 ```
 
-#### `hisaabo item stock-history`
+#### `fintranzact item stock-history`
 
 Full log of every stock adjustment ever made on an item:
 
 ```bash
-hisaabo item stock-history "Basmati Rice 25kg"
-hisaabo item stock-history item_xxxxxxxxxx --from 2026-01-01 --json
+fintranzact item stock-history "Basmati Rice 25kg"
+fintranzact item stock-history item_xxxxxxxxxx --from 2026-01-01 --json
 ```
 
-#### `hisaabo item stock-movements`
+#### `fintranzact item stock-movements`
 
 Every stock movement including invoice deductions, purchase additions, and manual adjustments:
 
 ```bash
-hisaabo item stock-movements "Mustard Oil 15L"
-hisaabo item stock-movements item_xxxxxxxxxx --json
+fintranzact item stock-movements "Mustard Oil 15L"
+fintranzact item stock-movements item_xxxxxxxxxx --json
 ```
 
-#### `hisaabo item low-stock-count`
+#### `fintranzact item low-stock-count`
 
 Quick count of items currently at or below their low-stock threshold:
 
 ```bash
-hisaabo item low-stock-count
+fintranzact item low-stock-count
 ```
 
-#### `hisaabo item price-history`
+#### `fintranzact item price-history`
 
 Historical sale price changes for an item:
 
 ```bash
-hisaabo item price-history "Basmati Rice 25kg"
-hisaabo item price-history item_xxxxxxxxxx --json
+fintranzact item price-history "Basmati Rice 25kg"
+fintranzact item price-history item_xxxxxxxxxx --json
 ```
 
-#### `hisaabo item sales-stats`
+#### `fintranzact item sales-stats`
 
 Total units sold and revenue for an item over a period:
 
 ```bash
-hisaabo item sales-stats "Basmati Rice 25kg" --from 2026-04-01 --to 2026-03-31
-hisaabo item sales-stats item_xxxxxxxxxx --json
+fintranzact item sales-stats "Basmati Rice 25kg" --from 2026-04-01 --to 2026-03-31
+fintranzact item sales-stats item_xxxxxxxxxx --json
 ```
 
-#### `hisaabo item variants`
+#### `fintranzact item variants`
 
 Manage variants (size, grade, colour, etc.) for an item that has multiple options at different prices or units.
 
 ```bash
 # List variants
-hisaabo item variants list item_xxxxxxxxxx
+fintranzact item variants list item_xxxxxxxxxx
 
 # Add a variant
-hisaabo item variants create \
+fintranzact item variants create \
   --item item_xxxxxxxxxx \
   --name "500g Pack" \
   --price 120 \
   --unit pack
 
 # Update a variant
-hisaabo item variants update variant_xxxxxxxxxx --price 130
+fintranzact item variants update variant_xxxxxxxxxx --price 130
 
 # Delete a variant
-hisaabo item variants delete variant_xxxxxxxxxx
+fintranzact item variants delete variant_xxxxxxxxxx
 ```
 
-#### `hisaabo item merge`
+#### `fintranzact item merge`
 
 Merge two duplicate item records. All line items and stock history are reassigned to the target and the source is deleted.
 
 ```bash
-hisaabo item merge --source item_xxxxxxxxxx --target item_yyyyyyyyyy
+fintranzact item merge --source item_xxxxxxxxxx --target item_yyyyyyyyyy
 ```
 
-#### `hisaabo item switch-base-unit`
+#### `fintranzact item switch-base-unit`
 
 Change the base unit of measurement for an item (e.g. `kg` to `g`). Provide the conversion factor.
 
 ```bash
-hisaabo item switch-base-unit item_xxxxxxxxxx --new-unit g --factor 1000
+fintranzact item switch-base-unit item_xxxxxxxxxx --new-unit g --factor 1000
 ```
 
-#### `hisaabo item rename-unit`
+#### `fintranzact item rename-unit`
 
 Rename a unit on an item without changing any quantities (e.g. rename `pcs` to `pieces`):
 
 ```bash
-hisaabo item rename-unit item_xxxxxxxxxx --from pcs --to pieces
+fintranzact item rename-unit item_xxxxxxxxxx --from pcs --to pieces
 ```
 
 ---
 
-### `hisaabo payment`
+### `fintranzact payment`
 
-#### `hisaabo payment list`
+#### `fintranzact payment list`
 
 ```bash
-hisaabo payment list
-hisaabo payment list --party "Sharma Traders"
-hisaabo payment list --from 2026-03-01 --to 2026-03-31
-hisaabo payment list --mode upi
-hisaabo payment list --json
+fintranzact payment list
+fintranzact payment list --party "Sharma Traders"
+fintranzact payment list --from 2026-03-01 --to 2026-03-31
+fintranzact payment list --mode upi
+fintranzact payment list --json
 ```
 
-#### `hisaabo payment create`
+#### `fintranzact payment create`
 
 ```bash
 # Payment received from customer
-hisaabo payment create \
+fintranzact payment create \
   --party "Sharma Traders" \
   --amount 25000 \
   --mode upi \
@@ -496,131 +496,131 @@ hisaabo payment create \
   --allocate BB-12800 BB-12801
 
 # Bulk payment (no specific invoice allocation)
-hisaabo payment create \
+fintranzact payment create \
   --party "Gupta Enterprises" \
   --amount 50000 \
   --mode bank \
   --reference "NEFT20260326"
 ```
 
-#### `hisaabo payment delete`
+#### `fintranzact payment delete`
 
 ```bash
-hisaabo payment delete pay_xxxxxxxxxx
+fintranzact payment delete pay_xxxxxxxxxx
 ```
 
-#### `hisaabo payment unpaid-invoices`
+#### `fintranzact payment unpaid-invoices`
 
 List invoices that still have an outstanding balance — useful before recording a payment to see what to allocate:
 
 ```bash
-hisaabo payment unpaid-invoices
-hisaabo payment unpaid-invoices --party "Sharma Traders" --json
+fintranzact payment unpaid-invoices
+fintranzact payment unpaid-invoices --party "Sharma Traders" --json
 ```
 
-#### `hisaabo payment untracked`
+#### `fintranzact payment untracked`
 
 Payments that were recorded but have not been linked to any invoice:
 
 ```bash
-hisaabo payment untracked
-hisaabo payment untracked --json
+fintranzact payment untracked
+fintranzact payment untracked --json
 ```
 
-#### `hisaabo payment default-account`
+#### `fintranzact payment default-account`
 
 Show the bank account that is currently set as the default for incoming payments:
 
 ```bash
-hisaabo payment default-account
+fintranzact payment default-account
 ```
 
-#### `hisaabo payment assign-account`
+#### `fintranzact payment assign-account`
 
 Assign a bank account to an existing payment record:
 
 ```bash
-hisaabo payment assign-account --payment pay_xxxxxxxxxx --account account_xxxxxxxxxx
+fintranzact payment assign-account --payment pay_xxxxxxxxxx --account account_xxxxxxxxxx
 ```
 
 ---
 
-### `hisaabo expense`
+### `fintranzact expense`
 
-#### `hisaabo expense list`
+#### `fintranzact expense list`
 
 ```bash
-hisaabo expense list
-hisaabo expense list --category "Transport"
-hisaabo expense list --from 2026-03-01 --to 2026-03-31
-hisaabo expense list --json
+fintranzact expense list
+fintranzact expense list --category "Transport"
+fintranzact expense list --from 2026-03-01 --to 2026-03-31
+fintranzact expense list --json
 ```
 
-#### `hisaabo expense create`
+#### `fintranzact expense create`
 
 ```bash
-hisaabo expense create \
+fintranzact expense create \
   --amount 1500 \
   --category "Transport" \
   --date 2026-03-26 \
   --description "Delivery to Sector 15 warehouse"
 ```
 
-#### `hisaabo expense delete`
+#### `fintranzact expense delete`
 
 ```bash
-hisaabo expense delete exp_xxxxxxxxxx
+fintranzact expense delete exp_xxxxxxxxxx
 ```
 
 ---
 
-### `hisaabo gst`
+### `fintranzact gst`
 
-#### `hisaabo gst r1`
+#### `fintranzact gst r1`
 
 Get GSTR-1 data (outward supplies):
 
 ```bash
-hisaabo gst r1 --month 3 --year 2026
-hisaabo gst r1 --month 3 --year 2026 --json
-hisaabo gst r1 --month 3 --year 2026 --csv --output /var/gst-reports/
+fintranzact gst r1 --month 3 --year 2026
+fintranzact gst r1 --month 3 --year 2026 --json
+fintranzact gst r1 --month 3 --year 2026 --csv --output /var/gst-reports/
 ```
 
-#### `hisaabo gst r3b`
+#### `fintranzact gst r3b`
 
 Get GSTR-3B summary (monthly return):
 
 ```bash
-hisaabo gst r3b --month 3 --year 2026
-hisaabo gst r3b --month 3 --year 2026 --csv --output /var/gst-reports/
+fintranzact gst r3b --month 3 --year 2026
+fintranzact gst r3b --month 3 --year 2026 --csv --output /var/gst-reports/
 ```
 
 ---
 
-### `hisaabo automated-invoice`
+### `fintranzact automated-invoice`
 
 Manage recurring invoice templates that auto-generate invoices on a schedule.
 
-#### `hisaabo automated-invoice list`
+#### `fintranzact automated-invoice list`
 
 ```bash
-hisaabo automated-invoice list [--status active|paused|completed|expired] [--json]
+fintranzact automated-invoice list [--status active|paused|completed|expired] [--json]
 ```
 
 Lists all recurring invoice templates with name, party, frequency, status, next run date, and run count.
 
-#### `hisaabo automated-invoice get`
+#### `fintranzact automated-invoice get`
 
 ```bash
-hisaabo automated-invoice get <template-id> [--json]
+fintranzact automated-invoice get <template-id> [--json]
 ```
 
 Shows full template details including line items and execution history.
 
-#### `hisaabo automated-invoice create`
+#### `fintranzact automated-invoice create`
 
 ```bash
-hisaabo automated-invoice create \
+fintranzact automated-invoice create \
   --name "Monthly Rent to Gupta Ji" \
   --party-id <uuid> \
   --type sale \
@@ -633,100 +633,100 @@ hisaabo automated-invoice create \
   [--json]
 ```
 
-#### `hisaabo automated-invoice pause`
+#### `fintranzact automated-invoice pause`
 
 ```bash
-hisaabo automated-invoice pause <template-id> [--json]
+fintranzact automated-invoice pause <template-id> [--json]
 ```
 
 Pauses an active template. No invoices will be generated until resumed.
 
-#### `hisaabo automated-invoice resume`
+#### `fintranzact automated-invoice resume`
 
 ```bash
-hisaabo automated-invoice resume <template-id> [--json]
+fintranzact automated-invoice resume <template-id> [--json]
 ```
 
 Resumes a paused template. Next run date is recalculated from now.
 
-#### `hisaabo automated-invoice run-now`
+#### `fintranzact automated-invoice run-now`
 
 ```bash
-hisaabo automated-invoice run-now <template-id> [--json]
+fintranzact automated-invoice run-now <template-id> [--json]
 ```
 
 Manually trigger immediate invoice generation from a template.
 
-#### `hisaabo automated-invoice delete`
+#### `fintranzact automated-invoice delete`
 
 ```bash
-hisaabo automated-invoice delete <template-id> [-y] [--json]
+fintranzact automated-invoice delete <template-id> [-y] [--json]
 ```
 
 Permanently deletes a template and all its execution history.
 
 ---
 
-### `hisaabo shipment`
+### `fintranzact shipment`
 
-#### `hisaabo shipment list`
+#### `fintranzact shipment list`
 
 ```bash
-hisaabo shipment list
-hisaabo shipment list --status in_transit
-hisaabo shipment list --from 2026-03-01 --json
+fintranzact shipment list
+fintranzact shipment list --status in_transit
+fintranzact shipment list --from 2026-03-01 --json
 ```
 
-#### `hisaabo shipment get`
+#### `fintranzact shipment get`
 
 ```bash
-hisaabo shipment get ship_xxxxxxxxxx
+fintranzact shipment get ship_xxxxxxxxxx
 ```
 
 Shows full tracking event history.
 
-#### `hisaabo shipment create`
+#### `fintranzact shipment create`
 
 ```bash
-hisaabo shipment create \
+fintranzact shipment create \
   --invoice BB-14821 \
   --mode "Delhivery" \
   --tracking "DEL9876543210" \
   --dispatch-date 2026-03-27
 ```
 
-#### `hisaabo shipment update`
+#### `fintranzact shipment update`
 
 ```bash
-hisaabo shipment update ship_xxxxxxxxxx \
+fintranzact shipment update ship_xxxxxxxxxx \
   --status delivered \
   --notes "Delivered to reception, signed by Ramesh"
 ```
 
 ---
 
-### `hisaabo bank`
+### `fintranzact bank`
 
-#### `hisaabo bank list`
+#### `fintranzact bank list`
 
 ```bash
-hisaabo bank list
-hisaabo bank list --json
+fintranzact bank list
+fintranzact bank list --json
 ```
 
 Shows all bank accounts and cash accounts with current balances.
 
-#### `hisaabo bank get`
+#### `fintranzact bank get`
 
 ```bash
-hisaabo bank get account_xxxxxxxxxx
-hisaabo bank get "SBI Current" --transactions --from 2026-03-01
+fintranzact bank get account_xxxxxxxxxx
+fintranzact bank get "SBI Current" --transactions --from 2026-03-01
 ```
 
-#### `hisaabo bank create`
+#### `fintranzact bank create`
 
 ```bash
-hisaabo bank create \
+fintranzact bank create \
   --name "HDFC Current Account" \
   --type bank \
   --account-number "1234567890" \
@@ -734,10 +734,10 @@ hisaabo bank create \
   --opening-balance 50000
 ```
 
-#### `hisaabo bank transfer`
+#### `fintranzact bank transfer`
 
 ```bash
-hisaabo bank transfer \
+fintranzact bank transfer \
   --from "SBI Current" \
   --to "Petty Cash" \
   --amount 5000 \
@@ -745,149 +745,149 @@ hisaabo bank transfer \
   --notes "Weekly petty cash replenishment"
 ```
 
-#### `hisaabo bank transactions`
+#### `fintranzact bank transactions`
 
 ```bash
-hisaabo bank transactions "HDFC Current Account"
-hisaabo bank transactions account_xxxxxxxxxx --from 2026-03-01 --to 2026-03-31 --json
+fintranzact bank transactions "HDFC Current Account"
+fintranzact bank transactions account_xxxxxxxxxx --from 2026-03-01 --to 2026-03-31 --json
 ```
 
-#### `hisaabo bank gateway-config`
+#### `fintranzact bank gateway-config`
 
 View the gateway configuration (charge rates, settlement account) for a payment gateway account.
 
 ```bash
-hisaabo bank gateway-config <accountId>
-hisaabo bank gateway-config <accountId> --json
+fintranzact bank gateway-config <accountId>
+fintranzact bank gateway-config <accountId> --json
 ```
 
-#### `hisaabo bank update-gateway`
+#### `fintranzact bank update-gateway`
 
 Update gateway charge rates or settlement account.
 
 ```bash
-hisaabo bank update-gateway <accountId> --charge-credit-card 2.5 --charge-upi 0
-hisaabo bank update-gateway <accountId> --settlement-account <bankAccountId>
+fintranzact bank update-gateway <accountId> --charge-credit-card 2.5 --charge-upi 0
+fintranzact bank update-gateway <accountId> --settlement-account <bankAccountId>
 ```
 
 Charge values are percentages by default. Use `flat:20` for a flat ₹20 charge.
 
 ---
 
-### `hisaabo report`
+### `fintranzact report`
 
-#### `hisaabo report daybook`
+#### `fintranzact report daybook`
 
 All transactions for a date range, ordered by date:
 
 ```bash
-hisaabo report daybook --from 2026-03-01 --to 2026-03-31
-hisaabo report daybook --from 2026-03-26 --to 2026-03-26 --json
+fintranzact report daybook --from 2026-03-01 --to 2026-03-31
+fintranzact report daybook --from 2026-03-26 --to 2026-03-26 --json
 ```
 
-#### `hisaabo report outstanding`
+#### `fintranzact report outstanding`
 
 Receivables and payables with aging buckets:
 
 ```bash
-hisaabo report outstanding
-hisaabo report outstanding --type receivable
-hisaabo report outstanding --json
+fintranzact report outstanding
+fintranzact report outstanding --type receivable
+fintranzact report outstanding --json
 ```
 
-#### `hisaabo report tax-summary`
+#### `fintranzact report tax-summary`
 
 Taxable turnover and GST by rate for a period:
 
 ```bash
-hisaabo report tax-summary --from 2026-01-01 --to 2026-03-31
-hisaabo report tax-summary --from 2026-04-01 --to 2026-03-31 --json
+fintranzact report tax-summary --from 2026-01-01 --to 2026-03-31
+fintranzact report tax-summary --from 2026-04-01 --to 2026-03-31 --json
 ```
 
-#### `hisaabo report item-sales`
+#### `fintranzact report item-sales`
 
 Top items by sales quantity and revenue:
 
 ```bash
-hisaabo report item-sales --period this-month
-hisaabo report item-sales --from 2026-04-01 --to 2026-03-31 --json
+fintranzact report item-sales --period this-month
+fintranzact report item-sales --from 2026-04-01 --to 2026-03-31 --json
 ```
 
-#### `hisaabo report stock`
+#### `fintranzact report stock`
 
 Current stock value and opening/closing comparison:
 
 ```bash
-hisaabo report stock
-hisaabo report stock --json
+fintranzact report stock
+fintranzact report stock --json
 ```
 
 ---
 
-### `hisaabo target`
+### `fintranzact target`
 
-#### `hisaabo target list`
+#### `fintranzact target list`
 
 ```bash
-hisaabo target list
-hisaabo target list --period monthly --json
+fintranzact target list
+fintranzact target list --period monthly --json
 ```
 
-#### `hisaabo target create`
+#### `fintranzact target create`
 
 ```bash
-hisaabo target create \
+fintranzact target create \
   --name "Q1 Revenue Target" \
   --type order_value \
   --value 500000 \
   --period monthly
 ```
 
-#### `hisaabo target my`
+#### `fintranzact target my`
 
 Show targets assigned to you (useful for sales team members):
 
 ```bash
-hisaabo target my
-hisaabo target my --json
+fintranzact target my
+fintranzact target my --json
 ```
 
 ---
 
-### `hisaabo import`
+### `fintranzact import`
 
-#### `hisaabo import parties`
+#### `fintranzact import parties`
 
 ```bash
 # From CSV
-hisaabo import parties --file parties.csv --format csv
+fintranzact import parties --file parties.csv --format csv
 
 # From JSON
-hisaabo import parties --file parties.json --format json
+fintranzact import parties --file parties.json --format json
 
 # Preview without importing
-hisaabo import parties --file parties.csv --dry-run
+fintranzact import parties --file parties.csv --dry-run
 ```
 
-#### `hisaabo import items`
+#### `fintranzact import items`
 
 ```bash
-hisaabo import items --file catalog.csv --format csv
-hisaabo import items --file catalog.json --dry-run
+fintranzact import items --file catalog.csv --format csv
+fintranzact import items --file catalog.json --dry-run
 ```
 
 ---
 
-### `hisaabo export`
+### `fintranzact export`
 
 Download a full tenant backup as a `.tar.gz` archive. This is a tenant-level operation — it does not require a business to be selected.
 
 ```bash
 # Export by tenant slug
-hisaabo export --tenant my-company -o backup.tar.gz
+fintranzact export --tenant my-company -o backup.tar.gz
 
 # Export by tenant UUID
-hisaabo export --tenant 550e8400-e29b-41d4-a716-446655440000 -o /tmp/backup.tar.gz
+fintranzact export --tenant 550e8400-e29b-41d4-a716-446655440000 -o /tmp/backup.tar.gz
 ```
 
 | Flag | Description |
@@ -905,24 +905,24 @@ On success, prints the file size, SHA256 hash, and download time.
 | 5 | Server or network error |
 
 :::note
-Only tenant owners can export. The CLI does not need a `--business` flag or `HISAABO_BUSINESS_ID` for this command — just authentication and a tenant.
+Only tenant owners can export. The CLI does not need a `--business` flag or `FINTRANZACT_BUSINESS_ID` for this command — just authentication and a tenant.
 :::
 
 ---
 
-### `hisaabo restore`
+### `fintranzact restore`
 
 Upload a `.tar.gz` backup archive into an empty tenant. The target tenant must have zero businesses.
 
 ```bash
 # Restore by tenant slug (interactive confirmation)
-hisaabo restore --tenant my-company -i backup.tar.gz
+fintranzact restore --tenant my-company -i backup.tar.gz
 
 # Skip confirmation prompt
-hisaabo restore --tenant my-company -i backup.tar.gz --yes
+fintranzact restore --tenant my-company -i backup.tar.gz --yes
 
 # Restore by tenant UUID
-hisaabo restore --tenant 550e8400-e29b-41d4-a716-446655440000 -i backup.tar.gz -y
+fintranzact restore --tenant 550e8400-e29b-41d4-a716-446655440000 -i backup.tar.gz -y
 ```
 
 | Flag | Description |
@@ -947,139 +947,139 @@ Restore only works on a completely empty tenant (no businesses created). To rest
 
 ---
 
-### `hisaabo store`
+### `fintranzact store`
 
-#### `hisaabo store settings`
-
-```bash
-hisaabo store settings
-hisaabo store settings --json
-```
-
-#### `hisaabo store orders`
+#### `fintranzact store settings`
 
 ```bash
-hisaabo store orders
-hisaabo store orders --status pending
-hisaabo store orders --from 2026-03-01 --json
+fintranzact store settings
+fintranzact store settings --json
 ```
 
-#### `hisaabo store order confirm`
+#### `fintranzact store orders`
+
+```bash
+fintranzact store orders
+fintranzact store orders --status pending
+fintranzact store orders --from 2026-03-01 --json
+```
+
+#### `fintranzact store order confirm`
 
 Mark a pending store order as confirmed and begin fulfillment:
 
 ```bash
-hisaabo store order confirm order_xxxxxxxxxx
+fintranzact store order confirm order_xxxxxxxxxx
 ```
 
-#### `hisaabo store order cancel`
+#### `fintranzact store order cancel`
 
 Cancel a store order:
 
 ```bash
-hisaabo store order cancel order_xxxxxxxxxx --reason "Out of stock"
+fintranzact store order cancel order_xxxxxxxxxx --reason "Out of stock"
 ```
 
-#### `hisaabo store check-slug`
+#### `fintranzact store check-slug`
 
 Check whether a URL slug is available before updating your store URL:
 
 ```bash
-hisaabo store check-slug my-store-name
+fintranzact store check-slug my-store-name
 ```
 
-#### `hisaabo store items`
+#### `fintranzact store items`
 
 List items currently shown in your online store:
 
 ```bash
-hisaabo store items
-hisaabo store items --json
+fintranzact store items
+fintranzact store items --json
 ```
 
-#### `hisaabo store items toggle`
+#### `fintranzact store items toggle`
 
 Bulk enable or disable items in the store without editing each one individually:
 
 ```bash
 # Enable multiple items
-hisaabo store items toggle --enable item_aaa item_bbb item_ccc
+fintranzact store items toggle --enable item_aaa item_bbb item_ccc
 
 # Disable multiple items
-hisaabo store items toggle --disable item_ddd item_eee
+fintranzact store items toggle --disable item_ddd item_eee
 ```
 
 ---
 
-### `hisaabo tenant`
+### `fintranzact tenant`
 
 Manage the tenant (organisation) that owns your businesses. Most users operate within a single tenant and never need these commands. They are most relevant to agency operators who manage multiple tenants.
 
-#### `hisaabo tenant list`
+#### `fintranzact tenant list`
 
 ```bash
-hisaabo tenant list
-hisaabo tenant list --json
+fintranzact tenant list
+fintranzact tenant list --json
 ```
 
-#### `hisaabo tenant select`
+#### `fintranzact tenant select`
 
 Switch the active tenant. All subsequent commands operate in the context of the selected tenant.
 
 ```bash
-hisaabo tenant select tenant_xxxxxxxxxx
+fintranzact tenant select tenant_xxxxxxxxxx
 ```
 
-#### `hisaabo tenant members`
+#### `fintranzact tenant members`
 
 List members of the current tenant:
 
 ```bash
-hisaabo tenant members
-hisaabo tenant members --json
+fintranzact tenant members
+fintranzact tenant members --json
 ```
 
-#### `hisaabo tenant invite`
+#### `fintranzact tenant invite`
 
 Invite a new member by email:
 
 ```bash
-hisaabo tenant invite --email colleague@example.com --role member
+fintranzact tenant invite --email colleague@example.com --role member
 ```
 
 Available roles: `owner`, `admin`, `member`.
 
-#### `hisaabo tenant remove`
+#### `fintranzact tenant remove`
 
 Remove a member from the tenant:
 
 ```bash
-hisaabo tenant remove user_xxxxxxxxxx
+fintranzact tenant remove user_xxxxxxxxxx
 ```
 
-#### `hisaabo tenant role`
+#### `fintranzact tenant role`
 
 Update a member's role:
 
 ```bash
-hisaabo tenant role user_xxxxxxxxxx --role admin
+fintranzact tenant role user_xxxxxxxxxx --role admin
 ```
 
-#### `hisaabo tenant invitations`
+#### `fintranzact tenant invitations`
 
 List pending invitations for the current tenant.
 
 ```bash
-hisaabo tenant invitations
-hisaabo tenant invitations --json
+fintranzact tenant invitations
+fintranzact tenant invitations --json
 ```
 
-#### `hisaabo tenant revoke-invitation`
+#### `fintranzact tenant revoke-invitation`
 
 Revoke a pending invitation.
 
 ```bash
-hisaabo tenant revoke-invitation <invitationId>
+fintranzact tenant revoke-invitation <invitationId>
 ```
 
 ---
@@ -1091,79 +1091,79 @@ Beyond standard invoices, Fintranzact supports six additional document types. Ea
 #### Quotation
 
 ```bash
-hisaabo quotation list
-hisaabo quotation list --party "Gupta Enterprises" --json
-hisaabo quotation get quot_xxxxxxxxxx
-hisaabo quotation create \
+fintranzact quotation list
+fintranzact quotation list --party "Gupta Enterprises" --json
+fintranzact quotation get quot_xxxxxxxxxx
+fintranzact quotation create \
   --party "Mehta & Sons" \
   --item "Basmati Rice 25kg" --quantity 50 --unit bag --price 1250 \
   --valid-until 2026-04-30
-hisaabo quotation status quot_xxxxxxxxxx accepted
-hisaabo quotation delete quot_xxxxxxxxxx
+fintranzact quotation status quot_xxxxxxxxxx accepted
+fintranzact quotation delete quot_xxxxxxxxxx
 ```
 
 #### Credit Note
 
 ```bash
-hisaabo credit-note list
-hisaabo credit-note get cn_xxxxxxxxxx
-hisaabo credit-note create --party "Sharma Traders" --invoice BB-12948 --reason "Goods returned"
-hisaabo credit-note status cn_xxxxxxxxxx issued
-hisaabo credit-note delete cn_xxxxxxxxxx
+fintranzact credit-note list
+fintranzact credit-note get cn_xxxxxxxxxx
+fintranzact credit-note create --party "Sharma Traders" --invoice BB-12948 --reason "Goods returned"
+fintranzact credit-note status cn_xxxxxxxxxx issued
+fintranzact credit-note delete cn_xxxxxxxxxx
 ```
 
 #### Debit Note
 
 ```bash
-hisaabo debit-note list
-hisaabo debit-note get dn_xxxxxxxxxx
-hisaabo debit-note create --party "Vinod & Sons" --invoice BB-12900 --reason "Short supply"
-hisaabo debit-note status dn_xxxxxxxxxx issued
-hisaabo debit-note delete dn_xxxxxxxxxx
+fintranzact debit-note list
+fintranzact debit-note get dn_xxxxxxxxxx
+fintranzact debit-note create --party "Vinod & Sons" --invoice BB-12900 --reason "Short supply"
+fintranzact debit-note status dn_xxxxxxxxxx issued
+fintranzact debit-note delete dn_xxxxxxxxxx
 ```
 
 #### Delivery Challan
 
 ```bash
-hisaabo challan list
-hisaabo challan get dc_xxxxxxxxxx
-hisaabo challan create \
+fintranzact challan list
+fintranzact challan get dc_xxxxxxxxxx
+fintranzact challan create \
   --party "Gupta Enterprises" \
   --item "Mustard Oil 15L" --quantity 10 --unit can
-hisaabo challan status dc_xxxxxxxxxx delivered
-hisaabo challan delete dc_xxxxxxxxxx
+fintranzact challan status dc_xxxxxxxxxx delivered
+fintranzact challan delete dc_xxxxxxxxxx
 ```
 
 #### Proforma Invoice
 
 ```bash
-hisaabo proforma list
-hisaabo proforma get pf_xxxxxxxxxx
-hisaabo proforma create \
+fintranzact proforma list
+fintranzact proforma get pf_xxxxxxxxxx
+fintranzact proforma create \
   --party "Mehta & Sons" \
   --item "Toor Dal 50kg" --quantity 5 --unit bag --price 4200
-hisaabo proforma status pf_xxxxxxxxxx approved
-hisaabo proforma delete pf_xxxxxxxxxx
+fintranzact proforma status pf_xxxxxxxxxx approved
+fintranzact proforma delete pf_xxxxxxxxxx
 ```
 
 #### Sales Return
 
 ```bash
-hisaabo sales-return list
-hisaabo sales-return get sr_xxxxxxxxxx
-hisaabo sales-return create --party "Sharma Traders" --invoice BB-12948
-hisaabo sales-return status sr_xxxxxxxxxx processed
-hisaabo sales-return delete sr_xxxxxxxxxx
+fintranzact sales-return list
+fintranzact sales-return get sr_xxxxxxxxxx
+fintranzact sales-return create --party "Sharma Traders" --invoice BB-12948
+fintranzact sales-return status sr_xxxxxxxxxx processed
+fintranzact sales-return delete sr_xxxxxxxxxx
 ```
 
 #### Purchase Return
 
 ```bash
-hisaabo purchase-return list
-hisaabo purchase-return get pr_xxxxxxxxxx
-hisaabo purchase-return create --party "Vinod & Sons" --invoice BB-12900
-hisaabo purchase-return status pr_xxxxxxxxxx processed
-hisaabo purchase-return delete pr_xxxxxxxxxx
+fintranzact purchase-return list
+fintranzact purchase-return get pr_xxxxxxxxxx
+fintranzact purchase-return create --party "Vinod & Sons" --invoice BB-12900
+fintranzact purchase-return status pr_xxxxxxxxxx processed
+fintranzact purchase-return delete pr_xxxxxxxxxx
 ```
 
 #### Convert a document
@@ -1172,7 +1172,7 @@ Convert one document type to another. The most common use case is converting a d
 
 ```bash
 # Convert a delivery challan to a sale invoice
-hisaabo document convert \
+fintranzact document convert \
   --from dc_xxxxxxxxxx \
   --from-type delivery_challan \
   --to-type invoice
@@ -1182,68 +1182,68 @@ The `--skip-stock-adjustment` flag is available when converting a challan to an 
 
 ---
 
-### `hisaabo session`
+### `fintranzact session`
 
 Manage active sessions across devices.
 
-#### `hisaabo session list`
+#### `fintranzact session list`
 
 List all active sessions for the current user.
 
 ```bash
-hisaabo session list
-hisaabo session list --expired
-hisaabo session list --json
+fintranzact session list
+fintranzact session list --expired
+fintranzact session list --json
 ```
 
 Shows device/browser, IP address, last activity time, creation date, and marks the current session.
 
-#### `hisaabo session revoke`
+#### `fintranzact session revoke`
 
 Terminate a specific session by ID.
 
 ```bash
-hisaabo session revoke <sessionId>
+fintranzact session revoke <sessionId>
 ```
 
 The revoked session is immediately invalidated. The user on that device will be redirected to the login page.
 
-#### `hisaabo session revoke-all`
+#### `fintranzact session revoke-all`
 
 Sign out from all devices (including the current one).
 
 ```bash
-hisaabo session revoke-all
+fintranzact session revoke-all
 ```
 
 ---
 
-### `hisaabo api-key`
+### `fintranzact api-key`
 
 Generate and manage API keys for automation scripts, CI/CD pipelines, and third-party integrations.
 
-#### `hisaabo api-key list`
+#### `fintranzact api-key list`
 
 ```bash
-hisaabo api-key list
-hisaabo api-key list --json
+fintranzact api-key list
+fintranzact api-key list --json
 ```
 
 Shows key name, creation date, expiry date, and last-used timestamp. The key secret is only shown once at creation time.
 
-#### `hisaabo api-key create`
+#### `fintranzact api-key create`
 
 ```bash
-hisaabo api-key create --name "CI Pipeline" --expires 2027-04-01
-hisaabo api-key create --name "Read-only export script"
+fintranzact api-key create --name "CI Pipeline" --expires 2027-04-01
+fintranzact api-key create --name "Read-only export script"
 ```
 
 Copy the returned key immediately — it is not shown again.
 
-#### `hisaabo api-key revoke`
+#### `fintranzact api-key revoke`
 
 ```bash
-hisaabo api-key revoke apikey_xxxxxxxxxx
+fintranzact api-key revoke apikey_xxxxxxxxxx
 ```
 
 Revoked keys stop working instantly.
@@ -1270,7 +1270,7 @@ These flags work on every command:
 ### Morning dashboard check
 
 ```bash
-hisaabo dashboard --period today
+fintranzact dashboard --period today
 ```
 
 Or with the full picture:
@@ -1278,19 +1278,19 @@ Or with the full picture:
 ```bash
 #!/bin/bash
 echo "=== $(date +"%d %b %Y") ==="
-hisaabo dashboard --period today
+fintranzact dashboard --period today
 echo ""
 echo "--- Overdue invoices ---"
-hisaabo invoice list --status overdue --sort oldest-first --limit 10
+fintranzact invoice list --status overdue --sort oldest-first --limit 10
 echo ""
 echo "--- Low stock ---"
-hisaabo item list --low-stock
+fintranzact item list --low-stock
 ```
 
 ### Creating an invoice from the terminal
 
 ```bash
-hisaabo invoice create \
+fintranzact invoice create \
   --party "Gupta Enterprises" \
   --item "Basmati Rice 25kg" --quantity 20 --unit bag --price 1250 \
   --item "Toor Dal 50kg" --quantity 5 --unit bag --price 4200 \
@@ -1300,12 +1300,12 @@ hisaabo invoice create \
 Then immediately get the PDF:
 
 ```bash
-INVOICE_ID=$(hisaabo invoice create \
+INVOICE_ID=$(fintranzact invoice create \
   --party "Gupta Enterprises" \
   --item "Basmati Rice 25kg" --quantity 20 --unit bag --price 1250 \
   --json | jq -r '.id')
 
-hisaabo invoice pdf "$INVOICE_ID" --output /tmp/
+fintranzact invoice pdf "$INVOICE_ID" --output /tmp/
 echo "PDF saved: /tmp/${INVOICE_ID}.pdf"
 ```
 
@@ -1313,14 +1313,14 @@ echo "PDF saved: /tmp/${INVOICE_ID}.pdf"
 
 ```bash
 # Human-readable table
-hisaabo invoice list --status overdue --sort oldest-first
+fintranzact invoice list --status overdue --sort oldest-first
 
 # Pipe to jq for custom formatting
-hisaabo invoice list --status overdue --json | jq -r \
+fintranzact invoice list --status overdue --json | jq -r \
   '.[] | "\(.invoiceNumber)  \(.party.name)  ₹\(.totalAmount)  \(.daysOverdue) days overdue"'
 
 # Total amount overdue
-hisaabo invoice list --status overdue --json | \
+fintranzact invoice list --status overdue --json | \
   jq '[.[].totalAmount | tonumber] | add'
 ```
 
@@ -1334,13 +1334,13 @@ OUTPUT_DIR="/var/gst-reports/${YEAR}-${MONTH}"
 mkdir -p "$OUTPUT_DIR"
 
 # Human-readable summary
-hisaabo gst r1 --month "$MONTH" --year "$YEAR"
+fintranzact gst r1 --month "$MONTH" --year "$YEAR"
 
 # Export CSV for CA or GST portal upload
-hisaabo gst r1 --month "$MONTH" --year "$YEAR" \
+fintranzact gst r1 --month "$MONTH" --year "$YEAR" \
   --csv --output "$OUTPUT_DIR/gstr1-${YEAR}-${MONTH}.csv"
 
-hisaabo gst r3b --month "$MONTH" --year "$YEAR" \
+fintranzact gst r3b --month "$MONTH" --year "$YEAR" \
   --csv --output "$OUTPUT_DIR/gstr3b-${YEAR}-${MONTH}.csv"
 
 echo "GST exports ready in $OUTPUT_DIR"
@@ -1350,19 +1350,19 @@ echo "GST exports ready in $OUTPUT_DIR"
 
 ```bash
 # Top 5 customers by outstanding balance
-hisaabo party list --outstanding --json | \
+fintranzact party list --outstanding --json | \
   jq 'sort_by(.outstandingBalance | tonumber) | reverse | .[0:5] |
       .[] | "\(.name): ₹\(.outstandingBalance)"'
 
 # Items needing reorder with suggested quantity
-hisaabo item list --low-stock --json | jq -r \
+fintranzact item list --low-stock --json | jq -r \
   '.[] | "REORDER \(.name): have \(.stockQuantity) \(.unit), min \(.lowStockThreshold) \(.unit)"'
 
 # Monthly revenue from dashboard
-hisaabo dashboard --period this-month --json | jq -r '.totalSales'
+fintranzact dashboard --period this-month --json | jq -r '.totalSales'
 
 # Count invoices by status
-hisaabo invoice list --json | jq 'group_by(.status) | .[] | {status: .[0].status, count: length}'
+fintranzact invoice list --json | jq 'group_by(.status) | .[] | {status: .[0].status, count: length}'
 ```
 
 ---
@@ -1375,9 +1375,9 @@ hisaabo invoice list --json | jq 'group_by(.status) | .[] | {status: .[0].status
 #!/bin/bash
 # morning-brief.sh — add to cron: 0 8 * * *
 
-DASH=$(hisaabo dashboard --period today --json)
-OVERDUE=$(hisaabo invoice list --status overdue --sort oldest-first --limit 5 --json)
-LOW=$(hisaabo item list --low-stock --json)
+DASH=$(fintranzact dashboard --period today --json)
+OVERDUE=$(fintranzact invoice list --status overdue --sort oldest-first --limit 5 --json)
+LOW=$(fintranzact item list --low-stock --json)
 
 echo "=== MORNING BRIEF — $(date +"%d %b %Y") ==="
 echo ""
@@ -1412,13 +1412,13 @@ CA_EMAIL="ca@yourca.com"
 OUTPUT_DIR="/var/gst-reports/${YEAR}-${MONTH}"
 mkdir -p "$OUTPUT_DIR"
 
-hisaabo gst r1 --month "$MONTH" --year "$YEAR" \
+fintranzact gst r1 --month "$MONTH" --year "$YEAR" \
   --csv --output "$OUTPUT_DIR/gstr1.csv"
 
-hisaabo gst r3b --month "$MONTH" --year "$YEAR" \
+fintranzact gst r3b --month "$MONTH" --year "$YEAR" \
   --csv --output "$OUTPUT_DIR/gstr3b.csv"
 
-SUMMARY=$(hisaabo gst r3b --month "$MONTH" --year "$YEAR")
+SUMMARY=$(fintranzact gst r3b --month "$MONTH" --year "$YEAR")
 
 {
   echo "GST data for ${YEAR}-${MONTH} attached."
@@ -1438,7 +1438,7 @@ SUMMARY=$(hisaabo gst r3b --month "$MONTH" --year "$YEAR")
 #!/bin/bash
 # aging-report.sh — cron: 0 9 * * 1
 
-hisaabo report outstanding --json | jq -r '
+fintranzact report outstanding --json | jq -r '
   "RECEIVABLES AGING — " + (now | strftime("%d %b %Y")) + "\n" +
   "0–30 days:  ₹\(.aging."0_30")\n" +
   "31–60 days: ₹\(.aging."31_60")\n" +
@@ -1466,11 +1466,11 @@ hisaabo report outstanding --json | jq -r '
 ### Exposing the CLI as an agent tool
 
 ```typescript
-// tools/hisaabo-cli.ts
-export const hisaaboCLI = {
-  name: "hisaabo_cli",
+// tools/fintranzact-cli.ts
+export const fintranzactCLI = {
+  name: "fintranzact_cli",
   description:
-    "Run a hisaabo CLI command and return the JSON output. " +
+    "Run a fintranzact CLI command and return the JSON output. " +
     "Available subcommands: dashboard, " +
     "invoice list/get/create/update/pdf/delete, " +
     "party list/get/create/delete/ledger/ledger-report/stats/top-items/merge, " +
@@ -1497,13 +1497,13 @@ export const hisaaboCLI = {
     properties: {
       command: {
         type: "string",
-        description: "The hisaabo subcommand to run, e.g. 'invoice list --status overdue --json'",
+        description: "The fintranzact subcommand to run, e.g. 'invoice list --status overdue --json'",
       },
     },
     required: ["command"],
   },
   execute: async ({ command }: { command: string }) => {
-    const { stdout, stderr } = await exec(`hisaabo ${command}`);
+    const { stdout, stderr } = await exec(`fintranzact ${command}`);
     if (stderr) throw new Error(stderr);
     return JSON.parse(stdout);
   },
@@ -1515,39 +1515,39 @@ export const hisaaboCLI = {
 ## Cron Job Reference
 
 ```bash
-# /etc/cron.d/hisaabo
-HISAABO_API_URL=https://your-hisaabo-instance.com
-HISAABO_API_KEY=hisaabo_key_xxxxxxxxxxxxxxxxxx
-HISAABO_BUSINESS_ID=business-uuid-here
+# /etc/cron.d/fintranzact
+FINTRANZACT_API_URL=https://your-fintranzact-instance.com
+FINTRANZACT_API_KEY=fintranzact_key_xxxxxxxxxxxxxxxxxx
+FINTRANZACT_BUSINESS_ID=business-uuid-here
 
 # Daily summary at 8:00 AM
-0 8 * * * root hisaabo dashboard --period today --json | \
+0 8 * * * root fintranzact dashboard --period today --json | \
   jq -r '"Revenue: ₹\(.totalSales)\nOutstanding: ₹\(.receivable)"' | \
   mail -s "Daily Summary" owner@yourbusiness.com
 
 # Overdue invoice alert at 9:00 AM
-0 9 * * * root /opt/hisaabo-scripts/morning-brief.sh
+0 9 * * * root /opt/fintranzact-scripts/morning-brief.sh
 
 # Stock check twice daily
-0 9,17 * * * root /opt/hisaabo-scripts/low-stock-check.sh
+0 9,17 * * * root /opt/fintranzact-scripts/low-stock-check.sh
 
 # Monthly GST export on the 28th at 8 AM
-0 8 28 * * root /opt/hisaabo-scripts/gst-filing-prep.sh
+0 8 28 * * root /opt/fintranzact-scripts/gst-filing-prep.sh
 
 # Weekly aging report every Monday
-0 9 * * 1 root /opt/hisaabo-scripts/aging-report.sh
+0 9 * * 1 root /opt/fintranzact-scripts/aging-report.sh
 ```
 
 ---
 
 ## Configuration File
 
-The CLI reads from `~/.config/hisaabo/config.json`, created automatically on first `hisaabo login`:
+The CLI reads from `~/.config/fintranzact/config.json`, created automatically on first `fintranzact login`:
 
 ```json
 {
-  "apiUrl": "https://your-hisaabo-instance.com",
-  "token": "hisaabo_key_xxxxxxxxxxxxxxxxxx",
+  "apiUrl": "https://your-fintranzact-instance.com",
+  "token": "fintranzact_key_xxxxxxxxxxxxxxxxxx",
   "tenantId": "tenant-uuid-here",
   "businessId": "business-uuid-here",
   "output": {

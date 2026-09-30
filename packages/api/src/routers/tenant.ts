@@ -32,6 +32,8 @@ function generateSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) + "-" + nanoid(6);
 }
 
+const SELF_SERVE_PLANS: string[] = ["forever_free", "free"];
+
 export const tenantRouter = router({
   updatePlan: protectedProcedure
     .input(z.object({
@@ -50,6 +52,13 @@ export const tenantRouter = router({
 
       if (!tenantId) {
         throw new TRPCError({ code: "NOT_FOUND", message: "No organization selected to update." });
+      }
+
+      // Owners can pick a free plan themselves; paid plans are set up by a
+      // platform admin (platform.setPlan) once the plan is arranged.
+      const [current] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+      if (!SELF_SERVE_PLANS.includes(input.plan) && current?.plan !== input.plan) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Paid plans are set up by the Fintranzact team. Contact us to upgrade." });
       }
 
       await controlDb.update(tenants)

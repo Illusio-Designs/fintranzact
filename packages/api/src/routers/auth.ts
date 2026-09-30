@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { createHash, randomBytes } from "node:crypto";
 import * as argon2 from "argon2";
+import { isPlatformAdmin } from "../lib/platform-admin.js";
 import { controlDb, users, sessions, tenants, tenantMembers, magicLinkTokens, invitations, accessTokens, provisionTenantDatabase, cleanupTenantDatabase, type TenantDbConfig } from "@fintranzact/db";
 import { loginSchema, registerSchema, magicLinkRequestSchema, magicLinkVerifySchema, completeProfileSchema } from "@fintranzact/shared";
 import { router, publicProcedure, protectedProcedure } from "../trpc.js";
@@ -63,7 +64,7 @@ function getClientIpFromRequest(req: Request): string | null {
 /**
  * Tauri desktop clients can't solve Cloudflare Turnstile challenges — the
  * widget rejects the `tauri.localhost` / `tauri://localhost` host. The web
- * bundle running inside Tauri sets `X-Fintranzact-Client: desktop` (or legacy `X-Hisaabo-Client`) and we skip
+ * bundle running inside Tauri sets `X-Fintranzact-Client: desktop` and we skip
  * the Turnstile gate here.
  *
  * Trade-off: the header is client-supplied and therefore spoofable. A
@@ -80,7 +81,7 @@ function isDesktopClient(req: Request): boolean {
 /**
  * Returns true when the session being minted will be consumed as a Bearer
  * token rather than a cookie. Mobile and desktop clients carry
- * `X-Fintranzact-Client: mobile | desktop` (legacy `X-Hisaabo-Client` also accepted); they never rely on Set-Cookie.
+ * `X-Fintranzact-Client: mobile | desktop`; they never rely on Set-Cookie.
  *
  * We use the client header (not the presence of an Authorization header) as
  * the signal because at session creation time there IS no existing Bearer
@@ -136,7 +137,7 @@ async function createSessionForUser(
   await enforceSessionLimit(userId);
 
   const previousSessionId = getSessionIdFromRequest(ctx.req);
-  if (previousSessionId && !previousSessionId.startsWith("hisaabo_key_")) {
+  if (previousSessionId && !previousSessionId.startsWith("fintranzact_key_")) {
     controlDb.delete(sessions).where(eq(sessions.id, previousSessionId)).catch(() => { });
     invalidateSessionCache(previousSessionId);
   }
@@ -168,7 +169,7 @@ async function createSessionForUser(
 }
 
 // Session ID extraction uses the canonical getSessionIdFromRequest from context.ts
-// which correctly skips API keys (hisaabo_key_ prefix).
+// which correctly skips API keys (fintranzact_key_ prefix).
 function getSessionIdFromContext(ctx: { req: Request }): string | null {
   return getSessionIdFromRequest(ctx.req);
 }
@@ -456,7 +457,9 @@ export const authRouter = router({
       .from(tenantMembers)
       .where(eq(tenantMembers.userId, user.id));
 
-    if (memberships.length === 0) {
+    // Platform admins (set by the server environment) may have no organisation
+    // of their own; they sign in to use /platform.
+    if (memberships.length === 0 && !(await isPlatformAdmin(user.id))) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Account has no organization membership" });
     }
 
@@ -507,14 +510,14 @@ export const authRouter = router({
 
     // Primary email CTA is ALWAYS the HTTPS link — email clients (Gmail,
     // Outlook, Apple Mail, corporate gateways) strip or refuse to render
-    // anchors with custom URL schemes like `hisaabo://`, treating them as
+    // anchors with custom URL schemes like `fintranzact://`, treating them as
     // phishing / protocol-hijack vectors. Shipping the deep link as the
     // primary `<a href="...">` produces a plain-text, non-clickable line
     // in most inboxes.
     //
     // When the sign-in was initiated from the desktop or mobile app we
     // thread the `source` through the HTTPS URL as a query param so the
-    // /auth/verify page can hand off to the native app via the `hisaabo://`
+    // /auth/verify page can hand off to the native app via the `fintranzact://`
     // scheme from a real browser (where custom schemes ARE honored by the
     // OS), instead of consuming the token inside the browser session.
     const sourceSuffix =
@@ -522,7 +525,7 @@ export const authRouter = router({
         ? `&source=${input.source}`
         : "";
     const webUrl = `${baseUrl}/auth/verify?${tokenParam}${sourceSuffix}`;
-    const deepLinkUrl = `hisaabo://verify?${tokenParam}`;
+    const deepLinkUrl = `fintranzact://verify?${tokenParam}`;
 
     // Secondary is the raw deep link — some email clients do render it
     // (and it serves as a copy-paste fallback) but we no longer depend

@@ -569,7 +569,7 @@ export default function InvoiceDetailScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
         <View style={styles.scrollContent}>
@@ -588,7 +588,7 @@ export default function InvoiceDetailScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
         <QueryError message="Invoice not found" onRetry={() => refetch()} />
@@ -619,12 +619,11 @@ export default function InvoiceDetailScreen() {
       {/* Top bar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.topBarCenter}>
-          <Text style={styles.topBarTitle}>{invoice.invoiceNumber}</Text>
+          <Text style={styles.topBarTitle} numberOfLines={1}>{invoice.invoiceNumber}</Text>
         </View>
-        <StatusBadge status={invoice.status} />
       </View>
 
       <ScrollView
@@ -640,21 +639,40 @@ export default function InvoiceDetailScreen() {
           />
         }
       >
-        {/* Party Info Card */}
-        <View style={styles.card}>
-          <View style={styles.cardRow}>
-            <View style={styles.cardIconWrap}>
-              <Ionicons name="person-outline" size={18} color={colors.brand} />
-            </View>
-            <View style={styles.cardInfo}>
-              <Text style={styles.cardLabel}>
+        {/* Navy highlight: party, status, amount due, progress */}
+        <View style={styles.hero}>
+          <View style={styles.heroRing} pointerEvents="none" />
+          <View style={styles.heroTop}>
+            <View style={styles.heroParty}>
+              <Text style={styles.heroPartyName} numberOfLines={1}>{invoice.party?.name ?? "—"}</Text>
+              <Text style={styles.heroPartySub} numberOfLines={1}>
                 {invoice.type === "sale" ? "Customer" : "Supplier"}
+                {invoice.party?.phone ? ` · ${invoice.party.phone}` : ""}
               </Text>
-              <Text style={styles.cardValue}>{invoice.party?.name ?? "—"}</Text>
-              {invoice.party?.phone ? (
-                <Text style={styles.cardSubValue}>{invoice.party.phone}</Text>
-              ) : null}
             </View>
+            <View style={styles.heroStatus}>
+              <StatusBadge status={invoice.status} />
+            </View>
+          </View>
+          <View style={styles.heroAmountBlock}>
+            <Text style={styles.heroAmountLabel}>{balance > 0 && !isAdjusted ? "AMOUNT DUE" : "TOTAL"}</Text>
+            <Text style={styles.heroAmount} numberOfLines={1} adjustsFontSizeToFit>
+              {formatCurrency(balance > 0 && !isAdjusted ? balance : total)}
+            </Text>
+          </View>
+          <View style={styles.heroProgressTrack}>
+            <View
+              style={[
+                styles.heroProgressFill,
+                { width: `${total > 0 ? Math.min(100, Math.round(((amountPaid + totalAdjusted) / total) * 100)) : 0}%` },
+              ]}
+            />
+          </View>
+          <View style={styles.heroFoot}>
+            <Text style={styles.heroFootText} numberOfLines={1}>{formatCurrency(amountPaid)} received</Text>
+            <Text style={styles.heroFootText} numberOfLines={1}>
+              {invoice.dueDate ? `Due ${formatDate(invoice.dueDate)}` : "No due date"}
+            </Text>
           </View>
         </View>
 
@@ -942,6 +960,28 @@ export default function InvoiceDetailScreen() {
 }
 
 const useStyles = makeStyles((colors) => ({
+  hero: {
+    backgroundColor: colors.hero, borderRadius: 24, borderWidth: 1, borderColor: colors.heroBorder,
+    padding: 20, gap: 14, marginBottom: 12, overflow: "hidden",
+    shadowColor: "#0f1b3d", shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 6,
+  },
+  heroRing: {
+    position: "absolute", right: -60, top: -80, width: 200, height: 200,
+    borderRadius: 100, borderWidth: 1, borderColor: colors.heroChip,
+  },
+  heroTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  heroParty: { flex: 1, gap: 2 },
+  heroPartyName: { fontSize: 16, fontWeight: "700", color: colors.heroText },
+  heroPartySub: { fontSize: 13, color: colors.heroMuted },
+  heroStatus: { backgroundColor: colors.surface, borderRadius: 999 },
+  heroAmountBlock: { gap: 4 },
+  heroAmountLabel: { fontSize: 13, fontWeight: "600", letterSpacing: 0.6, color: colors.heroMuted },
+  heroAmount: { fontSize: 36, fontWeight: "800", letterSpacing: -1, color: colors.heroText },
+  heroProgressTrack: { height: 6, borderRadius: 3, backgroundColor: colors.heroChip, overflow: "hidden" },
+  heroProgressFill: { height: "100%", borderRadius: 3, backgroundColor: "#8fb0ff" },
+  heroFoot: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  heroFootText: { flexShrink: 1, fontSize: 13, color: colors.heroMuted },
+
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -954,9 +994,9 @@ const useStyles = makeStyles((colors) => ({
     gap: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

@@ -74,10 +74,10 @@ export default function StoreOrdersScreen() {
     <View style={styles.listHeader}>
       <View style={styles.headerBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.screenTitle}>Store Orders</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <View style={styles.searchWrap}>
@@ -188,9 +188,9 @@ const useStyles = makeStyles((colors) => ({
     marginBottom: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -216,7 +216,7 @@ const useStyles = makeStyles((colors) => ({
   },
   statusFilterBtnActive: { backgroundColor: colors.brand, borderColor: colors.brand },
   statusFilterText: { fontSize: 12, fontWeight: "600", color: colors.textMuted },
-  statusFilterTextActive: { color: colors.textPrimary },
+  statusFilterTextActive: { color: colors.onBrand },
   countText: { fontSize: 12, color: colors.textMuted, paddingHorizontal: 16, marginBottom: 8 },
   orderRow: {
     flexDirection: "row",

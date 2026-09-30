@@ -17,7 +17,69 @@ import { trpc } from "../../../src/lib/trpc";
 import { makeStyles } from "../../../src/lib/makeStyles";
 import { useColors } from "../../../src/contexts/ThemeContext";
 import { haptic } from "../../../src/lib/haptics";
-import { GSTIN_REGEX, PAN_REGEX, panFromGstin } from "@fintranzact/shared";
+import {
+  GSTIN_REGEX,
+  PAN_REGEX,
+  IFSC_REGEX,
+  UDYAM_REGEX,
+  panFromGstin,
+  stateCodeFromGstin,
+  constitutionFromPan,
+  partyGstTypes,
+  partyGstTypeLabels,
+  partyConstitutions,
+  partyConstitutionLabels,
+  msmeCategories,
+  tdsSections,
+  tdsRateFor,
+  partyComplianceWarnings,
+  type PartyGstType,
+  type PartyConstitution,
+  type MsmeCategory,
+  type GstinStatus,
+} from "@fintranzact/shared";
+
+interface ShippingDraft {
+  label: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
+/** A row of tappable options; tapping the selected one clears it. */
+function Chips<T extends string>({
+  options,
+  value,
+  onChange,
+  labelFor,
+}: {
+  options: readonly T[];
+  value: T | "";
+  onChange: (next: T | "") => void;
+  labelFor: (option: T) => string;
+}) {
+  const styles = useStyles();
+  return (
+    <View style={styles.chips}>
+      {options.map((option) => {
+        const selected = option === value;
+        return (
+          <TouchableOpacity
+            key={option}
+            style={[styles.chip, selected && styles.chipActive]}
+            onPress={() => onChange(selected ? "" : option)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+          >
+            <Text style={[styles.chipText, selected && styles.chipTextActive]}>{labelFor(option)}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
 
 type PartyType = "customer" | "supplier";
 
@@ -36,7 +98,60 @@ export default function CreatePartyScreen() {
   const [billingAddress, setBillingAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [stateCode, setStateCode] = useState("");
+  const [legalName, setLegalName] = useState("");
+  const [tradeName, setTradeName] = useState("");
+  const [gstType, setGstType] = useState<PartyGstType | "">("");
+  const [constitution, setConstitution] = useState<PartyConstitution | "">("");
+  const [gstinStatus, setGstinStatus] = useState<GstinStatus | null>(null);
+  const [gstinVerifiedAt, setGstinVerifiedAt] = useState<string | null>(null);
+  const [isMsme, setIsMsme] = useState(false);
+  const [udyamNumber, setUdyamNumber] = useState("");
+  const [msmeCategory, setMsmeCategory] = useState<MsmeCategory | "">("");
+  const [tdsSection, setTdsSection] = useState("");
+  const [bankIfsc, setBankIfsc] = useState("");
+  const [shipping, setShipping] = useState<ShippingDraft[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const applyGstinDerived = (value: string, currentPan: string) => {
+    const detectedPan = panFromGstin(value);
+    if (detectedPan && (!currentPan || currentPan === panFromGstin(gstin))) setPan(detectedPan);
+    const detectedState = stateCodeFromGstin(value);
+    if (detectedState) setStateCode(detectedState);
+    const detectedConstitution = constitutionFromPan(detectedPan);
+    if (detectedConstitution && !constitution) setConstitution(detectedConstitution);
+    if (detectedState && !gstType) setGstType("regular");
+  };
+
+  const lookup = trpc.party.lookupGstin.useMutation({
+    onSuccess: (result) => {
+      if (!result.available) {
+        applyGstinDerived(result.derived.gstin, pan);
+        Alert.alert("GST lookup not set up", result.reason);
+        return;
+      }
+      const d = result.details;
+      applyGstinDerived(d.gstin, pan);
+      if (d.legalName) setLegalName(d.legalName);
+      if (d.tradeName) setTradeName(d.tradeName);
+      if (!name.trim()) setName(d.tradeName || d.legalName || "");
+      if (d.billingAddress && !billingAddress) setBillingAddress(d.billingAddress);
+      if (d.city && !city) setCity(d.city);
+      if (d.gstRegistrationType) setGstType(d.gstRegistrationType);
+      if (d.constitution) setConstitution(d.constitution);
+      setGstinStatus(d.gstinStatus);
+      setGstinVerifiedAt(result.verifiedAt);
+      if (d.gstinStatus && d.gstinStatus !== "active") {
+        Alert.alert("Check this GSTIN", `The GSTIN is ${d.gstinStatus}.`);
+      }
+    },
+    onError: (error) => Alert.alert("GST lookup failed", error.message),
+  });
+
+  const warnings = partyComplianceWarnings({
+    type, gstin, pan, stateCode, gstRegistrationType: gstType, gstinStatus, isMsme, udyamNumber, tdsSection,
+  });
+  const tdsRate = tdsRateFor({ tdsSection, pan, gstin, constitution });
 
   const phoneRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
@@ -71,6 +186,12 @@ export default function CreatePartyScreen() {
     if (pan && !PAN_REGEX.test(pan)) {
       newErrors.pan = "Enter a valid PAN";
     }
+    if (bankIfsc && !IFSC_REGEX.test(bankIfsc)) {
+      newErrors.bankIfsc = "Enter a valid IFSC (e.g. HDFC0001234)";
+    }
+    if (isMsme && udyamNumber && !UDYAM_REGEX.test(udyamNumber)) {
+      newErrors.udyamNumber = "Enter a valid Udyam number (UDYAM-MH-26-0012345)";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -88,7 +209,30 @@ export default function CreatePartyScreen() {
       billingAddress: billingAddress.trim() || undefined,
       city: city.trim() || undefined,
       state: state.trim() || undefined,
+      stateCode: stateCode || undefined,
       openingBalance: "0",
+      legalName: legalName.trim() || undefined,
+      tradeName: tradeName.trim() || undefined,
+      gstRegistrationType: gstType || undefined,
+      constitution: constitution || undefined,
+      gstinStatus: gstinStatus ?? undefined,
+      gstinVerifiedAt: gstinVerifiedAt ?? undefined,
+      isMsme,
+      udyamNumber: isMsme ? udyamNumber || undefined : undefined,
+      msmeCategory: isMsme ? msmeCategory || undefined : undefined,
+      tdsSection: tdsSection || undefined,
+      bankIfsc: bankIfsc || undefined,
+      additionalShippingAddresses: shipping.some((a) => a.address.trim())
+        ? shipping
+          .filter((a) => a.address.trim())
+          .map((a) => ({
+            label: a.label.trim() || undefined,
+            address: a.address.trim(),
+            city: a.city.trim() || undefined,
+            state: a.state.trim() || undefined,
+            pincode: a.pincode.trim() || undefined,
+          }))
+        : undefined,
     });
   };
 
@@ -118,7 +262,7 @@ export default function CreatePartyScreen() {
             activeOpacity={0.8}
           >
             {createParty.isPending ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
+              <ActivityIndicator size="small" color={colors.onBrand} />
             ) : (
               <Text style={styles.saveButtonText}>Save</Text>
             )}
@@ -277,9 +421,10 @@ export default function CreatePartyScreen() {
                     const next = t.toUpperCase().replace(/[^A-Z0-9]/g, "");
                     // Characters 3-12 of a GSTIN are the PAN. Fill it in
                     // unless the user already typed a different PAN.
-                    const detected = panFromGstin(next);
-                    if (detected && (!pan || pan === panFromGstin(gstin))) {
-                      setPan(detected);
+                    if (GSTIN_REGEX.test(next)) applyGstinDerived(next, pan);
+                    if (gstinStatus) {
+                      setGstinStatus(null);
+                      setGstinVerifiedAt(null);
                     }
                     setGstin(next);
                     if (errors.gstin) setErrors((e) => ({ ...e, gstin: "" }));
@@ -292,6 +437,21 @@ export default function CreatePartyScreen() {
                 />
                 {errors.gstin && (
                   <Text style={styles.errorText}>{errors.gstin}</Text>
+                )}
+                <TouchableOpacity
+                  style={[styles.linkButton, (!GSTIN_REGEX.test(gstin) || lookup.isPending) && styles.saveButtonDisabled]}
+                  onPress={() => lookup.mutate({ gstin })}
+                  disabled={!GSTIN_REGEX.test(gstin) || lookup.isPending}
+                  accessibilityRole="button"
+                >
+                  {lookup.isPending
+                    ? <ActivityIndicator size="small" color={colors.brand} />
+                    : <Text style={styles.linkButtonText}>Fetch details from GST</Text>}
+                </TouchableOpacity>
+                {gstinStatus && (
+                  <Text style={[styles.hint, { color: gstinStatus === "active" ? colors.success : colors.danger }]}>
+                    GSTIN status: {gstinStatus}
+                  </Text>
                 )}
               </View>
 
@@ -319,6 +479,131 @@ export default function CreatePartyScreen() {
                 {errors.pan && (
                   <Text style={styles.errorText}>{errors.pan}</Text>
                 )}
+              </View>
+
+              <View style={styles.fieldDivider} />
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Legal Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="As registered for GST"
+                  placeholderTextColor={colors.textMuted}
+                  value={legalName}
+                  onChangeText={setLegalName}
+                />
+              </View>
+              <View style={styles.fieldDivider} />
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Trade Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Name they do business under"
+                  placeholderTextColor={colors.textMuted}
+                  value={tradeName}
+                  onChangeText={setTradeName}
+                />
+              </View>
+              <View style={styles.fieldDivider} />
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>GST Type</Text>
+                <Chips options={partyGstTypes} value={gstType} onChange={setGstType} labelFor={(t) => partyGstTypeLabels[t]} />
+              </View>
+              <View style={styles.fieldDivider} />
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Business Type</Text>
+                <Chips options={partyConstitutions} value={constitution} onChange={setConstitution} labelFor={(c) => partyConstitutionLabels[c]} />
+              </View>
+            </View>
+          </View>
+
+          {warnings.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.warningBox} accessibilityRole="alert">
+                {warnings.map((w) => (
+                  <Text key={w} style={styles.warningText}>• {w}</Text>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* MSME */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>MSME (Udyam)</Text>
+            <View style={styles.card}>
+              <TouchableOpacity
+                style={[styles.fieldGroup, styles.toggleRow]}
+                onPress={() => setIsMsme((v) => !v)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: isMsme }}
+              >
+                <Ionicons name={isMsme ? "checkbox" : "square-outline"} size={20} color={isMsme ? colors.brand : colors.textMuted} />
+                <Text style={styles.toggleText}>Registered MSME (Udyam)</Text>
+              </TouchableOpacity>
+              {isMsme && (
+                <>
+                  <View style={styles.fieldDivider} />
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Udyam Number</Text>
+                    <TextInput
+                      style={[styles.input, errors.udyamNumber && styles.inputError]}
+                      placeholder="UDYAM-MH-26-0012345"
+                      placeholderTextColor={colors.textMuted}
+                      value={udyamNumber}
+                      onChangeText={(t) => setUdyamNumber(t.toUpperCase())}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                    />
+                    {errors.udyamNumber && <Text style={styles.errorText}>{errors.udyamNumber}</Text>}
+                  </View>
+                  <View style={styles.fieldDivider} />
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Category</Text>
+                    <Chips options={msmeCategories} value={msmeCategory} onChange={setMsmeCategory} labelFor={(c) => c[0]!.toUpperCase() + c.slice(1)} />
+                    {msmeCategory !== "medium" && (
+                      <Text style={styles.hint}>Pay within 45 days (15 without a written credit period) — Section 43B(h).</Text>
+                    )}
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+
+          {/* TDS */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>TDS</Text>
+            <View style={styles.card}>
+              <View style={styles.fieldGroup}>
+                <Chips
+                  options={tdsSections.map((t) => t.code)}
+                  value={tdsSection}
+                  onChange={setTdsSection}
+                  labelFor={(code) => tdsSections.find((t) => t.code === code)?.label ?? code}
+                />
+                {tdsRate && (
+                  <Text style={styles.hint}>
+                    Rate: {tdsRate}%{!pan && !panFromGstin(gstin) ? " (no PAN)" : ""}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+
+          {/* Bank */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Bank</Text>
+            <View style={styles.card}>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>IFSC</Text>
+                <TextInput
+                  style={[styles.input, errors.bankIfsc && styles.inputError]}
+                  placeholder="HDFC0001234"
+                  placeholderTextColor={colors.textMuted}
+                  value={bankIfsc}
+                  onChangeText={(t) => setBankIfsc(t.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11))}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+                {errors.bankIfsc && <Text style={styles.errorText}>{errors.bankIfsc}</Text>}
               </View>
             </View>
           </View>
@@ -381,6 +666,82 @@ export default function CreatePartyScreen() {
             </View>
           </View>
 
+          {/* Extra shipping addresses */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Shipping Addresses</Text>
+            {shipping.map((draft, index) => {
+              const update = (patch: Partial<ShippingDraft>) =>
+                setShipping((list) => list.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+              return (
+                <View key={index} style={[styles.card, { marginBottom: 12 }]}>
+                  <View style={[styles.fieldGroup, styles.toggleRow]}>
+                    <TextInput
+                      style={[styles.input, { flex: 1 }]}
+                      placeholder={`Label (e.g. Warehouse ${index + 1})`}
+                      placeholderTextColor={colors.textMuted}
+                      value={draft.label}
+                      onChangeText={(t) => update({ label: t })}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShipping((list) => list.filter((_, i) => i !== index))}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove shipping address ${index + 1}`}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.fieldDivider} />
+                  <View style={styles.fieldGroup}>
+                    <TextInput
+                      style={[styles.input, styles.textArea]}
+                      placeholder="Address"
+                      placeholderTextColor={colors.textMuted}
+                      value={draft.address}
+                      onChangeText={(t) => update({ address: t })}
+                      multiline
+                    />
+                  </View>
+                  <View style={styles.fieldDivider} />
+                  <View style={styles.fieldRow}>
+                    <TextInput
+                      style={[styles.input, { flex: 1 }]}
+                      placeholder="City"
+                      placeholderTextColor={colors.textMuted}
+                      value={draft.city}
+                      onChangeText={(t) => update({ city: t })}
+                    />
+                    <View style={styles.fieldRowDivider} />
+                    <TextInput
+                      style={[styles.input, { flex: 1 }]}
+                      placeholder="State"
+                      placeholderTextColor={colors.textMuted}
+                      value={draft.state}
+                      onChangeText={(t) => update({ state: t })}
+                    />
+                    <View style={styles.fieldRowDivider} />
+                    <TextInput
+                      style={[styles.input, { flex: 1 }]}
+                      placeholder="Pincode"
+                      placeholderTextColor={colors.textMuted}
+                      value={draft.pincode}
+                      onChangeText={(t) => update({ pincode: t.replace(/\D/g, "").slice(0, 6) })}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+              );
+            })}
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setShipping((list) => [...list, { label: "", address: "", city: "", state: "", pincode: "" }])}
+              disabled={shipping.length >= 20}
+              accessibilityRole="button"
+            >
+              <Ionicons name="add" size={18} color={colors.brand} />
+              <Text style={styles.linkButtonText}>Add shipping address</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -429,7 +790,7 @@ const useStyles = makeStyles((colors) => ({
   saveButtonText: {
     fontSize: 15,
     fontWeight: "700",
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   scrollView: {
     flex: 1,
@@ -472,7 +833,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
   },
   typeOptionTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   card: {
     backgroundColor: colors.surface,
@@ -522,5 +883,75 @@ const useStyles = makeStyles((colors) => ({
     width: 1,
     backgroundColor: colors.border,
     marginHorizontal: 16,
+  },
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipActive: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  chipText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  chipTextActive: {
+    color: colors.onBrand,
+    fontWeight: "600",
+  },
+  linkButton: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+  },
+  linkButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.brand,
+  },
+  hint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 8,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  toggleText: {
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  warningBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    padding: 12,
+    gap: 4,
+  },
+  warningText: {
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  addButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.border,
   },
 }));

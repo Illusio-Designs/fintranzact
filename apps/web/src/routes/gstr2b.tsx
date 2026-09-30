@@ -204,7 +204,7 @@ function UploadHistorySection({ onSelectUpload }: { onSelectUpload: (id: string)
   }
 
   return (
-    <div className="rounded-xl border border-border-light overflow-hidden">
+    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border-light bg-surface-1">
@@ -361,7 +361,7 @@ function ReconciliationSection({
 
       {!isLoading && !!records?.records.length && (
         <>
-          <div className="rounded-xl border border-border-light overflow-hidden">
+          <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border-light bg-surface-1">
@@ -534,7 +534,7 @@ function MissingInBooksSection({ year, month }: { year: number; month: number })
         Create a purchase invoice to claim the ITC.
       </p>
 
-      <div className="rounded-xl border border-border-light overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-light bg-surface-1">
@@ -617,7 +617,7 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
         supplier to ensure they file their return correctly.
       </p>
 
-      <div className="rounded-xl border border-border-light overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-light bg-surface-1">
@@ -664,12 +664,12 @@ function GSTR2BPage() {
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [activeTab, setActiveTabRaw] = useState<G2BTab>(
-    () => (localStorage.getItem("hisaabo_gstr2b_tab") as G2BTab) || "upload",
+    () => (localStorage.getItem("fintranzact_gstr2b_tab") as G2BTab) || "upload",
   );
 
   const setActiveTab = (tab: G2BTab) => {
     setActiveTabRaw(tab);
-    localStorage.setItem("hisaabo_gstr2b_tab", tab);
+    localStorage.setItem("fintranzact_gstr2b_tab", tab);
   };
 
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);

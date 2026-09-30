@@ -220,12 +220,12 @@ describe("escapeHtml — escapes all five HTML special characters to prevent ema
      * characters. The '&' joining query params is particularly relevant.
      * Example: ?token=abc&redirect=/dashboard
      */
-    const url = "https://app.hisaabo.in/auth/verify?token=abc123&redirect=/dashboard";
+    const url = "https://app.fintranzact.com/auth/verify?token=abc123&redirect=/dashboard";
     const result = escapeHtml(url);
     expect(result).toContain("&amp;");
     expect(result).not.toContain('"');
     // The rest of the URL must be preserved verbatim
-    expect(result).toContain("https://app.hisaabo.in/auth/verify?token=abc123");
+    expect(result).toContain("https://app.fintranzact.com/auth/verify?token=abc123");
     expect(result).toContain("redirect=/dashboard");
   });
 });

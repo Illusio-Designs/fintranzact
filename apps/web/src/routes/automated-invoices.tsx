@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
@@ -13,7 +14,6 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
 import { PartyCombobox } from "@/components/ui/PartyCombobox";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
@@ -147,7 +147,7 @@ const EMPTY_FORM: TemplateFormState = {
 // ── Main page component ────────────────────────────────────────
 
 function AutomatedInvoicesPage() {
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search templates…");
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
 
@@ -544,12 +544,6 @@ function AutomatedInvoicesPage() {
       {/* Filters + Table */}
       <div className="card mb-5 overflow-hidden">
         <div className="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-border-light">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search templates..."
-            className="max-w-xs"
-          />
         </div>
 
         <div className="px-4 py-2 border-b border-border-light">

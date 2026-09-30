@@ -23,8 +23,6 @@ import {
   // Party
   createPartySchema,
   panFromGstin,
-  normalizeShippingAddresses,
-  partyShippingAddresses,
   // Item
   createItemSchema,
   // Invoice
@@ -36,6 +34,8 @@ import {
   createExpenseSchema,
   // Pagination
   paginationSchema,
+  mergePartyShippingAddresses,
+  MAX_ADDITIONAL_SHIPPING_ADDRESSES,
 } from "../validators.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -974,30 +974,25 @@ describe("panFromGstin — the PAN is characters 3-12 of a GSTIN", () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Party shipping addresses
-// ─────────────────────────────────────────────────────────────────────────────
-describe("normalizeShippingAddresses", () => {
-  it("trims, drops blanks and duplicates, and keeps order", () => {
-    expect(normalizeShippingAddresses([" A ", "", "B", undefined, "A", null, "  "])).toEqual(["A", "B"]);
-  });
-});
-
-describe("partyShippingAddresses", () => {
-  it("returns the stored list", () => {
-    expect(partyShippingAddresses({ shippingAddress: "A", shippingAddresses: ["A", "B"] })).toEqual(["A", "B"]);
+describe("mergePartyShippingAddresses", () => {
+  it("keeps the target's default and every other address once", () => {
+    expect(
+      mergePartyShippingAddresses(
+        { shippingAddress: "A Road", additionalShippingAddresses: [{ address: "B Road" }] },
+        { shippingAddress: "a  road", additionalShippingAddresses: [{ address: "C Road", label: "Branch" }, { address: "b road" }] },
+      ),
+    ).toEqual({ shippingAddress: "A Road", additionalShippingAddresses: [{ address: "B Road" }, { address: "C Road", label: "Branch" }] });
   });
 
-  it("falls back to the single address for parties saved before the list existed", () => {
-    expect(partyShippingAddresses({ shippingAddress: "A", shippingAddresses: null })).toEqual(["A"]);
-    expect(partyShippingAddresses({ shippingAddress: null })).toEqual([]);
+  it("takes the source's default when the target has none", () => {
+    expect(mergePartyShippingAddresses({ shippingAddress: "" }, { shippingAddress: "X Road" }))
+      .toEqual({ shippingAddress: "X Road", additionalShippingAddresses: null });
   });
-});
 
-describe("createPartySchema — shippingAddresses", () => {
-  it("accepts up to 20 addresses and rejects more", () => {
-    const base = { type: "customer" as const, name: "X" };
-    expect(createPartySchema.safeParse({ ...base, shippingAddresses: Array(20).fill("a") }).success).toBe(true);
-    expect(createPartySchema.safeParse({ ...base, shippingAddresses: Array(21).fill("a") }).success).toBe(false);
+  it("stays within the extra-address limit", () => {
+    const many = Array.from({ length: 15 }, (_, i) => ({ address: `Shop ${i}` }));
+    const more = Array.from({ length: 15 }, (_, i) => ({ address: `Store ${i}` }));
+    const result = mergePartyShippingAddresses({ additionalShippingAddresses: many }, { additionalShippingAddresses: more });
+    expect(result.additionalShippingAddresses).toHaveLength(MAX_ADDITIONAL_SHIPPING_ADDRESSES);
   });
 });

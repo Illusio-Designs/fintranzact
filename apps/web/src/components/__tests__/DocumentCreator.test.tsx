@@ -58,6 +58,12 @@ vi.mock("@/lib/trpc", () => ({
         useQuery: () => businessListQuery(),
       },
     },
+    stock: {
+      warehouses: {
+        // One warehouse: the "Receive into" picker stays hidden.
+        useQuery: () => ({ data: [{ id: "wh-1", name: "Main warehouse", status: "active", premiseName: null }] }),
+      },
+    },
     party: {
       list: {
         useQuery: () => ({

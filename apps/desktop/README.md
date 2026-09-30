@@ -1,6 +1,6 @@
 # @fintranzact/desktop
 
-A native desktop wrapper for the Hisaabo web app. Built with Tauri v2, it ships a lightweight executable (macOS, Windows, Linux) that embeds the `apps/web` React app in a native webview with a proper window frame, system tray, and native OS integration.
+A native desktop wrapper for the Fintranzact web app. Built with Tauri v2, it ships a lightweight executable (macOS, Windows, Linux) that embeds the `apps/web` React app in a native webview with a proper window frame, system tray, and native OS integration.
 
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
 [![Rust](https://img.shields.io/badge/Rust-stable-CE4A00?logo=rust&logoColor=white)](https://www.rust-lang.org/)
@@ -9,9 +9,9 @@ A native desktop wrapper for the Hisaabo web app. Built with Tauri v2, it ships 
 
 ## Cloud vs. self-hosted
 
-The desktop app is a **Hisaabo Cloud** feature. Pre-built installers connect to `https://app.hisaabo.in` (Hisaabo Cloud) and are distributed to cloud subscribers.
+The desktop app is a **Fintranzact Cloud** feature. Pre-built installers connect to `https://app.fintranzact.com` (Fintranzact Cloud) and are distributed to cloud subscribers.
 
-If you are self-hosting Hisaabo, you do not need the desktop app. The web app (`apps/web`) runs in any browser and delivers the same full-featured experience.
+If you are self-hosting Fintranzact, you do not need the desktop app. The web app (`apps/web`) runs in any browser and delivers the same full-featured experience.
 
 **Advanced:** Self-hosted users can build the desktop app from source, targeting their own API, by setting `API_URL` to their server URL before running `cargo tauri build`.
 
@@ -24,7 +24,7 @@ Feature parity with the web app is complete by design: the desktop app renders t
 **Window configuration:**
 - Default size: 1200 × 800 px
 - Minimum size: 900 × 600 px
-- App identifier: `in.hisaabo.app`
+- App identifier: `in.fintranzact.app`
 
 ---
 

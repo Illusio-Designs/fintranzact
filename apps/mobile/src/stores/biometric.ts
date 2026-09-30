@@ -2,9 +2,9 @@ import { create } from "zustand";
 import * as SecureStore from "expo-secure-store";
 import * as LocalAuthentication from "expo-local-authentication";
 
-const BIOMETRIC_ENABLED_KEY = "hisaabo_biometric_enabled";
-const PIN_HASH_KEY = "hisaabo_pin_hash";
-const SETUP_PROMPTED_KEY = "hisaabo_setup_prompted";
+const BIOMETRIC_ENABLED_KEY = "fintranzact_biometric_enabled";
+const PIN_HASH_KEY = "fintranzact_pin_hash";
+const SETUP_PROMPTED_KEY = "fintranzact_setup_prompted";
 
 /**
  * Simple hash for PIN (local UX lock only, not a security boundary).
@@ -155,7 +155,7 @@ export const useBiometricStore = create<BiometricState>((set, get) => ({
   authenticate: async () => {
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Unlock Hisaabo",
+        promptMessage: "Unlock Fintranzact",
         cancelLabel: "Use PIN",
         disableDeviceFallback: true,
         fallbackLabel: "Use PIN",

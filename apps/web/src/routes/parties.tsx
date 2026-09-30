@@ -1,17 +1,38 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, getInitials, cn, downloadCSV, toISOString } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
-import { GSTIN_REGEX, PAN_REGEX, normalizeShippingAddresses, type PartyType } from "@fintranzact/shared";
+import {
+  GSTIN_REGEX,
+  PAN_REGEX,
+  IFSC_REGEX,
+  UDYAM_REGEX,
+  panFromGstin,
+  stateCodeFromGstin,
+  constitutionFromPan,
+  partyGstTypes,
+  partyGstTypeLabels,
+  partyConstitutions,
+  partyConstitutionLabels,
+  msmeCategories,
+  tdsSections,
+  tdsRateFor,
+  partyComplianceWarnings,
+  type PartyType,
+  type PartyGstType,
+  type PartyConstitution,
+  type MsmeCategory,
+  type GstinStatus,
+} from "@fintranzact/shared";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { InputField, TextareaField } from "@/components/ui/FormField";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
@@ -23,11 +44,18 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Icon } from "@/components/ui/Icon";
-import { Add01Icon, Alert02Icon, ArrowRight01Icon, ArrowRight02Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, ArrowRight01Icon, ArrowRight02Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
 import { PhoneInput } from "@/components/ui/PhoneInput";
 import { GstinInput } from "@/components/settings/GstinInput";
+import { Select } from "@/components/ui/Select";
+import { INDIAN_STATES } from "@/lib/indian-states";
+import {
+  PartyShippingAddresses,
+  shippingAddressesPayload,
+  type ShippingAddressDraft,
+} from "@/components/PartyShippingAddresses";
 export const Route = createFileRoute("/parties")({
   component: PartiesPage,
 });
@@ -44,15 +72,13 @@ const PARTY_STATUS_FILTERS = [
 ];
 
 const PARTIES_PAGE_SIZE = 20;
-// Matches the cap in createPartySchema.
-const MAX_SHIPPING_ADDRESSES = 20;
 
 function countFilled(...values: string[]): number {
   return values.filter((v) => v.trim() !== "").length;
 }
 
 function PartiesPage() {
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search by name…");
   const [partyFilter, setPartyFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"name" | "balance">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -160,12 +186,6 @@ function PartiesPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search by name..."
-          className="max-w-xs"
-        />
         <PillTabs
           tabs={PARTY_TYPE_TABS}
           value={["all", "customer", "supplier"].includes(partyFilter) ? partyFilter : "all"}
@@ -417,6 +437,34 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                   {party.pan && (
                     <p className="font-mono text-[13px] text-text-secondary">PAN: {party.pan}</p>
                   )}
+                  {party.legalName && party.legalName !== party.name && (
+                    <p className="text-[13px] text-text-secondary">Legal name: {party.legalName}</p>
+                  )}
+                  {party.tradeName && party.tradeName !== party.name && (
+                    <p className="text-[13px] text-text-secondary">Trade name: {party.tradeName}</p>
+                  )}
+                  {party.gstRegistrationType && (
+                    <p className="text-[13px] text-text-secondary">
+                      {partyGstTypeLabels[party.gstRegistrationType as PartyGstType] ?? party.gstRegistrationType}
+                      {party.constitution && ` · ${partyConstitutionLabels[party.constitution as PartyConstitution] ?? party.constitution}`}
+                    </p>
+                  )}
+                  {party.gstinStatus && (
+                    <p className={cn("text-[13px]", party.gstinStatus === "active" ? "text-green-600" : "text-red-600")}>
+                      GSTIN {party.gstinStatus}
+                      {party.gstinVerifiedAt && ` (checked ${formatDate(party.gstinVerifiedAt)})`}
+                    </p>
+                  )}
+                  {party.isMsme && (
+                    <p className="text-[13px] text-text-secondary">
+                      MSME{party.msmeCategory ? ` (${party.msmeCategory})` : ""}{party.udyamNumber ? ` · ${party.udyamNumber}` : ""}
+                    </p>
+                  )}
+                  {party.tdsSection && (
+                    <p className="text-[13px] text-text-secondary">
+                      TDS: {tdsSections.find((t) => t.code === party.tdsSection)?.label ?? party.tdsSection} @ {tdsRateFor(party)}%
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -459,6 +507,34 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
               </div>
             </div>
 
+            {(() => {
+              const partyWarnings = partyComplianceWarnings(party);
+              return partyWarnings.length > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200" role="status">
+                  <ul className="list-disc pl-4 space-y-1">
+                    {partyWarnings.map((w) => <li key={w}>{w}</li>)}
+                  </ul>
+                </div>
+              );
+            })()}
+
+            {party.additionalShippingAddresses && party.additionalShippingAddresses.length > 0 && (
+              <div className="rounded-xl border border-border-light p-4 space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                  Shipping addresses
+                </p>
+                {party.shippingAddress && (
+                  <p className="text-[13px] text-text-secondary">{party.shippingAddress}</p>
+                )}
+                {party.additionalShippingAddresses.map((a, i) => (
+                  <p key={i} className="text-[13px] text-text-secondary">
+                    {a.label && <span className="font-medium text-text-primary">{a.label}: </span>}
+                    {[a.address, a.city, a.state, a.pincode].filter(Boolean).join(", ")}
+                  </p>
+                ))}
+              </div>
+            )}
+
             {/* Top Items preview */}
             {topItems && topItems.length > 0 && (
               <div>
@@ -473,7 +549,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                     View all
                   </LinkButton>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -524,7 +600,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                     View all
                   </LinkButton>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -575,7 +651,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                 description="Invoices and payments for this party will appear here."
               />
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -661,7 +737,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                 description="Invoices for this party will appear here."
               />
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -719,7 +795,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
             {!paymentList?.data?.length ? (
               <p className="text-sm text-text-tertiary text-center py-6">No payments recorded</p>
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table w-full text-sm">
                   <thead>
                     <tr>
@@ -779,7 +855,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                   {party.type === "customer" ? "Items purchased by" : "Items supplied by"}{" "}
                   <span className="font-medium text-text-secondary">{party.name}</span>
                 </p>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -1128,8 +1204,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [autoPan, setAutoPan] = useState<string | null>(null);
   const [category, setCategory] = useState("");
   const [billingAddress, setBillingAddress] = useState("");
-  // First entry is the default shipping address.
-  const [shippingAddresses, setShippingAddresses] = useState<string[]>([""]);
+  const [shippingAddress, setShippingAddress] = useState("");
   const [sameAsBilling, setSameAsBilling] = useState(false);
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -1141,8 +1216,67 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankIfsc, setBankIfsc] = useState("");
   const [bankName, setBankName] = useState("");
+  const [stateCode, setStateCode] = useState("");
+  const [legalName, setLegalName] = useState("");
+  const [tradeName, setTradeName] = useState("");
+  const [gstType, setGstType] = useState<PartyGstType | "">("");
+  const [constitution, setConstitution] = useState<PartyConstitution | "">("");
+  const [gstinStatus, setGstinStatus] = useState<GstinStatus | null>(null);
+  const [gstinVerifiedAt, setGstinVerifiedAt] = useState<string | null>(null);
+  const [isMsme, setIsMsme] = useState(false);
+  const [udyamNumber, setUdyamNumber] = useState("");
+  const [msmeCategory, setMsmeCategory] = useState<MsmeCategory | "">("");
+  const [tdsSection, setTdsSection] = useState("");
+  const [extraShipping, setExtraShipping] = useState<ShippingAddressDraft[]>([]);
 
   const utils = trpc.useUtils();
+
+  // Fill PAN, state and business type from a GSTIN without overwriting
+  // anything the user has typed themselves.
+  function applyGstinDerived(value: string) {
+    const derivedPan = panFromGstin(value);
+    if (derivedPan && (!pan || pan === autoPan)) {
+      setPan(derivedPan);
+      setAutoPan(derivedPan);
+    }
+    const derivedState = stateCodeFromGstin(value);
+    if (derivedState) {
+      setStateCode(derivedState);
+      const stateName = INDIAN_STATES.find((st) => st.code === derivedState)?.name;
+      if (stateName && !state) setState(stateName);
+    }
+    const derivedConstitution = constitutionFromPan(derivedPan);
+    if (derivedConstitution && !constitution) setConstitution(derivedConstitution);
+    if (derivedState && !gstType) setGstType("regular");
+  }
+
+  const lookupMutation = trpc.party.lookupGstin.useMutation({
+    onSuccess: (result) => {
+      if (!result.available) {
+        applyGstinDerived(result.derived.gstin);
+        toast.info(result.reason);
+        return;
+      }
+      const d = result.details;
+      applyGstinDerived(d.gstin);
+      if (d.legalName) setLegalName(d.legalName);
+      if (d.tradeName) setTradeName(d.tradeName);
+      if (!name.trim()) setName(d.tradeName || d.legalName || "");
+      if (d.billingAddress && !billingAddress) setBillingAddress(d.billingAddress);
+      if (d.city && !city) setCity(d.city);
+      if (d.pincode && !pincode) setPincode(d.pincode);
+      if (d.gstRegistrationType) setGstType(d.gstRegistrationType);
+      if (d.constitution) setConstitution(d.constitution);
+      setGstinStatus(d.gstinStatus);
+      setGstinVerifiedAt(result.verifiedAt);
+      if (d.gstinStatus && d.gstinStatus !== "active") {
+        toast.error(`This GSTIN is ${d.gstinStatus}`);
+      } else {
+        toast.success("GST details fetched");
+      }
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const createMutation = trpc.party.create.useMutation({
     onSuccess: () => {
@@ -1166,7 +1300,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
     setAutoPan(null);
     setCategory("");
     setBillingAddress("");
-    setShippingAddresses([""]);
+    setShippingAddress("");
     setSameAsBilling(false);
     setCity("");
     setState("");
@@ -1178,6 +1312,18 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
     setBankAccountNumber("");
     setBankIfsc("");
     setBankName("");
+    setStateCode("");
+    setLegalName("");
+    setTradeName("");
+    setGstType("");
+    setConstitution("");
+    setGstinStatus(null);
+    setGstinVerifiedAt(null);
+    setIsMsme(false);
+    setUdyamNumber("");
+    setMsmeCategory("");
+    setTdsSection("");
+    setExtraShipping([]);
   }
 
   function handleClose() {
@@ -1194,6 +1340,14 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
       toast.error("Invalid PAN format");
       return;
     }
+    if (bankIfsc && !IFSC_REGEX.test(bankIfsc)) {
+      toast.error("Invalid IFSC (e.g. HDFC0001234)");
+      return;
+    }
+    if (udyamNumber && !UDYAM_REGEX.test(udyamNumber)) {
+      toast.error("Invalid Udyam number (e.g. UDYAM-MH-26-0012345)");
+      return;
+    }
     createMutation.mutate({
       type: partyType,
       name,
@@ -1204,9 +1358,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
       pan: pan || undefined,
       category: category || undefined,
       billingAddress: billingAddress || undefined,
-      shippingAddresses: normalizeShippingAddresses(
-        sameAsBilling ? [billingAddress, ...shippingAddresses.slice(1)] : shippingAddresses,
-      ),
+      shippingAddress: sameAsBilling ? billingAddress || undefined : shippingAddress || undefined,
       city: city || undefined,
       state: state || undefined,
       pincode: pincode || undefined,
@@ -1217,12 +1369,35 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
       bankAccountNumber: bankAccountNumber || undefined,
       bankIfsc: bankIfsc || undefined,
       bankName: bankName || undefined,
+      stateCode: stateCode || undefined,
+      additionalShippingAddresses: shippingAddressesPayload(extraShipping),
+      legalName: legalName.trim() || undefined,
+      tradeName: tradeName.trim() || undefined,
+      gstRegistrationType: gstType || undefined,
+      constitution: constitution || undefined,
+      gstinStatus: gstinStatus ?? undefined,
+      gstinVerifiedAt: gstinVerifiedAt ?? undefined,
+      isMsme,
+      udyamNumber: isMsme ? udyamNumber || undefined : undefined,
+      msmeCategory: isMsme ? msmeCategory || undefined : undefined,
+      tdsSection: tdsSection || undefined,
     });
   }
 
-  function setShippingAt(index: number, value: string) {
-    setShippingAddresses((prev) => prev.map((a, i) => (i === index ? value : a)));
-  }
+  const warnings = partyComplianceWarnings({
+    type: partyType,
+    gstin,
+    pan,
+    stateCode,
+    gstRegistrationType: gstType,
+    gstinStatus,
+    isMsme,
+    udyamNumber,
+    tdsSection,
+  });
+  const tdsRate = tdsRateFor({ tdsSection, pan, gstin, constitution });
+
+  const _effectiveShipping = sameAsBilling ? billingAddress : shippingAddress;
 
   return (
     <SlideOver
@@ -1285,16 +1460,43 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
             placeholder="0.00"
           />
         </div>
-        <GstinInput
-          value={gstin}
-          onChange={setGstin}
-          onPanDetected={(detectedPan) => {
-            if (!pan || pan === autoPan) {
-              setPan(detectedPan);
-              setAutoPan(detectedPan);
-            }
-          }}
-        />
+        <div className="flex items-start gap-2">
+          <div className="flex-1">
+            <GstinInput
+              value={gstin}
+              onChange={(value) => {
+                setGstin(value);
+                if (gstinStatus) {
+                  setGstinStatus(null);
+                  setGstinVerifiedAt(null);
+                }
+                if (GSTIN_REGEX.test(value)) applyGstinDerived(value);
+              }}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn-secondary mt-6"
+            onClick={() => lookupMutation.mutate({ gstin })}
+            disabled={!GSTIN_REGEX.test(gstin) || lookupMutation.isPending}
+            title="Fetch legal name, trade name, address and status from the GST system"
+          >
+            {lookupMutation.isPending ? <Spinner size="sm" /> : "Fetch details"}
+          </button>
+        </div>
+        {gstinStatus && (
+          <p className={cn("text-xs -mt-2", gstinStatus === "active" ? "text-green-600" : "text-red-600")}>
+            GSTIN status: {gstinStatus}
+          </p>
+        )}
+
+        {warnings.length > 0 && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200" role="status">
+            <ul className="list-disc pl-4 space-y-1">
+              {warnings.map((w) => <li key={w}>{w}</li>)}
+            </ul>
+          </div>
+        )}
 
         {/* Section divider */}
         <div className="flex items-center gap-3 pt-2">
@@ -1306,6 +1508,40 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
 
         {/* Disclosure sections */}
         <div className="space-y-1">
+          <Disclosure
+            label="GST Registration"
+            count={countFilled(legalName, tradeName, gstType, constitution)}
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <InputField
+                label="Legal Name"
+                value={legalName}
+                onChange={(e) => setLegalName(e.target.value)}
+                placeholder="As registered for GST"
+              />
+              <InputField
+                label="Trade Name"
+                value={tradeName}
+                onChange={(e) => setTradeName(e.target.value)}
+                placeholder="Name they do business under"
+              />
+              <div>
+                <label className="label">GST Type</label>
+                <Select className="input w-full" value={gstType} onChange={(e) => setGstType(e.target.value as PartyGstType | "")} aria-label="GST type">
+                  <option value="">Select</option>
+                  {partyGstTypes.map((t) => <option key={t} value={t}>{partyGstTypeLabels[t]}</option>)}
+                </Select>
+              </div>
+              <div>
+                <label className="label">Business Type</label>
+                <Select className="input w-full" value={constitution} onChange={(e) => setConstitution(e.target.value as PartyConstitution | "")} aria-label="Business type">
+                  <option value="">Select</option>
+                  {partyConstitutions.map((c) => <option key={c} value={c}>{partyConstitutionLabels[c]}</option>)}
+                </Select>
+              </div>
+            </div>
+          </Disclosure>
+
           <Disclosure
             label="Tax & Identity"
             count={countFilled(pan, category)}
@@ -1329,7 +1565,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
 
           <Disclosure
             label="Address"
-            count={countFilled(billingAddress, ...shippingAddresses, city, state, pincode)}
+            count={countFilled(billingAddress, city, state, pincode) + extraShipping.length}
           >
             <div className="grid grid-cols-2 gap-4">
               <TextareaField
@@ -1341,10 +1577,10 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
               />
               <div className="flex flex-col gap-1">
                 <TextareaField
-                  label={shippingAddresses.length > 1 ? "Shipping Address 1 (default)" : "Shipping Address"}
+                  label="Shipping Address"
                   rows={3}
-                  value={sameAsBilling ? billingAddress : shippingAddresses[0]}
-                  onChange={(e) => setShippingAt(0, e.target.value)}
+                  value={sameAsBilling ? billingAddress : shippingAddress}
+                  onChange={(e) => setShippingAddress(e.target.value)}
                   placeholder="Leave empty to use billing"
                   disabled={sameAsBilling}
                 />
@@ -1357,39 +1593,6 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
                   />
                   Same as billing
                 </label>
-                {shippingAddresses.slice(1).map((address, offset) => {
-                  const index = offset + 1;
-                  return (
-                    <div key={index} className="relative mt-2">
-                      <TextareaField
-                        label={`Shipping Address ${index + 1}`}
-                        rows={3}
-                        value={address}
-                        onChange={(e) => setShippingAt(index, e.target.value)}
-                        placeholder="Street, Area..."
-                      />
-                      <button
-                        type="button"
-                        className="absolute top-0 right-0 p-0.5 text-text-tertiary hover:text-red-600"
-                        onClick={() => setShippingAddresses((prev) => prev.filter((_, i) => i !== index))}
-                        aria-label={`Remove shipping address ${index + 1}`}
-                        title="Remove address"
-                      >
-                        <Icon icon={Cancel01Icon} size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-                {shippingAddresses.length < MAX_SHIPPING_ADDRESSES && (
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 self-start mt-2 text-xs font-medium text-brand-600 hover:text-brand-700"
-                    onClick={() => setShippingAddresses((prev) => [...prev, ""])}
-                  >
-                    <Icon icon={Add01Icon} size={14} />
-                    Add shipping address
-                  </button>
-                )}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4 mt-3">
@@ -1398,17 +1601,88 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
               />
-              <InputField
-                label="State"
-                value={state}
-                onChange={(e) => setState(e.target.value)}
-              />
+              <div>
+                <label className="label">State</label>
+                <Select
+                  className="input w-full"
+                  value={stateCode}
+                  onChange={(e) => {
+                    setStateCode(e.target.value);
+                    setState(INDIAN_STATES.find((st) => st.code === e.target.value)?.name ?? "");
+                  }}
+                  aria-label="State"
+                >
+                  <option value="">Select state</option>
+                  {INDIAN_STATES.map((st) => <option key={st.code} value={st.code}>{st.name}</option>)}
+                </Select>
+              </div>
               <InputField
                 label="Pincode"
                 value={pincode}
                 onChange={(e) => setPincode(e.target.value)}
               />
             </div>
+            <div className="mt-4">
+              <PartyShippingAddresses value={extraShipping} onChange={setExtraShipping} />
+            </div>
+          </Disclosure>
+
+          <Disclosure
+            label="MSME (Udyam)"
+            count={isMsme ? 1 + countFilled(udyamNumber, msmeCategory) : 0}
+          >
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" className="rounded" checked={isMsme} onChange={(e) => setIsMsme(e.target.checked)} />
+              Registered MSME (Udyam)
+            </label>
+            {isMsme && (
+              <div className="grid grid-cols-2 gap-4 mt-3">
+                <InputField
+                  label="Udyam Number"
+                  value={udyamNumber}
+                  onChange={(e) => setUdyamNumber(e.target.value.toUpperCase())}
+                  placeholder="UDYAM-MH-26-0012345"
+                />
+                <div>
+                  <label className="label">Category</label>
+                  <Select className="input w-full" value={msmeCategory} onChange={(e) => setMsmeCategory(e.target.value as MsmeCategory | "")} aria-label="MSME category">
+                    <option value="">Select</option>
+                    {msmeCategories.map((c) => <option key={c} value={c}>{c[0]!.toUpperCase() + c.slice(1)}</option>)}
+                  </Select>
+                </div>
+                {msmeCategory !== "medium" && (
+                  <p className="col-span-2 text-xs text-text-tertiary">
+                    Pay micro and small suppliers within 45 days (15 without a written credit period) to deduct the expense this year — Section 43B(h).
+                  </p>
+                )}
+              </div>
+            )}
+          </Disclosure>
+
+          <Disclosure
+            label="TDS"
+            count={countFilled(tdsSection)}
+          >
+            <div className="grid grid-cols-2 gap-4 items-end">
+              <div>
+                <label className="label">TDS Section</label>
+                <Select className="input w-full" value={tdsSection} onChange={(e) => setTdsSection(e.target.value)} aria-label="TDS section">
+                  <option value="">No TDS</option>
+                  {tdsSections.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}
+                </Select>
+              </div>
+              {tdsRate && (
+                <p className="text-sm pb-2">
+                  Rate: <span className="font-semibold">{tdsRate}%</span>
+                  {!pan && !panFromGstin(gstin) && <span className="text-red-600"> (no PAN)</span>}
+                </p>
+              )}
+            </div>
+            {tdsSection && (
+              <p className="text-xs text-text-tertiary mt-2">
+                {tdsSections.find((t) => t.code === tdsSection)?.note}
+              </p>
+            )}
           </Disclosure>
 
           <Disclosure
@@ -1470,7 +1744,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
               <InputField
                 label="IFSC"
                 value={bankIfsc}
-                onChange={(e) => setBankIfsc(e.target.value)}
+                onChange={(e) => setBankIfsc(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11))}
                 placeholder="SBIN0001234"
               />
               <InputField

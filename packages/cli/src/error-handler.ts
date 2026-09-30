@@ -6,12 +6,12 @@
  * and appropriate exit codes.
  */
 
-import { HisaaboApiError } from "./client.js";
+import { FintranzactApiError } from "./client.js";
 import { fatalError, EXIT } from "./output.js";
 import { getConfig } from "./config.js";
 
 /**
- * Handle any error thrown during a CLI command. Recognizes HisaaboApiError
+ * Handle any error thrown during a CLI command. Recognizes FintranzactApiError
  * subtypes and exits with the correct code and message.
  *
  * Usage:
@@ -22,11 +22,11 @@ import { getConfig } from "./config.js";
  *   }
  */
 export function handleApiError(e: unknown): never {
-  if (e instanceof HisaaboApiError) {
-    const err = e.hisaaboError;
+  if (e instanceof FintranzactApiError) {
+    const err = e.fintranzactError;
 
     if (err.code === "unauthorized") {
-      fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+      fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
     } else if (err.code === "forbidden") {
       fatalError(err.message, EXIT.FORBIDDEN);
     } else if (err.code === "not_found") {
@@ -41,7 +41,7 @@ export function handleApiError(e: unknown): never {
       fatalError(
         `Cannot reach ${url}\n` +
         `  Is the server running? Check: curl ${url}/health\n` +
-        `  Wrong URL? Run: hisaabo login`,
+        `  Wrong URL? Run: fintranzact login`,
         EXIT.NETWORK,
       );
     } else {

@@ -19,11 +19,14 @@ import { appRouter } from "./router.js";
 import { createContext, getSessionIdFromRequest } from "./context.js";
 import type { InvoicePDFData } from "./lib/invoice-pdf.js";
 import { generateLedgerPDF } from "./lib/ledger-pdf.js";
-import { generateLabelSheetPDF, LABEL_PRESETS } from "./lib/label-pdf.js";
+import { generateLabelSheetPDF, LABEL_PRESETS, TYPE_PRESET } from "./lib/label-pdf.js";
+import { asBarcodeType } from "./lib/barcode-setup.js";
+import { recordShareView, resolveShareToken } from "./lib/share-links.js";
 import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, tenantMembers, magicLinkTokens, bankAccounts, storeOrders, payments, assertMigrationsPresent } from "@fintranzact/db";
 import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
+import { seedPlatformAdmin } from "./lib/platform-admin.js";
 import { logger } from "./lib/logger.js";
 import { validateEnv } from "./lib/env.js";
 import { createCsrfMiddleware } from "./lib/csrf-middleware.js";
@@ -99,7 +102,7 @@ const allowedOrigins = [
 app.use("*", cors({
   origin: allowedOrigins,
   credentials: true,
-  allowHeaders: ["Content-Type", "x-business-id", "Authorization", "X-Requested-With", "X-Fintranzact-Client", "X-Hisaabo-Client"],
+  allowHeaders: ["Content-Type", "x-business-id", "Authorization", "X-Requested-With", "X-Fintranzact-Client", "X-Fintranzact-Client"],
   allowMethods: ["GET", "POST", "OPTIONS"],
   maxAge: 86400,
 }));
@@ -201,7 +204,7 @@ setInterval(() => {
 
 // ── CSRF protection (non-tRPC routes) ─────────────────────────
 // State-changing requests authenticated via cookies must include the
-// `X-Requested-With: fintranzact` header (legacy `hisaabo` still accepted). This blocks cross-origin form
+// `X-Requested-With: fintranzact` header. This blocks cross-origin form
 // submissions and navigation-based CSRF attacks.
 //
 // Scope:
@@ -444,49 +447,22 @@ setInterval(() => {
   }
 }, 300_000).unref();
 
-// ── PDF Download endpoint ──────────────────────────────────────
-app.get("/api/invoices/:id/pdf", async (c) => {
-  if (!checkPdfRateLimit(getClientIp(c))) {
-    return c.json({ error: "Too many PDF requests. Try again later." }, 429);
-  }
-
-  const invoiceId = c.req.param("id");
-  const rawFormat = c.req.query("format") || "a5";
-  // Accept legacy "a5-landscape" param from older clients and remap to "a5"
-  const format = (rawFormat === "a5-landscape" ? "a5" : rawFormat) as "a5" | "a4" | "thermal";
-
-  // Auth check — look up session in control DB
-  const sessionId = getSessionIdFromRequest(c.req.raw);
-  if (!sessionId) return c.json({ error: "Unauthorized" }, 401);
-
-  const [sessionRow] = await controlDb
-    .select({ userId: sessions.userId, tenantId: sessions.tenantId })
-    .from(sessions)
-    .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, new Date())))
-    .limit(1);
-
-  if (!sessionRow) return c.json({ error: "Unauthorized" }, 401);
-  if (!sessionRow.tenantId) return c.json({ error: "No organization selected" }, 400);
-
-  // Verify tenant is active
-  const [tenant] = await controlDb.select({ status: tenants.status, plan: tenants.plan })
-    .from(tenants).where(eq(tenants.id, sessionRow.tenantId)).limit(1);
-  if (!tenant || tenant.status !== "active") return c.json({ error: "Organization suspended" }, 403);
-
-  const businessId = c.req.header("x-business-id");
-  if (!businessId) return c.json({ error: "No business selected" }, 400);
-
-  // Get tenant DB for invoice data
-  const db = await getTenantDb(sessionRow.tenantId);
-
-  // Verify the business exists and belongs to this tenant (cross-tenant guard)
-  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
-  if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
-
+/**
+ * Everything the invoice PDF needs, read from the tenant DB. Shared by the
+ * signed-in PDF download and the public share-link endpoints so both print
+ * the same document. Null when the invoice is not in this business.
+ */
+async function buildInvoicePdfData(
+  db: Awaited<ReturnType<typeof getTenantDb>>,
+  businessId: string,
+  invoiceId: string,
+  origin: string,
+  plan: string,
+) {
   // Fetch invoice with party and business
   const [invoice] = await db.select().from(invoices)
     .where(and(eq(invoices.id, invoiceId), eq(invoices.businessId, businessId))).limit(1);
-  if (!invoice) return c.json({ error: "Invoice not found" }, 404);
+  if (!invoice) return null;
 
   const [party] = await db.select().from(parties).where(eq(parties.id, invoice.partyId)).limit(1);
   const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
@@ -525,7 +501,7 @@ app.get("/api/invoices/:id/pdf", async (c) => {
       const upiDeepLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(biz.name)}&am=${balance.toFixed(2)}&cu=INR&tn=${encodeURIComponent(invoice.invoiceNumber)}`;
       upiQrDataUrl = await QRCode.toDataURL(upiDeepLink, { width: 200, margin: 1 });
       // Clickable link uses HTTPS redirect (PDF viewers won't open upi:// directly)
-      const apiBase = new URL(c.req.url).origin;
+      const apiBase = origin;
       upiPayUrl = `${apiBase}/pay/upi?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(biz.name)}&am=${balance.toFixed(2)}&tn=${encodeURIComponent(invoice.invoiceNumber)}`;
     }
   }
@@ -581,7 +557,7 @@ app.get("/api/invoices/:id/pdf", async (c) => {
     businessStateCode: biz.stateCode || undefined,
     partyStateCode: party.stateCode || undefined,
     lineItemHsn: lineItems.map(li => li.itemId ? (hsnMap.get(li.itemId) || "") : ""),
-    isPaidPlan: tenant.plan !== "free",
+    isPaidPlan: plan !== "free",
     status: invoice.status,
     // Logo bytes are carried into the PDF worker. Buffers survive
     // structuredClone across worker threads as Uint8Array, and PDFKit
@@ -590,11 +566,197 @@ app.get("/api/invoices/:id/pdf", async (c) => {
     signatureBuffer: biz.signatureData ?? undefined,
   };
 
+  return { pdfData, invoice, party, biz, lineItems };
+}
+
+// ── PDF Download endpoint ──────────────────────────────────────
+app.get("/api/invoices/:id/pdf", async (c) => {
+  if (!checkPdfRateLimit(getClientIp(c))) {
+    return c.json({ error: "Too many PDF requests. Try again later." }, 429);
+  }
+
+  const invoiceId = c.req.param("id");
+  const rawFormat = c.req.query("format") || "a5";
+  // Accept legacy "a5-landscape" param from older clients and remap to "a5"
+  const format = (rawFormat === "a5-landscape" ? "a5" : rawFormat) as "a5" | "a4" | "thermal";
+
+  // Auth check — look up session in control DB
+  const sessionId = getSessionIdFromRequest(c.req.raw);
+  if (!sessionId) return c.json({ error: "Unauthorized" }, 401);
+
+  const [sessionRow] = await controlDb
+    .select({ userId: sessions.userId, tenantId: sessions.tenantId })
+    .from(sessions)
+    .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, new Date())))
+    .limit(1);
+
+  if (!sessionRow) return c.json({ error: "Unauthorized" }, 401);
+  if (!sessionRow.tenantId) return c.json({ error: "No organization selected" }, 400);
+
+  // Verify tenant is active
+  const [tenant] = await controlDb.select({ status: tenants.status, plan: tenants.plan })
+    .from(tenants).where(eq(tenants.id, sessionRow.tenantId)).limit(1);
+  if (!tenant || tenant.status !== "active") return c.json({ error: "Organization suspended" }, 403);
+
+  const businessId = c.req.header("x-business-id");
+  if (!businessId) return c.json({ error: "No business selected" }, 400);
+
+  // Get tenant DB for invoice data
+  const db = await getTenantDb(sessionRow.tenantId);
+
+  // Verify the business exists and belongs to this tenant (cross-tenant guard)
+  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
+  if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
+
+  const built = await buildInvoicePdfData(db, businessId, invoiceId, new URL(c.req.url).origin, tenant.plan);
+  if (!built) return c.json({ error: "Invoice not found" }, 404);
+  const { pdfData, invoice } = built;
+
   const pdfBuffer = await generatePDFInWorker(pdfData, format);
   return new Response(new Uint8Array(pdfBuffer), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${invoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf"`,
+    },
+  });
+});
+
+// ── Public share links (no sign-in) ─────────────────────────────
+// A customer opens /i/<token> in the web app, which reads these. The token
+// resolves through the control DB to exactly one document; nothing else in
+// the tenant is reachable from it. Unknown, revoked and suspended-tenant
+// tokens all answer the same 404. Rate limited like the PDF endpoint.
+
+const SHARE_HEADERS = {
+  "Cache-Control": "no-store",
+  "X-Robots-Tag": "noindex, nofollow",
+  "Referrer-Policy": "no-referrer",
+};
+
+async function loadSharedDocument(c: Context) {
+  const token = c.req.param("token") ?? "";
+  const link = await resolveShareToken(token);
+  if (!link) return null;
+  const db = await getTenantDb(link.tenantId);
+  const built = await buildInvoicePdfData(db, link.businessId, link.documentId, new URL(c.req.url).origin, link.tenantPlan);
+  // A deleted document is gone for the customer too.
+  if (!built || built.invoice.deletedAt) return null;
+  // Credit notes and returns against it reduce what is still owed.
+  const [adj] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${invoices.totalAmount}), 0)::text` })
+    .from(invoices)
+    .where(and(
+      eq(invoices.referenceDocumentId, link.documentId),
+      eq(invoices.businessId, link.businessId),
+      isNull(invoices.deletedAt),
+      inArray(invoices.documentType, ["credit_note", "sales_return", "purchase_return"]),
+      sql`${invoices.status} <> 'cancelled'`,
+    ));
+  return { link, db, ...built, amountAdjusted: parseFloat(adj?.total ?? "0") };
+}
+
+app.get("/api/share/:token", async (c) => {
+  if (!checkPdfRateLimit(getClientIp(c))) {
+    return c.json({ error: "Too many requests. Try again later." }, 429, SHARE_HEADERS);
+  }
+  const shared = await loadSharedDocument(c);
+  if (!shared) return c.json({ error: "This link is not valid any more" }, 404, SHARE_HEADERS);
+  const { link, pdfData: d, invoice, biz, amountAdjusted } = shared;
+  void recordShareView(link.id);
+
+  const total = parseFloat(invoice.totalAmount);
+  const paid = parseFloat(invoice.amountPaid);
+  return c.json({
+    document: {
+      documentType: invoice.documentType,
+      type: invoice.type,
+      number: invoice.invoiceNumber,
+      date: invoice.invoiceDate,
+      dueDate: invoice.dueDate,
+      status: invoice.status,
+      subtotal: invoice.subtotal,
+      taxAmount: invoice.taxAmount,
+      discountAmount: invoice.discountAmount,
+      additionalCharges: invoice.additionalCharges,
+      roundOff: invoice.roundOff,
+      totalAmount: invoice.totalAmount,
+      amountPaid: invoice.amountPaid,
+      amountAdjusted: amountAdjusted.toFixed(2),
+      balance: Math.max(0, total - paid - amountAdjusted).toFixed(2),
+      notes: d.notes ?? null,
+      terms: d.termsAndConditions ?? null,
+    },
+    business: {
+      name: d.businessName,
+      legalName: d.businessLegalName ?? null,
+      gstin: d.businessGstin ?? null,
+      phone: d.businessPhone ?? null,
+      email: d.businessEmail ?? null,
+      address: [d.businessAddress, d.businessCity, d.businessState, d.businessPincode].filter(Boolean).join(", ") || null,
+      hasLogo: !!biz.logoData,
+    },
+    party: {
+      name: d.partyName,
+      gstin: d.partyGstin ?? null,
+      address: [d.partyBillingAddress, d.partyCity, d.partyState].filter(Boolean).join(", ") || null,
+    },
+    lineItems: d.lineItems.map((li, i) => ({
+      name: li.itemName,
+      description: li.description ?? null,
+      hsn: d.lineItemHsn?.[i] || null,
+      quantity: li.quantity,
+      unit: li.unit ?? null,
+      unitPrice: li.unitPrice,
+      discountPercent: li.discountPercent,
+      taxPercent: li.taxPercent,
+      totalAmount: li.totalAmount,
+    })),
+    payment: d.upiId && d.upiQrDataUrl
+      ? { upiId: d.upiId, payUrl: d.upiPayUrl ?? null, qrDataUrl: d.upiQrDataUrl }
+      : null,
+    bank: d.bankAccountNumber
+      ? { accountName: d.bankAccountName ?? null, accountNumber: d.bankAccountNumber, ifsc: d.bankIfsc ?? null, bankName: d.bankName ?? null }
+      : null,
+    poweredBy: !d.isPaidPlan,
+  }, 200, SHARE_HEADERS);
+});
+
+app.get("/api/share/:token/pdf", async (c) => {
+  if (!checkPdfRateLimit(getClientIp(c))) {
+    return c.json({ error: "Too many PDF requests. Try again later." }, 429, SHARE_HEADERS);
+  }
+  const shared = await loadSharedDocument(c);
+  if (!shared) return c.json({ error: "This link is not valid any more" }, 404, SHARE_HEADERS);
+  const format = c.req.query("format") === "a5" ? "a5" : "a4";
+  const pdfBuffer = await generatePDFInWorker(shared.pdfData, format);
+  return new Response(new Uint8Array(pdfBuffer), {
+    headers: {
+      ...SHARE_HEADERS,
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${shared.invoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf"`,
+    },
+  });
+});
+
+app.get("/api/share/:token/logo", async (c) => {
+  if (!checkPdfRateLimit(getClientIp(c))) {
+    return c.json({ error: "Too many requests. Try again later." }, 429, SHARE_HEADERS);
+  }
+  const link = await resolveShareToken(c.req.param("token") ?? "");
+  if (!link) return c.json({ error: "Not found" }, 404, SHARE_HEADERS);
+  const db = await getTenantDb(link.tenantId);
+  const [biz] = await db
+    .select({ data: businesses.logoData, mime: businesses.logoMimeType })
+    .from(businesses)
+    .where(eq(businesses.id, link.businessId))
+    .limit(1);
+  if (!biz?.data || !biz.mime) return c.json({ error: "Not found" }, 404, SHARE_HEADERS);
+  return new Response(new Uint8Array(biz.data), {
+    headers: {
+      ...SHARE_HEADERS,
+      ...LOGO_SAFE_HEADERS,
+      "Content-Type": biz.mime,
+      "Cross-Origin-Resource-Policy": "cross-origin",
     },
   });
 });
@@ -1658,7 +1820,8 @@ app.post("/store/:slug/order", async (c) => {
 // Label print request. Quantities are bounded here as well as in the PDF
 // generator so an absurd payload is rejected before any work happens.
 const labelRequestSchema = z.object({
-  presetId: z.enum(Object.keys(LABEL_PRESETS) as [string, ...string[]]),
+  // Omitted = the fixed label for the business's barcode type.
+  presetId: z.enum(Object.keys(LABEL_PRESETS) as [string, ...string[]]).optional(),
   showPrice: z.boolean().default(true),
   showName: z.boolean().default(true),
   lines: z.array(z.object({
@@ -1707,8 +1870,15 @@ app.post("/api/items/labels", async (c) => {
   }
   const body = parsed.data;
 
-  const [biz] = await db.select({ name: businesses.name })
-    .from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  const [biz] = await db.select({
+    name: businesses.name,
+    barcodesEnabled: businesses.barcodesEnabled,
+    barcodeType: businesses.barcodeType,
+  }).from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  if (!biz?.barcodesEnabled) {
+    return c.json({ error: "Barcodes are switched off for this business" }, 403);
+  }
+  const symbology = asBarcodeType(biz.barcodeType);
 
   // Read the catalogue rows server-side: the client sends ids and counts, and
   // never the printed values, so a tampered request cannot put arbitrary text
@@ -1753,7 +1923,8 @@ app.post("/api/items/labels", async (c) => {
 
   const { pdf, printed, skipped } = await generateLabelSheetPDF({
     businessName: biz?.name ?? "",
-    presetId: body.presetId,
+    presetId: body.presetId ?? TYPE_PRESET[symbology],
+    symbology,
     items: labelItems,
     showPrice: body.showPrice,
     showName: body.showName,
@@ -1987,6 +2158,8 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   logger.info({ port: info.port }, `Fintranzact API running on http://localhost:${info.port}`);
   logger.info({ port: info.port }, `  tRPC endpoint: http://localhost:${info.port}/api/trpc`);
   startRecurringScheduler();
+  // Create the platform admin from PLATFORM_ADMIN_EMAIL / _PASSWORD if set.
+  seedPlatformAdmin().catch((err) => logger.error({ err }, "Could not create the platform admin account"));
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────

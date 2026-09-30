@@ -17,14 +17,15 @@ import * as SecureStore from "expo-secure-store";
 import { trpc } from "../../src/lib/trpc";
 
 const colors = {
-  bg: "#0f0f1a",
-  surface: "#1a1a2e",
-  border: "#2d2d44",
-  brand: "#6366f1",
-  brandLight: "rgba(99,102,241,0.12)",
+  bg: "#070c1b",
+  surface: "#0f1730",
+  border: "#212c4d",
+  brand: "#3b5eaa",
+  brandLight: "rgba(59, 94, 170,0.12)",
+  onBrand: "#ffffff",
   textPrimary: "#ffffff",
-  textSecondary: "#9ca3af",
-  textMuted: "#6b7280",
+  textSecondary: "#a3aecb",
+  textMuted: "#8390b0",
   success: "#10b981",
   danger: "#ef4444",
 } as const;
@@ -86,7 +87,7 @@ export default function CompleteProfileScreen() {
           <Text style={styles.heading}>Welcome!</Text>
           <Text style={styles.subheading}>What's your name?</Text>
           <Text style={styles.description}>
-            This helps personalize your Hisaabo experience and appears on your documents.
+            This helps personalize your Fintranzact experience and appears on your documents.
           </Text>
 
           {/* Input */}
@@ -115,11 +116,11 @@ export default function CompleteProfileScreen() {
             activeOpacity={0.8}
           >
             {completeMutation.isPending ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
+              <ActivityIndicator size="small" color={colors.onBrand} />
             ) : (
               <View style={styles.continueBtnInner}>
                 <Text style={styles.continueBtnText}>Continue</Text>
-                <Ionicons name="arrow-forward" size={18} color={colors.textPrimary} />
+                <Ionicons name="arrow-forward" size={18} color={colors.onBrand} />
               </View>
             )}
           </TouchableOpacity>
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   continueBtnText: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "700",
   },

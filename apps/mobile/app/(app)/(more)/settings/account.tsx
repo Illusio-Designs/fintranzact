@@ -463,10 +463,10 @@ export default function AccountScreen() {
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={s.title}>Account</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       {/* Main tabs */}
@@ -501,8 +501,12 @@ const useS = makeStyles((colors) => ({
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -539,7 +543,7 @@ const useS = makeStyles((colors) => ({
     color: colors.textMuted,
   },
   pillTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
 
   /* Tab content */

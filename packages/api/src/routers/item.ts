@@ -1,3 +1,4 @@
+import { assertCodeFree, getBarcodeSetup, resolveCodes } from "../lib/barcode-setup.js";
 import { eq, and, ilike, sql, desc, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { items, itemVariants, invoiceItems, invoices, parties, stockAdjustments } from "@fintranzact/db";
@@ -7,6 +8,8 @@ import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { ensureDefaultWarehouse } from "../lib/inventory-service.js";
+import { applyStockAdjustment } from "./stock.js";
 
 export const itemRouter = router({
   list: viewerProcedure
@@ -126,41 +129,24 @@ export const itemRouter = router({
       const code = input.code.trim();
       if (!code) return null;
 
-      const [byBarcode] = await ctx.db.select().from(items)
-        .where(and(
-          eq(items.businessId, ctx.businessId),
-          eq(items.barcode, code),
-          isNull(items.deletedAt),
-        ))
-        .limit(1);
-      if (byBarcode) return { item: byBarcode, variant: null, matchedOn: "barcode" as const };
+      const setup = await getBarcodeSetup(ctx.db, ctx.businessId);
+      const hit = (await resolveCodes(ctx.db, ctx.businessId, [code], setup.mode)).get(code);
+      if (!hit) return null;
 
-      // Variants have no businessId of their own, so scope through the join.
-      const [variantHit] = await ctx.db
-        .select({ item: items, variant: itemVariants })
-        .from(itemVariants)
-        .innerJoin(items, eq(itemVariants.itemId, items.id))
-        .where(and(
-          eq(items.businessId, ctx.businessId),
-          eq(itemVariants.barcode, code),
-          isNull(items.deletedAt),
-          isNull(itemVariants.deletedAt),
-        ))
+      const [item] = await ctx.db.select().from(items)
+        .where(and(eq(items.id, hit.itemId), eq(items.businessId, ctx.businessId)))
         .limit(1);
-      if (variantHit) {
-        return { item: variantHit.item, variant: variantHit.variant, matchedOn: "barcode" as const };
-      }
-
-      const [bySku] = await ctx.db.select().from(items)
-        .where(and(
-          eq(items.businessId, ctx.businessId),
-          eq(items.sku, code),
-          isNull(items.deletedAt),
-        ))
-        .limit(1);
-      if (bySku) return { item: bySku, variant: null, matchedOn: "sku" as const };
-
-      return null;
+      if (!item) return null;
+      const [variant] = hit.variantId
+        ? await ctx.db.select().from(itemVariants).where(eq(itemVariants.id, hit.variantId)).limit(1)
+        : [null];
+      return {
+        item,
+        variant: variant ?? null,
+        // A box or carton code stands for several pieces in one scan.
+        packQty: hit.packQty,
+        matchedOn: hit.matchedOn === "sku" ? ("sku" as const) : ("barcode" as const),
+      };
     }),
 
   create: memberProcedure.input(createItemSchema).mutation(async ({ input, ctx }) => {
@@ -168,6 +154,15 @@ export const itemRouter = router({
     const { variants: initialVariants, ...itemData } = input;
 
     return ctx.db.transaction(async (tx) => {
+      // A code scans to exactly one item, variant or extra code.
+      const newCodes = [itemData.barcode, ...(initialVariants ?? []).map((v) => v.barcode)]
+        .map((c) => c?.trim())
+        .filter((c): c is string => !!c);
+      if (new Set(newCodes).size !== newCodes.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "The same barcode is used twice on this item" });
+      }
+      for (const code of newCodes) await assertCodeFree(tx, ctx.businessId, code, {});
+
       const [item] = await tx.insert(items).values({
         ...itemData,
         // Blank means "no barcode". Storing "" instead of NULL would make
@@ -323,6 +318,9 @@ export const itemRouter = router({
     .input(z.object({ id: z.string().uuid(), data: updateItemSchema }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Item");
+      if (input.data.barcode?.trim()) {
+        await assertCodeFree(ctx.db, ctx.businessId, input.data.barcode.trim(), { itemId: input.id });
+      }
       // Active-mutation contract: a soft-deleted item cannot be edited via
       // the public API. Re-activation would require an explicit restore
       // endpoint, which is deferred per FIXES.md.
@@ -740,6 +738,9 @@ export const itemRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Item is not in variants mode" });
       }
 
+      if (input.variant.barcode?.trim()) {
+        await assertCodeFree(ctx.db, ctx.businessId, input.variant.barcode.trim(), {});
+      }
       const [variant] = await ctx.db.insert(itemVariants).values({
         itemId: input.itemId,
         attributeValues: input.variant.attributeValues,
@@ -791,7 +792,15 @@ export const itemRouter = router({
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.data.attributeValues !== undefined) updates.attributeValues = input.data.attributeValues;
       if (input.data.sku !== undefined) updates.sku = input.data.sku || null;
-      if (input.data.barcode !== undefined) updates.barcode = input.data.barcode || null;
+      if (input.data.barcode !== undefined) {
+        if (input.data.barcode?.trim()) {
+          await assertCodeFree(ctx.db, ctx.businessId, input.data.barcode.trim(), {
+            itemId: existing.itemId,
+            variantId: input.variantId,
+          });
+        }
+        updates.barcode = input.data.barcode?.trim() || null;
+      }
       if (input.data.salePrice !== undefined) updates.salePrice = input.data.salePrice || null;
       if (input.data.purchasePrice !== undefined) updates.purchasePrice = input.data.purchasePrice || null;
       if (input.data.stockQuantity !== undefined) updates.stockQuantity = input.data.stockQuantity;
@@ -890,6 +899,11 @@ export const itemRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Item is not in variants mode" });
       }
 
+      const bulkCodes = input.variants.map((v) => v.barcode?.trim()).filter((c): c is string => !!c);
+      if (new Set(bulkCodes).size !== bulkCodes.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "The same barcode is used twice" });
+      }
+      for (const code of bulkCodes) await assertCodeFree(ctx.db, ctx.businessId, code, {});
       const created = await ctx.db.insert(itemVariants).values(
         input.variants.map((v) => ({
           itemId: input.itemId,
@@ -1085,72 +1099,20 @@ export const itemRouter = router({
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Item");
 
+      // Goes through the warehouse-aware path so the item total, the default
+      // adjustment warehouse's balance and the adjustment log stay in step.
       return ctx.db.transaction(async (tx) => {
-        // Resolve current stock
-        let previousStock: string;
-
-        if (input.variantId) {
-          // Active read — can't adjust stock on a deleted variant.
-          const [variant] = await tx.select({ stockQuantity: itemVariants.stockQuantity })
-            .from(itemVariants)
-            .innerJoin(items, eq(items.id, itemVariants.itemId))
-            .where(and(
-              eq(itemVariants.id, input.variantId),
-              eq(items.businessId, ctx.businessId),
-              isNull(items.deletedAt),
-              isNull(itemVariants.deletedAt),
-            ))
-            .for("update")
-            .limit(1);
-          if (!variant) throw new TRPCError({ code: "NOT_FOUND", message: "Variant not found" });
-          previousStock = variant.stockQuantity;
-        } else {
-          // Active read — can't adjust stock on a deleted item.
-          const [item] = await tx.select({ stockQuantity: items.stockQuantity })
-            .from(items)
-            .where(and(
-              eq(items.id, input.itemId),
-              eq(items.businessId, ctx.businessId),
-              isNull(items.deletedAt),
-            ))
-            .for("update")
-            .limit(1);
-          if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item not found" });
-          previousStock = item.stockQuantity;
-        }
-
-        const adj = parseFloat(input.quantity);
-        const prev = parseFloat(previousStock);
-        const newStock = (prev + adj).toFixed(3);
-
-        // Apply stock change
-        if (input.variantId) {
-          await tx.update(itemVariants).set({
-            stockQuantity: newStock,
-            updatedAt: new Date(),
-          }).where(eq(itemVariants.id, input.variantId));
-        } else {
-          await tx.update(items).set({
-            stockQuantity: newStock,
-            updatedAt: new Date(),
-          }).where(eq(items.id, input.itemId));
-        }
-
-        // Record the adjustment
-        const [adjustment] = await tx.insert(stockAdjustments).values({
+        const settings = await ensureDefaultWarehouse(tx, ctx.businessId);
+        return applyStockAdjustment(tx, {
           businessId: ctx.businessId,
+          warehouseId: (settings.stockAdjustmentWarehouseId ?? settings.salesWarehouseId) as string,
           itemId: input.itemId,
-          variantId: input.variantId || null,
-          quantity: input.quantity,
-          previousStock,
-          newStock,
+          variantId: input.variantId,
+          quantity: parseFloat(input.quantity),
           reason: input.reason || null,
-          adjustmentDate: input.adjustmentDate ? new Date(input.adjustmentDate) : new Date(),
-          createdByUserId: ctx.user!.id,
-          createdByName: ctx.user!.name,
-        }).returning();
-
-        return adjustment;
+          date: input.adjustmentDate ? new Date(input.adjustmentDate) : new Date(),
+          user: { id: ctx.user!.id, name: ctx.user!.name },
+        });
       });
     }),
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { encodeCode128, BarcodeError, type EncodedBarcode } from "../lib/barcode.js";
+import { encodeCode128, encodeEan13, isValidEan13, BarcodeError, type EncodedBarcode } from "../lib/barcode.js";
 
 /**
  * Code 128 is fully specified, so rather than asserting against our own
@@ -108,5 +108,30 @@ describe("encodeCode128", () => {
 
   it("rejects an empty value", () => {
     expect(() => encodeCode128("")).toThrow(BarcodeError);
+  });
+});
+
+describe("encodeEan13", () => {
+  // Reference modules for 4006381333931, from an independent encoder (bwip-js).
+  const REFERENCE =
+    "10100011010100111010111101111010001001011001101010100001010000101000010111010010000101100110101";
+
+  const modulesOf = (e: EncodedBarcode) => {
+    const bits = Array(e.modules).fill("0");
+    for (const bar of e.bars) for (let k = 0; k < bar.width; k++) bits[bar.x + k] = "1";
+    return bits.join("");
+  };
+
+  it("matches the reference encoding, with 11 + 7 module quiet zones", () => {
+    const encoded = encodeEan13("4006381333931");
+    expect(encoded.modules).toBe(113);
+    expect(modulesOf(encoded).slice(11, 106)).toBe(REFERENCE);
+  });
+
+  it("checks the check digit", () => {
+    expect(isValidEan13("8901234567890")).toBe(true);
+    expect(isValidEan13("8901234567891")).toBe(false);
+    expect(isValidEan13("890123456789")).toBe(false);
+    expect(() => encodeEan13("8901234567891")).toThrow(BarcodeError);
   });
 });

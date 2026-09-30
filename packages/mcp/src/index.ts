@@ -6,22 +6,22 @@
  * Designed for use with Claude Desktop, OpenClaw, and any MCP-compatible host.
  *
  * Required environment variables:
- *   HISAABO_API_URL     — Base URL of the Fintranzact API (default: http://localhost:3000)
- *   HISAABO_API_KEY       — Session ID obtained from `hisaabo login` (Bearer token)
- *   HISAABO_TENANT_ID   — Tenant (organization) UUID
- *   HISAABO_BUSINESS_ID — Active business UUID
+ *   FINTRANZACT_API_URL     — Base URL of the Fintranzact API (default: http://localhost:3000)
+ *   FINTRANZACT_API_KEY       — Session ID obtained from `fintranzact login` (Bearer token)
+ *   FINTRANZACT_TENANT_ID   — Tenant (organization) UUID
+ *   FINTRANZACT_BUSINESS_ID — Active business UUID
  *
  * Usage in Claude Desktop claude_desktop_config.json:
  *   {
  *     "mcpServers": {
- *       "hisaabo": {
+ *       "fintranzact": {
  *         "command": "npx",
  *         "args": ["@fintranzact/mcp"],
  *         "env": {
- *           "HISAABO_API_URL": "http://localhost:3000",
- *           "HISAABO_API_KEY": "<session-id-from-hisaabo-login>",
- *           "HISAABO_TENANT_ID": "<tenant-uuid>",
- *           "HISAABO_BUSINESS_ID": "<business-uuid>"
+ *           "FINTRANZACT_API_URL": "http://localhost:3000",
+ *           "FINTRANZACT_API_KEY": "<session-id-from-fintranzact-login>",
+ *           "FINTRANZACT_TENANT_ID": "<tenant-uuid>",
+ *           "FINTRANZACT_BUSINESS_ID": "<business-uuid>"
  *         }
  *       }
  *     }
@@ -30,15 +30,15 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { HisaaboClient } from "./client.js";
+import { FintranzactClient } from "./client.js";
 import { registerTools } from "./server.js";
 
 function requireEnv(name: string): string {
   const val = process.env[name];
   if (!val) {
     process.stderr.write(
-      `[hisaabo-mcp] Error: Required environment variable "${name}" is not set.\n` +
-      `[hisaabo-mcp] Run "hisaabo whoami --json" to get all required values.\n`
+      `[fintranzact-mcp] Error: Required environment variable "${name}" is not set.\n` +
+      `[fintranzact-mcp] Run "fintranzact whoami --json" to get all required values.\n`
     );
     process.exit(1);
   }
@@ -50,29 +50,29 @@ function validateApiUrl(raw: string): string {
   try {
     url = new URL(raw);
   } catch {
-    process.stderr.write(`[hisaabo-mcp] Error: HISAABO_API_URL is not a valid URL: "${raw}"\n`);
+    process.stderr.write(`[fintranzact-mcp] Error: FINTRANZACT_API_URL is not a valid URL: "${raw}"\n`);
     process.exit(1);
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    process.stderr.write(`[hisaabo-mcp] Error: HISAABO_API_URL must use http: or https: protocol.\n`);
+    process.stderr.write(`[fintranzact-mcp] Error: FINTRANZACT_API_URL must use http: or https: protocol.\n`);
     process.exit(1);
   }
   return url.origin;
 }
 
 const config = {
-  apiUrl: validateApiUrl(process.env.HISAABO_API_URL ?? "http://localhost:3000"),
-  token: requireEnv("HISAABO_API_KEY"),
-  tenantId: requireEnv("HISAABO_TENANT_ID"),
-  businessId: requireEnv("HISAABO_BUSINESS_ID"),
+  apiUrl: validateApiUrl(process.env.FINTRANZACT_API_URL ?? "http://localhost:3000"),
+  token: requireEnv("FINTRANZACT_API_KEY"),
+  tenantId: requireEnv("FINTRANZACT_TENANT_ID"),
+  businessId: requireEnv("FINTRANZACT_BUSINESS_ID"),
 };
 
 declare const __MCP_VERSION__: string | undefined;
 const mcpVersion = typeof __MCP_VERSION__ !== "undefined" ? __MCP_VERSION__ : "dev";
 
-const client = new HisaaboClient(config);
+const client = new FintranzactClient(config);
 const server = new McpServer({
-  name: "hisaabo",
+  name: "fintranzact",
   version: mcpVersion,
 });
 

@@ -9,6 +9,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Cancel01Icon, Download04Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
+import { toast } from "@/hooks/useToast";
 interface LineItem {
   id: string;
   itemId?: string;
@@ -664,7 +665,7 @@ export function DownloadPDFButton({ invoiceId, invoiceNumber }: { invoiceId: str
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      alert("Failed to download PDF");
+      toast.error("Failed to download PDF");
     }
     setLoading(false);
   }

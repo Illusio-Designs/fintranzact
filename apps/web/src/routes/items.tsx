@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, downloadCSV, todayISODate, toISOString } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -9,11 +10,12 @@ import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import type { ItemType, ItemMode } from "@fintranzact/shared";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { LabelPrintDialog, type LabelCandidate } from "@/components/items/LabelPrintDialog";
+import { LabelPrintPanel, type LabelCandidate, type LabelMode } from "@/components/items/LabelPrintPanel";
+import { ItemBarcodeField, ItemExtraCodes } from "@/components/items/ItemBarcodeFields";
+import { useBarcodeSetup } from "@/components/barcodes/BarcodeSymbol";
 import { Modal } from "@/components/ui/Modal";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
@@ -117,15 +119,17 @@ function countFilled(...values: string[]): number {
 }
 
 function ItemsPage() {
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search items…");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
   const [page, setPage] = useState(1);
   const [showAddModal, setShowAddModal] = useState(false);
   const deleteConfirm = useDeleteConfirmation();
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [showLabels, setShowLabels] = useState(false);
+  const [labelPanel, setLabelPanel] = useState<{ mode: LabelMode; itemKey?: string } | null>(null);
   const [editItemId, setEditItemId] = useState<string | null>(null);
+  const { data: barcodeSetup } = useBarcodeSetup();
+  const barcodesOn = !!barcodeSetup?.enabled;
   const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 300);
@@ -288,16 +292,18 @@ function ItemsPage() {
   return (
     <div>
       <PageHeader
-        title="Items"
+        title="Stock Items"
         description="Products and services inventory"
         actions={
           <div className="flex items-center gap-2">
-            <button
-              className="btn-secondary inline-flex items-center gap-2"
-              onClick={() => setShowLabels(true)}
-            >
-              Print labels
-            </button>
+            {barcodesOn && (
+              <button
+                className="btn-secondary inline-flex items-center gap-2"
+                onClick={() => setLabelPanel({ mode: "many" })}
+              >
+                Print labels
+              </button>
+            )}
             <button
               className="btn-primary inline-flex items-center gap-2"
               onClick={() => setShowAddModal(true)}
@@ -311,12 +317,6 @@ function ItemsPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search items..."
-          className="max-w-xs"
-        />
         <SegmentedControl
           tabs={TYPE_TABS}
           value={typeFilter}
@@ -387,6 +387,7 @@ function ItemsPage() {
             <thead>
               <tr>
                 <th>Item</th>
+                {barcodesOn && <th>Barcode</th>}
                 <th className="text-right">Sale Price</th>
                 <th className="text-right">Stock</th>
                 <th>Unit</th>
@@ -421,6 +422,11 @@ function ItemsPage() {
                         </div>
                       </div>
                     </td>
+                    {barcodesOn && (
+                      <td className="font-mono text-xs text-text-secondary">
+                        {item.itemMode === "variants" ? "Per variant" : item.barcode || <span className="text-text-tertiary">—</span>}
+                      </td>
+                    )}
                     <td className="text-right tabular-nums">
                       {item.itemMode === "variants" ? (
                         <span className="text-text-secondary text-xs">{(item as any).variantCount ?? 0} variants</span>
@@ -481,10 +487,12 @@ function ItemsPage() {
       />
 
       {/* Item Detail */}
-      <LabelPrintDialog
-        open={showLabels}
-        onClose={() => setShowLabels(false)}
+      <LabelPrintPanel
+        open={labelPanel !== null}
+        onClose={() => setLabelPanel(null)}
         candidates={labelCandidates}
+        initialMode={labelPanel?.mode}
+        initialItemKey={labelPanel?.itemKey}
       />
 
       {selectedItemId && (
@@ -495,6 +503,14 @@ function ItemsPage() {
             setSelectedItemId(null);
             setEditItemId(id);
           }}
+          onPrintLabels={
+            barcodesOn
+              ? (id) => {
+                  setSelectedItemId(null);
+                  setLabelPanel({ mode: "one", itemKey: `${id}:` });
+                }
+              : undefined
+          }
         />
       )}
 
@@ -799,12 +815,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
               />
             </div>
             <div className="mt-3">
-              <InputField
-                label="Barcode"
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                placeholder="Scan or type — generated on purchase if left blank"
-              />
+              <ItemBarcodeField value={barcode} onChange={setBarcode} sku={sku} />
             </div>
             <div className="mt-3">
               <InputField
@@ -1375,12 +1386,8 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
               />
             </div>
             <div className="mt-3">
-              <InputField
-                label="Barcode"
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                placeholder="Scan or type — generated on purchase if left blank"
-              />
+              <ItemBarcodeField value={barcode} onChange={setBarcode} sku={sku} />
+              <ItemExtraCodes itemId={itemId} />
             </div>
             <div className="mt-3">
               <InputField
@@ -1738,7 +1745,7 @@ function PriceHistoryTab({
       {priceChangedRows.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-text-secondary mb-2">Price Changes</p>
-          <div className="rounded-xl border border-border-light overflow-hidden">
+          <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
             <div className="max-h-[300px] overflow-y-auto">
               <table className="data-table w-full">
                 <thead className="sticky top-0 z-10">
@@ -1910,7 +1917,7 @@ function StockMovementsTab({
         </div>
       )}
 
-      <div className="rounded-xl border border-border-light overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
         <div className="max-h-[300px] overflow-y-auto">
           <table className="data-table w-full">
             <thead className="sticky top-0 z-10">
@@ -1999,7 +2006,17 @@ function PeriodToggle({ value, onChange }: { value: PeriodFilter; onChange: (v: 
   );
 }
 
-function ItemDetailPanel({ itemId, onClose, onEdit }: { itemId: string; onClose: () => void; onEdit: (id: string) => void }) {
+function ItemDetailPanel({
+  itemId,
+  onClose,
+  onEdit,
+  onPrintLabels,
+}: {
+  itemId: string;
+  onClose: () => void;
+  onEdit: (id: string) => void;
+  onPrintLabels?: (id: string) => void;
+}) {
   const [tab, setTab] = useState("overview");
   const [showMerge, setShowMerge] = useState(false);
   const [showSwitchUnit, setShowSwitchUnit] = useState(false);
@@ -2052,6 +2069,14 @@ function ItemDetailPanel({ itemId, onClose, onEdit }: { itemId: string; onClose:
                 className="text-xs px-3 py-1.5 rounded-lg font-medium text-text-secondary hover:bg-surface-2 border border-border-light transition-colors"
               >
                 Adjust Stock
+              </button>
+            )}
+            {onPrintLabels && item.itemType === "product" && item.itemMode !== "variants" && item.barcode && (
+              <button
+                onClick={() => onPrintLabels(item.id)}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium text-text-secondary hover:bg-surface-2 border border-border-light transition-colors"
+              >
+                Print labels
               </button>
             )}
             {item.itemType === "product" && item.itemMode !== "variants" && (
@@ -2116,7 +2141,7 @@ function ItemDetailPanel({ itemId, onClose, onEdit }: { itemId: string; onClose:
             </div>
 
             {/* Compact item info grid */}
-            <div className="rounded-xl border border-border-light overflow-hidden">
+            <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
               <table className="w-full text-sm">
                 <tbody>
                   {[
@@ -2151,7 +2176,7 @@ function ItemDetailPanel({ itemId, onClose, onEdit }: { itemId: string; onClose:
                     Total stock: {item.variants.reduce((sum, v) => sum + parseFloat(v.stockQuantity), 0).toLocaleString()} {item.unit}
                   </p>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="data-table w-full">
                       <thead>
@@ -2188,7 +2213,7 @@ function ItemDetailPanel({ itemId, onClose, onEdit }: { itemId: string; onClose:
             {item.unitVariants && Array.isArray(item.unitVariants) && item.unitVariants.length > 0 && (
               <div>
                 <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">Unit Variants</p>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -2587,11 +2612,26 @@ function AdjustStockModal({
   }
 
   return (
-    <Modal open={true} onClose={onClose} title="Adjust Stock" className="max-w-md">
+    <SlideOver
+      open={true}
+      onClose={onClose}
+      title="Adjust stock"
+      description={`Add or remove stock for ${itemName}`}
+      footer={
+        <div className="flex justify-end gap-3">
+          <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleSubmit}
+            disabled={!qty || adjustMutation.isPending || (isVariantItem && !selectedVariantId)}
+          >
+            {adjustMutation.isPending ? "Adjusting..." : `${adjustType === "add" ? "Add" : "Remove"} Stock`}
+          </button>
+        </div>
+      }
+    >
       <div className="space-y-4">
-        <p className="text-sm text-text-secondary">
-          Manually adjust stock for <strong>{itemName}</strong>.
-        </p>
 
         {/* Variant selector (for variant items) */}
         {isVariantItem && (
@@ -2701,18 +2741,7 @@ function AdjustStockModal({
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex justify-end gap-2 pt-2">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button
-            className="btn-primary"
-            onClick={handleSubmit}
-            disabled={!qty || adjustMutation.isPending || (isVariantItem && !selectedVariantId)}
-          >
-            {adjustMutation.isPending ? "Adjusting..." : `${adjustType === "add" ? "Add" : "Remove"} Stock`}
-          </button>
-        </div>
       </div>
-    </Modal>
+    </SlideOver>
   );
 }

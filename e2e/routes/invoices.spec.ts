@@ -97,10 +97,10 @@ test.describe("Invoices — Interaction", () => {
     // Start on Sales (default)
     await invoices.switchToPurchases();
     // URL or state should reflect the switch — verify the toggle visual state
-    await expect(page.getByText("Purchases").first()).toBeVisible();
+    await expect(page.locator("main").getByText("Purchases", { exact: true }).first()).toBeVisible();
 
     await invoices.switchToSales();
-    await expect(page.getByText("Sales").first()).toBeVisible();
+    await expect(page.locator("main").getByText("Sales", { exact: true }).first()).toBeVisible();
   });
 
   test("status tabs filter the list", async () => {

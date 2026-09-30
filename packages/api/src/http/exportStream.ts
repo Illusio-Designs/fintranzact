@@ -172,7 +172,7 @@ export function registerExportRoute(app: Hono): void {
 
     const tenantSlug = tenant.slug;
     const exportDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const filename = `hisaabo-${tenantSlug}-${exportDate}.tar.gz`;
+    const filename = `fintranzact-${tenantSlug}-${exportDate}.tar.gz`;
 
     logger.info(
       { tenantId, userId: tokenPayload.userId },
@@ -180,7 +180,7 @@ export function registerExportRoute(app: Hono): void {
     );
 
     // ── Temp directory ────────────────────────────────────────────────────────
-    const tmpDir = await mkdtemp(path.join(tmpdir(), "hisaabo-export-"));
+    const tmpDir = await mkdtemp(path.join(tmpdir(), "fintranzact-export-"));
 
     async function cleanup(): Promise<void> {
       await rm(tmpDir, { recursive: true, force: true }).catch((err: unknown) => {
@@ -360,7 +360,7 @@ export function registerExportRoute(app: Hono): void {
     }
 
     const manifest: Manifest = {
-      format: "hisaabo-export",
+      format: "fintranzact-export",
       formatVersion: 1,
       appVersion: APP_VERSION,
       schemaChecksum: SCHEMA_CHECKSUM,

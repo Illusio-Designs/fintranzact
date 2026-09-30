@@ -203,8 +203,8 @@ export function BiometricSetupPrompt({ visible, onDismiss }: Props) {
               <Text style={styles.sheetTitle}>Secure your app</Text>
               <Text style={styles.sheetDesc}>
                 {hardwareAvailable
-                  ? `Would you like to use ${biometricType.toLowerCase()} to quickly unlock Hisaabo?`
-                  : "Set up a PIN to quickly unlock Hisaabo."}
+                  ? `Would you like to use ${biometricType.toLowerCase()} to quickly unlock Fintranzact?`
+                  : "Set up a PIN to quickly unlock Fintranzact."}
               </Text>
 
               {hardwareAvailable && (
@@ -213,7 +213,7 @@ export function BiometricSetupPrompt({ visible, onDismiss }: Props) {
                   onPress={handleEnableBiometric}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="finger-print" size={20} color={colors.textPrimary} />
+                  <Ionicons name="finger-print" size={20} color={colors.onBrand} />
                   <Text style={styles.primaryBtnText}>Enable {biometricType}</Text>
                 </TouchableOpacity>
               )}
@@ -380,7 +380,7 @@ const useStyles = makeStyles((colors) => ({
   primaryBtnText: {
     fontSize: 16,
     fontWeight: "700",
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   secondaryBtn: {
     flexDirection: "row",

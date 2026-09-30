@@ -73,7 +73,7 @@ function POSRoute() {
   if (!activeBiz) {
     return (
       <div className="p-10 max-w-xl mx-auto text-center space-y-4">
-        <h1 className="text-xl font-semibold">No business yet</h1>
+        <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-[#0f1b3d] dark:text-white">No business yet</h1>
         <p className="text-sm text-text-secondary">
           POS needs at least one business. Create one in Settings first.
         </p>
@@ -90,7 +90,7 @@ function POSRoute() {
   if (!activeBiz.posEnabled) {
     return (
       <div className="p-10 max-w-xl mx-auto text-center space-y-4">
-        <h1 className="text-xl font-semibold">POS mode is off for {activeBiz.name}</h1>
+        <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-[#0f1b3d] dark:text-white">POS mode is off for {activeBiz.name}</h1>
         <p className="text-sm text-text-secondary">
           Enable Point-of-Sale in Settings, then reload.
         </p>

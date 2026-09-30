@@ -1,4 +1,16 @@
 import { z } from "zod";
+import {
+  GSTIN_REGEX,
+  PAN_REGEX,
+  IFSC_REGEX,
+  UDYAM_REGEX,
+  panFromGstin,
+  partyGstTypes,
+  partyConstitutions,
+  gstinStatuses,
+  msmeCategories,
+  tdsSectionCodes,
+} from "./party-compliance.js";
 
 // ── Common ─────────────────────────────────────────────────────
 
@@ -218,45 +230,53 @@ export type BankTransactionType = (typeof bankTransactionTypes)[number];
 export const partyTypes = ["customer", "supplier"] as const;
 export type PartyType = (typeof partyTypes)[number];
 
-export const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-export const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+export { GSTIN_REGEX, PAN_REGEX, panFromGstin };
 
-/** Characters 3-12 of a valid GSTIN are the holder's PAN; null otherwise. */
-export function panFromGstin(gstin: string | null | undefined): string | null {
-  if (!gstin) return null;
-  const normalized = gstin.trim().toUpperCase();
-  return GSTIN_REGEX.test(normalized) ? normalized.slice(2, 12) : null;
-}
+/** An extra delivery location for a party (beyond its main shipping address). */
+export const partyShippingAddressSchema = z.object({
+  label: z.string().max(100).optional(),
+  address: z.string().min(1, "Address is required").max(500),
+  city: z.string().max(100).optional(),
+  state: z.string().max(100).optional(),
+  stateCode: z.string().max(2).optional(),
+  pincode: z.string().max(10).optional(),
+});
+export type PartyShippingAddress = z.infer<typeof partyShippingAddressSchema>;
 
-/** Trimmed, non-empty, de-duplicated shipping addresses in their given order. */
-export function normalizeShippingAddresses(addresses: readonly (string | null | undefined)[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of addresses) {
-    const address = raw?.trim();
-    if (address && !seen.has(address)) {
-      seen.add(address);
-      out.push(address);
-    }
-  }
-  return out;
-}
+/** A party can keep up to this many extra shipping addresses. */
+export const MAX_ADDITIONAL_SHIPPING_ADDRESSES = 20;
+
+const addressKey = (address: string) => address.trim().replace(/\s+/g, " ").toLowerCase();
 
 /**
- * A party's shipping addresses, default first. Parties written before the
- * list existed (or by importers that only set shippingAddress) fall back to
- * their single address.
+ * Shipping addresses for the party that survives a merge. The target keeps its
+ * default address (or takes the source's when it has none); every other
+ * address from both parties is kept as an extra one, without repeats.
  */
-export function partyShippingAddresses(party: {
-  shippingAddress?: string | null;
-  shippingAddresses?: readonly string[] | null;
-}): string[] {
-  return normalizeShippingAddresses(
-    party.shippingAddresses?.length ? party.shippingAddresses : [party.shippingAddress],
-  );
+export function mergePartyShippingAddresses(
+  target: { shippingAddress?: string | null; additionalShippingAddresses?: readonly PartyShippingAddress[] | null },
+  source: { shippingAddress?: string | null; additionalShippingAddresses?: readonly PartyShippingAddress[] | null },
+): { shippingAddress: string | null; additionalShippingAddresses: PartyShippingAddress[] | null } {
+  const shippingAddress = target.shippingAddress?.trim() || source.shippingAddress?.trim() || null;
+  const seen = new Set(shippingAddress ? [addressKey(shippingAddress)] : []);
+  const extras: PartyShippingAddress[] = [];
+  const candidates: PartyShippingAddress[] = [
+    ...(target.additionalShippingAddresses ?? []),
+    ...(source.shippingAddress?.trim() ? [{ address: source.shippingAddress.trim() }] : []),
+    ...(source.additionalShippingAddresses ?? []),
+  ];
+  for (const entry of candidates) {
+    const key = addressKey(entry.address ?? "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    extras.push(entry);
+  }
+  const kept = extras.slice(0, MAX_ADDITIONAL_SHIPPING_ADDRESSES);
+  return { shippingAddress, additionalShippingAddresses: kept.length ? kept : null };
 }
 
-export const createPartySchema = z.object({
+// Fields shared by create and update.
+const partyFields = {
   type: z.enum(partyTypes),
   name: z.string().min(1).max(200),
   phone: z.string().max(15).optional(),
@@ -265,9 +285,7 @@ export const createPartySchema = z.object({
   pan: z.string().regex(PAN_REGEX).optional().or(z.literal("")),
   billingAddress: z.string().max(500).optional(),
   shippingAddress: z.string().max(500).optional(),
-  // Every shipping address, default first. When given, shippingAddress is set
-  // to its first entry.
-  shippingAddresses: z.array(z.string().max(500)).max(20).optional(),
+  additionalShippingAddresses: z.array(partyShippingAddressSchema).max(MAX_ADDITIONAL_SHIPPING_ADDRESSES).optional(),
   city: z.string().max(100).optional(),
   state: z.string().max(100).optional(),
   stateCode: z.string().max(2).optional(),
@@ -279,11 +297,25 @@ export const createPartySchema = z.object({
   contactPersonName: z.string().max(200).optional(),
   contactPersonDob: z.string().datetime().optional(),
   bankAccountNumber: z.string().max(34).optional(),
-  bankIfsc: z.string().max(11).optional(),
+  bankIfsc: z.string().regex(IFSC_REGEX, "Invalid IFSC (e.g. HDFC0001234)").optional().or(z.literal("")),
   bankName: z.string().max(200).optional(),
-});
+  legalName: z.string().max(200).optional(),
+  tradeName: z.string().max(200).optional(),
+  gstRegistrationType: z.enum(partyGstTypes).optional(),
+  constitution: z.enum(partyConstitutions).optional(),
+  gstinStatus: z.enum(gstinStatuses).optional(),
+  gstinVerifiedAt: z.string().datetime().optional(),
+  isMsme: z.boolean().optional(),
+  udyamNumber: z.string().regex(UDYAM_REGEX, "Invalid Udyam number (e.g. UDYAM-MH-26-0012345)").optional().or(z.literal("")),
+  msmeCategory: z.enum(msmeCategories).optional(),
+  tdsSection: z.enum(tdsSectionCodes).optional(),
+};
 
-export const updatePartySchema = createPartySchema.partial().omit({ type: true });
+// A PAN or state that contradicts the GSTIN is only a warning
+// (partyComplianceWarnings), so imports and hand-entered values still save.
+export const createPartySchema = z.object(partyFields);
+
+export const updatePartySchema = z.object(partyFields).partial().omit({ type: true });
 
 // ── Item ───────────────────────────────────────────────────────
 
@@ -408,6 +440,8 @@ export const createInvoiceSchema = z.object({
   invoiceDiscountType: z.enum(["amount", "percent"]).default("amount"),
   roundOff: z.string().regex(/^-?\d{1,13}(\.\d{1,2})?$/).default("0"),
   referenceDocumentId: z.string().uuid().optional(),
+  /** Warehouse the goods come into (purchase) or go out of (sale). Default warehouse when omitted. */
+  warehouseId: z.string().uuid().nullish(),
   lineItems: z.array(invoiceLineItemSchema).min(1),
   /**
    * When true, skip stock adjustment on create. Used when converting a

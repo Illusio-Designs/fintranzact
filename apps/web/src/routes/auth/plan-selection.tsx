@@ -33,8 +33,12 @@ function PlanSelectionPage() {
     },
   });
 
+  // Owners can choose a free plan themselves; paid plans are switched on by
+  // the Fintranzact team (platform admin), so they start on Forever Free.
+  const selectedIsFree = selectedPlan === "forever_free" || selectedPlan === "free";
+
   function handleContinue() {
-    updatePlanMutation.mutate({ plan: selectedPlan });
+    updatePlanMutation.mutate({ plan: selectedIsFree ? selectedPlan : "forever_free" });
   }
 
   return (
@@ -108,6 +112,13 @@ function PlanSelectionPage() {
               </ul>
             </div>
 
+            {!selectedIsFree && (
+              <p className="mt-4 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm text-brand-700 dark:border-brand-900 dark:bg-brand-950 dark:text-brand-300">
+                {selectedLabel} is set up by the Fintranzact team. You'll start on Forever Free, and we'll switch you
+                to {selectedLabel} once it's arranged.
+              </p>
+            )}
+
             <button
               type="button"
               onClick={handleContinue}
@@ -116,7 +127,9 @@ function PlanSelectionPage() {
             >
               {updatePlanMutation.isPending
                 ? "Saving plan..."
-                : "Continue to dashboard"}
+                : selectedIsFree
+                  ? "Continue to dashboard"
+                  : "Start free for now"}
             </button>
           </div>
         </div>

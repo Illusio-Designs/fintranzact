@@ -22,7 +22,7 @@
                          |
                          v
                   +-------------------------------+
-                  | hisaabo-api (Docker / GHCR)   |
+                  | fintranzact-api (Docker / GHCR)   |
                   | packages/api + db + shared    |
                   | Runs migrations on startup    |
                   +------+------------------------+
@@ -66,7 +66,7 @@ The web and store frontends are deployed by Vercel's Git integration (see `apps/
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `DATABASE_URL` | Yes | PostgreSQL connection string | `postgresql://user:pass@host:5432/hisaabo` |
+| `DATABASE_URL` | Yes | PostgreSQL connection string | `postgresql://user:pass@host:5432/fintranzact` |
 | `PORT` | No | API port (default 3000) | `3000` |
 | `NODE_ENV` | Yes | Environment | `production` |
 | `CORS_ORIGINS` | Yes | Comma-separated allowed origins | `https://fintranzact-web.vercel.app,https://store.fintranzact.com` |
@@ -99,7 +99,7 @@ cp .env.prod.example .env.prod
    - Set `RESEND_API_KEY` for email delivery
 
 3. Update `docker-compose.prod.yml`:
-   - Replace `ghcr.io/OWNER/hisaabo-api:latest` with your actual GHCR image path
+   - Replace `ghcr.io/OWNER/fintranzact-api:latest` with your actual GHCR image path
 
 4. Start the stack:
 

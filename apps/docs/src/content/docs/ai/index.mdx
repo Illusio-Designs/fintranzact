@@ -122,8 +122,8 @@ See the [MCP Server setup guide](/ai/mcp-server/) for full installation and conf
 ```bash
 # 1. Install CLI and authenticate
 npm install -g @fintranzact/cli
-hisaabo login
-hisaabo whoami --json   # copy token, tenantId, businessId from output
+fintranzact login
+fintranzact whoami --json   # copy token, tenantId, businessId from output
 ```
 
 Then add this to your Claude Desktop `claude_desktop_config.json`:
@@ -131,14 +131,14 @@ Then add this to your Claude Desktop `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "hisaabo": {
+    "fintranzact": {
       "command": "npx",
       "args": ["@fintranzact/mcp"],
       "env": {
-        "HISAABO_API_URL": "https://your-hisaabo-instance.com",
-        "HISAABO_API_KEY": "sess_...",
-        "HISAABO_TENANT_ID": "tenant-uuid",
-        "HISAABO_BUSINESS_ID": "business-uuid"
+        "FINTRANZACT_API_URL": "https://your-fintranzact-instance.com",
+        "FINTRANZACT_API_KEY": "sess_...",
+        "FINTRANZACT_TENANT_ID": "tenant-uuid",
+        "FINTRANZACT_BUSINESS_ID": "business-uuid"
       }
     }
   }
@@ -171,7 +171,7 @@ Full schema documentation is in the [MCP Server reference](/ai/mcp-server/).
 
 ## CLI Tool
 
-The Fintranzact CLI (`hisaabo`) is built with [Ink 5](https://github.com/vadimdemedes/ink) (React for the terminal) and Commander.js. It renders rich interactive tables, colored status badges, and INR-formatted numbers directly in your shell. It is designed for three audiences: developers who want to script business operations, system administrators setting up automation, and AI agents that run shell commands as part of a broader workflow.
+The Fintranzact CLI (`fintranzact`) is built with [Ink 5](https://github.com/vadimdemedes/ink) (React for the terminal) and Commander.js. It renders rich interactive tables, colored status badges, and INR-formatted numbers directly in your shell. It is designed for three audiences: developers who want to script business operations, system administrators setting up automation, and AI agents that run shell commands as part of a broader workflow.
 
 ### Quick start
 
@@ -179,26 +179,26 @@ The Fintranzact CLI (`hisaabo`) is built with [Ink 5](https://github.com/vadimde
 npm install -g @fintranzact/cli
 
 # Authenticate (interactive prompt for URL, email, password)
-hisaabo login
+fintranzact login
 
 # Check current context
-hisaabo whoami
+fintranzact whoami
 ```
 
 ### Daily operations
 
 ```bash
 # Morning business snapshot
-hisaabo dashboard --period today
+fintranzact dashboard --period today
 
 # See who owes you money
-hisaabo invoice list --status overdue --sort oldest-first
+fintranzact invoice list --status overdue --sort oldest-first
 
 # Check stock levels
-hisaabo item list --low-stock
+fintranzact item list --low-stock
 
 # Record a payment
-hisaabo payment create --party "Sharma Traders" --amount 15000 --mode upi
+fintranzact payment create --party "Sharma Traders" --amount 15000 --mode upi
 ```
 
 ### Automation patterns
@@ -207,17 +207,17 @@ Pass `--json` for clean JSON output, then pipe into `jq` and other Unix tools:
 
 ```bash
 # Daily morning report sent to Slack
-hisaabo dashboard --period today --json | \
+fintranzact dashboard --period today --json | \
   jq '{revenue: .totalSales, outstanding: .receivable}' | \
   curl -X POST -H 'Content-type: application/json' \
     -d @- https://hooks.slack.com/your-webhook
 
 # Find items below low-stock threshold
-hisaabo item list --low-stock --json | \
+fintranzact item list --low-stock --json | \
   jq '.[] | "\(.name): \(.stockQuantity) \(.unit) remaining"'
 
 # Export GSTR-1 CSV for CA
-hisaabo gst r1 --month 3 --year 2026 --csv --output /var/gst-reports/
+fintranzact gst r1 --month 3 --year 2026 --csv --output /var/gst-reports/
 ```
 
 Full command reference is in the [CLI documentation](/ai/cli/).
@@ -241,8 +241,8 @@ x-tenant-id: <your-tenant-uuid>
 Get your session token by logging in via the CLI:
 
 ```bash
-hisaabo login
-hisaabo whoami --json   # prints token, tenantId, businessId
+fintranzact login
+fintranzact whoami --json   # prints token, tenantId, businessId
 ```
 
 Session tokens last 30 days. For unattended server automations, store the token in an environment variable and refresh it monthly.
@@ -289,16 +289,16 @@ import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import SuperJSON from "superjson";
 import type { AppRouter } from "@fintranzact/api";
 
-// Get these values from: hisaabo whoami --json
+// Get these values from: fintranzact whoami --json
 const client = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: `${process.env.HISAABO_API_URL}/api/trpc`,
+      url: `${process.env.FINTRANZACT_API_URL}/api/trpc`,
       transformer: SuperJSON,
       headers: {
-        Authorization: `Bearer ${process.env.HISAABO_API_KEY}`,
-        "x-business-id": process.env.HISAABO_BUSINESS_ID,
-        "x-tenant-id": process.env.HISAABO_TENANT_ID,
+        Authorization: `Bearer ${process.env.FINTRANZACT_API_KEY}`,
+        "x-business-id": process.env.FINTRANZACT_BUSINESS_ID,
+        "x-tenant-id": process.env.FINTRANZACT_TENANT_ID,
       },
     }),
   ],
@@ -422,9 +422,9 @@ An AI agent workflow that identifies overdue invoices and drafts personalized re
 Trigger: Daily at 9 AM (cron)
 
 Agent steps:
-1. hisaabo invoice list --status overdue --json
+1. fintranzact invoice list --status overdue --json
 2. For each invoice > 30 days overdue:
-   a. hisaabo party get <party-id> --json (get contact details)
+   a. fintranzact party get <party-id> --json (get contact details)
    b. Draft reminder message referencing invoice number and amount
    c. Log draft to /reminders/$(date +%Y-%m-%d).json for review
 3. Send summary to owner: "5 overdue invoices need attention"
@@ -436,7 +436,7 @@ Agent steps:
 #!/bin/bash
 # reorder-check.sh — run daily via cron
 
-LOW_STOCK=$(hisaabo item list --low-stock --json)
+LOW_STOCK=$(fintranzact item list --low-stock --json)
 COUNT=$(echo "$LOW_STOCK" | jq 'length')
 
 if [ "$COUNT" -gt 0 ]; then
@@ -452,11 +452,11 @@ fi
 # weekly-report.sh — run every Monday via cron
 
 REPORT_DATE=$(date +%Y-%m-%d)
-OUTPUT="/var/reports/hisaabo/week-$REPORT_DATE.json"
+OUTPUT="/var/reports/fintranzact/week-$REPORT_DATE.json"
 
 # Collect data
-DASHBOARD=$(hisaabo dashboard --period this-week --json)
-OVERDUE=$(hisaabo invoice list --status overdue --json)
+DASHBOARD=$(fintranzact dashboard --period this-week --json)
+OVERDUE=$(fintranzact invoice list --status overdue --json)
 
 # Email the report
 jq -n \
@@ -474,9 +474,9 @@ When a customer messages your store's chat widget:
 Customer: "Hi, I ordered rice yesterday. What's the status?"
 
 OpenClaw Agent:
-  [calls hisaabo MCP: store_order_list with customer phone]
+  [calls fintranzact MCP: store_order_list with customer phone]
   [finds order SO-4821, status: confirmed, dispatched via Shiprocket]
-  [calls hisaabo MCP: shipment_tracking for SO-4821]
+  [calls fintranzact MCP: shipment_tracking for SO-4821]
 
 Agent: "Hello! Your order SO-4821 (25 kg Basmati Rice) was dispatched
        this morning via Shiprocket. Tracking ID: SR-98421.

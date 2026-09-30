@@ -67,7 +67,7 @@ const FAQ_ITEMS: FAQItem[] = [
   // --- Agent Builder ---
   {
     question: "How do I connect an AI agent via MCP?",
-    answer: "Install `@fintranzact/mcp` and add it to your Claude Desktop `claude_desktop_config.json` with your `HISAABO_API_URL`, `HISAABO_API_KEY`, `HISAABO_TENANT_ID`, and `HISAABO_BUSINESS_ID`. The MCP server exposes every API endpoint as a callable tool, plus 6 built-in prompt templates (morning_briefing, party_deep_dive, gst_filing_prep, collection_follow_up, inventory_health, month_close).",
+    answer: "Install `@fintranzact/mcp` and add it to your Claude Desktop `claude_desktop_config.json` with your `FINTRANZACT_API_URL`, `FINTRANZACT_API_KEY`, `FINTRANZACT_TENANT_ID`, and `FINTRANZACT_BUSINESS_ID`. The MCP server exposes every API endpoint as a callable tool, plus 6 built-in prompt templates (morning_briefing, party_deep_dive, gst_filing_prep, collection_follow_up, inventory_health, month_close).",
     relatedGroups: ["api-keys"],
     personas: ["agent-builder"],
   },
@@ -79,7 +79,7 @@ const FAQ_ITEMS: FAQItem[] = [
   },
   {
     question: "How do I create API keys for agent access?",
-    answer: "Call `apiKey.create` with a descriptive name. The API key is shown once — store it securely. Use it in the `Authorization: Bearer <key>` header or pass it to the MCP server's `HISAABO_API_KEY` env var. Keys are scoped to a tenant and can be revoked instantly via `apiKey.revoke`.",
+    answer: "Call `apiKey.create` with a descriptive name. The API key is shown once — store it securely. Use it in the `Authorization: Bearer <key>` header or pass it to the MCP server's `FINTRANZACT_API_KEY` env var. Keys are scoped to a tenant and can be revoked instantly via `apiKey.revoke`.",
     relatedGroups: ["api-keys"],
     personas: ["agent-builder", "developer"],
   },

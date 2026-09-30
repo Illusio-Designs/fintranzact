@@ -210,12 +210,12 @@ function extractApiProcedures(): Map<string, string[]> {
   function extractProcs(content: string): string[] {
     const procs: string[] = [];
     for (const m of content.matchAll(
-      /^\s+(\w+):\s*(?:public|protected|tenant|viewer|member|admin)Procedure/gm
+      /^\s+(\w+):\s*(?:public|protected|tenant|viewer|member|admin|platformAdmin)Procedure/gm
     )) {
       procs.push(m[1]);
     }
     for (const m of content.matchAll(
-      /export const (\w+)\s*=\s*(?:public|protected|tenant|viewer|member|admin)Procedure/gm
+      /export const (\w+)\s*=\s*(?:public|protected|tenant|viewer|member|admin|platformAdmin)Procedure/gm
     )) {
       procs.push(m[1]);
     }

@@ -143,7 +143,7 @@ export async function ensureBusiness(api: ApiClient): Promise<SeededBusiness> {
     gstRegistrationType: "regular",
     gstin: "27AABCU9603R1ZM",
     phone: "9876500000",
-    email: "e2e@test.hisaabo.in",
+    email: "e2e@test.fintranzact.com",
     address: "123 Test Road",
     city: "Mumbai",
     state: "Maharashtra",

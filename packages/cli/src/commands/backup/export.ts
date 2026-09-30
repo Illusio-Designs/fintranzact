@@ -1,5 +1,5 @@
 /**
- * hisaabo export — download a full tenant backup as a .tar.gz archive.
+ * fintranzact export — download a full tenant backup as a .tar.gz archive.
  *
  * Flow:
  *   1. Resolve tenant slug → UUID if needed (via tenant.list)
@@ -11,7 +11,7 @@
 import { createWriteStream } from "node:fs";
 import { stat, unlink } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireTenantAuth } from "../../config.js";
 import { fatalError, success, hasColor, isInteractive, EXIT } from "../../output.js";
 import chalk from "chalk";
@@ -44,7 +44,7 @@ interface TenantEntry {
  * If the input is already a UUID, return it as-is.
  * Otherwise look it up via tenant.list and match by slug.
  */
-async function resolveTenantId(client: HisaaboClient, slugOrId: string): Promise<string> {
+async function resolveTenantId(client: FintranzactClient, slugOrId: string): Promise<string> {
   if (isUuid(slugOrId)) {
     return slugOrId;
   }
@@ -52,7 +52,7 @@ async function resolveTenantId(client: HisaaboClient, slugOrId: string): Promise
   const tenants = await client.tenant.list() as TenantEntry[];
   const match = tenants.find((t) => t.slug === slugOrId);
   if (!match) {
-    fatalError(`Tenant "${slugOrId}" not found. Run: hisaabo tenant list`, EXIT.NOT_FOUND);
+    fatalError(`Tenant "${slugOrId}" not found. Run: fintranzact tenant list`, EXIT.NOT_FOUND);
   }
   return match.id;
 }
@@ -92,17 +92,17 @@ export interface ExportOpts {
 
 export async function exportCommand(opts: ExportOpts): Promise<void> {
   const cfg = requireTenantAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   // 1. Resolve tenant
   let tenantId: string;
   try {
     tenantId = await resolveTenantId(client, opts.tenant);
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
       if (err.code === "unauthorized") {
-        fatalError("Not authenticated. Run `hisaabo login` first.", EXIT_AUTH);
+        fatalError("Not authenticated. Run `fintranzact login` first.", EXIT_AUTH);
       }
       if (err.code === "network_error") {
         fatalError(err.message, EXIT_SERVER_ERROR);
@@ -122,10 +122,10 @@ export async function exportCommand(opts: ExportOpts): Promise<void> {
       ? `${cfg.apiUrl}${result.url}`
       : result.url;
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
       if (err.code === "unauthorized") {
-        fatalError("Not authenticated. Run `hisaabo login` first.", EXIT_AUTH);
+        fatalError("Not authenticated. Run `fintranzact login` first.", EXIT_AUTH);
       }
       if (err.code === "forbidden") {
         fatalError("You must be the tenant owner to export data.", EXIT_AUTH);
@@ -213,8 +213,8 @@ export async function exportCommand(opts: ExportOpts): Promise<void> {
     // Clean up partial file
     writeStream.destroy();
     await unlink(outPath).catch(() => undefined);
-    if (e instanceof HisaaboApiError && e.hisaaboError.code === "network_error") {
-      fatalError(`Download failed: ${e.hisaaboError.message}`, EXIT_SERVER_ERROR);
+    if (e instanceof FintranzactApiError && e.fintranzactError.code === "network_error") {
+      fatalError(`Download failed: ${e.fintranzactError.message}`, EXIT_SERVER_ERROR);
     }
     fatalError(`Download failed: ${String(e instanceof Error ? e.message : e)}`, EXIT_SERVER_ERROR);
   }

@@ -176,7 +176,7 @@ describe("getGranularity", () => {
 
 describe("useDateRange (hook)", () => {
   const PAGE_KEY = "test-page";
-  const STORAGE_KEY = `hisaabo-daterange-${PAGE_KEY}`;
+  const STORAGE_KEY = `fintranzact-daterange-${PAGE_KEY}`;
 
   beforeEach(() => {
     vi.useFakeTimers({ now: FIXED_NOW });

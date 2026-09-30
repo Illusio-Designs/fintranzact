@@ -1,5 +1,5 @@
 {
-  "id": "1f0347b0-421e-4c49-b832-c40f1265c3ff",
+  "id": "e3663343-cdca-4351-8f9b-467c7f155656",
   "prevId": "cf29ffdf-a294-4d2f-b84c-ced470753e7b",
   "version": "7",
   "dialect": "postgresql",
@@ -6493,8 +6493,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "shipping_addresses": {
-          "name": "shipping_addresses",
+        "additional_shipping_addresses": {
+          "name": "additional_shipping_addresses",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -6574,6 +6574,67 @@
         },
         "bank_name": {
           "name": "bank_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "legal_name": {
+          "name": "legal_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trade_name": {
+          "name": "trade_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gst_registration_type": {
+          "name": "gst_registration_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "constitution": {
+          "name": "constitution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gstin_status": {
+          "name": "gstin_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gstin_verified_at": {
+          "name": "gstin_verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_msme": {
+          "name": "is_msme",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "udyam_number": {
+          "name": "udyam_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "msme_category": {
+          "name": "msme_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tds_section": {
+          "name": "tds_section",
           "type": "text",
           "primaryKey": false,
           "notNull": false

@@ -1,7 +1,7 @@
 /**
  * Import adapter tests covering the Bug B schema split.
  *
- * The MyBillBook and Hisaabo CSV import adapters both used to write the
+ * The MyBillBook and Fintranzact CSV import adapters both used to write the
  * item name into the invoice line item's `description` column via a
  * fallback chain. After Bug B, the target is the new required `itemName`
  * column, and the optional `description` (notes) column stays NULL for
@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from "vitest";
 import { transformInvoice as transformMyBillBook } from "../routers/import/adapters/mybillbook/transforms.js";
-import { transformInvoice as transformHisaabo } from "../routers/import/adapters/hisaabo/transforms.js";
+import { transformInvoice as transformFintranzact } from "../routers/import/adapters/fintranzact/transforms.js";
 
 describe("MyBillBook adapter — invoice line items map to itemName", () => {
   it("uses the CSV 'Item Name' column when present and leaves description NULL", () => {
@@ -88,7 +88,7 @@ describe("MyBillBook adapter — invoice line items map to itemName", () => {
   });
 });
 
-describe("Hisaabo adapter — invoice line items map to itemName", () => {
+describe("Fintranzact adapter — invoice line items map to itemName", () => {
   it("prefers itemName over legacy description", () => {
     const raw = {
       invoiceNumber: "INV-100",
@@ -106,14 +106,14 @@ describe("Hisaabo adapter — invoice line items map to itemName", () => {
       ],
     };
 
-    const canonical = transformHisaabo(raw);
+    const canonical = transformFintranzact(raw);
     expect(canonical).not.toBeNull();
     expect(canonical!.lineItems![0]!.itemName).toBe("Widget Pro");
     expect(canonical!.lineItems![0]!.unitPrice).toBe("250.00");
     expect(canonical!.lineItems![0]!.description).toBeNull();
   });
 
-  it("accepts legacy Hisaabo exports that only had a description column", () => {
+  it("accepts legacy Fintranzact exports that only had a description column", () => {
     const raw = {
       invoiceNumber: "INV-101",
       partyName: "Customer A",
@@ -130,7 +130,7 @@ describe("Hisaabo adapter — invoice line items map to itemName", () => {
       ],
     };
 
-    const canonical = transformHisaabo(raw);
+    const canonical = transformFintranzact(raw);
     expect(canonical).not.toBeNull();
     expect(canonical!.lineItems![0]!.itemName).toBe("Pre-split Widget");
     expect(canonical!.lineItems![0]!.unitPrice).toBe("100.00");
@@ -184,7 +184,7 @@ describe("Invoice import preserves CSV unitPrice — Bug A regression guard", ()
     expect(canonical!.lineItems![0]!.conversionFactor).toBe("0.2");
   });
 
-  it("Hisaabo: unitPrice from CSV is passed through, not derived from CF", () => {
+  it("Fintranzact: unitPrice from CSV is passed through, not derived from CF", () => {
     const raw = {
       invoiceNumber: "INV-PRICE-02",
       partyName: "Test Customer",
@@ -203,7 +203,7 @@ describe("Invoice import preserves CSV unitPrice — Bug A regression guard", ()
       ],
     };
 
-    const canonical = transformHisaabo(raw);
+    const canonical = transformFintranzact(raw);
     expect(canonical).not.toBeNull();
     expect(canonical!.lineItems![0]!.unitPrice).toBe("25.00");
     expect(canonical!.lineItems![0]!.conversionFactor).toBe("0.2");

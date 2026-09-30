@@ -38,11 +38,11 @@ The pre-backup hook (`/hooks/pre-backup`) creates `pg_dump --format=custom` dump
 
 ```bash
 # 1. Stop the container (or let ONCE handle it during a restore operation)
-docker stop hisaabo
+docker stop fintranzact
 
 # 2. If restoring manually (outside ONCE's restore flow):
 #    Exec into the container and restore the specific database
-docker exec -it hisaabo sh
+docker exec -it fintranzact sh
 
 # 3. Wait for PostgreSQL to be ready
 SOCKETDIR="/storage/run"
@@ -52,46 +52,46 @@ pg_isready -h "$SOCKETDIR" -U postgres
 ls -lh /storage/backups/
 
 # 5. If backups are encrypted, decrypt first
-echo "$BACKUP_ENCRYPTION_KEY" | age -d -o /storage/backups/hisaabo.dump /storage/backups/hisaabo.dump.age
+echo "$BACKUP_ENCRYPTION_KEY" | age -d -o /storage/backups/fintranzact.dump /storage/backups/fintranzact.dump.age
 
 # 6. Restore (WARNING: this drops and recreates the database)
-dropdb -h "$SOCKETDIR" -U postgres --if-exists hisaabo
-createdb -h "$SOCKETDIR" -U postgres hisaabo
-pg_restore -h "$SOCKETDIR" -U postgres -d hisaabo --no-owner --no-privileges /storage/backups/hisaabo.dump
+dropdb -h "$SOCKETDIR" -U postgres --if-exists fintranzact
+createdb -h "$SOCKETDIR" -U postgres fintranzact
+pg_restore -h "$SOCKETDIR" -U postgres -d fintranzact --no-owner --no-privileges /storage/backups/fintranzact.dump
 
 # 7. Verify
-psql -h "$SOCKETDIR" -U postgres -d hisaabo -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"
+psql -h "$SOCKETDIR" -U postgres -d fintranzact -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"
 ```
 
 If you are using the ONCE platform's built-in restore flow, it will unpack `/storage` from the snapshot and then execute `/hooks/post-restore` automatically. No manual intervention is needed.
 
 #### Docker Compose (backup sidecar)
 
-The backup sidecar runs `scripts/backup.sh` on cron. It creates per-database SQL dumps at `/var/backups/hisaabo/dump_<dbname>_<timestamp>.sql.gz` and full base backups at `/var/backups/hisaabo/base_<timestamp>.tar.gz`.
+The backup sidecar runs `scripts/backup.sh` on cron. It creates per-database SQL dumps at `/var/backups/fintranzact/dump_<dbname>_<timestamp>.sql.gz` and full base backups at `/var/backups/fintranzact/base_<timestamp>.tar.gz`.
 
 ```bash
 # 1. Stop the API to prevent writes during restore
 docker compose stop api
 
 # 2. List available backups (exec into backup sidecar or the postgres container)
-docker compose exec backup ls -lh /var/backups/hisaabo/
+docker compose exec backup ls -lh /var/backups/fintranzact/
 
 # 3. If encrypted, decrypt first
 docker compose exec backup sh -c \
-  'echo "$BACKUP_ENCRYPTION_KEY" | age -d -o /var/backups/hisaabo/decrypted.sql.gz /var/backups/hisaabo/dump_hisaabo_20260414_030000.sql.gz.age'
+  'echo "$BACKUP_ENCRYPTION_KEY" | age -d -o /var/backups/fintranzact/decrypted.sql.gz /var/backups/fintranzact/dump_fintranzact_20260414_030000.sql.gz.age'
 
 # 4. Restore from SQL dump
 docker compose exec -T postgres sh -c \
-  'gunzip -c /var/backups/hisaabo/dump_hisaabo_20260414_030000.sql.gz | psql -U hisaabo -d hisaabo'
+  'gunzip -c /var/backups/fintranzact/dump_fintranzact_20260414_030000.sql.gz | psql -U fintranzact -d fintranzact'
 
 # If you need a clean restore (drop + recreate):
-docker compose exec postgres dropdb -U hisaabo --if-exists hisaabo
-docker compose exec postgres createdb -U hisaabo hisaabo
+docker compose exec postgres dropdb -U fintranzact --if-exists fintranzact
+docker compose exec postgres createdb -U fintranzact fintranzact
 docker compose exec -T postgres sh -c \
-  'gunzip -c /var/backups/hisaabo/dump_hisaabo_20260414_030000.sql.gz | psql -U hisaabo -d hisaabo'
+  'gunzip -c /var/backups/fintranzact/dump_fintranzact_20260414_030000.sql.gz | psql -U fintranzact -d fintranzact'
 
 # 5. Verify
-docker compose exec postgres psql -U hisaabo -d hisaabo -c \
+docker compose exec postgres psql -U fintranzact -d fintranzact -c \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"
 
 # 6. Restart API
@@ -110,7 +110,7 @@ Set the `RESTORE_DB` environment variable to target a single database:
 
 ```bash
 # Restore only tenant_acme (other tenant databases are untouched)
-docker exec -e RESTORE_DB=tenant_acme hisaabo /hooks/post-restore
+docker exec -e RESTORE_DB=tenant_acme fintranzact /hooks/post-restore
 
 # Or restore manually:
 SOCKETDIR="/storage/run"
@@ -131,7 +131,7 @@ docker compose exec backup restore-db.sh tenant_acme
 docker compose exec backup restore-db.sh tenant_acme dump_tenant_acme_20260414_030000.sql.gz
 
 # List available backups for a tenant
-docker compose exec backup ls -lht /var/backups/hisaabo/dump_tenant_acme_*
+docker compose exec backup ls -lht /var/backups/fintranzact/dump_tenant_acme_*
 ```
 
 #### Verification
@@ -140,11 +140,11 @@ After restoring a single tenant, verify the other tenants were not affected:
 
 ```bash
 # Check tenant_acme is restored
-docker compose exec postgres psql -U hisaabo -d tenant_acme -c \
+docker compose exec postgres psql -U fintranzact -d tenant_acme -c \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"
 
 # Verify another tenant is untouched (spot-check a known row count)
-docker compose exec postgres psql -U hisaabo -d tenant_beta -c \
+docker compose exec postgres psql -U fintranzact -d tenant_beta -c \
   "SELECT COUNT(*) FROM invoices"
 ```
 
@@ -167,11 +167,11 @@ Use PITR when you need to restore to a specific moment in time -- for example, "
 ```bash
 # 1. Find the migration timestamp
 #    Check the Drizzle migration tracking table for the exact time the migration was applied:
-psql -U postgres -d hisaabo -c \
+psql -U postgres -d fintranzact -c \
   "SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at"
 #    The created_at column is a bigint (Unix epoch in milliseconds).
 #    Convert to a timestamp for the recovery target:
-psql -U postgres -d hisaabo -c \
+psql -U postgres -d fintranzact -c \
   "SELECT to_timestamp(created_at / 1000) AS applied_at FROM drizzle.__drizzle_migrations ORDER BY created_at DESC LIMIT 1"
 
 # 2. Stop PostgreSQL
@@ -195,11 +195,11 @@ EOF
 #    It will replay WAL files up to the target time and pause.
 
 # 6. Verify the state is correct
-psql -U postgres -d hisaabo -c \
+psql -U postgres -d fintranzact -c \
   "SELECT hash, to_timestamp(created_at / 1000) FROM drizzle.__drizzle_migrations ORDER BY created_at DESC LIMIT 5"
 
 # 7. If satisfied, resume normal operation
-psql -U postgres -d hisaabo -c "SELECT pg_wal_replay_resume()"
+psql -U postgres -d fintranzact -c "SELECT pg_wal_replay_resume()"
 
 # 8. Remove the recovery settings you added
 #    Edit postgresql.auto.conf and remove the restore_command, recovery_target_time,

@@ -11,7 +11,7 @@ import { OrderConfirmation } from "./components/OrderConfirmation";
 import { Footer } from "./components/Footer";
 
 // Cart persistence key
-const CART_KEY = "hisaabo-store-cart";
+const CART_KEY = "fintranzact-store-cart";
 
 function loadCart(): CartItem[] {
   try {

@@ -133,14 +133,14 @@ Add to Claude Desktop's `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "hisaabo": {
+    "fintranzact": {
       "command": "npx",
       "args": ["@fintranzact/mcp"],
       "env": {
-        "HISAABO_API_URL": "https://your-hisaabo-instance.com",
-        "HISAABO_API_KEY": "sess_...",
-        "HISAABO_TENANT_ID": "tenant-uuid",
-        "HISAABO_BUSINESS_ID": "business-uuid"
+        "FINTRANZACT_API_URL": "https://your-fintranzact-instance.com",
+        "FINTRANZACT_API_KEY": "sess_...",
+        "FINTRANZACT_TENANT_ID": "tenant-uuid",
+        "FINTRANZACT_BUSINESS_ID": "business-uuid"
       }
     }
   }
@@ -151,12 +151,12 @@ Add to Claude Desktop's `claude_desktop_config.json`:
 
 ```bash
 npm install -g @fintranzact/cli
-hisaabo login --api-url https://your-hisaabo-instance.com
+fintranzact login --api-url https://your-fintranzact-instance.com
 
-hisaabo dashboard --json | jq '{revenue, outstanding, overdueCount}'
-hisaabo invoice list --this-month --format csv > invoices.csv
-hisaabo gst r3b --quarter Q4 --json | jq '.taxPayable'
-hisaabo bank recon --account "HDFC Current" --format csv > brs.csv
+fintranzact dashboard --json | jq '{revenue, outstanding, overdueCount}'
+fintranzact invoice list --this-month --format csv > invoices.csv
+fintranzact gst r3b --quarter Q4 --json | jq '.taxPayable'
+fintranzact bank recon --account "HDFC Current" --format csv > brs.csv
 ```
 
 14 command groups. Every command supports `--json`, `--format csv`, and `--format ids` for piping.
@@ -400,7 +400,7 @@ Three paths depending on what you want to do.
 
 ```bash
 git clone https://github.com/Illusio-Designs/fintranzact.git
-cd hisaabo
+cd fintranzact
 pnpm install
 
 # Start PostgreSQL
@@ -436,8 +436,8 @@ curl -X POST ${import.meta.env.API_URL}/api/trpc/auth.register \
 
 ```bash
 npm install -g @fintranzact/cli
-hisaabo login --api-url https://your-hisaabo-instance.com
-hisaabo whoami --json  # Copy token, tenantId, businessId
+fintranzact login --api-url https://your-fintranzact-instance.com
+fintranzact whoami --json  # Copy token, tenantId, businessId
 ```
 
 Then add to `claude_desktop_config.json` -- see the [MCP Server guide](https://docs.fintranzact.com/ai/mcp-server/).
@@ -447,7 +447,7 @@ Then add to `claude_desktop_config.json` -- see the [MCP Server guide](https://d
 ## Project Structure
 
 ```
-hisaabo/
+fintranzact/
 ├── apps/
 │   ├── web/          # React 19 admin dashboard
 │   ├── mobile/       # Expo SDK 55 iOS + Android app
@@ -538,8 +538,8 @@ docker compose -f docker-compose.prod.yml up -d
 PostgreSQL 16 + Node API in a single container with s6-overlay:
 
 ```bash
-docker build -f Dockerfile.once -t hisaabo-once .
-docker run -v /data/hisaabo:/storage -p 80:80 hisaabo-once
+docker build -f Dockerfile.once -t fintranzact-once .
+docker run -v /data/fintranzact:/storage -p 80:80 fintranzact-once
 ```
 
 ### Vercel (frontends)

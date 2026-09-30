@@ -2,7 +2,7 @@ import Conf from "conf";
 import { hostname, userInfo } from "os";
 import { createHash } from "crypto";
 import { fatalError, warn } from "./output.js";
-import type { HisaaboClient } from "./client.js";
+import type { FintranzactClient } from "./client.js";
 
 interface ConfigSchema {
   apiUrl: string;
@@ -26,12 +26,12 @@ function deriveEncryptionKey(): string {
   } catch {
     uid = String(process.getuid?.() ?? process.pid);
   }
-  const raw = `${uid}:${hostname()}:hisaabo-cli`;
+  const raw = `${uid}:${hostname()}:fintranzact-cli`;
   return createHash("sha256").update(raw).digest("hex");
 }
 
 const conf = new Conf<Partial<ConfigSchema>>({
-  projectName: "hisaabo",
+  projectName: "fintranzact",
   projectSuffix: "",
   configName: "config",
   encryptionKey: deriveEncryptionKey(),
@@ -61,31 +61,31 @@ export function isAuthenticated(): boolean {
 
 export function requireAuth(): ConfigSchema {
   // Environment variables take priority — never persisted to disk (CI/scripts)
-  const envToken = process.env["HISAABO_TOKEN"];
-  const envUrl = process.env["HISAABO_API_URL"];
+  const envToken = process.env["FINTRANZACT_TOKEN"];
+  const envUrl = process.env["FINTRANZACT_API_URL"];
   if (envToken && envUrl) {
     return {
       apiUrl: envUrl,
       token: envToken,
-      tenantId: process.env["HISAABO_TENANT_ID"] ?? "",
-      businessId: process.env["HISAABO_BUSINESS_ID"] ?? "",
-      businessName: process.env["HISAABO_BUSINESS_NAME"] ?? "",
+      tenantId: process.env["FINTRANZACT_TENANT_ID"] ?? "",
+      businessId: process.env["FINTRANZACT_BUSINESS_ID"] ?? "",
+      businessName: process.env["FINTRANZACT_BUSINESS_NAME"] ?? "",
       tokenCreatedAt: Date.now(),
     };
   }
 
   const cfg = getConfig();
   if (!cfg.token || !cfg.apiUrl || !cfg.businessId || !cfg.tenantId) {
-    fatalError("Not authenticated. Run: hisaabo login", 3);
+    fatalError("Not authenticated. Run: fintranzact login", 3);
   }
 
   // Warn about expiring session tokens (not API keys)
-  const isApiKey = cfg.token.startsWith("hisaabo_key_");
+  const isApiKey = cfg.token.startsWith("fintranzact_key_");
   if (!isApiKey && cfg.tokenCreatedAt) {
     const ageMs = Date.now() - cfg.tokenCreatedAt;
     const TWENTY_FIVE_DAYS = 25 * 24 * 60 * 60 * 1000;
     if (ageMs > TWENTY_FIVE_DAYS) {
-      warn("Session expires soon. Run: hisaabo login");
+      warn("Session expires soon. Run: fintranzact login");
     }
   }
 
@@ -107,30 +107,30 @@ export interface TenantAuthConfig {
 }
 
 export function requireTenantAuth(): TenantAuthConfig {
-  const envToken = process.env["HISAABO_TOKEN"];
-  const envUrl = process.env["HISAABO_API_URL"];
+  const envToken = process.env["FINTRANZACT_TOKEN"];
+  const envUrl = process.env["FINTRANZACT_API_URL"];
   if (envToken && envUrl) {
     return {
       apiUrl: envUrl,
       token: envToken,
-      tenantId: process.env["HISAABO_TENANT_ID"] ?? "",
-      businessId: process.env["HISAABO_BUSINESS_ID"] ?? "",
-      businessName: process.env["HISAABO_BUSINESS_NAME"] ?? "",
+      tenantId: process.env["FINTRANZACT_TENANT_ID"] ?? "",
+      businessId: process.env["FINTRANZACT_BUSINESS_ID"] ?? "",
+      businessName: process.env["FINTRANZACT_BUSINESS_NAME"] ?? "",
       tokenCreatedAt: Date.now(),
     };
   }
 
   const cfg = getConfig();
   if (!cfg.token || !cfg.apiUrl || !cfg.tenantId) {
-    fatalError("Not authenticated. Run: hisaabo login", 3);
+    fatalError("Not authenticated. Run: fintranzact login", 3);
   }
 
-  const isApiKey = cfg.token.startsWith("hisaabo_key_");
+  const isApiKey = cfg.token.startsWith("fintranzact_key_");
   if (!isApiKey && cfg.tokenCreatedAt) {
     const ageMs = Date.now() - cfg.tokenCreatedAt;
     const TWENTY_FIVE_DAYS = 25 * 24 * 60 * 60 * 1000;
     if (ageMs > TWENTY_FIVE_DAYS) {
-      warn("Session expires soon. Run: hisaabo login");
+      warn("Session expires soon. Run: fintranzact login");
     }
   }
 
@@ -146,7 +146,7 @@ export function getConfigPath(): string {
  * Called after requireAuth() in command handlers.
  * Non-fatal — prints warning and continues (the API will block tenant ops anyway).
  */
-export async function checkMaintenance(client: HisaaboClient): Promise<void> {
+export async function checkMaintenance(client: FintranzactClient): Promise<void> {
   try {
     const status = await client.system.maintenanceStatus();
     if (status.enabled) {

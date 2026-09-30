@@ -52,7 +52,7 @@ export function useInfiniteList<T extends { id: string }>({
   const scrollRef = useRef<HTMLDivElement>(null);
   const restoredRef = useRef(false);
   const pageRef = useRef(page);
-  const storageKey = `hisaabo-scroll-${key}`;
+  const storageKey = `fintranzact-scroll-${key}`;
 
   pageRef.current = page;
 

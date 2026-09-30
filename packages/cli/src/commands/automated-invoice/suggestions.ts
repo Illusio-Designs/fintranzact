@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError, type RecurringInvoiceSuggestion } from "../../client.js";
+import { FintranzactClient, FintranzactApiError, type RecurringInvoiceSuggestion } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, outputTable, EXIT, type ColumnDef } from "../../output.js";
 import chalk from "chalk";
@@ -27,7 +27,7 @@ interface SuggestionsOpts {
 
 export async function automatedInvoiceSuggestionsCommand(opts: SuggestionsOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.recurringInvoice.suggestions();
@@ -55,12 +55,12 @@ export async function automatedInvoiceSuggestionsCommand(opts: SuggestionsOpts):
     outputTable(result, cols);
 
     console.log();
-    console.log(`  Tip: run ${chalk.cyan("hisaabo automated-invoice create --party-id <id>")} to set up a template.\n`);
+    console.log(`  Tip: run ${chalk.cyan("fintranzact automated-invoice create --party-id <id>")} to set up a template.\n`);
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));

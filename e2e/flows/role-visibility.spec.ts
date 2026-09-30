@@ -29,13 +29,13 @@ const ROLE_NAV_VISIBLE: Record<string, string[]> = {
     "Delivery Challans",
     "Proforma Invoices",
     "Parties",
-    "Items",
+    "Stock Items",
     "Payments",
   ],
   accountant: [
     "Invoices",
     "Parties",
-    "Items",
+    "Stock Items",
     "Payments",
     "Cash & Bank",
     "Expenses",
@@ -62,7 +62,7 @@ async function createRoleUser(
 ) {
   const api = new ApiHelper(ownerPage, API_URL);
   const ts = Date.now();
-  const email = `e2e-${role}-${ts}@test.hisaabo.in`;
+  const email = `e2e-${role}-${ts}@test.fintranzact.com`;
   const password = "Test@1234!";
   const name = `E2E ${role} User`;
 
@@ -86,7 +86,7 @@ async function createRoleUser(
   await fillRegisterForm(page, { username: name, email, password });
 
   // Wait for redirect — user has a pending invite so may land differently
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 });
+  await expect(page).not.toHaveURL(/\/(login|register)/, { timeout: 15_000 });
 
   // Step 3: Visit the invite acceptance page
   await page.goto(`/invite/${invite.token}`);

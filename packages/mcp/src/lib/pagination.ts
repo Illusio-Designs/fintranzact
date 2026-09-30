@@ -5,10 +5,10 @@
  * enforce a hard cap per page to keep context window usage bounded. See ADR-005.
  *
  * The default cap is 25 records. Operators may raise it (max 50) via the
- * HISAABO_MCP_PAGE_SIZE environment variable.
+ * FINTRANZACT_MCP_PAGE_SIZE environment variable.
  */
 
-const envCap = parseInt(process.env.HISAABO_MCP_PAGE_SIZE ?? "25", 10);
+const envCap = parseInt(process.env.FINTRANZACT_MCP_PAGE_SIZE ?? "25", 10);
 
 /** Maximum records per tool call response. */
 export const MAX_PAGE_SIZE = Math.min(Math.max(isNaN(envCap) ? 25 : envCap, 1), 50);

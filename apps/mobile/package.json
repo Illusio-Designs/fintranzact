@@ -16,6 +16,8 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
+    "@expo-google-fonts/dm-sans": "^0.4.2",
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo/metro-runtime": "~55.0.10",
     "@expo/vector-icons": "~15.1.1",
     "@fintranzact/shared": "workspace:*",

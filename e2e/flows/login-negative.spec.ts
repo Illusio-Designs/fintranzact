@@ -9,7 +9,7 @@ import { test, expect } from "../helpers/fixtures";
 import { openLoginForm, openRegisterForm, fillRegisterForm } from "../helpers/auth";
 
 test.describe("Login Negative Paths", () => {
-  test("login page opens on the Register tab by default", async ({ browser }) => {
+  test("login page shows the Log in form with a Register tab", async ({ browser }) => {
     const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await ctx.newPage();
 
@@ -18,27 +18,27 @@ test.describe("Login Negative Paths", () => {
     // Should show Fintranzact branding
     await expect(page.getByText("Fintranzact").first()).toBeVisible();
 
-    // Register and Login tabs, with the register form open
-    await expect(page.getByRole("button", { name: "Register" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Login" }).first()).toBeVisible();
-    await expect(page.getByText("Create your account")).toBeVisible();
-    await expect(page.getByPlaceholder("Enter username")).toBeVisible();
-    await expect(page.getByPlaceholder("Retype password")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Register" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Log in" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByPlaceholder("you@yourcompany.com")).toBeVisible();
+    await expect(page.getByPlaceholder("Enter password")).toBeVisible();
+    await expect(page.locator("form").getByRole("button", { name: "Log in" })).toBeVisible();
 
     await page.close();
     await ctx.close();
   });
 
-  test("switching to the Login tab shows email and password fields", async ({ browser }) => {
+  test("the Register tab opens the sign-up form", async ({ browser }) => {
     const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await ctx.newPage();
 
     await page.goto("/login");
-    await page.getByRole("button", { name: "Login" }).first().click();
+    await page.getByRole("tab", { name: "Register" }).click();
 
-    await expect(page.getByPlaceholder("you@yourcompany.com")).toBeVisible();
-    await expect(page.getByPlaceholder("Enter password")).toBeVisible();
-    await expect(page.locator("form").getByRole("button", { name: "Login" })).toBeVisible();
+    await expect(page).toHaveURL(/\/register/);
+    await expect(page.getByText("Create your account")).toBeVisible();
+    await expect(page.getByPlaceholder("Enter username")).toBeVisible();
+    await expect(page.getByPlaceholder("Retype password")).toBeVisible();
 
     await page.close();
     await ctx.close();
@@ -52,7 +52,7 @@ test.describe("Login Negative Paths", () => {
 
     await page.getByPlaceholder("you@yourcompany.com").fill("nonexistent-user@test.fintranzact.com");
     await page.getByPlaceholder("Enter password").fill("WrongPassword123!");
-    await page.locator("form").getByRole("button", { name: "Login" }).click();
+    await page.locator("form").getByRole("button", { name: "Log in" }).click();
 
     // Either an error toast or inline error should appear
     await expect(

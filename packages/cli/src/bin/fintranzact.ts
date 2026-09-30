@@ -36,7 +36,7 @@ declare const __CLI_VERSION__: string | undefined;
 const cliVersion = typeof __CLI_VERSION__ !== "undefined" ? __CLI_VERSION__ : "dev";
 
 program
-  .name("hisaabo")
+  .name("fintranzact")
   .description("Fintranzact CLI — Invoicing and business management")
   .version(cliVersion);
 

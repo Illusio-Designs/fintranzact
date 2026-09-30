@@ -17,6 +17,7 @@ import { BusinessSwitcher } from "@/components/ui/BusinessSwitcher";
 import { Logo } from "@/components/ui/Logo";
 import { Icon } from "@/components/ui/Icon";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { usePageSearchSlot } from "@/lib/page-search";
 import {
   Add01Icon,
   Alert02Icon,
@@ -38,12 +39,14 @@ import {
   ReceiptDollarIcon,
   ReturnRequestIcon,
   Settings01Icon,
+  UserShield01Icon,
   ShippingTruck01Icon,
   ShoppingCart01Icon,
   TaxesIcon,
   UnfoldMoreIcon,
   UserIcon,
   Search01Icon,
+  Cancel01Icon,
   File01Icon,
   Location01Icon,
   Call02Icon,
@@ -55,6 +58,10 @@ import {
   Analytics01Icon,
   Coins01Icon,
   CheckListIcon,
+  Building03Icon,
+  ArrowDataTransferHorizontalIcon,
+  SlidersHorizontalIcon,
+  TaskDone01Icon,
 } from "@hugeicons/core-free-icons";
 import { getRegisteredHotkeys } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
@@ -62,7 +69,7 @@ import { formatRole } from "@/lib/roles";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { LandingPage } from "@/components/LandingPage";
-import { AUTH_PUBLIC_PATHS, isMarketingPath } from "@/lib/public-paths";
+import { AUTH_PUBLIC_PATHS, isMarketingPath, isSharePath } from "@/lib/public-paths";
 import { isDesktop } from "@/lib/isDesktop";
 import { clearDesktopToken } from "@/lib/desktop-session";
 
@@ -209,10 +216,40 @@ const navSections = [
     items: [
       {
         to: "/items",
-        label: "Items",
+        label: "Stock Items",
         icon: PackageIcon,
         resource: "Item",
         action: "read",
+      },
+      {
+        to: "/warehouses",
+        label: "Warehouses",
+        icon: Building03Icon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/stock-transfers",
+        label: "Stock Transfers",
+        icon: ArrowDataTransferHorizontalIcon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/stock-adjustments",
+        label: "Stock Adjustments",
+        icon: SlidersHorizontalIcon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/physical-stock",
+        label: "Physical Stock",
+        icon: TaskDone01Icon,
+        resource: "Item",
+        action: "read",
+        // Counting is by barcode scan, so it goes away with barcodes.
+        barcodeOnly: true,
       },
       {
         to: "/shipments",
@@ -612,6 +649,11 @@ function RootLayout() {
   // We could not find out whether the visitor is signed in. Never treat that
   // as "signed out" (that is what used to bounce people to /login at random).
   const sessionUnknown = !session && sessionCheckFailed;
+  // Platform admins (set by the server's PLATFORM_ADMIN_EMAIL) get /platform.
+  const { data: platformMe } = trpc.platform.me.useQuery(undefined, {
+    enabled: !!session?.user,
+  });
+  const isPlatformAdmin = !!platformMe?.isPlatformAdmin;
   const {
     data: tenantList,
     isLoading: tenantListLoading,
@@ -637,6 +679,7 @@ function RootLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [showPalette, setShowPalette] = useState(false);
+  const pageSearch = usePageSearchSlot();
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showTenantPicker, setShowTenantPicker] = useState(false);
 
@@ -990,9 +1033,12 @@ function RootLayout() {
   // Marketing pages (/pricing, /about, …) are public for everyone, signed in
   // or not, and render outside the app shell.
   const showsMarketingPage = isMarketingPath(pathname) && !isDesktop();
+  // A shared document is public and opens on its own page for anyone.
+  const showsSharedDocument = isSharePath(pathname);
+  const showsStandalonePage = showsMarketingPage || showsSharedDocument;
 
   useEffect(() => {
-    if (showsMarketingPage) return;
+    if (showsStandalonePage) return;
     if (sessionLoading || sessionFetching) return;
     if (sessionUnknown) return;
 
@@ -1016,7 +1062,17 @@ function RootLayout() {
 
     // Already signed in: the login and register pages have nothing to do.
     if (pathname === "/login" || pathname === "/register") {
-      navigate({ to: "/", replace: true });
+      navigate({ to: isPlatformAdmin && !session.tenantId ? "/platform" : "/", replace: true });
+      return;
+    }
+
+    // The platform admin page needs a signed-in user only — no organisation,
+    // plan or business.
+    if (pathname === "/platform" || pathname.startsWith("/platform/")) return;
+
+    // A platform admin who is not part of any organisation has nothing else to open.
+    if (isPlatformAdmin && !session.tenantId && tenantList && tenantList.length === 0) {
+      navigate({ to: "/platform", replace: true });
       return;
     }
 
@@ -1108,6 +1164,7 @@ function RootLayout() {
     tenantListLoading,
     tenantListFetching,
     hasCompletedPlanSelection,
+    isPlatformAdmin,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select single tenant
@@ -1135,7 +1192,7 @@ function RootLayout() {
     </div>
   );
 
-  if (showsMarketingPage) return <Outlet />;
+  if (showsStandalonePage) return <Outlet />;
 
   // Loading session. Sign-in pages don't need the answer to render; if the
   // visitor turns out to be signed in, the effect above moves them on.
@@ -1170,6 +1227,9 @@ function RootLayout() {
     return <Outlet />;
   }
 
+  // The platform admin page has its own full-page layout and access check.
+  if (pathname === "/platform" || pathname.startsWith("/platform/")) return <Outlet />;
+
   // Authenticated but no tenant selected
   if (!session.tenantId) {
     // Auth flow pages (complete-profile, invite) handle tenant resolution
@@ -1179,6 +1239,9 @@ function RootLayout() {
     if (isAuthFlow) return <Outlet />;
 
     if (!tenantList) return loadingSpinner;
+
+    // Platform admin without an organisation: the redirect to /platform is in flight.
+    if (tenantList.length === 0 && isPlatformAdmin) return loadingSpinner;
 
     if (tenantList.length === 0) {
       // If a pending invite token exists, show spinner — the redirect useEffect
@@ -1315,6 +1378,7 @@ function RootLayout() {
   const isGstRegistered =
     activeBusiness?.gstRegistrationType !== "unregistered" ||
     !!activeBusiness?.gstin;
+  const barcodesOn = activeBusiness?.barcodesEnabled !== false;
 
   // No businesses yet — user is in the onboarding flow. Hide the sidebar
   // since nav items are meaningless without a business context.
@@ -1451,7 +1515,8 @@ function RootLayout() {
                   .filter(
                     (item) =>
                       canAccess(session?.role, item.resource, item.action) &&
-                      (!("gstOnly" in item && item.gstOnly) || isGstRegistered),
+                      (!("gstOnly" in item && item.gstOnly) || isGstRegistered) &&
+                      (!("barcodeOnly" in item && item.barcodeOnly) || barcodesOn),
                   )
                   .map((item) => {
                     // Rename reports label based on GST status (always visible)
@@ -1565,6 +1630,21 @@ function RootLayout() {
 
             {/* Sidebar footer: settings, then the signed-in user */}
             <div className="shrink-0 border-t border-white/10 px-2 py-2">
+              {isPlatformAdmin ? (
+                <Tooltip label="Platform admin" disabled={!navCollapsed}>
+                  <Link
+                    to="/platform"
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-[9px] py-2 text-[13.5px] text-[#c3cee6] transition-colors hover:bg-white/[.07] hover:text-white",
+                      navCollapsed ? "px-3 md:justify-center md:px-0" : "px-3",
+                    )}
+                  >
+                    <Icon icon={UserShield01Icon} size={16} className="shrink-0" />
+                    <span className={cn(navCollapsed && "md:hidden")}>Platform admin</span>
+                  </Link>
+                </Tooltip>
+              ) : null}
               <Tooltip label="Settings" disabled={!navCollapsed}>
                 <Link
                   to="/settings"
@@ -1657,8 +1737,43 @@ function RootLayout() {
               </div>
             )}
 
-            {/* Search — opens the command palette (also ⌘K / Ctrl+K) */}
-            {!isOnboarding && (
+            {/* Search — filters the current page's list when the page uses
+                it (usePageSearch); otherwise opens the command palette.
+                ⌘K / Ctrl+K always opens the palette. */}
+            {!isOnboarding && pageSearch?.placeholder && (
+              <div className="flex h-10 min-w-0 items-center gap-2.5 rounded-xl border border-border-light bg-surface-1 px-3 text-sm transition-colors focus-within:border-brand-500 focus-within:bg-surface-0 sm:w-72 lg:w-96">
+                <Icon icon={Search01Icon} size={17} className="shrink-0 text-text-tertiary" />
+                <input
+                  type="search"
+                  value={pageSearch.query}
+                  onChange={(e) => pageSearch.setQuery(e.target.value)}
+                  placeholder={pageSearch.placeholder}
+                  aria-label={pageSearch.placeholder}
+                  className="min-w-0 flex-1 bg-transparent text-text-primary outline-none placeholder:text-text-tertiary [&::-webkit-search-cancel-button]:hidden"
+                />
+                {pageSearch.query ? (
+                  <button
+                    type="button"
+                    onClick={() => pageSearch.setQuery("")}
+                    className="shrink-0 rounded-md p-0.5 text-text-tertiary hover:text-text-primary"
+                    aria-label="Clear search"
+                  >
+                    <Icon icon={Cancel01Icon} size={14} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowPalette(true)}
+                    className="hidden shrink-0 rounded-md border border-border-light px-1.5 py-0.5 font-sans text-[11px] font-semibold text-text-tertiary hover:text-text-primary sm:block"
+                    aria-label="Search the whole app"
+                    title="Search the whole app (⌘K)"
+                  >
+                    ⌘K
+                  </button>
+                )}
+              </div>
+            )}
+            {!isOnboarding && !pageSearch?.placeholder && (
               <button
                 type="button"
                 onClick={() => setShowPalette(true)}
@@ -1691,17 +1806,6 @@ function RootLayout() {
                   canSeeItems={canAccess(session?.role, "Item", "read")}
                   isGstRegistered={isGstRegistered}
                 />
-              )}
-              {!isOnboarding && canAccess(session?.role, "Invoice", "create") && (
-                <Link
-                  to="/invoices"
-                  search={{ create: "1" }}
-                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-3 text-sm font-bold text-white shadow-[0_8px_18px_-8px_rgba(59,94,170,.7)] transition hover:bg-brand-700 sm:px-4"
-                  aria-label="New invoice"
-                >
-                  <Icon icon={Add01Icon} size={16} strokeWidth={2.2} />
-                  <span className="hidden sm:inline">New invoice</span>
-                </Link>
               )}
 
               {/* No sidebar during onboarding, so the account controls live here */}

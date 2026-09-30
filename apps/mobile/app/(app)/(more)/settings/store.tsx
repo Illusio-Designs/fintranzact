@@ -151,7 +151,7 @@ export default function StoreSettingsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Online Store</Text>
         {isDirty ? (
@@ -164,7 +164,7 @@ export default function StoreSettingsScreen() {
             disabled={updateMutation.isPending || slugStatus === "taken"}
           >
             {updateMutation.isPending ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
+              <ActivityIndicator size="small" color={colors.onBrand} />
             ) : (
               <Text style={styles.saveBtnText}>Save</Text>
             )}
@@ -214,7 +214,7 @@ export default function StoreSettingsScreen() {
               <View style={styles.slugRow}>
                 <View style={styles.slugPrefix}>
                   <Text style={styles.slugPrefixText} numberOfLines={1}>
-                    store.hisaabo.in/
+                    store.fintranzact.com/
                   </Text>
                 </View>
                 <TextInput
@@ -698,7 +698,7 @@ function StoreItemsModal({
             <Ionicons name="close" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={modalStyles.title}>Manage Store Items</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
 
         {/* Search */}
@@ -1082,7 +1082,7 @@ const useModalStyles = makeStyles((colors) => ({
     alignItems: "center",
   },
   applyBtnText: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
     fontSize: 14,
     fontWeight: "700",
   },
@@ -1103,7 +1103,16 @@ const useStyles = makeStyles((colors) => ({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: { fontSize: 20, fontWeight: "700", color: colors.textPrimary },
   saveBtn: {
     backgroundColor: colors.brand,
@@ -1114,7 +1123,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: "center",
     justifyContent: "center",
   },
-  saveBtnText: { color: colors.textPrimary, fontWeight: "700", fontSize: 14 },
+  saveBtnText: { color: colors.onBrand, fontWeight: "700", fontSize: 14 },
   content: { padding: 16, paddingBottom: 48 },
 
   // Section label

@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
-import { Modal } from "@/components/ui/Modal";
+import { SlideOver } from "@/components/ui/SlideOver";
 import { Icon } from "@/components/ui/Icon";
 import { Cancel01Icon, Loading03Icon, SquareLock02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { PhoneInput } from "./PhoneInput";
@@ -382,7 +382,35 @@ function StoreItemsModal({ open, onClose }: StoreItemsModalProps) {
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title="Manage Store Items" className="max-w-xl">
+    <SlideOver
+      open={open}
+      onClose={handleClose}
+      title="Manage Store Items"
+      footer={
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-text-tertiary">
+            {changeCount > 0
+              ? `${changeCount} change${changeCount > 1 ? "s" : ""} pending`
+              : "Click items to add or remove"}
+          </p>
+          <div className="flex gap-3">
+            <button type="button" className="btn-secondary" onClick={handleClose}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={applyChanges}
+              disabled={changeCount === 0 || toggleMut.isPending}
+            >
+              {toggleMut.isPending
+                ? "Saving..."
+                : `Apply ${changeCount} Change${changeCount !== 1 ? "s" : ""}`}
+            </button>
+          </div>
+        </div>
+      }
+    >
       {/* Search */}
       <div className="mb-4">
         <input
@@ -395,7 +423,7 @@ function StoreItemsModal({ open, onClose }: StoreItemsModalProps) {
       </div>
 
       {/* Item list */}
-      <div className="max-h-[400px] overflow-y-auto -mx-6 px-6 divide-y divide-border-light">
+      <div className="-mx-6 px-6 divide-y divide-border-light">
         {isLoading ? (
           <div className="py-6 space-y-3">
             {[1, 2, 3, 4, 5].map((i) => (
@@ -448,30 +476,7 @@ function StoreItemsModal({ open, onClose }: StoreItemsModalProps) {
           })
         )}
       </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-4 mt-4 border-t border-border-light">
-        <p className="text-xs text-text-tertiary">
-          {changeCount > 0
-            ? `${changeCount} change${changeCount > 1 ? "s" : ""} pending`
-            : "Click items to add or remove"}
-        </p>
-        <div className="flex gap-2">
-          <button className="btn-ghost" onClick={handleClose}>
-            Cancel
-          </button>
-          <button
-            className="btn-primary"
-            onClick={applyChanges}
-            disabled={changeCount === 0 || toggleMut.isPending}
-          >
-            {toggleMut.isPending
-              ? "Saving..."
-              : `Apply ${changeCount} Change${changeCount !== 1 ? "s" : ""}`}
-          </button>
-        </div>
-      </div>
-    </Modal>
+    </SlideOver>
   );
 }
 

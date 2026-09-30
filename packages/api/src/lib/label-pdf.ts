@@ -1,7 +1,8 @@
 import PDFDocument from "pdfkit";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { encodeCode128 } from "./barcode.js";
+import QRCode from "qrcode";
+import { encodeCode128, encodeEan13, isValidEan13 } from "./barcode.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONT_REGULAR = resolve(__dirname, "../../fonts/NotoSans-Regular.ttf");
@@ -67,6 +68,48 @@ export const LABEL_PRESETS: Record<string, LabelPreset> = {
     gapX: 2.5 * MM,
     gapY: 0,
   },
+  // Fixed label per barcode type (Settings → Barcodes). One label per page
+  // at the exact roll size, so a thermal printer's driver needs no scaling.
+  type_ean13: {
+    id: "type_ean13",
+    name: "EAN-13 label, 50 x 25 mm",
+    page: { width: 50 * MM, height: 25 * MM },
+    columns: 1,
+    rows: 1,
+    labelWidth: 50 * MM,
+    labelHeight: 25 * MM,
+    marginX: 0,
+    marginY: 0,
+    gapX: 0,
+    gapY: 0,
+  },
+  type_code128: {
+    id: "type_code128",
+    name: "Code 128 label, 75 x 25 mm",
+    page: { width: 75 * MM, height: 25 * MM },
+    columns: 1,
+    rows: 1,
+    labelWidth: 75 * MM,
+    labelHeight: 25 * MM,
+    marginX: 0,
+    marginY: 0,
+    gapX: 0,
+    gapY: 0,
+  },
+  // 38 x 25 mm labels two across a 78 mm roll (2 mm gap between them).
+  type_qr: {
+    id: "type_qr",
+    name: "QR label, 38 x 25 mm, 2 across",
+    page: { width: 78 * MM, height: 25 * MM },
+    columns: 2,
+    rows: 1,
+    labelWidth: 38 * MM,
+    labelHeight: 25 * MM,
+    marginX: 0,
+    marginY: 0,
+    gapX: 2 * MM,
+    gapY: 0,
+  },
   // Continuous roll: one label per page.
   roll_50x25: {
     id: "roll_50x25",
@@ -94,9 +137,24 @@ export interface LabelItem {
   quantity: number;
 }
 
+export type LabelSymbology = "code128" | "ean13" | "qr";
+
+/** Preset used for each barcode type's fixed label. */
+export const TYPE_PRESET: Record<LabelSymbology, string> = {
+  ean13: "type_ean13",
+  code128: "type_code128",
+  qr: "type_qr",
+};
+
 export interface LabelSheetData {
   businessName: string;
   presetId: string;
+  /**
+   * How to draw codes. EAN-13 draws real EAN bars when the code is a valid
+   * EAN-13 and falls back to Code 128 otherwise (a supplier's UPC or SKU
+   * code still scans to the same value). Defaults to Code 128.
+   */
+  symbology?: LabelSymbology;
   items: LabelItem[];
   showPrice: boolean;
   showName: boolean;
@@ -117,6 +175,74 @@ export interface LabelSheetResult {
 /** Hard ceiling per item, so one bad quantity cannot spool thousands of pages. */
 const MAX_COPIES_PER_ITEM = 500;
 
+/** One printer dot at 203 dpi (the common thermal head), in points. */
+const DOT_203 = 72 / 203;
+
+/**
+ * Round a module width down to whole 203-dpi printer dots. Bars that fall
+ * between dots print unevenly and scan badly; a whole-dot module keeps every
+ * bar the same width. Below one dot the raw width is kept.
+ */
+function snapModule(width: number) {
+  const dots = Math.floor(width / DOT_203);
+  return dots >= 1 ? dots * DOT_203 : width;
+}
+
+/** "2000000000039" → "2 000000 000039", as printed under retail EAN bars. */
+function eanHumanText(code: string) {
+  return `${code[0]} ${code.slice(1, 7)} ${code.slice(7)}`;
+}
+
+/** QR on the left, name / code / price on the right. */
+function drawQrLabel(
+  doc: InstanceType<typeof PDFDocument>,
+  item: LabelItem,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  opts: { showPrice: boolean; showName: boolean },
+) {
+  const pad = Math.min(4, h * 0.08);
+  const qr = QRCode.create(item.barcode, { errorCorrectionLevel: "M" });
+  const size = qr.modules.size;
+  // The symbol plus a 2-module quiet zone must fit the label height.
+  const moduleW = snapModule((h - pad * 2) / (size + 4));
+  const side = moduleW * size;
+  const qx = x + pad + moduleW * 2;
+  const qy = y + (h - side) / 2;
+  doc.fillColor("#000000");
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (qr.modules.get(r, c)) doc.rect(qx + c * moduleW, qy + r * moduleW, moduleW, moduleW).fill();
+    }
+  }
+
+  const tx = qx + side + moduleW * 2;
+  const tw = x + w - pad - tx;
+  let cursorY = y + pad + 1;
+  if (opts.showName && item.name) {
+    const nameSize = Math.max(5, Math.min(7, h * 0.1));
+    doc.font("NotoSans-Bold").fontSize(nameSize).fillColor("#000000");
+    doc.text(item.name, tx, cursorY, { width: tw, height: nameSize * 2.6, ellipsis: true });
+    cursorY += nameSize * 2.7;
+    if (item.variantLabel) {
+      doc.font("NotoSans").fontSize(nameSize - 1).fillColor("#444444");
+      doc.text(item.variantLabel, tx, cursorY, { width: tw, lineBreak: false, ellipsis: true });
+      cursorY += nameSize * 1.3;
+    }
+  }
+  const codeSize = Math.max(4.5, Math.min(6, h * 0.08));
+  doc.font("NotoSans").fontSize(codeSize).fillColor("#000000");
+  doc.text(item.barcode, tx, cursorY, { width: tw, lineBreak: false, ellipsis: true });
+  cursorY += codeSize * 1.4;
+  if (opts.showPrice && item.price) {
+    const priceSize = Math.max(6, Math.min(9, h * 0.13));
+    doc.font("NotoSans-Bold").fontSize(priceSize);
+    doc.text(item.price, tx, cursorY, { width: tw, lineBreak: false, ellipsis: true });
+  }
+}
+
 /**
  * Draw one label into the box at (x, y).
  *
@@ -132,8 +258,12 @@ function drawLabel(
   y: number,
   w: number,
   h: number,
-  opts: { showPrice: boolean; showName: boolean },
+  opts: { showPrice: boolean; showName: boolean; symbology?: LabelSymbology },
 ) {
+  if (opts.symbology === "qr") {
+    drawQrLabel(doc, item, x, y, w, h, opts);
+    return;
+  }
   const padX = Math.min(4, w * 0.06);
   const padY = Math.min(3, h * 0.06);
   const innerW = w - padX * 2;
@@ -170,19 +300,20 @@ function drawLabel(
     codeSize * 1.3 + (opts.showPrice && item.price ? priceSize * 1.25 : 0);
   const barsH = Math.max(6, y + h - padY - footerH - cursorY);
 
-  const { bars, modules } = encodeCode128(item.barcode);
-  const moduleW = innerW / modules;
+  const ean = opts.symbology === "ean13" && isValidEan13(item.barcode);
+  const encoded = ean ? encodeEan13(item.barcode) : encodeCode128(item.barcode);
+  const moduleW = snapModule(innerW / encoded.modules);
+  // Centre the symbol: snapping the module to printer dots leaves spare room.
+  const left = x + padX + (innerW - moduleW * encoded.modules) / 2;
 
   doc.fillColor("#000000");
-  for (const bar of bars) {
-    doc
-      .rect(x + padX + bar.x * moduleW, cursorY, bar.width * moduleW, barsH)
-      .fill();
+  for (const bar of encoded.bars) {
+    doc.rect(left + bar.x * moduleW, cursorY, bar.width * moduleW, barsH).fill();
   }
   cursorY += barsH + 1;
 
   doc.font("NotoSans").fontSize(codeSize).fillColor("#000000");
-  doc.text(item.barcode, x + padX, cursorY, {
+  doc.text(ean ? eanHumanText(item.barcode) : item.barcode, x + padX, cursorY, {
     width: innerW,
     align: "center",
     lineBreak: false,
@@ -219,7 +350,8 @@ export function generateLabelSheetPDF(
       continue;
     }
     try {
-      encodeCode128(item.barcode);
+      if (data.symbology === "qr") QRCode.create(item.barcode, { errorCorrectionLevel: "M" });
+      else if (!(data.symbology === "ean13" && isValidEan13(item.barcode))) encodeCode128(item.barcode);
     } catch (err) {
       skipped.push({
         name: item.name,
@@ -248,7 +380,7 @@ export function generateLabelSheetPDF(
     doc.registerFont("NotoSans-Bold", FONT_BOLD);
 
     const perPage = preset.columns * preset.rows;
-    const opts = { showPrice: data.showPrice, showName: data.showName };
+    const opts = { showPrice: data.showPrice, showName: data.showName, symbology: data.symbology };
 
     slots.forEach((item, index) => {
       const slot = index % perPage;

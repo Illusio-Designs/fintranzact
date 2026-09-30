@@ -179,13 +179,13 @@ describe("SECURITY — sensitive data must not persist in React state after subm
 
   it("API key value should not be stored in persistent state after display", () => {
     /**
-     * INVARIANT: The raw API key (hisaabo_key_...) is shown once after creation
+     * INVARIANT: The raw API key (fintranzact_key_...) is shown once after creation
      * and then discarded. It must not be stored in localStorage or any persistent
      * client state. We verify the expected behaviour by checking that the
      * "transient" display pattern clears the key.
      */
 
-    let displayedApiKey: string | null = "hisaabo_key_example_raw_key";
+    let displayedApiKey: string | null = "fintranzact_key_example_raw_key";
     let persistedToLocalStorage = false;
 
     function onApiKeyAcknowledged() {
@@ -254,7 +254,7 @@ describe("SECURITY — sensitive values must not be logged to console", () => {
   });
 
   it("simulated API key creation handler does not log the raw key to console", () => {
-    const rawApiKey = "hisaabo_key_vyapar_AbCdEfGhIjKlMnOpQrStUvWxYz";
+    const rawApiKey = "fintranzact_key_vyapar_AbCdEfGhIjKlMnOpQrStUvWxYz";
 
     function simulateApiKeyDisplayHandler(keyName: string, _rawKey: string): void {
       // Correct: log the key name, not the value

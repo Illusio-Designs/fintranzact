@@ -2,7 +2,7 @@
  * Tests for the business Zustand store (`src/stores/business.ts`)
  *
  * WHY these tests matter for contributors:
- * Hisaabo is a multi-tenant, multi-business app. A single user (e.g. a CA
+ * Fintranzact is a multi-tenant, multi-business app. A single user (e.g. a CA
  * firm owner) can manage Sharma Textiles, Gupta Electricals, and their own
  * personal accounts — all from one login. The business store persists the
  * "active business" selection to SecureStore so switching apps or rebooting
@@ -100,7 +100,7 @@ describe("business store — active business selection", () => {
       .setBusiness("biz_gupta_02", "Gupta Electricals");
 
     expect(mockSet).toHaveBeenCalledWith(
-      "hisaabo_business",
+      "fintranzact_business",
       JSON.stringify({ id: "biz_gupta_02", name: "Gupta Electricals" })
     );
   });
@@ -196,7 +196,7 @@ describe("business store — active business selection", () => {
     const { businessId, businessName } = useBusinessStore.getState();
     expect(businessId).toBeNull();
     expect(businessName).toBeNull();
-    expect(mockDelete).toHaveBeenCalledWith("hisaabo_business");
+    expect(mockDelete).toHaveBeenCalledWith("fintranzact_business");
   });
 
   // -------------------------------------------------------------------------

@@ -24,7 +24,7 @@ export function PressableRow({ children, onPress, onLongPress, style, disabled, 
         Platform.OS === "ios" && pressed && { opacity: 0.7 },
         disabled && { opacity: 0.5 },
       ]}
-      android_ripple={{ color: "rgba(99, 102, 241, 0.15)", borderless: false }}
+      android_ripple={{ color: "rgba(59, 94, 170, 0.12)", borderless: false }}
     >
       {children}
     </Pressable>

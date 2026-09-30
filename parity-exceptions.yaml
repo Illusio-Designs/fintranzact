@@ -16,6 +16,19 @@ schema_version: "2.0"
 exceptions:
   mobile:
     not-applicable:
+      # --- Inventory (warehouses & stock) ---
+      # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
+      - stock.adjust
+      - stock.adjustments
+      - stock.balances
+      - stock.setup
+      - stock.transfer
+      - stock.transfers
+      - stock.verify
+      - stock.warehouses
+      - warehouse.premiseList
+      - warehouse.warehouseCreate
+
       # --- Multi-Tenancy ---
       # Mobile derives current tenant info from auth.me; the standalone
       # procedure is not needed.
@@ -30,7 +43,7 @@ exceptions:
       # Mobile displays the logo via /api/businesses/:id/logo but doesn't edit.
       - business.uploadLogo
       - business.deleteLogo
-      # Invoice signature upload/delete is web-only, like the logo.
+      # Invoice signature upload/delete are web-only for the same reason as the logo.
       - business.uploadSignature
       - business.deleteSignature
       # Point-of-Sale mode is a web/desktop-only fullscreen register.
@@ -124,6 +137,7 @@ exceptions:
       # Complex reporting workflows; intentionally desktop-only.
       - reports.daybook
       - reports.outstanding
+      - reports.msmePayables
       - reports.salesRegister
       - reports.purchaseRegister
       - reports.taxSummary
@@ -154,6 +168,13 @@ exceptions:
       # Plan choice is a step of the web signup flow (/auth/plan-selection);
       # mobile users pick a plan on the web.
       - tenant.updatePlan
+      # Platform admin (operators only, set by PLATFORM_ADMIN_EMAIL) is a
+      # web page at /platform; it has no place in the mobile app.
+      - platform.me
+      - platform.overview
+      - platform.tenants
+      - platform.tenant
+      - platform.setPlan
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
 
@@ -264,8 +285,47 @@ exceptions:
       - hsn.validate
       - hsn.validateForTurnover
 
+      # --- Inventory: scan-based physical stock and barcodes (mobile) ---
+      # Scan-based physical counts are desk / counter workflows built for the web and desktop
+      # app (barcode scanner on a PC, label printing through the system
+      # print window). Not yet exposed on mobile.
+      - stock.countSheet
+      - stock.countPreview
+      - stock.countFinish
+      - stock.countPost
+      - stock.counts
+      - stock.count
+      # Barcode setup (Settings → Barcodes), extra item codes and on-screen
+      # barcode previews for label printing.
+      - barcode.setup
+      - barcode.update
+      - barcode.lock
+      - barcode.generate
+      - barcode.itemCodes
+      - barcode.addItemCode
+      - barcode.removeItemCode
+      - barcode.symbol
+      # Public share links for documents. Web-only for now; mobile gets a
+      # "Share link" button in a later chunk.
+      - share.get
+      - share.create
+      - share.revoke
+
   cli:
     not-applicable:
+      # --- Inventory (warehouses & stock) ---
+      # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
+      - stock.adjust
+      - stock.adjustments
+      - stock.balances
+      - stock.setup
+      - stock.transfer
+      - stock.transfers
+      - stock.verify
+      - stock.warehouses
+      - warehouse.premiseList
+      - warehouse.warehouseCreate
+
       # --- Auth ---
       # Browser-only flows requiring email verification links / callbacks.
       - auth.requestEmailChange
@@ -283,6 +343,13 @@ exceptions:
       - tenant.peekInvitation
       # Plan choice is part of web signup; scripts must not change billing plans.
       - tenant.updatePlan
+      # Platform admin (operators only, set by PLATFORM_ADMIN_EMAIL) is a
+      # web page at /platform; it has no place in the CLI.
+      - platform.me
+      - platform.overview
+      - platform.tenants
+      - platform.tenant
+      - platform.setPlan
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
 
@@ -292,7 +359,7 @@ exceptions:
       # Logo upload/delete are browser-only (canvas resize + file picker).
       - business.uploadLogo
       - business.deleteLogo
-      # Invoice signature upload/delete is web-only, like the logo.
+      # Invoice signature image — same browser-only upload flow as the logo.
       - business.uploadSignature
       - business.deleteSignature
       # Point-of-Sale is a browser-only UI feature — no CLI command surface.
@@ -319,6 +386,10 @@ exceptions:
       # --- Parties ---
       # Tally accounting integration — desktop-specific export format.
       - party.tallyExport
+      # GSTIN lookup auto-fills the interactive party form; scripts pass fields directly.
+      - party.lookupGstin
+      # MSME payables is a web report view built on reports.outstanding data.
+      - reports.msmePayables
 
       # --- Bank Reconciliation ---
       # Interactive CSV upload + review workflow — not suited for CLI.
@@ -345,8 +416,47 @@ exceptions:
       - gstr2b.upload
       - gstr2b.ignoreRecord
 
+      # --- Inventory: scan-based physical stock and barcodes (the CLI) ---
+      # Scan-based physical counts are desk / counter workflows built for the web and desktop
+      # app (barcode scanner on a PC, label printing through the system
+      # print window). Not yet exposed on the CLI.
+      - stock.countSheet
+      - stock.countPreview
+      - stock.countFinish
+      - stock.countPost
+      - stock.counts
+      - stock.count
+      # Barcode setup (Settings → Barcodes), extra item codes and on-screen
+      # barcode previews for label printing.
+      - barcode.setup
+      - barcode.update
+      - barcode.lock
+      - barcode.generate
+      - barcode.itemCodes
+      - barcode.addItemCode
+      - barcode.removeItemCode
+      - barcode.symbol
+      # Public share links for documents. Web-only for now; mobile gets a
+      # "Share link" button in a later chunk.
+      - share.get
+      - share.create
+      - share.revoke
+
   mcp:
     not-applicable:
+      # --- Inventory (warehouses & stock) ---
+      # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
+      - stock.adjust
+      - stock.adjustments
+      - stock.balances
+      - stock.setup
+      - stock.transfer
+      - stock.transfers
+      - stock.verify
+      - stock.warehouses
+      - warehouse.premiseList
+      - warehouse.warehouseCreate
+
       # --- Auth ---
       # MCP runs as a pre-authenticated server-side agent. It does not
       # manage user sessions, login flows, or account registration.
@@ -372,6 +482,13 @@ exceptions:
       - tenant.peekInvitation
       # Plan choice is part of web signup; agents must not change billing plans.
       - tenant.updatePlan
+      # Platform admin (operators only, set by PLATFORM_ADMIN_EMAIL) is a
+      # web page at /platform; it has no place in the MCP tools.
+      - platform.me
+      - platform.overview
+      - platform.tenants
+      - platform.tenant
+      - platform.setPlan
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
 
@@ -386,7 +503,7 @@ exceptions:
       # Logo is a browser UI concern; MCP agents don't manage brand assets.
       - business.uploadLogo
       - business.deleteLogo
-      # Invoice signature upload/delete is web-only, like the logo.
+      # Invoice signature image — a browser UI concern like the logo.
       - business.uploadSignature
       - business.deleteSignature
       # POS mode is a web/desktop-only cashier surface; not an MCP workflow.
@@ -426,6 +543,10 @@ exceptions:
       # --- Parties ---
       # Tally accounting integration — desktop-specific export format.
       - party.tallyExport
+      # GSTIN lookup auto-fills the interactive party form; agents pass fields directly.
+      - party.lookupGstin
+      # MSME payables is a web report view built on reports.outstanding data.
+      - reports.msmePayables
 
       # --- Bank Reconciliation ---
       # Interactive CSV upload flow — MCP agents use structured data.
@@ -454,3 +575,29 @@ exceptions:
       # CSV upload and per-record ignore are interactive UI workflows.
       - gstr2b.upload
       - gstr2b.ignoreRecord
+
+      # --- Inventory: scan-based physical stock and barcodes (MCP) ---
+      # Scan-based physical counts are desk / counter workflows built for the web and desktop
+      # app (barcode scanner on a PC, label printing through the system
+      # print window). Not yet exposed on MCP.
+      - stock.countSheet
+      - stock.countPreview
+      - stock.countFinish
+      - stock.countPost
+      - stock.counts
+      - stock.count
+      # Barcode setup (Settings → Barcodes), extra item codes and on-screen
+      # barcode previews for label printing.
+      - barcode.setup
+      - barcode.update
+      - barcode.lock
+      - barcode.generate
+      - barcode.itemCodes
+      - barcode.addItemCode
+      - barcode.removeItemCode
+      - barcode.symbol
+      # Public share links for documents. Web-only for now; mobile gets a
+      # "Share link" button in a later chunk.
+      - share.get
+      - share.create
+      - share.revoke

@@ -1,11 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { cn, formatCurrency, formatDate, formatDateInput, toISOString, toISOStringEndOfDay, todayISODate } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Modal } from "@/components/ui/Modal";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField, SelectField } from "@/components/ui/FormField";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
@@ -17,7 +17,6 @@ import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Download04Icon, PencilEdit02Icon, StarIcon } from "@hugeicons/core-free-icons";
 import { Pagination } from "@/components/ui/Pagination";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { useDebounce } from "@/hooks/useDebounce";
 import { toast } from "@/hooks/useToast";
 import { getDatePreset } from "@/hooks/useDateRange";
@@ -39,7 +38,7 @@ function CashAndBankPage() {
   const [selectedUntracked, setSelectedUntracked] = useState<Set<string>>(new Set());
   const [selectAllMatching, setSelectAllMatching] = useState(false); // true = all across ALL pages
   const [assignAccountId, setAssignAccountId] = useState<string | null>(null);
-  const [untrackedSearch, setUntrackedSearch] = useState("");
+  const [untrackedSearch] = usePageSearch("Search party or payment #…");
   const [untrackedMode, setUntrackedMode] = useState("");
   const [untrackedPage, setUntrackedPage] = useState(1);
   const debouncedUntrackedSearch = useDebounce(untrackedSearch, 300);
@@ -579,12 +578,6 @@ function CashAndBankPage() {
 
           {/* Filters row */}
           <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <SearchInput
-              value={untrackedSearch}
-              onChange={setUntrackedSearch}
-              placeholder="Search party or payment #..."
-              className="max-w-xs"
-            />
             <PillTabs
               tabs={[
                 { value: "cash", label: "Cash" },
@@ -1343,7 +1336,26 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
   const isPending = createAccountMutation.isPending || upsertGatewayMutation.isPending;
 
   return (
-    <Modal open onClose={onClose} title="Add Bank Account">
+    <SlideOver
+      open
+      onClose={onClose}
+      title="Add Bank Account"
+      footer={
+        <div className="flex justify-end gap-3">
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleCreate}
+            disabled={isPending || !accountName.trim()}
+          >
+            {isPending ? "Creating..." : "Create Account"}
+          </button>
+        </div>
+      }
+    >
       <div className="space-y-4">
         <div>
           <p className="label">Account Type</p>
@@ -1495,20 +1507,8 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
           />
           Set as default account
         </label>
-        <div className="flex justify-end gap-3 pt-2">
-          <button className="btn-secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn-primary"
-            onClick={handleCreate}
-            disabled={isPending || !accountName.trim()}
-          >
-            {isPending ? "Creating..." : "Create Account"}
-          </button>
-        </div>
       </div>
-    </Modal>
+    </SlideOver>
   );
 }
 
@@ -1551,7 +1551,26 @@ function AddTransactionModal({
   }
 
   return (
-    <Modal open onClose={onClose} title="Add Transaction">
+    <SlideOver
+      open
+      onClose={onClose}
+      title="Add Transaction"
+      footer={
+        <div className="flex justify-end gap-3">
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleAdd}
+            disabled={addTxnMutation.isPending || !txnAmount}
+          >
+            {addTxnMutation.isPending ? "Adding..." : "Add Transaction"}
+          </button>
+        </div>
+      }
+    >
       <div className="space-y-4">
         <div>
           <p className="label">Transaction Type</p>
@@ -1586,20 +1605,8 @@ function AddTransactionModal({
           value={txnDate}
           onChange={(e) => setTxnDate(e.target.value)}
         />
-        <div className="flex justify-end gap-3 pt-2">
-          <button className="btn-secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn-primary"
-            onClick={handleAdd}
-            disabled={addTxnMutation.isPending || !txnAmount}
-          >
-            {addTxnMutation.isPending ? "Adding..." : "Add Transaction"}
-          </button>
-        </div>
       </div>
-    </Modal>
+    </SlideOver>
   );
 }
 
@@ -1649,7 +1656,31 @@ function TransferModal({
   }
 
   return (
-    <Modal open onClose={onClose} title="Transfer Money">
+    <SlideOver
+      open
+      onClose={onClose}
+      title="Transfer Money"
+      footer={
+        <div className="flex justify-end gap-3">
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleTransfer}
+            disabled={
+              transferMutation.isPending ||
+              !transferFrom ||
+              !transferTo ||
+              !transferAmount
+            }
+          >
+            {transferMutation.isPending ? "Transferring..." : "Transfer"}
+          </button>
+        </div>
+      }
+    >
       <div className="space-y-4">
         <SelectField
           label="From Account"
@@ -1695,25 +1726,8 @@ function TransferModal({
           onChange={(e) => setTransferDescription(e.target.value)}
           placeholder="e.g. Fund transfer"
         />
-        <div className="flex justify-end gap-3 pt-2">
-          <button className="btn-secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn-primary"
-            onClick={handleTransfer}
-            disabled={
-              transferMutation.isPending ||
-              !transferFrom ||
-              !transferTo ||
-              !transferAmount
-            }
-          >
-            {transferMutation.isPending ? "Transferring..." : "Transfer"}
-          </button>
-        </div>
       </div>
-    </Modal>
+    </SlideOver>
   );
 }
 

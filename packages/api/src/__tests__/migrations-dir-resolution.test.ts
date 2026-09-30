@@ -11,7 +11,7 @@
  *
  * INVARIANTS PROTECTED:
  *   1. `buildMigrationsDirCandidates` returns candidates in the correct
- *      priority order: HISAABO_MIGRATIONS_DIR override → db package root →
+ *      priority order: FINTRANZACT_MIGRATIONS_DIR override → db package root →
  *      __dirname hop (api/dist → db/) → cwd fallback.
  *   2. `pickExistingMigrationsDir` selects the FIRST candidate whose
  *      meta/_journal.json exists, not just the first candidate.
@@ -42,9 +42,9 @@ describe("buildMigrationsDirCandidates", () => {
   it("includes the override as the FIRST candidate when set", () => {
     const candidates = buildMigrationsDirCandidates(SUB, {
       ...base,
-      override: "/etc/hisaabo/migrations",
+      override: "/etc/fintranzact/migrations",
     });
-    expect(candidates[0]).toBe("/etc/hisaabo/migrations/drizzle-tenant");
+    expect(candidates[0]).toBe("/etc/fintranzact/migrations/drizzle-tenant");
   });
 
   it("omits the override slot entirely when the env var is undefined/null/empty", () => {
@@ -82,7 +82,7 @@ describe("buildMigrationsDirCandidates", () => {
 
   it("keeps candidate ordering stable: override > db root > api→db hop > cwd", () => {
     // Order matters because pickExistingMigrationsDir stops at the first hit.
-    // An operator setting HISAABO_MIGRATIONS_DIR must override everything.
+    // An operator setting FINTRANZACT_MIGRATIONS_DIR must override everything.
     const candidates = buildMigrationsDirCandidates(SUB, {
       dbPkgRoot: "/a",
       currentDir: "/b/c/d",
