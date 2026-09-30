@@ -1,6 +1,6 @@
 ---
 title: Business Reports
-description: All 11 business reports in Fintranzact — daybook, sales register, purchase register, outstanding, party statement, stock summary, item-wise sales, payment summary, tax summary, collection metrics, and cash flow forecast.
+description: The 24 business reports in Fintranzact — daybook, registers, outstanding, MSME payables, party statement, inventory and stock reports, pending order reports, payment and tax summaries, and collection metrics.
 sidebar:
   order: 1
 ---
@@ -8,7 +8,17 @@ sidebar:
 import ForCA from '../../../components/ForCA.astro';
 import ForBusiness from '../../../components/ForBusiness.astro';
 
-Fintranzact gives you 11 ready-made reports that cover every aspect of your business finances. All reports pull live data from your invoices, payments, and expenses — no manual data entry needed.
+Fintranzact gives you 24 ready-made reports that cover every aspect of your business finances and stock. All reports pull live data from your invoices, payments, expenses and stock records — no manual data entry needed.
+
+| Group | Reports |
+|---|---|
+| **Financial** | Daybook, Sales Register, Purchase Register |
+| **Receivables & Payables** | Outstanding Report, MSME Payables, Party Statement |
+| **Inventory** | Stock Summary, Stock Ledger, Movement Summary, Stock Group Summary, Godown Summary, Stock Ageing, Reorder Status, Dead Stock, Price List, Item-wise Sales |
+| **Orders** | Pending Sales Orders, Pending Purchase Orders, Pending GRNs, Pending Delivery Challans |
+| **Payments & Tax** | Payment Summary, Tax Summary, Collection Efficiency, Cash Flow Statement |
+
+The inventory and orders reports are described in detail on [Inventory Reports](/inventory/reports).
 
 You will find the reports page at **Reports** in the sidebar navigation after selecting a business.
 
@@ -28,7 +38,7 @@ For client reviews, start with the **Party Statement** (full ledger per party), 
 
 The reports page has two parts:
 
-1. **Sidebar** (left) -- lists all 11 reports grouped into four categories: Financial, Receivables & Payables, Inventory, and Payments & Tax. Click any report name to open it. On mobile, tap the menu icon at the top-left corner to open the sidebar.
+1. **Sidebar** (left) -- lists all 24 reports grouped into five categories: Financial, Receivables & Payables, Inventory, Orders, and Payments & Tax. Click any report name to open it. On mobile, tap the menu icon at the top-left corner to open the sidebar.
 2. **Report area** (right) -- shows the selected report along with the date range bar at the top.
 
 ### Date range bar
@@ -55,13 +65,13 @@ Your selected preset is also saved in your browser. If you close the page and co
 
 ### CSV export
 
-All tabular reports (Daybook, Sales Register, Purchase Register, Outstanding, Party Statement, Stock Summary, Item-wise Sales, Payment Summary, and Tax Summary) have a **Download CSV** button. Click it to save the current report data as a CSV file. You can open the CSV file in Excel, Google Sheets, or any spreadsheet app for further analysis.
+All tabular reports (everything except Collection Efficiency and Cash Flow Statement) have a **Download CSV** / **Export CSV** button. Click it to save the current report data as a CSV file. You can open the CSV file in Excel, Google Sheets, or any spreadsheet app for further analysis.
 
 ---
 
 ## Financial reports
 
-### 1. Daybook
+### Daybook
 
 The daybook is a chronological record of every financial transaction in your business for the selected period. Think of it as your daily diary of money coming in and going out.
 
@@ -89,7 +99,7 @@ At the bottom of each day's entries, you see a **Day Total** row summarising tha
 
 **Filtering:** Use the tabs at the top of the table to filter by transaction type -- All, Invoices, Payments, or Expenses.
 
-### 2. Sales Register
+### Sales Register
 
 A detailed list of every sale invoice in the selected date range.
 
@@ -113,7 +123,7 @@ A detailed list of every sale invoice in the selected date range.
 
 This report is useful for filing GST returns and for reviewing your sales trends over any period.
 
-### 3. Purchase Register
+### Purchase Register
 
 Same structure as the Sales Register, but for purchase invoices from your suppliers.
 
@@ -127,7 +137,7 @@ Use this report to track what you owe to suppliers and to reconcile purchase tax
 
 ## Receivables & Payables reports
 
-### 4. Outstanding Report
+### Outstanding Report
 
 Shows you who owes you money (receivables) and whom you owe money to (payables), broken down by how old the unpaid invoices are.
 
@@ -151,7 +161,28 @@ Each party row also shows their phone number for easy follow-up. A **Total** row
 Pay special attention to the **90+ days** column. If amounts are piling up there, it may be time to call those parties and remind them.
 :::
 
-### 5. Party Statement
+### MSME Payables
+
+Unpaid bills from suppliers registered as MSMEs, with the date by which each must be paid. Under Section 43B(h) of the Income Tax Act, a payment to a micro or small enterprise made after the due date can only be deducted in the year it is actually paid.
+
+**Which bills appear:** unpaid or part-paid purchase invoices (not drafts or cancelled bills) from suppliers marked as MSME on the Parties page, except those in the **medium** category.
+
+**Pay-by date** = bill date + the supplier's credit period, capped at **45 days**. If the supplier has no credit period set, 15 days is used.
+
+**Summary cards:** Owed to MSME suppliers, Past pay-by date, and Overdue bills.
+
+| Column | What it means |
+|---|---|
+| Supplier | Supplier name, with the Udyam number underneath |
+| Bill | Bill number |
+| Bill date | Date of the bill |
+| Outstanding | Amount still unpaid |
+| Pay by | The last date to pay |
+| Days left | Days until the pay-by date. Shown in red as "N overdue" once passed, and in amber when 7 days or fewer remain. |
+
+This report always works from today's date; the date range bar doesn't change it. Mark suppliers as MSME (with their Udyam number and category) on the **Parties** page.
+
+### Party Statement
 
 A complete ledger for a single customer or supplier, showing every invoice and payment between you and that party in chronological order.
 
@@ -182,34 +213,49 @@ This report is commonly shared with parties as an account statement. Download it
 
 ## Inventory reports
 
-### 6. Stock Summary
+### Stock Summary
 
-A snapshot of your current stock levels across all items. This report does not depend on the date range -- it always shows your stock as of right now.
+A snapshot of your current stock levels across all products. This report does not depend on the date range -- it always shows your stock as of right now.
 
 **Summary cards at the top:**
 
 | Card | Meaning |
 |---|---|
-| Total Cost Value | Total stock valued at purchase price |
+| Total Cost Value | Total stock value, using your [stock valuation method](/inventory/stock-valuation) (average cost or FIFO) |
 | Total Sale Value | Total stock valued at sale price |
-| SKU Count | Number of distinct items/variants tracked |
-| Low Stock | Number of items below their low-stock alert threshold |
+| SKU Count | Number of distinct items tracked |
+| Low Stock | Number of items at or below their low-stock alert threshold |
 
 **Filters:**
-- **Category dropdown** -- filter items by category (only shows categories that have items in stock)
+- **Stock group** -- filter items by [stock group](/inventory/stock-groups), including its sub-groups
 - **Show Zero Stock** -- toggle to include items with zero stock (hidden by default)
 
 **The table shows each item with:**
-- Item name (with a yellow **Low** badge if below alert threshold)
+- Item name (with a yellow **Low** badge if at or below alert threshold)
 - Category
 - HSN code and unit
 - Current stock quantity
 - Purchase price and sale price
-- Stock value (quantity multiplied by purchase price)
+- Stock value (using your valuation method)
 
 **Variant items:** If an item has variants (for example, a shirt in sizes S, M, L), it appears as a collapsible row. Click the row to expand and see each variant's individual stock, prices, and values. A badge shows the total variant count.
 
-### 7. Item-wise Sales
+### Other inventory reports
+
+These are covered in detail on [Inventory Reports](/inventory/reports):
+
+| Report | What it shows |
+|---|---|
+| **Stock Ledger** | Every movement of one item, with a running balance, optionally for one warehouse |
+| **Movement Summary** | Opening, inward, outward and closing stock per item for the period |
+| **Stock Group Summary** | Stock quantity and value per stock group, with drill-down to items |
+| **Godown Summary** | Stock held and its value in each warehouse |
+| **Stock Ageing** | How long current stock has been held, in 0–30, 31–60, 61–90, 91–180 and 180+ day buckets |
+| **Reorder Status** | Items at or below their reorder level, with a suggested order quantity |
+| **Dead Stock** | Stock that hasn't sold in 30 to 365 days |
+| **Price List** | Each item's price on every price level, with MRP |
+
+### Item-wise Sales
 
 Shows how much revenue and quantity each item generated in the selected period. Useful for identifying your best-selling products and highest-margin items.
 
@@ -236,9 +282,15 @@ Shows how much revenue and quantity each item generated in the selected period. 
 
 ---
 
+## Orders reports
+
+Four reports list what is still pending on your orders, challans and GRNs, line by line: **Pending Sales Orders** (ordered by customers and not yet delivered), **Pending Purchase Orders** (ordered from suppliers and not yet received), **Pending GRNs** (goods received and not yet billed) and **Pending Delivery Challans** (goods delivered and not yet billed). See [Inventory Reports](/inventory/reports#orders-reports) and [Orders & GRN](/inventory/orders-and-grn).
+
+---
+
 ## Payments & Tax reports
 
-### 8. Payment Summary
+### Payment Summary
 
 An overview of all payments received and made in the selected period, grouped by payment mode.
 
@@ -257,7 +309,7 @@ An overview of all payments received and made in the selected period, grouped by
 
 **Filtering:** Toggle between All, Received only, or Made only using the tabs.
 
-### 9. Tax Summary
+### Tax Summary
 
 Shows your GST tax position for the selected period -- how much tax you collected on sales versus how much tax you paid on purchases.
 
@@ -281,7 +333,7 @@ Shows your GST tax position for the selected period -- how much tax you collecte
 For detailed GSTR-1 and GSTR-3B reports formatted for government filing, see [GST Compliance](/gst) and [GSTR-1](/gst/gstr1).
 :::
 
-### 10. Collection Metrics
+### Collection Metrics
 
 Measures how efficiently your business collects payments from customers. This is a card-based report (not a table), so it does not have CSV export.
 
@@ -298,7 +350,7 @@ Measures how efficiently your business collects payments from customers. This is
 For most Indian small businesses, a DSO under 30 days is healthy. Between 30-45 days is acceptable. Above 45 days means you may want to tighten your payment terms or follow up more actively on overdue invoices.
 :::
 
-### 11. Cash Flow Forecast
+### Cash Flow Forecast
 
 Projects your future cash position based on open receivables, due dates, and historical collection patterns. This report does not use the date range bar -- it always looks forward from today.
 
