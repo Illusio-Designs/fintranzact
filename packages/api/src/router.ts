@@ -44,6 +44,7 @@ import { warehouseRouter } from "./routers/warehouse.js";
 import { barcodeRouter } from "./routers/barcode.js";
 import { shareRouter } from "./routers/share.js";
 import { stockRouter } from "./routers/stock.js";
+import { inventoryReportsRouter } from "./routers/inventory-reports.js";
 
 export const appRouter = router({
   auth: authRouter,
@@ -87,6 +88,7 @@ export const appRouter = router({
   pos: posRouter,
   warehouse: warehouseRouter,
   stock: stockRouter,
+  inventoryReports: inventoryReportsRouter,
   barcode: barcodeRouter,
   share: shareRouter,
 });

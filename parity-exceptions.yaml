@@ -26,6 +26,17 @@ exceptions:
       - stock.transfers
       - stock.verify
       - stock.warehouses
+      # Inventory settings (negative stock, valuation), the entry-form stock check
+      # and the inventory reports are web screens for now.
+      - stock.availability
+      - stock.settings
+      - stock.updateSettings
+      - inventoryReports.stockLedger
+      - inventoryReports.movementSummary
+      - inventoryReports.godownSummary
+      - inventoryReports.ageing
+      - inventoryReports.reorderStatus
+      - inventoryReports.deadStock
       - warehouse.premiseList
       - warehouse.warehouseCreate
 
@@ -316,6 +327,17 @@ exceptions:
       - stock.transfers
       - stock.verify
       - stock.warehouses
+      # Inventory settings (negative stock, valuation), the entry-form stock check
+      # and the inventory reports are web screens for now.
+      - stock.availability
+      - stock.settings
+      - stock.updateSettings
+      - inventoryReports.stockLedger
+      - inventoryReports.movementSummary
+      - inventoryReports.godownSummary
+      - inventoryReports.ageing
+      - inventoryReports.reorderStatus
+      - inventoryReports.deadStock
       - warehouse.premiseList
       - warehouse.warehouseCreate
 
@@ -440,6 +462,17 @@ exceptions:
       - stock.transfers
       - stock.verify
       - stock.warehouses
+      # Inventory settings (negative stock, valuation), the entry-form stock check
+      # and the inventory reports are web screens for now.
+      - stock.availability
+      - stock.settings
+      - stock.updateSettings
+      - inventoryReports.stockLedger
+      - inventoryReports.movementSummary
+      - inventoryReports.godownSummary
+      - inventoryReports.ageing
+      - inventoryReports.reorderStatus
+      - inventoryReports.deadStock
       - warehouse.premiseList
       - warehouse.warehouseCreate
 

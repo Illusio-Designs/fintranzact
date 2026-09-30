@@ -14,6 +14,14 @@ import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Analytics01Icon, ArrowRight01Icon, Cash01Icon, Download04Icon, FileEmpty01Icon, InformationCircleIcon, Invoice01Icon, Menu01Icon, MoneySend01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
+import {
+  DeadStockReport,
+  GodownSummaryReport,
+  MovementSummaryReport,
+  ReorderStatusReport,
+  StockAgeingReport,
+  StockLedgerReport,
+} from "@/components/reports/InventoryReports";
 export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
@@ -28,6 +36,12 @@ type ReportId =
   | "msme-payables"
   | "party-statement"
   | "stock-summary"
+  | "stock-ledger"
+  | "stock-movement"
+  | "godown-summary"
+  | "stock-ageing"
+  | "reorder-status"
+  | "dead-stock"
   | "item-wise-sales"
   | "payment-summary"
   | "tax-summary"
@@ -62,6 +76,12 @@ const REPORT_GROUPS: Array<{ label: string; reports: ReportDef[] }> = [
     label: "Inventory",
     reports: [
       { id: "stock-summary", label: "Stock Summary", description: "Current stock levels by item", tabular: true },
+      { id: "stock-ledger", label: "Stock Ledger", description: "Every movement of an item with its running balance", tabular: true },
+      { id: "stock-movement", label: "Movement Summary", description: "Opening, inward, outward and closing stock per item", tabular: true },
+      { id: "godown-summary", label: "Godown Summary", description: "Stock held and its value in each warehouse", tabular: true },
+      { id: "stock-ageing", label: "Stock Ageing", description: "How long current stock has been held", tabular: true },
+      { id: "reorder-status", label: "Reorder Status", description: "Items at or below their reorder level, with a suggested order", tabular: true },
+      { id: "dead-stock", label: "Dead Stock", description: "Stock that hasn't sold in a while", tabular: true },
       { id: "item-wise-sales", label: "Item-wise Sales", description: "Sales quantity and value per item", tabular: true },
     ],
   },
@@ -2896,6 +2916,18 @@ function ReportsPage() {
         return <PartyStatementReport partyId={partyStatementPartyId || null} fromDate={fromDate} toDate={toDate} />;
       case "stock-summary":
         return <StockSummaryReport />;
+      case "stock-ledger":
+        return <StockLedgerReport fromDate={fromDate} toDate={toDate} />;
+      case "stock-movement":
+        return <MovementSummaryReport fromDate={fromDate} toDate={toDate} />;
+      case "godown-summary":
+        return <GodownSummaryReport />;
+      case "stock-ageing":
+        return <StockAgeingReport />;
+      case "reorder-status":
+        return <ReorderStatusReport />;
+      case "dead-stock":
+        return <DeadStockReport />;
       case "payment-summary":
         return <PaymentSummaryReport fromDate={fromDate} toDate={toDate} />;
       case "tax-summary":
