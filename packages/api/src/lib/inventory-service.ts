@@ -229,12 +229,14 @@ type StockDocument = {
  * Credit and debit notes are financial only — goods coming back or going back
  * are recorded with a sales return or purchase return instead. Orders move
  * nothing; a goods receipt note brings purchased goods in ahead of the bill.
+ * A delivery challan follows its side: a sales challan sends goods out, a
+ * purchase (inward) challan brings them in.
  */
 export function documentStockDirection(doc: StockDocument): -1 | 0 | 1 {
   switch (doc.documentType) {
     case "invoice":
-      return doc.type === "sale" ? -1 : 1;
     case "delivery_challan":
+      return doc.type === "sale" ? -1 : 1;
     case "purchase_return":
       return -1;
     case "sales_return":
@@ -252,6 +254,7 @@ function documentOperation(doc: StockDocument): InventoryOperation {
     case "purchase_return":
       return "purchase_return";
     case "invoice":
+    case "delivery_challan":
       return doc.type === "sale" ? "sale" : "purchase";
     case "goods_receipt_note":
       return "purchase";
@@ -336,7 +339,10 @@ export async function syncDocumentStock(
   if (doc.stockMode === "none" || direction === 0) return;
 
   if (doc.stockMode === "legacy") {
-    await undoLegacyDocumentStock(tx, input.businessId, doc.id, direction);
+    // Before movements, every delivery challan took stock out — purchase
+    // (inward) ones included — so that is what gets undone.
+    const legacyDirection = doc.documentType === "delivery_challan" ? -1 : direction;
+    await undoLegacyDocumentStock(tx, input.businessId, doc.id, legacyDirection);
     await tx.update(invoices).set({ stockMode: "tracked" }).where(eq(invoices.id, doc.id));
   }
 
@@ -470,14 +476,14 @@ export async function postNewDocumentsStock(
 
   // Keep in step with documentStockDirection / documentOperation.
   const direction = sql`CASE
-      WHEN i.document_type = 'invoice' THEN CASE WHEN i.type = 'sale' THEN -1 ELSE 1 END
-      WHEN i.document_type IN ('delivery_challan', 'purchase_return') THEN -1
+      WHEN i.document_type IN ('invoice', 'delivery_challan') THEN CASE WHEN i.type = 'sale' THEN -1 ELSE 1 END
+      WHEN i.document_type = 'purchase_return' THEN -1
       WHEN i.document_type IN ('sales_return', 'goods_receipt_note') THEN 1
       ELSE 0 END`;
   const warehouse = sql`CASE
       WHEN i.document_type = 'sales_return' THEN ${salesReturnWh}::uuid
       WHEN i.document_type = 'purchase_return' THEN ${purchaseReturnWh}::uuid
-      WHEN i.document_type = 'invoice' AND i.type = 'purchase' THEN ${purchaseWh}::uuid
+      WHEN i.document_type IN ('invoice', 'delivery_challan') AND i.type = 'purchase' THEN ${purchaseWh}::uuid
       WHEN i.document_type = 'goods_receipt_note' THEN ${purchaseWh}::uuid
       ELSE ${saleWh}::uuid END`;
 

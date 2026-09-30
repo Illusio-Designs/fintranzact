@@ -387,7 +387,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               discountPercent: li.discountPercent || "0",
             })),
             charges: charges.length > 0 ? charges : undefined,
-            roundOff: charges.length > 0 ? (input.roundOff || "0") : undefined,
+            invoiceDiscount: input.invoiceDiscount || "0",
+            invoiceDiscountType: input.invoiceDiscountType || "amount",
+            roundOff: input.roundOff || "0",
           });
           const additionalCharges = charges.length > 0
             ? totals.chargesTotal
@@ -458,7 +460,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               dueDate: input.dueDate ? new Date(input.dueDate) : null,
               subtotal: totals.subtotal,
               taxAmount: totals.taxTotal,
-              discountAmount: "0.00",
+              discountAmount: totals.invoiceDiscountAmount,
               charges: charges.length > 0 ? charges : null,
               additionalCharges,
               roundOff,

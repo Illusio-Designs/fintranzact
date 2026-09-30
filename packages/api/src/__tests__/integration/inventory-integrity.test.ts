@@ -227,6 +227,133 @@ describe("delivery challans and returns", () => {
     await expectStock(item.id, 45);
   });
 
+  it("a purchase (inward) challan brings stock in; cancel, reinstate and delete reverse it", async () => {
+    const item = await newItem("50");
+    const challan = await caller().deliveryChallan.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: now(),
+      lineItems: [line(item.id, "5")],
+    } as never);
+    await expectStock(item.id, 55);
+
+    await caller().deliveryChallan.updateStatus({ id: challan.id, status: "cancelled" });
+    await expectStock(item.id, 50);
+    await caller().deliveryChallan.updateStatus({ id: challan.id, status: "sent" });
+    await expectStock(item.id, 55);
+
+    // Editing posts only the difference, still inward.
+    await caller().invoice.update({ id: challan.id, lineItems: [line(item.id, "8")] } as never);
+    await expectStock(item.id, 58);
+
+    await caller().deliveryChallan.delete({ id: challan.id });
+    await expectStock(item.id, 50);
+  });
+
+  it("billing a purchase challan does not bring the goods in again", async () => {
+    const item = await newItem("50");
+    const challan = await caller().deliveryChallan.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: now(),
+      lineItems: [line(item.id, "6")],
+    } as never);
+    const bill = await caller().document.convert({ sourceDocumentId: challan.id, targetDocumentType: "invoice" });
+    await expectStock(item.id, 56);
+    const [saved] = await getTenantTestDb().select({ type: invoices.type }).from(invoices).where(eq(invoices.id, bill.id));
+    expect(saved!.type).toBe("purchase");
+  });
+
+  it("a goods receipt note brings stock in; cancelling takes it out and reinstating brings it back", async () => {
+    const item = await newItem("20");
+    const grn = await caller().goodsReceiptNote.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: now(),
+      lineItems: [line(item.id, "7")],
+    } as never);
+    await expectStock(item.id, 27);
+
+    await caller().goodsReceiptNote.updateStatus({ id: grn.id, status: "cancelled" });
+    await expectStock(item.id, 20);
+    await caller().goodsReceiptNote.updateStatus({ id: grn.id, status: "sent" });
+    await expectStock(item.id, 27);
+  });
+
+  it("a purchase return takes stock out and a sales return brings it in, whatever side the client sends", async () => {
+    const item = await newItem("50");
+    const pr = await caller().purchaseReturn.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: now(),
+      lineItems: [line(item.id, "4")],
+    } as never);
+    await expectStock(item.id, 46);
+    expect(pr.type).toBe("purchase");
+
+    const sr = await caller().salesReturn.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: now(),
+      lineItems: [line(item.id, "3")],
+    } as never);
+    await expectStock(item.id, 49);
+    expect(sr.type).toBe("sale");
+
+    // Cancelling a purchase return brings the goods back; reinstating sends them again.
+    await caller().purchaseReturn.updateStatus({ id: pr.id, status: "cancelled" });
+    await expectStock(item.id, 53);
+    await caller().purchaseReturn.updateStatus({ id: pr.id, status: "sent" });
+    await expectStock(item.id, 49);
+
+    await caller().salesReturn.updateStatus({ id: sr.id, status: "sent" });
+    await expectStock(item.id, 49);
+    const movements = await caller().item.stockMovements({ id: item.id });
+    const byId = new Map(movements.map((m) => [m.invoiceId, m.direction]));
+    expect(byId.get(pr.id)).toBe("out");
+    expect(byId.get(sr.id)).toBe("in");
+  });
+
+  it("an item's history shows a purchase challan as inward", async () => {
+    const item = await newItem("10");
+    const challan = await caller().deliveryChallan.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: now(),
+      lineItems: [line(item.id, "2")],
+    } as never);
+    await caller().deliveryChallan.updateStatus({ id: challan.id, status: "sent" });
+    const movements = await caller().item.stockMovements({ id: item.id });
+    expect(movements.find((m) => m.invoiceId === challan.id)?.direction).toBe("in");
+  });
+
+  it("undoes a pre-movements purchase challan the way it was applied (out)", async () => {
+    const db = getTenantTestDb();
+    // Before movements every challan took stock out, whichever side it was.
+    const item = await createItem(db, world.business1.id, { name: "Legacy challan item", stockQuantity: "40.000" });
+    const [challan] = await db.insert(invoices).values({
+      businessId: world.business1.id,
+      partyId: world.party1.id,
+      type: "purchase",
+      documentType: "delivery_challan",
+      invoiceNumber: "LEGACY-DC-1",
+      totalAmount: "1000",
+      stockMode: "legacy",
+    }).returning();
+    await db.insert(invoiceItems).values({
+      invoiceId: challan!.id,
+      itemId: item.id,
+      itemName: "Legacy challan item",
+      quantity: "10",
+      unitPrice: "100",
+      totalAmount: "1000",
+    });
+
+    await caller().deliveryChallan.delete({ id: challan!.id });
+    const { total } = await stock(item.id);
+    expect(total).toBe(50);
+  });
+
   it("credit notes stay financial only", async () => {
     const item = await newItem("50");
     await caller().creditNote.create({

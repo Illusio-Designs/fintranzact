@@ -587,3 +587,144 @@ describe("Server-side guard: CN/SR total must not exceed invoice total", () => {
     ).rejects.toThrow(/exceeds remaining/i);
   });
 });
+
+// =============================================================================
+// Document-level discount and round-off
+// =============================================================================
+
+describe("Document-level discount and round-off", () => {
+  const lineOf = (quantity: string, unitPrice = "100.00", taxPercent = "0") => ({
+    itemName: "Discounted line",
+    quantity,
+    unitPrice,
+    taxPercent,
+    discountPercent: "0",
+    conversionFactor: null,
+    variantId: null,
+  });
+
+  async function saved(id: string) {
+    const [row] = await getTenantTestDb()
+      .select({
+        subtotal: invoices.subtotal,
+        taxAmount: invoices.taxAmount,
+        discountAmount: invoices.discountAmount,
+        roundOff: invoices.roundOff,
+        additionalCharges: invoices.additionalCharges,
+        totalAmount: invoices.totalAmount,
+      })
+      .from(invoices)
+      .where(eq(invoices.id, id));
+    return row!;
+  }
+
+  it("keeps a quotation's discount and round-off, and totals them like an invoice", async () => {
+    const caller = callerForRamesh();
+    const quotation = await caller.quotation.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      invoiceDiscount: "50.00",
+      invoiceDiscountType: "amount",
+      roundOff: "-0.40",
+      lineItems: [lineOf("10", "100.00", "18")],
+    });
+    // 1000 + 180 tax - 50 - 0.40
+    expect(await saved(quotation.id)).toMatchObject({
+      subtotal: "1000.00",
+      taxAmount: "180.00",
+      discountAmount: "50.00",
+      roundOff: "-0.40",
+      totalAmount: "1129.60",
+    });
+  });
+
+  it("applies a percent discount on documents made by the factory", async () => {
+    const caller = callerForRamesh();
+    const order = await caller.salesOrder.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      invoiceDiscount: "10",
+      invoiceDiscountType: "percent",
+      lineItems: [lineOf("5")],
+    });
+    expect(await saved(order.id)).toMatchObject({ discountAmount: "50.00", totalAmount: "450.00" });
+  });
+
+  it("carries discount, round-off and charges through quotation → invoice", async () => {
+    const caller = callerForRamesh();
+    const quotation = await caller.quotation.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      invoiceDiscount: "25.00",
+      charges: [{ label: "Freight", amount: "40.00" }],
+      roundOff: "0.30",
+      lineItems: [lineOf("3")],
+    });
+    const source = await saved(quotation.id);
+    expect(source).toMatchObject({ discountAmount: "25.00", additionalCharges: "40.00", totalAmount: "315.30" });
+
+    const converted = await caller.document.convert({ sourceDocumentId: quotation.id, targetDocumentType: "invoice" });
+    expect(await saved(converted.id)).toEqual(source);
+  });
+
+  it("carries the discount through sales order → challan → invoice", async () => {
+    const caller = callerForRamesh();
+    const order = await caller.salesOrder.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      invoiceDiscount: "20.00",
+      roundOff: "0.50",
+      lineItems: [lineOf("4")],
+    });
+    const challan = await caller.document.convert({ sourceDocumentId: order.id, targetDocumentType: "delivery_challan" });
+    expect(await saved(challan.id)).toMatchObject({ discountAmount: "20.00", roundOff: "0.50", totalAmount: "380.50" });
+
+    const bill = await caller.document.convert({ sourceDocumentId: challan.id, targetDocumentType: "invoice" });
+    expect(await saved(bill.id)).toMatchObject({ discountAmount: "20.00", roundOff: "0.50", totalAmount: "380.50" });
+  });
+
+  it("gives part of an order the matching share of its discount, and no round-off", async () => {
+    const caller = callerForRamesh();
+    const order = await caller.purchaseOrder.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: isoNow(),
+      invoiceDiscount: "100.00",
+      roundOff: "0.25",
+      lineItems: [lineOf("10")],
+    });
+    const full = await caller.purchaseOrder.getById({ id: order.id });
+    const grn = await caller.document.convert({
+      sourceDocumentId: order.id,
+      targetDocumentType: "goods_receipt_note",
+      lines: [{ sourceLineId: full!.lineItems[0]!.id, quantity: "4" }],
+    });
+    // 4 of 10 → 40% of the ₹100 discount.
+    expect(await saved(grn.id)).toMatchObject({ subtotal: "400.00", discountAmount: "40.00", roundOff: "0.00", totalAmount: "360.00" });
+  });
+
+  it("recomputes the total when only the discount or round-off is edited", async () => {
+    const caller = callerForRamesh();
+    const proforma = await caller.proforma.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      lineItems: [lineOf("2")],
+    });
+    expect((await saved(proforma.id)).totalAmount).toBe("200.00");
+
+    await caller.invoice.update({ id: proforma.id, invoiceDiscount: "15.00", roundOff: "-0.25" });
+    expect(await saved(proforma.id)).toMatchObject({ discountAmount: "15.00", roundOff: "-0.25", totalAmount: "184.75" });
+
+    // Editing the lines keeps the saved discount and round-off.
+    await caller.invoice.update({ id: proforma.id, lineItems: [lineOf("3")] });
+    expect(await saved(proforma.id)).toMatchObject({ discountAmount: "15.00", roundOff: "-0.25", totalAmount: "284.75" });
+
+    await caller.invoice.update({ id: proforma.id, invoiceDiscount: "10", invoiceDiscountType: "percent" });
+    expect(await saved(proforma.id)).toMatchObject({ discountAmount: "30.00", totalAmount: "269.75" });
+  });
+});
