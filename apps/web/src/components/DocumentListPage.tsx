@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, cn, getDocumentTypeLabel } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -8,6 +8,7 @@ import { PillTabs } from "@/components/ui/Tabs";
 import { SegmentedControl } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SlideOver } from "@/components/ui/SlideOver";
+import { ShareLinkSection } from "@/components/ShareLinkSection";
 import { DocumentCreator, type DocumentType } from "@/components/DocumentCreator";
 import { toast } from "@/hooks/useToast";
 
@@ -494,6 +495,14 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                 </div>
               </div>
             </div>
+
+            {selectedDoc.type === "sale" && (
+              <ShareLinkSection
+                documentId={selectedDoc.id}
+                documentLabel={`${getDocumentTypeLabel(selectedDoc.documentType)} ${selectedDoc.invoiceNumber}`}
+                partyPhone={selectedDoc.party?.phone}
+              />
+            )}
 
             {/* Notes & Terms */}
             {(selectedDoc.notes || selectedDoc.termsAndConditions) && (

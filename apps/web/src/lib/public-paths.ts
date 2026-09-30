@@ -34,3 +34,8 @@ export function isMarketingPath(pathname: string) {
 export function isAuthPublicPath(pathname: string) {
   return AUTH_PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 }
+
+/** Shared document pages (/i/<token>): public, and outside the app shell. */
+export function isSharePath(pathname: string) {
+  return pathname.startsWith("/i/");
+}

@@ -42,6 +42,7 @@ import { selfImportRouter } from "./routers/selfImport.js";
 import { posRouter } from "./routers/pos.js";
 import { warehouseRouter } from "./routers/warehouse.js";
 import { barcodeRouter } from "./routers/barcode.js";
+import { shareRouter } from "./routers/share.js";
 import { stockRouter } from "./routers/stock.js";
 
 export const appRouter = router({
@@ -87,6 +88,7 @@ export const appRouter = router({
   warehouse: warehouseRouter,
   stock: stockRouter,
   barcode: barcodeRouter,
+  share: shareRouter,
 });
 
 export type AppRouter = typeof appRouter;

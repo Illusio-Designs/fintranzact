@@ -27,6 +27,7 @@ import { useInfiniteList } from "@/hooks/useInfiniteList";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { RecordPaymentPanel } from "@/components/RecordPaymentPanel";
+import { ShareLinkSection } from "@/components/ShareLinkSection";
 import { Icon } from "@/components/ui/Icon";
 import { Cash01Icon, Delete02Icon, Download04Icon, File01Icon, FlashIcon, SentIcon } from "@hugeicons/core-free-icons";
 
@@ -750,6 +751,14 @@ function InvoiceDetailPanel({
               )}
             </div>
           </div>
+
+          {invoice.type === "sale" && (
+            <ShareLinkSection
+              documentId={invoice.id}
+              documentLabel={`Invoice ${invoice.invoiceNumber}`}
+              partyPhone={invoice.party?.phone}
+            />
+          )}
 
           {/* Notes & Terms */}
           {(invoice.notes || invoice.termsAndConditions) && (
