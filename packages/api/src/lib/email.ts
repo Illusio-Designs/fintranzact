@@ -22,7 +22,6 @@ export interface PartnerApprovedEmail {
   companyName: string;
   referralCode: string;
   signupUrl: string;
-  statusUrl: string;
 }
 
 function partnerApprovedText(d: PartnerApprovedEmail): string {
@@ -36,9 +35,6 @@ function partnerApprovedText(d: PartnerApprovedEmail): string {
     "",
     "Businesses that sign up with your code or link count as your referrals. Your badge and commission",
     "grow with the number of them on a paid plan.",
-    "",
-    `See your referrals, badge and payouts any time: ${d.statusUrl}`,
-    "(enter this email address and your referral code)",
     "",
     "Welcome aboard,",
     "The Fintranzact team",
@@ -69,7 +65,7 @@ function partnerApprovedHtml(d: PartnerApprovedEmail): string {
 <p style="margin:10px 0 0 0;font-size:12px;color:#6b7280;word-break:break-all;">${e(d.signupUrl)}</p>
 </td></tr>
 <tr><td style="padding:24px 40px 32px 40px;${font}">
-<p style="margin:0;font-size:14px;line-height:21px;color:#374151;">See your referrals, badge and payouts any time at <a href="${e(d.statusUrl)}" style="color:#3B5EAA;">${e(d.statusUrl)}</a> with this email address and your referral code.</p>
+<p style="margin:0;font-size:14px;line-height:21px;color:#374151;">Questions about your referrals or payouts? Get in touch with the Fintranzact team.</p>
 </td></tr>
 </table></td></tr></table></body></html>`;
 }

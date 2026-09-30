@@ -32,7 +32,7 @@ const FOOTER_COLUMNS: Array<{
       { label: "About us", to: "/about" },
       { label: "Contact", to: "/contact" },
       { label: "Partner with us", to: "/partners" },
-      { label: "Partner status", to: "/partner-status" },
+      { label: "Find a partner", to: "/find-a-partner" },
     ],
   },
   {

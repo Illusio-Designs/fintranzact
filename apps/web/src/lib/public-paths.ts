@@ -10,7 +10,7 @@ export const MARKETING_PATHS = [
   "/about",
   "/contact",
   "/partners",
-  "/partner-status",
+  "/find-a-partner",
   "/privacy",
   "/terms",
   "/refund-policy",

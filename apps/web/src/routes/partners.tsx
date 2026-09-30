@@ -1,10 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useRef, useState, type FormEvent } from "react";
-import { partnerApplicationSchema, partnerBadges, partnerClientCounts, partnerTypeInfo, type PartnerType } from "@fintranzact/shared";
+import { partnerApplicationSchema, partnerBadges, partnerClientCounts, type PartnerType } from "@fintranzact/shared";
 import { trpc } from "@/lib/trpc";
 import { TurnstileModal } from "@/components/ui/TurnstileModal";
 import { PartnerBadge } from "@/components/ui/PartnerBadge";
-import { Link } from "@tanstack/react-router";
 import {
   CONTACT_EMAIL,
   CtaBand,
@@ -23,8 +22,6 @@ import {
   Target02Icon,
   UserGroupIcon,
   BookOpen01Icon,
-  Location01Icon,
-  Globe02Icon,
 } from "@hugeicons/core-free-icons";
 import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
 import { InputField, SelectField, TextareaField } from "@/components/ui/FormField";
@@ -140,7 +137,7 @@ function PartnersPage() {
         title="Grow your practice with Fintranzact"
         subtitle="Join our partner programme for accountants, resellers and technology companies serving Indian businesses."
       >
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-8 flex flex-wrap items-center gap-3">
           <a
             href="#apply"
             className="inline-flex h-[52px] items-center rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
@@ -148,10 +145,10 @@ function PartnersPage() {
             Become a partner
           </a>
           <Link
-            to="/partner-status"
+            to="/find-a-partner"
             className="inline-flex h-[52px] items-center rounded-xl border border-border-medium bg-surface-0 px-6 text-base font-semibold text-text-primary transition hover:border-brand-500"
           >
-            Check partner status
+            Find a partner
           </Link>
         </div>
       </PageHero>
@@ -357,8 +354,6 @@ function PartnersPage() {
         </div>
       </section>
 
-      <PartnerDirectory />
-
       <TurnstileModal
         open={showTurnstile}
         onVerified={onVerified}
@@ -373,79 +368,3 @@ function PartnersPage() {
   );
 }
 
-/** Approved partners who chose to be listed. */
-function PartnerDirectory() {
-  const { data } = trpc.partner.directory.useQuery();
-  const [type, setType] = useState<PartnerType | "all">("all");
-  const [query, setQuery] = useState("");
-  if (!data?.length) return null;
-
-  const q = query.trim().toLowerCase();
-  const shown = data.filter(
-    (p) =>
-      (type === "all" || p.partnerType === type) &&
-      (!q || [p.companyName, p.city, p.state].some((v) => v?.toLowerCase().includes(q))),
-  );
-
-  return (
-    <section id="find-a-partner" className="scroll-mt-24">
-      <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
-        <p className={cn(EYEBROW, "text-center")}>Find a partner</p>
-        <h2 className={cn(HEADING, "mt-3 text-center text-3xl md:text-[40px]")}>Work with a Fintranzact partner near you</h2>
-        <div className="mx-auto mt-10 flex max-w-2xl flex-col gap-3 sm:flex-row">
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name or city"
-            aria-label="Search partners"
-            className="h-12 flex-1 rounded-xl border border-border-light bg-surface-0 px-4 text-[15px] text-text-primary outline-none focus:border-brand-500"
-          />
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as PartnerType | "all")}
-            aria-label="Partner type"
-            className="h-12 rounded-xl border border-border-light bg-surface-0 px-3 text-[15px] text-text-primary"
-          >
-            <option value="all">All partners</option>
-            {Object.entries(partnerTypeInfo).map(([id, info]) => (
-              <option key={id} value={id}>{info.label}</option>
-            ))}
-          </select>
-        </div>
-        {shown.length === 0 ? (
-          <p className="mt-10 text-center text-[15px] text-text-tertiary">No partners match that search yet.</p>
-        ) : (
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {shown.map((p) => (
-              <div key={p.id} className="rounded-2xl border border-border-light bg-surface-0 p-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
-                    {partnerTypeInfo[p.partnerType as PartnerType]?.label ?? p.partnerType}
-                  </span>
-                  <PartnerBadge badge={p.badge} />
-                </div>
-                <h3 className="mt-4 text-base font-bold text-text-primary">{p.companyName}</h3>
-                <p className="mt-1.5 flex items-center gap-1.5 text-sm text-text-tertiary">
-                  <Icon icon={Location01Icon} size={15} />
-                  {[p.city, p.state].filter(Boolean).join(", ")}
-                </p>
-                {p.website ? (
-                  <a
-                    href={p.website.startsWith("http") ? p.website : `https://${p.website}`}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                    className="mt-1.5 flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline dark:text-brand-300"
-                  >
-                    <Icon icon={Globe02Icon} size={15} />
-                    {p.website.replace(/^https?:\/\//, "")}
-                  </a>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}

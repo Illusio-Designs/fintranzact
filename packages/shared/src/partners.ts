@@ -98,11 +98,3 @@ export type PartnerPayoutStatus = (typeof partnerPayoutStatuses)[number];
 
 /** "2026-09" — the month a payout covers. */
 export const payoutPeriodSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM");
-
-/** What a partner enters on the public "Check partner status" page. */
-export const partnerStatusLookupSchema = z.object({
-  email: z.string().trim().toLowerCase().email("Enter the email you applied with").max(200),
-  /** Their referral code (full dashboard) or the phone number they applied with (application status only). */
-  secret: z.string().trim().min(4, "Enter your referral code or phone number").max(40),
-  turnstileToken: z.string().optional(),
-});

@@ -76,7 +76,6 @@ describe("referral codes", () => {
       contactName: "Kiran Desai",
       referralCode,
       signupUrl: expect.stringMatching(new RegExp(`/register\\?ref=${referralCode}$`)),
-      statusUrl: expect.stringMatching(/\/partner-status$/),
     });
 
     const again = await adminCaller().platform.updatePartner({ id: partnerId, status: "approved" });
@@ -209,34 +208,7 @@ describe("badges, commission and payouts", () => {
   });
 });
 
-describe("checking partner status", () => {
-  it("shows a partner their dashboard with email and referral code", async () => {
-    const result = await publicCaller().partner.checkStatus({ email: "Kiran@DesaiTax.in", secret: referralCode.toLowerCase() });
-    expect(result.kind).toBe("partner");
-    if (result.kind !== "partner") return;
-    expect(result.stats).toMatchObject({ referred: 2, paidReferrals: 1, badge: "registered", paidOut: "149.90" });
-    expect(result.referred.map((r) => r.paid).sort()).toEqual([false, true]);
-    expect(result.payouts).toEqual([
-      expect.objectContaining({ period: "2026-09", amount: "149.90", status: "paid", reference: "UPI 4312 9981" }),
-    ]);
-  });
-
-  it("shows only the application status with email and phone", async () => {
-    const result = await publicCaller().partner.checkStatus({ email: "kiran@desaitax.in", secret: "98765 43210" });
-    expect(result).toEqual({ kind: "application", companyName: "Desai Tax Consultants", status: "approved", appliedAt: expect.any(String) });
-  });
-
-  it("gives the same answer for any wrong details", async () => {
-    const wrong = [
-      { email: "kiran@desaitax.in", secret: "FTZ-AAAAAA" },
-      { email: "kiran@desaitax.in", secret: "9999999999" },
-      { email: "nobody@example.in", secret: referralCode },
-    ];
-    for (const input of wrong) {
-      await expect(publicCaller().partner.checkStatus(input)).rejects.toThrow(/couldn't find a partner/);
-    }
-  });
-
+describe("rejected partners", () => {
   it("stops linking new organisations once a partner is rejected", async () => {
     await adminCaller().platform.updatePartner({ id: partnerId, status: "rejected" });
     await publicCaller().auth.register({
@@ -247,8 +219,6 @@ describe("checking partner status", () => {
       referralCode,
     });
     expect((await tenantOf("late@signup.in")).partnerId).toBeNull();
-    await expect(publicCaller().partner.checkStatus({ email: "kiran@desaitax.in", secret: referralCode })).rejects.toThrow(
-      /couldn't find a partner/,
-    );
+    expect(await publicCaller().partner.directory()).toEqual([]);
   });
 });

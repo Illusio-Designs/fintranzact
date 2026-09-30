@@ -30,7 +30,6 @@ import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PhysicalStockRouteImport } from './routes/physical-stock'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PartnersRouteImport } from './routes/partners'
-import { Route as PartnerStatusRouteImport } from './routes/partner-status'
 import { Route as PartiesRouteImport } from './routes/parties'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
@@ -40,6 +39,7 @@ import { Route as ItcRouteImport } from './routes/itc'
 import { Route as InvoicesRouteImport } from './routes/invoices'
 import { Route as Gstr2bRouteImport } from './routes/gstr2b'
 import { Route as GstRouteImport } from './routes/gst'
+import { Route as FindAPartnerRouteImport } from './routes/find-a-partner'
 import { Route as FeaturesRouteImport } from './routes/features'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as EwayBillsRouteImport } from './routes/eway-bills'
@@ -164,11 +164,6 @@ const PartnersRoute = PartnersRouteImport.update({
   path: '/partners',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PartnerStatusRoute = PartnerStatusRouteImport.update({
-  id: '/partner-status',
-  path: '/partner-status',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PartiesRoute = PartiesRouteImport.update({
   id: '/parties',
   path: '/parties',
@@ -212,6 +207,11 @@ const Gstr2bRoute = Gstr2bRouteImport.update({
 const GstRoute = GstRouteImport.update({
   id: '/gst',
   path: '/gst',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FindAPartnerRoute = FindAPartnerRouteImport.update({
+  id: '/find-a-partner',
+  path: '/find-a-partner',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeaturesRoute = FeaturesRouteImport.update({
@@ -318,6 +318,7 @@ export interface FileRoutesByFullPath {
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
   '/features': typeof FeaturesRoute
+  '/find-a-partner': typeof FindAPartnerRoute
   '/gst': typeof GstRoute
   '/gstr2b': typeof Gstr2bRoute
   '/invoices': typeof InvoicesRoute
@@ -327,7 +328,6 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
-  '/partner-status': typeof PartnerStatusRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
@@ -369,6 +369,7 @@ export interface FileRoutesByTo {
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
   '/features': typeof FeaturesRoute
+  '/find-a-partner': typeof FindAPartnerRoute
   '/gst': typeof GstRoute
   '/gstr2b': typeof Gstr2bRoute
   '/invoices': typeof InvoicesRoute
@@ -378,7 +379,6 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
-  '/partner-status': typeof PartnerStatusRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
@@ -421,6 +421,7 @@ export interface FileRoutesById {
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
   '/features': typeof FeaturesRoute
+  '/find-a-partner': typeof FindAPartnerRoute
   '/gst': typeof GstRoute
   '/gstr2b': typeof Gstr2bRoute
   '/invoices': typeof InvoicesRoute
@@ -430,7 +431,6 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
-  '/partner-status': typeof PartnerStatusRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
@@ -474,6 +474,7 @@ export interface FileRouteTypes {
     | '/eway-bills'
     | '/expenses'
     | '/features'
+    | '/find-a-partner'
     | '/gst'
     | '/gstr2b'
     | '/invoices'
@@ -483,7 +484,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
-    | '/partner-status'
     | '/partners'
     | '/payments'
     | '/physical-stock'
@@ -525,6 +525,7 @@ export interface FileRouteTypes {
     | '/eway-bills'
     | '/expenses'
     | '/features'
+    | '/find-a-partner'
     | '/gst'
     | '/gstr2b'
     | '/invoices'
@@ -534,7 +535,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
-    | '/partner-status'
     | '/partners'
     | '/payments'
     | '/physical-stock'
@@ -576,6 +576,7 @@ export interface FileRouteTypes {
     | '/eway-bills'
     | '/expenses'
     | '/features'
+    | '/find-a-partner'
     | '/gst'
     | '/gstr2b'
     | '/invoices'
@@ -585,7 +586,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
-    | '/partner-status'
     | '/partners'
     | '/payments'
     | '/physical-stock'
@@ -628,6 +628,7 @@ export interface RootRouteChildren {
   EwayBillsRoute: typeof EwayBillsRoute
   ExpensesRoute: typeof ExpensesRoute
   FeaturesRoute: typeof FeaturesRoute
+  FindAPartnerRoute: typeof FindAPartnerRoute
   GstRoute: typeof GstRoute
   Gstr2bRoute: typeof Gstr2bRoute
   InvoicesRoute: typeof InvoicesRoute
@@ -637,7 +638,6 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
   PartiesRoute: typeof PartiesRoute
-  PartnerStatusRoute: typeof PartnerStatusRoute
   PartnersRoute: typeof PartnersRoute
   PaymentsRoute: typeof PaymentsRoute
   PhysicalStockRoute: typeof PhysicalStockRoute
@@ -816,13 +816,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PartnersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/partner-status': {
-      id: '/partner-status'
-      path: '/partner-status'
-      fullPath: '/partner-status'
-      preLoaderRoute: typeof PartnerStatusRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/parties': {
       id: '/parties'
       path: '/parties'
@@ -884,6 +877,13 @@ declare module '@tanstack/react-router' {
       path: '/gst'
       fullPath: '/gst'
       preLoaderRoute: typeof GstRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/find-a-partner': {
+      id: '/find-a-partner'
+      path: '/find-a-partner'
+      fullPath: '/find-a-partner'
+      preLoaderRoute: typeof FindAPartnerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/features': {
@@ -1028,6 +1028,7 @@ const rootRouteChildren: RootRouteChildren = {
   EwayBillsRoute: EwayBillsRoute,
   ExpensesRoute: ExpensesRoute,
   FeaturesRoute: FeaturesRoute,
+  FindAPartnerRoute: FindAPartnerRoute,
   GstRoute: GstRoute,
   Gstr2bRoute: Gstr2bRoute,
   InvoicesRoute: InvoicesRoute,
@@ -1037,7 +1038,6 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
   PartiesRoute: PartiesRoute,
-  PartnerStatusRoute: PartnerStatusRoute,
   PartnersRoute: PartnersRoute,
   PaymentsRoute: PaymentsRoute,
   PhysicalStockRoute: PhysicalStockRoute,
