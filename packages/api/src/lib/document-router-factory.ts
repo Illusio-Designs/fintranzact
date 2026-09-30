@@ -629,6 +629,17 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           // Already soft-deleted — return early
           if (doc.deletedAt) return { success: true, invoiceNumber: doc.invoiceNumber, deleted: false };
 
+          // seller_manager: same limit as invoice.delete — unpaid, within 2 hours of creation
+          if (ctx.role === "seller_manager") {
+            if (doc.status === "paid") {
+              throw new TRPCError({ code: "FORBIDDEN", message: "Cannot delete paid documents" });
+            }
+            const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+            if (doc.createdAt < twoHoursAgo) {
+              throw new TRPCError({ code: "FORBIDDEN", message: "Can only delete documents within 2 hours of creation" });
+            }
+          }
+
           await assertNotBilled(tx, ctx.businessId, doc);
 
           // Soft delete: set deletedAt + cancel the document

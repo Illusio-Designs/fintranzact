@@ -703,6 +703,7 @@ export const invoiceRouter = router({
   lastDeliveryMethod: viewerProcedure
     .input(z.object({ partyId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Invoice");
       const [row] = await ctx.db.select({ deliveryMethod: invoices.deliveryMethod })
         .from(invoices)
         .where(and(
