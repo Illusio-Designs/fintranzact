@@ -159,6 +159,30 @@ async function requireTenantAdmin(userId: string, tenantId: string) {
   }
 }
 
+/**
+ * The business must be one of this organization's. In self-hosted mode all
+ * organizations share one database, so an id alone could name another
+ * organization's business; as in the hasBusinessAccess middleware, it
+ * belongs here when its creator is a member of this tenant.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function assertBusinessInTenant(db: any, tenantId: string, businessId: string) {
+  const [biz] = await db
+    .select({ createdByUserId: businesses.createdByUserId })
+    .from(businesses)
+    .where(eq(businesses.id, businessId))
+    .limit(1);
+  if (biz) {
+    const [creator] = await controlDb
+      .select({ userId: tenantMembers.userId })
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, biz.createdByUserId)))
+      .limit(1);
+    if (creator) return;
+  }
+  throw new TRPCError({ code: "NOT_FOUND", message: "Business not found" });
+}
+
 export const businessRouter = router({
   list: tenantProcedure.query(async ({ ctx }) => {
     await backfillLegacyBusinessMembers(ctx.db, ctx.tenantId);
@@ -183,6 +207,7 @@ export const businessRouter = router({
     .input(z.object({ businessId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.businessId);
 
       const rows = await ctx.db
         .select({
@@ -211,6 +236,7 @@ export const businessRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.businessId);
 
       // Verify the business exists in this tenant.
       const [business] = await ctx.db
@@ -280,6 +306,7 @@ export const businessRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.businessId);
 
       const [membership] = await ctx.db
         .update(businessMembers)
@@ -307,6 +334,7 @@ export const businessRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.businessId);
 
       // Prevent removing the last company admin.
       const [target] = await ctx.db
@@ -501,6 +529,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), data: updateBusinessSchema }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
 
       // Encrypt carrier credentials if present in the update payload
       const data = { ...input.data } as Record<string, unknown>;
@@ -576,6 +605,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), data: uploadBusinessLogoSchema }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
 
       const { bytes, mime: actualMime } = validateLogoDataUrl(input.data.dataUrl);
 
@@ -614,6 +644,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), data: uploadBusinessSignatureSchema }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
 
       const { bytes, mime: actualMime } = validateLogoDataUrl(input.data.dataUrl);
 
@@ -649,6 +680,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
 
       const [biz] = await ctx.db
         .update(businesses)
@@ -681,6 +713,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
 
       const [biz] = await ctx.db
         .update(businesses)
@@ -716,6 +749,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), enabled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
 
       const [biz] = await ctx.db
         .update(businesses)
