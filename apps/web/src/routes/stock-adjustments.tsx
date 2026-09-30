@@ -72,7 +72,7 @@ function StockAdjustmentsPage() {
   return (
     <div>
       <PageHeader
-        title="Stock adjustments"
+        title="Stock Adjustments"
         description="Stock added or removed outside of sales and purchases, with the reason"
         actions={
           <button className="btn-primary" onClick={() => setOpen(true)}>

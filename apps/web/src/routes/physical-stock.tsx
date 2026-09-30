@@ -73,7 +73,7 @@ function PhysicalStockPage() {
   if (!setup?.enabled) {
     return (
       <div>
-        <PageHeader title="Physical stock" description="Count stock by scanning barcodes." />
+        <PageHeader title="Physical Stock" description="Count stock by scanning barcodes." />
         <EmptyState
           title="Barcodes are switched off"
           description="Physical stock works by scanning barcodes. Switch barcodes on in Settings → Barcodes to use it."
@@ -170,7 +170,7 @@ function HomeScreen({ onStart, onOpen }: { onStart: (warehouseId: string) => voi
 
   return (
     <div>
-      <PageHeader title="Physical stock" description="Scan every barcode in a store or godown. After End scan you get a report of what's missing." />
+      <PageHeader title="Physical Stock" description="Scan every barcode in a store or godown. After End scan you get a report of what's missing." />
 
       <div className="card mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-end">
         <div className="flex-1">

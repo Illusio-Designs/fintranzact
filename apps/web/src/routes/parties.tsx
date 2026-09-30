@@ -555,7 +555,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                     View all
                   </LinkButton>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -606,7 +606,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                     View all
                   </LinkButton>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -657,7 +657,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                 description="Invoices and payments for this party will appear here."
               />
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -743,7 +743,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                 description="Invoices for this party will appear here."
               />
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -801,7 +801,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
             {!paymentList?.data?.length ? (
               <p className="text-sm text-text-tertiary text-center py-6">No payments recorded</p>
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table w-full text-sm">
                   <thead>
                     <tr>
@@ -861,7 +861,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                   {party.type === "customer" ? "Items purchased by" : "Items supplied by"}{" "}
                   <span className="font-medium text-text-secondary">{party.name}</span>
                 </p>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>

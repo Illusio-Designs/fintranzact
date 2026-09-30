@@ -204,7 +204,7 @@ function UploadHistorySection({ onSelectUpload }: { onSelectUpload: (id: string)
   }
 
   return (
-    <div className="rounded-xl border border-border-light overflow-hidden">
+    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border-light bg-surface-1">
@@ -361,7 +361,7 @@ function ReconciliationSection({
 
       {!isLoading && !!records?.records.length && (
         <>
-          <div className="rounded-xl border border-border-light overflow-hidden">
+          <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border-light bg-surface-1">
@@ -534,7 +534,7 @@ function MissingInBooksSection({ year, month }: { year: number; month: number })
         Create a purchase invoice to claim the ITC.
       </p>
 
-      <div className="rounded-xl border border-border-light overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-light bg-surface-1">
@@ -617,7 +617,7 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
         supplier to ensure they file their return correctly.
       </p>
 
-      <div className="rounded-xl border border-border-light overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-light bg-surface-1">
