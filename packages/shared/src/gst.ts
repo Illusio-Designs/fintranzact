@@ -1,8 +1,9 @@
 import { istStartOfDay } from "./dates.js";
 
 /**
- * GST place-of-supply rules shared by reports, ledgers and printed documents,
- * so an invoice is intra- or inter-state the same way everywhere.
+ * GST place-of-supply rules shared by the ledger, GST returns, printed
+ * invoices, e-invoices and e-way bills, so a supply is intra- or inter-state
+ * the same way everywhere.
  */
 
 export interface GstStateParty {
@@ -22,19 +23,37 @@ export function gstStateCode(p: GstStateParty): string | null {
 /**
  * Whether a supply is intra-state (CGST + SGST) rather than inter-state
  * (IGST). State codes decide when both sides have one (a GSTIN's prefix
- * counts); otherwise state names, compared case-insensitively. Null when a
- * side's state is not known at all — callers pick their own default (the
- * ledger and e-invoice treat it as intra-state, GSTR-1 and the printed
- * invoice as inter-state).
+ * counts); otherwise state names, compared case-insensitively. When the
+ * buyer's state is not known (a walk-in customer with no state and no GSTIN)
+ * the place of supply is the supplier's own location, so it is intra-state.
  */
-export function isIntraStateSupply(seller: GstStateParty, buyer: GstStateParty): boolean | null {
+export function isIntraStateSupply(seller: GstStateParty, buyer: GstStateParty): boolean {
   const sellerCode = gstStateCode(seller);
   const buyerCode = gstStateCode(buyer);
   if (sellerCode && buyerCode) return sellerCode === buyerCode;
   const sellerState = seller.state?.trim();
   const buyerState = buyer.state?.trim();
   if (sellerState && buyerState) return sellerState.toLowerCase() === buyerState.toLowerCase();
-  return null;
+  return true;
+}
+
+/**
+ * Place-of-supply state code for a domestic supply: the buyer's state code
+ * (or GSTIN prefix), else — buyer's state unknown — the seller's own.
+ */
+export function placeOfSupplyCode(seller: GstStateParty, buyer: GstStateParty): string | null {
+  return gstStateCode(buyer) ?? gstStateCode(seller);
+}
+
+/**
+ * Split an intra-state tax amount into CGST and SGST: CGST is half, rounded
+ * to the paisa (half up); SGST is the rest, so the two always add up to the
+ * tax exactly.
+ */
+export function splitIntraStateTax(tax: number | string): { cgst: number; sgst: number } {
+  const p = Math.round(Number(tax || 0) * 100);
+  const c = Math.round(p / 2);
+  return { cgst: c / 100, sgst: (p - c) / 100 };
 }
 
 /**

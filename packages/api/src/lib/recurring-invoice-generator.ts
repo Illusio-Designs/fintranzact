@@ -4,6 +4,7 @@
  */
 
 import { eq, and, inArray } from "drizzle-orm";
+import { withAllocatedLines } from "./document-totals.js";
 import {
   invoices, invoiceItems, items, businesses, parties,
   recurringInvoiceTemplates, recurringInvoiceRuns,
@@ -199,7 +200,7 @@ export async function generateInvoiceFromTemplate(
 
     if (processedItems.length > 0) {
       await tx.insert(invoiceItems).values(
-        processedItems.map((li) => ({ ...li, invoiceId: invoice.id }))
+        withAllocatedLines(processedItems, totals.lines).map((li) => ({ ...li, invoiceId: invoice.id }))
       );
     }
 

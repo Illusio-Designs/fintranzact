@@ -23,7 +23,9 @@ import {
   gstr2bSummaryInputSchema,
   gstr2bLinkInvoiceSchema,
   gstr2bIgnoreRecordSchema,
+  isIntraStateSupply,
   istPeriodRange,
+  splitIntraStateTax,
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -118,10 +120,14 @@ export const gstr2bRouter = router({
       // halves, as in the ITC ledger), different state → IGST.
       const purchaseInvoices: PurchaseInvoice[] = purchaseRows.map((r) => {
         const taxPaise = Math.round(parseFloat(r.taxAmount ?? "0") * 100);
-        const supplierState = r.partyStateCode || r.partyGstin?.substring(0, 2) || null;
-        // Unknown state on either side: treat as intra-state
-        const interState = !!(recipientState && supplierState && recipientState !== supplierState);
-        const halfPaise = Math.floor(taxPaise / 2);
+        // Shared place-of-supply rule: unknown state on either side is intra-state
+        const interState = !isIntraStateSupply(
+          { stateCode: recipientState },
+          { stateCode: r.partyStateCode, gstin: r.partyGstin },
+        );
+        // CGST = half rounded to the paisa, SGST the rest (shared rule)
+        const { cgst: cgstRs } = splitIntraStateTax(taxPaise / 100);
+        const halfPaise = Math.round(cgstRs * 100);
         return {
           id: r.id,
           invoiceNumber: r.invoiceNumber,

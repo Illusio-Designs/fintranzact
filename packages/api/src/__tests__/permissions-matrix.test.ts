@@ -5,10 +5,6 @@
  * lib/permissions.ts and the capability matrix in
  * docs/architecture/role-based-ui.md §3. Every cell is checked, so any grant
  * added or removed shows up here as a one-cell diff.
- *
- * Known difference from the doc (kept as the code has it): the doc lists
- * "GST Returns: read" for seller_manager, but seller_manager has no GstReport
- * grant — only admin/superadmin and accountant can read GST returns.
  */
 import { describe, it, expect } from "vitest";
 import { defineAbilityFor, mapDbRole, type Action, type Resource } from "../lib/permissions.js";
@@ -41,6 +37,7 @@ const EXPECTED: Record<string, Grants> = {
     Account: "r",
     Business: "r",
     Report: "r",
+    GstReport: "r",
     Store: "cru",
     SalesTarget: ALL,
     RecurringInvoice: "crud",

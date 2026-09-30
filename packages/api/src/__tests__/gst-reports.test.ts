@@ -63,12 +63,12 @@ function makeIsSameState(biz: {
   stateCode?: string | null;
   state?: string | null;
 }) {
-  // Now calls the shared rule generateGSTR1 uses (unknown state → inter-state).
+  // Calls the shared rule generateGSTR1 uses (unknown state → intra-state).
   return function isSameState(
     partyState: string | null,
     partyStateCode: string | null
   ): boolean {
-    return isIntraStateSupply(biz, { state: partyState, stateCode: partyStateCode }) ?? false;
+    return isIntraStateSupply(biz, { state: partyState, stateCode: partyStateCode });
   };
 }
 
@@ -237,14 +237,14 @@ describe("isSameState — text fallback when stateCode is absent", () => {
     expect(isSameState("Karnataka", null)).toBe(false);
   });
 
-  it("returns false when both stateCode and state text are unavailable on biz", () => {
+  it("returns true (intra-state) when the business's state is unknown", () => {
     const isSameState = makeIsSameState({ stateCode: null, state: null });
-    expect(isSameState("Maharashtra", null)).toBe(false);
+    expect(isSameState("Maharashtra", null)).toBe(true);
   });
 
-  it("returns false when partyState is null and no stateCode available", () => {
+  it("returns true (intra-state: place of supply is our own state) when the buyer's state is unknown", () => {
     const isSameState = makeIsSameState({ stateCode: null, state: "Maharashtra" });
-    expect(isSameState(null, null)).toBe(false);
+    expect(isSameState(null, null)).toBe(true);
   });
 
   it("falls back to text when biz has stateCode but party has no stateCode", () => {

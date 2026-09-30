@@ -4,13 +4,15 @@
  * places of supply and B2CL the way the rules say.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { eq } from "drizzle-orm";
-import { invoices } from "@fintranzact/db";
+import { asc, eq } from "drizzle-orm";
+import { invoiceItems, invoices } from "@fintranzact/db";
 import { calcInvoiceTotals } from "@fintranzact/shared";
 import { getTenantTestDb, truncateAllTables } from "../helpers/test-db.js";
 import { createTestWorld, createParty, createInvoiceWithItems, type TestWorld } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
 import { generateGSTR1, generateGSTR3B } from "../../lib/gst-reports.js";
+import { deriveLedger } from "../../lib/derive-ledger.js";
+import { seedChartOfAccounts } from "../../lib/coa-seed.js";
 
 let world: TestWorld;
 
@@ -101,18 +103,20 @@ describe("flat additionalCharges (no itemised charges) count in the total", () =
   it("invoice.create adds them (regression: stored but left out of totalAmount)", async () => {
     const inv = await caller().invoice.create({ partyId: world.party1.id, type: "sale", additionalCharges: "50", lineItems: lines } as never);
     expect(Number(inv.additionalCharges)).toBe(50);
-    expect(Number(inv.totalAmount)).toBe(286); // 200 + 36 + 50
+    // 200 + 50 charges, all taxed at 18%: 250 + 45
+    expect(Number(inv.taxAmount)).toBe(45);
+    expect(Number(inv.totalAmount)).toBe(295);
   });
 
   it("the document factory adds them", async () => {
     const q = await caller().quotation.create({ partyId: world.party1.id, type: "sale", additionalCharges: "50", lineItems: lines } as never);
-    expect(Number(q.totalAmount)).toBe(286);
+    expect(Number(q.totalAmount)).toBe(295);
   });
 
   it("invoice.update keeps counting them when the charges are not touched", async () => {
     const inv = await caller().invoice.create({ partyId: world.party1.id, type: "sale", additionalCharges: "50", lineItems: lines } as never);
     const updated = await caller().invoice.update({ id: inv.id, roundOff: "-0.50" });
-    expect(Number(updated.totalAmount)).toBe(285.5);
+    expect(Number(updated.totalAmount)).toBe(294.5);
   });
 
   it("itemised charges win over a flat amount", async () => {
@@ -121,7 +125,7 @@ describe("flat additionalCharges (no itemised charges) count in the total", () =
       charges: [{ label: "Freight", amount: "20" }], lineItems: lines,
     } as never);
     expect(Number(inv.additionalCharges)).toBe(20);
-    expect(Number(inv.totalAmount)).toBe(256);
+    expect(Number(inv.totalAmount)).toBe(259.6); // 220 + 18% of 220
   });
 });
 
@@ -174,13 +178,13 @@ describe("GSTR-1 rules", () => {
     expect(r.b2cSmall.some((s) => s.supplyType === "INTER" && s.pos === "24")).toBe(true);
   });
 
-  it("an unregistered buyer with no state at all is reported inter-state — documents current behaviour", async () => {
+  it("an unregistered buyer with no state at all is intra-state, placed in our own state (regression: reported inter-state)", async () => {
     const walkIn = await createParty(getTenantTestDb(), world.business1.id, {
       name: "Walk-in", gstin: null, stateCode: null, state: null,
     });
     await saleOn(new Date("2025-07-10T06:30:00.000Z"), walkIn.id, "100.00");
     const r = await generateGSTR1(world.business1.id, 2025, 7, getTenantTestDb() as never);
-    expect(r.b2cSmall).toEqual([expect.objectContaining({ supplyType: "INTER", igst: 18, cgst: 0 })]);
+    expect(r.b2cSmall).toEqual([expect.objectContaining({ supplyType: "INTRA", pos: "27", cgst: 9, sgst: 9, igst: 0 })]);
   });
 
   it("GSTR-3B puts 0% (nil/exempt) lines in 3.1(c), not 3.1(a) (regression: 3.1(c) was always zero)", async () => {
@@ -211,5 +215,103 @@ describe("GSTR-1 rules", () => {
     await getTenantTestDb().update(invoices).set({ deletedAt: new Date() }).where(eq(invoices.id, d.id));
     const r = await generateGSTR1(world.business1.id, 2025, 8, getTenantTestDb() as never);
     expect(r.b2b.map((b) => b.invoiceNumber)).toEqual([kept.invoiceNumber]);
+  });
+});
+
+describe("value of supply: document discount and charges (CGST Act s.15)", () => {
+  // Business1 is in Maharashtra (27); party1 is registered in Maharashtra.
+  const LINES2 = [
+    { itemName: "Hi", quantity: "1", unitPrice: "1000", taxPercent: "18", discountPercent: "0" },
+    { itemName: "Lo", quantity: "1", unitPrice: "500", taxPercent: "5", discountPercent: "0" },
+  ];
+
+  async function savedLines(id: string) {
+    return getTenantTestDb()
+      .select({ taxAmount: invoiceItems.taxAmount, totalAmount: invoiceItems.totalAmount })
+      .from(invoiceItems)
+      .where(eq(invoiceItems.invoiceId, id))
+      .orderBy(asc(invoiceItems.sortOrder));
+  }
+
+  it("invoice.create: the discount is shared over the lines and reduces their tax; charges are taxed at the highest rate", async () => {
+    const inv = await caller().invoice.create({
+      partyId: world.party1.id, type: "sale", invoiceDiscount: "150",
+      charges: [{ label: "Freight", amount: "100" }], lineItems: LINES2,
+    } as never);
+    // 150 over 1000 : 500 → 100 + 50. Taxable 900 @18% = 162, 450 @5% = 22.50;
+    // freight 100 @18% = 18. Tax 202.50; total 1350 + 100 + 202.50 = 1652.50
+    expect(Number(inv.taxAmount)).toBe(202.5);
+    expect(Number(inv.totalAmount)).toBe(1652.5);
+    expect(await savedLines(inv.id)).toEqual([
+      { taxAmount: "162.00", totalAmount: "1062.00" },
+      { taxAmount: "22.50", totalAmount: "472.50" },
+    ]);
+  });
+
+  it("invoice.update of only the discount re-shares it over the saved lines", async () => {
+    const inv = await caller().invoice.create({ partyId: world.party1.id, type: "sale", lineItems: LINES2 } as never);
+    expect(Number(inv.taxAmount)).toBe(205);
+    const updated = await caller().invoice.update({ id: inv.id, invoiceDiscount: "10", invoiceDiscountType: "percent" });
+    // 10% of 1500 = 150 → same shares as above, no charges
+    expect(Number(updated.taxAmount)).toBe(184.5);
+    expect(Number(updated.totalAmount)).toBe(1534.5);
+    expect((await savedLines(inv.id)).map((l) => l.taxAmount)).toEqual(["162.00", "22.50"]);
+  });
+
+  it("the document factory keeps the same valuation", async () => {
+    const q = await caller().quotation.create({
+      partyId: world.party1.id, type: "sale", invoiceDiscount: "150",
+      charges: [{ label: "Freight", amount: "100" }], lineItems: LINES2,
+    } as never);
+    expect(Number(q.totalAmount)).toBe(1652.5);
+    expect((await savedLines(q.id)).map((l) => l.taxAmount)).toEqual(["162.00", "22.50"]);
+  });
+
+  it("GSTR-1 and GSTR-3B report the value of supply: lines less discount plus charges, charges under the main rate", async () => {
+    const date = new Date("2025-10-10T06:30:00.000Z");
+    const inv = await caller().invoice.create({
+      partyId: world.party1.id, type: "sale", invoiceDate: date.toISOString(), invoiceDiscount: "150",
+      charges: [{ label: "Freight", amount: "100" }], lineItems: LINES2,
+    } as never);
+    const r = await generateGSTR1(world.business1.id, 2025, 10, getTenantTestDb() as never);
+    const row = r.b2b.find((b) => b.invoiceNumber === inv.invoiceNumber)!;
+    expect(row.taxableValue).toBe(1450);
+    expect(row).toMatchObject({ cgst: 101.25, sgst: 101.25, igst: 0 });
+    expect(row.rateItems).toEqual([
+      { rate: 5, taxableValue: 450, cgst: 11.25, sgst: 11.25, igst: 0 },
+      { rate: 18, taxableValue: 1000, cgst: 90, sgst: 90, igst: 0 },
+    ]);
+    const b3 = await generateGSTR3B(world.business1.id, 2025, 10, getTenantTestDb() as never);
+    expect(b3.outwardSupplies.taxable.taxableValue).toBe(1450);
+  });
+
+  it("the derived ledger books total less GST to sales, so the entry balances", async () => {
+    const db = getTenantTestDb();
+    await seedChartOfAccounts(db, world.business1.id);
+    const date = new Date("2025-11-10T06:30:00.000Z");
+    const inv = await caller().invoice.create({
+      partyId: world.party1.id, type: "sale", invoiceDate: date.toISOString(), invoiceDiscount: "150",
+      charges: [{ label: "Freight", amount: "100" }], roundOff: "-0.50", lineItems: LINES2,
+    } as never);
+    const entries = await deriveLedger(db, world.business1.id, new Date("2025-11-01T00:00:00Z"), new Date("2025-11-30T00:00:00Z"));
+    const e = entries.find((x) => x.sourceId === inv.id)!;
+    const dr = e.lines.reduce((s, l) => s + Number(l.debit), 0);
+    const cr = e.lines.reduce((s, l) => s + Number(l.credit), 0);
+    expect(Math.round(dr * 100)).toBe(Math.round(cr * 100));
+    expect(e.lines.find((l) => l.accountCode === "4000")!.credit).toBe("1449.50");
+    expect(e.lines.filter((l) => l.accountCode === "2100" || l.accountCode === "2101").map((l) => l.credit)).toEqual(["101.25", "101.25"]);
+  });
+
+  it("a walk-in buyer (no state, no GSTIN) is intra-state; odd paisa: CGST = rounded half, SGST = the rest", async () => {
+    const walkIn = await createParty(getTenantTestDb(), world.business1.id, {
+      name: "Counter sale", gstin: null, stateCode: null, state: null,
+    });
+    const inv = await caller().invoice.create({
+      partyId: walkIn.id, type: "sale", invoiceDate: new Date("2025-12-10T06:30:00.000Z").toISOString(),
+      lineItems: [{ itemName: "Odd", quantity: "1", unitPrice: "0.25", taxPercent: "18", discountPercent: "0" }],
+    } as never);
+    expect(inv.taxAmount).toBe("0.05");
+    const r = await generateGSTR1(world.business1.id, 2025, 12, getTenantTestDb() as never);
+    expect(r.b2cSmall).toEqual([expect.objectContaining({ supplyType: "INTRA", pos: "27", cgst: 0.03, sgst: 0.02, igst: 0 })]);
   });
 });

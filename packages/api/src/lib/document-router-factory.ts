@@ -1,4 +1,5 @@
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
+import { withAllocatedLines } from "./document-totals.js";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -530,7 +531,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           if (processedItems.length > 0) {
             await tx
               .insert(invoiceItems)
-              .values(processedItems.map((li) => ({ ...li, invoiceId: result.id })));
+              .values(withAllocatedLines(processedItems, totals.lines).map((li) => ({ ...li, invoiceId: result.id })));
           }
 
           // Stock effect, recorded per warehouse.

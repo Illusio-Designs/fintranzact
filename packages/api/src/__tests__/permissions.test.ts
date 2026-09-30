@@ -115,6 +115,8 @@ describe("defineAbilityFor — builds CASL ability for each role", () => {
       ["read", "Business"],
       // Report — read only
       ["read", "Report"],
+      // GST returns — read only (role-based-ui.md §3)
+      ["read", "GstReport"],
       // Store — CRU (toggle items, confirm orders)
       ["create", "Store"],
       ["read",   "Store"],
@@ -431,11 +433,11 @@ describe("cross-cutting security properties", () => {
     }
   });
 
-  it("only accountant (and superadmin/admin) can read GstReport", () => {
+  it("accountant, seller_manager (and superadmin/admin) can read GstReport; seller cannot", () => {
     const expectations: Record<string, boolean> = {
       superadmin: true,
       admin: true,
-      seller_manager: false,
+      seller_manager: true,
       seller: false,
       accountant: true,
     };

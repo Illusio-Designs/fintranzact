@@ -274,6 +274,8 @@ export const ewayBillRouter = router({
         type: invoice.type,
         documentType: invoice.documentType,
         subtotal: invoice.subtotal,
+        discountAmount: invoice.discountAmount,
+        additionalCharges: invoice.additionalCharges,
         taxAmount: invoice.taxAmount,
         totalAmount: invoice.totalAmount,
         isReverseCharge: invoice.isReverseCharge,

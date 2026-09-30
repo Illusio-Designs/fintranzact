@@ -8,7 +8,7 @@
  * in integration/e-invoicing.test.ts.
  */
 import { describe, it, expect } from "vitest";
-import { calcInvoiceTotals, calcLineItem } from "@fintranzact/shared";
+import { calcInvoiceTotals } from "@fintranzact/shared";
 import { mapInvoiceToIRP, type IRPInvoice, type IRPLineItem } from "../lib/invoice-to-irp.js";
 
 const seller = {
@@ -44,12 +44,12 @@ function build(lines: Line[], opts: { discount?: string; charges?: string; round
     totalAmount: totals.total,
     isReverseCharge: opts.rcm ?? false,
   };
-  const items: IRPLineItem[] = lines.map((l) => {
-    const c = calcLineItem(l);
+  const items: IRPLineItem[] = lines.map((l, i) => {
+    const c = totals.lines[i]!;
     return {
       itemName: "Widget", description: null, ...l,
       taxAmount: c.taxAmount, totalAmount: c.total,
-      selectedUnit: "pcs", itemType: "product", itemHsn: "8471",
+      selectedUnit: "pcs", itemType: "product", itemHsn: i === 0 ? "8471" : "8473",
     };
   });
   return { invoice, items };
@@ -127,13 +127,41 @@ describe("ValDtls adds up to TotInvVal", () => {
     expect(balance(r.ValDtls)).toBe(r.ValDtls.TotInvVal);
   });
 
-  it("with a document discount, charges and round-off", () => {
+  it("with a document discount, charges and round-off: discount inside the items, charges as a taxed item", () => {
     const { invoice, items } = build(lines, { discount: "150", charges: "80", roundOff: "-0.42" });
     const r = mapInvoiceToIRP(invoice, items, buyer(), seller);
-    expect(r.ValDtls.Discount).toBe(150);
-    expect(r.ValDtls.OthChrg).toBe(80);
+    // The document discount reduced each line's AssAmt; counting it in
+    // ValDtls.Discount too would take it off twice.
+    expect(r.ValDtls.Discount).toBe(0);
+    const sumItemDiscount = Math.round(r.ItemList.reduce((s, i) => s + i.Discount, 0) * 100) / 100;
+    const lineDiscounts = 200 + Math.round(7 * 12.99 * 2.5) / 100; // 10% of 2000 + 2.5% of 90.93
+    expect(sumItemDiscount).toBeCloseTo(lineDiscounts + 150, 2);
+    // NIC: taxable charges go in as an item (in AssAmt), not OthChrg —
+    // at the highest line rate (28%) under the principal line's HSN.
+    const charge = r.ItemList[r.ItemList.length - 1]!;
+    expect(charge).toMatchObject({ PrdDesc: "Additional charges", AssAmt: 80, GstRt: 28, HsnCd: "8473", CgstAmt: 11.2, SgstAmt: 11.2 });
+    expect(r.ValDtls.OthChrg).toBeUndefined();
+    expect(r.ValDtls.AssVal).toBe(Number(invoice.subtotal) - 150 + 80);
     expect(r.ValDtls.RndOffAmt).toBe(-0.42);
     expect(balance(r.ValDtls)).toBe(r.ValDtls.TotInvVal);
+  });
+
+  it("charges on an invoice of only 0% lines stay untaxed, in OthChrg", () => {
+    const { invoice, items } = build(
+      [{ quantity: "1", unitPrice: "500", taxPercent: "0", discountPercent: "0" }],
+      { charges: "40" },
+    );
+    const r = mapInvoiceToIRP(invoice, items, buyer(), seller);
+    expect(r.ItemList).toHaveLength(1);
+    expect(r.ValDtls.OthChrg).toBe(40);
+    expect(balance(r.ValDtls)).toBe(r.ValDtls.TotInvVal);
+  });
+
+  it("a buyer with no state and no GSTIN is placed in the seller's state (export/overseas aside)", () => {
+    const { invoice, items } = build(lines);
+    const r = mapInvoiceToIRP(invoice, items, buyer({ gstin: "27AABCP0000R1ZM", stateCode: null, state: null }), seller);
+    expect(r.BuyerDtls.Pos).toBe("27");
+    expect(r.ValDtls.IgstVal).toBe(0);
   });
 
   it("inter-state too", () => {

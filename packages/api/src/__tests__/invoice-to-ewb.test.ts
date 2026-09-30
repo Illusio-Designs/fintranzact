@@ -91,16 +91,37 @@ describe("mapInvoiceToEWB", () => {
     expect(p.toStateCode).toBe(29);
   });
 
-  it("a missing state code on either side counts as intra-state — documents current behaviour", () => {
+  it("a missing state code falls back to the GSTIN's prefix (regression: counted intra-state)", () => {
     const { invoice, items } = build(lines, { partyStateCode: null, partyGstin: "29AABCG0000R1ZM" });
+    expect(mapInvoiceToEWB(invoice, items, transport).igstValue).toBe(Number(invoice.taxAmount));
+  });
+
+  it("a buyer with no state and no GSTIN is intra-state (our own state)", () => {
+    const { invoice, items } = build(lines, { partyStateCode: null, partyGstin: null });
     expect(mapInvoiceToEWB(invoice, items, transport).igstValue).toBe(0);
   });
 
-  it("odd-paise tax: CGST and SGST are each the rounded half, so together they can be a paisa over — documents current behaviour", () => {
+  it("odd-paise tax: CGST is the rounded half, SGST the rest (regression: both rounded up, a paisa over)", () => {
     const { invoice, items } = build([{ quantity: "1", unitPrice: "0.25", taxPercent: "18", discountPercent: "0" }]);
     const p = mapInvoiceToEWB(invoice, items, transport);
     expect(invoice.taxAmount).toBe("0.05");
-    expect([p.cgstValue, p.sgstValue]).toEqual([0.03, 0.03]);
+    expect([p.cgstValue, p.sgstValue]).toEqual([0.03, 0.02]);
+  });
+
+  it("a document discount and charges: items carry the allocated taxable values plus a charges item, adding up to the value of supply", () => {
+    const totals = calcInvoiceTotals({ lineItems: lines, invoiceDiscount: "500", charges: [{ amount: "250" }] });
+    const { invoice, items } = build(lines, {
+      subtotal: totals.subtotal, discountAmount: totals.invoiceDiscountAmount, additionalCharges: totals.chargesTotal,
+      taxAmount: totals.taxTotal, totalAmount: totals.total,
+    });
+    const allocated = items.map((it, i) => ({ ...it, taxAmount: totals.lines[i]!.taxAmount, totalAmount: totals.lines[i]!.total }));
+    const p = mapInvoiceToEWB(invoice, allocated, transport);
+    const charge = p.itemList[p.itemList.length - 1]!;
+    expect(charge).toMatchObject({ productName: "Additional charges", taxableAmount: 250, cgstRate: 9, sgstRate: 9, hsnCode: "8471" });
+    expect(p.totalValue).toBe(Number(totals.taxableValue));
+    const sum = Math.round(p.itemList.reduce((s, i) => s + i.taxableAmount, 0) * 100) / 100;
+    expect(sum).toBe(p.totalValue);
+    expect(Math.round((p.cgstValue + p.sgstValue) * 100) / 100).toBe(Number(totals.taxTotal));
   });
 
   it("outward for a sale (seller → buyer), inward for a purchase (supplier → us)", () => {

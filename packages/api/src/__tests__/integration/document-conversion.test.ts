@@ -768,13 +768,13 @@ describe("Document-level discount and round-off", () => {
       roundOff: "-0.40",
       lineItems: [lineOf("10", "100.00", "18")],
     });
-    // 1000 + 180 tax - 50 - 0.40
+    // The discount reduces the taxable value: (1000 - 50) + 18% of 950 - 0.40
     expect(await saved(quotation.id)).toMatchObject({
       subtotal: "1000.00",
-      taxAmount: "180.00",
+      taxAmount: "171.00",
       discountAmount: "50.00",
       roundOff: "-0.40",
-      totalAmount: "1129.60",
+      totalAmount: "1120.60",
     });
   });
 

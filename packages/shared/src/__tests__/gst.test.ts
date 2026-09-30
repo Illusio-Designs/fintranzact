@@ -9,6 +9,8 @@ import {
   gstStateCode,
   gstr1Section,
   isIntraStateSupply,
+  placeOfSupplyCode,
+  splitIntraStateTax,
 } from "../gst.js";
 
 const MH = { stateCode: "27", state: "Maharashtra", gstin: "27AABCA0000R1ZM" };
@@ -40,9 +42,16 @@ describe("isIntraStateSupply — intra (CGST+SGST) vs inter (IGST)", () => {
     expect(isIntraStateSupply(MH, buyer)).toBe(expected);
   });
 
-  it("returns null (caller decides) when the buyer's state is unknown", () => {
-    expect(isIntraStateSupply(MH, {})).toBeNull();
-    expect(isIntraStateSupply({}, { stateCode: "27" })).toBeNull();
+  it("an unknown buyer state (walk-in: no state, no GSTIN) is intra-state — the seller's own state", () => {
+    expect(isIntraStateSupply(MH, {})).toBe(true);
+    expect(isIntraStateSupply(MH, { state: "  ", stateCode: "", gstin: null })).toBe(true);
+    expect(isIntraStateSupply({}, { stateCode: "27" })).toBe(true);
+  });
+
+  it("placeOfSupplyCode falls back to the seller's state when the buyer's is unknown", () => {
+    expect(placeOfSupplyCode(MH, { stateCode: "29" })).toBe("29");
+    expect(placeOfSupplyCode(MH, { gstin: "07AABCP0000R1ZM" })).toBe("07");
+    expect(placeOfSupplyCode(MH, {})).toBe("27");
   });
 
   it("uses the seller's GSTIN prefix when its state code is missing", () => {
@@ -73,5 +82,20 @@ describe("gstr1Section — B2B / B2CL / B2CS", () => {
     ["empty GSTIN counts as unregistered", "", false, 150000, now, "b2cLarge"],
   ] as const)("%s → %s", (_l, partyGstin, intraState, invoiceValue, invoiceDate, section) => {
     expect(gstr1Section({ partyGstin, intraState, invoiceValue, invoiceDate })).toBe(section);
+  });
+});
+
+describe("splitIntraStateTax — CGST = half rounded to the paisa, SGST = the rest", () => {
+  it.each([
+    [180, 90, 90],
+    [0.05, 0.03, 0.02],
+    [1.01, 0.51, 0.5],
+    [0, 0, 0],
+    ["10.33", 5.17, 5.16],
+    [-0.05, -0.02, -0.03],
+  ] as const)("%s → CGST %s + SGST %s", (tax, cgst, sgst) => {
+    const r = splitIntraStateTax(tax);
+    expect(r).toEqual({ cgst, sgst });
+    expect(Math.round((r.cgst + r.sgst) * 100)).toBe(Math.round(Number(tax) * 100));
   });
 });

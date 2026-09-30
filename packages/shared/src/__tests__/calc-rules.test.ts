@@ -1,14 +1,15 @@
 /**
  * Money rules not covered by calc.test.ts / money.test.ts: paise rounding
- * direction, fractional quantities, tax-inclusive back-calculation, how the
- * document-level discount interacts with tax, and invariants that must hold
- * for any line (taxable + tax = total, parts add up to the invoice total).
+ * direction, fractional quantities, tax-inclusive back-calculation, the
+ * document-level discount reducing the taxable value (CGST Act s.15(3)(a),
+ * allocated pro rata), charges taxed at the main rate (s.15(2)(c)), and
+ * invariants that must hold (parts add up to the invoice total).
  *
  * Where the current behaviour is a design choice rather than a clear rule,
  * the test says "documents current behaviour".
  */
 import { describe, it, expect } from "vitest";
-import { calcInvoiceTotals, calcLineItem, type LineItemInput } from "../calc.js";
+import { allocatePaise, calcInvoiceTotals, calcLineItem, chargeSupplyOf, type LineItemInput } from "../calc.js";
 import { money } from "../money.js";
 
 const line = (o: Partial<LineItemInput>): LineItemInput => ({
@@ -114,19 +115,40 @@ describe("document totals", () => {
     expect(t).toMatchObject({ subtotal: "1225.00", lineDiscountTotal: "25.00", taxTotal: "191.25", total: "1416.25" });
   });
 
-  it("a document discount does not reduce the tax — documents current behaviour", () => {
-    // The document-level discount comes off the total after tax; tax stays
-    // on the pre-discount taxable value.
+  it("a document discount reduces the taxable value, shared pro rata with paise that add up exactly", () => {
+    // ₹100 over 1000 : 225 → 81.63 + 18.37 (largest remainder gets the odd paisa)
     const t = calcInvoiceTotals({ lineItems: lines, invoiceDiscount: "100" });
-    expect(t.taxTotal).toBe("191.25");
-    expect(t.invoiceDiscountAmount).toBe("100");
-    expect(t.total).toBe("1316.25");
+    expect(t.lines.map((l) => l.discountShare)).toEqual(["81.63", "18.37"]);
+    expect(t.lines.map((l) => l.taxableValue)).toEqual(["918.37", "206.63"]);
+    // tax on what is left: 918.37 × 18% = 165.31, 206.63 × 5% = 10.33
+    expect(t.lines.map((l) => l.taxAmount)).toEqual(["165.31", "10.33"]);
+    expect(t.taxTotal).toBe("175.64");
+    expect(t.invoiceDiscountAmount).toBe("100.00");
+    expect(t.taxableValue).toBe("1125.00");
+    expect(t.total).toBe("1300.64");
   });
 
   it("a percent document discount is taken on the taxable subtotal, not the total with tax", () => {
     const t = calcInvoiceTotals({ lineItems: lines, invoiceDiscount: "10", invoiceDiscountType: "percent" });
     expect(t.invoiceDiscountAmount).toBe("122.50");
-    expect(t.total).toBe("1293.75");
+    // 900 × 18% = 162.00, 202.50 × 5% = 10.13
+    expect(t.taxTotal).toBe("172.13");
+    expect(t.total).toBe("1274.63");
+  });
+
+  it("allocation handles many lines and awkward ratios without losing a paisa", () => {
+    const many = Array.from({ length: 7 }, (_, i) => line({ quantity: "1", unitPrice: (i * 13.37 + 1).toFixed(2), taxPercent: "12" }));
+    const t = calcInvoiceTotals({ lineItems: many, invoiceDiscount: "33.33" });
+    expect(money.sum(t.lines.map((l) => l.discountShare))).toBe("33.33");
+    expect(money.sum(t.lines.map((l) => l.taxableValue))).toBe(money.sub(t.subtotal, "33.33"));
+  });
+
+  it("no document discount leaves every line exactly as calcLineItem has it", () => {
+    const t = calcInvoiceTotals({ lineItems: lines });
+    lines.forEach((li, i) => {
+      const r = calcLineItem(li);
+      expect(t.lines[i]).toEqual({ taxableValue: r.afterDiscount, discountShare: "0.00", taxAmount: r.taxAmount, total: r.total });
+    });
   });
 
   it("a percent document discount rounds to paise", () => {
@@ -139,11 +161,22 @@ describe("document totals", () => {
     expect(t.total).toBe("87.49");
   });
 
-  it("itemised charges are added untaxed — documents current behaviour", () => {
+  it("charges are taxed at the highest line rate (composite supply)", () => {
+    // 1000 @ 18% and 225 @ 5%: charges take 18%. 50.75 × 18% = 9.135 → 9.14
     const t = calcInvoiceTotals({ lineItems: lines, charges: [{ amount: "50" }, { amount: "0.75" }] });
     expect(t.chargesTotal).toBe("50.75");
-    expect(t.taxTotal).toBe("191.25");
-    expect(t.total).toBe("1467.00");
+    expect(t.chargeTaxRate).toBe("18.00");
+    expect(t.chargeTax).toBe("9.14");
+    expect(t.taxTotal).toBe("200.39");
+    expect(t.taxableValue).toBe("1275.75");
+    expect(t.total).toBe("1476.14");
+  });
+
+  it("charges on a nil/exempt-only invoice stay untaxed", () => {
+    const t = calcInvoiceTotals({ lineItems: [line({ unitPrice: "500" })], charges: [{ amount: "40" }] });
+    expect(t.chargeTaxRate).toBe("0.00");
+    expect(t.chargeTax).toBe("0.00");
+    expect(t.total).toBe("540.00");
   });
 
   it("round-off can be negative and is added as given", () => {
@@ -151,7 +184,7 @@ describe("document totals", () => {
     expect(t.total).toBe("1416.00");
   });
 
-  it("total = subtotal + tax − document discount + charges + round-off, always", () => {
+  it("total = subtotal − document discount + charges + tax + round-off, always", () => {
     const t = calcInvoiceTotals({
       lineItems: lines,
       invoiceDiscount: "7.5",
@@ -164,7 +197,9 @@ describe("document totals", () => {
       money.add(t.chargesTotal, t.roundOff),
     );
     expect(t.total).toBe(expected);
-    expect(t.total).toBe("1364.74"); // 1225 + 191.25 − 91.88 + 40 + 0.37
+    expect(money.add(t.taxableValue, money.add(t.taxTotal, t.roundOff))).toBe(t.total);
+    // 1225 − 91.88 + 40 = 1173.12 taxable; tax 166.50 + 10.41 + 7.20 = 184.11
+    expect(t.total).toBe("1357.60");
   });
 
   it("a flat charge passed as a one-entry charge list counts like an itemised one", () => {
@@ -172,5 +207,46 @@ describe("document totals", () => {
     const t = calcInvoiceTotals({ lineItems: lines, charges: [{ amount: "0" }] });
     expect(t.chargesTotal).toBe("0.00");
     expect(t.total).toBe("1416.25");
+  });
+});
+
+describe("chargeSupplyOf — the charges part of a saved document", () => {
+  it("is the document tax less the lines' tax, at the highest line rate", () => {
+    expect(chargeSupplyOf(
+      { additionalCharges: "100.00", taxAmount: "202.50" },
+      [{ taxPercent: "18", taxAmount: "162.00" }, { taxPercent: "5", taxAmount: "22.50" }],
+    )).toEqual({ taxableValue: "100.00", taxAmount: "18.00", rate: "18.00" });
+  });
+
+  it("reports charges saved before they were taxed at 0%", () => {
+    expect(chargeSupplyOf(
+      { additionalCharges: "50", taxAmount: "180.00" },
+      [{ taxPercent: "18", taxAmount: "180.00" }],
+    )).toEqual({ taxableValue: "50.00", taxAmount: "0.00", rate: "0.00" });
+  });
+
+  it("round-trips what calcInvoiceTotals saved", () => {
+    const t = calcInvoiceTotals({
+      lineItems: [line({ quantity: "3", unitPrice: "99.99", taxPercent: "12" }), line({ unitPrice: "10", taxPercent: "28" })],
+      invoiceDiscount: "7.77",
+      charges: [{ amount: "33.33" }],
+    });
+    const c = chargeSupplyOf(
+      { additionalCharges: t.chargesTotal, taxAmount: t.taxTotal },
+      t.lines.map((l, i) => ({ taxPercent: ["12", "28"][i]!, taxAmount: l.taxAmount })),
+    );
+    expect(c).toEqual({ taxableValue: t.chargesTotal, taxAmount: t.chargeTax, rate: t.chargeTaxRate });
+  });
+});
+
+describe("allocatePaise", () => {
+  it.each([
+    [100, [1, 1, 1], [34, 33, 33]],
+    [1, [5, 5], [1, 0]],
+    [0, [3, 4], [0, 0]],
+    [10, [0, 0], [0, 0]],
+    [-10, [1, 3], [-3, -7]],
+  ])("%i over %j → %j", (amount, weights, parts) => {
+    expect(allocatePaise(amount, weights)).toEqual(parts);
   });
 });
