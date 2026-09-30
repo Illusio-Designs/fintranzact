@@ -311,6 +311,12 @@ export class FintranzactClient {
   get item() {
     const c = this;
     return {
+      batches(input: { itemId: string; variantId?: string | null; warehouseId?: string | null; includeEmpty?: boolean }) {
+        return c.query<unknown>("batch.list", input);
+      },
+      batchStock(input: { status?: "all" | "expiring" | "expired"; days?: number; warehouseId?: string | null; itemId?: string | null; search?: string | null }) {
+        return c.query<unknown>("inventoryReports.batchStock", input);
+      },
       list(input: ItemListInput) {
         return c.query<PaginatedResult<ItemSummary>>("item.list", input);
       },

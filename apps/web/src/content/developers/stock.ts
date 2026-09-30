@@ -793,5 +793,85 @@ const shortValue = count.lines.reduce((s, l) =>
       ],
       relatedEndpoints: ["stock-counts", "stock-count-post"],
     },
+    {
+      id: "batch-list",
+      method: "query",
+      path: "batch.list",
+      title: "List Item Batches",
+      description: "An item's batches (lots) — for items with `trackBatches` on — earliest expiry first, with the stock each holds. Stock per batch is summed from the stock movement ledger: in one warehouse when `warehouseId` is given, otherwise in total with `byWarehouse` showing the split. `unbatched` is stock of the item that no batch accounts for (stock from before batch tracking was switched on).",
+      auth: "business",
+      requiredRole: "viewer",
+      input: [
+        { name: "itemId", type: "string (UUID)", required: true, description: "The item." },
+        { name: "variantId", type: "string (UUID) | null", required: false, description: "One variant of a variant item." },
+        { name: "warehouseId", type: "string (UUID) | null", required: false, description: "Only stock in this warehouse." },
+        { name: "includeEmpty", type: "boolean", required: false, description: "Also list batches that hold no stock.", default: "false" },
+        { name: "asOf", type: "string (YYYY-MM-DD) | null", required: false, description: "Judge expiry as of this date (a document's date).", default: "today (IST)" },
+      ],
+      output: {
+        description: "Batches with quantity, expiry state and days to expiry; the unbatched quantity and the date used.",
+        example: {
+          data: [
+            { id: "batch-uuid-1", batchNumber: "PCM2407", mfgDate: "2025-07-01", expiryDate: "2027-06-30", mrp: "32.50", quantity: "140.000", byWarehouse: { "wh-uuid": "140.000" }, expired: false, daysToExpiry: 273, createdAt: "2025-08-02T10:00:00.000Z" },
+          ],
+          unbatched: "0.000",
+          asOf: "2026-09-30",
+        },
+      },
+      codeExamples: {
+        curl: `curl "${API_BASE_URL}/api/trpc/batch.list?input=%7B%22json%22%3A%7B%22itemId%22%3A%22item-uuid%22%7D%7D" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "x-business-id: YOUR_BUSINESS_ID"`,
+        javascript: `const { data } = await trpc.batch.list.query({ itemId: "item-uuid", warehouseId: "wh-uuid" });
+const fefo = data.find((b) => !b.expired && parseFloat(b.quantity) > 0);`,
+      },
+      gotchas: [
+        "Requires `Item:read` permission.",
+        "A batch counts as expired the day after its expiry date.",
+      ],
+      relatedEndpoints: ["batch-create", "inventory-reports-batch-stock"],
+    },
+    {
+      id: "batch-create",
+      method: "mutation",
+      path: "batch.create",
+      title: "Create Batch",
+      description: "Add a batch to an item by hand. Batches are usually created as they arrive: an inward document line (purchase, GRN, inward challan, sales return) with `batchNumber` and dates, an adjustment's `newBatch`, or `openingBatch` on `item.create`. Outward document lines name a `batchId`, or leave it out to have stock taken earliest expiry first (FEFO), split across batches if needed; an expired batch only goes out with `allowExpired: true` on the line, and no batch is ever taken below zero. `batch.update` corrects a batch's number, dates or MRP and `batch.delete` (admin) removes a batch nothing refers to.",
+      auth: "business",
+      requiredRole: "member",
+      input: [
+        { name: "itemId", type: "string (UUID)", required: true, description: "The item." },
+        { name: "variantId", type: "string (UUID) | null", required: false, description: "One variant of a variant item." },
+        { name: "batchNumber", type: "string", required: true, description: "Batch / lot number, 1–60 characters, unique per item." },
+        { name: "mfgDate", type: "string (YYYY-MM-DD) | null", required: false, description: "Manufacturing date." },
+        { name: "expiryDate", type: "string (YYYY-MM-DD) | null", required: false, description: "Expiry date. Required when the item has `trackExpiry`." },
+        { name: "mrp", type: "string | null", required: false, description: "MRP printed on this batch; shown on invoice lines instead of the item's." },
+      ],
+      output: {
+        description: "The created batch row.",
+        example: { id: "batch-uuid", businessId: "biz-uuid", itemId: "item-uuid", variantId: null, batchNumber: "PCM2407", mfgDate: "2025-07-01", expiryDate: "2027-06-30", mrp: "32.50" },
+      },
+      codeExamples: {
+        curl: `curl -X POST "${API_BASE_URL}/api/trpc/batch.create" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "x-business-id: YOUR_BUSINESS_ID" \\
+  -H "Content-Type: application/json" \\
+  -d '{"json":{"itemId":"item-uuid","batchNumber":"PCM2407","expiryDate":"2027-06-30"}}'`,
+        javascript: `await trpc.batch.create.mutate({ itemId: "item-uuid", batchNumber: "PCM2407", expiryDate: "2027-06-30" });
+
+// Usually batches come in on the purchase itself:
+await trpc.invoice.create.mutate({
+  partyId: "supplier-uuid", type: "purchase",
+  lineItems: [{ itemId: "item-uuid", itemName: "Paracetamol 500", quantity: "100", unitPrice: "18",
+    batchNumber: "PCM2407", expiryDate: "2027-06-30" }],
+});`,
+      },
+      gotchas: [
+        "Requires `Item:update` permission.",
+        "Throws `CONFLICT` if the item already has a batch with that number.",
+        "Expiry can't be before the manufacturing date.",
+      ],
+      relatedEndpoints: ["batch-list"],
+    },
   ],
 };

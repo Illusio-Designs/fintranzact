@@ -22,7 +22,6 @@ import {
   Layers01Icon,
   Layers02Icon,
   ListViewIcon,
-  NoteEditIcon,
   PackageDeliveredIcon,
   PackageIcon,
   PackageMovingIcon,
@@ -48,11 +47,14 @@ import type { FeaturePage } from "./types";
  * Public feature pages for inventory, warehouses and production
  * (/features/<slug>).
  *
- * Every claim here was checked against the stock, warehouse, barcode,
+ * Every claim here was checked against the stock, warehouse, batch, barcode,
  * priceLevel, orders, manufacturing and inventory-reports routers, the web
  * screens that use them, and the help articles under content/help/inventory.
- * Batch/expiry tracking, serial/IMEI numbers and stock per rack or bin are
- * NOT built, so none of these pages may promise them.
+ * Batch / lot numbers with expiry dates are built (items opt in with "Track
+ * batches"; see help/inventory/batches-and-expiry). Serial/IMEI numbers and
+ * stock per rack or bin are NOT built, so none of these pages may promise them.
+ * Manufacturing and physical stock counts don't pick batches yet, so don't
+ * claim batch-wise production or batch-wise counting either.
  */
 export const INVENTORY_PAGES: FeaturePage[] = [
   // ── Inventory ──────────────────────────────────────────────
@@ -87,9 +89,9 @@ export const INVENTORY_PAGES: FeaturePage[] = [
         icon: Alert02Icon,
       },
       {
-        title: "Adjustments with a reason",
-        body: "Record damaged, lost, found or sample stock at a warehouse, with the reason, the date and the name of whoever made the change.",
-        icon: NoteEditIcon,
+        title: "Batches and expiry dates",
+        body: "Turn on batch tracking for medicines, food or chemicals. Purchases record the batch and expiry, and sales take the batch that expires first.",
+        icon: Calendar03Icon,
       },
       {
         title: "Your rule for selling below zero",
@@ -144,6 +146,16 @@ export const INVENTORY_PAGES: FeaturePage[] = [
           "Scan your shelves with a barcode scanner and post the differences when the books and the shelf disagree.",
         ],
       },
+      {
+        heading: "Batch and expiry tracking",
+        points: [
+          "Switch on Track batches (and Track expiry) per item. Items without it work exactly as before.",
+          "Purchase bills, GRNs, inward challans, sales returns, opening stock and adjustments record the batch number, expiry, manufacturing date and batch MRP.",
+          "Sale invoices, POS bills, challans and purchase returns take the batch that expires first, splitting a line across batches when one isn't enough, or the batch you pick.",
+          "Expired batches are skipped unless you allow them on the line, and no bill can take more out of a batch than it holds.",
+          "Batch-wise stock, Expiring Soon and Expired Stock reports, and the batch and expiry printed under each line of the invoice.",
+        ],
+      },
     ],
     faqs: [
       {
@@ -165,6 +177,10 @@ export const INVENTORY_PAGES: FeaturePage[] = [
       {
         q: "Can I organise items into groups like in Tally?",
         a: "Yes. Stock groups can be nested as deep as you like, and an item in a sub-group counts towards every group above it in reports.",
+      },
+      {
+        q: "Can I track batch numbers and expiry dates?",
+        a: "Yes, item by item. Turn on Track batches on the item: purchases then ask for the batch and expiry, sales pick the earliest-expiring batch that is still in date, and reports show what is expiring soon and what has already expired.",
       },
     ],
     related: ["warehouses", "physical-stock-barcodes", "stock-valuation", "inventory-reports"],
@@ -1040,6 +1056,7 @@ export const INVENTORY_PAGES: FeaturePage[] = [
         points: [
           "Stock Summary: total cost value, total sale value, number of SKUs and low-stock count, with a stock group filter.",
           "Godown Summary: items, quantity and value held in each warehouse.",
+          "Batch-wise Stock: quantity and value of every batch in every warehouse, with its expiry, for items that track batches. Expiring Soon narrows it to the next 7 to 180 days, and Expired Stock to what is past its date.",
           "Stock Group Summary: quantity and value by group as on any date, with a row for items not in a group.",
           "Values follow your valuation method, so totals tie back to your profit & loss and balance sheet.",
         ],

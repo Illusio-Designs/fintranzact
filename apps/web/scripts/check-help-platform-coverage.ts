@@ -78,6 +78,7 @@ const WEB_ONLY: Set<string> = new Set([
   "inventory/manufacturing.mdx",
   "inventory/orders-and-grn.mdx",
   "inventory/reports.mdx",
+  "inventory/batches-and-expiry.mdx",
 ]);
 
 const SHARED: Set<string> = new Set([

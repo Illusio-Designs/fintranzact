@@ -331,5 +331,47 @@ console.log("Ungrouped:", report.ungrouped.value);`,
       ],
       relatedEndpoints: ["stock-group-list", "inventory-reports-movement-summary"],
     },
+    {
+      id: "inventory-reports-batch-stock",
+      method: "query",
+      path: "inventoryReports.batchStock",
+      title: "Batch-wise Stock",
+      description: "Stock per batch and warehouse for items that track batches, with each batch's dates, days to expiry and value (valuation rate of the item). `status: \"expiring\"` narrows it to batches expiring within `days` (not yet expired); `status: \"expired\"` to expired stock still on hand. Only batches holding stock are listed, earliest expiry first.",
+      auth: "business",
+      requiredRole: "viewer",
+      input: [
+        { name: "status", type: "string", required: false, description: "Which batches.", default: "all", enumValues: ["all", "expiring", "expired"] },
+        { name: "days", type: "number (integer)", required: false, description: "Window for `expiring` (1–3650).", default: "30" },
+        { name: "warehouseId", type: "string (UUID) | null", required: false, description: "Only this warehouse." },
+        { name: "itemId", type: "string (UUID) | null", required: false, description: "Only this item." },
+        { name: "search", type: "string | null", required: false, description: "Match item name, SKU or batch number." },
+      ],
+      output: {
+        description: "Rows per batch and warehouse, with totals.",
+        example: {
+          data: [
+            { batchId: "batch-uuid", batchNumber: "AMX2311", mfgDate: "2024-11-01", expiryDate: "2026-10-15", mrp: "85.00", itemId: "item-uuid", variantId: null, name: "Amoxicillin 250", sku: null, unit: "pcs", warehouseId: "wh-uuid", warehouseName: "Main warehouse", quantity: 40, value: 2400, daysToExpiry: 15, expired: false },
+          ],
+          asOf: "2026-09-30",
+          status: "expiring",
+          days: 30,
+          totalQuantity: 40,
+          totalValue: 2400,
+          valuationMethod: "weighted_average",
+        },
+      },
+      codeExamples: {
+        curl: `curl "${API_BASE_URL}/api/trpc/inventoryReports.batchStock?input=%7B%22json%22%3A%7B%22status%22%3A%22expiring%22%2C%22days%22%3A30%7D%7D" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "x-business-id: YOUR_BUSINESS_ID"`,
+        javascript: `const { data } = await trpc.inventoryReports.batchStock.query({ status: "expired" });
+data.forEach((r) => console.log(r.name, r.batchNumber, r.quantity));`,
+      },
+      gotchas: [
+        "Requires `Report:read` permission.",
+        "Dates are judged in India time (IST).",
+      ],
+      relatedEndpoints: ["batch-list"],
+    },
   ],
 };

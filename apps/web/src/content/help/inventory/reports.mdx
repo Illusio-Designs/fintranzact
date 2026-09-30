@@ -1,6 +1,6 @@
 ---
 title: Inventory Reports
-description: Stock Summary, Stock Ledger, Movement Summary, Godown Summary, Stock Ageing, Reorder Status, Dead Stock, Stock Group Summary, Price List and the pending order reports in Fintranzact.
+description: Stock Summary, Stock Ledger, Movement Summary, Godown Summary, Batch-wise Stock, Expiring Soon, Expired Stock, Stock Ageing, Reorder Status, Dead Stock, Stock Group Summary, Price List and the pending order reports in Fintranzact.
 sidebar:
   order: 12
 ---
@@ -16,7 +16,7 @@ The date range bar at the top is shared by all reports, but not every inventory 
 |---|---|
 | The full date range | Stock Ledger, Movement Summary |
 | Only the end date ("as on") | Stock Group Summary, Price List |
-| Today's stock (date range ignored) | Stock Summary, Godown Summary, Stock Ageing, Reorder Status, Dead Stock, all pending order reports |
+| Today's stock (date range ignored) | Stock Summary, Godown Summary, Batch-wise Stock, Expiring Soon, Expired Stock, Stock Ageing, Reorder Status, Dead Stock, all pending order reports |
 
 Stock values follow your [valuation method](/help/inventory/stock-valuation) (Average cost or FIFO).
 
@@ -64,6 +64,15 @@ Stock held and its value in each warehouse, today.
 
 - **Columns:** Warehouse (with code and premises; inactive warehouses greyed), Items, Quantity, Value, and a total value.
 - [Unplaced stock](/help/inventory/warehouses) is counted in your sales default warehouse.
+
+## Batch-wise Stock, Expiring Soon and Expired Stock
+
+For items that [track batches](/help/inventory/batches-and-expiry): the stock of every batch in every warehouse, earliest expiry first.
+
+- **Columns:** Item, Batch, Expiry (with days to go, or days since it expired), Warehouse, Quantity, Value.
+- **Expiring Soon** shows only batches that expire in the next 7, 15, 30, 60, 90 or 180 days and haven't expired yet. **Expired Stock** shows batches past their expiry that are still in stock.
+- Filter by warehouse (when you have more than one) and search by item name, SKU or batch number.
+- Only batches holding stock are listed. Stock of a batch-tracked item that isn't in any batch doesn't appear here.
 
 ## Stock Ageing
 

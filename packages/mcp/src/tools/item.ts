@@ -18,6 +18,8 @@
  *   item_rename_unit             — rename a unit (base or alt) across all invoices
  *   item_stock_adjustment_history — view the audit log of stock adjustments
  *   item_low_stock_count         — count items below their low-stock alert threshold
+ *   item_batches                 — batches of a batch-tracked item with stock and expiry
+ *   report_batch_stock           — batch-wise stock, expiring soon or expired stock
  */
 
 import { z } from "zod";
@@ -122,6 +124,57 @@ export function registerItemTools(server: McpServer, client: FintranzactClient) 
           text: JSON.stringify(item, null, 2),
         }],
       };
+    })
+  );
+
+  server.tool(
+    "item_batches",
+    [
+      "List the batches (lots) of an item that tracks batches, earliest expiry first,",
+      "with the stock each holds, its expiry date, days to expiry and whether it has expired.",
+      "Give warehouse_id for one warehouse; otherwise totals with a per-warehouse split.",
+      "'unbatched' is stock of the item not in any batch.",
+    ].join(" "),
+    {
+      item_id: z.string().uuid().describe("Item UUID from item_list."),
+      variant_id: z.string().uuid().optional().describe("One variant of a variant item."),
+      warehouse_id: z.string().uuid().optional().describe("Only stock in this warehouse."),
+      include_empty: z.boolean().default(false).describe("Also list batches with no stock."),
+    },
+    wrapTool(async (input) => {
+      const result = await client.item.batches({
+        itemId: input.item_id,
+        variantId: input.variant_id ?? null,
+        warehouseId: input.warehouse_id ?? null,
+        includeEmpty: input.include_empty,
+      });
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "report_batch_stock",
+    [
+      "Batch-wise stock for items that track batches: quantity and value of every batch in every warehouse, with expiry.",
+      "status='expiring' lists batches expiring within `days` (not yet expired); status='expired' lists expired stock still on hand.",
+      "Use this to answer 'What medicines expire this month?' or 'How much expired stock do we hold?'",
+    ].join(" "),
+    {
+      status: z.enum(["all", "expiring", "expired"]).default("all").describe("Which batches."),
+      days: z.number().int().min(1).max(3650).default(30).describe("Window in days for status='expiring'."),
+      warehouse_id: z.string().uuid().optional().describe("Only this warehouse."),
+      item_id: z.string().uuid().optional().describe("Only this item."),
+      search: z.string().max(100).optional().describe("Match item name, SKU or batch number."),
+    },
+    wrapTool(async (input) => {
+      const result = await client.item.batchStock({
+        status: input.status,
+        days: input.days,
+        warehouseId: input.warehouse_id ?? null,
+        itemId: input.item_id ?? null,
+        search: input.search ?? null,
+      });
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     })
   );
 

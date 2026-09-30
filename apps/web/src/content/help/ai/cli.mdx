@@ -379,6 +379,25 @@ fintranzact item stock "Basmati Rice 25kg" --adjustment +50 --reason "Purchase f
 fintranzact item stock "Mustard Oil 15L" --adjustment -3 --reason "Damaged in transit"
 ```
 
+#### `fintranzact item batches`
+
+Batches of an item that [tracks batches](/help/inventory/batches-and-expiry), earliest expiry first, with stock and days to expiry:
+
+```bash
+fintranzact item batches item_xxxxxxxxxx
+fintranzact item batches item_xxxxxxxxxx --warehouse wh_xxxxxxxxxx --all --json
+```
+
+#### `fintranzact item expiring`
+
+Batches expiring soon, or expired stock still on hand, across all batch-tracked items:
+
+```bash
+fintranzact item expiring              # next 30 days
+fintranzact item expiring --days 90
+fintranzact item expiring --expired --json
+```
+
 #### `fintranzact item stock-history`
 
 Full log of every stock adjustment ever made on an item:

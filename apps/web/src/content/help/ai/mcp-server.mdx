@@ -782,6 +782,35 @@ Get the total count of items (and variants) that are below their low-stock alert
 
 **Input:** `{}` (no parameters)
 
+#### `item_batches`
+
+List the batches (lots) of an item that [tracks batches](/help/inventory/batches-and-expiry), earliest expiry first, with each batch's stock, expiry date, days to expiry and whether it has expired. `unbatched` is the item's stock that isn't in any batch.
+
+**Input:**
+```typescript
+{
+  item_id: string;
+  variant_id?: string;    // one variant of a variant item
+  warehouse_id?: string;  // only stock in this warehouse
+  include_empty?: boolean; // also list batches with no stock (default false)
+}
+```
+
+#### `report_batch_stock`
+
+Batch-wise stock for items that track batches: quantity and value of every batch in every warehouse, with its expiry. Use `status: "expiring"` for batches that expire within `days`, or `status: "expired"` for expired stock still on hand — "What medicines expire this month?"
+
+**Input:**
+```typescript
+{
+  status?: "all" | "expiring" | "expired"; // default "all"
+  days?: number;          // window for "expiring", default 30
+  warehouse_id?: string;
+  item_id?: string;
+  search?: string;        // item name, SKU or batch number
+}
+```
+
 ---
 
 ### Payments
