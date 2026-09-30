@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, toISOString } from "@/lib/utils";
@@ -16,6 +16,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { Spinner } from "@/components/ui/Spinner";
 import { Pagination } from "@/components/ui/Pagination";
+import { usePageSearch } from "@/lib/page-search";
 
 export const Route = createFileRoute("/bank-reconciliation")({
   component: BankReconciliationPage,
@@ -51,6 +52,18 @@ const DATE_FORMAT_OPTIONS = [
 ];
 
 const PAGE_SIZE = 20;
+
+/** Card surface shared with the dashboard. */
+const PANEL = "rounded-2xl border border-border-light bg-surface-0";
+
+function PanelHeader({ title, children }: { title: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-5 pt-4">
+      <h2 className="text-[15px] font-bold text-text-primary">{title}</h2>
+      {children}
+    </div>
+  );
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -178,96 +191,100 @@ function HubTab({
     limit: PAGE_SIZE,
   });
 
+  // Cash in hand has no bank statement to reconcile against.
+  const bankAccounts = (accounts ?? []).filter((a) => a.accountType !== "cash");
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Bank accounts overview */}
-      <div>
-        <h2 className="text-sm font-semibold text-text-secondary mb-3 uppercase tracking-wide">
-          Bank Accounts
-        </h2>
-        {accounts && accounts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {accounts.map((acc) => (
-              <div key={acc.id} className="card p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium text-text-primary">{acc.accountName}</p>
-                    <p className="text-sm text-text-secondary mt-0.5">
-                      {acc.bankName ?? "Bank"} &middot; {acc.accountType}
+      <section className={PANEL}>
+        <PanelHeader title="Bank accounts" />
+        {bankAccounts.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
+            {bankAccounts.map((acc) => (
+              <div key={acc.id} className="rounded-xl border border-border-light bg-surface-1 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-text-primary">{acc.accountName}</p>
+                    <p className="mt-0.5 truncate text-sm text-text-secondary">
+                      {acc.bankName ?? "Bank"} &middot; <span className="capitalize">{acc.accountType.replace(/_/g, " ")}</span>
                     </p>
                     {acc.accountNumber && (
-                      <p className="text-xs text-text-tertiary mt-0.5">
-                        ****{acc.accountNumber.slice(-4)}
+                      <p className="mt-0.5 text-xs text-text-tertiary tabular-nums">
+                        •••• {acc.accountNumber.slice(-4)}
                       </p>
                     )}
                   </div>
-                  <p className="text-lg font-semibold text-text-primary">
+                  <p className="font-display text-lg font-extrabold tabular-nums text-text-primary">
                     {fmt(acc.currentBalance)}
                   </p>
                 </div>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    className="btn-secondary text-xs py-1"
-                    onClick={onUpload}
-                  >
-                    Import Statement
+                <div className="mt-4 flex gap-2">
+                  <button className="btn-primary flex-1 justify-center" onClick={onUpload}>
+                    Import statement
                   </button>
-                  <button
-                    className="btn-secondary text-xs py-1"
-                    onClick={() => onOpenSummary(acc.id)}
-                  >
-                    BRS
+                  <button className="btn-secondary flex-1 justify-center" onClick={() => onOpenSummary(acc.id)}>
+                    View BRS
                   </button>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <EmptyState
-            title="No bank accounts"
-            description="Add a bank account to start reconciling"
-          />
+          <div className="p-5">
+            <EmptyState
+              title="No bank accounts"
+              description="Add a bank account in Cash & Bank to start reconciling"
+              action={
+                <Link to="/cash-and-bank" className="btn-primary">
+                  Add bank account
+                </Link>
+              }
+            />
+          </div>
         )}
-      </div>
+      </section>
 
       {/* Import history */}
-      <div>
-        <h2 className="text-sm font-semibold text-text-secondary mb-3 uppercase tracking-wide">
-          Recent Imports
-        </h2>
+      <section className={PANEL}>
+        <PanelHeader title="Recent imports">
+          {imports && imports.data.length > 0 && (
+            <button className="btn-secondary" onClick={onUpload}>Import statement</button>
+          )}
+        </PanelHeader>
         {isLoading ? (
-          <div className="flex justify-center py-8"><Spinner /></div>
+          <div className="flex justify-center py-10"><Spinner /></div>
         ) : imports && imports.data.length > 0 ? (
-          <>
-            <div className="card overflow-hidden">
+          <div className="mt-4">
+            <div className="overflow-x-auto border-t border-border-light">
               <table className="table-auto w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border-light">
-                    <th className="text-left px-4 py-3 text-text-secondary font-medium">File</th>
-                    <th className="text-left px-4 py-3 text-text-secondary font-medium">Status</th>
-                    <th className="text-right px-4 py-3 text-text-secondary font-medium">Lines</th>
-                    <th className="text-right px-4 py-3 text-text-secondary font-medium">Matched</th>
-                    <th className="text-right px-4 py-3 text-text-secondary font-medium">Unmatched</th>
-                    <th className="text-left px-4 py-3 text-text-secondary font-medium">Date</th>
-                    <th className="px-4 py-3" />
+                  <tr className="border-b border-border-light bg-surface-1">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-text-secondary">File</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary">Status</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-text-secondary">Lines</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-text-secondary">Matched</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-text-secondary">Unmatched</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary">Date</th>
+                    <th className="px-5 py-3" />
                   </tr>
                 </thead>
                 <tbody>
                   {imports.data.map((imp) => (
                     <tr key={imp.id} className="border-b border-border-light last:border-0 hover:bg-surface-hover">
-                      <td className="px-4 py-3 text-text-primary font-medium">{imp.fileName}</td>
+                      <td className="px-5 py-3 text-text-primary font-medium">{imp.fileName}</td>
                       <td className="px-4 py-3">
                         <Badge size="md" color={importStatusColor(imp.status)}>
                           {imp.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-right text-text-secondary">{imp.totalLines}</td>
-                      <td className="px-4 py-3 text-right text-emerald-600">{imp.matchedLines}</td>
-                      <td className="px-4 py-3 text-right text-red-500">{imp.unmatchedLines}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-text-secondary">{imp.totalLines}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-emerald-600">{imp.matchedLines}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-red-500">{imp.unmatchedLines}</td>
                       <td className="px-4 py-3 text-text-secondary">{formatDate(imp.createdAt)}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-5 py-3 text-right">
                         <button
-                          className="text-brand-600 hover:text-brand-700 text-xs font-medium"
+                          className="text-brand-600 hover:text-brand-700 text-xs font-semibold"
                           onClick={() => onOpenReview(imp.id)}
                         >
                           Review
@@ -279,7 +296,7 @@ function HubTab({
               </table>
             </div>
             {imports.total > PAGE_SIZE && (
-              <div className="mt-3">
+              <div className="border-t border-border-light px-5 py-3">
                 <Pagination
                   page={page}
                   total={imports.total}
@@ -289,19 +306,21 @@ function HubTab({
                 />
               </div>
             )}
-          </>
+          </div>
         ) : (
-          <EmptyState
-            title="No imports yet"
-            description="Upload a bank statement CSV to get started"
-            action={
-              <button className="btn-primary" onClick={onUpload}>
-                Import Statement
-              </button>
-            }
-          />
+          <div className="p-5">
+            <EmptyState
+              title="No imports yet"
+              description="Upload a bank statement CSV to get started"
+              action={
+                <button className="btn-primary" onClick={onUpload}>
+                  Import statement
+                </button>
+              }
+            />
+          </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
@@ -1673,7 +1692,7 @@ function templateTypeBadge(t: { isSeeded: boolean; forkedFromId: string | null }
 
 function TemplatesTab() {
   const deleteConfirm = useDeleteConfirmation();
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search templates by bank name…");
   const utils = trpc.useUtils();
 
   const { data: templates, isLoading } = trpc.bankRecon.templateList.useQuery(
@@ -1699,19 +1718,9 @@ function TemplatesTab() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1 max-w-xs">
-          <InputField
-            label=""
-            placeholder="Search by bank name..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <p className="text-xs text-text-tertiary">
-          Built-in templates cannot be edited — fork them to create a custom copy.
-        </p>
-      </div>
+      <p className="text-xs text-text-tertiary">
+        Built-in templates cannot be edited — fork them to create a custom copy.
+      </p>
 
       {isLoading ? (
         <div className="flex justify-center py-10"><Spinner /></div>

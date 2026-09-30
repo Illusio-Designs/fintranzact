@@ -1,5 +1,5 @@
-import { pgTable, text, timestamp, uuid, pgEnum, index, uniqueIndex, boolean, jsonb } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, text, timestamp, uuid, pgEnum, index, uniqueIndex, boolean, jsonb, integer } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
 
 // ── Enums ──────────────────────────────────────────────────────
 
@@ -174,6 +174,31 @@ export const systemConfig = pgTable("system_config", {
   value: jsonb("value").notNull().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ── Document share links ──────────────────────────────────────
+// A public link to one invoice (or quotation, proforma, …) that its customer
+// can open without an account: view it, download the PDF and pay. Kept in the
+// control DB so a link resolves to its tenant in one lookup. Only a SHA-256
+// hash of the token is searchable; the token itself is stored encrypted so
+// the business can copy the same link again. Revoking stamps `revokedAt`.
+
+export const shareLinks = pgTable("share_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tokenHash: text("token_hash").notNull(),
+  tokenEncrypted: text("token_encrypted").notNull(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  businessId: uuid("business_id").notNull(),
+  documentId: uuid("document_id").notNull(),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }),
+  viewCount: integer("view_count").default(0).notNull(),
+}, (t) => [
+  uniqueIndex("share_links_token_hash_idx").on(t.tokenHash),
+  // At most one live link per document.
+  uniqueIndex("share_links_live_document_idx").on(t.tenantId, t.documentId).where(sql`${t.revokedAt} IS NULL`),
+]);
 
 // ── Relations ──────────────────────────────────────────────────
 

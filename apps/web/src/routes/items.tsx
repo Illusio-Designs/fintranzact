@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, downloadCSV, todayISODate, toISOString } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -15,7 +16,6 @@ import { useBarcodeSetup } from "@/components/barcodes/BarcodeSymbol";
 import { Modal } from "@/components/ui/Modal";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
@@ -119,7 +119,7 @@ function countFilled(...values: string[]): number {
 }
 
 function ItemsPage() {
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search items…");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
   const [page, setPage] = useState(1);
@@ -292,7 +292,7 @@ function ItemsPage() {
   return (
     <div>
       <PageHeader
-        title="Items"
+        title="Stock Items"
         description="Products and services inventory"
         actions={
           <div className="flex items-center gap-2">
@@ -317,12 +317,6 @@ function ItemsPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search items..."
-          className="max-w-xs"
-        />
         <SegmentedControl
           tabs={TYPE_TABS}
           value={typeFilter}
@@ -1751,7 +1745,7 @@ function PriceHistoryTab({
       {priceChangedRows.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-text-secondary mb-2">Price Changes</p>
-          <div className="rounded-xl border border-border-light overflow-hidden">
+          <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
             <div className="max-h-[300px] overflow-y-auto">
               <table className="data-table w-full">
                 <thead className="sticky top-0 z-10">
@@ -1923,7 +1917,7 @@ function StockMovementsTab({
         </div>
       )}
 
-      <div className="rounded-xl border border-border-light overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
         <div className="max-h-[300px] overflow-y-auto">
           <table className="data-table w-full">
             <thead className="sticky top-0 z-10">
@@ -2147,7 +2141,7 @@ function ItemDetailPanel({
             </div>
 
             {/* Compact item info grid */}
-            <div className="rounded-xl border border-border-light overflow-hidden">
+            <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
               <table className="w-full text-sm">
                 <tbody>
                   {[
@@ -2182,7 +2176,7 @@ function ItemDetailPanel({
                     Total stock: {item.variants.reduce((sum, v) => sum + parseFloat(v.stockQuantity), 0).toLocaleString()} {item.unit}
                   </p>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="data-table w-full">
                       <thead>
@@ -2219,7 +2213,7 @@ function ItemDetailPanel({
             {item.unitVariants && Array.isArray(item.unitVariants) && item.unitVariants.length > 0 && (
               <div>
                 <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">Unit Variants</p>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>

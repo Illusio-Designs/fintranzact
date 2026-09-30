@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn, formatDateInput, todayISODate } from "@/lib/utils";
@@ -2978,7 +2979,7 @@ function ReportsPage() {
             </button>
 
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-semibold text-text-primary">{currentReport.label}</h1>
+              <h1 className={PAGE_TITLE_CLASS}>{currentReport.label}</h1>
               <p className="text-sm text-text-tertiary mt-0.5">{currentReport.description}</p>
             </div>
           </div>

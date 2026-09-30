@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, getInitials, cn, downloadCSV, toISOString } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -32,7 +33,6 @@ import {
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { InputField, TextareaField } from "@/components/ui/FormField";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
@@ -78,7 +78,7 @@ function countFilled(...values: string[]): number {
 }
 
 function PartiesPage() {
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search by name…");
   const [partyFilter, setPartyFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"name" | "balance">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -186,12 +186,6 @@ function PartiesPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search by name..."
-          className="max-w-xs"
-        />
         <PillTabs
           tabs={PARTY_TYPE_TABS}
           value={["all", "customer", "supplier"].includes(partyFilter) ? partyFilter : "all"}
@@ -555,7 +549,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                     View all
                   </LinkButton>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -606,7 +600,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                     View all
                   </LinkButton>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -657,7 +651,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                 description="Invoices and payments for this party will appear here."
               />
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -743,7 +737,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                 description="Invoices for this party will appear here."
               />
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -801,7 +795,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
             {!paymentList?.data?.length ? (
               <p className="text-sm text-text-tertiary text-center py-6">No payments recorded</p>
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table w-full text-sm">
                   <thead>
                     <tr>
@@ -861,7 +855,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                   {party.type === "customer" ? "Items purchased by" : "Items supplied by"}{" "}
                   <span className="font-medium text-text-secondary">{party.name}</span>
                 </p>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>

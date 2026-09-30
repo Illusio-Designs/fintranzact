@@ -51,6 +51,7 @@ import { Route as AutomatedInvoicesRouteImport } from './routes/automated-invoic
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as InviteTokenRouteImport } from './routes/invite/$token'
+import { Route as ITokenRouteImport } from './routes/i/$token'
 import { Route as BusinessCreateRouteImport } from './routes/business/create'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthPlanSelectionRouteImport } from './routes/auth/plan-selection'
@@ -266,6 +267,11 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
   path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ITokenRoute = ITokenRouteImport.update({
+  id: '/i/$token',
+  path: '/i/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BusinessCreateRoute = BusinessCreateRouteImport.update({
   id: '/business/create',
   path: '/business/create',
@@ -333,6 +339,7 @@ export interface FileRoutesByFullPath {
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/business/create': typeof BusinessCreateRoute
+  '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
 }
 export interface FileRoutesByTo {
@@ -381,6 +388,7 @@ export interface FileRoutesByTo {
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/business/create': typeof BusinessCreateRoute
+  '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
 }
 export interface FileRoutesById {
@@ -430,6 +438,7 @@ export interface FileRoutesById {
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/business/create': typeof BusinessCreateRoute
+  '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
 }
 export interface FileRouteTypes {
@@ -480,6 +489,7 @@ export interface FileRouteTypes {
     | '/auth/plan-selection'
     | '/auth/verify'
     | '/business/create'
+    | '/i/$token'
     | '/invite/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -528,6 +538,7 @@ export interface FileRouteTypes {
     | '/auth/plan-selection'
     | '/auth/verify'
     | '/business/create'
+    | '/i/$token'
     | '/invite/$token'
   id:
     | '__root__'
@@ -576,6 +587,7 @@ export interface FileRouteTypes {
     | '/auth/plan-selection'
     | '/auth/verify'
     | '/business/create'
+    | '/i/$token'
     | '/invite/$token'
   fileRoutesById: FileRoutesById
 }
@@ -625,6 +637,7 @@ export interface RootRouteChildren {
   AuthPlanSelectionRoute: typeof AuthPlanSelectionRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
   BusinessCreateRoute: typeof BusinessCreateRoute
+  ITokenRoute: typeof ITokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
 }
 
@@ -924,6 +937,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/i/$token': {
+      id: '/i/$token'
+      path: '/i/$token'
+      fullPath: '/i/$token'
+      preLoaderRoute: typeof ITokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/business/create': {
       id: '/business/create'
       path: '/business/create'
@@ -1001,6 +1021,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthPlanSelectionRoute: AuthPlanSelectionRoute,
   AuthVerifyRoute: AuthVerifyRoute,
   BusinessCreateRoute: BusinessCreateRoute,
+  ITokenRoute: ITokenRoute,
   InviteTokenRoute: InviteTokenRoute,
 }
 export const routeTree = rootRouteImport
