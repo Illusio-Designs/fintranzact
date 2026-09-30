@@ -22,10 +22,6 @@ const __dirname = typeof import.meta.dirname === "string"
 // Paths are relative to src/content/docs/
 
 const WEB_ONLY: Set<string> = new Set([
-  // Self-hosting and infrastructure
-  "getting-started/self-hosting.mdx",
-  "self-hosting/index.mdx",
-
   // Data import (bulk CSV — desktop workflow)
   "getting-started/import-data.mdx",
 
@@ -35,6 +31,26 @@ const WEB_ONLY: Set<string> = new Set([
   // GST compliance (desktop-only)
   "gst/index.mdx",
   "gst/gstr1.mdx",
+  "gst/e-invoicing.mdx",
+  "gst/eway-bills.mdx",
+  "gst/gstr2b.mdx",
+  "gst/itc.mdx",
+
+  // Accounting & banking tools not in the mobile app
+  "accounting/journal-entries.mdx",
+  "banking/bank-reconciliation.mdx",
+
+  // Point of sale register (web/desktop only)
+  "pos/index.mdx",
+
+  // Plan picker (web sign-up flow)
+  "settings/plans.mdx",
+
+  // Public share links are created from the web/desktop app only
+  "documents/share-links.mdx",
+
+  // Full backup lives in Settings → Data (web/desktop only)
+  "settings/backup-restore.mdx",
 
   // Online store admin (desktop-only)
   "online-store/index.mdx",
@@ -47,11 +63,29 @@ const WEB_ONLY: Set<string> = new Set([
 
   // Keyboard shortcuts (desktop-only by definition)
   "reference/keyboard-shortcuts.mdx",
+
+
+  // Inventory (web-only today)
+  "inventory/warehouses.mdx",
+  "inventory/stock-transfers.mdx",
+  "inventory/stock-adjustments.mdx",
+  "inventory/physical-stock.mdx",
+  "inventory/barcodes.mdx",
+  "inventory/how-stock-moves.mdx",
+  "inventory/stock-valuation.mdx",
+  "inventory/stock-groups.mdx",
+  "inventory/price-levels.mdx",
+  "inventory/manufacturing.mdx",
+  "inventory/orders-and-grn.mdx",
+  "inventory/reports.mdx",
 ]);
 
 const SHARED: Set<string> = new Set([
   // Landing / splash page
   "index.mdx",
+
+  // FAQ (platform-agnostic Q&A)
+  "faq.mdx",
 
   // Overview pages that are mostly conceptual
   "getting-started/index.mdx",
@@ -65,6 +99,12 @@ const SHARED: Set<string> = new Set([
 ]);
 
 // Everything else is dual-platform.
+
+// Classification keys use forward slashes; path.relative() returns
+// backslashes on Windows.
+function toPosix(p: string): string {
+  return p.split("\\").join("/");
+}
 
 // ── File discovery ───────────────────────────────────────────────
 
@@ -95,7 +135,7 @@ const issues: Issue[] = [];
 const allFiles = walk(DOCS_ROOT);
 
 for (const file of allFiles) {
-  const rel = relative(DOCS_ROOT, file);
+  const rel = toPosix(relative(DOCS_ROOT, file));
   const content = readFileSync(file, "utf-8");
 
   const hasDesktop =
@@ -157,12 +197,12 @@ for (const file of allFiles) {
 // ── Report ───────────────────────────────────────────────────────
 
 const dualPlatformTotal = allFiles.filter((f) => {
-  const rel = relative(DOCS_ROOT, f);
+  const rel = toPosix(relative(DOCS_ROOT, f));
   return !WEB_ONLY.has(rel) && !SHARED.has(rel);
 }).length;
 
 const covered = allFiles.filter((f) => {
-  const rel = relative(DOCS_ROOT, f);
+  const rel = toPosix(relative(DOCS_ROOT, f));
   if (WEB_ONLY.has(rel) || SHARED.has(rel)) return false;
   const content = readFileSync(f, "utf-8");
   return (

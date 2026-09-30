@@ -1,6 +1,6 @@
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { recordStockMovement, resolveInvoiceWarehouse, reverseInvoiceStock } from "../lib/inventory-service.js";
+import { getDocumentWarehouseId, getDefaultWarehouse, resolveInvoiceWarehouse, syncDocumentStock } from "../lib/inventory-service.js";
 import {
   invoices,
   invoiceItems,
@@ -220,7 +220,10 @@ export const invoiceRouter = router({
         ? "adjusted"
         : invoice.status;
 
-      return { ...invoice, status: effectiveStatus, lineItems: lineItemsWithUnit, party: party ?? null, relatedDocuments: relatedDocs, totalAdjusted };
+      // Saved choice first; older documents only show it in their movements.
+      const warehouseId = invoice.warehouseId ?? await getDocumentWarehouseId(ctx.db, ctx.businessId, invoice);
+
+      return { ...invoice, status: effectiveStatus, lineItems: lineItemsWithUnit, party: party ?? null, relatedDocuments: relatedDocs, totalAdjusted, warehouseId };
     }),
 
   create: memberProcedure.input(createInvoiceSchema).mutation(async ({ input, ctx }) => {
@@ -415,6 +418,7 @@ export const invoiceRouter = router({
         deliveryMethod: input.deliveryMethod || "self_pickup",
         isReverseCharge: input.isReverseCharge ?? false,
         source: input.source ?? null,
+        stockMode: input.skipStockAdjustment ? "none" : "tracked",
         createdByUserId: ctx.user!.id,
         createdByName: ctx.user!.name,
       }).returning();
@@ -425,68 +429,26 @@ export const invoiceRouter = router({
         );
       }
 
-      // Record inventory movement for sale/purchase invoices.
-      // Skip when skipStockAdjustment is set — used when converting from
-      // delivery_challan (which already decremented stock) to avoid double-counting.
-      if (!input.skipStockAdjustment) {
-        const operation = input.type === "sale" ? "sale" : "purchase";
-        const movementType = input.type === "sale" ? "SALE" : "PURCHASE";
+      // Record inventory movement for sale/purchase invoices. An invoice billed
+      // against a delivery challan (skipStockAdjustment) is stored with stock
+      // mode "none": the challan already moved the goods.
+      await syncDocumentStock(tx, {
+        businessId: ctx.businessId,
+        documentId: invoice.id,
+        event: "CREATE",
+        enforceStock: true,
+        actorUserId: ctx.user!.id,
+      });
 
-        const warehouse = await resolveInvoiceWarehouse(tx, {
-          businessId: ctx.businessId,
-          operation,
-          warehouseId: input.warehouseId,
-        });
-
+      // Goods receipt is the moment stock becomes something you put on a
+      // shelf, so anything arriving without a scannable code gets an
+      // in-store one now — ready to label straight off the purchase.
+      // Sales never mint codes: selling an unbarcoded item is not a
+      // reason to relabel it.
+      if (input.type === "purchase" && !input.skipStockAdjustment) {
         for (const li of input.lineItems) {
-          if (!li.itemId && !li.variantId) {
-            continue;
-          }
-
-          const itemId =
-            li.itemId ||
-            (li.variantId ? variantItemMap.get(li.variantId) : null);
-
-          if (!itemId) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Inventory item could not be resolved for invoice line",
-            });
-          }
-
-          const cf = li.conversionFactor || "1";
-
-          const signedQuantity = li.variantId
-            ? input.type === "sale"
-              ? `-${li.quantity}`
-              : li.quantity
-            : sql<string>`
-              (
-                ${input.type === "sale" ? sql`-` : sql``}
-                ${li.quantity}::numeric * ${cf}::numeric
-              )
-            `;
-
-          await recordStockMovement(tx, {
-            businessId: ctx.businessId,
-            warehouseId: warehouse.id,
-            itemId,
-            variantId: li.variantId || null,
-            referenceType: "INVOICE",
-            referenceId: invoice.id,
-            movementType,
-            quantity: signedQuantity,
-            actorUserId: ctx.user!.id,
-          });
-
-          // Goods receipt is the moment stock becomes something you put on a
-          // shelf, so anything arriving without a scannable code gets an
-          // in-store one now — ready to label straight off the purchase.
-          // Sales never mint codes: selling an unbarcoded item is not a
-          // reason to relabel it.
-          if (input.type === "purchase") {
-            await ensureBarcodeForStock(tx, ctx.businessId, itemId, li.variantId || null);
-          }
+          const itemId = li.itemId || (li.variantId ? variantItemMap.get(li.variantId) : null);
+          if (itemId) await ensureBarcodeForStock(tx, ctx.businessId, itemId, li.variantId || null);
         }
       }
 
@@ -763,14 +725,31 @@ export const invoiceRouter = router({
         .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
         .limit(1);
 
-      const [invoice] = await ctx.db.update(invoices)
-        .set({ status: input.status, updatedAt: new Date() })
-        .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
-        .returning();
+      const invoice = await ctx.db.transaction(async (tx) => {
+        const [updated] = await tx.update(invoices)
+          .set({ status: input.status, updatedAt: new Date() })
+          .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
+          .returning();
 
-      if (!invoice) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" });
-      }
+        if (!updated) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" });
+        }
+
+        // A cancelled invoice gives its stock back; reinstating it takes the
+        // stock out again.
+        const wasCancelled = before?.status === "cancelled";
+        const isCancelled = input.status === "cancelled";
+        if (wasCancelled !== isCancelled) {
+          await syncDocumentStock(tx, {
+            businessId: ctx.businessId,
+            documentId: input.id,
+            event: isCancelled ? "CANCEL" : "REINSTATE",
+            enforceStock: !isCancelled,
+            actorUserId: ctx.user!.id,
+          });
+        }
+        return updated;
+      });
 
       // Auto-reverse ITC when a purchase invoice is cancelled
       if (input.status === "cancelled" && invoice.type === "purchase" && invoice.documentType === "invoice") {
@@ -904,16 +883,6 @@ export const invoiceRouter = router({
         // 4. Handle line items — delete old, insert new, recalculate totals
         if (input.lineItems) {
 
-          // Step 2: Undo this invoice's current stock effect before applying the
-          // new lines. Nets all earlier movements, so repeated edits are safe.
-          await reverseInvoiceStock(tx, {
-            businessId: ctx.businessId,
-            invoiceId: input.id,
-            invoiceType: existing.type,
-            referenceType: "INVOICE_UPDATE_REVERSAL",
-            actorUserId: ctx.user!.id,
-          });
-
           // Step 3: Delete existing line items
           await tx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, input.id));
 
@@ -947,56 +916,22 @@ export const invoiceRouter = router({
             await tx.insert(invoiceItems).values(processedItems);
           }
 
-          // Step 5: Record new inventory movements.
-          const operation = existing.type === "sale" ? "sale" : "purchase";
-          const movementType = existing.type === "sale" ? "SALE" : "PURCHASE";
-
-          const warehouse = await resolveInvoiceWarehouse(tx, {
+          // Step 5: Post only the change in stock against the new lines.
+          await syncDocumentStock(tx, {
             businessId: ctx.businessId,
-            operation,
-            warehouseId: input.warehouseId !== undefined ? input.warehouseId : existing.warehouseId,
+            documentId: input.id,
+            event: "UPDATE",
+            // null picks the business default again.
+            warehouseId: input.warehouseId !== undefined
+              ? input.warehouseId ?? (await getDefaultWarehouse(tx, {
+                  businessId: ctx.businessId,
+                  operation: existing.type === "sale" ? "sale" : "purchase",
+                })).id
+              : undefined,
+            enforceStock: true,
+            actorUserId: ctx.user!.id,
           });
           if (input.warehouseId !== undefined) updates.warehouseId = input.warehouseId ?? null;
-
-          for (const li of input.lineItems) {
-            if (!li.itemId && !li.variantId) continue;
-
-            const itemId = li.itemId;
-
-            if (!itemId) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Inventory item could not be resolved for invoice line",
-              });
-            }
-
-            const cf = li.conversionFactor || "1";
-
-            const signedQuantity = li.variantId
-              ? existing.type === "sale"
-                ? `-${li.quantity}`
-                : li.quantity
-              : sql<string>`
-        (
-          ${existing.type === "sale" ? sql`-` : sql``}
-          ${li.quantity}::numeric * ${cf}::numeric
-        )
-      `;
-
-            await recordStockMovement(tx, {
-              businessId: ctx.businessId,
-              warehouseId: warehouse.id,
-              itemId,
-              variantId: li.variantId || null,
-              referenceType: "INVOICE_UPDATE",
-              referenceId: input.id,
-              movementType,
-              quantity: signedQuantity,
-              actorUserId: ctx.user!.id,
-            });
-          }
-
-
 
           // Recalculate totals using fixed-point arithmetic.
           // Use merged charges (updates.charges) if charges were modified; otherwise
@@ -1072,13 +1007,6 @@ export const invoiceRouter = router({
 
       await ctx.db.transaction(async (tx) => {
 
-        await reverseInvoiceStock(tx, {
-          businessId: ctx.businessId,
-          invoiceId: input.id,
-          invoiceType: inv.type,
-          referenceType: "INVOICE_DELETE_REVERSAL",
-          actorUserId: ctx.user!.id,
-        });
 
         // Auto-reverse ITC when a purchase invoice is deleted
         if (inv.type === "purchase" && inv.documentType === "invoice") {
@@ -1095,6 +1023,14 @@ export const invoiceRouter = router({
         await tx.update(invoices)
           .set({ deletedAt: new Date(), status: "cancelled" as const, updatedAt: new Date() })
           .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)));
+
+        // A deleted invoice holds no stock.
+        await syncDocumentStock(tx, {
+          businessId: ctx.businessId,
+          documentId: input.id,
+          event: "DELETE",
+          actorUserId: ctx.user!.id,
+        });
       });
 
       await logAudit(ctx.db, {

@@ -7,13 +7,29 @@ import { StatCard } from "@/components/ui/StatCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { PartyCombobox } from "@/components/ui/PartyCombobox";
-import { Combobox } from "@/components/ui/Combobox";
 import { Select } from "@/components/ui/Select";
 import { useDateRange } from "@/hooks/useDateRange";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Analytics01Icon, ArrowRight01Icon, Cash01Icon, Download04Icon, FileEmpty01Icon, InformationCircleIcon, Invoice01Icon, Menu01Icon, MoneySend01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
+import {
+  DeadStockReport,
+  GodownSummaryReport,
+  MovementSummaryReport,
+  ReorderStatusReport,
+  StockAgeingReport,
+  StockLedgerReport,
+  StockGroupSummaryReport,
+} from "@/components/reports/InventoryReports";
+import {
+  PendingDeliveryChallansReport,
+  PendingGrnReport,
+  PendingPurchaseOrdersReport,
+  PendingSalesOrdersReport,
+} from "@/components/reports/OrderReports";
+import { StockGroupFilter } from "@/components/inventory/StockGroups";
+import { PriceListReport } from "@/components/reports/PriceListReport";
 export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
@@ -28,6 +44,18 @@ type ReportId =
   | "msme-payables"
   | "party-statement"
   | "stock-summary"
+  | "stock-ledger"
+  | "stock-movement"
+  | "godown-summary"
+  | "stock-group-summary"
+  | "stock-ageing"
+  | "reorder-status"
+  | "dead-stock"
+  | "pending-sales-orders"
+  | "pending-purchase-orders"
+  | "pending-grns"
+  | "pending-delivery-challans"
+  | "price-list"
   | "item-wise-sales"
   | "payment-summary"
   | "tax-summary"
@@ -62,7 +90,24 @@ const REPORT_GROUPS: Array<{ label: string; reports: ReportDef[] }> = [
     label: "Inventory",
     reports: [
       { id: "stock-summary", label: "Stock Summary", description: "Current stock levels by item", tabular: true },
+      { id: "stock-ledger", label: "Stock Ledger", description: "Every movement of an item with its running balance", tabular: true },
+      { id: "stock-movement", label: "Movement Summary", description: "Opening, inward, outward and closing stock per item", tabular: true },
+      { id: "stock-group-summary", label: "Stock Group Summary", description: "Stock quantity and value per stock group, with drill-down to items", tabular: true },
+      { id: "godown-summary", label: "Godown Summary", description: "Stock held and its value in each warehouse", tabular: true },
+      { id: "stock-ageing", label: "Stock Ageing", description: "How long current stock has been held", tabular: true },
+      { id: "reorder-status", label: "Reorder Status", description: "Items at or below their reorder level, with a suggested order", tabular: true },
+      { id: "dead-stock", label: "Dead Stock", description: "Stock that hasn't sold in a while", tabular: true },
+      { id: "price-list", label: "Price List", description: "Each item's price on every price level, with MRP", tabular: true },
       { id: "item-wise-sales", label: "Item-wise Sales", description: "Sales quantity and value per item", tabular: true },
+    ],
+  },
+  {
+    label: "Orders",
+    reports: [
+      { id: "pending-sales-orders", label: "Pending Sales Orders", description: "Ordered by customers and not yet delivered", tabular: true },
+      { id: "pending-purchase-orders", label: "Pending Purchase Orders", description: "Ordered from suppliers and not yet received", tabular: true },
+      { id: "pending-grns", label: "Pending GRNs", description: "Goods received and not yet billed", tabular: true },
+      { id: "pending-delivery-challans", label: "Pending Delivery Challans", description: "Goods delivered and not yet billed", tabular: true },
     ],
   },
   {
@@ -1427,11 +1472,11 @@ interface StockSummaryData {
 
 function StockSummaryReport() {
   const [showZeroStock, setShowZeroStock] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
   const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
 
   const { data, isLoading, error } = (trpc as any).reports.stockSummary.useQuery(
-    { showZeroStock, category: categoryFilter || undefined }
+    { showZeroStock, stockGroupId: groupFilter || undefined }
   ) as { data: StockSummaryData | undefined; isLoading: boolean; error: unknown };
 
   function toggleVariant(itemId: string) {
@@ -1491,14 +1536,6 @@ function StockSummaryReport() {
     downloadCSV("stock-summary", headers, rows);
   }
 
-  // Collect unique categories from loaded data for the filter dropdown
-  const categories = data
-    ? Array.from(new Set([
-        ...(data.simpleItems.map((i) => i.category).filter(Boolean) as string[]),
-        ...(data.variantItems.map((i) => i.category).filter(Boolean) as string[]),
-      ])).sort()
-    : [];
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -1541,19 +1578,7 @@ function StockSummaryReport() {
 
       {/* Filters + Export */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {categories.length > 0 && (
-          <div className="w-48">
-            <Combobox
-              value={categoryFilter}
-              onChange={setCategoryFilter}
-              options={[
-                { value: "", label: "All Categories" },
-                ...categories.map((cat) => ({ value: cat, label: cat })),
-              ]}
-              placeholder="Filter category…"
-            />
-          </div>
-        )}
+        <StockGroupFilter value={groupFilter} onChange={setGroupFilter} className="w-48" />
         <button
           onClick={() => setShowZeroStock((v) => !v)}
           className={cn(
@@ -2896,6 +2921,30 @@ function ReportsPage() {
         return <PartyStatementReport partyId={partyStatementPartyId || null} fromDate={fromDate} toDate={toDate} />;
       case "stock-summary":
         return <StockSummaryReport />;
+      case "stock-ledger":
+        return <StockLedgerReport fromDate={fromDate} toDate={toDate} />;
+      case "stock-movement":
+        return <MovementSummaryReport fromDate={fromDate} toDate={toDate} />;
+      case "stock-group-summary":
+        return <StockGroupSummaryReport toDate={toDate} />;
+      case "godown-summary":
+        return <GodownSummaryReport />;
+      case "stock-ageing":
+        return <StockAgeingReport />;
+      case "reorder-status":
+        return <ReorderStatusReport />;
+      case "dead-stock":
+        return <DeadStockReport />;
+      case "pending-sales-orders":
+        return <PendingSalesOrdersReport />;
+      case "pending-purchase-orders":
+        return <PendingPurchaseOrdersReport />;
+      case "pending-grns":
+        return <PendingGrnReport />;
+      case "pending-delivery-challans":
+        return <PendingDeliveryChallansReport />;
+      case "price-list":
+        return <PriceListReport asOf={toDate} />;
       case "payment-summary":
         return <PaymentSummaryReport fromDate={fromDate} toDate={toDate} />;
       case "tax-summary":

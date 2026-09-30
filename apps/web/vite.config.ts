@@ -2,8 +2,9 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import path from "path";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
+import { DEFAULT_SITE_URL, buildSitemap, resolveSiteUrl } from "./src/lib/seo";
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8"));
 
@@ -60,6 +61,41 @@ function cspPlugin(apiOrigin: string | null): Plugin {
   };
 }
 
+/**
+ * Search-engine files, built from the same list of public pages the app uses
+ * (src/lib/public-paths.ts) so they cannot drift:
+ *   - sitemap.xml is generated for "/" plus MARKETING_PATHS (served live in dev);
+ *   - index.html, public/robots.txt and public/.well-known/security.txt carry
+ *     the production URL, swapped for VITE_SITE_URL when that is set.
+ */
+function seoPlugin(siteUrl: string): Plugin {
+  let outDir = "";
+  const swapUrl = (text: string) =>
+    siteUrl === DEFAULT_SITE_URL ? text : text.split(DEFAULT_SITE_URL).join(siteUrl);
+  return {
+    name: "fintranzact-seo",
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    transformIndexHtml: swapUrl,
+    configureServer(server) {
+      server.middlewares.use("/sitemap.xml", (_req, res) => {
+        res.setHeader("Content-Type", "application/xml; charset=utf-8");
+        res.end(buildSitemap(siteUrl));
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "sitemap.xml", source: buildSitemap(siteUrl) });
+    },
+    writeBundle() {
+      for (const file of ["robots.txt", ".well-known/security.txt"]) {
+        const target = path.join(outDir, file);
+        if (existsSync(target)) writeFileSync(target, swapUrl(readFileSync(target, "utf-8")));
+      }
+    },
+  };
+}
+
 function getVersion(): string {
   // CI sets this from the git tag; fallback to git describe, then package.json
   // Always strip leading "v" — the display template adds its own "v" prefix
@@ -76,6 +112,7 @@ export default defineConfig(({ mode }) => {
   // files), so the CSP always allows the origin the app will call.
   const fileEnv = loadEnv(mode, __dirname, ["VITE_", "API_URL"]);
   const apiOrigin = toOrigin(process.env.API_URL ?? fileEnv.API_URL);
+  const siteUrl = resolveSiteUrl(process.env.VITE_SITE_URL ?? fileEnv.VITE_SITE_URL);
 
   return {
   // Vite only exposes VITE_* vars to client code by default; the app reads
@@ -88,6 +125,7 @@ export default defineConfig(({ mode }) => {
   },
   plugins: [
     cspPlugin(apiOrigin),
+    seoPlugin(siteUrl),
     TanStackRouterVite(),
     react(),
   ],

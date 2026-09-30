@@ -34,6 +34,10 @@ function DeliveryChallansPage() {
         col4Variant: "dueDate",
         col4Header: "Due Date",
         markSent: true,
+        fulfilment: {
+          convertTo: [{ type: "invoice", label: "Invoice" }],
+          labels: { open: "Not billed", partial: "Partly billed", fulfilled: "Billed" },
+        },
       }}
     />
   );

@@ -8,7 +8,7 @@ sidebar:
 import ForDesktop from '../../../components/ForDesktop.astro';
 import ForMobile from '../../../components/ForMobile.astro';
 
-The Banking section lets you track the balances in your business bank accounts, UPI accounts, and cash. When you link a payment to a bank account, Fintranzact automatically records the corresponding deposit or withdrawal.
+The Banking section tracks the balances of your business bank accounts, UPI accounts, and cash. When you link a payment to a bank account, Fintranzact records the deposit or withdrawal for you.
 
 ## Account types
 
@@ -16,103 +16,138 @@ The Banking section lets you track the balances in your business bank accounts, 
 |---|---|
 | `savings` | Standard savings bank account |
 | `current` | Current account (business banking) |
-| `cash` | Physical cash — petty cash box, counter cash, etc. |
-| `upi` | UPI-linked account (Google Pay, PhonePe, Paytm business accounts) |
+| `cash` | Physical cash, such as a petty cash box or counter cash |
+| `upi` | UPI-linked account (Google Pay, PhonePe, or Paytm business accounts) |
 | `credit_card` | Business credit card |
+| `payment_gateway` | Razorpay, PayU, or another gateway that deducts charges before paying out. See [Payment Gateway Accounts](/banking/payment-gateways). |
 
 ## Adding a bank account
 
 <ForDesktop>
-Go to **Cash & Bank** in the sidebar and click **+ Add Account**. A form opens where you enter the account details.
+Go to **Cash & Bank** in the sidebar and click **+ Add Account**. The **Add Bank Account** panel opens. Fill in the account details and click **Create Account**.
 </ForDesktop>
 
 <ForMobile>
-Tap **More** in the bottom tab bar, then tap **Bank**. Tap the floating **+** button to open a full-screen form for entering the account details.
+Tap **More** in the bottom tab bar, then tap **Bank**. Tap the floating **+** button. The **New Bank Account** screen opens. Fill in the account details and tap **Create Account**.
 </ForMobile>
 
 | Field | Required | Notes |
 |---|---|---|
-| **Account Name** | Yes | A label for this account, for example "SBI Current Account" or "GPay UPI" |
-| **Account Type** | Yes | Savings, Current, Cash, UPI, or Credit Card |
+| **Account Type** | Yes | Savings, Current, Cash, UPI, Credit Card, or Payment Gateway |
+| **Account Name** | Yes | A label for the account, for example "SBI Current Account" or "GPay UPI" |
+| **Account Number** | No | For savings, current, and credit card accounts. For a credit card, the web app labels it **Last 4 Digits**. |
+| **IFSC Code** | No | For savings and current accounts. Bank reconciliation also uses it to recognise your bank's statement format. |
+| **UPI ID** | No | Web app, UPI accounts only. For example `business@upi`. It is used for the UPI QR code on invoices. |
 | **Bank Name** | No | Name of the bank |
-| **Account Number** | No | Full account number. Displayed on invoice PDFs for payment. |
-| **IFSC** | No | IFSC code. Displayed on invoice PDFs for NEFT/RTGS transfers. |
-| **Opening Balance** | No | Your account balance on the day you start using Fintranzact. Defaults to 0. |
-| **Set as Default** | No | If enabled, this account is pre-selected when recording payments and expenses. |
+| **Opening Balance (₹)** | No | Your account balance on the day you start using Fintranzact. Defaults to 0. |
+| **Set as default account** | No | If on, this account is auto-selected when you record payments |
+
+<ForMobile>
+The mobile form shows **Bank Name**, **Account Number**, and **IFSC Code** for every account type except Payment Gateway. It has no separate UPI ID field.
+</ForMobile>
 
 ## Default account
 
-Set one account as your default. The default account is pre-selected whenever you record a payment or expense, saving time. Change the default in the account settings.
+You can set one account as your default. It is auto-selected when you record a payment. When an expense is posted to a bank account automatically, the default account is preferred among accounts of the right type.
+
+<ForDesktop>
+To change the default, hover over an account in the **Accounts** list and click the edit icon. Turn on **Set as default account**, then click **Save Changes**.
+</ForDesktop>
+
+<ForMobile>
+Open an account and tap **Set as Default**. You can also turn on the switch on the account's edit screen.
+</ForMobile>
 
 ## Banking layout
 
 <ForDesktop>
-The Banking page opens with 3 summary cards at the top showing your total balance across all accounts, total deposits, and total withdrawals. Below, a split view shows the account list on the left and the selected account's transactions on the right. Click an account in the left panel to view its transaction history in the right panel. Use the date range tabs at the top of the transaction panel to filter by period.
+The **Cash & Bank** page has three summary cards at the top: **Total Balance**, **Cash in Hand**, and **Bank Balance**. Bank Balance covers every account that is not a cash account. Below the cards, the **Accounts** list is on the left and the selected account's **Transactions** are on the right. Click an account to see its history. Use the period buttons (**This Month**, **Last Month**, **Last 30 Days**, **This FY**, **Last FY**, **Custom**, **All**) to filter by date, and **Export CSV** to download the list.
+
+Payments that are not linked to any account appear under **Untracked Payments** at the bottom of the page. Filter them by mode, select them, and assign them to an account in bulk.
 </ForDesktop>
 
 <ForMobile>
-The Banking page opens with a summary card at the top showing your total balance across all accounts. Below, a vertical list of account cards shows each account's name, type, and current balance. Tap an account card to open its full-screen transaction history with a date filter at the top.
+The **Cash & Bank** screen opens with a summary card showing **Total Balance**, plus **Cash in Hand** and **Bank Balance**. Below it is a list of account cards showing each account's name, type, and current balance. Tap an account card to open its details and transaction history. Tap **Load more** to see older transactions.
 </ForMobile>
 
 ## How balances are tracked
 
-The `currentBalance` field on each account is maintained automatically by the system:
+Fintranzact updates each account's current balance automatically:
 
-- **Payment received** (customer pays you): `currentBalance += payment amount`
-- **Payment made** (you pay a supplier): `currentBalance -= payment amount`
-- **Bank transfer in**: `currentBalance += transfer amount`
-- **Bank transfer out**: `currentBalance -= transfer amount`
+- **Payment received** (a customer pays you): balance goes up by the payment amount
+- **Payment made** (you pay a supplier against a purchase invoice): balance goes down by the payment amount
+- **Expense**: balance goes down by the expense amount
+- **Bank transfer in**: balance goes up by the transfer amount
+- **Bank transfer out**: balance goes down by the transfer amount
+- **Manual transaction**: balance goes up for a deposit and down for a withdrawal
 
-Each adjustment creates a record in the `bank_transactions` table, giving you a full ledger of what moved through each account.
+Each change creates a bank transaction, which gives you a full ledger of what moved through each account.
 
 :::note
-Expenses are not directly linked to bank accounts. To track an expense paid from a specific account, record a manual withdrawal transaction for the same amount.
+When you record an expense, Fintranzact picks the account from the payment mode:
+
+- **Cash** uses a cash account.
+- **Bank** and **Cheque** use a savings or current account.
+- **UPI** uses a UPI account.
+
+The default account is preferred when there is more than one. Expenses with the mode **Other** are not posted to any account.
 :::
 
 ## Viewing transactions
 
 <ForDesktop>
-Click an account in the left panel to view its transaction history in the right panel. Each row shows:
+Click an account in the **Accounts** list to view its transactions on the right. Each row shows:
 </ForDesktop>
 
 <ForMobile>
-Tap an account card to open a full-screen transaction history. Each row shows:
+Tap an account card to open its details. Each transaction row shows:
 </ForMobile>
 
 | Column | Meaning |
 |---|---|
 | Date | Transaction date |
-| Description | Auto-generated description (for example, "Payment from Raj Traders") |
-| Type | Deposit, Withdrawal, or Transfer |
+| Description | Auto-generated description, for example the payment number, expense category, or transfer note |
+| Type | Deposit or withdrawal. A transfer shows as a withdrawal in one account and a deposit in the other. |
 | Amount | Transaction amount in INR |
-| Reference | Links to the source payment, expense, or transfer |
+| Balance | Running balance after the transaction, counted from the opening balance |
+
+<ForDesktop>
+To record a deposit or withdrawal that did not come from a payment or expense, such as bank charges or interest, click **+ Add Transaction**. Choose **Deposit** or **Withdrawal**, then enter the **Amount (₹)**, **Description**, and **Date**.
+</ForDesktop>
+
+<ForMobile>
+To record a deposit or withdrawal that did not come from a payment or expense, open the account and tap **Add Transaction**.
+</ForMobile>
 
 ## Bank transfers
 
 <ForDesktop>
-Click the **Transfer** button to open a slide-over panel. Select the source account, destination account, enter the amount, and confirm. This creates:
+Click the **Transfer** button to open the **Transfer Money** panel. Select the **From Account** and **To Account**, enter the amount, and confirm. This creates:
 </ForDesktop>
 
 <ForMobile>
-Tap the **Transfer** icon in the header to open a full-screen form. Tap each account field to open an account picker modal where you select the source and destination accounts. Enter the amount and confirm. This creates:
+Tap the **Transfer** icon in the header to open the **Transfer Funds** screen. Tap each account field to open a picker and choose the source and destination accounts. Enter the amount and confirm. This creates:
 </ForMobile>
 
 - A withdrawal transaction in the source account
 - A deposit transaction in the destination account
 
-Both transactions reference each other for traceability. The transfer happens atomically, so both account balances are always consistent.
+Both transactions reference each other so you can trace them. The transfer is saved as a single step, so the two balances always stay consistent.
 
 ## Reconciling your balance
 
-The `currentBalance` in Fintranzact reflects transactions recorded through the app. If you have bank transactions that were not entered in Fintranzact (for example, bank charges auto-debited, or an interest credit), you can manually add adjustment transactions to keep the balance accurate.
+To check your books against the bank, use [Bank Reconciliation](/banking/bank-reconciliation) in the web or desktop app. It is under **Accounts → Bank Reconciliation** in the sidebar.
 
-:::tip
-At the end of each month, compare your Fintranzact account balance with your bank statement. The difference equals the total of transactions that happened outside Fintranzact (bank charges, auto-debits, etc.). Enter these as manual adjustments to reconcile.
-:::
+1. Import your bank statement as a CSV. Built-in templates cover SBI, HDFC, ICICI, Axis, Kotak, PNB, Bank of Baroda, Union Bank, IDBI, and IndusInd.
+2. Fintranzact auto-matches each statement line with your payments, expenses, and bank transactions.
+3. Review the matches. Match any leftover lines by hand, turn bank charges into expenses, or ignore lines.
+4. The **Summary (BRS)** tab compares the book balance with the statement balance.
+
+For bank charges or interest that appear only on the statement, add a manual transaction with **+ Add Transaction** so the account balance stays accurate.
 
 ## UPI details on invoices
 
-If you store a **UPI ID** on a bank account and set it as the default, the UPI ID is used to generate a QR code on invoice PDFs. This makes it easy for customers to pay by scanning the QR code with any UPI app.
+If you have a **UPI** account with a **UPI ID**, Fintranzact adds a UPI payment QR code and link to your sale invoices. The QR code asks for the invoice's unpaid balance. Customers can scan it with any UPI app to pay. The QR code appears only on sale invoices that still have a balance due.
 
 ## Frequently asked questions
 
@@ -120,16 +155,16 @@ If you store a **UPI ID** on a bank account and set it as the default, the UPI I
 Yes. Add as many accounts as you need. Each has its own transaction history and balance.
 
 **I entered the wrong opening balance. Can I correct it?**
-Yes. Edit the bank account and update the opening balance. This also updates the current balance accordingly.
+Yes. Edit the account and change **Opening Balance (₹)**. The running **Balance** shown next to each transaction is recalculated from the new opening balance. The account's current balance is not recalculated, though. To correct it, add a manual deposit or withdrawal for the difference.
 
 **Can I record inter-bank transfers (moving money from one account to another)?**
-Yes. Use the **Transfer** feature in the Banking section. Select the source account, the destination account, and the amount. Fintranzact creates a withdrawal in the source account and a deposit in the destination account in a single transaction, keeping both balances accurate.
+Yes. Use the **Transfer** feature in the Banking section. Select the source account, the destination account, and the amount. Fintranzact creates a withdrawal in the source account and a deposit in the destination account in a single step, keeping both balances accurate.
 
 **Does Fintranzact connect to my bank to import transactions automatically?**
-No. Fintranzact does not connect to bank APIs. All transactions must be entered manually (or via payment and expense records).
+No. Fintranzact has no live bank feed. You can download your statement as a CSV from net banking and import it on the [Bank Reconciliation](/banking/bank-reconciliation) page in the web or desktop app. Fintranzact then matches the statement lines with your payments and expenses. Everything else is recorded through payments, expenses, transfers, and manual transactions.
 
 ## Payment Gateway Accounts
 
-Track charges from Razorpay, PayU, PhonePe, and other payment gateways automatically. When a customer pays through a gateway, Fintranzact deducts the gateway charge as an expense and settles the net amount to your bank account.
+Fintranzact can track charges from Razorpay, PayU, PhonePe, and other payment gateways automatically. When a customer pays through a gateway, Fintranzact records the gateway charge as an expense and can move the net amount to your bank account.
 
 See [Payment Gateway Accounts](/banking/payment-gateways) for setup and configuration.

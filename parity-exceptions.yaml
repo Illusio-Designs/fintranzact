@@ -26,8 +26,66 @@ exceptions:
       - stock.transfers
       - stock.verify
       - stock.warehouses
+      # Stock groups (manage screen, item picker, stock group summary) are web screens for now.
+      - stockGroup.list
+      - stockGroup.create
+      - stockGroup.rename
+      - stockGroup.move
+      - stockGroup.delete
+      - inventoryReports.stockGroupSummary
+      # Bills of material and the manufacturing journal are web screens for now.
+      - manufacturing.boms
+      - manufacturing.bom
+      - manufacturing.bomCreate
+      - manufacturing.bomUpdate
+      - manufacturing.bomDelete
+      - manufacturing.plan
+      - manufacturing.manufacture
+      - manufacturing.journals
+      - manufacturing.journal
+      - manufacturing.cancel
+      # Inventory settings (negative stock, valuation), the entry-form stock check
+      # and the inventory reports are web screens for now.
+      - stock.availability
+      - stock.settings
+      - stock.updateSettings
+      - inventoryReports.stockLedger
+      - inventoryReports.movementSummary
+      - inventoryReports.godownSummary
+      - inventoryReports.ageing
+      - inventoryReports.reorderStatus
+      - inventoryReports.deadStock
+      # Purchase/sales orders, GRNs, pending tracking and short-close are web screens for now.
+      - purchaseOrder.create
+      - salesOrder.create
+      - goodsReceiptNote.create
+      - orders.pending
+      - orders.fulfilment
+      - orders.close
+      - orders.reopen
+      # Warehouse management (edit, locations, member access, default warehouses) is a web screen for now.
+      - warehouse.accessList
+      - warehouse.accessSet
+      - warehouse.inventorySettingsUpdate
+      - warehouse.locationCreate
+      - warehouse.locationList
+      - warehouse.locationUpdate
+      - warehouse.warehouseDelete
+      - warehouse.warehouseUpdate
       - warehouse.premiseList
       - warehouse.warehouseCreate
+      # Price levels (price lists, quantity slabs) and sale-line pricing are web screens for now.
+      - priceLevel.bulkUpdate
+      - priceLevel.create
+      - priceLevel.delete
+      - priceLevel.grid
+      - priceLevel.itemEntries
+      - priceLevel.list
+      - priceLevel.priceList
+      - priceLevel.setGridPrices
+      - priceLevel.setItemPrices
+      - priceLevel.update
+      - pricing.resolve
 
       # --- Multi-Tenancy ---
       # Mobile derives current tenant info from auth.me; the standalone
@@ -190,6 +248,11 @@ exceptions:
       - platform.deletePayout
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
+      # Public contact/partner forms and the emailed email-change confirmation
+      # link are pages of the public website (/contact, /partners,
+      # /auth/verify-email-change); the link opens in a browser, not the app.
+      - contact.submit
+      - auth.confirmEmailChange
 
       # --- Chart of Accounts ---
       # Accounting management is a desktop/CA workflow.
@@ -336,8 +399,66 @@ exceptions:
       - stock.transfers
       - stock.verify
       - stock.warehouses
+      # Stock groups (manage screen, item picker, stock group summary) are web screens for now.
+      - stockGroup.list
+      - stockGroup.create
+      - stockGroup.rename
+      - stockGroup.move
+      - stockGroup.delete
+      - inventoryReports.stockGroupSummary
+      # Bills of material and the manufacturing journal are web screens for now.
+      - manufacturing.boms
+      - manufacturing.bom
+      - manufacturing.bomCreate
+      - manufacturing.bomUpdate
+      - manufacturing.bomDelete
+      - manufacturing.plan
+      - manufacturing.manufacture
+      - manufacturing.journals
+      - manufacturing.journal
+      - manufacturing.cancel
+      # Inventory settings (negative stock, valuation), the entry-form stock check
+      # and the inventory reports are web screens for now.
+      - stock.availability
+      - stock.settings
+      - stock.updateSettings
+      - inventoryReports.stockLedger
+      - inventoryReports.movementSummary
+      - inventoryReports.godownSummary
+      - inventoryReports.ageing
+      - inventoryReports.reorderStatus
+      - inventoryReports.deadStock
+      # Purchase/sales orders, GRNs, pending tracking and short-close are web screens for now.
+      - purchaseOrder.create
+      - salesOrder.create
+      - goodsReceiptNote.create
+      - orders.pending
+      - orders.fulfilment
+      - orders.close
+      - orders.reopen
+      # Warehouse management (edit, locations, member access, default warehouses) is a web screen for now.
+      - warehouse.accessList
+      - warehouse.accessSet
+      - warehouse.inventorySettingsUpdate
+      - warehouse.locationCreate
+      - warehouse.locationList
+      - warehouse.locationUpdate
+      - warehouse.warehouseDelete
+      - warehouse.warehouseUpdate
       - warehouse.premiseList
       - warehouse.warehouseCreate
+      # Price levels (price lists, quantity slabs) and sale-line pricing are web screens for now.
+      - priceLevel.bulkUpdate
+      - priceLevel.create
+      - priceLevel.delete
+      - priceLevel.grid
+      - priceLevel.itemEntries
+      - priceLevel.list
+      - priceLevel.priceList
+      - priceLevel.setGridPrices
+      - priceLevel.setItemPrices
+      - priceLevel.update
+      - pricing.resolve
 
       # --- Auth ---
       # Browser-only flows requiring email verification links / callbacks.
@@ -378,6 +499,11 @@ exceptions:
       - platform.deletePayout
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
+      # Public contact/partner forms and the emailed email-change confirmation
+      # link are pages of the public website (/contact, /partners,
+      # /auth/verify-email-change); the link opens in a browser, not the app.
+      - contact.submit
+      - auth.confirmEmailChange
 
       # --- Business ---
       # Plan limit check — CLI doesn't create businesses.
@@ -480,8 +606,66 @@ exceptions:
       - stock.transfers
       - stock.verify
       - stock.warehouses
+      # Stock groups (manage screen, item picker, stock group summary) are web screens for now.
+      - stockGroup.list
+      - stockGroup.create
+      - stockGroup.rename
+      - stockGroup.move
+      - stockGroup.delete
+      - inventoryReports.stockGroupSummary
+      # Bills of material and the manufacturing journal are web screens for now.
+      - manufacturing.boms
+      - manufacturing.bom
+      - manufacturing.bomCreate
+      - manufacturing.bomUpdate
+      - manufacturing.bomDelete
+      - manufacturing.plan
+      - manufacturing.manufacture
+      - manufacturing.journals
+      - manufacturing.journal
+      - manufacturing.cancel
+      # Inventory settings (negative stock, valuation), the entry-form stock check
+      # and the inventory reports are web screens for now.
+      - stock.availability
+      - stock.settings
+      - stock.updateSettings
+      - inventoryReports.stockLedger
+      - inventoryReports.movementSummary
+      - inventoryReports.godownSummary
+      - inventoryReports.ageing
+      - inventoryReports.reorderStatus
+      - inventoryReports.deadStock
+      # Purchase/sales orders, GRNs, pending tracking and short-close are web screens for now.
+      - purchaseOrder.create
+      - salesOrder.create
+      - goodsReceiptNote.create
+      - orders.pending
+      - orders.fulfilment
+      - orders.close
+      - orders.reopen
+      # Warehouse management (edit, locations, member access, default warehouses) is a web screen for now.
+      - warehouse.accessList
+      - warehouse.accessSet
+      - warehouse.inventorySettingsUpdate
+      - warehouse.locationCreate
+      - warehouse.locationList
+      - warehouse.locationUpdate
+      - warehouse.warehouseDelete
+      - warehouse.warehouseUpdate
       - warehouse.premiseList
       - warehouse.warehouseCreate
+      # Price levels (price lists, quantity slabs) and sale-line pricing are web screens for now.
+      - priceLevel.bulkUpdate
+      - priceLevel.create
+      - priceLevel.delete
+      - priceLevel.grid
+      - priceLevel.itemEntries
+      - priceLevel.list
+      - priceLevel.priceList
+      - priceLevel.setGridPrices
+      - priceLevel.setItemPrices
+      - priceLevel.update
+      - pricing.resolve
 
       # --- Auth ---
       # MCP runs as a pre-authenticated server-side agent. It does not
@@ -530,6 +714,11 @@ exceptions:
       - platform.deletePayout
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
+      # Public contact/partner forms and the emailed email-change confirmation
+      # link are pages of the public website (/contact, /partners,
+      # /auth/verify-email-change); the link opens in a browser, not the app.
+      - contact.submit
+      - auth.confirmEmailChange
 
       # --- Backup & Restore ---
       # Tenant-level backup/restore requires file I/O; not an MCP workflow.

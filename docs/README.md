@@ -24,12 +24,17 @@ This folder contains **internal architecture documents, audit reports, and desig
 
 ### Deployment
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — Production deployment guide (Docker, ONCE, Vercel)
+- [`ROLLBACK.md`](ROLLBACK.md) — Migration rollback procedures (reverse SQL per Drizzle migration, backup-based recovery)
+
+### Testing & Workflows
+- [`INTEGRATION-TEST-WORKFLOWS.md`](INTEGRATION-TEST-WORKFLOWS.md) — Integration test workflow tree (every testable API workflow, grouped by test file)
+- [`workflows/WORKFLOW-SPECS.md`](workflows/WORKFLOW-SPECS.md) — Build-ready workflow specifications for BDD-style integration tests
 
 ## Feature Reference
 
 ### Reports System
 
-A `reports` tRPC router (11 report types) accessible at the `/reports` route in the web app. All reports are scoped to the active business via `businessProcedure`.
+24 report types, accessible at the `/reports` route in the web app, served by the `reports`, `inventoryReports`, `orders` (pending order reports) and `priceLevel` (Price List) tRPC routers. All reports are scoped to the active business.
 
 | Report | Description |
 |---|---|
@@ -38,12 +43,25 @@ A `reports` tRPC router (11 report types) accessible at the `/reports` route in 
 | Purchase Register | Purchase invoice listing |
 | Outstanding Report | Unpaid/partially-paid receivables and payables |
 | Tax Summary | GST collected and paid, period-wise |
-| Cash Flow Forecast | Projected inflows/outflows from due dates |
+| Cash Flow Statement | Cash flows from operating, investing and financing activities |
 | Collection Efficiency + DSO | Payment collection rate and Days Sales Outstanding |
 | Item-wise Sales | Revenue and quantity breakdown per item |
 | Stock Summary | Current stock levels per item |
 | Party Statement | Ledger-style transaction history per party |
 | Payment Summary | Payments grouped by mode and period |
+| MSME Payables | Unpaid MSME supplier bills with 45-day pay-by dates (Section 43B(h)) |
+| Stock Ledger | Every movement of an item with a running balance |
+| Movement Summary | Opening, inward, outward and closing stock per item |
+| Stock Group Summary | Stock quantity and value per stock group, with drill-down |
+| Godown Summary | Stock held and its value per warehouse |
+| Stock Ageing | Current stock by age bucket (0–30 … 180+ days) |
+| Reorder Status | Items at or below reorder level, with suggested order |
+| Dead Stock | Stock with no outward movement in N days |
+| Price List | Each item's price on every price level, with MRP |
+| Pending Sales Orders | Ordered by customers and not yet delivered |
+| Pending Purchase Orders | Ordered from suppliers and not yet received |
+| Pending GRNs | Goods received and not yet billed |
+| Pending Delivery Challans | Goods delivered and not yet billed |
 
 ### Dashboard Analytics Widgets
 

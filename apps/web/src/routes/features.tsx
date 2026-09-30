@@ -1,8 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+  ArrowDataTransferHorizontalIcon,
   ArrowRight01Icon,
   BankIcon,
+  BarCode01Icon,
   Book02Icon,
+  Calculator01Icon,
+  CheckListIcon,
+  Clock01Icon,
+  Factory01Icon,
+  Layers01Icon,
+  PackageReceiveIcon,
+  ScanIcon,
+  Share08Icon,
+  SlidersHorizontalIcon,
+  Tag01Icon,
+  WarehouseIcon,
   Building03Icon,
   ChartBarLineIcon,
   ChartIncreaseIcon,
@@ -54,6 +67,7 @@ const FEATURE_GROUPS: Array<{
       { name: "Credit notes & returns", body: "Handle sales returns and adjustments with correct tax reversal." },
       { name: "Recurring invoices", body: "Automate monthly and periodic billing for retainers and subscriptions." },
       { name: "Point of sale", body: "A fast checkout screen for walk-in customers, with keyboard shortcuts." },
+      { name: "Share links", body: "Send any invoice or quote as a link your customer opens without signing in, or share it on WhatsApp. See when it was opened and turn it off any time." },
     ],
   },
   {
@@ -77,14 +91,32 @@ const FEATURE_GROUPS: Array<{
       { name: "Bank reconciliation", body: "Import statements and match them against your books." },
       { name: "Journal entries", body: "Post manual adjustments with full double-entry support." },
       { name: "Reports", body: "Profit & loss, balance sheet, day book, party ledgers, stock and tax reports." },
+      { name: "MSME payables", body: "Unpaid bills from MSME suppliers with their 45-day pay-by dates, so payments stay on time under Section 43B(h)." },
     ],
   },
   {
     title: "Inventory & fulfilment",
-    intro: "Know what you have and where it is going.",
+    intro: "Know what you have, where it is and what it is worth.",
     items: [
-      { name: "Items & variants", body: "Products and services with units, variants, pricing and tax rates." },
-      { name: "Stock tracking", body: "Stock levels update automatically as you buy and sell." },
+      { name: "Items & variants", body: "Products and services with units, variants, pricing and tax rates. Stock updates as you buy and sell." },
+      { name: "Warehouses & godowns", body: "Keep stock in several warehouses or godowns and see what each one holds. Choose whether stock may go below zero." },
+      { name: "Stock transfers", body: "Move stock between your warehouses, with every transfer kept in a journal." },
+      { name: "Stock adjustments", body: "Record damaged, expired or found stock with a reason, outside of sales and purchases." },
+      { name: "Physical stock & barcode counts", body: "Scan everything on the shelf in a store or godown, then compare the count with your books and fix the difference." },
+      { name: "Barcode labels", body: "Print barcode labels for one item, several items or every piece on a purchase bill, sized for your label printer." },
+      { name: "Stock valuation", body: "Value closing stock at average cost or FIFO, the method you pick for your business." },
+      { name: "Stock groups", body: "Arrange items in nested stock groups and see quantity and value for each group." },
+      { name: "Price levels & MRP", body: "Wholesale, retail or dealer price lists with quantity slabs, set per customer, and a warning when a price goes above MRP." },
+      { name: "Inventory reports", body: "Stock ledger, movement summary, godown summary, stock ageing, reorder status and dead stock." },
+    ],
+  },
+  {
+    title: "Orders & manufacturing",
+    intro: "From the first order to the finished product and the delivery.",
+    items: [
+      { name: "Sales & purchase orders", body: "Take sales orders and raise purchase orders, track what is still pending and short-close what won't be supplied." },
+      { name: "Goods receipt notes", body: "Record goods as they arrive against a purchase order, before the supplier's bill." },
+      { name: "Bill of materials & manufacturing", body: "List what goes into each item you make, then record production: components leave stock and the finished item comes in at cost." },
       { name: "Shipments", body: "Track dispatches and deliveries for your orders." },
       { name: "Online store", body: "Publish a storefront for your items and receive orders straight into your books." },
     ],
@@ -107,6 +139,7 @@ const GROUP_ICONS: Record<string, IconSvgElement> = {
   "GST compliance": TaxesIcon,
   "Accounting & banking": BankIcon,
   "Inventory & fulfilment": PackageIcon,
+  "Orders & manufacturing": Factory01Icon,
   "Teams & platform": UserGroupIcon,
 };
 
@@ -128,8 +161,21 @@ const ITEM_ICONS: Record<string, IconSvgElement> = {
   "Bank reconciliation": GitCompareIcon,
   "Journal entries": Book02Icon,
   Reports: ChartBarLineIcon,
+  "MSME payables": Clock01Icon,
+  "Share links": Share08Icon,
   "Items & variants": PackageIcon,
-  "Stock tracking": ChartIncreaseIcon,
+  "Warehouses & godowns": WarehouseIcon,
+  "Stock transfers": ArrowDataTransferHorizontalIcon,
+  "Stock adjustments": SlidersHorizontalIcon,
+  "Physical stock & barcode counts": ScanIcon,
+  "Barcode labels": BarCode01Icon,
+  "Stock valuation": Calculator01Icon,
+  "Stock groups": Layers01Icon,
+  "Price levels & MRP": Tag01Icon,
+  "Inventory reports": ChartIncreaseIcon,
+  "Sales & purchase orders": CheckListIcon,
+  "Goods receipt notes": PackageReceiveIcon,
+  "Bill of materials & manufacturing": Factory01Icon,
   Shipments: DeliveryTruck01Icon,
   "Online store": ShoppingBag01Icon,
   "Multiple businesses": Building03Icon,
@@ -143,7 +189,10 @@ const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
 function FeaturesPage() {
   return (
-    <MarketingLayout title="Features">
+    <MarketingLayout
+      title="Features"
+      description="GST invoicing, e-invoicing, e-way bills, GSTR returns, banking, multi-godown inventory, manufacturing and reports: every Fintranzact feature in one place."
+    >
       <PageHero
         eyebrow="Features"
         title="Everything you need to bill, file and grow"

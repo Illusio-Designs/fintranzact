@@ -17,8 +17,12 @@ import {
   proformaRouter,
   salesReturnRouter,
   purchaseReturnRouter,
+  purchaseOrderRouter,
+  salesOrderRouter,
+  goodsReceiptNoteRouter,
   documentRouter,
 } from "./routers/document.js";
+import { ordersRouter } from "./routers/orders.js";
 import { bankAccountRouter } from "./routers/bankAccount.js";
 import { importRouter } from "./routers/import/index.js";
 import { storeRouter } from "./routers/store.js";
@@ -46,6 +50,12 @@ import { warehouseRouter } from "./routers/warehouse.js";
 import { barcodeRouter } from "./routers/barcode.js";
 import { shareRouter } from "./routers/share.js";
 import { stockRouter } from "./routers/stock.js";
+import { inventoryReportsRouter } from "./routers/inventory-reports.js";
+import { stockGroupRouter } from "./routers/stockGroup.js";
+import { manufacturingRouter } from "./routers/manufacturing.js";
+import { priceLevelRouter } from "./routers/priceLevel.js";
+import { pricingRouter } from "./routers/pricing.js";
+import { contactRouter } from "./routers/contact.js";
 
 export const appRouter = router({
   auth: authRouter,
@@ -65,6 +75,10 @@ export const appRouter = router({
   proforma: proformaRouter,
   salesReturn: salesReturnRouter,
   purchaseReturn: purchaseReturnRouter,
+  purchaseOrder: purchaseOrderRouter,
+  salesOrder: salesOrderRouter,
+  goodsReceiptNote: goodsReceiptNoteRouter,
+  orders: ordersRouter,
   document: documentRouter,
   bankAccount: bankAccountRouter,
   import: importRouter,
@@ -91,8 +105,14 @@ export const appRouter = router({
   pos: posRouter,
   warehouse: warehouseRouter,
   stock: stockRouter,
+  inventoryReports: inventoryReportsRouter,
+  stockGroup: stockGroupRouter,
+  manufacturing: manufacturingRouter,
+  priceLevel: priceLevelRouter,
+  pricing: pricingRouter,
   barcode: barcodeRouter,
   share: shareRouter,
+  contact: contactRouter,
 });
 
 export type AppRouter = typeof appRouter;

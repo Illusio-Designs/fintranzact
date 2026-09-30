@@ -17,11 +17,13 @@ import {
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
+import { assertPriceLevel } from "../lib/pricing.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPClient, IRPError, type IRPGstinDetails } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
+import { notOrderDocument } from "../lib/order-fulfilment.js";
 
 const IRP_TAXPAYER_TYPES: Record<string, PartyGstType> = {
   REG: "regular",
@@ -137,6 +139,7 @@ export const partyRouter = router({
         .from(invoices)
         .where(and(
           eq(invoices.businessId, ctx.businessId),
+          notOrderDocument(),
           sql`${invoices.status} NOT IN ('cancelled')`,
           isNull(invoices.deletedAt),
         ))
@@ -213,6 +216,7 @@ export const partyRouter = router({
         .where(and(
           eq(invoices.partyId, input.id),
           eq(invoices.businessId, ctx.businessId),
+          notOrderDocument(),
           sql`${invoices.status} NOT IN ('cancelled')`,
           isNull(invoices.deletedAt),
         ));
@@ -268,6 +272,7 @@ export const partyRouter = router({
 
   create: memberProcedure.input(createPartySchema).mutation(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "Party");
+    await assertPriceLevel(ctx.db, ctx.businessId, input.priceLevelId);
     const [party] = await ctx.db.insert(parties).values({
       ...input,
       // A GSTIN embeds the PAN and the state, so fill them in when left blank.
@@ -296,6 +301,7 @@ export const partyRouter = router({
     .input(z.object({ id: z.string().uuid(), data: updatePartySchema }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Party");
+      await assertPriceLevel(ctx.db, ctx.businessId, input.data.priceLevelId);
       const { contactPersonDob, gstinVerifiedAt, ...rest } = input.data;
 
       // A new GSTIN fills PAN / state only where the party has none yet, and

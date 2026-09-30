@@ -4,21 +4,27 @@ import { IN } from "country-flag-icons/react/3x2";
 import {
   Analytics01Icon,
   ApiIcon,
+  ArrowDataTransferHorizontalIcon,
   ArrowDown01Icon,
   ArrowRight02Icon,
   BankIcon,
+  BarCode01Icon,
   BookOpen01Icon,
   Briefcase01Icon,
   Building03Icon,
   Cancel01Icon,
+  ChartIncreaseIcon,
+  CheckListIcon,
   CheckmarkCircle02Icon,
   ComputerIcon,
+  DashboardSquare01Icon,
   DeliveryTruck01Icon,
   DocumentValidationIcon,
   Factory01Icon,
   FileValidationIcon,
   HeadphonesIcon,
   Invoice01Icon,
+  Layers01Icon,
   Legal01Icon,
   Mail01Icon,
   Medicine02Icon,
@@ -36,11 +42,13 @@ import {
   ShoppingCart01Icon,
   SmartPhone01Icon,
   Store01Icon,
+  Tag01Icon,
   TaxesIcon,
   TShirtIcon,
   TvSmartIcon,
   UserGroupIcon,
   Wallet01Icon,
+  WarehouseIcon,
 } from "@hugeicons/core-free-icons";
 import { Logo } from "@/components/ui/Logo";
 import { Icon, type IconSvgElement } from "@/components/ui/Icon";
@@ -55,6 +63,7 @@ import { cn } from "@/lib/utils";
 export const CONTACT_EMAIL = "support@fintranzact.com";
 export const SECURITY_EMAIL = "security@fintranzact.com";
 export const DOCS_URL = "https://docs.fintranzact.com";
+export const API_DOCS_URL = "https://api-docs.fintranzact.com";
 
 type MenuLink = {
   label: string;
@@ -66,7 +75,12 @@ type MenuLink = {
   href?: string;
 };
 
-type MenuColumn = { title: string; links: MenuLink[] };
+type MenuColumn = {
+  title: string;
+  links: MenuLink[];
+  /** On wide screens, give this column its own grid column instead of stacking it under the second. */
+  ownColumn?: boolean;
+};
 
 type MegaMenu = {
   id: "features" | "solutions" | "resources";
@@ -118,6 +132,20 @@ const MENUS: MegaMenu[] = [
           f("API & integrations", ApiIcon, "teams-platform"),
         ],
       },
+      {
+        title: "Inventory & manufacturing",
+        ownColumn: true,
+        links: [
+          f("Warehouses & godowns", WarehouseIcon, "inventory-fulfilment"),
+          f("Stock transfers & adjustments", ArrowDataTransferHorizontalIcon, "inventory-fulfilment"),
+          f("Physical stock & barcodes", BarCode01Icon, "inventory-fulfilment"),
+          f("Stock valuation & groups", Layers01Icon, "inventory-fulfilment"),
+          f("Price levels & MRP", Tag01Icon, "inventory-fulfilment"),
+          f("Orders & goods receipts", CheckListIcon, "orders-manufacturing"),
+          f("Bill of materials & manufacturing", Factory01Icon, "orders-manufacturing"),
+          f("Inventory reports", ChartIncreaseIcon, "inventory-fulfilment"),
+        ],
+      },
     ],
     footer: { label: "See all features", to: "/features" },
     promo: "devices",
@@ -129,27 +157,27 @@ const MENUS: MegaMenu[] = [
       {
         title: "By industry",
         links: [
-          { label: "Retail & kirana", icon: ShoppingBasket01Icon, to: "/", hash: "industries" },
-          { label: "Wholesale & distribution", icon: DeliveryTruck01Icon, to: "/", hash: "industries" },
-          { label: "Manufacturing", icon: Factory01Icon, to: "/", hash: "industries" },
-          { label: "Services & agencies", icon: Briefcase01Icon, to: "/", hash: "industries" },
-          { label: "Pharmacy", icon: Medicine02Icon, to: "/", hash: "industries" },
-          { label: "Restaurants & cafés", icon: Restaurant01Icon, to: "/", hash: "industries" },
-          { label: "Electronics", icon: TvSmartIcon, to: "/", hash: "industries" },
-          { label: "Apparel & textiles", icon: TShirtIcon, to: "/", hash: "industries" },
+          { label: "Retail & kirana", icon: ShoppingBasket01Icon, to: "/solutions/retail" },
+          { label: "Wholesale & distribution", icon: DeliveryTruck01Icon, to: "/solutions/wholesale" },
+          { label: "Manufacturing", icon: Factory01Icon, to: "/solutions/manufacturing" },
+          { label: "Services & agencies", icon: Briefcase01Icon, to: "/solutions/services" },
+          { label: "Pharmacy", icon: Medicine02Icon, to: "/solutions/pharmacy" },
+          { label: "Restaurants & cafés", icon: Restaurant01Icon, to: "/solutions/restaurants" },
+          { label: "Electronics", icon: TvSmartIcon, to: "/solutions/electronics" },
+          { label: "Apparel & textiles", icon: TShirtIcon, to: "/solutions/apparel" },
         ],
       },
       {
         title: "By business size",
         links: [
-          { label: "Freelancers & small shops", icon: Store01Icon, to: "/pricing" },
-          { label: "Growing businesses", icon: Analytics01Icon, to: "/pricing" },
-          { label: "Multi-branch & multi-GSTIN", icon: Building03Icon, to: "/pricing" },
-          { label: "Accountants & CAs", icon: FileValidationIcon, to: "/pricing" },
+          { label: "Freelancers & small shops", icon: Store01Icon, to: "/solutions/freelancers" },
+          { label: "Growing businesses", icon: Analytics01Icon, to: "/solutions/growing-businesses" },
+          { label: "Multi-branch & multi-GSTIN", icon: Building03Icon, to: "/solutions/multi-branch" },
+          { label: "Accountants & CAs", icon: FileValidationIcon, to: "/solutions/accountants" },
         ],
       },
     ],
-    footer: { label: "Compare plans", to: "/pricing" },
+    footer: { label: "See all solutions", to: "/solutions" },
     promo: "talk",
   },
   {
@@ -165,13 +193,15 @@ const MENUS: MegaMenu[] = [
           { label: "Partner with us", icon: UserGroupIcon, to: "/partners" },
           { label: "Find a partner", icon: UserGroupIcon, to: "/find-a-partner" },
           { label: "Partner login", icon: UserGroupIcon, to: "/partner-portal" },
+          { label: "Widget gallery", icon: DashboardSquare01Icon, to: "/widgets" },
+          { label: "API docs", icon: ApiIcon, href: API_DOCS_URL },
           { label: "Email us", icon: Mail01Icon, href: `mailto:${CONTACT_EMAIL}` },
         ],
       },
       {
         title: "Trust & legal",
         links: [
-          { label: "Security", icon: Shield01Icon, href: `mailto:${SECURITY_EMAIL}` },
+          { label: "Security", icon: Shield01Icon, to: "/security" },
           { label: "Privacy policy", icon: Legal01Icon, to: "/privacy" },
           { label: "Terms of service", icon: Legal01Icon, to: "/terms" },
           { label: "Refund policy", icon: Legal01Icon, to: "/refund-policy" },
@@ -309,7 +339,9 @@ function TalkPromo({ onNavigate }: { onNavigate: () => void }) {
 
 function MegaPanel({ menu, onNavigate }: { menu: MegaMenu; onNavigate: () => void }) {
   const hasPromo = Boolean(menu.promo);
-  const [first, ...rest] = menu.columns;
+  const [first, ...others] = menu.columns;
+  const rest = others.filter((column) => !column.ownColumn);
+  const separate = others.filter((column) => column.ownColumn);
   return (
     <div className="mx-auto max-w-7xl px-4 md:px-6">
       <div
@@ -319,7 +351,12 @@ function MegaPanel({ menu, onNavigate }: { menu: MegaMenu; onNavigate: () => voi
         )}
       >
         <div className="p-8">
-          <div className={cn("grid gap-x-10 gap-y-8", hasPromo ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:max-w-2xl")}>
+          <div
+            className={cn(
+              "grid gap-x-10 gap-y-8",
+              separate.length > 0 ? "sm:grid-cols-2 xl:grid-cols-3" : hasPromo ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:max-w-2xl",
+            )}
+          >
             <MenuColumnBlock column={first} onNavigate={onNavigate} />
             {/* Remaining columns stack in the second column, like Zoho's
                 "Compliance" over "Effortless Accounting". */}
@@ -330,6 +367,9 @@ function MegaPanel({ menu, onNavigate }: { menu: MegaMenu; onNavigate: () => voi
                 ))}
               </div>
             )}
+            {separate.map((column) => (
+              <MenuColumnBlock key={column.title} column={column} onNavigate={onNavigate} />
+            ))}
           </div>
           {menu.footer && (
             <Link

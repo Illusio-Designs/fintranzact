@@ -2,6 +2,7 @@ import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { invoices, invoiceItems, parties, businesses, items as itemsTable } from "@fintranzact/db";
 import type { TenantDatabase } from "@fintranzact/db";
 import { buildBusinessDateFilter } from "./business-date.js";
+import { notOrderDocument } from "./order-fulfilment.js";
 
 // Split a tax amount exactly in half using paise-level integer arithmetic
 // to avoid floating-point rounding errors on odd amounts (e.g. ₹1.01).
@@ -420,6 +421,7 @@ export async function generateGSTR3B(
     .where(and(
       eq(invoices.businessId, businessId),
       eq(invoices.type, "purchase"),
+      notOrderDocument(),
       sql`${invoices.status} != 'cancelled'`,
       isNull(invoices.deletedAt),
       ...buildBusinessDateFilter(invoices, { from: startDate, to: endDate }),

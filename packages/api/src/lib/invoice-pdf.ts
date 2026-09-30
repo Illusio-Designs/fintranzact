@@ -52,6 +52,8 @@ export interface InvoicePDFData {
     quantity: string;
     unit?: string; // base unit or selected alt unit (e.g. "kg", "box")
     unitPrice: string;
+    /** Printed MRP of the item (per the line's unit), shown under the name when set. */
+    mrp?: string | null;
     taxPercent: string;
     taxAmount: string;
     discountPercent: string;
@@ -1533,7 +1535,22 @@ function renderStatusStamp(
 
 // ── Public API ─────────────────────────────────────────────────
 
-export function generateInvoicePDF(data: InvoicePDFData, format: PDFFormat = "a5"): InstanceType<typeof PDFDocument> {
+/** Fold each line's MRP into its sub-line, so every template shows it without a new column. */
+export function withMrpNotes(data: InvoicePDFData): InvoicePDFData {
+  if (!data.lineItems.some((li) => li.mrp && parseFloat(li.mrp) > 0)) return data;
+  return {
+    ...data,
+    lineItems: data.lineItems.map((li) => {
+      if (!li.mrp || !(parseFloat(li.mrp) > 0)) return li;
+      const mrp = `MRP ${fmt(li.mrp)}`;
+      const note = li.description?.trim();
+      return { ...li, description: note ? `${note} · ${mrp}` : mrp };
+    }),
+  };
+}
+
+export function generateInvoicePDF(input: InvoicePDFData, format: PDFFormat = "a5"): InstanceType<typeof PDFDocument> {
+  const data = withMrpNotes(input);
   let docSize: string | number[];
   let docMargin: number;
 

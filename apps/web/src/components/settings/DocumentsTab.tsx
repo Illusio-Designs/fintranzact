@@ -16,6 +16,9 @@ const DOC_TYPES = [
   { key: "credit_note", label: "Credit Note", prefixField: "creditNotePrefix", counterField: "nextCreditNoteNumber" },
   { key: "delivery_challan", label: "Delivery Challan", prefixField: "deliveryChallanPrefix", counterField: "nextDeliveryChallanNumber" },
   { key: "proforma", label: "Proforma Invoice", prefixField: "proformaPrefix", counterField: "nextProformaNumber" },
+  { key: "sales_order", label: "Sales Order", prefixField: "salesOrderPrefix", counterField: "nextSalesOrderNumber" },
+  { key: "purchase_order", label: "Purchase Order", prefixField: "purchaseOrderPrefix", counterField: "nextPurchaseOrderNumber" },
+  { key: "goods_receipt_note", label: "Goods Receipt Note", prefixField: "goodsReceiptNotePrefix", counterField: "nextGoodsReceiptNoteNumber" },
 ] as const;
 
 export function DocumentsTab({ biz }: DocumentsTabProps) {

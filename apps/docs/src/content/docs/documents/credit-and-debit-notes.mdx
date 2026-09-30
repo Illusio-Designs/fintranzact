@@ -1,0 +1,163 @@
+---
+title: Credit and Debit Notes
+description: Issue credit notes against invoices in Fintranzact to reduce what a party owes, how they affect the invoice balance, party ledger and GSTR-1, and how debit notes work.
+sidebar:
+  order: 4
+---
+
+import ForDesktop from '../../../components/ForDesktop.astro';
+import ForMobile from '../../../components/ForMobile.astro';
+import ForCA from '../../../components/ForCA.astro';
+import ForBusiness from '../../../components/ForBusiness.astro';
+
+A **credit note** reduces what a party owes — for example a price correction, a discount given after the sale, or a short supply you are not going to deliver. A **debit note** does the opposite and increases what is owed.
+
+| | Credit Note | Debit Note |
+|---|---|---|
+| Default number | `CN-00001` | `DN-00001` |
+| Statuses | Draft, Sent, Paid, Cancelled | Draft, Sent, Paid, Cancelled |
+| Stock | No change | No change |
+| Party ledger | Reduces the balance | Increases the balance (sales side) |
+| GSTR-1 | **Credit Notes** section | **Debit Notes** section |
+| Where to create | Web and mobile app | [CLI](/ai/cli) or [MCP server](/ai/mcp-server) only |
+
+:::tip
+If goods physically come back, use a [sales return](/documents/returns) instead. A credit note never puts stock back; a sales return does, and reduces the customer's balance in the same way.
+:::
+
+## Issuing a credit note against an invoice
+
+This is the recommended way, because the credit note is linked to the invoice.
+
+<ForDesktop>
+1. Go to **Invoices** and click the invoice to open its detail panel.
+2. Click **Issue Credit Note**. It is shown once the invoice is no longer a draft, is not cancelled, and has not already been fully credited.
+3. The **New Credit Note** panel opens pre-filled with the invoice's party, line items, notes and terms, dated today.
+4. Change the quantities or prices to the amount you are crediting, and remove lines you are not crediting.
+5. Click **Create Credit Note**.
+
+The invoice's detail panel now shows a **See CN-…** link to the credit note.
+
+**Issue Credit Note** also appears on purchase invoices. There it creates a purchases-side credit note — a credit you received from the supplier.
+</ForDesktop>
+
+<ForMobile>
+1. Open the invoice from the **Invoices** tab.
+2. Tap **Issue Credit Note**. It is hidden for drafts, cancelled invoices and invoices that are already fully adjusted.
+3. The **New Credit Note** screen opens pre-filled with the invoice's party and items, dated today.
+4. Adjust the items under **Items (Returned)** and add a reason in **Notes (optional)**.
+5. Tap **Create Credit Note**.
+</ForMobile>
+
+### What happens to the invoice
+
+- The invoice's balance due goes down by the credit note's total. The shared invoice page shows it as **Credited**.
+- Credit notes and sales returns against one invoice cannot add up to more than the invoice total. If they would, saving fails with *Amount exceeds remaining adjustable amount*, showing the invoice total, what is already adjusted, and what remains.
+- When credit notes and returns together cover the whole invoice, the invoice's status shows as **Adjusted**, and **Issue Credit Note** / **Create Sales Return** disappear.
+- A cancelled or deleted credit note no longer counts.
+
+## Creating a standalone credit note
+
+<ForDesktop>
+Go to **VOUCHERS** → **Credit Notes**, choose **Sales** or **Purchases**, and click **+ New Credit Note**. Fill in the party, **Date**, line items, notes and terms, and click **Create Credit Note**.
+
+A credit note made this way is **not linked** to any invoice — the form has no field to pick one. It still reduces the party's balance, but it does not reduce any particular invoice's balance, and GSTR-1 will not show an original invoice number for it.
+</ForDesktop>
+
+<ForMobile>
+Tap **More** → **Credit notes**, then the **+** button. Tap **Select party...**, set the **Credit Note Date**, add items, and tap **Create Credit Note**. Credit notes created this way are sales-side and are not linked to an invoice.
+</ForMobile>
+
+:::caution
+On the web form, the whole-document **Discount** box is not saved on credit notes, and **Round Off** only counts toward the saved total when the note also has a charge. Put any discount on the lines instead.
+:::
+
+## Managing credit notes
+
+<ForDesktop>
+The **Credit Notes** page has a **Sales** / **Purchases** switch and status tabs **All**, **Draft**, **Sent**, **Paid** and **Cancelled**. Columns are **Party**, **Credit Note #**, **Date**, **Ref. Invoice** (shows **Linked** when the note was issued from an invoice), **Status** and **Total**.
+
+| Action | When it shows |
+|---|---|
+| **Mark Sent** | Draft |
+| **Mark Paid** | Sent |
+| **Delete** | Draft (Admin or Owner) |
+
+Click a row to see the details. A linked note shows **Reference Invoice** with the invoice number — click it to jump to the invoice. Sales credit notes also have a **Share link** section, see [Share links](/documents/share-links). Drafts can be edited from the detail panel.
+</ForDesktop>
+
+<ForMobile>
+The **Credit notes** screen lists sales and purchase credit notes together, with chips **All**, **Draft**, **Sent**, **Paid** and **Cancelled**. Each card offers **Mark Sent** and **Delete** while it is a draft, and **Mark Paid** and **Cancel** once sent.
+
+Tap a card to open it. You see the customer, **Credit Note Date**, **Source Invoice** (if linked), items and summary. Drafts have **Mark as Sent** and **Delete Credit Note**.
+</ForMobile>
+
+:::note
+**Mark Paid** only changes the status label. It does not record a refund in **Cash & Bank** and does not change any balance — the credit note reduces the party's balance from the moment it is saved.
+:::
+
+## Effect on the party ledger
+
+| Credit note on the… | Party ledger entry |
+|---|---|
+| **Sales** side (to a customer) | Credit — the customer owes you less |
+| **Purchases** side (from a supplier) | Debit — you owe the supplier less |
+
+See [Party Ledger](/parties/party-ledger).
+
+## Effect on GST reports
+
+- Every non-cancelled credit note dated in the month is listed in the **Credit Notes** section of [GSTR-1](/gst/gstr1), together with sales returns. If the note was issued from an invoice, the original invoice number is shown.
+- The credit notes are **listed**, not netted: GSTR-1's B2B/B2C totals and the GSTR-3B outward supplies figures come from invoices only.
+- Debit notes (and purchase returns) are listed in the **Debit Notes** section.
+
+<ForCA>
+:::caution[Check before filing]
+- The **Credit Notes** section includes credit notes on **both** the sales and purchase side. Exclude supplier credit notes before reporting CDNR.
+- The **Debit Notes** section includes purchase returns and purchase-side debit notes, which are inward documents and do not belong in GSTR-1.
+- Reduce output tax in GSTR-3B by the eligible credit notes yourself — the 3B figures are not reduced automatically.
+- GSTR-3B's ITC figure adds up the tax on **every** purchases-side document except orders and GRNs, so a supplier's credit note currently **adds** to ITC instead of reducing it. Correct ITC manually.
+- Credit notes made from the **Credit Notes** page have no original invoice number; add it before filing.
+- In the derived accounting (trial balance, P&L), every credit note is posted as **Dr Sales Returns + Output GST / Cr Receivable**, even when it is on the purchases side.
+:::
+</ForCA>
+
+## Debit notes
+
+Debit notes have no page in the web or mobile app. Create them with the [CLI](/ai/cli) or [MCP server](/ai/mcp-server). Once created, they appear in the party ledger and in GSTR-1.
+
+| Debit note on the… | Party ledger | Derived accounting |
+|---|---|---|
+| **Sales** side | Debit — the customer owes you more | Dr Receivable / Cr Sales + Output GST |
+| **Purchases** side | Credit — you owe the supplier more | Dr Payable / Cr Purchase Returns + Input GST |
+
+<ForCA>
+:::note
+For a purchase-side debit note, the party ledger and the derived accounting ledger move the supplier balance in opposite directions. If you issue debit notes to suppliers for returns, use a purchase return instead so both agree.
+:::
+</ForCA>
+
+<ForBusiness>
+:::tip[Which one should I use?]
+- Customer paid too much or you gave a discount after billing → **Credit Note** from the invoice.
+- Customer sent goods back → **Sales Return** from the invoice.
+- You undercharged and need to bill the difference → create a new invoice for the difference (debit notes are not available in the app).
+:::
+</ForBusiness>
+
+## Frequently asked questions
+
+**Why is Issue Credit Note missing on my invoice?**
+The invoice is still a draft, is cancelled, or is already fully covered by credit notes and returns (status **Adjusted**).
+
+**Can I link an existing credit note to an invoice later?**
+No. The link is set only when you create the credit note from the invoice. Delete the unlinked draft and issue a new one from the invoice.
+
+**Does a credit note bring stock back?**
+No. Use a [sales return](/documents/returns) when goods come back.
+
+**Can I issue a credit note for more than the invoice amount?**
+Not against an invoice. All credit notes and returns linked to one invoice together can't exceed its total.
+
+**How do I refund the money?**
+Fintranzact does not create a refund from a credit note. Record the money leaving your account under **Cash & Bank** (see [Banking](/banking/)). Marking the credit note **Paid** only changes its label.

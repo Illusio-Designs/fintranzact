@@ -4,7 +4,6 @@ import { formatCurrency, cn, todayISODate, toISOString, formatDateInput } from "
 import dayjs from "dayjs";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { Combobox } from "@/components/ui/Combobox";
-import { Listbox } from "@/components/ui/Listbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -14,6 +13,8 @@ import { QuickItemCreate, type QuickItemCreateResult } from "@/components/QuickI
 import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
 import { Delete02Icon, Cancel01Icon, DeliveryTruck01Icon } from "@hugeicons/core-free-icons";
+import { WarehouseSelect, formatQty, useWarehouses } from "@/components/inventory/shared";
+import { useLevelPricing } from "@/components/pricing/useLevelPricing";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -25,7 +26,10 @@ export type DocumentType =
   | "delivery_challan"
   | "proforma"
   | "sales_return"
-  | "purchase_return";
+  | "purchase_return"
+  | "purchase_order"
+  | "sales_order"
+  | "goods_receipt_note";
 
 export interface DocumentCreatorProps {
   documentType: DocumentType;
@@ -90,7 +94,36 @@ const documentTypeLabels: Record<DocumentType, string> = {
   proforma: "Proforma Invoice",
   sales_return: "Sales Return",
   purchase_return: "Purchase Return",
+  purchase_order: "Purchase Order",
+  sales_order: "Sales Order",
+  goods_receipt_note: "Goods Receipt Note",
 };
+
+/** Orders and GRNs are always one side; the server enforces the same. */
+const fixedInvoiceType: Partial<Record<DocumentType, "sale" | "purchase">> = {
+  purchase_order: "purchase",
+  sales_order: "sale",
+  goods_receipt_note: "purchase",
+};
+
+/** Which way a document moves stock: -1 out, +1 in, 0 not at all (mirrors the server). */
+function stockDirection(documentType: DocumentType, invoiceType: "sale" | "purchase"): -1 | 0 | 1 {
+  if (documentType === "invoice") return invoiceType === "sale" ? -1 : 1;
+  if (documentType === "delivery_challan" || documentType === "purchase_return") return -1;
+  if (documentType === "sales_return" || documentType === "goods_receipt_note") return 1;
+  return 0;
+}
+
+/** Quantity of each item a set of lines takes, in the item's base unit. */
+function baseQuantities(lines: Array<{ itemId?: string | null; quantity: string; conversionFactor?: string | null }>) {
+  const need = new Map<string, number>();
+  for (const li of lines) {
+    if (!li.itemId) continue;
+    const q = parseFloat(li.quantity || "0") * parseFloat(li.conversionFactor || "1");
+    if (Number.isFinite(q)) need.set(li.itemId, (need.get(li.itemId) ?? 0) + q);
+  }
+  return need;
+}
 
 function newLineItem(): LineItem {
   return {
@@ -123,16 +156,15 @@ function calcLine(li: LineItem) {
 
 export function DocumentCreator({
   documentType,
-  invoiceType,
+  invoiceType: requestedInvoiceType,
   onClose,
   onSuccess,
   editInvoiceId,
   prefillFromInvoiceId,
   initialPartyId,
 }: DocumentCreatorProps) {
+  const invoiceType = fixedInvoiceType[documentType] ?? requestedInvoiceType;
   const [partyId, setPartyId] = useState(initialPartyId ?? "");
-  // Where the goods come in (purchase) or go out (sale). "" = the default warehouse.
-  const [warehouseId, setWarehouseId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(todayISODate);
   const [dueDate, setDueDate] = useState(() => dayjs().add(7, "day").format("YYYY-MM-DD"));
   const [dueDateManuallySet, setDueDateManuallySet] = useState(false);
@@ -148,6 +180,18 @@ export function DocumentCreator({
   // integer" auto-fill so we don't silently undo their override.
   const [roundOffOverridden, setRoundOffOverridden] = useState(false);
   const [referenceDocumentId, _setReferenceDocumentId] = useState<string | undefined>(prefillFromInvoiceId || undefined);
+  // Warehouse the goods leave from or arrive into. Starts at the business
+  // default for this kind of document; only shown when there's a choice.
+  const [warehouseId, setWarehouseId] = useState("");
+
+  // Sale prices from the party's price level (slabs, dates); typed prices are kept.
+  const pricing = useLevelPricing({
+    enabled: invoiceType === "sale" && documentType !== "credit_note" && documentType !== "sales_return",
+    partyId,
+    date: invoiceDate,
+    lines: items,
+    setLines: setItems,
+  });
 
   // Confirm dialog when closing with unsaved data
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
@@ -165,9 +209,6 @@ export function DocumentCreator({
     businessList?.find((b) => b.id === currentBizId) ?? businessList?.[0];
   const bizDefaultTerms = activeBusiness?.defaultTermsAndConditions ?? "";
   const bizDefaultRoundOff = activeBusiness?.defaultRoundOff ?? false;
-
-  const { data: warehouseList } = trpc.stock.warehouses.useQuery(undefined, { staleTime: 60_000 });
-  const activeWarehouses = (warehouseList ?? []).filter((w) => w.status === "active");
 
   // Server-side search for party picker
   const [partySearch, setPartySearch] = useState("");
@@ -230,11 +271,27 @@ export function DocumentCreator({
     { enabled: !!prefillId }
   );
 
+  const direction = stockDirection(documentType, invoiceType);
+  const { data: warehouseList } = useWarehouses();
+  const { data: inventorySettings } = trpc.stock.settings.useQuery(undefined, { enabled: direction !== 0, staleTime: 60_000 });
+  const activeWarehouses = (warehouseList ?? []).filter((w) => w.status === "active");
+  const showWarehouse = direction !== 0 && activeWarehouses.length > 1;
+
+  useEffect(() => {
+    if (warehouseId || !inventorySettings || isEditing) return;
+    const fallback =
+      documentType === "sales_return" ? inventorySettings.salesReturnWarehouseId
+      : documentType === "purchase_return" ? inventorySettings.purchaseReturnWarehouseId
+      : (documentType === "invoice" && invoiceType === "purchase") || documentType === "goods_receipt_note" ? inventorySettings.purchaseWarehouseId
+      : inventorySettings.salesWarehouseId;
+    if (fallback) setWarehouseId(fallback);
+  }, [inventorySettings, warehouseId, isEditing, documentType, invoiceType]);
+
   useEffect(() => {
     if (!editData) return;
     setPartyId(editData.partyId);
+    if (isEditing && editData.warehouseId) setWarehouseId(editData.warehouseId);
     if (isEditing) {
-      setWarehouseId(editData.warehouseId ?? "");
       // Editing: use the document's own date
       setInvoiceDate(formatDateInput(editData.invoiceDate));
       if (editData.dueDate) setDueDate(formatDateInput(editData.dueDate));
@@ -280,6 +337,10 @@ export function DocumentCreator({
     utils.proforma.list.invalidate();
     utils.salesReturn.list.invalidate();
     utils.purchaseReturn.list.invalidate();
+    utils.purchaseOrder.list.invalidate();
+    utils.salesOrder.list.invalidate();
+    utils.goodsReceiptNote.list.invalidate();
+    utils.orders.invalidate();
     utils.dashboard.summary.invalidate();
     utils.dashboard.shippingSummary.invalidate();
     utils.item.list.invalidate();
@@ -379,6 +440,18 @@ export function DocumentCreator({
     onSuccess: handleSuccess,
     onError: handleError,
   });
+  const purchaseOrderMutation = trpc.purchaseOrder.create.useMutation({
+    onSuccess: handleSuccess,
+    onError: handleError,
+  });
+  const salesOrderMutation = trpc.salesOrder.create.useMutation({
+    onSuccess: handleSuccess,
+    onError: handleError,
+  });
+  const goodsReceiptNoteMutation = trpc.goodsReceiptNote.create.useMutation({
+    onSuccess: handleSuccess,
+    onError: handleError,
+  });
 
   const updateMutation = trpc.invoice.update.useMutation({
     onSuccess: handleSuccess,
@@ -394,6 +467,9 @@ export function DocumentCreator({
     proforma: proformaMutation,
     sales_return: salesReturnMutation,
     purchase_return: purchaseReturnMutation,
+    purchase_order: purchaseOrderMutation,
+    sales_order: salesOrderMutation,
+    goods_receipt_note: goodsReceiptNoteMutation,
   };
 
   const createMutation = mutationMap[documentType];
@@ -441,6 +517,34 @@ export function DocumentCreator({
       setRoundOff(target);
     }
   }, [bizDefaultRoundOff, isEditing, roundOffOverridden, totals.total, roundOff]);
+
+  const neededByItem = useMemo(() => baseQuantities(items), [items]);
+  const neededItemIds = useMemo(() => [...neededByItem.keys()].sort(), [neededByItem]);
+  const { data: availability } = trpc.stock.availability.useQuery(
+    { warehouseId: warehouseId || null, lines: neededItemIds.map((itemId) => ({ itemId })) },
+    { enabled: direction === -1 && neededItemIds.length > 0 },
+  );
+
+  const shortages = useMemo(() => {
+    if (!availability || availability.policy === "allow") return [];
+    // An edited document already holds its own stock at its warehouse.
+    const alreadyHeld =
+      isEditing && editData?.warehouseId && editData.warehouseId === availability.warehouseId
+        ? baseQuantities(editData.lineItems ?? [])
+        : new Map<string, number>();
+    const out: Array<{ name: string; available: number; needed: number; unit: string | null }> = [];
+    for (const row of availability.lines) {
+      if (row.variantId) continue;
+      const needed = neededByItem.get(row.itemId) ?? 0;
+      const available = parseFloat(row.available) + (alreadyHeld.get(row.itemId) ?? 0);
+      if (needed - available > 0.0005) {
+        const product = itemsData?.data.find((p) => p.id === row.itemId);
+        const line = items.find((li) => li.itemId === row.itemId);
+        out.push({ name: product?.name ?? line?.itemName ?? "Item", available, needed, unit: product?.unit ?? null });
+      }
+    }
+    return out;
+  }, [availability, neededByItem, isEditing, editData, itemsData, items]);
 
   function updateItem(id: string, field: keyof LineItem, value: string) {
     setItems((prev) =>
@@ -605,7 +709,7 @@ export function DocumentCreator({
         invoiceDiscountType,
         roundOff: roundOff || "0",
         lineItems: lineItemsPayload,
-        ...(documentType === "invoice" ? { warehouseId: warehouseId || null } : {}),
+        warehouseId: direction !== 0 && warehouseId ? warehouseId : undefined,
       });
     } else {
       createMutation.mutate({
@@ -621,7 +725,7 @@ export function DocumentCreator({
         roundOff: roundOff || undefined,
         referenceDocumentId: referenceDocumentId || undefined,
         lineItems: lineItemsPayload,
-        ...(documentType === "invoice" && warehouseId ? { warehouseId } : {}),
+        warehouseId: direction !== 0 && warehouseId ? warehouseId : undefined,
       });
     }
   }
@@ -663,6 +767,32 @@ export function DocumentCreator({
       title={isEditing ? `Edit ${label}` : `New ${label}`}
       description={isEditing ? `Edit ${invoiceType} ${label.toLowerCase()}` : `Create a new ${invoiceType} ${label.toLowerCase()}`}
       footer={
+        <div className="space-y-3">
+        {shortages.length > 0 && (
+          <div
+            role="alert"
+            className={cn(
+              "rounded-lg border px-3 py-2 text-xs",
+              availability?.policy === "block"
+                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+                : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+            )}
+          >
+            <p className="font-medium">
+              {availability?.policy === "block"
+                ? "Not enough stock — this can't be saved until the quantities fit"
+                : "Not enough stock — saving will take it below zero"}
+              {showWarehouse && ` at ${activeWarehouses.find((w) => w.id === availability?.warehouseId)?.name ?? "this warehouse"}`}
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {shortages.map((s) => (
+                <li key={s.name}>
+                  {s.name}: {formatQty(Math.max(s.available, 0), s.unit)} available, {formatQty(s.needed, s.unit)} needed
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="flex justify-end gap-3">
           <button
             type="button"
@@ -681,6 +811,7 @@ export function DocumentCreator({
               ? isEditing ? "Saving..." : "Creating..."
               : isEditing ? "Save Changes" : `Create ${label}`}
           </button>
+        </div>
         </div>
       }
     >
@@ -723,7 +854,7 @@ export function DocumentCreator({
           </div>
           {!["credit_note", "sales_return", "purchase_return"].includes(documentType) && (
             <div>
-              <label className="label">Due date</label>
+              <label className="label">{documentType === "sales_order" || documentType === "purchase_order" ? "Delivery by" : "Due date"}</label>
               <DateInput
                 value={dueDate}
                 onChange={(e) => { setDueDate(e.target.value); setDueDateManuallySet(true); }}
@@ -732,18 +863,18 @@ export function DocumentCreator({
             </div>
           )}
         </div>
+        {pricing.priceLevelName && (
+          <p className="-mt-3 text-xs text-text-tertiary">
+            Prices from the <span className="font-medium text-text-secondary">{pricing.priceLevelName}</span> price level
+          </p>
+        )}
 
-        {/* Warehouse — only asked when the business has more than one */}
-        {documentType === "invoice" && activeWarehouses.length > 1 && (
-          <div className="max-w-sm">
-            <Listbox
-              label={invoiceType === "purchase" ? "Receive into" : "Dispatch from"}
+        {showWarehouse && (
+          <div className="max-w-xs">
+            <WarehouseSelect
+              label={direction === -1 ? "Dispatch from" : "Receive into"}
               value={warehouseId}
               onChange={setWarehouseId}
-              options={[
-                { value: "", label: "Default warehouse" },
-                ...activeWarehouses.map((w) => ({ value: w.id, label: w.name, description: w.premiseName ?? undefined })),
-              ]}
             />
           </div>
         )}
@@ -861,6 +992,9 @@ export function DocumentCreator({
                         className="input py-1.5 text-sm tabular-nums"
                         placeholder="0.00"
                       />
+                      {pricing.mrpWarningFor(li) && (
+                        <p className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400" role="alert">{pricing.mrpWarningFor(li)}</p>
+                      )}
                     </div>
                     <div>
                       <label

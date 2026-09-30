@@ -9,6 +9,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import type { ItemType, ItemMode } from "@fintranzact/shared";
+import { MrpField } from "@/components/pricing/MrpField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LabelPrintPanel, type LabelCandidate, type LabelMode } from "@/components/items/LabelPrintPanel";
 import { ItemBarcodeField, ItemExtraCodes } from "@/components/items/ItemBarcodeFields";
@@ -34,6 +35,7 @@ import {
 import { Icon } from "@/components/ui/Icon";
 import { ArrowDown01Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
+import { StockGroupFilter, StockGroupPicker } from "@/components/inventory/StockGroups";
 
 import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/items")({
@@ -122,6 +124,7 @@ function ItemsPage() {
   const [search] = usePageSearch("Search items…");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
+  const [groupFilter, setGroupFilter] = useState("");
   const [page, setPage] = useState(1);
   const [showAddModal, setShowAddModal] = useState(false);
   const deleteConfirm = useDeleteConfirmation();
@@ -135,11 +138,12 @@ function ItemsPage() {
   const debouncedSearch = useDebounce(search, 300);
 
   // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter, showLowStock]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter, showLowStock, groupFilter]);
 
   const { data, isLoading } = trpc.item.list.useQuery({
     search: debouncedSearch || undefined,
     lowStock: showLowStock || undefined,
+    stockGroupId: groupFilter || undefined,
     page,
     limit: ITEMS_PAGE_SIZE,
   });
@@ -170,6 +174,7 @@ function ItemsPage() {
       const result = await utils.item.list.fetch({
         search: debouncedSearch || undefined,
         lowStock: showLowStock || undefined,
+        stockGroupId: groupFilter || undefined,
         page: pg,
         limit: 100,
       });
@@ -296,6 +301,9 @@ function ItemsPage() {
         description="Products and services inventory"
         actions={
           <div className="flex items-center gap-2">
+            <Link to="/stock-groups" className="btn-secondary inline-flex items-center gap-2">
+              Stock groups
+            </Link>
             {barcodesOn && (
               <button
                 className="btn-secondary inline-flex items-center gap-2"
@@ -322,6 +330,7 @@ function ItemsPage() {
           value={typeFilter}
           onChange={setTypeFilter}
         />
+        <StockGroupFilter value={groupFilter} onChange={setGroupFilter} allowNone className="w-48" />
         {(lowStockCount ?? 0) > 0 && (
           <button
             onClick={() => setShowLowStock(!showLowStock)}
@@ -530,10 +539,11 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
-  const [category, setCategory] = useState("");
+  const [stockGroupId, setStockGroupId] = useState("");
   const [hsn, setHsn] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
+  const [mrp, setMrp] = useState("");
   const [taxPercent, setTaxPercent] = useState("0");
   const [taxInclusive, setTaxInclusive] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("0");
@@ -639,10 +649,11 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
     setName("");
     setSku("");
     setBarcode("");
-    setCategory("");
+    setStockGroupId("");
     setHsn("");
     setSalePrice("");
     setPurchasePrice("");
+    setMrp("");
     setTaxPercent("0");
     setTaxInclusive(false);
     setStockQuantity("0");
@@ -678,10 +689,11 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
       name,
       sku: sku || undefined,
       barcode: barcode || undefined,
-      category: category || undefined,
+      stockGroupId: stockGroupId || undefined,
       hsn: hsn || undefined,
       salePrice: salePrice || undefined,
       purchasePrice: purchasePrice || undefined,
+      mrp: mrp || undefined,
       taxPercent,
       taxInclusive,
       stockQuantity: effectiveMode === "variants" ? "0" : stockQuantity,
@@ -798,7 +810,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
         <div className="space-y-1">
           <Disclosure
             label="Identification"
-            count={countFilled(sku, hsn, category)}
+            count={countFilled(sku, hsn, stockGroupId)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -818,12 +830,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
               <ItemBarcodeField value={barcode} onChange={setBarcode} sku={sku} />
             </div>
             <div className="mt-3">
-              <InputField
-                label="Category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="e.g. Electronics, Food"
-              />
+              <StockGroupPicker value={stockGroupId} onChange={setStockGroupId} />
             </div>
           </Disclosure>
 
@@ -841,6 +848,12 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
               placeholder="0.00"
             />
           </Disclosure>
+
+          {itemType === "product" && (
+            <Disclosure label="MRP" count={countFilled(mrp)}>
+              <MrpField value={mrp} onChange={setMrp} salePrice={salePrice} />
+            </Disclosure>
+          )}
 
           {itemType === "product" && derivedMode !== "variants" && (
             <Disclosure
@@ -1088,10 +1101,11 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
-  const [category, setCategory] = useState("");
+  const [stockGroupId, setStockGroupId] = useState("");
   const [hsn, setHsn] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
+  const [mrp, setMrp] = useState("");
   const [taxPercent, setTaxPercent] = useState("0");
   const [taxInclusive, setTaxInclusive] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("0");
@@ -1116,10 +1130,11 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
     setName(item.name);
     setSku(item.sku ?? "");
     setBarcode(item.barcode ?? "");
-    setCategory(item.category ?? "");
+    setStockGroupId(item.stockGroupId ?? "");
     setHsn(item.hsn ?? "");
     setSalePrice(item.salePrice ?? "");
     setPurchasePrice(item.purchasePrice ?? "");
+    setMrp(item.mrp ?? "");
     setTaxPercent(item.taxPercent ?? "0");
     setTaxInclusive(item.taxInclusive ?? false);
     setStockQuantity(item.stockQuantity ?? "0");
@@ -1235,10 +1250,12 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         name,
         sku: sku || undefined,
         barcode: barcode || undefined,
-        category: category || undefined,
+        // Only when changed, so saving never touches a group set elsewhere.
+        ...(stockGroupId !== (item?.stockGroupId ?? "") ? { stockGroupId: stockGroupId || null } : {}),
         hsn: hsn || undefined,
         salePrice: salePrice || undefined,
         purchasePrice: purchasePrice || undefined,
+        mrp: mrp || null,
         taxPercent,
         taxInclusive,
         lowStockAlert: lowStockAlert || undefined,
@@ -1369,7 +1386,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         <div className="space-y-1">
           <Disclosure
             label="Identification"
-            count={countFilled(sku, hsn, category)}
+            count={countFilled(sku, hsn, stockGroupId)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -1390,12 +1407,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
               <ItemExtraCodes itemId={itemId} />
             </div>
             <div className="mt-3">
-              <InputField
-                label="Category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="e.g. Electronics, Food"
-              />
+              <StockGroupPicker value={stockGroupId} onChange={setStockGroupId} />
             </div>
           </Disclosure>
 
@@ -1413,6 +1425,12 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
               placeholder="0.00"
             />
           </Disclosure>
+
+          {itemType === "product" && (
+            <Disclosure label="MRP" count={countFilled(mrp)}>
+              <MrpField value={mrp} onChange={setMrp} salePrice={salePrice} />
+            </Disclosure>
+          )}
 
           {itemType === "product" && itemMode !== "variants" && (
             <Disclosure
@@ -2147,6 +2165,7 @@ function ItemDetailPanel({
                   {[
                     ["Sale Price", item.salePrice ? `${formatCurrency(item.salePrice)}${item.taxInclusive ? " (incl. tax)" : ""}` : "—"],
                     ["Purchase Price", item.purchasePrice ? formatCurrency(item.purchasePrice) : "—"],
+                    ...(item.mrp ? [["MRP", formatCurrency(item.mrp)]] : []),
                     ...(item.itemMode !== "variants"
                       ? [["Current Stock", `${parseFloat(item.stockQuantity).toLocaleString()} ${item.unit}${isLow ? " ⚠ Low" : ""}`]]
                       : [["Variants", `${item.variants?.length ?? 0} variants`]]

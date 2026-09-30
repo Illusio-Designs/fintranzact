@@ -28,6 +28,7 @@ import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
 import { seedPlatformAdmin } from "./lib/platform-admin.js";
 import { logger } from "./lib/logger.js";
+import { syncDocumentStock } from "./lib/inventory-service.js";
 import { validateEnv } from "./lib/env.js";
 import { createCsrfMiddleware } from "./lib/csrf-middleware.js";
 import { assertAllowedStoreOrigin } from "./lib/store-origin.js";
@@ -475,8 +476,21 @@ async function buildInvoicePdfData(
   // must not blank out HSN or unit on a previously-generated PDF.
   const itemIds = lineItems.map(li => li.itemId).filter(Boolean) as string[];
   const itemMeta = itemIds.length > 0
-    ? await db.select({ id: items.id, hsn: items.hsn, unit: items.unit }).from(items).where(inArray(items.id, itemIds))
+    ? await db.select({ id: items.id, hsn: items.hsn, unit: items.unit, mrp: items.mrp }).from(items).where(inArray(items.id, itemIds))
     : [];
+  // MRP per line: the variant's, else the item's, scaled to an alternate unit.
+  const variantIds = lineItems.map(li => li.variantId).filter(Boolean) as string[];
+  const variantMrp = new Map(
+    (variantIds.length > 0
+      ? await db.select({ id: itemVariants.id, mrp: itemVariants.mrp }).from(itemVariants).where(inArray(itemVariants.id, variantIds))
+      : []).map(v => [v.id, v.mrp]),
+  );
+  const itemMrp = new Map(itemMeta.map(i => [i.id, i.mrp]));
+  const lineMrp = (li: typeof lineItems[number]): string | null => {
+    const base = (li.variantId ? variantMrp.get(li.variantId) : null) ?? (li.itemId ? itemMrp.get(li.itemId) : null);
+    if (!base || invoice.type !== "sale") return null;
+    return money.mul(base, parseFloat(li.conversionFactor ?? "1") || 1);
+  };
   const hsnMap = new Map(itemMeta.map(i => [i.id, i.hsn || ""]));
   const itemUnitMap = new Map(itemMeta.map(i => [i.id, i.unit]));
 
@@ -534,6 +548,7 @@ async function buildInvoicePdfData(
       quantity: li.quantity,
       unit: li.selectedUnit || (li.itemId ? itemUnitMap.get(li.itemId) : undefined) || undefined,
       unitPrice: li.unitPrice,
+      mrp: lineMrp(li),
       taxPercent: li.taxPercent,
       taxAmount: li.taxAmount,
       discountPercent: li.discountPercent,
@@ -1720,6 +1735,7 @@ app.post("/store/:slug/order", async (c) => {
         amountPaid: "0",
         notes: typeof notes === "string" ? notes : null,
         source: "online_store",
+        stockMode: "tracked",
       }).returning();
 
       // Create invoice line items
@@ -1754,8 +1770,8 @@ app.post("/store/:slug/order", async (c) => {
 
       await tx.insert(invoiceItems).values(processedLineItems);
 
-      // Stock adjustment per line item — use PostgreSQL NUMERIC arithmetic
-      // to avoid JS floating-point drift. Lock rows first for concurrency safety.
+      // Take the ordered stock out, per warehouse. Lock the item rows first
+      // so concurrent orders for the same item queue up.
       // No extra isNull filter needed here: items/variants were already confirmed
       // active by the foundItems/foundVariants queries earlier in this handler.
       const itemIds = [...new Set(lineItemInputs.filter(li => !li.variantId).map(li => li.itemId))];
@@ -1768,20 +1784,11 @@ app.post("/store/:slug/order", async (c) => {
         await tx.select({ id: itemVariants.id }).from(itemVariants)
           .where(inArray(itemVariants.id, variantIds)).for("update");
       }
-      for (const li of lineItemInputs) {
-        if (li.variantId) {
-          await tx.update(itemVariants).set({
-            stockQuantity: sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`,
-            updatedAt: new Date(),
-          }).where(eq(itemVariants.id, li.variantId));
-        } else {
-          const cf = li.conversionFactor || "1";
-          await tx.update(items).set({
-            stockQuantity: sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`,
-            updatedAt: new Date(),
-          }).where(eq(items.id, li.itemId));
-        }
-      }
+      await syncDocumentStock(tx, {
+        businessId: resolved.businessId,
+        documentId: invoice.id,
+        event: "CREATE",
+      });
 
       // Create the store order record
       const [order] = await tx.insert(storeOrders).values({

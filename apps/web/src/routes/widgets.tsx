@@ -257,7 +257,10 @@ function ThemeSwitch() {
 
 function WidgetsPage() {
   return (
-    <MarketingLayout title="Widgets">
+    <MarketingLayout
+      title="Widget gallery"
+      description="Try every Fintranzact control and dashboard widget live, in light and dark mode, with sample data. No account needed."
+    >
       <PageHero
         eyebrow="Component & widget gallery"
         title="Every control and dashboard widget, live"

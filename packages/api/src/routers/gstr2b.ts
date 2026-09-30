@@ -33,6 +33,7 @@ import {
   type GSTR2BRecord,
   type PurchaseInvoice,
 } from "../lib/gstr2b-parser.js";
+import { notOrderDocument } from "../lib/order-fulfilment.js";
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -90,6 +91,7 @@ export const gstr2bRouter = router({
           and(
             eq(invoices.businessId, ctx.businessId),
             eq(invoices.type, "purchase"),
+            notOrderDocument(),
             sql`${invoices.status} != 'cancelled'`,
             isNull(invoices.deletedAt),
           ),
@@ -506,6 +508,7 @@ export const gstr2bRouter = router({
           and(
             eq(invoices.businessId, ctx.businessId),
             eq(invoices.type, "purchase"),
+            notOrderDocument(),
             sql`${invoices.status} != 'cancelled'`,
             isNull(invoices.deletedAt),
             sql`${invoices.invoiceDate} >= ${periodStart}`,

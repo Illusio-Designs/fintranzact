@@ -4,7 +4,7 @@ const API_BASE_URL = (import.meta.env.API_URL || (typeof window !== "undefined" 
 export const reportsEndpoints: EndpointGroup = {
   id: "reports",
   title: "Reports",
-  description: "Business intelligence reports. All 11 endpoints are read-only queries under `businessProcedure` — they require an active business context via the `x-business-id` header. All monetary values are returned as NUMERIC strings.",
+  description: "Business intelligence and accounting reports. Every endpoint is a read-only query that requires an active business (`x-business-id` header) and the `Report:read` permission (viewer role or above). Monetary values are returned as decimal strings. Stock-aware statements (P&L, balance sheet and their comparatives, stock summary) value inventory on the fly with the business's valuation method (`weighted_average` or `fifo`, set in inventory settings) — nothing is posted to the ledger for stock.",
   endpoints: [
     {
       id: "reports-daybook",
@@ -453,10 +453,12 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.itemSales?input={params}", .
       method: "query",
       path: "reports.stockSummary",
       title: "Stock Summary",
-      description: "Current stock position for all product items. Handles both simple items and variant items separately. For variant items, returns a JSON array of per-variant stock. Returns cost value (at purchase price) and sale value (at sale price) for each item, plus aggregate totals and a low-stock alert count.",
+      description: "Current stock position for all active product items, split into simple/alt-unit items and variant items (with a per-variant array). Cost value uses the business's stock valuation method (weighted average or FIFO over purchase bills and manufacturing journals, as of now) and each valued row carries its `valuationRate`; sale value is stock × current sale price. Returns aggregate totals, the low-stock alert count and the valuation method used.",
       auth: "business",
+      requiredRole: "viewer",
       input: [
         { name: "category", type: "string", required: false, description: "Filter to a specific item category" },
+        { name: "stockGroupId", type: "string (UUID)", required: false, description: "Limit to one stock group and all groups nested under it" },
         { name: "showZeroStock", type: "boolean", required: false, description: "Include items with zero stock. Default: false." },
       ],
       output: {
@@ -472,10 +474,11 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.itemSales?input={params}", .
               currentStock: "12.00",
               purchasePrice: "1500.00",
               salePrice: "2500.00",
-              stockValue: "18000.00",
+              stockValue: "17640.00",
               stockValueAtSale: "30000.00",
               lowStockAlert: "5.00",
               isLowStock: false,
+              valuationRate: "1470.00",
             },
           ],
           variantItems: [
@@ -486,7 +489,7 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.itemSales?input={params}", .
               totalValue: "14400.00",
               totalValueAtSale: "24000.00",
               variantDetails: [
-                { sku: "TSHIRT-RED-M", attributes: { color: "Red", size: "M" }, stock: "12.00", purchasePrice: "300.00", salePrice: "500.00", isLowStock: false },
+                { variantId: "variant-uuid", sku: "TSHIRT-RED-M", attributes: { color: "Red", size: "M" }, stock: "12.00", purchasePrice: "300.00", salePrice: "500.00", lowStockAlert: null, isLowStock: false, value: 3600, valuationRate: 300 },
               ],
             },
           ],
@@ -495,6 +498,7 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.itemSales?input={params}", .
             totalSaleValue: "54000.00",
             totalSkuCount: 2,
             lowStockCount: 0,
+            valuationMethod: "weighted_average",
           },
         },
       },
@@ -513,7 +517,9 @@ console.log("Low stock alerts:", stock.summary.lowStockCount);`,
       gotchas: [
         "Only items with `itemType = 'product'` are included — service items have no stock.",
         "Variant items use `itemVariants.stockQuantity` for stock levels. Simple items use `items.stockQuantity`.",
-        "`stockValue` and `stockValueAtSale` use stored price fields — they reflect the current prices, not historical purchase costs.",
+        "`stockValue` / variant `value` come from the stock valuation (`summary.valuationMethod`: `weighted_average` or `fifo`). Units the valuation has no entry for fall back to stock × current purchase price and have no `valuationRate`. Negative stock is valued at zero.",
+        "`stockValueAtSale` / `totalValueAtSale` always use the current sale price.",
+        "Variant `value` and `valuationRate` are JSON numbers, not strings.",
       ],
     },
     {
@@ -708,23 +714,29 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.trialBalance?input={params}"
       method: "query",
       path: "reports.balanceSheet",
       title: "Balance Sheet",
-      description: "Cumulative balance sheet as of a specific date. Derives all entries from the beginning of time up to `asOfDate`. Returns three sections: assets (debit-normal), liabilities (credit-normal), and equity (credit-normal). Net income from accumulated income/expense flows is added to the equity section.",
+      description: "Cumulative balance sheet as of a specific date. Derives all entries from the beginning of time up to `asOfDate`. Returns three sections: assets (debit-normal), liabilities (credit-normal), and equity (credit-normal). Closing stock, valued at `asOfDate` with the business's valuation method, is added to Inventory (account `1200`) on the asset side and to net income on the equity side, because purchases are expensed when booked.",
       auth: "business",
+      requiredRole: "viewer",
       input: [
         { name: "asOfDate", type: "string (ISO datetime)", required: true, description: "Balance sheet date" },
       ],
       output: {
-        description: "Assets, liabilities, and equity sections with totals.",
+        description: "Assets, liabilities, and equity sections with totals, plus `closingStock` (the inventory value included in assets and net income) and `valuationMethod` (`weighted_average` | `fifo`).",
         example: {
-          assets: [{ accountCode: "1000", accountName: "Cash & Bank", balance: "245000.00" }],
+          assets: [
+            { accountCode: "1000", accountName: "Cash & Bank", balance: "245000.00" },
+            { accountCode: "1200", accountName: "Inventory (closing stock)", balance: "92000.00" },
+          ],
           liabilities: [{ accountCode: "2000", accountName: "Accounts Payable", balance: "50000.00" }],
           equity: [
             { accountCode: "3000", accountName: "Owner's Capital", balance: "100000.00" },
-            { accountCode: "9999", accountName: "Net Income (Current Period)", balance: "95000.00" },
+            { accountCode: "9999", accountName: "Net Income (Current Period)", balance: "187000.00" },
           ],
-          totalAssets: "245000.00",
+          totalAssets: "337000.00",
           totalLiabilities: "50000.00",
-          totalEquity: "195000.00",
+          totalEquity: "287000.00",
+          closingStock: "92000.00",
+          valuationMethod: "weighted_average",
         },
       },
       codeExamples: {
@@ -746,32 +758,39 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.balanceSheet?input={params}"
         "The balance sheet is cumulative from the beginning of time \u2014 not just the current financial year.",
         "Net Income (account code `9999`) is a synthetic row representing accumulated income minus expenses. There are no year-end closing entries.",
         "Accounts with a zero balance are excluded from each section.",
+        "If journals already carry a balance on account `1200`, closing stock is added to that row; otherwise a synthetic \"Inventory (closing stock)\" row is appended.",
+        "Stock is valued with the business's current valuation method, even for past dates.",
       ],
-      relatedEndpoints: ["reports-trial-balance", "reports-profit-and-loss"],
+      relatedEndpoints: ["reports-trial-balance", "reports-profit-and-loss", "reports-stock-summary"],
     },
     {
       id: "reports-profit-and-loss",
       method: "query",
       path: "reports.profitAndLoss",
       title: "Profit & Loss",
-      description: "Income statement (P&L) for a date range, based on the Chart of Accounts. Returns income and expense line items with gross profit and net profit calculations. Gross profit is calculated as Sales (4000) minus direct costs (5000 Purchases + 5100 Direct Expenses).",
+      description: "Income statement (P&L) for a date range, based on the Chart of Accounts. Purchases are expensed when booked (account `5000`), so the report adds a synthetic \"Changes in inventories of stock-in-trade\" expense line (account `5050`) equal to opening stock − closing stock, valued with the business's valuation method at the day before `fromDate` and at `toDate`. Returns income and expense line items, gross and net profit, and the stock figures used.",
       auth: "business",
+      requiredRole: "viewer",
       input: [
         { name: "fromDate", type: "string (ISO datetime)", required: true, description: "Start of the period" },
         { name: "toDate", type: "string (ISO datetime)", required: true, description: "End of the period" },
       ],
       output: {
-        description: "Income and expense accounts with gross and net profit.",
+        description: "Income and expense accounts with gross and net profit, plus `openingStock`, `closingStock` and `valuationMethod` (`weighted_average` | `fifo`).",
         example: {
           income: [{ accountCode: "4000", accountName: "Sales Revenue", amount: "485000.00" }],
           expenses: [
             { accountCode: "5000", accountName: "Purchases", amount: "290000.00" },
+            { accountCode: "5050", accountName: "Changes in inventories of stock-in-trade", amount: "-30000.00" },
             { accountCode: "6000", accountName: "Operating Expenses", amount: "45000.00" },
           ],
           totalIncome: "485000.00",
-          totalExpenses: "335000.00",
-          grossProfit: "195000.00",
-          netProfit: "150000.00",
+          totalExpenses: "305000.00",
+          grossProfit: "225000.00",
+          netProfit: "180000.00",
+          openingStock: "62000.00",
+          closingStock: "92000.00",
+          valuationMethod: "weighted_average",
         },
       },
       codeExamples: {
@@ -790,7 +809,8 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.profitAndLoss?input={params}
       },
       gotchas: [
         "Income accounts: `amount = credit - debit` (credit-normal). Expense accounts: `amount = debit - credit` (debit-normal).",
-        "`grossProfit = Sales (4000) - Sales Returns (4010) - Purchases (5000) - Direct Expenses (5100)`.",
+        "`grossProfit = Sales (4000) - Sales Returns (4010) - [Purchases (5000) + Purchase Returns (5010, negative) + Direct Expenses (5100) + Change in stock (5050)]`.",
+        "The `5050` line is omitted when opening and closing stock are equal. A negative amount means stock grew during the period (it reduces cost of sales).",
         "`netProfit = totalIncome - totalExpenses`.",
       ],
       relatedEndpoints: ["reports-balance-sheet"],
@@ -899,14 +919,15 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.comparativeTrialBalance?inpu
       method: "query",
       path: "reports.comparativeBalanceSheet",
       title: "Comparative Balance Sheet",
-      description: "Side-by-side balance sheet comparing two points in time. Each account shows current balance, previous balance, and variance. Net income is calculated separately for each period and added to equity.",
+      description: "Side-by-side balance sheet comparing two points in time. Each account shows current balance, previous balance, and variance. Net income is calculated separately for each date and added to equity. Closing stock at each date is added to Inventory (`1200`) and to net income, exactly as in `reports.balanceSheet`.",
       auth: "business",
+      requiredRole: "viewer",
       input: [
         { name: "currentAsOf", type: "string (ISO datetime)", required: true, description: "Current period balance sheet date" },
         { name: "previousAsOf", type: "string (ISO datetime)", required: true, description: "Previous period balance sheet date" },
       ],
       output: {
-        description: "Assets, liabilities, and equity with per-account current/previous/variance.",
+        description: "Assets, liabilities, and equity with per-account current/previous/variance (`variancePercent` is `\"N/A\"` when the previous value is zero), section totals for both dates, `currentClosingStock`, `previousClosingStock` and `valuationMethod`.",
         example: {
           assets: [{ accountCode: "1000", accountName: "Cash & Bank", currentBalance: "245000.00", previousBalance: "180000.00", variance: "65000.00", variancePercent: "36.1" }],
           liabilities: [],
@@ -914,6 +935,8 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.comparativeTrialBalance?inpu
           currentTotalAssets: "245000.00", previousTotalAssets: "180000.00",
           currentTotalLiabilities: "0.00", previousTotalLiabilities: "0.00",
           currentTotalEquity: "245000.00", previousTotalEquity: "180000.00",
+          currentClosingStock: "92000.00", previousClosingStock: "62000.00",
+          valuationMethod: "weighted_average",
         },
       },
       codeExamples: {
@@ -930,6 +953,9 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.comparativeTrialBalance?inpu
 }}))
 resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.comparativeBalanceSheet?input={params}", ...)`,
       },
+      gotchas: [
+        "Both dates are valued with the business's current valuation method, so switching between weighted average and FIFO restates the previous column too.",
+      ],
       relatedEndpoints: ["reports-balance-sheet"],
     },
     {
@@ -937,8 +963,9 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.comparativeBalanceSheet?inpu
       method: "query",
       path: "reports.comparativeProfitAndLoss",
       title: "Comparative Profit & Loss",
-      description: "Side-by-side P&L comparing two financial year periods. Shows current and previous amounts per income/expense account with variance. Includes aggregate totals and net profit comparison.",
+      description: "Side-by-side P&L comparing two financial year periods. Shows current and previous amounts per income/expense account with variance, including the synthetic \"Changes in inventories of stock-in-trade\" line (`5050`, opening − closing stock) for each period. Includes aggregate totals, net profit comparison and the opening/closing stock of both periods.",
       auth: "business",
+      requiredRole: "viewer",
       input: [
         { name: "currentFYStart", type: "string (ISO datetime)", required: true, description: "Start of current FY" },
         { name: "currentFYEnd", type: "string (ISO datetime)", required: true, description: "End of current FY" },
@@ -946,7 +973,7 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.comparativeBalanceSheet?inpu
         { name: "previousFYEnd", type: "string (ISO datetime)", required: true, description: "End of previous FY" },
       ],
       output: {
-        description: "Income and expense accounts with current/previous/variance, plus net profit comparison.",
+        description: "Income and expense accounts with current/previous/variance, net profit comparison, `currentOpeningStock`, `currentClosingStock`, `previousOpeningStock`, `previousClosingStock` and `valuationMethod`.",
         example: {
           income: [{ accountCode: "4000", accountName: "Sales Revenue", currentAmount: "485000.00", previousAmount: "380000.00", variance: "105000.00", variancePercent: "27.6" }],
           expenses: [{ accountCode: "5000", accountName: "Purchases", currentAmount: "290000.00", previousAmount: "240000.00", variance: "50000.00", variancePercent: "20.8" }],
@@ -954,6 +981,9 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.comparativeBalanceSheet?inpu
           currentTotalExpenses: "335000.00", previousTotalExpenses: "285000.00",
           currentNetProfit: "150000.00", previousNetProfit: "95000.00",
           netProfitVariance: "55000.00", netProfitVariancePercent: "57.9",
+          currentOpeningStock: "62000.00", currentClosingStock: "92000.00",
+          previousOpeningStock: "48000.00", previousClosingStock: "62000.00",
+          valuationMethod: "weighted_average",
         },
       },
       codeExamples: {
@@ -975,6 +1005,10 @@ console.log("Net profit growth:", cpl.netProfitVariancePercent + "%");`,
 }}))
 resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.comparativeProfitAndLoss?input={params}", ...)`,
       },
+      gotchas: [
+        "The `5050` stock-change line is included when either period's stock changed; `variancePercent` is `\"N/A\"` when the previous amount is zero.",
+        "Both periods are valued with the business's current valuation method.",
+      ],
       relatedEndpoints: ["reports-profit-and-loss"],
     },
     {
@@ -1079,6 +1113,83 @@ resp = httpx.get(f"${API_BASE_URL}/api/trpc/reports.cashFlowStatement?input={par
         "Investing activities include fixed asset movements (1500). Financing includes loan movements (2100) and equity changes (3000).",
       ],
       relatedEndpoints: ["reports-profit-and-loss", "reports-balance-sheet"],
+    },
+    {
+      id: "reports-msme-payables",
+      method: "query",
+      path: "reports.msmePayables",
+      title: "MSME Payables (43B(h))",
+      description: "Unpaid purchase bills from suppliers marked as MSME (micro or small; `medium` enterprises are excluded), with the date each must be paid by under the MSMED Act, 2006: the agreed credit period capped at 45 days, or 15 days when the supplier has no credit period set. Payments beyond this limit are disallowed as an expense under section 43B(h) of the Income-tax Act until actually paid, so the report is sorted by pay-by date (most urgent first) and flags overdue bills.",
+      auth: "business",
+      requiredRole: "viewer",
+      input: [
+        { name: "asOfDate", type: "string (ISO datetime)", required: false, description: "Date to measure `daysLeft` against. Defaults to now. The whole input object may be omitted." },
+      ],
+      output: {
+        description: "Totals plus one row per open bill. `outstanding` = `totalAmount` − `amountPaid`; `limitDays` is the payment window used; `payBy` is the invoice date plus `limitDays` (Postgres timestamp text); `daysLeft` is negative when overdue.",
+        example: {
+          asOfDate: "2026-09-30T06:30:00.000Z",
+          totalOutstanding: "186500.00",
+          overdueOutstanding: "42000.00",
+          overdueCount: 1,
+          bills: [
+            {
+              partyId: "party-uuid-1",
+              partyName: "Shree Ganesh Packaging",
+              udyamNumber: "UDYAM-MH-26-0012345",
+              msmeCategory: "micro",
+              invoiceId: "inv-uuid-1",
+              invoiceNumber: "SGP/2026/118",
+              invoiceDate: "2026-08-01T00:00:00.000Z",
+              totalAmount: "42000.00",
+              amountPaid: "0.00",
+              outstanding: "42000.00",
+              limitDays: 45,
+              payBy: "2026-09-15 00:00:00+00",
+              daysLeft: -15,
+            },
+            {
+              partyId: "party-uuid-2",
+              partyName: "Kaveri Engineering Works",
+              udyamNumber: "UDYAM-KR-03-0098765",
+              msmeCategory: "small",
+              invoiceId: "inv-uuid-2",
+              invoiceNumber: "KEW-2026-0457",
+              invoiceDate: "2026-09-20T00:00:00.000Z",
+              totalAmount: "169500.00",
+              amountPaid: "25000.00",
+              outstanding: "144500.00",
+              limitDays: 30,
+              payBy: "2026-10-20 00:00:00+00",
+              daysLeft: 20,
+            },
+          ],
+        },
+      },
+      codeExamples: {
+        curl: `curl "${API_BASE_URL}/api/trpc/reports.msmePayables?input=%7B%22json%22%3A%7B%7D%7D" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "x-business-id: YOUR_BUSINESS_ID"`,
+        javascript: `const msme = await trpc.reports.msmePayables.query();
+const overdue = msme.bills.filter(b => b.daysLeft < 0);
+console.log(\`₹\${msme.overdueOutstanding} across \${msme.overdueCount} bills is past the 43B(h) limit\`);`,
+        python: `import httpx, json, urllib.parse
+
+params = urllib.parse.quote(json.dumps({"json": {"asOfDate": "2027-03-31T23:59:59.999Z"}}))
+resp = httpx.get(
+    f"${API_BASE_URL}/api/trpc/reports.msmePayables?input={params}",
+    headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
+)
+report = resp.json()["result"]["data"]["json"]`,
+      },
+      gotchas: [
+        "Requires `Report:read` permission.",
+        "Only suppliers with `isMsme = true` are considered; set this (and `msmeCategory`, `udyamNumber`, `creditPeriodDays`) on the party. Parties with category `medium` are skipped because 43B(h) applies to micro and small enterprises only.",
+        "Only purchase documents of type `invoice` with status other than paid/cancelled/draft and a positive balance are listed; soft-deleted bills are excluded.",
+        "`asOfDate` only moves the `daysLeft` reference point; the bill list is always the current open balance (payments recorded after `asOfDate` are already reflected).",
+        "`payBy` is returned as a raw Postgres timestamp string, not ISO 8601.",
+      ],
+      relatedEndpoints: ["reports-outstanding", "party-update"],
     },
   ],
 };

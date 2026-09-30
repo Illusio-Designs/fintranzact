@@ -3,11 +3,12 @@
  * adjustments and physical stock verification.
  *
  * Stock has two layers. items/item_variants.stock_quantity is the business-wide
- * total every other screen reads (and many paths — opening stock, imports,
- * merges — write only that). stock_balances splits it by warehouse. Stock that
- * no warehouse accounts for yet ("unplaced") is treated as sitting in the
- * default warehouse: read paths add it there, and write paths move it there
- * for real before touching a balance, so the two layers stay consistent.
+ * total every other screen reads. stock_balances splits it by warehouse. Every
+ * write path records a movement that updates both, but data from before
+ * warehouses existed can leave stock that no warehouse accounts for
+ * ("unplaced"). It is treated as sitting in the default warehouse: read paths
+ * add it there, and write paths move it there for real before touching a
+ * balance, so the two layers stay consistent.
  */
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -16,19 +17,23 @@ import {
   businessMembers,
   inventorySettings,
   itemBarcodes,
-  items,
-  itemVariants,
   physicalStockCounts,
   stockAdjustments,
-  stockMovements,
   warehousePermissions,
   warehouses,
 } from "@fintranzact/db";
 import { paginationSchema } from "@fintranzact/shared";
-import { router, viewerProcedure, memberProcedure } from "../trpc.js";
+import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
-import { ensureDefaultWarehouse, recordStockMovement, updateStockBalance } from "../lib/inventory-service.js";
+import {
+  ensureDefaultWarehouse,
+  getNegativeStockPolicy,
+  placeUnplacedStock,
+  recordStockMovement,
+  warehouseBalance,
+} from "../lib/inventory-service.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { getValuationMethod } from "../lib/stock-valuation.js";
 import { getBarcodeSetup, requireBarcodesEnabled, resolveCodes } from "../lib/barcode-setup.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,88 +57,7 @@ function qty(n: number) {
   return n.toFixed(3);
 }
 
-/** Total stock for an item or variant, locked for the rest of the transaction. */
-async function lockTotal(tx: Tx, businessId: string, itemId: string, variantId?: string | null) {
-  if (variantId) {
-    const [row] = await tx
-      .select({ stock: itemVariants.stockQuantity })
-      .from(itemVariants)
-      .innerJoin(items, eq(items.id, itemVariants.itemId))
-      .where(and(
-        eq(itemVariants.id, variantId),
-        eq(items.id, itemId),
-        eq(items.businessId, businessId),
-        sql`${items.deletedAt} IS NULL`,
-        sql`${itemVariants.deletedAt} IS NULL`,
-      ))
-      .for("update")
-      .limit(1);
-    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Item variant not found" });
-    return parseFloat(row.stock);
-  }
-  const [row] = await tx
-    .select({ stock: items.stockQuantity, itemType: items.itemType })
-    .from(items)
-    .where(and(eq(items.id, itemId), eq(items.businessId, businessId), sql`${items.deletedAt} IS NULL`))
-    .for("update")
-    .limit(1);
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Item not found" });
-  if (row.itemType === "service") {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Services don't carry stock" });
-  }
-  return parseFloat(row.stock);
-}
-
-/** Sum of warehouse balances (all locations) for one item or variant. */
-async function placedTotal(tx: Tx, businessId: string, itemId: string, variantId?: string | null) {
-  const rows = (await tx.execute(sql`
-    SELECT COALESCE(SUM(quantity::numeric), 0)::text AS placed
-    FROM stock_balances
-    WHERE business_id = ${businessId} AND item_id = ${itemId}
-      AND ${variantId ? sql`variant_id = ${variantId}` : sql`variant_id IS NULL`}
-  `)) as unknown as Array<{ placed: string }>;
-  return parseFloat(rows[0]?.placed ?? "0");
-}
-
-/** Balance at one warehouse (location-less row). */
-async function warehouseBalance(tx: Tx, businessId: string, warehouseId: string, itemId: string, variantId?: string | null) {
-  const rows = (await tx.execute(sql`
-    SELECT COALESCE(SUM(quantity::numeric), 0)::text AS qty
-    FROM stock_balances
-    WHERE business_id = ${businessId} AND warehouse_id = ${warehouseId}
-      AND item_id = ${itemId} AND location_id IS NULL
-      AND ${variantId ? sql`variant_id = ${variantId}` : sql`variant_id IS NULL`}
-  `)) as unknown as Array<{ qty: string }>;
-  return parseFloat(rows[0]?.qty ?? "0");
-}
-
-/**
- * Put stock that no warehouse accounts for into the default warehouse, without
- * changing the item's total. Records an OPENING_BALANCE movement for the audit
- * trail. Call after lockTotal so the total cannot move underneath.
- */
-async function placeUnplacedStock(tx: Tx, businessId: string, itemId: string, variantId?: string | null) {
-  const total = await lockTotal(tx, businessId, itemId, variantId);
-  const placed = await placedTotal(tx, businessId, itemId, variantId);
-  const diff = total - placed;
-  if (Math.abs(diff) < 0.0005) return total;
-
-  const settings = await ensureDefaultWarehouse(tx, businessId);
-  const warehouseId = settings.salesWarehouseId as string;
-  await tx.insert(stockMovements).values({
-    businessId,
-    warehouseId,
-    itemId,
-    variantId: variantId ?? null,
-    referenceType: "OPENING_BALANCE",
-    movementType: "UNPLACED_STOCK",
-    quantity: qty(diff),
-  });
-  await updateStockBalance(tx, { businessId, warehouseId, locationId: null, itemId, variantId: variantId ?? null }, qty(diff));
-  return total;
-}
-
-async function assertWarehouses(tx: Tx, businessId: string, ids: string[]) {
+export async function assertWarehouses(tx: Tx, businessId: string, ids: string[]) {
   const rows = await tx
     .select({ id: warehouses.id, status: warehouses.status })
     .from(warehouses)
@@ -147,7 +71,7 @@ async function assertWarehouses(tx: Tx, businessId: string, ids: string[]) {
 }
 
 /** Non-admin members need an explicit per-warehouse grant. */
-async function assertWarehousePermission(
+export async function assertWarehousePermission(
   tx: Tx,
   ctx: { businessId: string; role: string; user: { id: string } },
   warehouseIds: string[],
@@ -754,6 +678,86 @@ export const stockRouter = router({
       });
     }),
 
+  /** Inventory settings: the negative stock policy and default warehouses. */
+  settings: viewerProcedure.query(async ({ ctx }) => {
+    requireCan(ctx.ability, "read", "Item");
+    const settings = await ctx.db.transaction((tx: Tx) => ensureDefaultWarehouse(tx, ctx.businessId));
+    return {
+      negativeStockPolicy: await getNegativeStockPolicy(ctx.db, ctx.businessId),
+      valuationMethod: await getValuationMethod(ctx.db, ctx.businessId),
+      salesWarehouseId: settings.salesWarehouseId as string | null,
+      purchaseWarehouseId: settings.purchaseWarehouseId as string | null,
+      salesReturnWarehouseId: settings.salesReturnWarehouseId as string | null,
+      purchaseReturnWarehouseId: settings.purchaseReturnWarehouseId as string | null,
+      stockAdjustmentWarehouseId: settings.stockAdjustmentWarehouseId as string | null,
+    };
+  }),
+
+  updateSettings: adminProcedure
+    .input(z.object({
+      negativeStockPolicy: z.enum(["allow", "warn", "block"]).optional(),
+      valuationMethod: z.enum(["weighted_average", "fifo"]).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // A business-wide rule, so the same permission as editing the business.
+      requireCan(ctx.ability, "update", "Business");
+      await ctx.db.transaction(async (tx: Tx) => {
+        await ensureDefaultWarehouse(tx, ctx.businessId);
+        await tx
+          .update(inventorySettings)
+          .set({
+            ...(input.negativeStockPolicy ? { negativeStockPolicy: input.negativeStockPolicy } : {}),
+            ...(input.valuationMethod ? { valuationMethod: input.valuationMethod } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(inventorySettings.businessId, ctx.businessId));
+      });
+      return { ok: true };
+    }),
+
+  /**
+   * How much of each item a warehouse holds, for warning about shortfalls
+   * while a document is being entered. Defaults to the default warehouse,
+   * which also holds any unplaced stock.
+   */
+  availability: viewerProcedure
+    .input(z.object({
+      warehouseId: z.string().uuid().nullish(),
+      lines: z.array(lineKey).max(200),
+    }))
+    .query(async ({ ctx, input }) => {
+      requireCan(ctx.ability, "read", "Item");
+      const [settings] = await ctx.db
+        .select({ defaultId: inventorySettings.salesWarehouseId, policy: inventorySettings.negativeStockPolicy })
+        .from(inventorySettings)
+        .where(eq(inventorySettings.businessId, ctx.businessId))
+        .limit(1);
+      const warehouseId = input.warehouseId ?? settings?.defaultId ?? null;
+      const policy = settings?.policy ?? "warn";
+      if (!warehouseId || input.lines.length === 0) return { warehouseId, policy, lines: [] };
+      const isDefault = warehouseId === settings?.defaultId;
+
+      const itemIds = [...new Set(input.lines.map((l) => l.itemId))];
+      const rows = (await ctx.db.execute(sql`
+        WITH units AS (${stockUnitsSql(ctx.businessId)})
+        SELECT u.item_id AS "itemId", u.variant_id AS "variantId",
+               COALESCE((SELECT SUM(quantity::numeric) FROM stock_balances sb
+                 WHERE sb.business_id = ${ctx.businessId} AND sb.warehouse_id = ${warehouseId}
+                   AND sb.item_id = u.item_id AND sb.variant_id IS NOT DISTINCT FROM u.variant_id), 0)
+               + CASE WHEN ${isDefault} THEN u.total - COALESCE((SELECT SUM(quantity::numeric) FROM stock_balances sb
+                 WHERE sb.business_id = ${ctx.businessId}
+                   AND sb.item_id = u.item_id AND sb.variant_id IS NOT DISTINCT FROM u.variant_id), 0)
+                 ELSE 0 END AS available
+        FROM units u
+        WHERE u.item_id IN ${itemIds}
+      `)) as unknown as Array<{ itemId: string; variantId: string | null; available: string }>;
+
+      return {
+        warehouseId,
+        policy,
+        lines: rows.map((r) => ({ ...r, available: qty(parseFloat(r.available)) })),
+      };
+    }),
   /**
    * What a barcode count at this warehouse expects: every stock unit with its
    * book quantity and the codes that scan to it, so the scanner screen can

@@ -187,6 +187,9 @@ export const createBusinessSchema = z.object({
   debitNotePrefix: z.string().min(1).max(10).default("DN"),
   salesReturnPrefix: z.string().min(1).max(10).default("SR"),
   purchaseReturnPrefix: z.string().min(1).max(10).default("PR"),
+  purchaseOrderPrefix: z.string().min(1).max(10).default("PO"),
+  salesOrderPrefix: z.string().min(1).max(10).default("SO"),
+  goodsReceiptNotePrefix: z.string().min(1).max(10).default("GRN"),
   // Drives HSN digit enforcement and the e-invoicing threshold.
   annualTurnover: z.number().nonnegative().nullable().optional(),
   defaultRoundOff: z.boolean().default(true),
@@ -211,7 +214,7 @@ export const uploadBusinessLogoSchema = z.object({
 export const uploadBusinessSignatureSchema = uploadBusinessLogoSchema;
 
 export const updateSequenceNumberSchema = z.object({
-  documentType: z.enum(["invoice", "payment", "quotation", "credit_note", "delivery_challan", "proforma"]),
+  documentType: z.enum(["invoice", "payment", "quotation", "credit_note", "delivery_challan", "proforma", "purchase_order", "sales_order", "goods_receipt_note"]),
   newNumber: z.number().int().min(1),
 });
 
@@ -220,7 +223,7 @@ export const updateSequenceNumberSchema = z.object({
 export const itemTypes = ["product", "service"] as const;
 export type ItemType = (typeof itemTypes)[number];
 
-export const documentTypes = ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return"] as const;
+export const documentTypes = ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return", "purchase_order", "sales_order", "goods_receipt_note"] as const;
 export type DocumentType = (typeof documentTypes)[number];
 
 export const bankAccountTypes = ["savings", "current", "cash", "upi", "credit_card", "payment_gateway"] as const;
@@ -311,6 +314,8 @@ const partyFields = {
   udyamNumber: z.string().regex(UDYAM_REGEX, "Invalid Udyam number (e.g. UDYAM-MH-26-0012345)").optional().or(z.literal("")),
   msmeCategory: z.enum(msmeCategories).optional(),
   tdsSection: z.enum(tdsSectionCodes).optional(),
+  // Price level sales to this party use; null = the business default.
+  priceLevelId: z.string().uuid().nullable().optional(),
 };
 
 // A PAN or state that contradicts the GSTIN is only a warning
@@ -353,6 +358,8 @@ export const itemVariantSchema = z.object({
 
   salePrice: decimalStr.optional(),
   purchasePrice: decimalStr.optional(),
+  // Printed MRP; "" clears it.
+  mrp: decimalStr.optional().or(z.literal("")),
   stockQuantity: decimalStr3.default("0"),
   lowStockAlert: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
 });
@@ -375,12 +382,18 @@ const createItemBaseSchema = z.object({
   itemMode: z.enum(itemModes).default("simple"),
   salePrice: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
   purchasePrice: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
+  // Printed MRP (maximum retail price); null clears it. A sale price above it
+  // is only a warning (see mrpWarning).
+  mrp: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).nullable().optional(),
   taxPercent: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0"),
   stockQuantity: z.string().regex(/^-?\d+(\.\d{1,3})?$/).default("0"),
   lowStockAlert: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
   description: z.string().max(1000).optional(),
   itemType: z.enum(itemTypes).default("product"),
   category: z.string().max(100).optional(),
+  // Stock group. Takes precedence over `category`, which then mirrors the
+  // group's name; null clears it.
+  stockGroupId: z.string().uuid().nullish(),
   taxInclusive: z.boolean().default(false),
   unitVariants: z.array(unitVariantSchema).optional(),
   variantAttributes: z.array(z.string().min(1).max(50)).max(5).optional(),
@@ -395,6 +408,27 @@ export const createItemSchema = createItemBaseSchema.refine((d) => {
 }, { message: "An item cannot have both unit variants and product variants" });
 
 export const updateItemSchema = createItemBaseSchema.partial();
+
+/**
+ * Warning text when a selling price is above the printed MRP (selling above
+ * MRP is not allowed under the Legal Metrology rules), else null.
+ */
+export function mrpWarning(price: string | number | null | undefined, mrp: string | number | null | undefined): string | null {
+  const p = parseFloat(String(price ?? ""));
+  const m = parseFloat(String(mrp ?? ""));
+  if (!Number.isFinite(p) || !Number.isFinite(m) || m <= 0) return null;
+  return p > m + 0.0001 ? `Price ${p.toFixed(2)} is above the MRP ${m.toFixed(2)}` : null;
+}
+
+// ── Price levels ───────────────────────────────────────────────
+
+export const priceSlabSchema = z.object({
+  minQuantity: z.string().regex(/^\d{1,12}(\.\d{1,3})?$/).default("0"),
+  price: decimalStr.nullable().optional(),
+  discountPercent: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/).refine((v) => parseFloat(v) <= 100, "Discount can't exceed 100%").nullable().optional(),
+}).refine((s) => !!s.price || !!s.discountPercent, { message: "Give a price or a discount" });
+
+export type PriceSlab = z.infer<typeof priceSlabSchema>;
 
 // ── Invoice ────────────────────────────────────────────────────
 
@@ -575,9 +609,36 @@ export const bankTransferSchema = z.object({
   transactionDate: z.string().datetime().optional(),
 });
 
+/**
+ * Documents that track what is still pending against them: orders until they
+ * are delivered or received, and challans/GRNs until they are billed.
+ */
+export const pendingTrackedDocumentTypes = ["sales_order", "purchase_order", "goods_receipt_note", "delivery_challan"] as const;
+export type PendingTrackedDocumentType = (typeof pendingTrackedDocumentTypes)[number];
+
 export const convertDocumentSchema = z.object({
   sourceDocumentId: z.string().uuid(),
   targetDocumentType: z.enum(documentTypes),
+  /**
+   * Quantities to take from the source, per source line, in the line's unit.
+   * Only for sources that track pending quantities (orders, challans, GRNs).
+   * Omitted, every line's pending quantity is taken; lines left out are not
+   * converted.
+   */
+  lines: z.array(z.object({
+    sourceLineId: z.string().uuid(),
+    quantity: z.string().regex(/^\d+(\.\d{1,3})?$/),
+  })).optional(),
+  /** Warehouse for the new document when it moves stock. Default warehouse when omitted. */
+  warehouseId: z.string().uuid().nullish(),
+});
+
+export const pendingOrdersInputSchema = z.object({
+  documentType: z.enum(pendingTrackedDocumentTypes),
+  partyId: z.string().uuid().optional(),
+  itemId: z.string().uuid().optional(),
+  /** Only lines whose due date has passed. */
+  overdueOnly: z.boolean().default(false),
 });
 
 // ── Reports ────────────────────────────────────────────────────
@@ -625,6 +686,8 @@ export const itemSalesInputSchema = z.object({
 
 export const stockSummaryInputSchema = z.object({
   category: z.string().optional(),
+  // Limit to one stock group and the groups under it.
+  stockGroupId: z.string().uuid().optional(),
   showZeroStock: z.boolean().default(false),
 });
 

@@ -232,6 +232,13 @@
       "when": 1790774898433,
       "tag": "0032_plans_and_partners",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790779605517,
+      "tag": "0033_inventory",
+      "breakpoints": true
     }
   ]
 }

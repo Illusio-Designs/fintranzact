@@ -1,4 +1,4 @@
-import { and, eq, asc, sql } from "drizzle-orm";
+import { and, eq, asc, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
@@ -7,14 +7,40 @@ import {
     warehouses,
     warehouseLocations,
     inventorySettings,
-    stockBalances,
     warehousePermissions,
     businessMembers,
+    controlDb,
+    tenantMembers,
+    users,
 } from "@fintranzact/db";
 
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
-import { recordStockMovement } from "../lib/inventory-service.js";
-import { requireCan } from "../lib/permissions.js";
+import { mapDbRole, requireCan } from "../lib/permissions.js";
+
+/** Roles that manage every warehouse without per-warehouse grants (as stock.ts). */
+const ADMIN_ROLES = new Set(["admin", "superadmin"]);
+
+/**
+ * Whether a warehouse is a default for some operation, whether it has ever
+ * held stock, and what it holds now. A default can't be deactivated or
+ * deleted (documents would have nowhere to post), and a warehouse with stock
+ * history can't be deleted (its history and balances would go with it).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function warehouseUsage(db: any, businessId: string, warehouseId: string) {
+    const [row] = (await db.execute(sql`
+        SELECT
+          EXISTS (
+            SELECT 1 FROM inventory_settings
+            WHERE business_id = ${businessId}
+              AND ${warehouseId} IN (sales_warehouse_id, purchase_warehouse_id, sales_return_warehouse_id,
+                                    purchase_return_warehouse_id, production_warehouse_id, stock_adjustment_warehouse_id)
+          ) AS "isDefault",
+          EXISTS (SELECT 1 FROM stock_movements WHERE warehouse_id = ${warehouseId}) AS "hasHistory",
+          COALESCE((SELECT SUM(ABS(quantity::numeric)) FROM stock_balances WHERE warehouse_id = ${warehouseId}), 0)::text AS "stock"
+    `)) as Array<{ isDefault: boolean; hasHistory: boolean; stock: string }>;
+    return { isDefault: !!row?.isDefault, hasHistory: !!row?.hasHistory, holdsStock: parseFloat(row?.stock ?? "0") > 0.0005 };
+}
 
 export const warehouseRouter = router({
     // ============================================================
@@ -428,6 +454,22 @@ export const warehouseRouter = router({
 
             const businessId = ctx.businessId;
 
+            if (input.status && input.status !== "active") {
+                const usage = await warehouseUsage(ctx.db, businessId, input.id);
+                if (usage.isDefault) {
+                    throw new TRPCError({
+                        code: "BAD_REQUEST",
+                        message: "This is a default warehouse. Choose another default before making it inactive.",
+                    });
+                }
+                if (usage.holdsStock) {
+                    throw new TRPCError({
+                        code: "BAD_REQUEST",
+                        message: "This warehouse still holds stock. Transfer it out before making it inactive.",
+                    });
+                }
+            }
+
             const [existing] = await ctx.db
                 .select()
                 .from(warehouses)
@@ -521,6 +563,20 @@ export const warehouseRouter = router({
             }
 
             const businessId = ctx.businessId;
+
+            const usage = await warehouseUsage(ctx.db, businessId, input.id);
+            if (usage.isDefault) {
+                throw new TRPCError({
+                    code: "BAD_REQUEST",
+                    message: "This is a default warehouse. Choose another default before deleting it.",
+                });
+            }
+            if (usage.hasHistory) {
+                throw new TRPCError({
+                    code: "BAD_REQUEST",
+                    message: "This warehouse has stock history, so it can't be deleted. Mark it inactive instead.",
+                });
+            }
 
             const [deleted] = await ctx.db
                 .delete(warehouses)
@@ -1002,171 +1058,6 @@ export const warehouseRouter = router({
             return permission;
         }),
 
-    stockTransfer: memberProcedure
-        .input(
-            z.object({
-                sourceWarehouseId: z.string().uuid(),
-                destinationWarehouseId: z.string().uuid(),
-                itemId: z.string().uuid(),
-                variantId: z.string().uuid().optional(),
-                quantity: z.string(),
-                actorUserId: z.string().uuid().optional(),
-            }),
-        )
-        .mutation(async ({ ctx, input }) => {
-        requireCan(ctx.ability, "update", "Item");
-            if (!ctx.businessId) {
-                throw new TRPCError({
-                    code: "BAD_REQUEST",
-                    message: "Business context is required",
-                });
-            }
-
-            if (input.sourceWarehouseId === input.destinationWarehouseId) {
-                throw new TRPCError({
-                    code: "BAD_REQUEST",
-                    message: "Source and destination warehouse must be different",
-                });
-            }
-
-            const quantity = Number(input.quantity);
-
-            if (!Number.isFinite(quantity) || quantity <= 0) {
-                throw new TRPCError({
-                    code: "BAD_REQUEST",
-                    message: "Quantity must be greater than zero",
-                });
-            }
-
-            const warehouseRows = await ctx.db
-                .select({
-                    id: warehouses.id,
-                })
-                .from(warehouses)
-                .where(
-                    and(
-                        eq(warehouses.businessId, ctx.businessId),
-                        sql`${warehouses.id} IN (${input.sourceWarehouseId}, ${input.destinationWarehouseId})`,
-                    ),
-                );
-
-            const [businessMember] = await ctx.db
-                .select({
-                    id: businessMembers.id,
-                })
-                .from(businessMembers)
-                .where(
-                    and(
-                        eq(businessMembers.businessId, ctx.businessId),
-                        eq(businessMembers.userId, ctx.user!.id),
-                    ),
-                )
-                .limit(1);
-
-            if (!businessMember) {
-                throw new TRPCError({
-                    code: "FORBIDDEN",
-                    message: "You do not have access to this business",
-                });
-            }
-
-            const transferPermissions = await ctx.db
-                .select({
-                    warehouseId: warehousePermissions.warehouseId,
-                    canTransfer: warehousePermissions.canTransfer,
-                })
-                .from(warehousePermissions)
-                .where(
-                    and(
-                        eq(
-                            warehousePermissions.businessMemberId,
-                            businessMember.id,
-                        ),
-                        sql`${warehousePermissions.warehouseId} IN (${input.sourceWarehouseId}, ${input.destinationWarehouseId})`,
-                    ),
-                );
-
-            if (
-                transferPermissions.length !== 2 ||
-                transferPermissions.some((permission) => !permission.canTransfer)
-            ) {
-                throw new TRPCError({
-                    code: "FORBIDDEN",
-                    message: "You do not have transfer permission for both warehouses",
-                });
-            }
-
-            if (warehouseRows.length !== 2) {
-                throw new TRPCError({
-                    code: "NOT_FOUND",
-                    message: "Source or destination warehouse not found",
-                });
-            }
-
-            return await ctx.db.transaction(async (tx) => {
-                const sourceBalance = await tx
-                    .select({
-                        quantity: stockBalances.quantity,
-                    })
-                    .from(stockBalances)
-                    .where(
-                        and(
-                            eq(stockBalances.businessId, ctx.businessId!),
-                            eq(stockBalances.warehouseId, input.sourceWarehouseId),
-                            eq(stockBalances.itemId, input.itemId),
-                            input.variantId
-                                ? eq(stockBalances.variantId, input.variantId)
-                                : sql`${stockBalances.variantId} IS NULL`,
-                            sql`${stockBalances.locationId} IS NULL`,
-                        ),
-                    )
-                    .limit(1);
-
-                const availableQuantity = Number(sourceBalance[0]?.quantity ?? 0);
-
-                if (availableQuantity < quantity) {
-                    throw new TRPCError({
-                        code: "BAD_REQUEST",
-                        message: `Insufficient stock. Available: ${availableQuantity}`,
-                    });
-                }
-
-                const referenceId = crypto.randomUUID();
-
-                await recordStockMovement(tx, {
-                    businessId: ctx.businessId!,
-                    warehouseId: input.sourceWarehouseId,
-                    itemId: input.itemId,
-                    variantId: input.variantId,
-                    referenceType: "STOCK_TRANSFER",
-                    referenceId,
-                    movementType: "TRANSFER_OUT",
-                    quantity: sql<string>`-${input.quantity}::numeric`,
-                    actorUserId: input.actorUserId ?? ctx.user!.id,
-                });
-
-                await recordStockMovement(tx, {
-                    businessId: ctx.businessId!,
-                    warehouseId: input.destinationWarehouseId,
-                    itemId: input.itemId,
-                    variantId: input.variantId,
-                    referenceType: "STOCK_TRANSFER",
-                    referenceId,
-                    movementType: "TRANSFER_IN",
-                    quantity: sql<string>`${input.quantity}::numeric`,
-                    actorUserId: input.actorUserId ?? ctx.user!.id,
-                });
-
-                return {
-                    success: true,
-                    referenceId,
-                    sourceWarehouseId: input.sourceWarehouseId,
-                    destinationWarehouseId: input.destinationWarehouseId,
-                    quantity: input.quantity,
-                };
-            });
-        }),
-
     // ============================================================
     // INVENTORY SETTINGS
     // ============================================================
@@ -1259,17 +1150,20 @@ export const warehouseRouter = router({
                 .where(eq(inventorySettings.businessId, businessId))
                 .limit(1);
 
+            // Only the defaults that were sent change; leaving one out keeps
+            // it, so a screen showing some of them can't clear the others.
+            const keys = [
+                "salesWarehouseId",
+                "purchaseWarehouseId",
+                "salesReturnWarehouseId",
+                "purchaseReturnWarehouseId",
+                "productionWarehouseId",
+                "stockAdjustmentWarehouseId",
+            ] as const;
             const data = {
-                salesWarehouseId: input.salesWarehouseId ?? null,
-                purchaseWarehouseId: input.purchaseWarehouseId ?? null,
-                salesReturnWarehouseId:
-                    input.salesReturnWarehouseId ?? null,
-                purchaseReturnWarehouseId:
-                    input.purchaseReturnWarehouseId ?? null,
-                productionWarehouseId:
-                    input.productionWarehouseId ?? null,
-                stockAdjustmentWarehouseId:
-                    input.stockAdjustmentWarehouseId ?? null,
+                ...Object.fromEntries(
+                    keys.filter((k) => input[k] !== undefined).map((k) => [k, input[k]]),
+                ),
                 updatedAt: new Date(),
             };
 
@@ -1294,4 +1188,119 @@ export const warehouseRouter = router({
             return created;
         }),
 
+    // ============================================================
+    // PER-MEMBER WAREHOUSE ACCESS
+    // ============================================================
+
+    /**
+     * Team members of this business with what they may do in one warehouse.
+     * Owners and admins manage every warehouse; everyone else needs a grant
+     * to transfer or adjust stock there.
+     */
+    accessList: viewerProcedure
+        .input(z.object({ warehouseId: z.string().uuid() }))
+        .query(async ({ input, ctx }) => {
+            requireCan(ctx.ability, "manage", "Business");
+            const members = await ctx.db
+                .select({ id: businessMembers.id, userId: businessMembers.userId, role: businessMembers.role })
+                .from(businessMembers)
+                .where(eq(businessMembers.businessId, ctx.businessId));
+            if (members.length === 0) return [];
+
+            const userIds = members.map((m) => m.userId);
+            const [people, roles, grants] = await Promise.all([
+                controlDb
+                    .select({ id: users.id, name: users.name, email: users.email })
+                    .from(users)
+                    .where(inArray(users.id, userIds)),
+                ctx.tenantId
+                    ? controlDb
+                        .select({ userId: tenantMembers.userId, role: tenantMembers.role })
+                        .from(tenantMembers)
+                        .where(and(eq(tenantMembers.tenantId, ctx.tenantId), inArray(tenantMembers.userId, userIds)))
+                    : Promise.resolve([] as Array<{ userId: string; role: string }>),
+                ctx.db
+                    .select()
+                    .from(warehousePermissions)
+                    .where(and(
+                        eq(warehousePermissions.businessId, ctx.businessId),
+                        eq(warehousePermissions.warehouseId, input.warehouseId),
+                    )),
+            ]);
+            const person = new Map(people.map((p) => [p.id, p]));
+            const role = new Map(roles.map((r) => [r.userId, r.role as string]));
+            const grant = new Map(grants.map((g) => [g.businessMemberId, g]));
+
+            return members.map((m) => {
+                const g = grant.get(m.id);
+                // The role they act with here, resolved as in trpc.ts.
+                const tenantRole = mapDbRole(role.get(m.userId) ?? "member");
+                const r = m.role === "admin" ? (tenantRole === "superadmin" ? "superadmin" : "admin") : tenantRole;
+                return {
+                    businessMemberId: m.id,
+                    name: person.get(m.userId)?.name ?? null,
+                    email: person.get(m.userId)?.email ?? null,
+                    role: r,
+                    fullAccess: ADMIN_ROLES.has(r),
+                    canView: g?.canView ?? false,
+                    canReceive: g?.canReceive ?? false,
+                    canIssue: g?.canIssue ?? false,
+                    canTransfer: g?.canTransfer ?? false,
+                    canAdjust: g?.canAdjust ?? false,
+                };
+            });
+        }),
+
+    /** Grant or change one member's access to a warehouse; all false removes it. */
+    accessSet: memberProcedure
+        .input(z.object({
+            warehouseId: z.string().uuid(),
+            businessMemberId: z.string().uuid(),
+            canView: z.boolean(),
+            canReceive: z.boolean(),
+            canIssue: z.boolean(),
+            canTransfer: z.boolean(),
+            canAdjust: z.boolean(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+            requireCan(ctx.ability, "manage", "Business");
+            const [[warehouse], [member]] = await Promise.all([
+                ctx.db.select({ id: warehouses.id }).from(warehouses)
+                    .where(and(eq(warehouses.id, input.warehouseId), eq(warehouses.businessId, ctx.businessId)))
+                    .limit(1),
+                ctx.db.select({ id: businessMembers.id }).from(businessMembers)
+                    .where(and(eq(businessMembers.id, input.businessMemberId), eq(businessMembers.businessId, ctx.businessId)))
+                    .limit(1),
+            ]);
+            if (!warehouse) throw new TRPCError({ code: "NOT_FOUND", message: "Warehouse not found" });
+            if (!member) throw new TRPCError({ code: "NOT_FOUND", message: "Team member not found" });
+
+            const where = and(
+                eq(warehousePermissions.businessMemberId, input.businessMemberId),
+                eq(warehousePermissions.warehouseId, input.warehouseId),
+            );
+            const flags = {
+                canView: input.canView,
+                canReceive: input.canReceive,
+                canIssue: input.canIssue,
+                canTransfer: input.canTransfer,
+                canAdjust: input.canAdjust,
+            };
+            if (!Object.values(flags).some(Boolean)) {
+                await ctx.db.delete(warehousePermissions).where(where);
+                return { ok: true };
+            }
+            const [existing] = await ctx.db.select({ id: warehousePermissions.id }).from(warehousePermissions).where(where).limit(1);
+            if (existing) {
+                await ctx.db.update(warehousePermissions).set(flags).where(eq(warehousePermissions.id, existing.id));
+            } else {
+                await ctx.db.insert(warehousePermissions).values({
+                    businessId: ctx.businessId,
+                    businessMemberId: input.businessMemberId,
+                    warehouseId: input.warehouseId,
+                    ...flags,
+                });
+            }
+            return { ok: true };
+        }),
 });

@@ -1,8 +1,9 @@
 import { parties, items, invoices, invoiceItems, payments, shipments } from "@fintranzact/db";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { calcLineItem, money } from "@fintranzact/shared";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalInvoice } from "../types.js";
+import { postNewDocumentsStock } from "../../../lib/inventory-service.js";
 
 export interface InvoiceImportOpts {
   autoCreatePayments: boolean;
@@ -54,7 +55,6 @@ export async function runInvoicesImport(
     invoiceRow: any;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     lineItemRows: any[];
-    stockDeltas: Map<string, number>;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     autoPaymentRow: any | null;
   }> = [];
@@ -80,6 +80,7 @@ export async function runInvoicesImport(
       partyId,
       type: inv.type,
       documentType: "invoice" as const,
+      stockMode: "tracked",
       invoiceNumber: inv.invoiceNumber,
       invoiceDate: inv.invoiceDate,
       dueDate: inv.dueDate ?? null,
@@ -102,7 +103,6 @@ export async function runInvoicesImport(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lineItemRows: any[] = [];
-    const stockDeltas = new Map<string, number>();
 
     if (inv.lineItems?.length) {
       for (let idx = 0; idx < inv.lineItems.length; idx++) {
@@ -144,12 +144,6 @@ export async function runInvoicesImport(
           totalAmount: calc.total,
           sortOrder: idx,
         });
-
-        if (itemId) {
-          // Stock delta in base units: qty × conversionFactor
-          const baseQty = money.toNumber(li.quantity || "1") * money.toNumber(cf);
-          stockDeltas.set(itemId, (stockDeltas.get(itemId) || 0) + baseQty);
-        }
       }
     } else {
       lineItemRows.push({
@@ -190,7 +184,7 @@ export async function runInvoicesImport(
       };
     }
 
-    validInvoices.push({ invoiceId, invoiceRow, lineItemRows, stockDeltas, autoPaymentRow });
+    validInvoices.push({ invoiceId, invoiceRow, lineItemRows, autoPaymentRow });
     existingNumbers.add(inv.invoiceNumber);
     created++;
   }
@@ -212,34 +206,12 @@ export async function runInvoicesImport(
         }
       }
 
-      // Aggregate stock deltas by direction
-      const saleDeltas = new Map<string, number>();
-      const purchaseDeltas = new Map<string, number>();
-      for (const b of batch) {
-        for (const [itemId, qty] of b.stockDeltas) {
-          if (b.invoiceRow.type === "sale") {
-            saleDeltas.set(itemId, (saleDeltas.get(itemId) || 0) + qty);
-          } else {
-            purchaseDeltas.set(itemId, (purchaseDeltas.get(itemId) || 0) + qty);
-          }
-        }
-      }
-
-      // Apply sale stock adjustments (subtract)
-      for (const [itemId, totalQty] of saleDeltas) {
-        await tx.update(items).set({
-          stockQuantity: sql`${items.stockQuantity}::numeric - ${totalQty.toFixed(3)}::numeric`,
-          updatedAt: new Date(),
-        }).where(eq(items.id, itemId));
-      }
-
-      // Apply purchase stock adjustments (add)
-      for (const [itemId, totalQty] of purchaseDeltas) {
-        await tx.update(items).set({
-          stockQuantity: sql`${items.stockQuantity}::numeric + ${totalQty.toFixed(3)}::numeric`,
-          updatedAt: new Date(),
-        }).where(eq(items.id, itemId));
-      }
+      // Stock effect of the whole batch, per warehouse.
+      await postNewDocumentsStock(tx, {
+        businessId,
+        documentIds: batch.map((b) => b.invoiceId),
+        actorUserId: user.id,
+      });
 
       // Bulk insert auto-payment records if any
       const autoPayments = batch.map(b => b.autoPaymentRow).filter(Boolean);

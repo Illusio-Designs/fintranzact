@@ -1,0 +1,58 @@
+# Fintranzact — the marketing pages are public; everything else is the app,
+# which needs a sign-in, or a private link (shared documents, invitations).
+# Keep in step with src/routes: src/__tests__/seo.test.ts fails when an app
+# route is added without a Disallow line here.
+
+User-agent: *
+Allow: /
+
+# Private links
+Disallow: /i/
+Disallow: /invite/
+Disallow: /auth/
+
+# Sign-in and set-up
+Disallow: /login
+Disallow: /onboarding
+Disallow: /business/
+
+# The app
+Disallow: /automated-invoices
+Disallow: /bank-reconciliation
+Disallow: /bill-of-materials
+Disallow: /cash-and-bank
+Disallow: /credit-notes
+Disallow: /delivery-challans
+Disallow: /e-invoicing
+Disallow: /eway-bills
+Disallow: /expenses
+Disallow: /goods-receipt-notes
+Disallow: /gst
+Disallow: /gstr2b
+Disallow: /invoices
+Disallow: /itc
+Disallow: /items
+Disallow: /journal-entries
+Disallow: /manufacturing
+Disallow: /parties
+Disallow: /partner-portal
+Disallow: /payments
+Disallow: /physical-stock
+Disallow: /platform
+Disallow: /pos
+Disallow: /price-levels
+Disallow: /proforma-invoices
+Disallow: /purchase-orders
+Disallow: /quotations
+Disallow: /reports
+Disallow: /sales-orders
+Disallow: /sales-returns
+Disallow: /settings
+Disallow: /shipments
+Disallow: /stock-adjustments
+Disallow: /stock-groups
+Disallow: /stock-transfers
+Disallow: /store-orders
+Disallow: /warehouses
+
+Sitemap: https://fintranzact-web.vercel.app/sitemap.xml
