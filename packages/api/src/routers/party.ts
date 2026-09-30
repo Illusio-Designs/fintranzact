@@ -21,6 +21,7 @@ import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPClient, IRPError, type IRPGstinDetails } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
+import { notOrderDocument } from "../lib/order-fulfilment.js";
 
 const IRP_TAXPAYER_TYPES: Record<string, PartyGstType> = {
   REG: "regular",
@@ -136,6 +137,7 @@ export const partyRouter = router({
         .from(invoices)
         .where(and(
           eq(invoices.businessId, ctx.businessId),
+          notOrderDocument(),
           sql`${invoices.status} NOT IN ('cancelled')`,
           isNull(invoices.deletedAt),
         ))
@@ -212,6 +214,7 @@ export const partyRouter = router({
         .where(and(
           eq(invoices.partyId, input.id),
           eq(invoices.businessId, ctx.businessId),
+          notOrderDocument(),
           sql`${invoices.status} NOT IN ('cancelled')`,
           isNull(invoices.deletedAt),
         ));

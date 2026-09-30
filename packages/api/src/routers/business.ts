@@ -789,6 +789,9 @@ export const businessRouter = router({
         credit_note: "next_credit_note_number",
         delivery_challan: "next_delivery_challan_number",
         proforma: "next_proforma_number",
+        purchase_order: "next_purchase_order_number",
+        sales_order: "next_sales_order_number",
+        goods_receipt_note: "next_goods_receipt_note_number",
       };
 
       const column = counterColumns[input.documentType];

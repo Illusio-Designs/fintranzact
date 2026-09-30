@@ -21,7 +21,7 @@ const dateString = z.string().datetime();
 /** Movements that take goods out to a customer (not transfers or corrections). */
 const OUTWARD_TYPES = ["SALE", "DELIVERY_CHALLAN", "PURCHASE_RETURN"];
 /** Movements that bring goods in and so start their age. */
-const INWARD_TYPES = ["PURCHASE", "OPENING", "UNPLACED_STOCK", "SALES_RETURN", "ADJUSTMENT"];
+const INWARD_TYPES = ["PURCHASE", "GOODS_RECEIPT_NOTE", "OPENING", "UNPLACED_STOCK", "SALES_RETURN", "ADJUSTMENT"];
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -66,6 +66,7 @@ function referenceLabel(row: { reference_type: string; movement_type: string; do
     const kind: Record<string, string> = {
       invoice: row.movement_type.startsWith("PURCHASE") ? "Purchase" : "Sale",
       delivery_challan: "Delivery challan",
+      goods_receipt_note: "Goods receipt note",
       sales_return: "Sales return",
       purchase_return: "Purchase return",
     };

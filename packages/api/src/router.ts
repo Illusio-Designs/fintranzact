@@ -17,8 +17,12 @@ import {
   proformaRouter,
   salesReturnRouter,
   purchaseReturnRouter,
+  purchaseOrderRouter,
+  salesOrderRouter,
+  goodsReceiptNoteRouter,
   documentRouter,
 } from "./routers/document.js";
+import { ordersRouter } from "./routers/orders.js";
 import { bankAccountRouter } from "./routers/bankAccount.js";
 import { importRouter } from "./routers/import/index.js";
 import { storeRouter } from "./routers/store.js";
@@ -64,6 +68,10 @@ export const appRouter = router({
   proforma: proformaRouter,
   salesReturn: salesReturnRouter,
   purchaseReturn: purchaseReturnRouter,
+  purchaseOrder: purchaseOrderRouter,
+  salesOrder: salesOrderRouter,
+  goodsReceiptNote: goodsReceiptNoteRouter,
+  orders: ordersRouter,
   document: documentRouter,
   bankAccount: bankAccountRouter,
   import: importRouter,

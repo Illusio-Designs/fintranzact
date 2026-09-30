@@ -33,7 +33,7 @@ export const paymentModeEnum = pgEnum("payment_mode", ["cash", "bank", "upi", "c
 export const unitEnum = pgEnum("unit", ["pcs", "kg", "g", "l", "ml", "m", "cm", "ft", "in", "box", "dozen", "pair", "set", "pkt", "bun", "pouch", "jar", "btl", "bag", "ton", "pack", "pet", "person", "other"]);
 export const itemTypeEnum = pgEnum("item_type", ["product", "service"]);
 export const itemModeEnum = pgEnum("item_mode", ["simple", "alt_units", "variants"]);
-export const documentTypeEnum = pgEnum("document_type", ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return"]);
+export const documentTypeEnum = pgEnum("document_type", ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return", "purchase_order", "sales_order", "goods_receipt_note"]);
 export const bankAccountTypeEnum = pgEnum("bank_account_type", ["savings", "current", "cash", "upi", "credit_card", "payment_gateway"]);
 export const bankTransactionTypeEnum = pgEnum("bank_transaction_type", ["deposit", "withdrawal", "transfer"]);
 export const gstRegistrationTypeEnum = pgEnum("gst_registration_type", ["regular", "composition", "unregistered"]);
@@ -126,6 +126,12 @@ export const businesses = pgTable("businesses", {
   nextPurchaseReturnNumber: integer("next_purchase_return_number").default(1).notNull(),
   deliveryChallanPrefix: text("delivery_challan_prefix").default("DC").notNull(),
   nextDeliveryChallanNumber: integer("next_delivery_challan_number").default(1).notNull(),
+  purchaseOrderPrefix: text("purchase_order_prefix").default("PO").notNull(),
+  nextPurchaseOrderNumber: integer("next_purchase_order_number").default(1).notNull(),
+  salesOrderPrefix: text("sales_order_prefix").default("SO").notNull(),
+  nextSalesOrderNumber: integer("next_sales_order_number").default(1).notNull(),
+  goodsReceiptNotePrefix: text("goods_receipt_note_prefix").default("GRN").notNull(),
+  nextGoodsReceiptNoteNumber: integer("next_goods_receipt_note_number").default(1).notNull(),
   // Counter behind auto-generated internal barcodes (see generateInternalBarcode).
   // Follows the same allocate-then-increment pattern as the document numbers
   // above so two concurrent purchases cannot mint the same code.
@@ -616,6 +622,10 @@ export const invoices = pgTable("invoices", {
   // Where the goods physically came in (purchase) or went out (sale). Null
   // means the business's default warehouse for that operation.
   warehouseId: uuid("warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
+  // Orders, GRNs and delivery challans track what is still pending against
+  // them (ordered minus what later documents took up). Set when the user
+  // short-closes one: nothing more is expected, whatever is still pending.
+  closedAt: timestamp("closed_at", { withTimezone: true }),
   // No FK to users — plain UUID, users live in control schema (different DB in cloud mode)
   createdByUserId: uuid("created_by_user_id"),
   createdByName: text("created_by_name"), // denormalized for display + imports

@@ -227,7 +227,8 @@ type StockDocument = {
 /**
  * Which way a document moves stock: -1 out, +1 in, 0 not at all.
  * Credit and debit notes are financial only — goods coming back or going back
- * are recorded with a sales return or purchase return instead.
+ * are recorded with a sales return or purchase return instead. Orders move
+ * nothing; a goods receipt note brings purchased goods in ahead of the bill.
  */
 export function documentStockDirection(doc: StockDocument): -1 | 0 | 1 {
   switch (doc.documentType) {
@@ -237,6 +238,7 @@ export function documentStockDirection(doc: StockDocument): -1 | 0 | 1 {
     case "purchase_return":
       return -1;
     case "sales_return":
+    case "goods_receipt_note":
       return 1;
     default:
       return 0;
@@ -251,6 +253,8 @@ function documentOperation(doc: StockDocument): InventoryOperation {
       return "purchase_return";
     case "invoice":
       return doc.type === "sale" ? "sale" : "purchase";
+    case "goods_receipt_note":
+      return "purchase";
     default:
       return "sale";
   }
@@ -468,12 +472,13 @@ export async function postNewDocumentsStock(
   const direction = sql`CASE
       WHEN i.document_type = 'invoice' THEN CASE WHEN i.type = 'sale' THEN -1 ELSE 1 END
       WHEN i.document_type IN ('delivery_challan', 'purchase_return') THEN -1
-      WHEN i.document_type = 'sales_return' THEN 1
+      WHEN i.document_type IN ('sales_return', 'goods_receipt_note') THEN 1
       ELSE 0 END`;
   const warehouse = sql`CASE
       WHEN i.document_type = 'sales_return' THEN ${salesReturnWh}::uuid
       WHEN i.document_type = 'purchase_return' THEN ${purchaseReturnWh}::uuid
       WHEN i.document_type = 'invoice' AND i.type = 'purchase' THEN ${purchaseWh}::uuid
+      WHEN i.document_type = 'goods_receipt_note' THEN ${purchaseWh}::uuid
       ELSE ${saleWh}::uuid END`;
 
   const totals = (await tx.execute(sql`

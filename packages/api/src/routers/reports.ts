@@ -34,6 +34,7 @@ import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { generateTallyXml } from "../lib/tally-xml-export.js";
 import { valueStock, type ValuationMethod } from "../lib/stock-valuation.js";
+import { notOrderDocument } from "../lib/order-fulfilment.js";
 
 // ── Shared variance helper ────────────────────────────────────────
 function computeVariance(current: string, previous: string): { variance: string; variancePercent: string } {
@@ -516,6 +517,7 @@ export const reportsRouter = router({
             and(
               eq(invoices.businessId, ctx.businessId),
               eq(invoices.type, "sale"),
+              notOrderDocument(),
               ...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }),
               isNull(invoices.deletedAt),
             ),
@@ -593,6 +595,7 @@ export const reportsRouter = router({
             and(
               eq(invoices.businessId, ctx.businessId),
               eq(invoices.type, "purchase"),
+              notOrderDocument(),
               ...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }),
               isNull(invoices.deletedAt),
             ),

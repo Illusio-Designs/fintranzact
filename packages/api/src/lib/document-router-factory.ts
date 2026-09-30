@@ -5,6 +5,7 @@ import {
   invoices,
   invoiceItems,
   items,
+  itemVariants,
   businesses,
   parties,
 } from "@fintranzact/db";
@@ -20,6 +21,7 @@ import { logAudit } from "./audit.js";
 import { resolveInvoiceWarehouse, syncDocumentStock } from "./inventory-service.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
+import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 
@@ -32,6 +34,8 @@ export interface DocumentRouterConfig {
   allowedStatuses: string[];
   /** whether creating this document type affects item stock */
   stockEffect: "none" | "decrement" | "increment";
+  /** Sale or purchase regardless of what the client sends (orders, GRNs). */
+  fixedType?: "sale" | "purchase";
 }
 
 // Map document type to prefix/counter columns on businesses table
@@ -71,7 +75,49 @@ const bizColumns = {
     counter: businesses.nextPurchaseReturnNumber,
     setCounter: (n: number) => ({ nextPurchaseReturnNumber: n }),
   },
+  purchase_order: {
+    prefix: businesses.purchaseOrderPrefix,
+    counter: businesses.nextPurchaseOrderNumber,
+    setCounter: (n: number) => ({ nextPurchaseOrderNumber: n }),
+  },
+  sales_order: {
+    prefix: businesses.salesOrderPrefix,
+    counter: businesses.nextSalesOrderNumber,
+    setCounter: (n: number) => ({ nextSalesOrderNumber: n }),
+  },
+  goods_receipt_note: {
+    prefix: businesses.goodsReceiptNotePrefix,
+    counter: businesses.nextGoodsReceiptNoteNumber,
+    setCounter: (n: number) => ({ nextGoodsReceiptNoteNumber: n }),
+  },
 } as const;
+
+/**
+ * A challan or GRN whose goods were billed on an invoice made from it can't be
+ * cancelled or deleted while that invoice stands: the invoice was saved
+ * without moving stock, so taking the challan's movement back would lose it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function assertNotBilled(tx: any, businessId: string, doc: { id: string; documentType: string }) {
+  if (doc.documentType !== "goods_receipt_note" && doc.documentType !== "delivery_challan") return;
+  const [bill] = await tx
+    .select({ invoiceNumber: invoices.invoiceNumber })
+    .from(invoices)
+    .where(and(
+      eq(invoices.businessId, businessId),
+      eq(invoices.referenceDocumentId, doc.id),
+      eq(invoices.documentType, "invoice"),
+      isNull(invoices.deletedAt),
+      sql`${invoices.status} <> 'cancelled'`,
+    ))
+    .limit(1);
+  if (bill) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Invoice ${bill.invoiceNumber} was billed from this document. Cancel or delete that invoice first.`,
+    });
+  }
+}
 
 type KnownDocType = keyof typeof bizColumns;
 
@@ -90,6 +136,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           toDate: z.string().datetime().optional(),
           search: z.string().optional(),
           itemId: z.string().uuid().optional(),
+          /** Orders, challans and GRNs: filter by how much is still pending. */
+          fulfilment: z.enum(["open", "partial", "fulfilled", "closed"]).optional(),
           ...paginationSchema.shape,
         })
       )
@@ -128,22 +176,48 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           );
         }
 
-        const [data, [{ count }]] = await Promise.all([
+        const tracked = isPendingTracked(docType);
+        const columns = {
+          id: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+          type: invoices.type,
+          status: invoices.status,
+          documentType: invoices.documentType,
+          invoiceDate: invoices.invoiceDate,
+          dueDate: invoices.dueDate,
+          totalAmount: invoices.totalAmount,
+          amountPaid: invoices.amountPaid,
+          referenceDocumentId: invoices.referenceDocumentId,
+          closedAt: invoices.closedAt,
+          deletedAt: invoices.deletedAt,
+          partyName: parties.name,
+          partyId: parties.id,
+        };
+
+        // The fulfilment filter is worked out from the documents' lines, so
+        // find the matching ids first and page over those.
+        if (tracked && input.fulfilment) {
+          const candidates = await ctx.db
+            .select({ id: invoices.id, status: invoices.status, deletedAt: invoices.deletedAt, closedAt: invoices.closedAt })
+            .from(invoices)
+            .where(and(...conditions))
+            .orderBy(desc(invoices.createdAt));
+          const statuses = await fulfilmentStatuses(ctx.db, ctx.businessId, candidates);
+          const matching = candidates.filter((c) => statuses.get(c.id) === input.fulfilment).map((c) => c.id);
+          const pageIds = matching.slice(offset, offset + input.limit);
+          const rows = pageIds.length === 0 ? [] : await ctx.db
+            .select(columns)
+            .from(invoices)
+            .innerJoin(parties, eq(parties.id, invoices.partyId))
+            .where(and(eq(invoices.businessId, ctx.businessId), inArray(invoices.id, pageIds)))
+            .orderBy(desc(invoices.createdAt));
+          const data = rows.map(({ deletedAt: _deletedAt, ...r }) => ({ ...r, fulfilmentStatus: statuses.get(r.id) ?? null }));
+          return { data, total: matching.length, page: input.page, limit: input.limit };
+        }
+
+        const [rows, [{ count }]] = await Promise.all([
           ctx.db
-            .select({
-              id: invoices.id,
-              invoiceNumber: invoices.invoiceNumber,
-              type: invoices.type,
-              status: invoices.status,
-              documentType: invoices.documentType,
-              invoiceDate: invoices.invoiceDate,
-              dueDate: invoices.dueDate,
-              totalAmount: invoices.totalAmount,
-              amountPaid: invoices.amountPaid,
-              referenceDocumentId: invoices.referenceDocumentId,
-              partyName: parties.name,
-              partyId: parties.id,
-            })
+            .select(columns)
             .from(invoices)
             .innerJoin(parties, eq(parties.id, invoices.partyId))
             .where(and(...conditions))
@@ -155,6 +229,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             .from(invoices)
             .where(and(...conditions)),
         ]);
+
+        const statuses = tracked ? await fulfilmentStatuses(ctx.db, ctx.businessId, rows) : null;
+        const data = rows.map(({ deletedAt: _deletedAt, ...r }) => ({ ...r, fulfilmentStatus: statuses?.get(r.id) ?? null }));
 
         return { data, total: count, page: input.page, limit: input.limit };
       }),
@@ -218,6 +295,20 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             }
           }
 
+          // Security: validate variantIds belong to items in this business.
+          const variantIds = input.lineItems
+            .map((li) => li.variantId)
+            .filter((id): id is string => Boolean(id));
+          if (variantIds.length > 0) {
+            const ownedVariants = await tx.select({ id: itemVariants.id })
+              .from(itemVariants)
+              .innerJoin(items, eq(items.id, itemVariants.itemId))
+              .where(and(inArray(itemVariants.id, variantIds), eq(items.businessId, ctx.businessId)));
+            if (ownedVariants.length !== new Set(variantIds).size) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: "One or more variants do not belong to this business" });
+            }
+          }
+
           // Determine prefix/counter columns for this document type
           const cols = bizColumns[docType as KnownDocType];
 
@@ -278,7 +369,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               totalAmount: calc.total,
               sortOrder: idx,
               selectedUnit: li.selectedUnit || null,
-              conversionFactor: li.conversionFactor || "1",
+              conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
+              variantId: li.variantId || null,
             };
           });
 
@@ -354,7 +446,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             .values({
               businessId: ctx.businessId,
               partyId: input.partyId,
-              type: input.type,
+              type: config.fixedType ?? input.type,
               // ALWAYS use config.documentType — never trust client-supplied value
               documentType: docType as DocumentType,
               invoiceNumber: docNumber,
@@ -455,6 +547,10 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
             .limit(1);
 
+          if (input.status === "cancelled" && before && before.status !== "cancelled") {
+            await assertNotBilled(tx, ctx.businessId, { id: input.id, documentType: docType });
+          }
+
           const [updated] = await tx
             .update(invoices)
             .set({
@@ -524,6 +620,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
           // Already soft-deleted — return early
           if (doc.deletedAt) return { success: true, invoiceNumber: doc.invoiceNumber, deleted: false };
+
+          await assertNotBilled(tx, ctx.businessId, doc);
 
           // Soft delete: set deletedAt + cancel the document
           await tx

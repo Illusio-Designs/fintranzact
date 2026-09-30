@@ -707,7 +707,7 @@ export const itemRouter = router({
             eq(invoiceItems.itemId, input.id),
             eq(invoices.businessId, ctx.businessId),
             sql`${invoices.status} NOT IN ('draft', 'cancelled')`,
-            sql`${invoices.documentType} NOT IN ('credit_note', 'quotation', 'proforma', 'debit_note')`,
+            sql`${invoices.documentType} NOT IN ('credit_note', 'quotation', 'proforma', 'debit_note', 'sales_order', 'purchase_order')`,
           )
         )
         .orderBy(desc(invoices.invoiceDate))

@@ -6,6 +6,7 @@ import { requireCan } from "../lib/permissions.js";
 import { generateGSTR1, generateGSTR3B, gstr1ToCSV, gstr1ToPortalJson } from "../lib/gst-reports.js";
 import { generateGSTR9, gstr9ToPortalJson } from "../lib/gstr9-generator.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
+import { notOrderDocument } from "../lib/order-fulfilment.js";
 
 export const gstRouter = router({
   // Reports are available for ALL businesses — GST-registered get GST terminology,
@@ -126,6 +127,7 @@ export const gstRouter = router({
         .where(and(
           eq(invoices.businessId, ctx.businessId),
           eq(invoices.type, "sale"),
+          notOrderDocument(),
           sql`${invoices.status} != 'cancelled'`,
           ...buildBusinessDateFilter(invoices, { from: quarterStart, to: quarterEnd }),
         ));

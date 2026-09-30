@@ -55,7 +55,7 @@ const paymentMode = z.enum(["cash", "bank", "upi", "cheque", "other", "credit_ca
 const unit = z.enum(["pcs", "kg", "g", "l", "ml", "m", "cm", "ft", "in", "box", "dozen", "pair", "set", "pkt", "bun", "pouch", "jar", "btl", "bag", "ton", "pack", "pet", "person", "other"]);
 const itemType = z.enum(["product", "service"]);
 const itemMode = z.enum(["simple", "alt_units", "variants"]);
-const documentType = z.enum(["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return"]);
+const documentType = z.enum(["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return", "purchase_order", "sales_order", "goods_receipt_note"]);
 const bankAccountType = z.enum(["savings", "current", "cash", "upi", "credit_card", "payment_gateway"]);
 const bankTransactionType = z.enum(["deposit", "withdrawal", "transfer"]);
 const gstRegistrationType = z.enum(["regular", "composition", "unregistered"]);
@@ -112,6 +112,13 @@ export const businessRowSchema = z.object({
   nextPurchaseReturnNumber: z.number().int(),
   deliveryChallanPrefix: z.string(),
   nextDeliveryChallanNumber: z.number().int(),
+  // Added with purchase/sales orders and GRNs; older exports lack them.
+  purchaseOrderPrefix: z.string().optional(),
+  nextPurchaseOrderNumber: z.number().int().optional(),
+  salesOrderPrefix: z.string().optional(),
+  nextSalesOrderNumber: z.number().int().optional(),
+  goodsReceiptNotePrefix: z.string().optional(),
+  nextGoodsReceiptNoteNumber: z.number().int().optional(),
   proformaPrefix: z.string(),
   nextProformaNumber: z.number().int(),
   financialYearStart: z.number().int(),

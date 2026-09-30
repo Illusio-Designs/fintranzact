@@ -185,6 +185,9 @@ export const createBusinessSchema = z.object({
   debitNotePrefix: z.string().min(1).max(10).default("DN"),
   salesReturnPrefix: z.string().min(1).max(10).default("SR"),
   purchaseReturnPrefix: z.string().min(1).max(10).default("PR"),
+  purchaseOrderPrefix: z.string().min(1).max(10).default("PO"),
+  salesOrderPrefix: z.string().min(1).max(10).default("SO"),
+  goodsReceiptNotePrefix: z.string().min(1).max(10).default("GRN"),
   // Drives HSN digit enforcement and the e-invoicing threshold.
   annualTurnover: z.number().nonnegative().nullable().optional(),
   defaultRoundOff: z.boolean().default(true),
@@ -209,7 +212,7 @@ export const uploadBusinessLogoSchema = z.object({
 export const uploadBusinessSignatureSchema = uploadBusinessLogoSchema;
 
 export const updateSequenceNumberSchema = z.object({
-  documentType: z.enum(["invoice", "payment", "quotation", "credit_note", "delivery_challan", "proforma"]),
+  documentType: z.enum(["invoice", "payment", "quotation", "credit_note", "delivery_challan", "proforma", "purchase_order", "sales_order", "goods_receipt_note"]),
   newNumber: z.number().int().min(1),
 });
 
@@ -218,7 +221,7 @@ export const updateSequenceNumberSchema = z.object({
 export const itemTypes = ["product", "service"] as const;
 export type ItemType = (typeof itemTypes)[number];
 
-export const documentTypes = ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return"] as const;
+export const documentTypes = ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return", "purchase_order", "sales_order", "goods_receipt_note"] as const;
 export type DocumentType = (typeof documentTypes)[number];
 
 export const bankAccountTypes = ["savings", "current", "cash", "upi", "credit_card", "payment_gateway"] as const;
@@ -541,9 +544,36 @@ export const bankTransferSchema = z.object({
   transactionDate: z.string().datetime().optional(),
 });
 
+/**
+ * Documents that track what is still pending against them: orders until they
+ * are delivered or received, and challans/GRNs until they are billed.
+ */
+export const pendingTrackedDocumentTypes = ["sales_order", "purchase_order", "goods_receipt_note", "delivery_challan"] as const;
+export type PendingTrackedDocumentType = (typeof pendingTrackedDocumentTypes)[number];
+
 export const convertDocumentSchema = z.object({
   sourceDocumentId: z.string().uuid(),
   targetDocumentType: z.enum(documentTypes),
+  /**
+   * Quantities to take from the source, per source line, in the line's unit.
+   * Only for sources that track pending quantities (orders, challans, GRNs).
+   * Omitted, every line's pending quantity is taken; lines left out are not
+   * converted.
+   */
+  lines: z.array(z.object({
+    sourceLineId: z.string().uuid(),
+    quantity: z.string().regex(/^\d+(\.\d{1,3})?$/),
+  })).optional(),
+  /** Warehouse for the new document when it moves stock. Default warehouse when omitted. */
+  warehouseId: z.string().uuid().nullish(),
+});
+
+export const pendingOrdersInputSchema = z.object({
+  documentType: z.enum(pendingTrackedDocumentTypes),
+  partyId: z.string().uuid().optional(),
+  itemId: z.string().uuid().optional(),
+  /** Only lines whose due date has passed. */
+  overdueOnly: z.boolean().default(false),
 });
 
 // ── Reports ────────────────────────────────────────────────────
