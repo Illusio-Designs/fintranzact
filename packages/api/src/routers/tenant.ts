@@ -7,8 +7,11 @@ import { createHash } from "node:crypto";
 import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
 import { invalidateSessionCache, getSessionIdFromRequest } from "../context.js";
 import { emailService } from "../lib/email.js";
-import { isSelfServePlan } from "../lib/plan-catalog.js";
+import { isPaidPlan, isSelfServePlan } from "../lib/plan-catalog.js";
 import { effectiveOwnerPlan, enforceTeamMemberLimit, enforceOrgCreationLimit, getLimits } from "../lib/plan-limits.js";
+
+/** Tenant roles that manage billing, and so may change the organisation's plan. */
+const PLAN_MANAGER_ROLES: string[] = ["owner", "superadmin"];
 
 function hashInvitationToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -53,11 +56,33 @@ export const tenantRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "No organization selected to update." });
       }
 
+      // The plan is billing: only the organisation's owner may change it.
+      const [membership] = await controlDb.select({ role: tenantMembers.role })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, ctx.user.id)))
+        .limit(1);
+      if (!membership || !PLAN_MANAGER_ROLES.includes(membership.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the organization owner can change the plan." });
+      }
+
+      const [current] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+      if (!current) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No organization selected to update." });
+      }
+      // Keeping the current plan changes nothing.
+      if (current.plan === input.plan) {
+        return { plan: current.plan };
+      }
+
       // Owners can pick a free (₹0) plan that is on offer themselves; paid
       // plans are set up by a platform admin (platform.setPlan).
-      const [current] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-      if (current?.plan !== input.plan && !(await isSelfServePlan(input.plan))) {
+      if (!(await isSelfServePlan(input.plan))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Paid plans are set up by the Fintranzact team. Contact us to upgrade." });
+      }
+      // A paid plan was set up by a platform admin; choosing a free plan here
+      // must never switch it off.
+      if (await isPaidPlan(current.plan)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Your plan is managed by the Fintranzact team. Contact us to change it." });
       }
 
       await controlDb.update(tenants)

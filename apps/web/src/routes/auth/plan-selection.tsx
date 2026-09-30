@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { usePlans, type PlanId } from "@/lib/plans";
+import { planSelectionMode } from "@/lib/plan-selection";
 
 import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/Icon";
@@ -37,7 +38,22 @@ function PlanSelectionPage() {
   // the Fintranzact team (platform admin), so they start on Forever Free.
   const selectedIsFree = selectedPlan === "forever_free" || selectedPlan === "free";
 
+  // Only the owner changes the plan, and an organisation already on a paid
+  // plan keeps it — picking here must never reset it to Forever Free.
+  const { data: session, isLoading: sessionLoading } = trpc.auth.me.useQuery();
+  const { data: tenantList, isLoading: tenantListLoading } = trpc.tenant.list.useQuery();
+  const currentTenant = tenantList?.find((tenant) => tenant.tenantId === session?.tenantId);
+  const mode = planSelectionMode(currentTenant);
+  const keepsCurrentPlan = mode !== "choose";
+  const currentPlanLabel = currentTenant
+    ? (plans.find((plan) => plan.id === currentTenant.tenantPlan)?.name ?? currentTenant.tenantPlan)
+    : null;
+
   function handleContinue() {
+    if (keepsCurrentPlan) {
+      navigate({ to: "/" });
+      return;
+    }
     updatePlanMutation.mutate({ plan: selectedIsFree ? selectedPlan : "forever_free" });
   }
 
@@ -112,7 +128,13 @@ function PlanSelectionPage() {
               </ul>
             </div>
 
-            {!selectedIsFree && (
+            {keepsCurrentPlan ? (
+              <p className="mt-4 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm text-brand-700 dark:border-brand-900 dark:bg-brand-950 dark:text-brand-300">
+                {mode === "managed"
+                  ? `Your organization is on ${currentPlanLabel}, set up by the Fintranzact team. Contact us to change it.`
+                  : `Your organization is on ${currentPlanLabel}. Only the organization owner can change the plan.`}
+              </p>
+            ) : !selectedIsFree && (
               <p className="mt-4 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm text-brand-700 dark:border-brand-900 dark:bg-brand-950 dark:text-brand-300">
                 {selectedLabel} is set up by the Fintranzact team. You'll start on Forever Free, and we'll switch you
                 to {selectedLabel} once it's arranged.
@@ -122,12 +144,12 @@ function PlanSelectionPage() {
             <button
               type="button"
               onClick={handleContinue}
-              disabled={updatePlanMutation.isPending}
+              disabled={updatePlanMutation.isPending || sessionLoading || tenantListLoading}
               className="btn-primary mt-6 w-full py-3"
             >
               {updatePlanMutation.isPending
                 ? "Saving plan..."
-                : selectedIsFree
+                : keepsCurrentPlan || selectedIsFree
                   ? "Continue to dashboard"
                   : "Start free for now"}
             </button>

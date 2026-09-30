@@ -216,7 +216,7 @@ describe("editing plans", () => {
   });
 
   it("lets owners pick a plan themselves only while it is free and offered", async () => {
-    await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "pro" });
+    await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "free" });
     await callerFor(admin).platform.savePlan({
       plan: "forever_free",
       settings: { ...proSettings(), name: "Forever Free", monthlyPriceInr: 99, limits: limitsToStored(PLAN_DEFAULTS.forever_free.limits) },

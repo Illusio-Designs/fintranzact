@@ -81,3 +81,13 @@ export async function isSelfServePlan(plan: string): Promise<boolean> {
   const found = (await catalog()).get(plan as PlanId);
   return !!found && found.visible && found.monthlyPriceInr === 0;
 }
+
+/**
+ * Whether a plan is paid: it has a price, or a custom one set up by the
+ * Fintranzact team. Hidden ₹0 plans (legacy Free) are not paid. Unknown plans
+ * count as paid so a self-serve choice never overwrites them.
+ */
+export async function isPaidPlan(plan: string): Promise<boolean> {
+  const found = (await catalog()).get(plan as PlanId);
+  return !found || found.monthlyPriceInr !== 0;
+}
