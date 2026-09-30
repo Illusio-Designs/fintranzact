@@ -1,0 +1,100 @@
+---
+title: Orders & GRN
+description: Track sales orders and purchase orders until they're delivered or received, record goods receipt notes (GRN), convert pending quantities in full or in part, and short-close what won't come.
+sidebar:
+  order: 11
+---
+
+import ForBusiness from '../../../components/ForBusiness.astro';
+
+Orders let you record what a customer has asked for, or what you've asked a supplier for, and then track how much is still to be delivered or received. **Goods receipt notes (GRN)** and **delivery challans** record goods physically arriving or leaving, before the bill.
+
+All four are in the sidebar under **Vouchers**: **Sales Orders**, **Delivery Challans**, **Purchase Orders** and **Goods Receipts (GRN)**.
+
+## The documents
+
+| Document | Use it when | Moves stock? | Converts into |
+|---|---|---|---|
+| **Sales order** | A customer places an order | No | Delivery challan or invoice |
+| **Delivery challan** | Goods leave before (or without) an invoice | Yes, **out** | Invoice |
+| **Purchase order** | You place an order with a supplier | No | Goods receipt note or purchase invoice |
+| **Goods receipt note (GRN)** | Goods arrive before the supplier's bill | Yes, **in** | Purchase invoice |
+
+Orders never move stock. Stock moves when the goods do: on the challan or GRN, or on the invoice if you bill an order directly. An invoice made from a challan or GRN does **not** move stock again, since the goods have already moved. See [How Stock Moves](/inventory/how-stock-moves).
+
+On orders, the date field is called **Delivery by**.
+
+## Sales order to delivery
+
+1. Create the order: **Sales Orders → + New Sales Order**. Add the customer, the items and quantities, and a **Delivery by** date.
+2. When goods are ready, open the order and click **Convert**, or use **Convert** on the row.
+3. In the **Convert pending items** dialog, choose **Delivery Challan** or **Invoice**.
+4. The table shows each line's **Ordered**, **Done** and **Pending** quantity. **Take now** starts at the full pending quantity. Lower it to deliver only part of a line.
+5. If you have more than one warehouse, choose **Dispatch from** (leave blank to use the default).
+6. Click **Create …**.
+
+Later, convert the delivery challan into an invoice the same way.
+
+Purchase orders work the same way: **Purchase Orders → + New Purchase Order**, then **Convert** into a **Goods Receipt Note** (choose **Receive into**) or straight into a **Purchase Invoice**. A GRN is later converted into the purchase invoice when the bill arrives.
+
+:::tip[Always bill through Convert]
+Make the invoice from the challan or GRN using **Convert**, rather than typing a new invoice. Converting links the two, so stock isn't counted twice and the challan or GRN shows as billed.
+:::
+
+**Conversion rules:**
+
+- You can't take more than what's pending ("Only N of … is pending").
+- A cancelled document can't be converted.
+- A closed (short-closed) document can't be converted until you reopen it.
+- Documents made from an order, or from a GRN, are dated **today**. An invoice made from a delivery challan keeps the challan's date.
+- A partial conversion doesn't carry over the source's additional charges or round-off. A full conversion does.
+
+## Tracking what's pending
+
+Pending quantities are always worked out live from the documents made from an order:
+
+- **Pending = ordered − delivered (or received, or billed)**, line by line, in base units.
+- Only documents made using **Convert** count. An invoice typed separately doesn't reduce what's pending on the order.
+- If a document made from the order is cancelled or deleted, its quantity goes back to pending.
+
+Each list shows a **Pending** column with a fulfilment badge, and has status tabs:
+
+| Page | Tabs |
+|---|---|
+| Sales Orders | All, Open, Partly delivered, Fulfilled, Closed, Cancelled |
+| Purchase Orders | All, Open, Partly received, Received, Closed, Cancelled |
+| Goods Receipt Notes | All, Not billed, Partly billed, Billed, Closed, Cancelled |
+| Delivery Challans | All, Draft, Sent, Cancelled, plus a **Sales / Purchases** switch |
+
+Open a document to see its **Fulfilment** section: a table of **Item**, **Ordered**, **Done** and **Pending**, and the list of documents made from it. Documents made from another one show a **Made from …** link back to the source.
+
+## Short-close and reopen
+
+Sometimes the rest of an order will never come: the customer cancelled part of it, or the supplier can't supply the balance. Open the document and click **Short-close**. Nothing more is expected against it, whatever is still pending. It moves to the **Closed** tab and drops out of the [pending reports](/inventory/reports#orders-reports).
+
+Changed your mind? Open it and click **Reopen**. It goes back to open or partly done, and can be converted again.
+
+A cancelled document can't be closed.
+
+## Deleting, and billed challans and GRNs
+
+- **Delete** is available on draft documents, for owners and admins.
+- A delivery challan or GRN that has been billed can't be cancelled or deleted while its invoice stands: "Invoice … was billed from this document. Cancel or delete that invoice first." Delete the invoice first. That also puts the quantity back to pending on the challan or GRN.
+
+<ForBusiness>
+Open **Reports → Orders → Pending Sales Orders** every morning, and tick **Past delivery date only** to see which customers are waiting on overdue deliveries. Do the same with **Pending GRNs** at month end, so no supplier bill is missed before you file GST returns.
+</ForBusiness>
+
+## Frequently asked questions
+
+**Does a sales order reduce my stock?**
+No. Stock goes out when you create the delivery challan, or the invoice if you bill the order directly.
+
+**Can I deliver an order in several lots?**
+Yes. Convert it as many times as needed, lowering **Take now** each time. The order shows **Partly delivered** until everything is done.
+
+**I made an invoice separately instead of converting the challan. What now?**
+The goods were taken out of stock twice, and the challan still shows as not billed. Delete the separate invoice and convert the challan instead.
+
+**What's the difference between Short-close and Cancel?**
+Short-close keeps everything already delivered or received and just stops expecting the rest. The web app doesn't have a Cancel button on these documents; drafts can be deleted.

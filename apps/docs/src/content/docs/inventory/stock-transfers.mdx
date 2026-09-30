@@ -1,0 +1,76 @@
+---
+title: Stock Transfers
+description: Move stock from one warehouse to another in Fintranzact. Transfers are instant, need enough stock at the source, and are kept in a journal.
+sidebar:
+  order: 2
+---
+
+A **stock transfer** moves goods from one of your [warehouses](/inventory/warehouses) to another, for example from the godown to the shop. Stock leaves the source warehouse and arrives in the destination at the same moment. Your total stock doesn't change, so a transfer has no effect on your accounts.
+
+Open it from the sidebar: **Inventory → Stock Transfers**.
+
+## Making a transfer
+
+1. Click **+ New transfer**.
+2. Choose the **From** warehouse and the **To** warehouse. Only active warehouses are listed, and each list hides the warehouse picked in the other. Your sales default warehouse is marked **(default)**.
+3. Check the **Date**. It defaults to today and can be changed.
+4. Add the items to move:
+   - Search for an item. Once **From** is chosen, each result shows how much is available there ("12 pcs here").
+   - Enter the **Quantity** to move. The line shows how much is "in this warehouse".
+   - Click **Add item** for more lines, or the delete icon to remove one.
+5. Click **Transfer N items**.
+
+You see "Stock transferred" when it's done. The button stays disabled until both warehouses and at least one item with a quantity are filled in. Lines left without an item or with a zero quantity are ignored.
+
+Items with variants appear once per variant (for example "T-shirt — Red / M"), so you transfer each variant separately. Service items can't be transferred, since they don't carry stock.
+
+## Rules
+
+| Rule | What you see if it's broken |
+|---|---|
+| From and To must be different | "Pick two different warehouses" |
+| Both warehouses must be active | "That warehouse is inactive" |
+| Quantities must be more than zero, with up to 3 decimals | "Transfer quantities must be more than zero" |
+| 1 to 100 lines per transfer | — |
+| The source must have enough stock | "Not enough stock to transfer: N available" |
+
+The stock check always applies, whatever your **Selling more than you have** setting is. You can't transfer stock you don't have. If the same item is on two lines, both lines are added together for the check.
+
+A transfer is all-or-nothing: if any line fails, nothing moves.
+
+## Who can transfer
+
+- **Owners and admins** can transfer between any warehouses.
+- **Seller managers** can transfer when they have the **Transfer** permission on *both* warehouses. Set this on each warehouse's **Access** tab (see [Warehouses](/inventory/warehouses#access)).
+- **Sellers and accountants** can't make transfers.
+
+## The transfer journal
+
+The Stock Transfers page lists every transfer, newest first, 25 per page:
+
+| Column | Shows |
+|---|---|
+| **Date** | Transfer date |
+| **From → To** | The two warehouses |
+| **Items** | Each item and quantity moved, with a count when there are several |
+| **Quantity** | Total quantity moved |
+
+Transfers also appear in the [Stock Ledger](/inventory/reports#stock-ledger) as "Transfer in" and "Transfer out".
+
+:::caution[Transfers can't be edited or deleted]
+Once saved, a transfer is permanent. There's no edit, cancel or delete. If you moved the wrong item or quantity, make a second transfer in the opposite direction.
+:::
+
+## Frequently asked questions
+
+**Is there an "in transit" stage, where goods have left one godown but not reached the other?**
+No. A transfer is instant: the stock is out of the source and in the destination as soon as you save. If you want to see goods on the road, create a warehouse with the type **In transit** and make two transfers (godown → in transit when the truck leaves, in transit → shop when it arrives).
+
+**Do transfers have a number, like TR-001?**
+No. Transfers are identified by their date, warehouses and items in the journal.
+
+**Can I transfer to a specific rack or bin?**
+No. Transfers work at warehouse level. [Locations](/inventory/warehouses#locations) are labels only for now.
+
+**Does a transfer affect my P&L or GST?**
+No. It only changes where your stock is. Your total quantity and stock value stay the same.

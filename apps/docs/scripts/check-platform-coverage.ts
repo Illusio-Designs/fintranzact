@@ -11,7 +11,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from "fs";
-import { join, relative, dirname } from "path";
+import { join, relative, dirname, sep } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = typeof import.meta.dirname === "string"
@@ -47,11 +47,31 @@ const WEB_ONLY: Set<string> = new Set([
 
   // Keyboard shortcuts (desktop-only by definition)
   "reference/keyboard-shortcuts.mdx",
+
+  // Backup & restore (web settings only)
+  "settings/backup-restore.mdx",
+
+  // Inventory (web-only today)
+  "inventory/warehouses.mdx",
+  "inventory/stock-transfers.mdx",
+  "inventory/stock-adjustments.mdx",
+  "inventory/physical-stock.mdx",
+  "inventory/barcodes.mdx",
+  "inventory/how-stock-moves.mdx",
+  "inventory/stock-valuation.mdx",
+  "inventory/stock-groups.mdx",
+  "inventory/price-levels.mdx",
+  "inventory/manufacturing.mdx",
+  "inventory/orders-and-grn.mdx",
+  "inventory/reports.mdx",
 ]);
 
 const SHARED: Set<string> = new Set([
   // Landing / splash page
   "index.mdx",
+
+  // General FAQ
+  "faq.mdx",
 
   // Overview pages that are mostly conceptual
   "getting-started/index.mdx",
@@ -95,7 +115,7 @@ const issues: Issue[] = [];
 const allFiles = walk(DOCS_ROOT);
 
 for (const file of allFiles) {
-  const rel = relative(DOCS_ROOT, file);
+  const rel = relative(DOCS_ROOT, file).split(sep).join("/");
   const content = readFileSync(file, "utf-8");
 
   const hasDesktop =
@@ -157,12 +177,12 @@ for (const file of allFiles) {
 // ── Report ───────────────────────────────────────────────────────
 
 const dualPlatformTotal = allFiles.filter((f) => {
-  const rel = relative(DOCS_ROOT, f);
+  const rel = relative(DOCS_ROOT, f).split(sep).join("/");
   return !WEB_ONLY.has(rel) && !SHARED.has(rel);
 }).length;
 
 const covered = allFiles.filter((f) => {
-  const rel = relative(DOCS_ROOT, f);
+  const rel = relative(DOCS_ROOT, f).split(sep).join("/");
   if (WEB_ONLY.has(rel) || SHARED.has(rel)) return false;
   const content = readFileSync(f, "utf-8");
   return (
