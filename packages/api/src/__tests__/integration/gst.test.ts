@@ -20,10 +20,13 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
+import { invoiceItems } from "@fintranzact/db";
 import {
   createTestWorld,
   createParty,
   createBusiness,
+  createItem,
   createInvoiceWithItems,
   type TestWorld,
   type TestBusiness,
@@ -783,6 +786,53 @@ describe("Composition scheme enforcement", () => {
     expect(typeof cmp08.quarterStart).toBe("string");
     expect(typeof cmp08.quarterEnd).toBe("string");
   });
+
+  // Regression: CMP-08 summed every sale-side document except orders, so
+  // quotations, proformas, challans and credit notes counted as sales, and
+  // deleted invoices were included.
+  it("CMP-08 counts only sale invoices, net of credit and debit notes, excluding deleted and cancelled", async () => {
+    const tenantDb = getTenantTestDb();
+    const party = await createParty(tenantDb, compositionBusiness.id, {
+      name: "Q4 Buyer",
+      type: "customer",
+      gstin: null,
+      city: "Nashik",
+      state: "Maharashtra",
+      stateCode: "27",
+      openingBalance: "0.00",
+    });
+    const date = new Date(2025, 10, 12, 12, 0, 0); // 12 Nov 2025 — calendar Q4
+    const doc = (unitPrice: string, overrides: Parameters<typeof createInvoiceWithItems>[4]) =>
+      createInvoiceWithItems(
+        tenantDb, compositionBusiness.id, party.id,
+        [{ description: "Groceries", quantity: "1", unitPrice, taxPercent: "0" }],
+        { type: "sale", status: "sent", invoiceDate: date, ...overrides },
+      );
+
+    await doc("10000.00", { documentType: "invoice" });                 // +10,000
+    await doc("2000.00", { documentType: "debit_note" });               //  +2,000
+    await doc("1500.00", { documentType: "credit_note" });              //  -1,500
+    await doc("500.00", { documentType: "sales_return" });              //    -500
+    // None of these are outward supplies
+    await doc("40000.00", { documentType: "quotation" });
+    await doc("40000.00", { documentType: "proforma" });
+    await doc("40000.00", { documentType: "delivery_challan" });
+    await doc("40000.00", { documentType: "sales_order" });
+    await doc("40000.00", { documentType: "invoice", deletedAt: new Date() });
+    await doc("40000.00", { documentType: "invoice", status: "cancelled" });
+
+    const caller = createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: compositionBusiness.id,
+    });
+    const cmp08 = await caller.gst.cmp08({ year: 2025, quarter: 4 });
+
+    expect(cmp08.taxableValue).toBe("10000.00");
+    expect(cmp08.taxPayable).toBe("100.00");
+  });
 });
 
 // ── GSTR-3B Table 4 — ITC must not be double counted ─────────────────────────
@@ -1105,5 +1155,171 @@ describe("GSTR-1 portal JSON — b2cl and b2cs follow the GSTN schema", () => {
       { sply_ty: "INTER", pos: "29", rt: 18, txval: 10000, iamt: 1800, camt: 0, samt: 0 },
       { sply_ty: "INTRA", pos: "27", rt: 18, txval: 10000, iamt: 0, camt: 900, samt: 900 },
     ]);
+  });
+});
+
+// ── GSTR-1 follow-ups: unregistered notes, HSN rt/uqc, IST dates ─────────────
+
+describe("GSTR-1 — notes to unregistered customers, HSN rate rows and IST dates", () => {
+  const FU_YEAR = 2026;
+  const FU_MONTH = 7; // July 2026
+  // Entered in India as 16 Jul — stored as 2026-07-15T18:30:00Z
+  const date = new Date("2026-07-16T00:00:00+05:30");
+
+  beforeAll(async () => {
+    const tenantDb = getTenantTestDb();
+    const biz = world.business1.id;
+    const sale = { type: "sale" as const, status: "sent" as const, invoiceDate: date };
+
+    const kaConsumer = await createParty(tenantDb, biz, {
+      name: "Mysuru Walk-in", type: "customer", gstin: null,
+      city: "Mysuru", state: "Karnataka", stateCode: "29", openingBalance: "0.00",
+    });
+    const mhConsumer = await createParty(tenantDb, biz, {
+      name: "Thane Walk-in", type: "customer", gstin: null,
+      city: "Thane", state: "Maharashtra", stateCode: "27", openingBalance: "0.00",
+    });
+
+    // B2CL invoice (inter-state, above the limit) and a small credit note on it
+    const { invoice: b2cl } = await createInvoiceWithItems(
+      tenantDb, biz, kaConsumer.id,
+      [{ description: "Sofa", quantity: "1", unitPrice: "300000.00", taxPercent: "18.00" }],
+      { ...sale, documentType: "invoice", invoiceNumber: "FU-B2CL-1" },
+    );
+    await createInvoiceWithItems(
+      tenantDb, biz, kaConsumer.id,
+      [{ description: "Sofa discount", quantity: "1", unitPrice: "10000.00", taxPercent: "18.00" }],
+      { ...sale, documentType: "credit_note", invoiceNumber: "FU-CN-L", referenceDocumentId: b2cl.id },
+    );
+
+    // B2CS invoices, a credit note to the intra-state buyer and a debit note
+    // to the inter-state one — both netted into the B2CS rows
+    await createInvoiceWithItems(
+      tenantDb, biz, kaConsumer.id,
+      [{ description: "Lamp", quantity: "1", unitPrice: "10000.00", taxPercent: "18.00" }],
+      { ...sale, documentType: "invoice", invoiceNumber: "FU-B2CS-KA" },
+    );
+    await createInvoiceWithItems(
+      tenantDb, biz, mhConsumer.id,
+      [{ description: "Chair", quantity: "1", unitPrice: "20000.00", taxPercent: "12.00" }],
+      { ...sale, documentType: "invoice", invoiceNumber: "FU-B2CS-MH" },
+    );
+    await createInvoiceWithItems(
+      tenantDb, biz, mhConsumer.id,
+      [{ description: "Chair return", quantity: "1", unitPrice: "5000.00", taxPercent: "12.00" }],
+      { ...sale, documentType: "credit_note", invoiceNumber: "FU-CN-S" },
+    );
+    await createInvoiceWithItems(
+      tenantDb, biz, kaConsumer.id,
+      [{ description: "Delivery charge", quantity: "1", unitPrice: "1000.00", taxPercent: "18.00" }],
+      { ...sale, documentType: "debit_note", invoiceNumber: "FU-DN-S" },
+    );
+
+    // Registered customer: B2B invoice with HSN-coded items and a CDNR note
+    const rice = await createItem(tenantDb, biz, { name: "Rice", hsn: "1006", unit: "kg" });
+    const cups = await createItem(tenantDb, biz, { name: "Cups", hsn: "3924", unit: "pcs" });
+    const support = await createItem(tenantDb, biz, {
+      name: "IT support", hsn: "998314", unit: "other", itemType: "service",
+    });
+    const { lineItems } = await createInvoiceWithItems(
+      tenantDb, biz, world.party1.id,
+      [
+        { itemId: rice.id, description: "Rice", quantity: "10", unitPrice: "100.00", taxPercent: "5.00" },
+        { itemId: rice.id, description: "Rice (premium)", quantity: "2.5", unitPrice: "200.00", taxPercent: "12.00" },
+        { itemId: cups.id, description: "Cups", quantity: "3", unitPrice: "120.00", taxPercent: "18.00" },
+        { itemId: support.id, description: "IT support", quantity: "4", unitPrice: "500.00", taxPercent: "18.00" },
+      ],
+      { ...sale, documentType: "invoice", invoiceNumber: "FU-B2B-1" },
+    );
+    // The cups were billed in boxes of 12
+    await tenantDb.update(invoiceItems)
+      .set({ selectedUnit: "box", conversionFactor: "12" })
+      .where(eq(invoiceItems.id, lineItems[2]!.id));
+    await createInvoiceWithItems(
+      tenantDb, biz, world.party1.id,
+      [{ description: "Rate difference", quantity: "1", unitPrice: "100.00", taxPercent: "5.00" }],
+      { ...sale, documentType: "credit_note", invoiceNumber: "FU-CN-R" },
+    );
+  });
+
+  function caller() {
+    return createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: world.business1.id,
+    });
+  }
+
+  it("classifies each note: registered → cdnr, B2C Large supply → cdnur, other unregistered → b2cs", async () => {
+    const report = await caller().gst.gstr1({ year: FU_YEAR, month: FU_MONTH });
+    const sections = Object.fromEntries(
+      [...report.creditNotes, ...report.debitNotes].map((n) => [n.invoiceNumber, n.section]),
+    );
+    expect(sections).toEqual({ "FU-CN-L": "cdnur", "FU-CN-S": "b2cs", "FU-DN-S": "b2cs", "FU-CN-R": "cdnr" });
+  });
+
+  it("puts only registered customers' notes in cdnr, never with an empty ctin", async () => {
+    const { json } = await caller().gst.gstr1Json({ year: FU_YEAR, month: FU_MONTH });
+    type CDNR = { ctin: string; nt: Array<{ nt_num: string }> };
+    const cdnr = json.cdnr as CDNR[];
+    expect(cdnr.every((c) => c.ctin.length === 15)).toBe(true);
+    expect(cdnr.flatMap((c) => c.nt.map((n) => n.nt_num))).toEqual(["FU-CN-R"]);
+  });
+
+  it("reports a note on a B2C Large invoice in cdnur", async () => {
+    const { json } = await caller().gst.gstr1Json({ year: FU_YEAR, month: FU_MONTH });
+    expect(json.cdnur).toEqual([
+      {
+        typ: "B2CL",
+        ntty: "C",
+        nt_num: "FU-CN-L",
+        nt_dt: "16-07-2026",
+        val: 11800,
+        pos: "29",
+        itms: [{ num: 1, itm_det: { txval: 10000, rt: 18, iamt: 1800, csamt: 0 } }],
+      },
+    ]);
+  });
+
+  it("nets the other unregistered notes into b2cs", async () => {
+    const { json } = await caller().gst.gstr1Json({ year: FU_YEAR, month: FU_MONTH });
+    type B2CS = { sply_ty: string; pos: string; rt: number; txval: number; iamt: number; camt: number; samt: number };
+    const rows = (json.b2cs as B2CS[])
+      .map(({ sply_ty, pos, rt, txval, iamt, camt, samt }) => ({ sply_ty, pos, rt, txval, iamt, camt, samt }))
+      .sort((a, b) => a.rt - b.rt);
+    expect(rows).toEqual([
+      // 20,000 sale less the 5,000 credit note
+      { sply_ty: "INTRA", pos: "27", rt: 12, txval: 15000, iamt: 0, camt: 900, samt: 900 },
+      // 10,000 sale plus the 1,000 debit note
+      { sply_ty: "INTER", pos: "29", rt: 18, txval: 11000, iamt: 1980, camt: 0, samt: 0 },
+    ]);
+  });
+
+  it("emits one HSN row per HSN and rate with rt and the item's UQC", async () => {
+    const { json } = await caller().gst.gstr1Json({ year: FU_YEAR, month: FU_MONTH });
+    type HSN = { hsn_sc: string; rt: number; uqc: string; qty: number; txval: number };
+    const rows = (json.hsn as { data: HSN[] }).data
+      .filter((r) => r.hsn_sc !== "0000")
+      .map(({ hsn_sc, rt, uqc, qty, txval }) => ({ hsn_sc, rt, uqc, qty, txval }))
+      .sort((a, b) => a.hsn_sc.localeCompare(b.hsn_sc) || a.rt - b.rt);
+    expect(rows).toEqual([
+      { hsn_sc: "1006", rt: 5, uqc: "KGS", qty: 10, txval: 1000 },
+      { hsn_sc: "1006", rt: 12, uqc: "KGS", qty: 2.5, txval: 500 },
+      // 3 boxes of 12, reported in the item's base unit
+      { hsn_sc: "3924", rt: 18, uqc: "PCS", qty: 36, txval: 360 },
+      // Services carry UQC NA and no quantity
+      { hsn_sc: "998314", rt: 18, uqc: "NA", qty: 0, txval: 2000 },
+    ]);
+  });
+
+  it("dates invoices by the calendar day in India, not UTC", async () => {
+    const { json } = await caller().gst.gstr1Json({ year: FU_YEAR, month: FU_MONTH });
+    type B2B = { inv: Array<{ inum: string; idt: string }> };
+    const inv = (json.b2b as B2B[]).flatMap((b) => b.inv).find((i) => i.inum === "FU-B2B-1");
+    expect(inv?.idt).toBe("16-07-2026");
+    type CDNR = { nt: Array<{ nt_dt: string }> };
+    expect((json.cdnr as CDNR[])[0].nt[0].nt_dt).toBe("16-07-2026");
   });
 });

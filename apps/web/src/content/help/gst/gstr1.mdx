@@ -66,7 +66,9 @@ Shown aggregated by state:
 
 All other sales to unregistered parties — intra-state sales of any amount, and small inter-state sales under ₹2,50,000.
 
-Shown aggregated by tax rate and place of supply: intra-state sales form one row per rate, and inter-state sales one row per rate for each destination state (the portal needs them apart):
+Shown aggregated by tax rate and place of supply: intra-state sales form one row per rate, and inter-state sales one row per rate for each destination state (the portal needs them apart).
+
+Credit and debit notes issued to these customers are netted into the same rows, as the portal expects: a credit note reduces its rate's row and a debit note adds to it. (Notes to unregistered customers on a B2CL invoice are reported separately — see [Credit Notes](#credit-notes).)
 
 | Column | Meaning |
 |---|---|
@@ -78,13 +80,15 @@ Shown aggregated by tax rate and place of supply: intra-state sales form one row
 
 ### HSN Summary
 
-This section aggregates total quantity sold and value, broken down by HSN code. The GST portal requires HSN-wise data for businesses above certain turnover thresholds.
+This section aggregates total quantity sold and value, broken down by HSN code, tax rate and unit. The GST portal requires HSN-wise data for businesses above certain turnover thresholds, with one row for each rate an HSN was sold at.
 
 | Column | Meaning |
 |---|---|
 | HSN | HSN or SAC code |
 | Description | Item description for context (from the first item with this HSN) |
-| Quantity | Total quantity sold |
+| Rate | GST rate of the sales in this row |
+| Unit (UQC) | The item's unit as a GST unit code — `KGS` for kg, `PCS` for pieces, `DOZ` for dozen, and so on. Units without a GST code of their own (feet, inches) are reported as `OTH`. Services (SAC codes starting with `99`) are reported as `NA`. |
+| Quantity | Total quantity sold, in the item's base unit. A line billed in an alternate unit (say, a box of 12) is converted through its conversion factor. Services show 0. |
 | Taxable Value | Total taxable value |
 | CGST / SGST / IGST | Tax amounts |
 | Total Value | Total including tax |
@@ -108,9 +112,21 @@ Sale credit notes and sales returns issued to customers during the period. Credi
 | Taxable Amount | Taxable value (subtotal) |
 | Tax Amount | Total GST on the credit note |
 
+Where each note goes in the portal GSTR-1 JSON depends on the customer:
+
+| Customer | Portal table |
+|---|---|
+| Has a GSTIN | **CDNR**, grouped by the customer's GSTIN |
+| No GSTIN, and the note is on a B2CL invoice (inter-state, invoice total above ₹2,50,000; for a note not linked to an invoice, the note's own total is used) | **CDNUR**, type `B2CL` |
+| Any other customer without a GSTIN | Netted into the **B2CS** rows (see above) |
+
 ### Debit Notes
 
-Sale debit notes issued to customers during the period. Same structure as credit notes. A supplier's debit note adds to ITC in GSTR-3B instead.
+Sale debit notes issued to customers during the period. Same structure as credit notes, and they go to the same portal tables. A supplier's debit note adds to ITC in GSTR-3B instead.
+
+### Dates
+
+Dates in the portal JSON are the invoice's calendar date in India (`DD-MM-YYYY`), whatever the server's timezone. An invoice dated 25 August 2025 is reported as `25-08-2025`, never as the previous day.
 
 ## Summary totals
 

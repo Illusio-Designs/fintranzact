@@ -1573,7 +1573,38 @@ describe("gstr1ToPortalJson — HSN section", () => {
     expect(entry.qty).toBe(10);
     expect(entry.txval).toBe(100000);
     expect(entry.num).toBe(1);
-    expect(entry.uqc).toBe("NOS"); // default UQC when unit not known
+    expect(entry.uqc).toBe("OTH"); // GSTN's "others" code when the unit is not known
+  });
+
+  // Regression: HSN rows had no `rt` and every row's uqc was NOS.
+  it("emits rt and the row's UQC on each HSN row", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({
+        hsn: [
+          { hsn: "1006", description: "Rice", rate: 5, uqc: "KGS", quantity: 12.5, taxableValue: 1000, cgst: 25, sgst: 25, igst: 0, totalValue: 1050 },
+          { hsn: "1006", description: "Rice", rate: 12, uqc: "KGS", quantity: 2, taxableValue: 500, cgst: 30, sgst: 30, igst: 0, totalValue: 560 },
+          { hsn: "998314", description: "IT support", rate: 18, uqc: "NA", quantity: 0, taxableValue: 2000, cgst: 0, sgst: 0, igst: 360, totalValue: 2360 },
+        ],
+      }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    type HSNEntry = { hsn_sc: string; rt: number; uqc: string; qty: number };
+    const rows = (json.hsn as { data: HSNEntry[] }).data.map(({ hsn_sc, rt, uqc, qty }) => ({ hsn_sc, rt, uqc, qty }));
+    expect(rows).toEqual([
+      { hsn_sc: "1006", rt: 5, uqc: "KGS", qty: 12.5 },
+      { hsn_sc: "1006", rt: 12, uqc: "KGS", qty: 2 },
+      { hsn_sc: "998314", rt: 18, uqc: "NA", qty: 0 },
+    ]);
+  });
+
+  it("derives rt from the tax when a row carries no rate", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({
+        hsn: [{ hsn: "8471", description: "Computers", quantity: 1, taxableValue: 100000, cgst: 9000, sgst: 9000, igst: 0, totalValue: 118000 }],
+      }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    expect((json.hsn as { data: Array<{ rt: number }> }).data[0].rt).toBe(18);
   });
 
   it("assigns sequential num starting from 1", () => {
@@ -1616,6 +1647,85 @@ describe("gstr1ToPortalJson — HSN section", () => {
     expect(entry.samt).toBe(9000);
     expect(entry.iamt).toBe(0);
     expect(entry.csamt).toBe(0);
+  });
+});
+
+describe("gstr1ToPortalJson — notes to unregistered customers", () => {
+  const note = (over: Partial<GSTR1Report["creditNotes"][0]> = {}): GSTR1Report["creditNotes"][0] => ({
+    invoiceNumber: "CN-UR-1",
+    invoiceDate: "2025-08-20T06:30:00.000Z",
+    partyName: "Walk-in",
+    partyGstin: "",
+    totalAmount: "11800.00",
+    taxableAmount: "10000.00",
+    taxAmount: "1800.00",
+    igst: 1800,
+    rateItems: [{ rate: 18, taxableValue: 10000, cgst: 0, sgst: 0, igst: 1800 }],
+    ...over,
+  });
+
+  // Regression: notes to customers without a GSTIN were put in cdnr with an
+  // empty ctin, which the portal rejects.
+  it("puts a note on a B2C Large supply in cdnur with typ B2CL, not in cdnr", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({ creditNotes: [note({ section: "cdnur", pos: "29" })] }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    expect(json.cdnr).toEqual([]);
+    expect(json.cdnur).toEqual([
+      {
+        typ: "B2CL",
+        ntty: "C",
+        nt_num: "CN-UR-1",
+        nt_dt: "20-08-2025",
+        val: 11800,
+        pos: "29",
+        itms: [{ num: 1, itm_det: { txval: 10000, rt: 18, iamt: 1800, csamt: 0 } }],
+      },
+    ]);
+  });
+
+  it("leaves a note netted into B2CS out of both cdnr and cdnur", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({ debitNotes: [note({ invoiceNumber: "DN-UR-1", section: "b2cs", pos: "27" })] }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    expect(json.cdnr).toEqual([]);
+    expect(json.cdnur).toEqual([]);
+  });
+
+  it("never emits a cdnr entry with an empty ctin, even for a report without sections", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({ creditNotes: [note()] }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    expect(json.cdnr).toEqual([]);
+  });
+});
+
+describe("gstr1ToPortalJson — dates are the calendar day in India", () => {
+  // Regression: dates were cut from the UTC ISO string, so an invoice dated
+  // 25 Aug in India (stored as 2025-08-24T18:30:00Z) showed as 24-08-2025.
+  it("formats b2b idt and cdnr nt_dt in Asia/Kolkata", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({
+        b2b: [{
+          partyGstin: "29XYZAB5678G1Z9", partyName: "Buyer", invoiceNumber: "INV-IST",
+          invoiceDate: "2025-08-24T18:30:00.000Z", invoiceType: "Regular",
+          taxableValue: 1000, cgst: 0, sgst: 0, igst: 180, totalInvoiceValue: 1180,
+        }],
+        creditNotes: [{
+          invoiceNumber: "CN-IST", invoiceDate: "2025-08-31T18:30:00.000Z",
+          partyName: "Buyer", partyGstin: "29XYZAB5678G1Z9",
+          totalAmount: "118.00", taxableAmount: "100.00", taxAmount: "18.00",
+        }],
+      }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    type B2B = { inv: Array<{ idt: string }> };
+    type CDNR = { nt: Array<{ nt_dt: string }> };
+    expect((json.b2b as B2B[])[0].inv[0].idt).toBe("25-08-2025");
+    expect((json.cdnr as CDNR[])[0].nt[0].nt_dt).toBe("01-09-2025");
   });
 });
 

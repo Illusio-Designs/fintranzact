@@ -108,8 +108,8 @@ See [Party Ledger](/help/parties/party-ledger).
 ## Effect on GST reports
 
 - Every non-cancelled credit note dated in the month is listed in the **Credit Notes** section of [GSTR-1](/help/gst/gstr1), together with sales returns. If the note was issued from an invoice, the original invoice number is shown.
-- The credit notes are **listed**, not netted: GSTR-1's B2B/B2C totals and the GSTR-3B outward supplies figures come from invoices only.
-- Debit notes (and purchase returns) are listed in the **Debit Notes** section.
+- In the portal GSTR-1 JSON, notes to customers with a GSTIN go to **CDNR**; notes to unregistered customers go to **CDNUR** when they amend a B2CL invoice, and are otherwise netted into the **B2CS** rows. See [GSTR-1 credit notes](/help/gst/gstr1#credit-notes).
+- Sale debit notes are listed in the **Debit Notes** section and follow the same rules.
 
 <ForCA>
 :::caution[Check before filing]

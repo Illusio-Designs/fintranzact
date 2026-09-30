@@ -38,6 +38,7 @@ import {
   truncateAllTables,
   closeTestDb,
 } from "../helpers/test-db.js";
+import { mapInvoiceToEWB } from "../../lib/invoice-to-ewb.js";
 
 // ── Mock the EWB client ───────────────────────────────────────────────────────
 
@@ -743,5 +744,47 @@ describe("getByInvoice", () => {
 
     const detail = await caller.ewayBill.getByInvoice({ invoiceId: invoice.id });
     expect(detail).toBeNull();
+  });
+});
+
+// ── 7. Payload dates ──────────────────────────────────────────────────────────
+
+describe("mapInvoiceToEWB — document date", () => {
+  // Regression: docDate was read with the server's local-time getters. On a
+  // UTC server an invoice dated 3 Apr (entered in India, so stored as
+  // 2026-04-02T18:30Z) went to NIC as 02/04/2026.
+  it("sends the invoice date as the calendar day in India", () => {
+    const payload = mapInvoiceToEWB(
+      {
+        id: "inv-1",
+        invoiceNumber: "INV-EWB-IST",
+        invoiceDate: new Date("2026-04-03T00:00:00+05:30"),
+        type: "sale",
+        documentType: "invoice",
+        subtotal: "70000.00",
+        taxAmount: "12600.00",
+        totalAmount: "82600.00",
+        isReverseCharge: false,
+        partyGstin: "29AABCG0000R1ZM",
+        partyName: "Buyer",
+        partyAddress: "1 MG Road",
+        partyCity: "Bengaluru",
+        partyPincode: "560001",
+        partyStateCode: "29",
+        businessGstin: "27AABCU9603R1ZM",
+        businessName: "Seller",
+        businessAddress: "2 FC Road",
+        businessCity: "Pune",
+        businessPincode: "411001",
+        businessStateCode: "27",
+      },
+      [{
+        itemName: "Steel", description: null, quantity: "700", unitPrice: "100.00",
+        taxPercent: "18", taxAmount: "12600.00", totalAmount: "82600.00",
+        hsn: "7306", unit: "kg", itemType: "product",
+      }],
+      { vehicleNumber: "MH12AB1234", vehicleType: "regular", transportMode: "road", distance: 800 },
+    );
+    expect(payload.docDate).toBe("03/04/2026");
   });
 });

@@ -16,6 +16,7 @@
 
 import type { GenerateEWBPayload, EWBItemPayload } from "./ewb-client.js";
 import { transportModeCode } from "./ewb-client.js";
+import { formatIstDate } from "./ist-date.js";
 
 // ── Input types ───────────────────────────────────────────────────────────────
 
@@ -84,13 +85,11 @@ function docTypeCode(documentType: string, _invoiceType: "sale" | "purchase"): "
 }
 
 /**
- * Format Date to DD/MM/YYYY as required by NIC.
+ * Format Date to DD/MM/YYYY as required by NIC — the calendar day in India,
+ * whatever the server's timezone (midnight IST is the previous day in UTC).
  */
 function formatNICDate(date: Date): string {
-  const d = String(date.getDate()).padStart(2, "0");
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
+  return formatIstDate(date, "/");
 }
 
 /**

@@ -1,7 +1,9 @@
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { invoices, invoiceItems, parties, businesses, items as itemsTable } from "@fintranzact/db";
 import type { TenantDatabase } from "@fintranzact/db";
+import { gstUqcForUnit } from "@fintranzact/shared";
 import { buildBusinessDateFilter } from "./business-date.js";
+import { formatIstDate } from "./ist-date.js";
 
 // Split a tax amount exactly in half using paise-level integer arithmetic
 // to avoid floating-point rounding errors on odd amounts (e.g. ₹1.01).
@@ -53,6 +55,15 @@ function groupLinesByRate(
     }));
 }
 
+export type GstNoteSection = "cdnr" | "cdnur" | "b2cs";
+
+/**
+ * Invoice value above which an inter-state supply to an unregistered person
+ * is reported invoice-wise in B2CL (and its credit/debit notes in CDNUR)
+ * rather than netted in B2CS.
+ */
+export const B2CL_INVOICE_THRESHOLD = 250000;
+
 export interface GSTR1Report {
   period: string; // e.g. "Apr 2025"
   businessGstin: string;
@@ -71,7 +82,7 @@ export interface GSTR1Report {
     totalInvoiceValue: number;
     rateItems?: GstRateLine[];
   }>;
-  // B2C Large - to unregistered (> ₹2.5L inter-state)
+  // B2C Large - to unregistered (> B2CL_INVOICE_THRESHOLD inter-state)
   b2cLarge: Array<{
     state: string;
     taxableValue: number;
@@ -98,10 +109,15 @@ export interface GSTR1Report {
     supplyType?: "INTRA" | "INTER";
     pos?: string; // 2-digit state code of the place of supply
   }>;
-  // HSN summary
+  // HSN summary — one row per HSN, tax rate and unit (UQC), as the portal
+  // requires `rt` and `uqc` on each row
   hsn: Array<{
     hsn: string;
     description: string;
+    /** GST rate (%) of the lines in this row */
+    rate?: number;
+    /** GST Unit Quantity Code; "NA" for services (SAC codes) */
+    uqc?: string;
     quantity: number;
     taxableValue: number;
     cgst: number;
@@ -123,6 +139,15 @@ export interface GSTR1Report {
     sgst?: number;
     igst?: number;
     rateItems?: GstRateLine[];
+    /**
+     * Where the note goes in the GSTR-1 JSON: `cdnr` for a registered
+     * customer, `cdnur` for an unregistered customer on a B2C Large
+     * (inter-state, above the B2CL limit) supply, and `b2cs` for any other
+     * unregistered customer — those are netted into the b2cSmall rows.
+     */
+    section?: GstNoteSection;
+    /** 2-digit state code of the place of supply */
+    pos?: string;
   }>;
   // Debit Notes issued to customers (additional charges, increasing output tax)
   debitNotes: Array<{
@@ -138,6 +163,15 @@ export interface GSTR1Report {
     sgst?: number;
     igst?: number;
     rateItems?: GstRateLine[];
+    /**
+     * Where the note goes in the GSTR-1 JSON: `cdnr` for a registered
+     * customer, `cdnur` for an unregistered customer on a B2C Large
+     * (inter-state, above the B2CL limit) supply, and `b2cs` for any other
+     * unregistered customer — those are netted into the b2cSmall rows.
+     */
+    section?: GstNoteSection;
+    /** 2-digit state code of the place of supply */
+    pos?: string;
   }>;
   // Totals
   totalTaxableValue: number;
@@ -250,11 +284,12 @@ export async function generateGSTR1(
     if (li.itemId) allItemIds.add(li.itemId);
   }
   const itemHsnData = allItemIds.size > 0
-    ? await db.select({ id: itemsTable.id, hsn: itemsTable.hsn })
+    ? await db.select({ id: itemsTable.id, hsn: itemsTable.hsn, unit: itemsTable.unit })
         .from(itemsTable)
         .where(inArray(itemsTable.id, [...allItemIds]))
     : [];
   const itemHsnLookup = new Map(itemHsnData.map((i) => [i.id, i.hsn || "0000"]));
+  const itemUnitLookup = new Map(itemHsnData.map((i) => [i.id, i.unit]));
 
   // Fix 3: State comparison using stateCode (preferred) with text fallback
   const isSameState = (partyState: string | null, partyStateCode: string | null) => {
@@ -271,6 +306,30 @@ export async function generateGSTR1(
   const b2cSmallMap = new Map<string, GSTR1Report["b2cSmall"][0]>();
   const bizStateCode = biz?.stateCode || biz?.gstin?.substring(0, 2) || undefined;
   const hsnSummaryMap = new Map<string, GSTR1Report["hsn"][0]>();
+
+  /** Place of supply for a B2C supply: our state when intra-state, else the buyer's. */
+  const b2cPos = (sameState: boolean, partyState: string | null, partyStateCode: string | null) =>
+    sameState
+      ? bizStateCode
+      : partyStateCode || (partyState ? stateNameToCode(partyState) : undefined);
+
+  /** Add (sign 1) or take away (sign -1) one rate's value in the B2CS rows. */
+  const addToB2cs = (
+    rate: number, taxable: number, tax: number,
+    sameState: boolean, pos: string | undefined, sign: 1 | -1,
+  ) => {
+    const supplyType = sameState ? "INTRA" : "INTER";
+    const key = `${rate}|${supplyType}|${pos ?? ""}`;
+    const existing = b2cSmallMap.get(key) || { taxRate: rate, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, supplyType, pos };
+    existing.taxableValue += sign * taxable;
+    if (sameState) {
+      existing.cgst += sign * splitTax(tax);
+      existing.sgst += sign * splitTax(tax);
+    } else {
+      existing.igst += sign * tax;
+    }
+    b2cSmallMap.set(key, existing);
+  };
 
   let totalTaxableValue = 0;
   let totalCgst = 0;
@@ -308,8 +367,8 @@ export async function generateGSTR1(
         totalInvoiceValue: total,
         rateItems: groupLinesByRate(lineItems, !!sameState),
       });
-    } else if (!sameState && total > 250000) {
-      // B2C Large: inter-state > ₹2.5L
+    } else if (!sameState && total > B2CL_INVOICE_THRESHOLD) {
+      // B2C Large: inter-state above the B2CL limit
       const state = inv.partyState || "Unknown";
       const existing = b2cLargeMap.get(state) || { state, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, invoices: [] };
       existing.taxableValue += taxable;
@@ -326,42 +385,41 @@ export async function generateGSTR1(
     } else {
       // B2C Small: one row per rate and place of supply (the portal needs
       // intra- and inter-state supplies apart, each with its state)
-      const supplyType = sameState ? "INTRA" : "INTER";
-      const pos = sameState
-        ? bizStateCode
-        : inv.partyStateCode || (inv.partyState ? stateNameToCode(inv.partyState) : undefined);
+      const pos = b2cPos(!!sameState, inv.partyState, inv.partyStateCode);
       for (const li of lineItems) {
-        const rate = parseFloat(li.taxPercent);
-        const key = `${rate}|${supplyType}|${pos ?? ""}`;
-        const existing = b2cSmallMap.get(key) || { taxRate: rate, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, supplyType, pos };
-        const itemTaxable = parseFloat(li.totalAmount) - parseFloat(li.taxAmount);
         const itemTax = parseFloat(li.taxAmount);
-        existing.taxableValue += itemTaxable;
-        if (sameState) {
-          existing.cgst += splitTax(itemTax);
-          existing.sgst += splitTax(itemTax);
-        } else {
-          existing.igst += itemTax;
-        }
-        b2cSmallMap.set(key, existing);
+        addToB2cs(parseFloat(li.taxPercent), parseFloat(li.totalAmount) - itemTax, itemTax, !!sameState, pos, 1);
       }
     }
 
-    // Fix 1: HSN summary using actual HSN from items table
+    // HSN summary: one row per HSN, rate and UQC, using the item's HSN and
+    // unit from the items table
     for (const li of lineItems) {
       const itemHsn = li.itemId
         ? (itemHsnLookup.get(li.itemId) || "0000")
         : "0000";
-      const existing = hsnSummaryMap.get(itemHsn) || {
+      const rate = parseFloat(li.taxPercent);
+      // Quantities are summed in the item's base unit: a line billed in an
+      // alternate unit (a box of 12) converts through its conversion factor
+      const baseUnit = li.itemId ? itemUnitLookup.get(li.itemId) : undefined;
+      const unit = baseUnit ?? li.selectedUnit;
+      const factor = baseUnit && li.selectedUnit && li.selectedUnit !== baseUnit
+        ? parseFloat(li.conversionFactor ?? "1") || 1
+        : 1;
+      // Services (SAC codes start with 99) carry no quantity: UQC "NA", qty 0
+      const isService = itemHsn.startsWith("99");
+      const uqc = isService ? "NA" : gstUqcForUnit(unit, "OTH");
+      const hsnKey = `${itemHsn}|${rate}|${uqc}`;
+      const existing = hsnSummaryMap.get(hsnKey) || {
         // HSN summary description is a human-readable label for the HSN
         // group — use itemName (required snapshot), not the optional notes
         // column.
-        hsn: itemHsn, description: li.itemName, quantity: 0,
+        hsn: itemHsn, description: li.itemName, rate, uqc, quantity: 0,
         taxableValue: 0, cgst: 0, sgst: 0, igst: 0, totalValue: 0,
       };
       const itemTaxable = parseFloat(li.totalAmount) - parseFloat(li.taxAmount);
       const itemTax = parseFloat(li.taxAmount);
-      existing.quantity += parseFloat(li.quantity);
+      if (!isService) existing.quantity += parseFloat(li.quantity) * factor;
       existing.taxableValue += itemTaxable;
       existing.totalValue += parseFloat(li.totalAmount);
       if (sameState) {
@@ -370,7 +428,7 @@ export async function generateGSTR1(
       } else {
         existing.igst += itemTax;
       }
-      hsnSummaryMap.set(itemHsn, existing);
+      hsnSummaryMap.set(hsnKey, existing);
     }
   }
 
@@ -433,11 +491,12 @@ export async function generateGSTR1(
   ].filter((id): id is string => id !== null && id !== undefined);
 
   const refInvoiceNumbers = noteRefIds.length > 0
-    ? await db.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber })
+    ? await db.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber, totalAmount: invoices.totalAmount })
         .from(invoices)
         .where(inArray(invoices.id, noteRefIds))
     : [];
   const refInvoiceMap = new Map(refInvoiceNumbers.map((r) => [r.id, r.invoiceNumber]));
+  const refInvoiceTotal = new Map(refInvoiceNumbers.map((r) => [r.id, parseFloat(r.totalAmount)]));
 
   // Line items for notes — needed for the per-rate breakdown in the portal JSON
   const noteIds = [...rawCreditNotes, ...rawDebitNotes].map((n) => n.id);
@@ -462,31 +521,59 @@ export async function generateGSTR1(
     };
   };
 
-  const creditNotes: GSTR1Report["creditNotes"] = rawCreditNotes.map((n) => ({
-    invoiceNumber: n.invoiceNumber,
-    originalInvoiceNumber: n.referenceDocumentId ? refInvoiceMap.get(n.referenceDocumentId) : undefined,
-    invoiceDate: n.invoiceDate.toISOString(),
-    partyName: n.partyName,
-    partyGstin: n.partyGstin || "",
-    totalAmount: n.totalAmount,
-    taxableAmount: n.subtotal,
-    taxAmount: n.taxAmount,
-    ...noteTaxSplit(n),
-    rateItems: noteRateItems(n),
-  }));
+  /**
+   * GSTR-1 table for a note: registered customers go to CDNR. For an
+   * unregistered customer the note follows the supply it amends — CDNUR when
+   * that was a B2C Large supply (inter-state, invoice above the B2CL limit;
+   * the note's own value when it references no invoice), otherwise the note
+   * is netted into B2CS.
+   */
+  const noteSection = (n: typeof rawCreditNotes[0]): GstNoteSection => {
+    if (n.partyGstin) return "cdnr";
+    if (isSameState(n.partyState, n.partyStateCode)) return "b2cs";
+    const supplyValue = (n.referenceDocumentId ? refInvoiceTotal.get(n.referenceDocumentId) : undefined)
+      ?? parseFloat(n.totalAmount);
+    return supplyValue > B2CL_INVOICE_THRESHOLD ? "cdnur" : "b2cs";
+  };
 
-  const debitNotes: GSTR1Report["debitNotes"] = rawDebitNotes.map((n) => ({
-    invoiceNumber: n.invoiceNumber,
-    originalInvoiceNumber: n.referenceDocumentId ? refInvoiceMap.get(n.referenceDocumentId) : undefined,
-    invoiceDate: n.invoiceDate.toISOString(),
-    partyName: n.partyName,
-    partyGstin: n.partyGstin || "",
-    totalAmount: n.totalAmount,
-    taxableAmount: n.subtotal,
-    taxAmount: n.taxAmount,
-    ...noteTaxSplit(n),
-    rateItems: noteRateItems(n),
-  }));
+  const toNote = (n: typeof rawCreditNotes[0], sign: 1 | -1): GSTR1Report["creditNotes"][0] => {
+    const sameState = !!isSameState(n.partyState, n.partyStateCode);
+    const section = noteSection(n);
+    const pos = n.partyGstin
+      ? n.partyGstin.substring(0, 2)
+      : b2cPos(sameState, n.partyState, n.partyStateCode);
+    if (section === "b2cs") {
+      // Credit notes reduce, and debit notes add to, the B2CS rate rows
+      const lines = noteLinesByNote.get(n.id) || [];
+      if (lines.length > 0) {
+        for (const li of lines) {
+          const tax = parseFloat(li.taxAmount);
+          addToB2cs(parseFloat(li.taxPercent), parseFloat(li.totalAmount) - tax, tax, sameState, pos, sign);
+        }
+      } else {
+        const taxable = parseFloat(n.subtotal);
+        const tax = parseFloat(n.taxAmount);
+        addToB2cs(deriveRate(taxable, tax), taxable, tax, sameState, pos, sign);
+      }
+    }
+    return {
+      invoiceNumber: n.invoiceNumber,
+      originalInvoiceNumber: n.referenceDocumentId ? refInvoiceMap.get(n.referenceDocumentId) : undefined,
+      invoiceDate: n.invoiceDate.toISOString(),
+      partyName: n.partyName,
+      partyGstin: n.partyGstin || "",
+      totalAmount: n.totalAmount,
+      taxableAmount: n.subtotal,
+      taxAmount: n.taxAmount,
+      ...noteTaxSplit(n),
+      rateItems: noteRateItems(n),
+      section,
+      pos,
+    };
+  };
+
+  const creditNotes: GSTR1Report["creditNotes"] = rawCreditNotes.map((n) => toNote(n, -1));
+  const debitNotes: GSTR1Report["debitNotes"] = rawDebitNotes.map((n) => toNote(n, 1));
 
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -496,7 +583,13 @@ export async function generateGSTR1(
     businessName: biz?.name || "",
     b2b,
     b2cLarge: Array.from(b2cLargeMap.values()),
-    b2cSmall: Array.from(b2cSmallMap.values()),
+    b2cSmall: Array.from(b2cSmallMap.values()).map((row) => ({
+      ...row,
+      taxableValue: round2(row.taxableValue),
+      cgst: round2(row.cgst),
+      sgst: round2(row.sgst),
+      igst: round2(row.igst),
+    })),
     hsn: Array.from(hsnSummaryMap.values()),
     creditNotes,
     debitNotes,
@@ -685,38 +778,13 @@ function stateNameToCode(state: string): string {
   return GST_STATE_CODE_MAP[state.toLowerCase()] ?? "99";
 }
 
-// UQC (Unit Quantity Code) mapping — GST portal codes
-const UQC_MAP: Record<string, string> = {
-  "pcs": "NOS", "nos": "NOS", "piece": "NOS", "pieces": "NOS",
-  "unit": "NOS", "units": "NOS", "number": "NOS",
-  "kg": "KGS", "kgs": "KGS", "kilogram": "KGS", "kilograms": "KGS",
-  "gm": "GMS", "gms": "GMS", "gram": "GMS", "grams": "GMS",
-  "ltr": "LTR", "lts": "LTR", "litre": "LTR", "litres": "LTR", "liter": "LTR",
-  "mtr": "MTR", "meter": "MTR", "meters": "MTR", "metre": "MTR",
-  "sqm": "SQM", "sqmtr": "SQM",
-  "sqf": "SQF", "sqft": "SQF",
-  "cbm": "CBM",
-  "doz": "DOZ", "dozen": "DOZ",
-  "box": "BOX", "boxes": "BOX",
-  "bag": "BAG", "bags": "BAG",
-  "set": "SET", "sets": "SET",
-  "pk": "PAC", "pac": "PAC", "pack": "PAC", "packs": "PAC",
-  "rol": "ROL", "roll": "ROL", "rolls": "ROL",
-  "tub": "TUB", "tube": "TUB",
-  "ton": "TON", "tonne": "TON", "tonnes": "TON",
-  "mlt": "MLT", "ml": "MLT", "millilitre": "MLT", "milliliter": "MLT",
-};
-
-function toUqc(unit?: string | null): string {
-  if (!unit) return "NOS";
-  return UQC_MAP[unit.toLowerCase()] ?? "NOS";
-}
-
-/** Convert ISO date string "YYYY-MM-DDTXX:XX:XX..." to portal "DD-MM-YYYY" */
+/**
+ * Convert an ISO timestamp to the portal's "DD-MM-YYYY", reading the calendar
+ * day in India: an invoice dated 25 Aug is stored as 2025-08-24T18:30:00Z,
+ * which a plain split of the UTC string would report as 24 Aug.
+ */
 function isoToPortalDate(isoDate: string): string {
-  const datePart = isoDate.split("T")[0];
-  const [year, month, day] = datePart.split("-");
-  return `${day}-${month}-${year}`;
+  return formatIstDate(isoDate, "-");
 }
 
 // Valid GST rate slabs (percent) accepted by the portal for `rt`.
@@ -831,10 +899,40 @@ export function gstr1ToPortalJson(
     csamt: 0,
   }));
 
-  // CDNR: group credit and debit notes by recipient GSTIN
+  // CDNR: group credit and debit notes by recipient GSTIN. Notes to
+  // unregistered customers go to CDNUR (B2C Large supplies) or were already
+  // netted into the b2cSmall rows by generateGSTR1.
   const cdnrMap = new Map<string, { ctin: string; nt: Array<Record<string, unknown>> }>();
+  const cdnur: Array<Record<string, unknown>> = [];
+
+  const pushUnregisteredNote = (note: GSTR1Report["creditNotes"][0], ntty: "C" | "D") => {
+    const noteTaxable = parseFloat(note.taxableAmount);
+    const noteTax = parseFloat(note.taxAmount);
+    const lines = note.rateItems && note.rateItems.length > 0
+      ? note.rateItems
+      : [{ rate: deriveRate(noteTaxable, noteTax), taxableValue: noteTaxable, igst: noteTax }];
+    cdnur.push({
+      typ: "B2CL",
+      ntty,
+      nt_num: note.invoiceNumber,
+      nt_dt: isoToPortalDate(note.invoiceDate),
+      val: parseFloat(note.totalAmount),
+      pos: note.pos ?? "99",
+      itms: lines.map((line, idx) => ({
+        num: idx + 1,
+        itm_det: { txval: line.taxableValue, rt: line.rate, iamt: line.igst, csamt: 0 },
+      })),
+    });
+  };
 
   const pushNote = (note: GSTR1Report["creditNotes"][0], ntty: "C" | "D") => {
+    const section = note.section ?? (note.partyGstin ? "cdnr" : "b2cs");
+    if (section === "cdnur") {
+      pushUnregisteredNote(note, ntty);
+      return;
+    }
+    // Notes netted into B2CS are already in report.b2cSmall
+    if (section !== "cdnr" || !note.partyGstin) return;
     const ctin = note.partyGstin;
     const existing = cdnrMap.get(ctin) ?? { ctin, nt: [] };
     const noteTaxable = parseFloat(note.taxableAmount);
@@ -862,13 +960,15 @@ export function gstr1ToPortalJson(
   for (const cn of report.creditNotes) pushNote(cn, "C");
   for (const dn of report.debitNotes) pushNote(dn, "D");
 
-  // HSN summary
+  // HSN summary: one row per HSN, rate and UQC. Reports built before rows
+  // carried a rate derive it from the row's tax.
   const hsnData = report.hsn.map((entry, idx) => ({
     num: idx + 1,
     hsn_sc: entry.hsn,
     desc: entry.description,
-    uqc: toUqc(null),
-    qty: entry.quantity,
+    uqc: entry.uqc ?? "OTH",
+    qty: Math.round(entry.quantity * 1000) / 1000,
+    rt: entry.rate ?? deriveRate(entry.taxableValue, entry.igst + entry.cgst + entry.sgst),
     txval: entry.taxableValue,
     iamt: entry.igst,
     camt: entry.cgst,
@@ -883,6 +983,7 @@ export function gstr1ToPortalJson(
     b2cl: Array.from(b2clMap.values()),
     b2cs,
     cdnr: Array.from(cdnrMap.values()),
+    cdnur,
     hsn: { data: hsnData },
   };
 }
@@ -904,7 +1005,7 @@ export function gstr1ToCSV(report: GSTR1Report): string {
   for (const row of report.b2b) {
     lines.push([
       row.partyGstin, `"${row.partyName}"`, row.invoiceNumber,
-      new Date(row.invoiceDate).toLocaleDateString("en-IN"),
+      formatIstDate(row.invoiceDate, "/"),
       row.invoiceType, row.taxableValue.toFixed(2),
       row.cgst.toFixed(2), row.sgst.toFixed(2), row.igst.toFixed(2),
       row.totalInvoiceValue.toFixed(2),
