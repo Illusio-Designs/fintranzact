@@ -10,6 +10,7 @@
  * by UPI), a purchase 5 days ago (₹630) and a ₹300 rent expense.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { istDateParts } from "@fintranzact/shared";
 import { payments } from "@fintranzact/db";
 import { getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createBankAccount, createExpense, createTestWorld, type TestWorld } from "../helpers/fixtures.js";
@@ -184,8 +185,13 @@ describe("dashboard widgets", () => {
     expect(await c.dashboard.shippingSummary({})).toEqual({ charged: "0.00", spent: "0.00", net: "0.00" });
     const statuses = await c.dashboard.invoiceStatusBreakdown({});
     expect(statuses.reduce((s, r) => s + r.count, 0)).toBeGreaterThanOrEqual(2);
+    // The rent expense is dated 2 days ago; on the 1st or 2nd of an Indian
+    // month that falls in the previous month's bucket.
     const mc = await c.dashboard.monthlyComparison();
-    expect(mc.expenses.curr).toBe("300.00");
+    const spent = istDateParts(new Date(now - 2 * 86_400_000));
+    const today = istDateParts(new Date(now));
+    const sameMonth = spent.year === today.year && spent.month === today.month;
+    expect(sameMonth ? mc.expenses.curr : mc.expenses.prev).toBe("300.00");
   });
 
   it("are empty for another business and validate their limits", async () => {
