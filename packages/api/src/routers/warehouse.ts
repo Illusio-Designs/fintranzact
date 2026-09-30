@@ -256,6 +256,20 @@ export const warehouseRouter = router({
 
             const businessId = ctx.businessId;
 
+            // Warehouses reference their premise (ON DELETE RESTRICT): say so
+            // instead of failing in the database.
+            const [inUse] = await ctx.db
+                .select({ id: warehouses.id })
+                .from(warehouses)
+                .where(and(eq(warehouses.premiseId, input.id), eq(warehouses.businessId, businessId)))
+                .limit(1);
+            if (inUse) {
+                throw new TRPCError({
+                    code: "PRECONDITION_FAILED",
+                    message: "This premise still has warehouses. Move or delete them first.",
+                });
+            }
+
             const [deleted] = await ctx.db
                 .delete(premises)
                 .where(
@@ -851,6 +865,24 @@ export const warehouseRouter = router({
                         message:
                             "Parent location does not belong to this warehouse",
                     });
+                }
+
+                // Walk up from the new parent: meeting this location means
+                // it would sit under one of its own sub-locations.
+                const all = await ctx.db
+                    .select({ id: warehouseLocations.id, parentId: warehouseLocations.parentId })
+                    .from(warehouseLocations)
+                    .where(eq(warehouseLocations.warehouseId, existing.warehouseId));
+                const parentOf = new Map(all.map((l) => [l.id, l.parentId]));
+                const seen = new Set<string>();
+                for (let at: string | null | undefined = input.parentId; at && !seen.has(at); at = parentOf.get(at)) {
+                    if (at === input.id) {
+                        throw new TRPCError({
+                            code: "BAD_REQUEST",
+                            message: "A location can't be moved under one of its own sub-locations",
+                        });
+                    }
+                    seen.add(at);
                 }
             }
 
