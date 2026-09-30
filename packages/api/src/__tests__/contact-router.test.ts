@@ -76,6 +76,20 @@ describe("contact.submit", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("validates partner applications and falls back to the name in the subject", async () => {
+    const caller = anonymousCaller();
+    const partner = { kind: "partner" as const, programme: "reseller" as const, name: "Meera Iyer", email: "meera@x.in" };
+    await expect(caller.contact.submit({ ...partner, programme: "investor" as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.contact.submit({ ...partner, company: "Evil\nBcc: a@b.c" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.contact.submit({ ...partner, kind: "sales" as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.contact.submit({ ...partner, name: "M" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(send).not.toHaveBeenCalled();
+
+    await caller.contact.submit(partner);
+    expect(send.mock.calls[0][0].subject).toBe("Partner application (Resellers & consultants): Meera Iyer");
+    expect(send.mock.calls[0][0].message).toBe("");
+  });
+
   it(`allows ${ENQUIRY_LIMIT} submissions per IP, then refuses`, async () => {
     const caller = anonymousCaller("198.51.100.20");
     for (let i = 0; i < ENQUIRY_LIMIT; i++) {
