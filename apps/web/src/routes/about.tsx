@@ -66,7 +66,10 @@ const WHY: Array<[IconSvgElement, string, string]> = [
 
 function AboutPage() {
   return (
-    <MarketingLayout title="About us">
+    <MarketingLayout
+      title="About us"
+      description="Fintranzact builds GST billing, inventory and accounting software for Indian businesses. Learn who we are and what we believe."
+    >
       <PageHero
         eyebrow="About us"
         title="Your trustable accounting partner"

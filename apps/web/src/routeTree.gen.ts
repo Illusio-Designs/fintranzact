@@ -18,6 +18,7 @@ import { Route as StockGroupsRouteImport } from './routes/stock-groups'
 import { Route as StockAdjustmentsRouteImport } from './routes/stock-adjustments'
 import { Route as ShipmentsRouteImport } from './routes/shipments'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SalesReturnsRouteImport } from './routes/sales-returns'
 import { Route as SalesOrdersRouteImport } from './routes/sales-orders'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -61,6 +62,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as InviteTokenRouteImport } from './routes/invite/$token'
 import { Route as ITokenRouteImport } from './routes/i/$token'
 import { Route as BusinessCreateRouteImport } from './routes/business/create'
+import { Route as AuthVerifyEmailChangeRouteImport } from './routes/auth/verify-email-change'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthPlanSelectionRouteImport } from './routes/auth/plan-selection'
 import { Route as AuthCompleteProfileRouteImport } from './routes/auth/complete-profile'
@@ -108,6 +110,11 @@ const ShipmentsRoute = ShipmentsRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SalesReturnsRoute = SalesReturnsRouteImport.update({
@@ -325,6 +332,11 @@ const BusinessCreateRoute = BusinessCreateRouteImport.update({
   path: '/business/create',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthVerifyEmailChangeRoute = AuthVerifyEmailChangeRouteImport.update({
+  id: '/auth/verify-email-change',
+  path: '/auth/verify-email-change',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthVerifyRoute = AuthVerifyRouteImport.update({
   id: '/auth/verify',
   path: '/auth/verify',
@@ -382,6 +394,7 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
+  '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
@@ -394,6 +407,7 @@ export interface FileRoutesByFullPath {
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -439,6 +453,7 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
+  '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
@@ -451,6 +466,7 @@ export interface FileRoutesByTo {
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -497,6 +513,7 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
+  '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
@@ -509,6 +526,7 @@ export interface FileRoutesById {
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -556,6 +574,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales-orders'
     | '/sales-returns'
+    | '/security'
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
@@ -568,6 +587,7 @@ export interface FileRouteTypes {
     | '/auth/complete-profile'
     | '/auth/plan-selection'
     | '/auth/verify'
+    | '/auth/verify-email-change'
     | '/business/create'
     | '/i/$token'
     | '/invite/$token'
@@ -613,6 +633,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales-orders'
     | '/sales-returns'
+    | '/security'
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
@@ -625,6 +646,7 @@ export interface FileRouteTypes {
     | '/auth/complete-profile'
     | '/auth/plan-selection'
     | '/auth/verify'
+    | '/auth/verify-email-change'
     | '/business/create'
     | '/i/$token'
     | '/invite/$token'
@@ -670,6 +692,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales-orders'
     | '/sales-returns'
+    | '/security'
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
@@ -682,6 +705,7 @@ export interface FileRouteTypes {
     | '/auth/complete-profile'
     | '/auth/plan-selection'
     | '/auth/verify'
+    | '/auth/verify-email-change'
     | '/business/create'
     | '/i/$token'
     | '/invite/$token'
@@ -728,6 +752,7 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   SalesOrdersRoute: typeof SalesOrdersRoute
   SalesReturnsRoute: typeof SalesReturnsRoute
+  SecurityRoute: typeof SecurityRoute
   SettingsRoute: typeof SettingsRoute
   ShipmentsRoute: typeof ShipmentsRoute
   StockAdjustmentsRoute: typeof StockAdjustmentsRoute
@@ -740,6 +765,7 @@ export interface RootRouteChildren {
   AuthCompleteProfileRoute: typeof AuthCompleteProfileRoute
   AuthPlanSelectionRoute: typeof AuthPlanSelectionRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
+  AuthVerifyEmailChangeRoute: typeof AuthVerifyEmailChangeRoute
   BusinessCreateRoute: typeof BusinessCreateRoute
   ITokenRoute: typeof ITokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
@@ -808,6 +834,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sales-returns': {
@@ -1111,6 +1144,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BusinessCreateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/verify-email-change': {
+      id: '/auth/verify-email-change'
+      path: '/auth/verify-email-change'
+      fullPath: '/auth/verify-email-change'
+      preLoaderRoute: typeof AuthVerifyEmailChangeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/verify': {
       id: '/auth/verify'
       path: '/auth/verify'
@@ -1176,6 +1216,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   SalesOrdersRoute: SalesOrdersRoute,
   SalesReturnsRoute: SalesReturnsRoute,
+  SecurityRoute: SecurityRoute,
   SettingsRoute: SettingsRoute,
   ShipmentsRoute: ShipmentsRoute,
   StockAdjustmentsRoute: StockAdjustmentsRoute,
@@ -1188,6 +1229,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCompleteProfileRoute: AuthCompleteProfileRoute,
   AuthPlanSelectionRoute: AuthPlanSelectionRoute,
   AuthVerifyRoute: AuthVerifyRoute,
+  AuthVerifyEmailChangeRoute: AuthVerifyEmailChangeRoute,
   BusinessCreateRoute: BusinessCreateRoute,
   ITokenRoute: ITokenRoute,
   InviteTokenRoute: InviteTokenRoute,

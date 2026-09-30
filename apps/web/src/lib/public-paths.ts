@@ -13,6 +13,7 @@ export const MARKETING_PATHS = [
   "/privacy",
   "/terms",
   "/refund-policy",
+  "/security",
   "/widgets",
 ];
 

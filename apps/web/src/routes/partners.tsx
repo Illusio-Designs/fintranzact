@@ -22,6 +22,13 @@ import {
 import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
 import { InputField, SelectField, TextareaField } from "@/components/ui/FormField";
 import { PhoneInput } from "@/components/ui/PhoneInput";
+import {
+  EnquiryError,
+  EnquirySent,
+  HoneypotField,
+  mailtoLink,
+  useEnquiry,
+} from "@/components/marketing/enquiry";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/partners")({
@@ -78,14 +85,15 @@ function PartnersPage() {
   const [company, setCompany] = useState("");
   const [city, setCity] = useState("");
   const [message, setMessage] = useState("");
+  const [website, setWebsite] = useState("");
+  const enquiry = useEnquiry();
 
-  // No backend endpoint for applications yet: open the visitor's mail client
-  // with everything filled in, so nothing typed here is lost.
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    const programName = PROGRAMS.find((p) => p.id === program)?.title ?? program;
-    const subject = `Partner application: ${company || name}`;
-    const body = [
+  // The same application as an email, for the fallback link if sending fails.
+  const programName = PROGRAMS.find((p) => p.id === program)?.title ?? program;
+  const mailto = mailtoLink(
+    CONTACT_EMAIL,
+    `Partner application: ${company || name}`,
+    [
       `Programme: ${programName}`,
       `Name: ${name}`,
       `Company / firm: ${company}`,
@@ -94,12 +102,29 @@ function PartnersPage() {
       `City: ${city}`,
       "",
       message,
-    ].join("\n");
-    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    ].join("\n"),
+  );
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    enquiry.submit({
+      kind: "partner",
+      programme: program,
+      name,
+      email,
+      company: company || undefined,
+      phone: phone || undefined,
+      city: city || undefined,
+      message: message || undefined,
+      website: website || undefined,
+    });
   }
 
   return (
-    <MarketingLayout title="Partner with us">
+    <MarketingLayout
+      title="Partner with us"
+      description="Partner programmes for accountants and CA firms, resellers and technology companies serving Indian businesses. Apply to become a Fintranzact partner."
+    >
       <PageHero
         eyebrow="Partner with us"
         title="Grow your practice with Fintranzact"
@@ -193,61 +218,82 @@ function PartnersPage() {
             </div>
           </div>
 
-          <form
-            onSubmit={handleSubmit}
-            className="rounded-[22px] border border-border-light bg-surface-0 p-7 shadow-[0_24px_60px_-34px_rgba(15,27,61,.35)] md:p-9 lg:col-span-3"
-          >
-            <SelectField
-              label="Partner programme"
-              required
-              value={program}
-              onChange={(e) => setProgram(e.target.value as ProgramId)}
-            >
-              {PROGRAMS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </SelectField>
-            <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              <InputField label="Name" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Your full name" />
-              <InputField
-                label="Company or firm"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                autoComplete="organization"
-                placeholder="Firm or company name"
+          <div className="relative rounded-[22px] border border-border-light bg-surface-0 p-7 shadow-[0_24px_60px_-34px_rgba(15,27,61,.35)] md:p-9 lg:col-span-3">
+            {enquiry.status === "sent" ? (
+              <EnquirySent
+                title="Thanks for applying"
+                body={`We have your application and usually reply within two business days, to ${email}.`}
+                againLabel="Send another application"
+                onAgain={enquiry.reset}
               />
-              <InputField
-                label="Email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                placeholder="you@yourfirm.com"
-              />
-              <PhoneInput label="Phone" value={phone} onChange={setPhone} />
-              <InputField label="City" value={city} onChange={(e) => setCity(e.target.value)} autoComplete="address-level2" placeholder="Mumbai" />
-            </div>
-            <div className="mt-5">
-              <TextareaField
-                label="Tell us about your work"
-                className="min-h-32"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="How many clients you serve, the tools you use today, anything we should know."
-              />
-            </div>
-            <button
-              type="submit"
-              className="mt-7 inline-flex h-[52px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
-            >
-              <Icon icon={SentIcon} size={18} />
-              Send application
-            </button>
-            <p className="mt-3 text-xs text-text-tertiary">Your email app opens with the application ready to send.</p>
-          </form>
+            ) : (
+              <form onSubmit={handleSubmit}>
+                <SelectField
+                  label="Partner programme"
+                  required
+                  value={program}
+                  onChange={(e) => setProgram(e.target.value as ProgramId)}
+                >
+                  {PROGRAMS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </SelectField>
+                <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                  <InputField label="Name" required minLength={2} maxLength={100} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Your full name" />
+                  <InputField
+                    label="Company or firm"
+                    maxLength={150}
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    autoComplete="organization"
+                    placeholder="Firm or company name"
+                  />
+                  <InputField
+                    label="Email"
+                    type="email"
+                    required
+                    maxLength={255}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    placeholder="you@yourfirm.com"
+                  />
+                  <PhoneInput label="Phone" value={phone} onChange={setPhone} />
+                  <InputField label="City" maxLength={100} value={city} onChange={(e) => setCity(e.target.value)} autoComplete="address-level2" placeholder="Mumbai" />
+                </div>
+                <div className="mt-5">
+                  <TextareaField
+                    label="Tell us about your work"
+                    className="min-h-32"
+                    maxLength={5000}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="How many clients you serve, the tools you use today, anything we should know."
+                  />
+                </div>
+                <HoneypotField value={website} onChange={setWebsite} />
+                {enquiry.status === "error" && <EnquiryError message={enquiry.error} mailto={mailto} />}
+                <button
+                  type="submit"
+                  disabled={enquiry.busy}
+                  className="mt-7 inline-flex h-[52px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700 disabled:cursor-wait disabled:opacity-70"
+                >
+                  <Icon icon={SentIcon} size={18} />
+                  {enquiry.status === "sending" ? "Sending…" : "Send application"}
+                </button>
+                <p className="mt-3 text-xs text-text-tertiary">
+                  Prefer email?{" "}
+                  <a href={mailto} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">
+                    Send the application from your mail app
+                  </a>
+                  .
+                </p>
+              </form>
+            )}
+            {enquiry.turnstile}
+          </div>
         </div>
       </section>
 

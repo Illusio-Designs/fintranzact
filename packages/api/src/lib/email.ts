@@ -11,9 +11,41 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
+/** A message from the public contact or partner form, sent to our inbox. */
+export interface EnquiryEmail {
+  to: string;
+  /** The visitor's address, so a reply from the inbox goes straight back to them. */
+  replyTo: string;
+  subject: string;
+  /** Label/value pairs shown as a table above the message. */
+  fields: Array<[string, string]>;
+  message: string;
+}
+
 interface EmailService {
   sendMagicLink(to: string, magicLinkUrl: string, deepLinkUrl?: string, isNewUser?: boolean): Promise<void>;
   sendInvitation(to: string, inviteUrl: string, businessName: string, inviterName: string | null): Promise<void>;
+  sendEnquiry(enquiry: EnquiryEmail): Promise<void>;
+}
+
+/** Plain-text body for an enquiry (console output and the text part of the email). */
+export function enquiryText(enquiry: EnquiryEmail): string {
+  const rows = enquiry.fields.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`);
+  return [...rows, "", enquiry.message || "(no message)"].join("\n");
+}
+
+/** Minimal, fully escaped HTML body for an enquiry. */
+export function enquiryHtml(enquiry: EnquiryEmail): string {
+  const font = "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;";
+  const rows = enquiry.fields
+    .filter(([, v]) => v)
+    .map(
+      ([k, v]) =>
+        `<tr><td style="${font} padding: 4px 16px 4px 0; font-size: 13px; color: #6b7280; vertical-align: top;">${escapeHtml(k)}</td><td style="${font} padding: 4px 0; font-size: 14px; color: #111827;">${escapeHtml(v)}</td></tr>`,
+    )
+    .join("");
+  const message = escapeHtml(enquiry.message || "(no message)").replace(/\n/g, "<br />");
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><title>${escapeHtml(enquiry.subject)}</title></head><body style="margin: 0; padding: 24px; background-color: #f3f4f6;"><table role="presentation" width="100%" style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;"><tr><td style="padding: 24px;"><h1 style="${font} margin: 0 0 16px 0; font-size: 18px; color: #111827;">${escapeHtml(enquiry.subject)}</h1><table role="presentation">${rows}</table><p style="${font} margin: 20px 0 0 0; font-size: 14px; line-height: 22px; color: #374151;">${message}</p></td></tr></table></body></html>`;
 }
 
 class ConsoleEmailService implements EmailService {
@@ -46,6 +78,16 @@ class ConsoleEmailService implements EmailService {
     console.log(`║  ${inviteUrl}`);
     console.log("╚══════════════════════════════════════════════════════════╝");
     console.log("");
+  }
+
+  async sendEnquiry(enquiry: EnquiryEmail): Promise<void> {
+    // Without a mail provider the enquiry is only logged, so the public form
+    // keeps working on dev and self-hosted installs. Warn loudly in production
+    // because nobody will see these unless they read the logs.
+    if (process.env.NODE_ENV === "production") {
+      console.warn("[email] RESEND_API_KEY not set — enquiry logged instead of emailed.");
+    }
+    console.log(`[enquiry] to=${enquiry.to} reply-to=${enquiry.replyTo} subject=${JSON.stringify(enquiry.subject)}\n${enquiryText(enquiry)}`);
   }
 }
 
@@ -367,6 +409,30 @@ ${deepLinkHtml}
 
 </body>
 </html>`,
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`[email] Resend API error: ${res.status} ${text}`);
+      throw new Error("Failed to send email");
+    }
+  }
+
+  async sendEnquiry(enquiry: EnquiryEmail): Promise<void> {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: this.fromAddress,
+        to: enquiry.to,
+        reply_to: enquiry.replyTo,
+        subject: enquiry.subject,
+        text: enquiryText(enquiry),
+        html: enquiryHtml(enquiry),
       }),
     });
 
