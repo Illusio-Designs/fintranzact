@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
 import { z } from "zod";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { getBusinessId } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn } from "@/lib/utils";
@@ -16,7 +17,6 @@ import { DetailField } from "@/components/ui/DetailField";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { DocumentCreator } from "@/components/DocumentCreator";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { Select } from "@/components/ui/Select";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { toast } from "@/hooks/useToast";
@@ -866,7 +866,7 @@ const PAGE_SIZE = 25;
 function InvoicesPage() {
   const [type, setType] = useState<"sale" | "purchase">("sale");
   const [status, setStatus] = useState("");
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search invoices…");
   const [sortBy, setSortBy] = useState<"date" | "amount" | "number">("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -1042,212 +1042,211 @@ function InvoicesPage() {
         }
       />
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search invoices..."
-          className="max-w-xs"
-        />
-        <SegmentedControl
-          tabs={typeOptions}
-          value={type}
-          onChange={(v) => setType(v as "sale" | "purchase")}
-        />
-        <div className="ml-auto">
-          <PillTabs
-            tabs={statusTabs}
-            value={status}
-            onChange={setStatus}
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+        {/* Filters */}
+        <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
+          <SegmentedControl
+            tabs={typeOptions}
+            value={type}
+            onChange={(v) => setType(v as "sale" | "purchase")}
           />
-        </div>
-      </div>
-      <DateRangeBar
-        preset={dateRange.preset}
-        onPresetChange={dateRange.setPreset}
-        customFrom={dateRange.customFrom}
-        customTo={dateRange.customTo}
-        onCustomChange={dateRange.setCustomRange}
-        onExport={exportInvoicesCSV}
-        exporting={exporting}
-        className="mb-4"
-      />
-
-      {/* Content */}
-      {isLoading ? (
-        <SkeletonRows count={6} height="h-14" />
-      ) : !list.items.length && !isFetching ? (
-        <EmptyState
-          icon={
-            <Icon icon={File01Icon} size={24} className="text-text-tertiary" />
-          }
-          title="No invoices found"
-          description={`No ${type === "sale" ? "sales" : "purchase"} invoices${status ? ` with status "${status}"` : ""}.`}
-          encouragement={!search && !status ? "Create your first invoice — it only takes a minute." : undefined}
-          action={
-            <button
-              className="btn-primary"
-              onClick={() => setShowCreate(true)}
-            >
-              + New Invoice
-            </button>
-          }
-        />
-      ) : (
-        <div className="card overflow-hidden">
-          <div
-            ref={list.scrollRef}
-            onScroll={list.onScroll}
-            className="max-h-[600px] overflow-y-auto"
-          >
-            <table className="data-table w-full">
-              <thead className="sticky top-0 z-10">
-                <tr>
-                  <th>Party</th>
-                  <th
-                    className="whitespace-nowrap cursor-pointer select-none hover:text-text-primary transition-colors"
-                    onClick={() => {
-                      if (sortBy === "number" && sortDir === "desc") setSortDir("asc");
-                      else if (sortBy === "number" && sortDir === "asc") { setSortBy("date"); setSortDir("desc"); }
-                      else { setSortBy("number"); setSortDir("desc"); }
-                    }}
-                  >
-                    Invoice # {sortBy === "number" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
-                  </th>
-                  <th className="whitespace-nowrap">Date</th>
-                  <th className="whitespace-nowrap">Source</th>
-                  <th className="whitespace-nowrap">Seller</th>
-                  <th
-                    className="text-right whitespace-nowrap cursor-pointer select-none hover:text-text-primary transition-colors"
-                    onClick={() => {
-                      if (sortBy === "amount" && sortDir === "desc") setSortDir("asc");
-                      else if (sortBy === "amount" && sortDir === "asc") { setSortBy("date"); setSortDir("desc"); }
-                      else { setSortBy("amount"); setSortDir("desc"); }
-                    }}
-                  >
-                    Amount {sortBy === "amount" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
-                  </th>
-                  <th>Status</th>
-                  <th className="w-28"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.items.map((inv) => (
-                    <tr
-                      key={inv.id}
-                      className="group cursor-pointer"
-                      onClick={() => setSelectedInvoiceId(inv.id)}
-                    >
-                      <td className="font-medium"><span className="block truncate max-w-[250px]">{inv.partyName}</span></td>
-                      <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
-                        {inv.invoiceNumber}
-                      </td>
-                      <td className="text-text-secondary whitespace-nowrap">
-                        {formatDate(inv.invoiceDate)}
-                      </td>
-                      <td className="whitespace-nowrap">
-                        <SourceChip source={(inv as { source?: string | null }).source ?? null} />
-                      </td>
-                      <td className="text-text-secondary whitespace-nowrap">
-                        <span className="block truncate max-w-[140px]" title={inv.createdByName ?? ""}>
-                          {inv.createdByName ?? "—"}
-                        </span>
-                      </td>
-                      <td className="text-right tabular-nums font-medium whitespace-nowrap">
-                        {formatCurrency(inv.totalAmount)}
-                      </td>
-                      <td className="whitespace-nowrap">
-                        <StatusBadge status={inv.status} size="sm" />
-                      </td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-0.5">
-                          {/* PDF buttons — always visible, LEFT aligned */}
-                          <DownloadPDFButton
-                            invoiceId={inv.id}
-                            invoiceNumber={inv.invoiceNumber}
-                            invoiceStatus={inv.status}
-                            onShared={() =>
-                              updateStatus.mutate({ id: inv.id, status: "sent" })
-                            }
-                          />
-                          {/* Context actions — always visible at reduced opacity, full on hover */}
-                          <div className="flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
-                            {(inv.status === "draft" || inv.status === "unfulfilled") && (
-                              <button
-                                onClick={() =>
-                                  updateStatus.mutate({ id: inv.id, status: "sent" })
-                                }
-                                title={inv.status === "unfulfilled" ? "Mark fulfilled" : "Mark as sent"}
-                                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
-                              >
-                                <Icon icon={SentIcon} size={16} />
-                              </button>
-                            )}
-                            {inv.status !== "draft" &&
-                              inv.status !== "cancelled" &&
-                              inv.status !== "paid" &&
-                              inv.status !== "adjusted" &&
-                              (parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0")) > 0.01 && (
-                                <button
-                                  onClick={() =>
-                                    openPaymentPanel(
-                                      inv.partyId,
-                                      inv.id,
-                                      (parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0")).toFixed(2)
-                                    )
-                                  }
-                                  title="Record payment"
-                                  className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-600/[0.08] transition-colors"
-                                >
-                                  <Icon icon={Cash01Icon} size={16} />
-                                </button>
-                              )}
-                            {(inv.status === "draft" || inv.status === "unfulfilled") && (
-                              <button
-                                onClick={() =>
-                                  confirmDelete(inv.id, inv.invoiceNumber)
-                                }
-                                title="Delete invoice"
-                                className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
-                              >
-                                <Icon icon={Delete02Icon} size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                ))}
-              </tbody>
-            </table>
-            {list.loadingMore && (
-              <div className="border-t border-border-light">
-                <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                  <div className="h-3 bg-surface-2 rounded w-32" />
-                  <div className="h-3 bg-surface-2 rounded w-20" />
-                  <div className="h-3 bg-surface-2 rounded w-24" />
-                  <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
-                </div>
-              </div>
-            )}
-            {list.hasMore && !list.loadingMore && (
-              <button
-                type="button"
-                onClick={list.loadMore}
-                className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
-              >
-                Load more
-              </button>
-            )}
-            {!list.hasMore && list.items.length > PAGE_SIZE && (
-              <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
-                All {list.total.toLocaleString()} records loaded
-              </div>
-            )}
+          <div className="ml-auto">
+            <PillTabs
+              tabs={statusTabs}
+              value={status}
+              onChange={setStatus}
+            />
           </div>
         </div>
-      )}
+        <div className="border-b border-border-light px-4 py-2">
+          <DateRangeBar
+            preset={dateRange.preset}
+            onPresetChange={dateRange.setPreset}
+            customFrom={dateRange.customFrom}
+            customTo={dateRange.customTo}
+            onCustomChange={dateRange.setCustomRange}
+            onExport={exportInvoicesCSV}
+            exporting={exporting}
+          />
+        </div>
+
+        {/* Content */}
+        {isLoading ? (
+          <div className="p-4">
+            <SkeletonRows count={6} height="h-14" />
+          </div>
+        ) : !list.items.length && !isFetching ? (
+          <EmptyState
+            icon={
+              <Icon icon={File01Icon} size={24} className="text-text-tertiary" />
+            }
+            title="No invoices found"
+            description={`No ${type === "sale" ? "sales" : "purchase"} invoices${status ? ` with status "${status}"` : ""}.`}
+            encouragement={!search && !status ? "Create your first invoice — it only takes a minute." : undefined}
+            action={
+              <button
+                className="btn-primary"
+                onClick={() => setShowCreate(true)}
+              >
+                + New Invoice
+              </button>
+            }
+          />
+        ) : (
+          <div>
+            <div
+              ref={list.scrollRef}
+              onScroll={list.onScroll}
+              className="max-h-[600px] overflow-y-auto"
+            >
+              <table className="data-table w-full">
+                <thead className="sticky top-0 z-10">
+                  <tr>
+                    <th>Party</th>
+                    <th
+                      className="whitespace-nowrap cursor-pointer select-none hover:text-text-primary transition-colors"
+                      onClick={() => {
+                        if (sortBy === "number" && sortDir === "desc") setSortDir("asc");
+                        else if (sortBy === "number" && sortDir === "asc") { setSortBy("date"); setSortDir("desc"); }
+                        else { setSortBy("number"); setSortDir("desc"); }
+                      }}
+                    >
+                      Invoice # {sortBy === "number" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
+                    </th>
+                    <th className="whitespace-nowrap">Date</th>
+                    <th className="whitespace-nowrap">Source</th>
+                    <th className="whitespace-nowrap">Seller</th>
+                    <th
+                      className="text-right whitespace-nowrap cursor-pointer select-none hover:text-text-primary transition-colors"
+                      onClick={() => {
+                        if (sortBy === "amount" && sortDir === "desc") setSortDir("asc");
+                        else if (sortBy === "amount" && sortDir === "asc") { setSortBy("date"); setSortDir("desc"); }
+                        else { setSortBy("amount"); setSortDir("desc"); }
+                      }}
+                    >
+                      Amount {sortBy === "amount" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
+                    </th>
+                    <th>Status</th>
+                    <th className="w-28"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.items.map((inv) => (
+                      <tr
+                        key={inv.id}
+                        className="group cursor-pointer"
+                        onClick={() => setSelectedInvoiceId(inv.id)}
+                      >
+                        <td className="font-medium"><span className="block truncate max-w-[250px]">{inv.partyName}</span></td>
+                        <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
+                          {inv.invoiceNumber}
+                        </td>
+                        <td className="text-text-secondary whitespace-nowrap">
+                          {formatDate(inv.invoiceDate)}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <SourceChip source={(inv as { source?: string | null }).source ?? null} />
+                        </td>
+                        <td className="text-text-secondary whitespace-nowrap">
+                          <span className="block truncate max-w-[140px]" title={inv.createdByName ?? ""}>
+                            {inv.createdByName ?? "—"}
+                          </span>
+                        </td>
+                        <td className="text-right tabular-nums font-medium whitespace-nowrap">
+                          {formatCurrency(inv.totalAmount)}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <StatusBadge status={inv.status} size="sm" />
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-0.5">
+                            {/* PDF buttons — always visible, LEFT aligned */}
+                            <DownloadPDFButton
+                              invoiceId={inv.id}
+                              invoiceNumber={inv.invoiceNumber}
+                              invoiceStatus={inv.status}
+                              onShared={() =>
+                                updateStatus.mutate({ id: inv.id, status: "sent" })
+                              }
+                            />
+                            {/* Context actions — always visible at reduced opacity, full on hover */}
+                            <div className="flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
+                              {(inv.status === "draft" || inv.status === "unfulfilled") && (
+                                <button
+                                  onClick={() =>
+                                    updateStatus.mutate({ id: inv.id, status: "sent" })
+                                  }
+                                  title={inv.status === "unfulfilled" ? "Mark fulfilled" : "Mark as sent"}
+                                  className="p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
+                                >
+                                  <Icon icon={SentIcon} size={16} />
+                                </button>
+                              )}
+                              {inv.status !== "draft" &&
+                                inv.status !== "cancelled" &&
+                                inv.status !== "paid" &&
+                                inv.status !== "adjusted" &&
+                                (parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0")) > 0.01 && (
+                                  <button
+                                    onClick={() =>
+                                      openPaymentPanel(
+                                        inv.partyId,
+                                        inv.id,
+                                        (parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0")).toFixed(2)
+                                      )
+                                    }
+                                    title="Record payment"
+                                    className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-600/[0.08] transition-colors"
+                                  >
+                                    <Icon icon={Cash01Icon} size={16} />
+                                  </button>
+                                )}
+                              {(inv.status === "draft" || inv.status === "unfulfilled") && (
+                                <button
+                                  onClick={() =>
+                                    confirmDelete(inv.id, inv.invoiceNumber)
+                                  }
+                                  title="Delete invoice"
+                                  className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
+                                >
+                                  <Icon icon={Delete02Icon} size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                  ))}
+                </tbody>
+              </table>
+              {list.loadingMore && (
+                <div className="border-t border-border-light">
+                  <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                    <div className="h-3 bg-surface-2 rounded w-32" />
+                    <div className="h-3 bg-surface-2 rounded w-20" />
+                    <div className="h-3 bg-surface-2 rounded w-24" />
+                    <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
+                  </div>
+                </div>
+              )}
+              {list.hasMore && !list.loadingMore && (
+                <button
+                  type="button"
+                  onClick={list.loadMore}
+                  className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
+                >
+                  Load more
+                </button>
+              )}
+              {!list.hasMore && list.items.length > PAGE_SIZE && (
+                <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
+                  All {list.total.toLocaleString()} records loaded
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Delete confirm dialog */}
       <DeleteConfirmDialog

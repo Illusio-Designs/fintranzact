@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, downloadCSV, todayISODate, toISOString } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -15,7 +16,6 @@ import { useBarcodeSetup } from "@/components/barcodes/BarcodeSymbol";
 import { Modal } from "@/components/ui/Modal";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
@@ -119,7 +119,7 @@ function countFilled(...values: string[]): number {
 }
 
 function ItemsPage() {
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search items…");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
   const [page, setPage] = useState(1);
@@ -317,12 +317,6 @@ function ItemsPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search items..."
-          className="max-w-xs"
-        />
         <SegmentedControl
           tabs={TYPE_TABS}
           value={typeFilter}

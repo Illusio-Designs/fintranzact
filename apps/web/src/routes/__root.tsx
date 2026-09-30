@@ -17,6 +17,7 @@ import { BusinessSwitcher } from "@/components/ui/BusinessSwitcher";
 import { Logo } from "@/components/ui/Logo";
 import { Icon } from "@/components/ui/Icon";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { usePageSearchSlot } from "@/lib/page-search";
 import {
   Add01Icon,
   Alert02Icon,
@@ -44,6 +45,7 @@ import {
   UnfoldMoreIcon,
   UserIcon,
   Search01Icon,
+  Cancel01Icon,
   File01Icon,
   Location01Icon,
   Call02Icon,
@@ -671,6 +673,7 @@ function RootLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [showPalette, setShowPalette] = useState(false);
+  const pageSearch = usePageSearchSlot();
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showTenantPicker, setShowTenantPicker] = useState(false);
 
@@ -1693,8 +1696,43 @@ function RootLayout() {
               </div>
             )}
 
-            {/* Search — opens the command palette (also ⌘K / Ctrl+K) */}
-            {!isOnboarding && (
+            {/* Search — filters the current page's list when the page uses
+                it (usePageSearch); otherwise opens the command palette.
+                ⌘K / Ctrl+K always opens the palette. */}
+            {!isOnboarding && pageSearch?.placeholder && (
+              <div className="flex h-10 min-w-0 items-center gap-2.5 rounded-xl border border-border-light bg-surface-1 px-3 text-sm transition-colors focus-within:border-brand-500 focus-within:bg-surface-0 sm:w-72 lg:w-96">
+                <Icon icon={Search01Icon} size={17} className="shrink-0 text-text-tertiary" />
+                <input
+                  type="search"
+                  value={pageSearch.query}
+                  onChange={(e) => pageSearch.setQuery(e.target.value)}
+                  placeholder={pageSearch.placeholder}
+                  aria-label={pageSearch.placeholder}
+                  className="min-w-0 flex-1 bg-transparent text-text-primary outline-none placeholder:text-text-tertiary [&::-webkit-search-cancel-button]:hidden"
+                />
+                {pageSearch.query ? (
+                  <button
+                    type="button"
+                    onClick={() => pageSearch.setQuery("")}
+                    className="shrink-0 rounded-md p-0.5 text-text-tertiary hover:text-text-primary"
+                    aria-label="Clear search"
+                  >
+                    <Icon icon={Cancel01Icon} size={14} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowPalette(true)}
+                    className="hidden shrink-0 rounded-md border border-border-light px-1.5 py-0.5 font-sans text-[11px] font-semibold text-text-tertiary hover:text-text-primary sm:block"
+                    aria-label="Search the whole app"
+                    title="Search the whole app (⌘K)"
+                  >
+                    ⌘K
+                  </button>
+                )}
+              </div>
+            )}
+            {!isOnboarding && !pageSearch?.placeholder && (
               <button
                 type="button"
                 onClick={() => setShowPalette(true)}
@@ -1727,17 +1765,6 @@ function RootLayout() {
                   canSeeItems={canAccess(session?.role, "Item", "read")}
                   isGstRegistered={isGstRegistered}
                 />
-              )}
-              {!isOnboarding && canAccess(session?.role, "Invoice", "create") && (
-                <Link
-                  to="/invoices"
-                  search={{ create: "1" }}
-                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-3 text-sm font-bold text-white shadow-[0_8px_18px_-8px_rgba(59,94,170,.7)] transition hover:bg-brand-700 sm:px-4"
-                  aria-label="New invoice"
-                >
-                  <Icon icon={Add01Icon} size={16} strokeWidth={2.2} />
-                  <span className="hidden sm:inline">New invoice</span>
-                </Link>
               )}
 
               {/* No sidebar during onboarding, so the account controls live here */}

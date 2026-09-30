@@ -2,13 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Building03Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
@@ -34,8 +34,10 @@ const TYPE_LABEL = Object.fromEntries(TYPE_OPTIONS.map((t) => [t.value, t.label]
 function WarehousesPage() {
   const utils = trpc.useUtils();
   const { data: warehouses, isLoading } = useWarehouses();
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search item or SKU…");
   const [page, setPage] = useState(1);
+  // A new search starts from the first page.
+  useEffect(() => setPage(1), [search]);
   const { data: balances, isFetching } = trpc.stock.balances.useQuery(
     { search: search || undefined, page, limit: PAGE_SIZE },
     { placeholderData: keepPreviousData },
@@ -124,15 +126,6 @@ function WarehousesPage() {
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-light px-4 py-3">
           <h2 className="text-sm font-semibold text-text-primary">Stock by warehouse</h2>
-          <SearchInput
-            value={search}
-            onChange={(v) => {
-              setSearch(v);
-              setPage(1);
-            }}
-            placeholder="Search item or SKU..."
-            className="max-w-xs"
-          />
         </div>
         {!balances ? (
           <SkeletonRows />

@@ -154,6 +154,29 @@ describe("quotation via document factory", () => {
     }
   });
 
+  it("quotation.list search matches the document number and party name", async () => {
+    const caller = createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: world.business1.id,
+    });
+
+    const doc = await caller.quotation.create(
+      buildInvoiceInput(world.party1.id, stockItemDecrement.id, "1", "100.00"),
+    );
+
+    const byNumber = await caller.quotation.list({ page: 1, limit: 100, search: doc.invoiceNumber });
+    expect(byNumber.data.map((d) => d.id)).toEqual([doc.id]);
+
+    const byParty = await caller.quotation.list({ page: 1, limit: 100, search: world.party1.name.slice(0, 4).toLowerCase() });
+    expect(byParty.data.map((d) => d.id)).toContain(doc.id);
+
+    const none = await caller.quotation.list({ page: 1, limit: 100, search: "no-such-quotation" });
+    expect(none.data).toHaveLength(0);
+  });
+
   it("quotation.updateStatus transitions from draft to sent", async () => {
     const caller = createTestCaller({
       userId: world.ramesh.id,

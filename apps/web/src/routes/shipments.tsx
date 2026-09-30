@@ -529,119 +529,123 @@ function ShipmentsPage() {
         }
       />
 
-      {/* Status filter */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <PillTabs
-          tabs={STATUS_TABS}
-          value={status}
-          onChange={(v) => { setStatus(v as ShipmentStatus | ""); setPage(1); }}
-        />
-      </div>
-
-      {/* Content */}
-      {isLoading ? (
-        <SkeletonRows count={6} height="h-14" />
-      ) : !list.items.length && !isFetching ? (
-        <EmptyState
-          icon={
-            <Icon icon={DeliveryTruck01Icon} size={24} className="text-text-tertiary" />
-          }
-          title="No shipments found"
-          description={status ? `No shipments with status "${status}".` : "No shipments have been created yet."}
-        />
-      ) : (
-        <div className="card overflow-hidden">
-          <div
-            ref={list.scrollRef}
-            onScroll={list.onScroll}
-            className="max-h-[600px] overflow-y-auto"
-          >
-            <table className="data-table w-full">
-              <thead className="sticky top-0 z-10">
-                <tr>
-                  <th className="whitespace-nowrap">Date</th>
-                  <th className="whitespace-nowrap">Invoice #</th>
-                  <th>Party</th>
-                  <th>Mode</th>
-                  <th>Carrier</th>
-                  <th>Tracking #</th>
-                  <th className="text-right whitespace-nowrap">Cost</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.items.map((s) => (
-                  <tr
-                    key={s.id}
-                    className="group cursor-pointer"
-                    onClick={() => setSelectedId(s.id)}
-                  >
-                    <td className="text-text-secondary whitespace-nowrap text-xs">
-                      {formatDate(s.shipmentDate ?? s.createdAt)}
-                    </td>
-                    <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
-                      {s.invoiceNumber ?? "—"}
-                    </td>
-                    <td className="font-medium">
-                      <span className="block truncate max-w-[200px]">{s.partyName ?? "—"}</span>
-                    </td>
-                    <td className="text-text-secondary text-xs">
-                      {MODE_LABELS[s.mode ?? ""] ?? s.mode ?? "—"}
-                    </td>
-                    <td className="text-text-secondary text-xs capitalize">
-                      {s.carrier?.replace(/_/g, " ") ?? "—"}
-                    </td>
-                    <td className="text-xs" onClick={(e) => e.stopPropagation()}>
-                      {s.trackingUrl ? (
-                        <a
-                          href={s.trackingUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono text-brand-600 hover:underline"
-                        >
-                          {s.trackingNumber ?? "—"}
-                        </a>
-                      ) : (
-                        <span className="font-mono text-text-secondary">{s.trackingNumber ?? "—"}</span>
-                      )}
-                    </td>
-                    <td className="text-right tabular-nums font-medium whitespace-nowrap">
-                      {formatCurrency(s.cost)}
-                    </td>
-                    <td className="whitespace-nowrap">
-                      <ShipmentStatusBadge status={s.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {list.loadingMore && (
-              <div className="border-t border-border-light">
-                <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                  <div className="h-3 bg-surface-2 rounded w-32" />
-                  <div className="h-3 bg-surface-2 rounded w-20" />
-                  <div className="h-3 bg-surface-2 rounded w-24" />
-                  <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
-                </div>
-              </div>
-            )}
-            {list.hasMore && !list.loadingMore && (
-              <button
-                type="button"
-                onClick={list.loadMore}
-                className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
-              >
-                Load more
-              </button>
-            )}
-            {!list.hasMore && list.items.length > PAGE_SIZE && (
-              <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
-                All {list.total.toLocaleString()} records loaded
-              </div>
-            )}
-          </div>
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+        {/* Status filter */}
+        <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
+          <PillTabs
+            tabs={STATUS_TABS}
+            value={status}
+            onChange={(v) => { setStatus(v as ShipmentStatus | ""); setPage(1); }}
+          />
         </div>
-      )}
+
+        {/* Content */}
+        {isLoading ? (
+          <div className="p-4">
+            <SkeletonRows count={6} height="h-14" />
+          </div>
+        ) : !list.items.length && !isFetching ? (
+          <EmptyState
+            icon={
+              <Icon icon={DeliveryTruck01Icon} size={24} className="text-text-tertiary" />
+            }
+            title="No shipments found"
+            description={status ? `No shipments with status "${status}".` : "No shipments have been created yet."}
+          />
+        ) : (
+          <div>
+            <div
+              ref={list.scrollRef}
+              onScroll={list.onScroll}
+              className="max-h-[600px] overflow-y-auto"
+            >
+              <table className="data-table w-full">
+                <thead className="sticky top-0 z-10">
+                  <tr>
+                    <th className="whitespace-nowrap">Date</th>
+                    <th className="whitespace-nowrap">Invoice #</th>
+                    <th>Party</th>
+                    <th>Mode</th>
+                    <th>Carrier</th>
+                    <th>Tracking #</th>
+                    <th className="text-right whitespace-nowrap">Cost</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.items.map((s) => (
+                    <tr
+                      key={s.id}
+                      className="group cursor-pointer"
+                      onClick={() => setSelectedId(s.id)}
+                    >
+                      <td className="text-text-secondary whitespace-nowrap text-xs">
+                        {formatDate(s.shipmentDate ?? s.createdAt)}
+                      </td>
+                      <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
+                        {s.invoiceNumber ?? "—"}
+                      </td>
+                      <td className="font-medium">
+                        <span className="block truncate max-w-[200px]">{s.partyName ?? "—"}</span>
+                      </td>
+                      <td className="text-text-secondary text-xs">
+                        {MODE_LABELS[s.mode ?? ""] ?? s.mode ?? "—"}
+                      </td>
+                      <td className="text-text-secondary text-xs capitalize">
+                        {s.carrier?.replace(/_/g, " ") ?? "—"}
+                      </td>
+                      <td className="text-xs" onClick={(e) => e.stopPropagation()}>
+                        {s.trackingUrl ? (
+                          <a
+                            href={s.trackingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-brand-600 hover:underline"
+                          >
+                            {s.trackingNumber ?? "—"}
+                          </a>
+                        ) : (
+                          <span className="font-mono text-text-secondary">{s.trackingNumber ?? "—"}</span>
+                        )}
+                      </td>
+                      <td className="text-right tabular-nums font-medium whitespace-nowrap">
+                        {formatCurrency(s.cost)}
+                      </td>
+                      <td className="whitespace-nowrap">
+                        <ShipmentStatusBadge status={s.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {list.loadingMore && (
+                <div className="border-t border-border-light">
+                  <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                    <div className="h-3 bg-surface-2 rounded w-32" />
+                    <div className="h-3 bg-surface-2 rounded w-20" />
+                    <div className="h-3 bg-surface-2 rounded w-24" />
+                    <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
+                  </div>
+                </div>
+              )}
+              {list.hasMore && !list.loadingMore && (
+                <button
+                  type="button"
+                  onClick={list.loadMore}
+                  className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
+                >
+                  Load more
+                </button>
+              )}
+              {!list.hasMore && list.items.length > PAGE_SIZE && (
+                <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
+                  All {list.total.toLocaleString()} records loaded
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Detail panel */}
       <ShipmentDetailPanel

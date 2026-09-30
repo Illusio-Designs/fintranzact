@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, getInitials, cn, downloadCSV, toISOString } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -32,7 +33,6 @@ import {
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { InputField, TextareaField } from "@/components/ui/FormField";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
@@ -78,7 +78,7 @@ function countFilled(...values: string[]): number {
 }
 
 function PartiesPage() {
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search by name…");
   const [partyFilter, setPartyFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"name" | "balance">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -186,12 +186,6 @@ function PartiesPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search by name..."
-          className="max-w-xs"
-        />
         <PillTabs
           tabs={PARTY_TYPE_TABS}
           value={["all", "customer", "supplier"].includes(partyFilter) ? partyFilter : "all"}
