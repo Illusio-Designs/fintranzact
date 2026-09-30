@@ -37,6 +37,15 @@ exceptions:
       - inventoryReports.ageing
       - inventoryReports.reorderStatus
       - inventoryReports.deadStock
+      # Warehouse management (edit, locations, member access, default warehouses) is a web screen for now.
+      - warehouse.accessList
+      - warehouse.accessSet
+      - warehouse.inventorySettingsUpdate
+      - warehouse.locationCreate
+      - warehouse.locationList
+      - warehouse.locationUpdate
+      - warehouse.warehouseDelete
+      - warehouse.warehouseUpdate
       - warehouse.premiseList
       - warehouse.warehouseCreate
 
@@ -338,6 +347,15 @@ exceptions:
       - inventoryReports.ageing
       - inventoryReports.reorderStatus
       - inventoryReports.deadStock
+      # Warehouse management (edit, locations, member access, default warehouses) is a web screen for now.
+      - warehouse.accessList
+      - warehouse.accessSet
+      - warehouse.inventorySettingsUpdate
+      - warehouse.locationCreate
+      - warehouse.locationList
+      - warehouse.locationUpdate
+      - warehouse.warehouseDelete
+      - warehouse.warehouseUpdate
       - warehouse.premiseList
       - warehouse.warehouseCreate
 
@@ -473,6 +491,15 @@ exceptions:
       - inventoryReports.ageing
       - inventoryReports.reorderStatus
       - inventoryReports.deadStock
+      # Warehouse management (edit, locations, member access, default warehouses) is a web screen for now.
+      - warehouse.accessList
+      - warehouse.accessSet
+      - warehouse.inventorySettingsUpdate
+      - warehouse.locationCreate
+      - warehouse.locationList
+      - warehouse.locationUpdate
+      - warehouse.warehouseDelete
+      - warehouse.warehouseUpdate
       - warehouse.premiseList
       - warehouse.warehouseCreate
 

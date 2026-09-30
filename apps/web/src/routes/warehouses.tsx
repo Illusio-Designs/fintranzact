@@ -15,6 +15,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Icon } from "@/components/ui/Icon";
 import { cn } from "@/lib/utils";
 import { formatQty, useWarehouses } from "@/components/inventory/shared";
+import { DefaultWarehouses, WarehouseManager } from "@/components/inventory/WarehouseManager";
 
 export const Route = createFileRoute("/warehouses")({
   component: WarehousesPage,
@@ -128,6 +129,7 @@ function InventorySettings() {
         pending={update.isPending}
         onChange={(v) => update.mutate({ valuationMethod: v as (typeof VALUATION_OPTIONS)[number]["value"] })}
       />
+      <DefaultWarehouses canEdit={canEdit} />
     </div>
   );
 }
@@ -143,6 +145,11 @@ function WarehousesPage() {
     { search: search || undefined, page, limit: PAGE_SIZE },
     { placeholderData: keepPreviousData },
   );
+
+  const { data: session } = trpc.auth.me.useQuery();
+  const canManage = ["owner", "admin", "superadmin"].includes(session?.role ?? "");
+  const [managingId, setManagingId] = useState<string | null>(null);
+  const managing = (warehouses ?? []).find((w) => w.id === managingId) ?? null;
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", code: "", warehouseType: "godown", premiseId: "", address: "" });
@@ -210,6 +217,14 @@ function WarehousesPage() {
                     {w.premiseName ? ` · ${w.premiseName}` : ""}
                   </p>
                 </div>
+                {canManage && (
+                  <button
+                    className="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                    onClick={() => setManagingId(w.id)}
+                  >
+                    Manage
+                  </button>
+                )}
               </div>
               <div className="mt-4 flex items-end justify-between border-t border-border-light pt-3">
                 <div>
@@ -283,6 +298,8 @@ function WarehousesPage() {
           </>
         )}
       </div>
+
+      {managing && <WarehouseManager key={managing.id} warehouse={managing} onClose={() => setManagingId(null)} />}
 
       <SlideOver
         open={open}
