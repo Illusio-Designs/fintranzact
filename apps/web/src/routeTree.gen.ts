@@ -20,7 +20,6 @@ import { Route as StockGroupsRouteImport } from './routes/stock-groups'
 import { Route as StockAdjustmentsRouteImport } from './routes/stock-adjustments'
 import { Route as ShipmentsRouteImport } from './routes/shipments'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SalesReturnsRouteImport } from './routes/sales-returns'
 import { Route as SalesOrdersRouteImport } from './routes/sales-orders'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -36,7 +35,6 @@ import { Route as PosRouteImport } from './routes/pos'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PhysicalStockRouteImport } from './routes/physical-stock'
 import { Route as PaymentsRouteImport } from './routes/payments'
-import { Route as PartnersRouteImport } from './routes/partners'
 import { Route as PartnerPortalRouteImport } from './routes/partner-portal'
 import { Route as PartiesRouteImport } from './routes/parties'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
@@ -63,9 +61,13 @@ import { Route as AutomatedInvoicesRouteImport } from './routes/automated-invoic
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SolutionsIndexRouteImport } from './routes/solutions/index'
+import { Route as SecurityIndexRouteImport } from './routes/security/index'
+import { Route as PartnersIndexRouteImport } from './routes/partners/index'
 import { Route as HelpIndexRouteImport } from './routes/help/index'
 import { Route as FeaturesIndexRouteImport } from './routes/features/index'
 import { Route as SolutionsSlugRouteImport } from './routes/solutions/$slug'
+import { Route as SecurityReportRouteImport } from './routes/security/report'
+import { Route as PartnersApplyRouteImport } from './routes/partners/apply'
 import { Route as InviteTokenRouteImport } from './routes/invite/$token'
 import { Route as ITokenRouteImport } from './routes/i/$token'
 import { Route as HelpSplatRouteImport } from './routes/help/$'
@@ -134,11 +136,6 @@ const ShipmentsRoute = ShipmentsRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SecurityRoute = SecurityRouteImport.update({
-  id: '/security',
-  path: '/security',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SalesReturnsRoute = SalesReturnsRouteImport.update({
@@ -214,11 +211,6 @@ const PhysicalStockRoute = PhysicalStockRouteImport.update({
 const PaymentsRoute = PaymentsRouteImport.update({
   id: '/payments',
   path: '/payments',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PartnersRoute = PartnersRouteImport.update({
-  id: '/partners',
-  path: '/partners',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PartnerPortalRoute = PartnerPortalRouteImport.update({
@@ -358,6 +350,16 @@ const SolutionsIndexRoute = SolutionsIndexRouteImport.update({
   path: '/solutions/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SecurityIndexRoute = SecurityIndexRouteImport.update({
+  id: '/security/',
+  path: '/security/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnersIndexRoute = PartnersIndexRouteImport.update({
+  id: '/partners/',
+  path: '/partners/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HelpIndexRoute = HelpIndexRouteImport.update({
   id: '/help/',
   path: '/help/',
@@ -394,6 +396,16 @@ const DevelopersAuthenticationLazyRoute =
 const SolutionsSlugRoute = SolutionsSlugRouteImport.update({
   id: '/solutions/$slug',
   path: '/solutions/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityReportRoute = SecurityReportRouteImport.update({
+  id: '/security/report',
+  path: '/security/report',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnersApplyRoute = PartnersApplyRouteImport.update({
+  id: '/partners/apply',
+  path: '/partners/apply',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
@@ -484,7 +496,6 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/partner-portal': typeof PartnerPortalRoute
-  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/platform': typeof PlatformRoute
@@ -500,7 +511,6 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
-  '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
@@ -519,12 +529,16 @@ export interface FileRoutesByFullPath {
   '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/partners/apply': typeof PartnersApplyRoute
+  '/security/report': typeof SecurityReportRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
   '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
   '/developers/conventions': typeof DevelopersConventionsLazyRoute
   '/developers/faq': typeof DevelopersFaqLazyRoute
   '/features/': typeof FeaturesIndexRoute
   '/help/': typeof HelpIndexRoute
+  '/partners/': typeof PartnersIndexRoute
+  '/security/': typeof SecurityIndexRoute
   '/solutions/': typeof SolutionsIndexRoute
   '/developers/': typeof DevelopersIndexLazyRoute
   '/developers/$section/$endpoint': typeof DevelopersSectionEndpointLazyRoute
@@ -556,7 +570,6 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/partner-portal': typeof PartnerPortalRoute
-  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/platform': typeof PlatformRoute
@@ -572,7 +585,6 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
-  '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
@@ -591,12 +603,16 @@ export interface FileRoutesByTo {
   '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/partners/apply': typeof PartnersApplyRoute
+  '/security/report': typeof SecurityReportRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
   '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
   '/developers/conventions': typeof DevelopersConventionsLazyRoute
   '/developers/faq': typeof DevelopersFaqLazyRoute
   '/features': typeof FeaturesIndexRoute
   '/help': typeof HelpIndexRoute
+  '/partners': typeof PartnersIndexRoute
+  '/security': typeof SecurityIndexRoute
   '/solutions': typeof SolutionsIndexRoute
   '/developers': typeof DevelopersIndexLazyRoute
   '/developers/$section/$endpoint': typeof DevelopersSectionEndpointLazyRoute
@@ -629,7 +645,6 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/partner-portal': typeof PartnerPortalRoute
-  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/platform': typeof PlatformRoute
@@ -645,7 +660,6 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
-  '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
@@ -664,12 +678,16 @@ export interface FileRoutesById {
   '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/partners/apply': typeof PartnersApplyRoute
+  '/security/report': typeof SecurityReportRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
   '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
   '/developers/conventions': typeof DevelopersConventionsLazyRoute
   '/developers/faq': typeof DevelopersFaqLazyRoute
   '/features/': typeof FeaturesIndexRoute
   '/help/': typeof HelpIndexRoute
+  '/partners/': typeof PartnersIndexRoute
+  '/security/': typeof SecurityIndexRoute
   '/solutions/': typeof SolutionsIndexRoute
   '/developers/': typeof DevelopersIndexLazyRoute
   '/developers/$section/$endpoint': typeof DevelopersSectionEndpointLazyRoute
@@ -703,7 +721,6 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/parties'
     | '/partner-portal'
-    | '/partners'
     | '/payments'
     | '/physical-stock'
     | '/platform'
@@ -719,7 +736,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales-orders'
     | '/sales-returns'
-    | '/security'
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
@@ -738,12 +754,16 @@ export interface FileRouteTypes {
     | '/help/$'
     | '/i/$token'
     | '/invite/$token'
+    | '/partners/apply'
+    | '/security/report'
     | '/solutions/$slug'
     | '/developers/authentication'
     | '/developers/conventions'
     | '/developers/faq'
     | '/features/'
     | '/help/'
+    | '/partners/'
+    | '/security/'
     | '/solutions/'
     | '/developers/'
     | '/developers/$section/$endpoint'
@@ -775,7 +795,6 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/parties'
     | '/partner-portal'
-    | '/partners'
     | '/payments'
     | '/physical-stock'
     | '/platform'
@@ -791,7 +810,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales-orders'
     | '/sales-returns'
-    | '/security'
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
@@ -810,12 +828,16 @@ export interface FileRouteTypes {
     | '/help/$'
     | '/i/$token'
     | '/invite/$token'
+    | '/partners/apply'
+    | '/security/report'
     | '/solutions/$slug'
     | '/developers/authentication'
     | '/developers/conventions'
     | '/developers/faq'
     | '/features'
     | '/help'
+    | '/partners'
+    | '/security'
     | '/solutions'
     | '/developers'
     | '/developers/$section/$endpoint'
@@ -847,7 +869,6 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/parties'
     | '/partner-portal'
-    | '/partners'
     | '/payments'
     | '/physical-stock'
     | '/platform'
@@ -863,7 +884,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales-orders'
     | '/sales-returns'
-    | '/security'
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
@@ -882,12 +902,16 @@ export interface FileRouteTypes {
     | '/help/$'
     | '/i/$token'
     | '/invite/$token'
+    | '/partners/apply'
+    | '/security/report'
     | '/solutions/$slug'
     | '/developers/authentication'
     | '/developers/conventions'
     | '/developers/faq'
     | '/features/'
     | '/help/'
+    | '/partners/'
+    | '/security/'
     | '/solutions/'
     | '/developers/'
     | '/developers/$section/$endpoint'
@@ -920,7 +944,6 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   PartiesRoute: typeof PartiesRoute
   PartnerPortalRoute: typeof PartnerPortalRoute
-  PartnersRoute: typeof PartnersRoute
   PaymentsRoute: typeof PaymentsRoute
   PhysicalStockRoute: typeof PhysicalStockRoute
   PlatformRoute: typeof PlatformRoute
@@ -936,7 +959,6 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   SalesOrdersRoute: typeof SalesOrdersRoute
   SalesReturnsRoute: typeof SalesReturnsRoute
-  SecurityRoute: typeof SecurityRoute
   SettingsRoute: typeof SettingsRoute
   ShipmentsRoute: typeof ShipmentsRoute
   StockAdjustmentsRoute: typeof StockAdjustmentsRoute
@@ -955,12 +977,16 @@ export interface RootRouteChildren {
   HelpSplatRoute: typeof HelpSplatRoute
   ITokenRoute: typeof ITokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
+  PartnersApplyRoute: typeof PartnersApplyRoute
+  SecurityReportRoute: typeof SecurityReportRoute
   SolutionsSlugRoute: typeof SolutionsSlugRoute
   DevelopersAuthenticationLazyRoute: typeof DevelopersAuthenticationLazyRoute
   DevelopersConventionsLazyRoute: typeof DevelopersConventionsLazyRoute
   DevelopersFaqLazyRoute: typeof DevelopersFaqLazyRoute
   FeaturesIndexRoute: typeof FeaturesIndexRoute
   HelpIndexRoute: typeof HelpIndexRoute
+  PartnersIndexRoute: typeof PartnersIndexRoute
+  SecurityIndexRoute: typeof SecurityIndexRoute
   SolutionsIndexRoute: typeof SolutionsIndexRoute
   DevelopersIndexLazyRoute: typeof DevelopersIndexLazyRoute
   DevelopersSectionEndpointLazyRoute: typeof DevelopersSectionEndpointLazyRoute
@@ -1030,13 +1056,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/security': {
-      id: '/security'
-      path: '/security'
-      fullPath: '/security'
-      preLoaderRoute: typeof SecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sales-returns': {
@@ -1142,13 +1161,6 @@ declare module '@tanstack/react-router' {
       path: '/payments'
       fullPath: '/payments'
       preLoaderRoute: typeof PaymentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/partners': {
-      id: '/partners'
-      path: '/partners'
-      fullPath: '/partners'
-      preLoaderRoute: typeof PartnersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/partner-portal': {
@@ -1340,6 +1352,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SolutionsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/security/': {
+      id: '/security/'
+      path: '/security'
+      fullPath: '/security/'
+      preLoaderRoute: typeof SecurityIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partners/': {
+      id: '/partners/'
+      path: '/partners'
+      fullPath: '/partners/'
+      preLoaderRoute: typeof PartnersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/help/': {
       id: '/help/'
       path: '/help'
@@ -1380,6 +1406,20 @@ declare module '@tanstack/react-router' {
       path: '/solutions/$slug'
       fullPath: '/solutions/$slug'
       preLoaderRoute: typeof SolutionsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security/report': {
+      id: '/security/report'
+      path: '/security/report'
+      fullPath: '/security/report'
+      preLoaderRoute: typeof SecurityReportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partners/apply': {
+      id: '/partners/apply'
+      path: '/partners/apply'
+      fullPath: '/partners/apply'
+      preLoaderRoute: typeof PartnersApplyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
@@ -1488,7 +1528,6 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   PartiesRoute: PartiesRoute,
   PartnerPortalRoute: PartnerPortalRoute,
-  PartnersRoute: PartnersRoute,
   PaymentsRoute: PaymentsRoute,
   PhysicalStockRoute: PhysicalStockRoute,
   PlatformRoute: PlatformRoute,
@@ -1504,7 +1543,6 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   SalesOrdersRoute: SalesOrdersRoute,
   SalesReturnsRoute: SalesReturnsRoute,
-  SecurityRoute: SecurityRoute,
   SettingsRoute: SettingsRoute,
   ShipmentsRoute: ShipmentsRoute,
   StockAdjustmentsRoute: StockAdjustmentsRoute,
@@ -1523,12 +1561,16 @@ const rootRouteChildren: RootRouteChildren = {
   HelpSplatRoute: HelpSplatRoute,
   ITokenRoute: ITokenRoute,
   InviteTokenRoute: InviteTokenRoute,
+  PartnersApplyRoute: PartnersApplyRoute,
+  SecurityReportRoute: SecurityReportRoute,
   SolutionsSlugRoute: SolutionsSlugRoute,
   DevelopersAuthenticationLazyRoute: DevelopersAuthenticationLazyRoute,
   DevelopersConventionsLazyRoute: DevelopersConventionsLazyRoute,
   DevelopersFaqLazyRoute: DevelopersFaqLazyRoute,
   FeaturesIndexRoute: FeaturesIndexRoute,
   HelpIndexRoute: HelpIndexRoute,
+  PartnersIndexRoute: PartnersIndexRoute,
+  SecurityIndexRoute: SecurityIndexRoute,
   SolutionsIndexRoute: SolutionsIndexRoute,
   DevelopersIndexLazyRoute: DevelopersIndexLazyRoute,
   DevelopersSectionEndpointLazyRoute: DevelopersSectionEndpointLazyRoute,

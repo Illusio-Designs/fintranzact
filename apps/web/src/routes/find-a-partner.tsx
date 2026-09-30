@@ -55,8 +55,7 @@ function FindAPartnerPage() {
       >
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <Link
-            to="/partners"
-            hash="apply"
+            to="/partners/apply"
             className="inline-flex h-[52px] items-center rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
           >
             Become a partner
@@ -132,7 +131,7 @@ function FindAPartnerPage() {
                   Clear filters
                 </button>
               ) : (
-                <Link to="/partners" hash="apply" className="mt-2 text-sm font-semibold text-brand-600 hover:underline dark:text-brand-300">
+                <Link to="/partners/apply" className="mt-2 text-sm font-semibold text-brand-600 hover:underline dark:text-brand-300">
                   Become a partner
                 </Link>
               )}

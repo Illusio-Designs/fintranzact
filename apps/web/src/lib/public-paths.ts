@@ -13,11 +13,13 @@ export const MARKETING_PATHS = [
   "/about",
   "/contact",
   "/partners",
+  "/partners/apply",
   "/find-a-partner",
   "/privacy",
   "/terms",
   "/refund-policy",
   "/security",
+  "/security/report",
   "/widgets",
 ];
 

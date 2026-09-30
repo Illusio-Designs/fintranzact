@@ -42,6 +42,7 @@ import {
   WarehouseIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@/components/ui/Icon";
+import type { FeatureSlug } from "@/lib/feature-slugs";
 
 /**
  * Content for the public solutions pages (/solutions and /solutions/<slug>).
@@ -53,18 +54,11 @@ import type { IconSvgElement } from "@/components/ui/Icon";
  * KOT and table management are NOT built).
  */
 
-/** Section anchors on /features. */
-export type FeatureAnchor =
-  | "sales-billing"
-  | "gst-compliance"
-  | "accounting-banking"
-  | "inventory-fulfilment"
-  | "teams-platform";
-
 export type SolutionFeature = {
   name: string;
   body: string;
-  anchor: FeatureAnchor;
+  /** The feature page this card links to (/features/<page>). */
+  page: FeatureSlug;
   icon: IconSvgElement;
 };
 
@@ -73,199 +67,199 @@ export const FEATURES = {
   gstInvoices: {
     name: "GST invoices",
     body: "Sale and purchase invoices with HSN/SAC codes and CGST, SGST, IGST and cess worked out on every line.",
-    anchor: "sales-billing",
+    page: "invoicing",
     icon: Invoice01Icon,
   },
   quotations: {
     name: "Quotations & proforma",
     body: "Send estimates and proforma invoices, then convert them to invoices without retyping.",
-    anchor: "sales-billing",
+    page: "quotations",
     icon: FileEditIcon,
   },
   challans: {
     name: "Delivery challans",
     body: "Move goods without a sale and invoice them later from the challan.",
-    anchor: "sales-billing",
+    page: "delivery-challans",
     icon: DeliveryTruck01Icon,
   },
   orders: {
     name: "Sales & purchase orders",
     body: "Record orders, receive goods against purchase orders with GRNs, and see ordered, fulfilled and pending quantities.",
-    anchor: "sales-billing",
+    page: "orders-goods-receipts",
     icon: ClipboardIcon,
   },
   returns: {
     name: "Credit notes & returns",
     body: "Handle sales returns and adjustments with the tax reversed correctly.",
-    anchor: "sales-billing",
+    page: "credit-notes-returns",
     icon: ReturnRequestIcon,
   },
   recurring: {
     name: "Recurring invoices",
     body: "Automate monthly and periodic billing for retainers and subscriptions.",
-    anchor: "sales-billing",
+    page: "recurring-invoices",
     icon: RepeatIcon,
   },
   pos: {
     name: "Point of sale",
     body: "A full-screen checkout with barcode scanning, keyboard shortcuts, held sales, cash or UPI payment and thermal receipts.",
-    anchor: "sales-billing",
+    page: "point-of-sale",
     icon: ShoppingCart01Icon,
   },
   shareLinks: {
     name: "Shareable invoice links",
     body: "Send a link your customer opens without signing in, share it on WhatsApp, and show your UPI QR code for payment.",
-    anchor: "sales-billing",
+    page: "invoicing",
     icon: Share01Icon,
   },
   eInvoice: {
     name: "e-Invoicing",
     body: "Generate the IRN and signed QR code directly from your invoices.",
-    anchor: "gst-compliance",
+    page: "e-invoicing",
     icon: QrCodeIcon,
   },
   ewayBill: {
     name: "e-Way bills",
     body: "Create and track e-way bills for goods in transit from the invoice or challan.",
-    anchor: "gst-compliance",
+    page: "e-way-bills",
     icon: Route01Icon,
   },
   gstReturns: {
     name: "GSTR-1 & GSTR-3B",
     body: "File-ready return summaries built from the transactions you already recorded.",
-    anchor: "gst-compliance",
+    page: "gst-filing",
     icon: TaxesIcon,
   },
   gstr2b: {
     name: "GSTR-2B & input tax credit",
     body: "Match supplier data against your purchase bills, spot mismatches and track eligible and claimed ITC.",
-    anchor: "gst-compliance",
+    page: "gst-filing",
     icon: GitCompareIcon,
   },
   composition: {
     name: "Composition scheme",
     body: "Mark your business as a composition dealer and inter-state sale invoices are blocked, as the rules require.",
-    anchor: "gst-compliance",
+    page: "gst-filing",
     icon: PercentIcon,
   },
   payments: {
     name: "Payments & outstanding",
     body: "Record receipts and payments against invoices and follow up with outstanding and ageing reports.",
-    anchor: "accounting-banking",
+    page: "payments",
     icon: MoneyReceive01Icon,
   },
   expenses: {
     name: "Expenses",
     body: "Log business expenses by category, with GST where it applies.",
-    anchor: "accounting-banking",
+    page: "expenses",
     icon: Wallet01Icon,
   },
   banking: {
     name: "Cash, bank & reconciliation",
     body: "Keep several cash and bank accounts, import statements and match them against your books.",
-    anchor: "accounting-banking",
+    page: "banking",
     icon: BankIcon,
   },
   reports: {
     name: "Accounting reports",
     body: "Profit & loss, balance sheet, trial balance, general ledger, day book, cash flow and party statements.",
-    anchor: "accounting-banking",
+    page: "reporting",
     icon: ChartBarLineIcon,
   },
   tally: {
     name: "Tally export",
     body: "Export vouchers for a date range from the Tally Export report to carry your books into Tally.",
-    anchor: "accounting-banking",
+    page: "reporting",
     icon: Download04Icon,
   },
   items: {
     name: "Items, variants & units",
     body: "Products and services with variants such as size and colour, alternate units like box and piece, and tax rates.",
-    anchor: "inventory-fulfilment",
+    page: "inventory",
     icon: PackageIcon,
   },
   barcodes: {
     name: "Barcodes & label printing",
     body: "Print barcode labels for one item, several items, or one per piece received on a purchase bill.",
-    anchor: "inventory-fulfilment",
+    page: "physical-stock-barcodes",
     icon: BarCode01Icon,
   },
   priceLevels: {
     name: "Price levels & MRP",
     body: "Keep separate price lists such as retail and wholesale, assign one to a party, and record MRP on items.",
-    anchor: "inventory-fulfilment",
+    page: "price-levels",
     icon: Tag01Icon,
   },
   warehouses: {
     name: "Warehouses & stock transfers",
     body: "Track stock per shop or godown, move it between them, and decide who may transfer or adjust stock where.",
-    anchor: "inventory-fulfilment",
+    page: "warehouses",
     icon: WarehouseIcon,
   },
   stockCount: {
     name: "Physical stock counts",
     body: "Count shelves with a barcode scanner, compare against your books and post the difference.",
-    anchor: "inventory-fulfilment",
+    page: "physical-stock-barcodes",
     icon: CheckListIcon,
   },
   stockReports: {
     name: "Stock valuation & reports",
     body: "Value stock on weighted average or FIFO, with stock ledger, ageing, dead stock and reorder reports.",
-    anchor: "inventory-fulfilment",
+    page: "stock-valuation",
     icon: Layers01Icon,
   },
   manufacturing: {
     name: "Bill of materials & production",
     body: "Define BOMs with wastage and by-products, see shortages before a run, and add labour or job-work costs to what you make.",
-    anchor: "inventory-fulfilment",
+    page: "manufacturing",
     icon: Factory01Icon,
   },
   shipments: {
     name: "Shipments",
     body: "Track dispatches and deliveries for your orders.",
-    anchor: "inventory-fulfilment",
+    page: "delivery-challans",
     icon: DeliveryTruck01Icon,
   },
   onlineStore: {
     name: "Online store",
     body: "Publish a storefront for your items and receive orders straight into your books.",
-    anchor: "inventory-fulfilment",
+    page: "online-store",
     icon: ShoppingBag01Icon,
   },
   multiBusiness: {
     name: "Multiple businesses & GSTINs",
     body: "Add a business for each GSTIN, each with its own invoice series and books, and switch between them from the sidebar.",
-    anchor: "teams-platform",
+    page: "team-roles",
     icon: Building03Icon,
   },
   roles: {
     name: "Roles & permissions",
     body: "Invite admins, sales managers, salespeople and accountants, each with access that fits their job.",
-    anchor: "teams-platform",
+    page: "team-roles",
     icon: SecurityCheckIcon,
   },
   salesTargets: {
     name: "Sales targets",
     body: "Set targets for your salespeople and let each of them follow their own progress.",
-    anchor: "teams-platform",
+    page: "team-roles",
     icon: Target02Icon,
   },
   devices: {
     name: "Web, desktop & mobile",
     body: "Use Fintranzact in the browser, as a desktop app or on your phone.",
-    anchor: "teams-platform",
+    page: "mobile-desktop-apps",
     icon: ComputerIcon,
   },
   api: {
     name: "API, CLI & AI assistants",
     body: "API keys, a command-line tool and an MCP server for connecting AI assistants to your books.",
-    anchor: "teams-platform",
+    page: "api-integrations",
     icon: ApiIcon,
   },
   importExport: {
     name: "Import & export",
     body: "Bring in parties and items from spreadsheets and export all of your data whenever you like.",
-    anchor: "teams-platform",
+    page: "api-integrations",
     icon: CloudUploadIcon,
   },
 } satisfies Record<string, SolutionFeature>;

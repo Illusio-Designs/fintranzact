@@ -11,6 +11,7 @@ import {
   BarCode01Icon,
   BookOpen01Icon,
   Briefcase01Icon,
+  Bug01Icon,
   Building03Icon,
   Cancel01Icon,
   ChartIncreaseIcon,
@@ -52,6 +53,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Logo } from "@/components/ui/Logo";
 import { Icon, type IconSvgElement } from "@/components/ui/Icon";
+import type { FeatureSlug } from "@/lib/feature-slugs";
 import { cn } from "@/lib/utils";
 
 /**
@@ -66,24 +68,23 @@ export const SECURITY_EMAIL = "security@fintranzact.com";
 export const DOCS_URL = "/help";
 export const API_DOCS_URL = "/developers";
 
-type MenuLink = {
+export type MenuLink = {
   label: string;
   icon: IconSvgElement;
-  /** Internal route, optionally with a hash (section on that page). */
+  /** Internal page on this site. Every item opens its own page, never a section of another one. */
   to?: string;
-  hash?: string;
   /** External link or mailto. */
   href?: string;
 };
 
-type MenuColumn = {
+export type MenuColumn = {
   title: string;
   links: MenuLink[];
   /** On wide screens, give this column its own grid column instead of stacking it under the second. */
   ownColumn?: boolean;
 };
 
-type MegaMenu = {
+export type MegaMenu = {
   id: "features" | "solutions" | "resources";
   label: string;
   columns: MenuColumn[];
@@ -92,9 +93,10 @@ type MegaMenu = {
   promo?: "devices" | "talk";
 };
 
-const f = (label: string, icon: IconSvgElement, hash: string): MenuLink => ({ label, icon, to: "/features", hash });
+/** A Features menu item: each feature has its own page at /features/<slug>. */
+const f = (label: string, icon: IconSvgElement, slug: FeatureSlug): MenuLink => ({ label, icon, to: `/features/${slug}` });
 
-const MENUS: MegaMenu[] = [
+export const MENUS: MegaMenu[] = [
   {
     id: "features",
     label: "Features",
@@ -102,49 +104,49 @@ const MENUS: MegaMenu[] = [
       {
         title: "Core features",
         links: [
-          f("Invoicing", Invoice01Icon, "sales-billing"),
-          f("Quotations & proforma", QuoteDownIcon, "sales-billing"),
-          f("Delivery challans", DeliveryTruck01Icon, "sales-billing"),
-          f("Credit notes & returns", Note01Icon, "sales-billing"),
-          f("Point of sale", ShoppingCart01Icon, "sales-billing"),
-          f("Payments", Money03Icon, "accounting-banking"),
-          f("Expenses", Wallet01Icon, "accounting-banking"),
-          f("Banking", BankIcon, "accounting-banking"),
-          f("Inventory", PackageIcon, "inventory-fulfilment"),
-          f("Online store", Store01Icon, "inventory-fulfilment"),
-          f("Reporting", Analytics01Icon, "accounting-banking"),
+          f("Invoicing", Invoice01Icon, "invoicing"),
+          f("Quotations & proforma", QuoteDownIcon, "quotations"),
+          f("Delivery challans", DeliveryTruck01Icon, "delivery-challans"),
+          f("Credit notes & returns", Note01Icon, "credit-notes-returns"),
+          f("Point of sale", ShoppingCart01Icon, "point-of-sale"),
+          f("Payments", Money03Icon, "payments"),
+          f("Expenses", Wallet01Icon, "expenses"),
+          f("Banking", BankIcon, "banking"),
+          f("Inventory", PackageIcon, "inventory"),
+          f("Online store", Store01Icon, "online-store"),
+          f("Reporting", Analytics01Icon, "reporting"),
         ],
       },
       {
         title: "GST & compliance",
         links: [
-          f("GST filing", TaxesIcon, "gst-compliance"),
-          f("e-Invoicing", QrCodeIcon, "gst-compliance"),
-          f("e-Way bills", Route01Icon, "gst-compliance"),
-          f("GSTR-2B & ITC", DocumentValidationIcon, "gst-compliance"),
+          f("GST filing", TaxesIcon, "gst-filing"),
+          f("e-Invoicing", QrCodeIcon, "e-invoicing"),
+          f("e-Way bills", Route01Icon, "e-way-bills"),
+          f("GSTR-2B & ITC", DocumentValidationIcon, "gstr-2b-itc"),
         ],
       },
       {
         title: "Effortless accounting",
         links: [
-          f("Mobile & desktop apps", SmartPhone01Icon, "teams-platform"),
-          f("Recurring invoices", RepeatIcon, "sales-billing"),
-          f("Team roles & access", UserGroupIcon, "teams-platform"),
-          f("API & integrations", ApiIcon, "teams-platform"),
+          f("Mobile & desktop apps", SmartPhone01Icon, "mobile-desktop-apps"),
+          f("Recurring invoices", RepeatIcon, "recurring-invoices"),
+          f("Team roles & access", UserGroupIcon, "team-roles"),
+          f("API & integrations", ApiIcon, "api-integrations"),
         ],
       },
       {
         title: "Inventory & manufacturing",
         ownColumn: true,
         links: [
-          f("Warehouses & godowns", WarehouseIcon, "inventory-fulfilment"),
-          f("Stock transfers & adjustments", ArrowDataTransferHorizontalIcon, "inventory-fulfilment"),
-          f("Physical stock & barcodes", BarCode01Icon, "inventory-fulfilment"),
-          f("Stock valuation & groups", Layers01Icon, "inventory-fulfilment"),
-          f("Price levels & MRP", Tag01Icon, "inventory-fulfilment"),
-          f("Orders & goods receipts", CheckListIcon, "orders-manufacturing"),
-          f("Bill of materials & manufacturing", Factory01Icon, "orders-manufacturing"),
-          f("Inventory reports", ChartIncreaseIcon, "inventory-fulfilment"),
+          f("Warehouses & godowns", WarehouseIcon, "warehouses"),
+          f("Stock transfers & adjustments", ArrowDataTransferHorizontalIcon, "stock-transfers"),
+          f("Physical stock & barcodes", BarCode01Icon, "physical-stock-barcodes"),
+          f("Stock valuation & groups", Layers01Icon, "stock-valuation"),
+          f("Price levels & MRP", Tag01Icon, "price-levels"),
+          f("Orders & goods receipts", CheckListIcon, "orders-goods-receipts"),
+          f("Bill of materials & manufacturing", Factory01Icon, "manufacturing"),
+          f("Inventory reports", ChartIncreaseIcon, "inventory-reports"),
         ],
       },
     ],
@@ -188,7 +190,7 @@ const MENUS: MegaMenu[] = [
       {
         title: "Learn",
         links: [
-          { label: "Help & docs", icon: BookOpen01Icon, href: DOCS_URL },
+          { label: "Help & docs", icon: BookOpen01Icon, to: DOCS_URL },
           { label: "About Fintranzact", icon: Building03Icon, to: "/about" },
           { label: "Contact us", icon: HeadphonesIcon, to: "/contact" },
           { label: "Partner with us", icon: UserGroupIcon, to: "/partners" },
@@ -203,6 +205,7 @@ const MENUS: MegaMenu[] = [
         title: "Trust & legal",
         links: [
           { label: "Security", icon: Shield01Icon, to: "/security" },
+          { label: "Report a vulnerability", icon: Bug01Icon, to: "/security/report" },
           { label: "Privacy policy", icon: Legal01Icon, to: "/privacy" },
           { label: "Terms of service", icon: Legal01Icon, to: "/terms" },
           { label: "Refund policy", icon: Legal01Icon, to: "/refund-policy" },
@@ -247,7 +250,7 @@ function MenuItemLink({ link, onNavigate }: { link: MenuLink; onNavigate: () => 
     );
   }
   return (
-    <Link to={link.to!} hash={link.hash} className={LINK_ROW} onClick={onNavigate}>
+    <Link to={link.to!} className={LINK_ROW} onClick={onNavigate}>
       {content}
     </Link>
   );

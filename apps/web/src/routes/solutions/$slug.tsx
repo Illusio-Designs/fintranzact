@@ -56,11 +56,12 @@ function SolutionPage({ solution }: { solution: Solution }) {
           <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {solution.features.map((id) => {
               const feature = FEATURES[id];
+              // Each feature has its own page, served by routes/features/$slug.tsx.
+              const featurePage: string = `/features/${feature.page}`;
               return (
                 <Link
                   key={id}
-                  to="/features"
-                  hash={feature.anchor}
+                  to={featurePage}
                   className="group flex flex-col rounded-2xl border border-border-light bg-surface-0 p-6 transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_18px_40px_-18px_rgba(15,27,61,.28)] dark:hover:border-brand-800"
                 >
                   <IconCircle icon={feature.icon} size="md" />

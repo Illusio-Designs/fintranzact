@@ -8,7 +8,6 @@ import {
   Key01Icon,
   LockIcon,
   Mail01Icon,
-  SecurityCheckIcon,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import {
@@ -19,9 +18,10 @@ import {
 } from "@/components/marketing/MarketingLayout";
 import { EYEBROW, HEADING } from "@/components/marketing/sections";
 import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
+import { ACKNOWLEDGE_WITHIN, CRITICAL_FIX_WITHIN } from "@/lib/security-disclosure";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/security")({
+export const Route = createFileRoute("/security/")({
   component: SecurityPage,
 });
 
@@ -78,28 +78,6 @@ const PILLARS: Array<{ icon: IconSvgElement; title: string; points: string[] }> 
   },
 ];
 
-const REPORT_STEPS: Array<[string, string]> = [
-  ["Email us", `Write to ${SECURITY_EMAIL} with what you found, the steps to reproduce it and the impact you expect.`],
-  ["We confirm", "We acknowledge every report within 48 hours and keep you updated while we investigate."],
-  ["We fix it", "Critical issues get a fix or a mitigation plan within 7 days. We will tell you when it is resolved."],
-];
-
-const IN_SCOPE = [
-  "Signing in as someone else, or bypassing a role's permissions",
-  "Seeing or changing another business's data",
-  "SQL injection, cross-site scripting (XSS) and CSRF",
-  "Session hijacking or fixation",
-  "Bypassing rate limits or bot protection",
-  "Sensitive data in logs, error messages or share links",
-];
-
-const OUT_OF_SCOPE = [
-  "Volumetric denial of service",
-  "Social engineering of our team or customers",
-  "Issues in third-party dependencies (please report them upstream)",
-  "Attacks that need physical access to a device or server",
-];
-
 function SecurityPage() {
   return (
     <MarketingLayout
@@ -112,13 +90,13 @@ function SecurityPage() {
         subtitle="Fintranzact holds your invoices, ledgers and tax data. Here is how we protect them, and how to tell us if you find a problem."
       >
         <div className="mt-8 flex flex-wrap gap-3">
-          <a
-            href="#report"
+          <Link
+            to="/security/report"
             className="inline-flex h-[52px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
           >
             <Icon icon={Bug01Icon} size={18} />
             Report a vulnerability
-          </a>
+          </Link>
           <Link
             to="/privacy"
             className="inline-flex h-[52px] items-center rounded-xl border border-[#cfd8ea] bg-white px-6 text-base font-semibold text-[#0f1b3d] transition hover:border-brand-300 dark:border-white/15 dark:bg-white/5 dark:text-white"
@@ -158,63 +136,36 @@ function SecurityPage() {
         </div>
       </section>
 
-      <section id="report" className="scroll-mt-24 bg-surface-1">
-        <div className="mx-auto grid max-w-6xl items-start gap-10 px-4 py-24 md:px-6 lg:grid-cols-5">
-          <div className="lg:col-span-2">
+      <section className="bg-surface-1">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-20 md:px-6 lg:grid-cols-5">
+          <div className="lg:col-span-3">
             <p className={EYEBROW}>Responsible disclosure</p>
             <h2 className={cn(HEADING, "mt-3 text-3xl leading-tight md:text-[38px]")}>Found a security issue?</h2>
-            <p className="mt-3.5 text-[15px] leading-relaxed text-text-tertiary">
-              Please tell us privately before sharing it anywhere else, and give us a reasonable time to fix it. Don&apos;t
-              access, change or delete data that isn&apos;t yours while testing. We won&apos;t take action against anyone who
-              reports in good faith and follows these rules.
+            <p className="mt-3.5 max-w-xl text-[15px] leading-relaxed text-text-tertiary">
+              Please tell us privately before sharing it anywhere else. We acknowledge every report within{" "}
+              {ACKNOWLEDGE_WITHIN}, and critical issues get a fix or a mitigation plan within {CRITICAL_FIX_WITHIN}. See
+              what is in scope, what to include and how we protect researchers who report in good faith.
             </p>
-            <a
-              href={`mailto:${SECURITY_EMAIL}`}
-              className="mt-6 inline-flex items-center gap-3 rounded-2xl border border-border-light bg-surface-0 p-5 text-[15px] font-semibold text-brand-600 hover:border-brand-300 dark:text-brand-300"
+            <Link
+              to="/security/report"
+              className="mt-7 inline-flex h-[52px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
             >
-              <IconCircle icon={Mail01Icon} />
-              {SECURITY_EMAIL}
-              <Icon icon={ArrowRight01Icon} size={16} strokeWidth={2} />
-            </a>
+              How to report a vulnerability
+              <Icon icon={ArrowRight01Icon} size={18} strokeWidth={2} />
+            </Link>
           </div>
-
-          <div className="space-y-8 lg:col-span-3">
-            <div className="grid gap-6 sm:grid-cols-3">
-              {REPORT_STEPS.map(([title, body], i) => (
-                <div key={title}>
-                  <span className="grid h-11 w-11 place-items-center rounded-full bg-brand-600 font-display text-lg font-extrabold text-white">
-                    {i + 1}
-                  </span>
-                  <h3 className="mt-4 text-base font-bold text-text-primary">{title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-text-tertiary">{body}</p>
-                </div>
-              ))}
-            </div>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <ScopeList icon={SecurityCheckIcon} title="In scope" items={IN_SCOPE} />
-              <ScopeList icon={Bug01Icon} title="Out of scope" items={OUT_OF_SCOPE} />
-            </div>
-          </div>
+          <a
+            href={`mailto:${SECURITY_EMAIL}`}
+            className="flex min-w-0 items-center gap-3 rounded-2xl border border-border-light bg-surface-0 p-5 text-[15px] font-semibold text-brand-600 hover:border-brand-300 dark:text-brand-300 lg:col-span-2"
+          >
+            <IconCircle icon={Mail01Icon} />
+            <span className="min-w-0 break-words">{SECURITY_EMAIL}</span>
+            <Icon icon={ArrowRight01Icon} size={16} strokeWidth={2} className="shrink-0" />
+          </a>
         </div>
       </section>
 
       <CtaBand />
     </MarketingLayout>
-  );
-}
-
-function ScopeList({ icon, title, items }: { icon: IconSvgElement; title: string; items: string[] }) {
-  return (
-    <div className="rounded-2xl border border-border-light bg-surface-0 p-6">
-      <div className="flex items-center gap-3">
-        <IconCircle icon={icon} size="sm" />
-        <h3 className="text-base font-bold text-text-primary">{title}</h3>
-      </div>
-      <ul className="mt-4 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-text-secondary">
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-    </div>
   );
 }

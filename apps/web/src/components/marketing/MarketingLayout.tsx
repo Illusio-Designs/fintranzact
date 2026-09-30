@@ -55,6 +55,7 @@ const FOOTER_COLUMNS: Array<{
       { label: "Terms of service", to: "/terms" },
       { label: "Refund policy", to: "/refund-policy" },
       { label: "Security", to: "/security" },
+      { label: "Report a vulnerability", to: "/security/report" },
     ],
   },
 ];
@@ -150,7 +151,8 @@ export function MarketingLayout({
   const { pathname, hash } = useLocation();
   const year = new Date().getFullYear();
 
-  // New page: start at the top, or at the linked section (e.g. /features#gst-compliance).
+  // New page: start at the top. The site no longer links to #sections, but an
+  // old bookmark with a hash still lands on that section if it exists.
   useEffect(() => {
     const target = hash ? document.getElementById(hash) : null;
     if (target) target.scrollIntoView({ block: "start" });
