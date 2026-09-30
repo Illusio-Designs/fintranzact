@@ -243,7 +243,7 @@ function ThemeSwitch() {
           aria-pressed={theme === o.value}
           onClick={() => setTheme(o.value)}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors",
+            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold transition-colors sm:px-3.5",
             theme === o.value ? "bg-brand-600 text-white shadow-sm" : "text-text-secondary hover:text-text-primary",
           )}
         >
