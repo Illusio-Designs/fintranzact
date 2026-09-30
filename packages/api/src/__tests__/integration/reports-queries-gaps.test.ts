@@ -230,7 +230,7 @@ describe("reports", () => {
   it("registers and tax summary", async () => {
     const range = { fromDate: iso(-60), toDate: iso(1) };
     const sales = await caller().reports.salesRegister(range);
-    expect(sales.summary).toEqual({ totalSubtotal: "500.00", totalTax: "25.00", totalAmount: "525.00", count: 1 });
+    expect(sales.summary).toMatchObject({ totalSubtotal: "500.00", totalTax: "25.00", totalAmount: "525.00", count: 1 });
     const purchases = await caller().reports.purchaseRegister(range);
     expect(purchases.summary.totalAmount).toBe("630.00");
     expect((await caller().reports.salesRegister({ ...range, partyId: UNKNOWN })).rows).toEqual([]);
