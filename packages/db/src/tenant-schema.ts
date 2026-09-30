@@ -294,7 +294,8 @@ export const parties = pgTable("parties", {
   gstin: text("gstin"),
   pan: text("pan"),
   billingAddress: text("billing_address"),
-  shippingAddress: text("shipping_address"),
+  shippingAddress: text("shipping_address"), // default (first) shipping address
+  shippingAddresses: jsonb("shipping_addresses").$type<string[]>(), // every shipping address, default first
   city: text("city"),
   state: text("state"),
   stateCode: text("state_code"), // 2-digit GST state code for inter/intra-state detection

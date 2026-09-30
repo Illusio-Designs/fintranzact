@@ -1,7 +1,7 @@
 import { eq, and, ilike, or, sql, desc, asc, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { parties, invoices, payments, expenses, items, invoiceItems } from "@fintranzact/db";
-import { createPartySchema, updatePartySchema, paginationSchema, money, panFromGstin } from "@fintranzact/shared";
+import { createPartySchema, updatePartySchema, paginationSchema, money, panFromGstin, normalizeShippingAddresses, partyShippingAddresses } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
@@ -9,6 +9,34 @@ import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 
+
+/**
+ * Column updates for a party's shipping addresses. A full list replaces both
+ * columns; a lone shippingAddress (older clients) replaces only the default,
+ * keeping any other addresses.
+ */
+function shippingUpdate(list: string[] | undefined, single: string | undefined) {
+  if (list !== undefined) {
+    const addresses = normalizeShippingAddresses(list);
+    return { shippingAddress: addresses[0] ?? null, shippingAddresses: addresses.length ? addresses : null };
+  }
+  if (single === undefined) return {};
+  const address = single.trim();
+  if (!address) {
+    // Clearing the default promotes the next address, if there is one.
+    return {
+      shippingAddress: sql<string | null>`${parties.shippingAddresses}->>1`,
+      shippingAddresses: sql<string[] | null>`nullif(coalesce(${parties.shippingAddresses}, '[]'::jsonb) - 0, '[]'::jsonb)`,
+    };
+  }
+  return {
+    shippingAddress: address,
+    shippingAddresses: sql<string[]>`case
+      when coalesce(jsonb_array_length(${parties.shippingAddresses}), 0) = 0 then jsonb_build_array(${address}::text)
+      else jsonb_set(${parties.shippingAddresses}, '{0}', to_jsonb(${address}::text))
+    end`,
+  };
+}
 
 export const partyRouter = router({
   list: viewerProcedure
@@ -105,6 +133,7 @@ export const partyRouter = router({
           openingBalance: parties.openingBalance,
           billingAddress: parties.billingAddress,
           shippingAddress: parties.shippingAddress,
+          shippingAddresses: parties.shippingAddresses,
           city: parties.city,
           state: parties.state,
           stateCode: parties.stateCode,
@@ -168,8 +197,11 @@ export const partyRouter = router({
 
   create: memberProcedure.input(createPartySchema).mutation(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "Party");
+    const shippingAddresses = normalizeShippingAddresses(input.shippingAddresses ?? [input.shippingAddress]);
     const [party] = await ctx.db.insert(parties).values({
       ...input,
+      shippingAddress: shippingAddresses[0] ?? null,
+      shippingAddresses: shippingAddresses.length ? shippingAddresses : null,
       // A GSTIN embeds the PAN, so fill it in when the caller left it blank.
       pan: input.pan || panFromGstin(input.gstin) || input.pan,
       businessId: ctx.businessId,
@@ -194,7 +226,7 @@ export const partyRouter = router({
     .input(z.object({ id: z.string().uuid(), data: updatePartySchema }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Party");
-      const { contactPersonDob, ...rest } = input.data;
+      const { contactPersonDob, shippingAddresses, shippingAddress, ...rest } = input.data;
       // A new GSTIN without a PAN fills the PAN only if the party has none yet.
       const derivedPan = rest.pan === undefined ? panFromGstin(rest.gstin) : null;
       const [party] = await ctx.db.update(parties)
@@ -202,6 +234,7 @@ export const partyRouter = router({
           ...rest,
           ...(derivedPan ? { pan: sql`coalesce(nullif(${parties.pan}, ''), ${derivedPan})` } : {}),
           ...(contactPersonDob ? { contactPersonDob: new Date(contactPersonDob) } : {}),
+          ...shippingUpdate(shippingAddresses, shippingAddress),
           updatedAt: new Date(),
         })
         .where(and(eq(parties.id, input.id), eq(parties.businessId, ctx.businessId)))
@@ -344,6 +377,14 @@ export const partyRouter = router({
         if (!target.city && source.city) updates.city = source.city;
         if (!target.state && source.state) updates.state = source.state;
         if (!target.pincode && source.pincode) updates.pincode = source.pincode;
+        const mergedShipping = normalizeShippingAddresses([
+          ...partyShippingAddresses(target),
+          ...partyShippingAddresses(source),
+        ]);
+        if (mergedShipping.length) {
+          updates.shippingAddress = mergedShipping[0];
+          updates.shippingAddresses = mergedShipping;
+        }
         if (!target.category && source.category) updates.category = source.category;
 
         await tx.update(parties).set(updates).where(eq(parties.id, input.targetId));

@@ -23,6 +23,8 @@ import {
   // Party
   createPartySchema,
   panFromGstin,
+  normalizeShippingAddresses,
+  partyShippingAddresses,
   // Item
   createItemSchema,
   // Invoice
@@ -969,5 +971,33 @@ describe("panFromGstin — the PAN is characters 3-12 of a GSTIN", () => {
     expect(panFromGstin("")).toBeNull();
     expect(panFromGstin(undefined)).toBeNull();
     expect(panFromGstin(null)).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Party shipping addresses
+// ─────────────────────────────────────────────────────────────────────────────
+describe("normalizeShippingAddresses", () => {
+  it("trims, drops blanks and duplicates, and keeps order", () => {
+    expect(normalizeShippingAddresses([" A ", "", "B", undefined, "A", null, "  "])).toEqual(["A", "B"]);
+  });
+});
+
+describe("partyShippingAddresses", () => {
+  it("returns the stored list", () => {
+    expect(partyShippingAddresses({ shippingAddress: "A", shippingAddresses: ["A", "B"] })).toEqual(["A", "B"]);
+  });
+
+  it("falls back to the single address for parties saved before the list existed", () => {
+    expect(partyShippingAddresses({ shippingAddress: "A", shippingAddresses: null })).toEqual(["A"]);
+    expect(partyShippingAddresses({ shippingAddress: null })).toEqual([]);
+  });
+});
+
+describe("createPartySchema — shippingAddresses", () => {
+  it("accepts up to 20 addresses and rejects more", () => {
+    const base = { type: "customer" as const, name: "X" };
+    expect(createPartySchema.safeParse({ ...base, shippingAddresses: Array(20).fill("a") }).success).toBe(true);
+    expect(createPartySchema.safeParse({ ...base, shippingAddresses: Array(21).fill("a") }).success).toBe(false);
   });
 });

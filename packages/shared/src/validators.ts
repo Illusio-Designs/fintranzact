@@ -228,6 +228,34 @@ export function panFromGstin(gstin: string | null | undefined): string | null {
   return GSTIN_REGEX.test(normalized) ? normalized.slice(2, 12) : null;
 }
 
+/** Trimmed, non-empty, de-duplicated shipping addresses in their given order. */
+export function normalizeShippingAddresses(addresses: readonly (string | null | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of addresses) {
+    const address = raw?.trim();
+    if (address && !seen.has(address)) {
+      seen.add(address);
+      out.push(address);
+    }
+  }
+  return out;
+}
+
+/**
+ * A party's shipping addresses, default first. Parties written before the
+ * list existed (or by importers that only set shippingAddress) fall back to
+ * their single address.
+ */
+export function partyShippingAddresses(party: {
+  shippingAddress?: string | null;
+  shippingAddresses?: readonly string[] | null;
+}): string[] {
+  return normalizeShippingAddresses(
+    party.shippingAddresses?.length ? party.shippingAddresses : [party.shippingAddress],
+  );
+}
+
 export const createPartySchema = z.object({
   type: z.enum(partyTypes),
   name: z.string().min(1).max(200),
@@ -237,6 +265,9 @@ export const createPartySchema = z.object({
   pan: z.string().regex(PAN_REGEX).optional().or(z.literal("")),
   billingAddress: z.string().max(500).optional(),
   shippingAddress: z.string().max(500).optional(),
+  // Every shipping address, default first. When given, shippingAddress is set
+  // to its first entry.
+  shippingAddresses: z.array(z.string().max(500)).max(20).optional(),
   city: z.string().max(100).optional(),
   state: z.string().max(100).optional(),
   stateCode: z.string().max(2).optional(),

@@ -173,6 +173,27 @@ describe("party.create", () => {
     expect(result!.creditPeriodDays).toBe(30);
   });
 
+  it("stores multiple shipping addresses, default first", async () => {
+    const result = await callerRamesh.party.create({
+      type: "customer",
+      name: "Multi Ship Customer",
+      shippingAddresses: ["Plot 1, Surat", "Unit 9, Mumbai"],
+    });
+
+    expect(result!.shippingAddress).toBe("Plot 1, Surat");
+    expect(result!.shippingAddresses).toEqual(["Plot 1, Surat", "Unit 9, Mumbai"]);
+  });
+
+  it("a single shippingAddress becomes a one-entry list", async () => {
+    const result = await callerRamesh.party.create({
+      type: "customer",
+      name: "Single Ship Customer",
+      shippingAddress: "Plot 1, Surat",
+    });
+
+    expect(result!.shippingAddresses).toEqual(["Plot 1, Surat"]);
+  });
+
   it("fills PAN from the GSTIN when no PAN is given", async () => {
     const result = await callerRamesh.party.create({
       type: "supplier",
@@ -484,6 +505,36 @@ describe("party.update", () => {
 
     expect(result!.gstin).toBe("24AAPFU0939F1ZV");
     expect(result!.pan).toBe("AABCR0000R");
+  });
+
+  it("saves a list of shipping addresses with the first as the default", async () => {
+    const result = await callerRamesh.party.update({
+      id: partyToUpdate.id,
+      data: { shippingAddresses: [" Warehouse A ", "", "Warehouse B", "Warehouse A"] },
+    });
+
+    expect(result!.shippingAddresses).toEqual(["Warehouse A", "Warehouse B"]);
+    expect(result!.shippingAddress).toBe("Warehouse A");
+  });
+
+  it("a lone shippingAddress from an older client replaces only the default", async () => {
+    const result = await callerRamesh.party.update({
+      id: partyToUpdate.id,
+      data: { shippingAddress: "Warehouse C" },
+    });
+
+    expect(result!.shippingAddresses).toEqual(["Warehouse C", "Warehouse B"]);
+    expect(result!.shippingAddress).toBe("Warehouse C");
+  });
+
+  it("clearing the default promotes the next shipping address", async () => {
+    const result = await callerRamesh.party.update({
+      id: partyToUpdate.id,
+      data: { shippingAddress: "" },
+    });
+
+    expect(result!.shippingAddresses).toEqual(["Warehouse B"]);
+    expect(result!.shippingAddress).toBe("Warehouse B");
   });
 
   it("businessId cannot be changed via update — stays scoped to the original business", async () => {

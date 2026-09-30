@@ -7,7 +7,7 @@ import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
-import { GSTIN_REGEX, PAN_REGEX, type PartyType } from "@fintranzact/shared";
+import { GSTIN_REGEX, PAN_REGEX, normalizeShippingAddresses, type PartyType } from "@fintranzact/shared";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { InputField, TextareaField } from "@/components/ui/FormField";
@@ -23,7 +23,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Icon } from "@/components/ui/Icon";
-import { Alert02Icon, ArrowRight01Icon, ArrowRight02Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Alert02Icon, ArrowRight01Icon, ArrowRight02Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
 import { PhoneInput } from "@/components/ui/PhoneInput";
@@ -44,6 +44,8 @@ const PARTY_STATUS_FILTERS = [
 ];
 
 const PARTIES_PAGE_SIZE = 20;
+// Matches the cap in createPartySchema.
+const MAX_SHIPPING_ADDRESSES = 20;
 
 function countFilled(...values: string[]): number {
   return values.filter((v) => v.trim() !== "").length;
@@ -1126,7 +1128,8 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [autoPan, setAutoPan] = useState<string | null>(null);
   const [category, setCategory] = useState("");
   const [billingAddress, setBillingAddress] = useState("");
-  const [shippingAddress, setShippingAddress] = useState("");
+  // First entry is the default shipping address.
+  const [shippingAddresses, setShippingAddresses] = useState<string[]>([""]);
   const [sameAsBilling, setSameAsBilling] = useState(false);
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -1163,7 +1166,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
     setAutoPan(null);
     setCategory("");
     setBillingAddress("");
-    setShippingAddress("");
+    setShippingAddresses([""]);
     setSameAsBilling(false);
     setCity("");
     setState("");
@@ -1201,7 +1204,9 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
       pan: pan || undefined,
       category: category || undefined,
       billingAddress: billingAddress || undefined,
-      shippingAddress: sameAsBilling ? billingAddress || undefined : shippingAddress || undefined,
+      shippingAddresses: normalizeShippingAddresses(
+        sameAsBilling ? [billingAddress, ...shippingAddresses.slice(1)] : shippingAddresses,
+      ),
       city: city || undefined,
       state: state || undefined,
       pincode: pincode || undefined,
@@ -1215,7 +1220,9 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
     });
   }
 
-  const _effectiveShipping = sameAsBilling ? billingAddress : shippingAddress;
+  function setShippingAt(index: number, value: string) {
+    setShippingAddresses((prev) => prev.map((a, i) => (i === index ? value : a)));
+  }
 
   return (
     <SlideOver
@@ -1322,7 +1329,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
 
           <Disclosure
             label="Address"
-            count={countFilled(billingAddress, city, state, pincode)}
+            count={countFilled(billingAddress, ...shippingAddresses, city, state, pincode)}
           >
             <div className="grid grid-cols-2 gap-4">
               <TextareaField
@@ -1334,10 +1341,10 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
               />
               <div className="flex flex-col gap-1">
                 <TextareaField
-                  label="Shipping Address"
+                  label={shippingAddresses.length > 1 ? "Shipping Address 1 (default)" : "Shipping Address"}
                   rows={3}
-                  value={sameAsBilling ? billingAddress : shippingAddress}
-                  onChange={(e) => setShippingAddress(e.target.value)}
+                  value={sameAsBilling ? billingAddress : shippingAddresses[0]}
+                  onChange={(e) => setShippingAt(0, e.target.value)}
                   placeholder="Leave empty to use billing"
                   disabled={sameAsBilling}
                 />
@@ -1350,6 +1357,39 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
                   />
                   Same as billing
                 </label>
+                {shippingAddresses.slice(1).map((address, offset) => {
+                  const index = offset + 1;
+                  return (
+                    <div key={index} className="relative mt-2">
+                      <TextareaField
+                        label={`Shipping Address ${index + 1}`}
+                        rows={3}
+                        value={address}
+                        onChange={(e) => setShippingAt(index, e.target.value)}
+                        placeholder="Street, Area..."
+                      />
+                      <button
+                        type="button"
+                        className="absolute top-0 right-0 p-0.5 text-text-tertiary hover:text-red-600"
+                        onClick={() => setShippingAddresses((prev) => prev.filter((_, i) => i !== index))}
+                        aria-label={`Remove shipping address ${index + 1}`}
+                        title="Remove address"
+                      >
+                        <Icon icon={Cancel01Icon} size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {shippingAddresses.length < MAX_SHIPPING_ADDRESSES && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 self-start mt-2 text-xs font-medium text-brand-600 hover:text-brand-700"
+                    onClick={() => setShippingAddresses((prev) => [...prev, ""])}
+                  >
+                    <Icon icon={Add01Icon} size={14} />
+                    Add shipping address
+                  </button>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4 mt-3">

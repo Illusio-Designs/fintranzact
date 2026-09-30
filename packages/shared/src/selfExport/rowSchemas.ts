@@ -158,6 +158,8 @@ export const partyRowSchema = z.object({
   pan: z.string().nullable(),
   billingAddress: z.string().nullable(),
   shippingAddress: z.string().nullable(),
+  // Optional so exports made before multiple shipping addresses still import.
+  shippingAddresses: z.array(z.string()).nullable().optional(),
   city: z.string().nullable(),
   state: z.string().nullable(),
   stateCode: z.string().nullable(),
