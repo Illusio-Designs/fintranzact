@@ -282,9 +282,21 @@ export const tenantRouter = router({
       return { success: true };
     }),
 
-  // Get current tenant info
+  // Get current tenant info. Explicit columns: the tenants row also holds
+  // the organisation's database connection details (dbHost/dbUser/dbPassword…),
+  // which must never reach a client.
   current: tenantProcedure.query(async ({ ctx }) => {
-    const [tenant] = await controlDb.select()
+    const [tenant] = await controlDb.select({
+      id: tenants.id,
+      name: tenants.name,
+      slug: tenants.slug,
+      referralCode: tenants.referralCode,
+      partnerId: tenants.partnerId,
+      plan: tenants.plan,
+      status: tenants.status,
+      createdAt: tenants.createdAt,
+      updatedAt: tenants.updatedAt,
+    })
       .from(tenants)
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
