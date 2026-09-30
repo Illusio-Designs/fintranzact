@@ -23,7 +23,7 @@ import { render, screen } from "@testing-library/react";
 import { FormField, InputField } from "../components/ui/FormField";
 import { Listbox } from "../components/ui/Listbox";
 import { Combobox } from "../components/ui/Combobox";
-import { validateBusinessStep } from "../components/settings/BusinessTab";
+import { resolveBusinessStateCode, validateBusinessStep } from "../components/settings/BusinessTab";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -658,5 +658,23 @@ describe("Bank account form validation contract", () => {
   it("rejects whitespace-only account name", () => {
     const errs = validateBankAccount({ accountName: "   " });
     expect(errs.accountName).toBeDefined();
+  });
+});
+
+// Regression: a business that is not GST registered was saved without a
+// state code (only a GSTIN set it), leaving place of supply unknown.
+describe("resolveBusinessStateCode", () => {
+  it("takes the code from a registered business's GSTIN", () => {
+    expect(resolveBusinessStateCode({ gstRegType: "regular", gstin: "27AAPFU0939F1ZV", stateName: "Maharashtra" })).toBe("27");
+  });
+
+  it("uses the chosen state when the business is not GST registered", () => {
+    expect(resolveBusinessStateCode({ gstRegType: "unregistered", gstin: "", stateName: "Karnataka" })).toBe("29");
+    expect(resolveBusinessStateCode({ gstRegType: "unregistered", gstin: "27AAPFU0939F1ZV", stateName: "Karnataka" })).toBe("29");
+  });
+
+  it("falls back to the state while the GSTIN is incomplete, and is empty for an unknown state", () => {
+    expect(resolveBusinessStateCode({ gstRegType: "regular", gstin: "27AAP", stateName: "Delhi" })).toBe("07");
+    expect(resolveBusinessStateCode({ gstRegType: "unregistered", gstin: "", stateName: "Atlantis" })).toBeUndefined();
   });
 });

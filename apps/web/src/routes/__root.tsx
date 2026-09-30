@@ -1417,20 +1417,24 @@ function RootLayout() {
     );
   }
 
-  // Tenant selected but businesses still loading — show spinner, don't render
-  // the main layout yet (prevents flash of /settings "Set up your business")
-  if (session.tenantId && businessesLoading) return loadingSpinner;
-
   // Tenant-level routes are independent of business context.
   // They must render without waiting for the business list and
-  // must not use the business dashboard shell.
+  // must not use the business dashboard shell. Checked before the
+  // business-list spinner: swapping the page for a spinner (and then the
+  // shell) while the list loads remounted it and wiped what the user had
+  // already typed, e.g. their name on the complete-profile page.
   if (
+    pathname.startsWith("/auth/complete-profile") ||
     pathname.startsWith("/auth/plan-selection") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/business/create")
   ) {
     return <Outlet />;
   }
+
+  // Tenant selected but businesses still loading — show spinner, don't render
+  // the main layout yet (prevents flash of /settings "Set up your business")
+  if (session.tenantId && businessesLoading) return loadingSpinner;
 
   // Business-level routes require business context.
   if (session.tenantId && businessesLoading) {
@@ -1550,6 +1554,7 @@ function RootLayout() {
         {/* Sidebar — hidden during onboarding (no business context yet) */}
         {!isOnboarding && (
           <aside
+            data-testid="app-sidebar"
             className={cn(
               // Navy brand sidebar in both themes (light text on #0f1b3d).
               "w-60 shrink-0 border-r border-white/5 flex flex-col overflow-hidden bg-[#0f1b3d] text-[#c3cee6] dark:border-white/10",
@@ -1643,6 +1648,7 @@ function RootLayout() {
 
             {/* Nav sections */}
             <nav
+              data-testid="app-sidebar-nav"
               className="flex-1 overflow-y-auto pb-2"
               onClick={() => setSidebarOpen(false)}
             >
@@ -1980,7 +1986,7 @@ function RootLayout() {
           </div>
 
           {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto">
+          <div data-testid="app-content" className="flex-1 overflow-y-auto">
             <div className="max-w-[1400px] mx-auto px-6 py-6">
               <Outlet />
             </div>

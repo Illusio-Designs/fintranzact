@@ -90,6 +90,26 @@ export interface BusinessStepValues {
   responsiblePersonDesignation: string;
 }
 
+/**
+ * The GST state code saved with a business. A valid GSTIN carries it in its
+ * first two digits; without one (not GST registered) it comes from the state
+ * picked in the address. Without this, businesses that are not registered
+ * were saved with no state code at all, so place of supply, ITC and e-way
+ * bill checks had nothing to compare against.
+ */
+export function resolveBusinessStateCode(values: {
+  gstRegType: string;
+  gstin: string;
+  stateName: string;
+}): string | undefined {
+  const gstin = values.gstin.trim();
+  if (values.gstRegType !== "unregistered" && /^[0-9]{2}/.test(gstin) && gstin.length === 15) {
+    return gstin.slice(0, 2);
+  }
+  const name = values.stateName.trim().toLowerCase();
+  return INDIAN_STATES.find((s) => s.name.toLowerCase() === name)?.code;
+}
+
 export function validateBusinessStep(
   step: number,
   values: BusinessStepValues,
@@ -827,7 +847,11 @@ export function BusinessForm({
                     setGstin(val);
 
                     if (val.length === 15) {
-                      setStateCode(val.slice(0, 2));
+                      const code = val.slice(0, 2);
+                      setStateCode(code);
+                      // The GSTIN names the state of registration: fill it in.
+                      const state = INDIAN_STATES.find((s) => s.code === code);
+                      if (state) setStateName(state.name);
                     }
                   }}
                   onPanDetected={(detectedPan) => {
@@ -1534,7 +1558,10 @@ export function BusinessForm({
       landmark: landmark || undefined,
       city: city || undefined,
       state: stateName || undefined,
-      stateCode: stateCode || undefined,
+      stateCode:
+        resolveBusinessStateCode({ gstRegType, gstin, stateName }) ||
+        stateCode ||
+        undefined,
       pincode: pincode || undefined,
       countryOfOperations: countryOfOperations || undefined,
       financialYearStartDate: financialYearStartDate || undefined,

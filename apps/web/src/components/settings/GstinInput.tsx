@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 interface GstinInputProps {
   value: string;
@@ -8,6 +8,7 @@ interface GstinInputProps {
 }
 
 export function GstinInput({ value, onChange, onPanDetected, error }: GstinInputProps) {
+  const inputId = useId();
   const [blurred, setBlurred] = useState(false);
   const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
   const isValid = !value || gstinRegex.test(value);
@@ -16,8 +17,9 @@ export function GstinInput({ value, onChange, onPanDetected, error }: GstinInput
 
   return (
     <div>
-      <label className="label">GSTIN</label>
+      <label className="label" htmlFor={inputId}>GSTIN</label>
       <input
+          id={inputId}
         className={`input font-mono tracking-wide ${showError || error ? "border-red-500" : ""}`}
         value={value}
         onChange={(e) => {
