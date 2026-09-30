@@ -1,15 +1,36 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq } from "drizzle-orm";
-import { controlDb, partners } from "@fintranzact/db";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { controlDb, partners, partnerPayouts, tenants, users } from "@fintranzact/db";
 import { partnerApplicationSchema } from "@fintranzact/shared";
 import { getPartnerStats } from "../lib/partner-program.js";
-import { router, publicProcedure } from "../trpc.js";
+import { getPlanCatalog } from "../lib/plan-catalog.js";
+import { router, publicProcedure, protectedProcedure } from "../trpc.js";
 import { verifyTurnstile } from "../lib/turnstile.js";
 import { logger } from "../lib/logger.js";
 
 /**
+ * The partner record for a signed-in user: the newest application made with
+ * their email, but only once the email is verified (so registering someone
+ * else's address never shows their partner details).
+ */
+async function partnerForUser(userId: string) {
+  const [user] = await controlDb
+    .select({ email: users.email, emailVerified: users.emailVerified })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!user) return { user: null, partner: null };
+  if (!user.emailVerified) return { user, partner: null };
+  const email = user.email.trim().toLowerCase();
+  const rows = await controlDb.select().from(partners).where(eq(partners.email, email)).orderBy(desc(partners.createdAt));
+  // An approved record wins over an older or newer rejected / pending one.
+  return { user, partner: rows.find((r) => r.status === "approved") ?? rows[0] ?? null };
+}
+
+/**
  * Public side of the partner programme: the "Become a partner" form and the
- * directory of approved partners. Reviewing applications is in
+ * directory of approved partners, and the signed-in partner portal.
+ * Reviewing applications is in
  * platform.partners / platform.updatePartner (platform admins only).
  */
 export const partnerRouter = router({
@@ -56,5 +77,85 @@ export const partnerRouter = router({
       .orderBy(asc(partners.companyName));
     const stats = await getPartnerStats(rows);
     return rows.map(({ commissionPercent: _c, ...p }) => ({ ...p, badge: stats.get(p.id)!.badge.id }));
+  }),
+
+  /** Whether the signed-in user is a partner (shows the "Partner portal" link). */
+  me: protectedProcedure.query(async ({ ctx }) => {
+    const { partner } = await partnerForUser(ctx.user.id);
+    return { status: (partner?.status as "pending" | "approved" | "rejected" | undefined) ?? null };
+  }),
+
+  /** The signed-in partner's own portal: application status, or code, badge, referrals and payouts. */
+  portal: protectedProcedure.query(async ({ ctx }) => {
+    const { user, partner } = await partnerForUser(ctx.user.id);
+    if (!user) return { kind: "none" as const, email: ctx.user.email, emailVerified: false };
+    if (!partner) return { kind: "none" as const, email: user.email, emailVerified: user.emailVerified };
+
+    if (partner.status !== "approved" || !partner.referralCode) {
+      return {
+        kind: "application" as const,
+        email: user.email,
+        companyName: partner.companyName,
+        status: partner.status as "pending" | "approved" | "rejected",
+        appliedAt: partner.createdAt.toISOString(),
+      };
+    }
+
+    const [stats, referred, payouts, catalog] = await Promise.all([
+      getPartnerStats([partner]),
+      controlDb
+        .select({ name: tenants.name, plan: tenants.plan, status: tenants.status, createdAt: tenants.createdAt })
+        .from(tenants)
+        .where(eq(tenants.partnerId, partner.id))
+        .orderBy(desc(tenants.createdAt)),
+      controlDb
+        .select({
+          period: partnerPayouts.period,
+          amount: partnerPayouts.amount,
+          status: partnerPayouts.status,
+          paidAt: partnerPayouts.paidAt,
+          reference: partnerPayouts.reference,
+        })
+        .from(partnerPayouts)
+        .where(eq(partnerPayouts.partnerId, partner.id))
+        .orderBy(desc(partnerPayouts.period)),
+      getPlanCatalog(),
+    ]);
+    const plans = new Map(catalog.map((p) => [p.id, p]));
+    const st = stats.get(partner.id)!;
+    return {
+      kind: "partner" as const,
+      email: user.email,
+      companyName: partner.companyName,
+      contactName: partner.contactName,
+      partnerType: partner.partnerType,
+      city: partner.city,
+      state: partner.state,
+      website: partner.website,
+      phone: partner.phone,
+      listPublicly: partner.listPublicly,
+      approvedAt: partner.reviewedAt?.toISOString() ?? null,
+      referralCode: partner.referralCode,
+      stats: {
+        referred: st.referred,
+        paidReferrals: st.paidReferrals,
+        customPriced: st.customPriced,
+        monthlyValue: st.monthlyValue,
+        commissionPercent: st.commissionPercent,
+        monthlyCommission: st.monthlyCommission,
+        paidOut: st.paidOut,
+        pendingPayout: st.pendingPayout,
+        badge: st.badge.id,
+        next: st.next ? { badge: st.next.badge.id, needed: st.next.needed } : null,
+      },
+      referred: referred.map((t) => ({
+        name: t.name,
+        planName: plans.get(t.plan)?.name ?? t.plan,
+        paid: (plans.get(t.plan)?.monthlyPriceInr ?? 0) !== 0,
+        active: t.status === "active",
+        joinedAt: t.createdAt.toISOString(),
+      })),
+      payouts: payouts.map((p) => ({ ...p, paidAt: p.paidAt?.toISOString() ?? null })),
+    };
   }),
 });

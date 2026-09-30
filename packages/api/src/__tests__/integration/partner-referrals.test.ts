@@ -76,6 +76,7 @@ describe("referral codes", () => {
       contactName: "Kiran Desai",
       referralCode,
       signupUrl: expect.stringMatching(new RegExp(`/register\\?ref=${referralCode}$`)),
+      portalUrl: expect.stringMatching(/\/partner-portal$/),
     });
 
     const again = await adminCaller().platform.updatePartner({ id: partnerId, status: "approved" });
@@ -205,6 +206,58 @@ describe("badges, commission and payouts", () => {
     const meena = await tenantOf("meena@shahtraders.in");
     const detail = await adminCaller().platform.tenant({ id: meena.id });
     expect(detail.referredBy).toMatchObject({ companyName: "Desai Tax Consultants", referralCode });
+  });
+});
+
+describe("partner portal (signed in)", () => {
+  const callerAs = (u: TestUser) => createTestCaller({ userId: u.id, email: u.email, name: u.name ?? null, tenantId: tenant.id, businessId: business.id });
+
+  it("shows an approved partner their code, badge, referrals and payouts", async () => {
+    const kiran = await createUser({ email: "kiran@desaitax.in", name: "Kiran Desai" });
+    expect(await callerAs(kiran).partner.me()).toEqual({ status: "approved" });
+
+    const portal = await callerAs(kiran).partner.portal();
+    expect(portal.kind).toBe("partner");
+    if (portal.kind !== "partner") return;
+    expect(portal).toMatchObject({ companyName: "Desai Tax Consultants", referralCode });
+    expect(portal.stats).toMatchObject({ referred: 2, paidReferrals: 1, paidOut: "149.90", badge: "registered" });
+    expect(portal.referred.map((r) => r.paid).sort()).toEqual([false, true]);
+    expect(portal.payouts).toEqual([
+      expect.objectContaining({ period: "2026-09", amount: "149.90", status: "paid", reference: "UPI 4312 9981" }),
+    ]);
+  });
+
+  it("shows nothing to an account whose email is not verified", async () => {
+    await getControlDb().delete(users).where(eq(users.email, "kiran@desaitax.in"));
+    const squatter = await createUser({ email: "kiran@desaitax.in", emailVerified: false });
+    expect(await callerAs(squatter).partner.me()).toEqual({ status: null });
+    expect(await callerAs(squatter).partner.portal()).toMatchObject({ kind: "none", emailVerified: false });
+    await getControlDb().delete(users).where(eq(users.id, squatter.id));
+  });
+
+  it("shows a pending applicant only their application status", async () => {
+    await publicCaller().partner.submitApplication({
+      contactName: "Pending Person",
+      companyName: "Pending Firm",
+      email: "pending@firm.in",
+      phone: "+91 91234 56789",
+      city: "Surat",
+      partnerType: "reseller",
+    });
+    const pending = await createUser({ email: "pending@firm.in" });
+    expect(await callerAs(pending).partner.portal()).toEqual({
+      kind: "application",
+      email: "pending@firm.in",
+      companyName: "Pending Firm",
+      status: "pending",
+      appliedAt: expect.any(String),
+    });
+  });
+
+  it("tells anyone else they are not a partner", async () => {
+    const stranger = await createUser({ email: "stranger@example.in" });
+    expect(await callerAs(stranger).partner.me()).toEqual({ status: null });
+    expect(await callerAs(stranger).partner.portal()).toMatchObject({ kind: "none", email: "stranger@example.in" });
   });
 });
 

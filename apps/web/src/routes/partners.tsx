@@ -150,6 +150,12 @@ function PartnersPage() {
           >
             Find a partner
           </Link>
+          <Link
+            to="/partner-portal"
+            className="inline-flex h-[52px] items-center px-2 text-base font-semibold text-brand-600 hover:underline dark:text-brand-300"
+          >
+            Partner login →
+          </Link>
         </div>
       </PageHero>
 

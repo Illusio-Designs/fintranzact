@@ -51,9 +51,9 @@ function CompleteProfilePage() {
     if (pendingToken && inviteInfo) {
       setName(session!.user!.name!);
       setStep("org-choice");
-    } else {
-      navigate({ to: session?.tenantId ? "/" : "/settings" });
     }
+    // Otherwise the app's routing (routes/__root.tsx) moves them on: to the
+    // partner portal, onboarding or the app, depending on who they are.
   }, [alreadyHasName, step, pendingToken, inviteInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const acceptInviteMutation = trpc.tenant.acceptInvitation.useMutation();
@@ -67,10 +67,11 @@ function CompleteProfilePage() {
       if (pendingToken && inviteInfo) {
         setStep("org-choice");
       } else {
-        // No invite — go straight to business creation
+        // No invite: the app's routing (routes/__root.tsx) moves them on once
+        // the refreshed session shows the name — to the partner portal,
+        // onboarding or the app, depending on who they are.
         setDoneMessage("Setting up your account...");
         setStep("done");
-        setTimeout(() => navigate({ to: "/settings" }), 800);
       }
     },
     onError: (e) => setError(e.message),

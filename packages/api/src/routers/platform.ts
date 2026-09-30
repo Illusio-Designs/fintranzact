@@ -356,6 +356,7 @@ export const platformRouter = router({
             companyName: p!.companyName,
             referralCode,
             signupUrl: `${base}/register?ref=${referralCode}`,
+            portalUrl: `${base}/partner-portal`,
           });
           emailed = true;
         } catch (err) {
