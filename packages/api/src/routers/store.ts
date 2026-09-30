@@ -6,6 +6,7 @@ import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trp
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { syncDocumentStock } from "../lib/inventory-service.js";
 
 // ── Validators ─────────────────────────────────────────────────
 
@@ -440,11 +441,25 @@ export const storeRouter = router({
           })
           .where(eq(storeOrders.id, input.orderId));
 
-        // Cancel linked invoice
+        // Cancel linked invoice, and give back the stock checkout took out
+        // (as cancelling any document does).
         if (order.invoiceId) {
-          await tx.update(invoices)
+          const [cancelled] = await tx.update(invoices)
             .set({ status: "cancelled", updatedAt: new Date() })
-            .where(eq(invoices.id, order.invoiceId));
+            .where(and(
+              eq(invoices.id, order.invoiceId),
+              eq(invoices.businessId, ctx.businessId),
+              sql`${invoices.status} <> 'cancelled'`,
+            ))
+            .returning({ id: invoices.id });
+          if (cancelled) {
+            await syncDocumentStock(tx, {
+              businessId: ctx.businessId,
+              documentId: cancelled.id,
+              event: "CANCEL",
+              actorUserId: ctx.user.id,
+            });
+          }
         }
 
         return { success: true, orderId: input.orderId };
