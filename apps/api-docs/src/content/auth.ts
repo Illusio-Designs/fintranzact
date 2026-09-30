@@ -445,7 +445,7 @@ print("New email:", data["newEmail"])`,
           {
             id: "sess_def456...",
             ipAddress: "49.36.128.42",
-            userAgent: "Hisaabo-Mobile/1.0",
+            userAgent: "Fintranzact-Mobile/1.0",
             createdAt: "2026-04-01T12:00:00.000Z",
             lastUsedAt: "2026-04-07T18:00:00.000Z",
             expiresAt: "2026-05-01T12:00:00.000Z",

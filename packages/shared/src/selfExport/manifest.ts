@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const manifestSchema = z.object({
-  format: z.literal("hisaabo-export"),
+  format: z.literal("fintranzact-export"),
   formatVersion: z.literal(1),
   appVersion: z.string(),
   schemaChecksum: z.string().regex(/^sha256:[0-9a-f]{64}$/),

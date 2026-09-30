@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError, type InvoiceStatus } from "../../client.js";
+import { FintranzactClient, FintranzactApiError, type InvoiceStatus } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT } from "../../output.js";
 import { formatStatus } from "../../format.js";
@@ -7,7 +7,7 @@ const VALID_STATUSES: InvoiceStatus[] = ["draft", "unfulfilled", "sent", "paid",
 
 export async function invoiceStatusCommand(id: string, status: string, opts: { json?: boolean }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   if (!VALID_STATUSES.includes(status as InvoiceStatus)) {
     fatalError(`Invalid status: ${status}. Valid: ${VALID_STATUSES.join(", ")}`, EXIT.USAGE);
@@ -28,10 +28,10 @@ export async function invoiceStatusCommand(id: string, status: string, opts: { j
     console.log(`  ${id} status updated: ${fromBadge} -> ${toBadge}`);
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
       if (err.code === "not_found") fatalError(`Invoice not found: ${id}`, EXIT.NOT_FOUND);
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "forbidden") fatalError(err.message, EXIT.FORBIDDEN);
       if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);

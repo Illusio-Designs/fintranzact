@@ -14,10 +14,10 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { HisaaboClient } from "../client.js";
+import type { FintranzactClient } from "../client.js";
 import { wrapTool } from "../lib/errors.js";
 
-export function registerEInvoiceTools(server: McpServer, client: HisaaboClient) {
+export function registerEInvoiceTools(server: McpServer, client: FintranzactClient) {
 
   server.tool(
     "einvoice_dashboard",

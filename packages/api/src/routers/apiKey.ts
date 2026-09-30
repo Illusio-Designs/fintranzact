@@ -45,7 +45,7 @@ export const apiKeyRouter = router({
     await enforceApiKeyLimit(ctx.tenantId);
 
     // Generate a high-entropy raw key
-    const rawKey = `hisaabo_key_${randomBytes(32).toString("base64url")}`;
+    const rawKey = `fintranzact_key_${randomBytes(32).toString("base64url")}`;
 
     // SHA-256 hash — API keys are high-entropy so slow hashing (argon2) is unnecessary
     const keyHash = createHash("sha256").update(rawKey).digest("hex");

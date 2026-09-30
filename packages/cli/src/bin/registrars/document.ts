@@ -129,12 +129,12 @@ export function registerDocumentCommands(program: Command): void {
     .option("--json", "JSON output")
     .option("-y, --yes", "Skip confirmation")
     .action(async (opts) => {
-      const { HisaaboClient, HisaaboApiError } = await import("../../client.js");
+      const { FintranzactClient, FintranzactApiError } = await import("../../client.js");
       const { requireAuth } = await import("../../config.js");
       const { fatalError, outputJSON, success, EXIT } = await import("../../output.js");
 
       const cfg = requireAuth();
-      const client = new HisaaboClient(cfg);
+      const client = new FintranzactClient(cfg);
 
       if (!opts.yes && process.stdin.isTTY) {
         const readline = await import("readline");
@@ -170,10 +170,10 @@ export function registerDocumentCommands(program: Command): void {
         console.log(`  New ID:  ${newId}\n`);
 
       } catch (e) {
-        if (e instanceof HisaaboApiError) {
-          const err = e.hisaaboError;
+        if (e instanceof FintranzactApiError) {
+          const err = e.fintranzactError;
           if (err.code === "not_found") fatalError(`Source document not found: ${opts.fromId}`, EXIT.NOT_FOUND);
-          if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+          if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
           if (err.code === "forbidden") fatalError(err.message, EXIT.FORBIDDEN);
           if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
           if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);

@@ -1872,7 +1872,7 @@ STEP 1: Create API key
   INPUT: { name: "CLI Access" }
   ASSERT:
     - Returns { id, name, key, keyPrefix, expiresAt }
-    - key starts with "hisaabo_key_"
+    - key starts with "fintranzact_key_"
     - keyPrefix = first 20 chars of key
     - key is returned ONCE (never stored in plaintext)
     - Database: api_keys row with keyHash (SHA-256), not raw key
@@ -2414,11 +2414,11 @@ describe("Dockerfile (API-only image)")
 PRE-CONDITIONS: Docker available, PostgreSQL accessible
 
 STEP 1: Build image
-  ACTION: docker build -t hisaabo-api .
+  ACTION: docker build -t fintranzact-api .
   ASSERT: Build succeeds
 
 STEP 2: Start container with DATABASE_URL
-  ACTION: docker run -e DATABASE_URL=... -p 3000:3000 hisaabo-api
+  ACTION: docker run -e DATABASE_URL=... -p 3000:3000 fintranzact-api
   ASSERT:
     - Entrypoint runs migrations: "[entrypoint] Running database migrations..."
     - Server starts: "[entrypoint] Starting Fintranzact API server on port 3000..."
@@ -2438,7 +2438,7 @@ STEP 5: Environment variables
   ASSERT:
     - NODE_ENV=production
     - PORT=3000 (default)
-    - HISAABO_VERSION set from build arg
+    - FINTRANZACT_VERSION set from build arg
 ```
 
 ---
@@ -2449,15 +2449,15 @@ STEP 5: Environment variables
 describe("Dockerfile.once (All-in-one image)")
 
 STEP 1: Build image
-  ACTION: docker build -f Dockerfile.once -t hisaabo-once .
+  ACTION: docker build -f Dockerfile.once -t fintranzact-once .
   ASSERT: Build succeeds (includes PostgreSQL 16 + s6-overlay)
 
 STEP 2: First boot (fresh data dir)
-  ACTION: docker run -v hisaabo-data:/storage -p 3000:3000 hisaabo-once
+  ACTION: docker run -v fintranzact-data:/storage -p 3000:3000 fintranzact-once
   ASSERT:
     - PostgreSQL initialized: "[postgres] Initializing new database cluster..."
     - flock acquired: "[postgres] Lock acquired - we own PostgreSQL"
-    - Database created: "hisaabo" database exists
+    - Database created: "fintranzact" database exists
     - Migrations run: "[api] Running database migrations..."
     - API starts: "[api] Starting Fintranzact API on port 3000..."
     - GET /health returns 200
@@ -2471,7 +2471,7 @@ STEP 3: Persistent data across restarts
 STEP 4: Backup hook
   ACTION: Execute /hooks/pre-backup inside container
   ASSERT:
-    - pg_dump creates /storage/backups/hisaabo.dump
+    - pg_dump creates /storage/backups/fintranzact.dump
     - File size > 0
 
 STEP 5: Restore hook

@@ -520,7 +520,7 @@ describe("apiKey — paid tenant", () => {
     const result = await caller.apiKey.create({ name: "CI Integration Key" });
 
     expect(typeof result.key).toBe("string");
-    expect(result.key).toMatch(/^hisaabo_key_/);
+    expect(result.key).toMatch(/^fintranzact_key_/);
     expect(typeof result.keyPrefix).toBe("string");
     expect(result.keyPrefix.length).toBe(20);
     expect(result.keyPrefix).toBe(result.key.slice(0, 20));

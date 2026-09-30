@@ -36,11 +36,11 @@ function GSTReportsPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [activeTab, setActiveTabRaw] = useState<ReportTab>(
-    () => (localStorage.getItem("hisaabo_gst_tab") as ReportTab) || "gstr1"
+    () => (localStorage.getItem("fintranzact_gst_tab") as ReportTab) || "gstr1"
   );
   const setActiveTab = (tab: ReportTab) => {
     setActiveTabRaw(tab);
-    localStorage.setItem("hisaabo_gst_tab", tab);
+    localStorage.setItem("fintranzact_gst_tab", tab);
   };
 
   const { data: businesses } = trpc.business.list.useQuery();

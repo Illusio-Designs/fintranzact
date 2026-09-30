@@ -1,4 +1,4 @@
-// Hisaabo adapter: near-identity transforms.
+// Fintranzact adapter: near-identity transforms.
 // Our own export format already matches canonical types closely;
 // we still need parseFlexibleDate for date strings, but units and modes
 // are already canonical values.
@@ -107,7 +107,7 @@ export function transformInvoice(raw: Record<string, unknown>): CanonicalInvoice
   // Line items
   //
   // Post-schema-split (Bug B): prefer the explicit "Item Name" column from
-  // the CSV. For legacy Hisaabo exports that only had a "Description" column
+  // the CSV. For legacy Fintranzact exports that only had a "Description" column
   // (pre-split), fall back so we don't break old exports. Imported rows never
   // carry a user-authored description.
   let lineItems: CanonicalInvoice["lineItems"] = undefined;

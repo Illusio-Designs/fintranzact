@@ -284,8 +284,8 @@ describe("DataTab — FullBackupSection", () => {
 
   // ── URL resolution (split-host prod regression guard) ──────────────────────
   // Background: the server used to return an absolute URL built from APP_URL
-  // (the frontend host), so the anchor click went to app.hisaabo.in instead
-  // of api.hisaabo.in and silently failed. Server now returns a relative URL
+  // (the frontend host), so the anchor click went to app.fintranzact.com instead
+  // of api.fintranzact.com and silently failed. Server now returns a relative URL
   // and this component resolves it via apiUrl(API_URL).
 
   it("relative URL is resolved against API_URL in split-host mode", () => {

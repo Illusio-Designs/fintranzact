@@ -17,20 +17,20 @@
 
 ### Command Grammar
 
-Every command follows: `hisaabo <resource> <action> [flags]`
+Every command follows: `fintranzact <resource> <action> [flags]`
 
 ```
-hisaabo login
-hisaabo dashboard
-hisaabo invoice list
-hisaabo invoice create
-hisaabo invoice get INV-0042
-hisaabo invoice pdf INV-0042
-hisaabo party list --type customer
-hisaabo payment create
-hisaabo expense list --from 2026-04-01 --to 2026-06-30
-hisaabo gst r1 --quarter Q1
-hisaabo report daybook --from 2026-04-01 --to 2026-04-30
+fintranzact login
+fintranzact dashboard
+fintranzact invoice list
+fintranzact invoice create
+fintranzact invoice get INV-0042
+fintranzact invoice pdf INV-0042
+fintranzact party list --type customer
+fintranzact payment create
+fintranzact expense list --from 2026-04-01 --to 2026-06-30
+fintranzact gst r1 --quarter Q1
+fintranzact report daybook --from 2026-04-01 --to 2026-04-30
 ```
 
 Resources match the existing tRPC router names exactly: `invoice`, `party`, `item`, `payment`, `expense`, `bank`, `shipment`, `gst`, `report`.
@@ -156,7 +156,7 @@ The most-used screen. Optimized for scanning 50+ invoices quickly.
 
 ### 2.2 Invoice Detail View
 
-When a user runs `hisaabo invoice get INV-0042`:
+When a user runs `fintranzact invoice get INV-0042`:
 
 ```
  ┌─────────────────────────────────────────────────────────────────┐
@@ -195,7 +195,7 @@ When a user runs `hisaabo invoice get INV-0042`:
 
 ### 2.3 Dashboard Summary
 
-`hisaabo dashboard`:
+`fintranzact dashboard`:
 
 ```
  Fintranzact Dashboard                     Sharma Trading Co.
@@ -227,7 +227,7 @@ When a user runs `hisaabo invoice get INV-0042`:
 
 ### 2.4 Party List
 
-`hisaabo party list --type customer`:
+`fintranzact party list --type customer`:
 
 ```
  Customers                                           12 total
@@ -245,7 +245,7 @@ When a user runs `hisaabo invoice get INV-0042`:
 
 ### 2.5 Item List
 
-`hisaabo item list`:
+`fintranzact item list`:
 
 ```
  Items                                                45 total
@@ -263,7 +263,7 @@ When a user runs `hisaabo invoice get INV-0042`:
 
 ### 2.6 GST Reports
 
-`hisaabo gst r1 --quarter Q4`:
+`fintranzact gst r1 --quarter Q4`:
 
 ```
  GSTR-1 Summary                            Q4 FY 2025-26
@@ -297,7 +297,7 @@ When a user runs `hisaabo invoice get INV-0042`:
 ### 3.1 First-Time Login
 
 ```
-$ hisaabo login
+$ fintranzact login
 
   Fintranzact CLI
   ───────────
@@ -318,20 +318,20 @@ $ hisaabo login
   Select business [1]: 1
 
   Active business: Sharma Trading Co.
-  Config saved to ~/.config/hisaabo/config.json
+  Config saved to ~/.config/fintranzact/config.json
 
   You can switch businesses anytime with:
-    hisaabo business switch
+    fintranzact business switch
 ```
 
 ### 3.2 Invoice Creation (Interactive)
 
-`hisaabo invoice create`:
+`fintranzact invoice create`:
 
 The flow mirrors the web `InvoiceCreator.tsx` but linearized for terminal. Each step can be skipped or pre-filled via flags.
 
 ```
-$ hisaabo invoice create
+$ fintranzact invoice create
 
   New Sale Invoice
   ────────────────
@@ -391,14 +391,14 @@ $ hisaabo invoice create
   Create this invoice? (y/n) [y]: y
 
   Created: INV-0042 for ₹15,216.22
-  View:    hisaabo invoice get INV-0042
-  PDF:     hisaabo invoice pdf INV-0042
+  View:    fintranzact invoice get INV-0042
+  PDF:     fintranzact invoice pdf INV-0042
 ```
 
 **Shortcut for power users** -- supply everything via flags:
 
 ```
-$ hisaabo invoice create \
+$ fintranzact invoice create \
     --party "Sharma Traders" \
     --item "Basmati Rice 5kg" --qty 10 --rate 1200 \
     --item "Toor Dal 1kg" --qty 5 \
@@ -408,10 +408,10 @@ $ hisaabo invoice create \
 
 ### 3.3 Payment Recording (Interactive)
 
-`hisaabo payment create`:
+`fintranzact payment create`:
 
 ```
-$ hisaabo payment create
+$ fintranzact payment create
 
   Record Payment
   ──────────────
@@ -457,22 +457,22 @@ Some operations should be instant, no wizard:
 
 ```
 # Mark invoice as sent
-$ hisaabo invoice status INV-0042 sent
+$ fintranzact invoice status INV-0042 sent
   INV-0042 status updated: draft -> [SENT]
 
 # Download PDF
-$ hisaabo invoice pdf INV-0042
+$ fintranzact invoice pdf INV-0042
   Saved: INV-0042.pdf (45 KB)
 
-$ hisaabo invoice pdf INV-0042 --output ~/Desktop/
+$ fintranzact invoice pdf INV-0042 --output ~/Desktop/
   Saved: ~/Desktop/INV-0042.pdf (45 KB)
 
 # Quick expense entry
-$ hisaabo expense create --amount 500 --category "Office Supplies" --mode cash
+$ fintranzact expense create --amount 500 --category "Office Supplies" --mode cash
   Created: Expense #45 - Office Supplies ₹500.00
 
 # Switch business
-$ hisaabo business switch
+$ fintranzact business switch
   1  Sharma Trading Co.    [active]
   2  Kumar Enterprises
   Select [2]: 2
@@ -485,29 +485,29 @@ Consistent filtering grammar across all resources:
 
 ```
 # Date ranges
-$ hisaabo invoice list --from 2026-01-01 --to 2026-03-31
-$ hisaabo invoice list --this-month
-$ hisaabo invoice list --this-quarter
-$ hisaabo invoice list --this-fy
+$ fintranzact invoice list --from 2026-01-01 --to 2026-03-31
+$ fintranzact invoice list --this-month
+$ fintranzact invoice list --this-quarter
+$ fintranzact invoice list --this-fy
 
 # Status filtering
-$ hisaabo invoice list --status overdue
-$ hisaabo invoice list --status overdue,partial
+$ fintranzact invoice list --status overdue
+$ fintranzact invoice list --status overdue,partial
 
 # Party filtering
-$ hisaabo invoice list --party "Sharma Traders"
-$ hisaabo invoice list --party-id 550e8400-e29b-41d4-a716-446655440000
+$ fintranzact invoice list --party "Sharma Traders"
+$ fintranzact invoice list --party-id 550e8400-e29b-41d4-a716-446655440000
 
 # Type filtering
-$ hisaabo invoice list --type sale
-$ hisaabo party list --type customer
+$ fintranzact invoice list --type sale
+$ fintranzact party list --type customer
 
 # Combined
-$ hisaabo invoice list --type sale --status overdue --this-month
+$ fintranzact invoice list --type sale --status overdue --this-month
 
 # Full text search
-$ hisaabo party search "sharma"
-$ hisaabo item search "basmati"
+$ fintranzact party search "sharma"
+$ fintranzact item search "basmati"
 ```
 
 ---
@@ -519,7 +519,7 @@ $ hisaabo item search "basmati"
 Every command supports `--json` for machine-readable output:
 
 ```
-$ hisaabo invoice list --status overdue --json
+$ fintranzact invoice list --status overdue --json
 ```
 
 ```json
@@ -556,16 +556,16 @@ TSV output for piping to standard Unix tools:
 
 ```
 # Pipe to awk for custom calculations
-$ hisaabo invoice list --status overdue --format tsv | awk -F'\t' '{sum += $5} END {print sum}'
+$ fintranzact invoice list --status overdue --format tsv | awk -F'\t' '{sum += $5} END {print sum}'
 
 # Pipe to grep
-$ hisaabo party list --format tsv | grep "Wholesale"
+$ fintranzact party list --format tsv | grep "Wholesale"
 
 # Feed into another command
-$ hisaabo invoice list --status draft --format ids | xargs -I{} hisaabo invoice status {} sent
+$ fintranzact invoice list --status draft --format ids | xargs -I{} fintranzact invoice status {} sent
 
 # CSV export
-$ hisaabo invoice list --this-fy --format csv > invoices-fy2526.csv
+$ fintranzact invoice list --this-fy --format csv > invoices-fy2526.csv
 ```
 
 Output formats:
@@ -599,7 +599,7 @@ Script example:
 #!/bin/bash
 # Daily overdue reminder script (cron: 0 9 * * *)
 
-overdue=$(hisaabo invoice list --status overdue --json 2>/dev/null)
+overdue=$(fintranzact invoice list --status overdue --json 2>/dev/null)
 exit_code=$?
 
 if [ $exit_code -eq 3 ]; then
@@ -627,7 +627,7 @@ For scripting safety, create operations accept `--idempotency-key`:
 
 ```
 # Safe to retry -- won't create duplicate invoices
-$ hisaabo invoice create --idempotency-key "daily-sharma-2026-03-30" \
+$ fintranzact invoice create --idempotency-key "daily-sharma-2026-03-30" \
     --party "Sharma Traders" \
     --item "Basmati Rice 5kg" --qty 10 \
     --yes
@@ -640,15 +640,15 @@ $ hisaabo invoice create --idempotency-key "daily-sharma-2026-03-30" \
 
 ```
 # Bulk status update
-$ hisaabo invoice status --from-status draft --to-status sent --this-week
+$ fintranzact invoice status --from-status draft --to-status sent --this-week
   Updated 8 invoices: draft -> sent
 
 # Import from CSV (matches existing import router)
-$ hisaabo import parties --file customers.csv --dry-run
+$ fintranzact import parties --file customers.csv --dry-run
   Parsed 45 records: 40 new, 3 duplicates (will skip), 2 errors
   Run without --dry-run to import.
 
-$ hisaabo import parties --file customers.csv
+$ fintranzact import parties --file customers.csv
   Imported 40 parties, skipped 3 duplicates, 2 errors (see import-errors.log)
 ```
 
@@ -661,7 +661,7 @@ $ hisaabo import parties --file customers.csv
 Field-level errors with the exact field name (matching Zod validator paths from `packages/shared`):
 
 ```
-$ hisaabo party create --name "" --phone "abc"
+$ fintranzact party create --name "" --phone "abc"
 
   Error: Validation failed (2 errors)
 
@@ -682,14 +682,14 @@ For interactive mode, validate inline and re-prompt:
 ### 5.2 Network Errors
 
 ```
-$ hisaabo dashboard
+$ fintranzact dashboard
 
   Error: Cannot reach Fintranzact API at https://billing.mycompany.in
 
   Possible causes:
     - Server is not running (try: docker compose up -d)
     - Network is unreachable
-    - URL is wrong (check: hisaabo config show)
+    - URL is wrong (check: fintranzact config show)
 
   Last successful connection: 30 Mar 2026, 09:15 AM
 ```
@@ -697,11 +697,11 @@ $ hisaabo dashboard
 ### 5.3 Authentication Errors
 
 ```
-$ hisaabo invoice list
+$ fintranzact invoice list
 
   Error: Session expired
 
-  Run 'hisaabo login' to re-authenticate.
+  Run 'fintranzact login' to re-authenticate.
   Your business selection will be preserved.
 ```
 
@@ -713,7 +713,7 @@ Map these to user-understandable messages:
 
 ```
 # Insufficient stock
-$ hisaabo invoice create --party "Sharma" --item "Basmati Rice 5kg" --qty 100 --yes
+$ fintranzact invoice create --party "Sharma" --item "Basmati Rice 5kg" --qty 100 --yes
 
   Error: Insufficient stock for Basmati Rice 5kg
 
@@ -723,15 +723,15 @@ $ hisaabo invoice create --party "Sharma" --item "Basmati Rice 5kg" --qty 100 --
   Use --skip-stock-check to override (for back-orders).
 
 # Duplicate invoice number
-$ hisaabo invoice create ...
+$ fintranzact invoice create ...
 
   Error: Invoice number INV-0042 already exists
 
   The server auto-assigns the next number. If you need to reset:
-    hisaabo business sequence invoice 100
+    fintranzact business sequence invoice 100
 
 # Credit limit exceeded
-$ hisaabo invoice create --party "Kumar Stores" ...
+$ fintranzact invoice create --party "Kumar Stores" ...
 
   Warning: This invoice will exceed Kumar Stores' credit limit.
 
@@ -749,7 +749,7 @@ Errors always go to stderr, never stdout. This keeps piping clean:
 
 ```
 # stdout has the data, stderr has the error
-$ hisaabo invoice list --json 2>errors.log | jq '.data | length'
+$ fintranzact invoice list --json 2>errors.log | jq '.data | length'
 ```
 
 Error format in `--json` mode:
@@ -775,12 +775,12 @@ Error format in `--json` mode:
 
 Three levels of help, matching how users actually ask for help:
 
-**Level 1: Overview** (`hisaabo --help`):
+**Level 1: Overview** (`fintranzact --help`):
 
 ```
 Fintranzact CLI - Self-hosted invoicing for Indian businesses
 
-Usage: hisaabo <command> [options]
+Usage: fintranzact <command> [options]
 
 Commands:
   login              Authenticate with your Fintranzact server
@@ -801,22 +801,22 @@ Commands:
 
   config             View and edit CLI configuration
 
-Run 'hisaabo <command> --help' for details on a specific command.
-Run 'hisaabo <command> <subcommand> --help' for subcommand details.
+Run 'fintranzact <command> --help' for details on a specific command.
+Run 'fintranzact <command> <subcommand> --help' for subcommand details.
 
 Examples:
-  hisaabo invoice list --this-month --status overdue
-  hisaabo invoice create --party "Sharma Traders" --item "Rice" --qty 10
-  hisaabo dashboard
-  hisaabo gst r1 --quarter Q4
+  fintranzact invoice list --this-month --status overdue
+  fintranzact invoice create --party "Sharma Traders" --item "Rice" --qty 10
+  fintranzact dashboard
+  fintranzact gst r1 --quarter Q4
 ```
 
-**Level 2: Command help** (`hisaabo invoice --help`):
+**Level 2: Command help** (`fintranzact invoice --help`):
 
 ```
-hisaabo invoice - Manage invoices
+fintranzact invoice - Manage invoices
 
-Usage: hisaabo invoice <subcommand> [options]
+Usage: fintranzact invoice <subcommand> [options]
 
 Subcommands:
   list               List invoices with filters
@@ -842,20 +842,20 @@ Common Flags:
   --no-color                 Disable colored output
 
 Examples:
-  hisaabo invoice list --type sale --this-month
-  hisaabo invoice get INV-0042
-  hisaabo invoice create --party "Sharma" --item "Rice" --qty 10 --yes
-  hisaabo invoice pdf INV-0042 --output ~/invoices/
-  hisaabo invoice status INV-0042 paid
-  hisaabo invoice list --status overdue --json | jq '.data[].party.name'
+  fintranzact invoice list --type sale --this-month
+  fintranzact invoice get INV-0042
+  fintranzact invoice create --party "Sharma" --item "Rice" --qty 10 --yes
+  fintranzact invoice pdf INV-0042 --output ~/invoices/
+  fintranzact invoice status INV-0042 paid
+  fintranzact invoice list --status overdue --json | jq '.data[].party.name'
 ```
 
-**Level 3: Subcommand help** (`hisaabo invoice create --help`):
+**Level 3: Subcommand help** (`fintranzact invoice create --help`):
 
 ```
-hisaabo invoice create - Create a new invoice
+fintranzact invoice create - Create a new invoice
 
-Usage: hisaabo invoice create [options]
+Usage: fintranzact invoice create [options]
 
 Without flags, starts an interactive wizard.
 With flags, creates directly (use --yes to skip confirmation).
@@ -882,13 +882,13 @@ Options:
 
 Examples:
   # Interactive wizard
-  hisaabo invoice create
+  fintranzact invoice create
 
   # Quick sale
-  hisaabo invoice create --party "Sharma" --item "Rice" --qty 10 --yes
+  fintranzact invoice create --party "Sharma" --item "Rice" --qty 10 --yes
 
   # Multiple items
-  hisaabo invoice create \
+  fintranzact invoice create \
     --party "Patel & Sons" \
     --item "Basmati Rice 5kg" --qty 10 --rate 1200 \
     --item "Toor Dal 1kg" --qty 5 \
@@ -897,7 +897,7 @@ Examples:
     --yes
 
   # Scripted with JSON output
-  hisaabo invoice create --party "Sharma" --item "Rice" --qty 10 --yes --json
+  fintranzact invoice create --party "Sharma" --item "Rice" --qty 10 --yes --json
 ```
 
 ### 6.2 Command Discovery
@@ -905,37 +905,37 @@ Examples:
 **Fuzzy matching on typos:**
 
 ```
-$ hisaabo invioce list
+$ fintranzact invioce list
 
   Unknown command: invioce
 
   Did you mean?
     invoice     Manage invoices
 
-  Run 'hisaabo --help' for all commands.
+  Run 'fintranzact --help' for all commands.
 ```
 
 **Contextual suggestions after actions:**
 
 ```
-$ hisaabo invoice create ... --yes
+$ fintranzact invoice create ... --yes
 
   Created: INV-0043 for ₹15,216.22
 
   Next steps:
-    hisaabo invoice get INV-0043      View details
-    hisaabo invoice pdf INV-0043      Download PDF
-    hisaabo invoice status INV-0043 sent    Mark as sent
-    hisaabo payment create            Record a payment
+    fintranzact invoice get INV-0043      View details
+    fintranzact invoice pdf INV-0043      Download PDF
+    fintranzact invoice status INV-0043 sent    Mark as sent
+    fintranzact payment create            Record a payment
 ```
 
 **Shortest unique prefix (for power users):**
 
 ```
-$ hisaabo inv list          # matches 'invoice'
-$ hisaabo pay create        # matches 'payment'
-$ hisaabo dash              # matches 'dashboard'
-$ hisaabo exp list          # matches 'expense'
+$ fintranzact inv list          # matches 'invoice'
+$ fintranzact pay create        # matches 'payment'
+$ fintranzact dash              # matches 'dashboard'
+$ fintranzact exp list          # matches 'expense'
 ```
 
 ### 6.3 Shell Completions
@@ -943,33 +943,33 @@ $ hisaabo exp list          # matches 'expense'
 Provide installable completions for bash, zsh, and fish:
 
 ```
-$ hisaabo completion bash >> ~/.bashrc
-$ hisaabo completion zsh >> ~/.zshrc
-$ hisaabo completion fish > ~/.config/fish/completions/hisaabo.fish
+$ fintranzact completion bash >> ~/.bashrc
+$ fintranzact completion zsh >> ~/.zshrc
+$ fintranzact completion fish > ~/.config/fish/completions/fintranzact.fish
 ```
 
 Completions cover:
 
 - Commands and subcommands
 - Flag names and their allowed values (statuses, types, modes)
-- Party names (cached locally, refreshed on `hisaabo party list`)
+- Party names (cached locally, refreshed on `fintranzact party list`)
 - Item names (cached locally)
 - Invoice numbers (recent, cached)
 - Bank account names
 
-Cache location: `~/.cache/hisaabo/completions.json`, refreshed every 5 minutes or on explicit list commands.
+Cache location: `~/.cache/fintranzact/completions.json`, refreshed every 5 minutes or on explicit list commands.
 
 ### 6.4 Recent Command Context
 
 ```
-$ hisaabo invoice list --type sale --this-month --status overdue
+$ fintranzact invoice list --type sale --this-month --status overdue
 
   ... (results) ...
 
-$ hisaabo invoice list --repeat
+$ fintranzact invoice list --repeat
   (re-runs the previous invoice list command with same filters)
 
-$ hisaabo invoice list --last
+$ fintranzact invoice list --last
   (shows what filters were used last time)
   Last: --type sale --this-month --status overdue (30 Mar 2026, 10:45 AM)
 ```
@@ -980,7 +980,7 @@ $ hisaabo invoice list --last
 
 ### 7.1 Config File
 
-Location: `~/.config/hisaabo/config.json`
+Location: `~/.config/fintranzact/config.json`
 
 ```json
 {
@@ -1007,17 +1007,17 @@ Location: `~/.config/hisaabo/config.json`
 ### 7.2 Config Commands
 
 ```
-$ hisaabo config show
+$ fintranzact config show
   Server:    https://billing.mycompany.in
   Business:  Sharma Trading Co. (07AAACR5055K1Z5)
   User:      saurabh@example.com
   Session:   Valid until 29 Apr 2026
   Defaults:  invoice type=sale, delivery=hand_delivery, page=20
 
-$ hisaabo config set defaults.pageSize 50
+$ fintranzact config set defaults.pageSize 50
   Updated: defaults.pageSize = 50
 
-$ hisaabo config set display.color false
+$ fintranzact config set display.color false
   Updated: display.color = false
 ```
 
@@ -1026,11 +1026,11 @@ $ hisaabo config set display.color false
 Every config value can be overridden via env var (useful for CI/CD):
 
 ```
-HISAABO_SERVER=https://billing.mycompany.in
-HISAABO_SESSION_ID=...
-HISAABO_BUSINESS_ID=...
-HISAABO_NO_COLOR=1
-HISAABO_FORMAT=json
+FINTRANZACT_SERVER=https://billing.mycompany.in
+FINTRANZACT_SESSION_ID=...
+FINTRANZACT_BUSINESS_ID=...
+FINTRANZACT_NO_COLOR=1
+FINTRANZACT_FORMAT=json
 ```
 
 Priority: CLI flags > env vars > config file > defaults.
@@ -1105,7 +1105,7 @@ apps/cli/
       completion.ts
     lib/
       api.ts                   # HTTP client, auth header injection, business ID header
-      config.ts                # Read/write ~/.config/hisaabo/config.json
+      config.ts                # Read/write ~/.config/fintranzact/config.json
       format.ts                # INR formatting, date formatting, status badges
       table.ts                 # Table rendering with width detection
       prompt.ts                # Interactive prompts, party/item search
@@ -1113,7 +1113,7 @@ apps/cli/
       cache.ts                 # Completion cache, party/item name cache
     types.ts                   # CLI-specific types (extends @fintranzact/shared)
   bin/
-    hisaabo                    # Shebang entry: #!/usr/bin/env node
+    fintranzact                    # Shebang entry: #!/usr/bin/env node
   tsconfig.json
   tsup.config.ts               # Bundle for distribution
 ```
@@ -1203,29 +1203,29 @@ For a user billing 50 invoices a day, every millisecond counts:
 
 The CLI requires network access (it talks to the API). But provide graceful degradation:
 
-- Cache the last dashboard response for `hisaabo dashboard --cached`
+- Cache the last dashboard response for `fintranzact dashboard --cached`
 - Cache party and item lists for completion (5 min TTL)
-- Queue operations for later with `hisaabo invoice create ... --queue` (writes to `~/.local/share/hisaabo/queue.json`, flushed on `hisaabo sync`)
+- Queue operations for later with `fintranzact invoice create ... --queue` (writes to `~/.local/share/fintranzact/queue.json`, flushed on `fintranzact sync`)
 
 ### 8.7 Document Type Support
 
 The CLI should support all 8 document types from the schema, using the existing `document-router-factory.ts` endpoints:
 
 ```
-hisaabo invoice list                    # type=invoice (default)
-hisaabo quotation list                  # documentType=quotation
-hisaabo credit-note list                # documentType=credit_note
-hisaabo debit-note list                 # documentType=debit_note
-hisaabo challan list                    # documentType=delivery_challan
-hisaabo proforma list                   # documentType=proforma
-hisaabo sales-return list               # documentType=sales_return
-hisaabo purchase-return list            # documentType=purchase_return
+fintranzact invoice list                    # type=invoice (default)
+fintranzact quotation list                  # documentType=quotation
+fintranzact credit-note list                # documentType=credit_note
+fintranzact debit-note list                 # documentType=debit_note
+fintranzact challan list                    # documentType=delivery_challan
+fintranzact proforma list                   # documentType=proforma
+fintranzact sales-return list               # documentType=sales_return
+fintranzact purchase-return list            # documentType=purchase_return
 ```
 
 Or use a unified flag:
 
 ```
-hisaabo invoice list --doc-type quotation
+fintranzact invoice list --doc-type quotation
 ```
 
 ### 8.8 Report Command Mapping
@@ -1233,17 +1233,17 @@ hisaabo invoice list --doc-type quotation
 Maps to the 11 report types in `routers/reports.ts`:
 
 ```
-hisaabo report daybook --from 2026-04-01 --to 2026-04-30
-hisaabo report outstanding --type receivable
-hisaabo report sale-register --this-fy
-hisaabo report purchase-register --this-fy
-hisaabo report tax-summary --this-quarter
-hisaabo report pnl --this-fy
-hisaabo report balance-sheet --as-of 2026-03-31
-hisaabo report stock --low-stock
-hisaabo report ageing --type receivable
-hisaabo report party-statement --party "Sharma Traders"
-hisaabo report expense-summary --this-fy
+fintranzact report daybook --from 2026-04-01 --to 2026-04-30
+fintranzact report outstanding --type receivable
+fintranzact report sale-register --this-fy
+fintranzact report purchase-register --this-fy
+fintranzact report tax-summary --this-quarter
+fintranzact report pnl --this-fy
+fintranzact report balance-sheet --as-of 2026-03-31
+fintranzact report stock --low-stock
+fintranzact report ageing --type receivable
+fintranzact report party-statement --party "Sharma Traders"
+fintranzact report expense-summary --this-fy
 ```
 
 ---

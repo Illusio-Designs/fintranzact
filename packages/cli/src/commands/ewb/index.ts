@@ -1,12 +1,12 @@
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT } from "../../output.js";
 import { formatDate } from "../../format.js";
 
 function handleError(e: unknown): never {
-  if (e instanceof HisaaboApiError) {
-    const err = e.hisaaboError;
-    if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+  if (e instanceof FintranzactApiError) {
+    const err = e.fintranzactError;
+    if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
     if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
   }
   fatalError(String(e instanceof Error ? e.message : e));
@@ -14,7 +14,7 @@ function handleError(e: unknown): never {
 
 export async function ewbDashboardCommand(opts: { json?: boolean; from?: string; to?: string }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.ewayBill.dashboard({ fromDate: opts.from, toDate: opts.to });
@@ -46,7 +46,7 @@ export async function ewbDashboardCommand(opts: { json?: boolean; from?: string;
 
 export async function ewbGenerateCommand(invoiceId: string, opts: { json?: boolean }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.ewayBill.generate({ invoiceId });
@@ -71,7 +71,7 @@ export async function ewbGenerateCommand(invoiceId: string, opts: { json?: boole
 
 export async function ewbExpiringCommand(opts: { json?: boolean; days?: number }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.ewayBill.expiringList({ withinDays: opts.days ?? 3 });

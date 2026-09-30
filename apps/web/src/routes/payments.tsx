@@ -37,7 +37,7 @@ export const Route = createFileRoute("/payments")({
 const SECONDS_PER_MANUAL_ASSIGN = 75;
 
 function getAutoAssignKey(businessId: string) {
-  return `hisaabo_autoassign_shown_${businessId}`;
+  return `fintranzact_autoassign_shown_${businessId}`;
 }
 
 function formatTimeSaved(assignedCount: number): string {

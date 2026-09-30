@@ -154,7 +154,7 @@ describe("P2: CSRF protection logic", () => {
    * cookie-based auth, cross-site form submissions could trigger payments,
    * invoice creation, etc.
    *
-   * FIX: Require X-Requested-With: hisaabo header on state-changing
+   * FIX: Require X-Requested-With: fintranzact header on state-changing
    * (non-GET/HEAD/OPTIONS) requests authenticated via cookies.
    * Bearer token / API key requests are exempt (not vulnerable to CSRF).
    */
@@ -163,7 +163,7 @@ describe("P2: CSRF protection logic", () => {
   function csrfCheck(method: string, hasCookie: boolean, xRequestedWith: string | null): "pass" | "fail" {
     if (method === "GET" || method === "HEAD" || method === "OPTIONS") return "pass";
     if (!hasCookie) return "pass"; // Bearer token / API key — not vulnerable
-    return xRequestedWith === "hisaabo" ? "pass" : "fail";
+    return xRequestedWith === "fintranzact" ? "pass" : "fail";
   }
 
   it("allows GET requests regardless of headers", () => {
@@ -172,7 +172,7 @@ describe("P2: CSRF protection logic", () => {
   });
 
   it("allows POST with cookie + correct header", () => {
-    expect(csrfCheck("POST", true, "hisaabo")).toBe("pass");
+    expect(csrfCheck("POST", true, "fintranzact")).toBe("pass");
   });
 
   it("blocks POST with cookie but no header (CSRF attack vector)", () => {
@@ -185,7 +185,7 @@ describe("P2: CSRF protection logic", () => {
 
   it("allows POST without cookie (Bearer token — mobile/CLI)", () => {
     expect(csrfCheck("POST", false, null)).toBe("pass");
-    expect(csrfCheck("POST", false, "hisaabo")).toBe("pass");
+    expect(csrfCheck("POST", false, "fintranzact")).toBe("pass");
   });
 
   it("allows OPTIONS regardless (CORS preflight)", () => {

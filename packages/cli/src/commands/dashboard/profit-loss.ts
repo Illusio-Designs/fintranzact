@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT, hasColor, termWidth } from "../../output.js";
 import { formatINR, formatDate, fyStart, todayISO, monthStart, monthEnd } from "../../format.js";
@@ -73,7 +73,7 @@ function colorPL(formatted: string, isProfit: boolean): string {
 
 export async function dashboardProfitLossCommand(opts: ProfitLossOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   let fromDate = opts.from ?? fyStart();
   let toDate = opts.to ?? todayISO();
@@ -136,9 +136,9 @@ export async function dashboardProfitLossCommand(opts: ProfitLossOpts): Promise<
     process.stdout.write("\n");
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));

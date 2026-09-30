@@ -14,7 +14,7 @@ type ThemeContextValue = {
   setMode: (mode: ThemeMode) => void;
 };
 
-const THEME_KEY = "hisaabo_theme";
+const THEME_KEY = "fintranzact_theme";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function isThemeMode(value: unknown): value is ThemeMode {

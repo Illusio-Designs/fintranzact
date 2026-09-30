@@ -40,7 +40,7 @@ const SALES_MILESTONES: Array<{ amount: number; message: string }> = [
 ];
 
 function getMilestoneKey(businessId: string, type: "invoices" | "sales", value: number) {
-  return `hisaabo_milestone_${businessId}_${type}_${value}`;
+  return `fintranzact_milestone_${businessId}_${type}_${value}`;
 }
 
 function checkMilestone(

@@ -664,12 +664,12 @@ function GSTR2BPage() {
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [activeTab, setActiveTabRaw] = useState<G2BTab>(
-    () => (localStorage.getItem("hisaabo_gstr2b_tab") as G2BTab) || "upload",
+    () => (localStorage.getItem("fintranzact_gstr2b_tab") as G2BTab) || "upload",
   );
 
   const setActiveTab = (tab: G2BTab) => {
     setActiveTabRaw(tab);
-    localStorage.setItem("hisaabo_gstr2b_tab", tab);
+    localStorage.setItem("fintranzact_gstr2b_tab", tab);
   };
 
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);

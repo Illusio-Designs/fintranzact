@@ -62,7 +62,7 @@ async function createRoleUser(
 ) {
   const api = new ApiHelper(ownerPage, API_URL);
   const ts = Date.now();
-  const email = `e2e-${role}-${ts}@test.hisaabo.in`;
+  const email = `e2e-${role}-${ts}@test.fintranzact.com`;
   const password = "Test@1234!";
   const name = `E2E ${role} User`;
 

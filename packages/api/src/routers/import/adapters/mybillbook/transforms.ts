@@ -89,7 +89,7 @@ export function transformInvoice(raw: Record<string, unknown>): CanonicalInvoice
   // exports) is a fallback so old CSVs don't break. Imported historical
   // invoices never carry a user-authored description, so the optional notes
   // column is left blank (null) — user notes only make sense when a human
-  // authored the line in Hisaabo.
+  // authored the line in Fintranzact.
   let lineItems: CanonicalInvoice["lineItems"] = undefined;
   if (Array.isArray(raw.lineItems) && raw.lineItems.length > 0) {
     lineItems = (raw.lineItems as Record<string, unknown>[]).map((li) => ({

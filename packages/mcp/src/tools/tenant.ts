@@ -11,12 +11,12 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { HisaaboClient } from "../client.js";
+import type { FintranzactClient } from "../client.js";
 import { wrapTool } from "../lib/errors.js";
 
 const MEMBER_ROLES = ["admin", "seller_manager", "seller", "accountant"] as const;
 
-export function registerTenantTools(server: McpServer, client: HisaaboClient) {
+export function registerTenantTools(server: McpServer, client: FintranzactClient) {
 
   server.tool(
     "tenant_list",

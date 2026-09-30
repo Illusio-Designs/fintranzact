@@ -22,7 +22,7 @@ export const importTransfers = adminProcedure
 
     // Transfers don't have a source param (they have no source-specific format differences),
     // but we still use the mybillbook adapter as default for the transform.
-    // The hisaabo adapter's transfer transform is identical in shape anyway.
+    // The fintranzact adapter's transfer transform is identical in shape anyway.
     const adapter = getAdapter("mybillbook");
 
     const canonicalErrors: string[] = [];

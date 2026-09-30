@@ -367,7 +367,7 @@ function AnimatedSplash({
             },
           ]}
         >
-          Hisaabo
+          Fintranzact
         </Animated.Text>
 
         {/* Tagline */}

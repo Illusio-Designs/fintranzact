@@ -2,7 +2,7 @@
  * Tests for the biometric Zustand store (`src/stores/biometric.ts`)
  *
  * WHY these tests matter for contributors:
- * Hisaabo stores confidential GST data, bank account details, and party
+ * Fintranzact stores confidential GST data, bank account details, and party
  * (customer/supplier) financials. The biometric/PIN lock is the user-facing
  * security layer that prevents anyone who picks up an unlocked phone from
  * instantly accessing sensitive business data.
@@ -79,9 +79,9 @@ function hashPin(pin: string): string {
   return String(hash);
 }
 
-const BIOMETRIC_ENABLED_KEY = "hisaabo_biometric_enabled";
-const PIN_HASH_KEY = "hisaabo_pin_hash";
-const SETUP_PROMPTED_KEY = "hisaabo_setup_prompted";
+const BIOMETRIC_ENABLED_KEY = "fintranzact_biometric_enabled";
+const PIN_HASH_KEY = "fintranzact_pin_hash";
+const SETUP_PROMPTED_KEY = "fintranzact_setup_prompted";
 
 // Reset store + mocks before every test
 beforeEach(() => {
@@ -192,7 +192,7 @@ describe("biometric store — fingerprint/PIN lock management", () => {
     // WHAT: User has never configured any lock — or has disabled them all.
     //       The app should open straight to the home screen after restart.
     // WHY: Unnecessarily locking a user who chose not to use the feature
-    //      damages retention and makes Hisaabo feel broken compared to
+    //      damages retention and makes Fintranzact feel broken compared to
     //      alternatives like Khatabook that don't force lock screens.
     mockGet
       .mockResolvedValueOnce(null)  // biometric = off
@@ -486,7 +486,7 @@ describe("biometric store — fingerprint/PIN lock management", () => {
 
     expect(result).toEqual({ success: true, cancelled: false });
     expect(mockAuthenticate).toHaveBeenCalledWith({
-      promptMessage: "Unlock Hisaabo",
+      promptMessage: "Unlock Fintranzact",
       cancelLabel: "Use PIN",
       disableDeviceFallback: true,
       fallbackLabel: "Use PIN",

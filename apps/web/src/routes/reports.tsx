@@ -2826,7 +2826,7 @@ function CashFlowReport({
 
 // ── Sticky-period hint (shows once per session on first tab switch) ──
 
-const HINT_SESSION_KEY = "hisaabo_reports_sticky_hint_shown";
+const HINT_SESSION_KEY = "fintranzact_reports_sticky_hint_shown";
 
 function StickyPeriodHint({ visible }: { visible: boolean }) {
   const [show, setShow] = useState(false);
@@ -2852,14 +2852,14 @@ function StickyPeriodHint({ visible }: { visible: boolean }) {
 
 function ReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportId>(
-    () => (localStorage.getItem("hisaabo_reports_tab") as ReportId) || "daybook"
+    () => (localStorage.getItem("fintranzact_reports_tab") as ReportId) || "daybook"
   );
   const [showStickyHint, setShowStickyHint] = useState(false);
   const hasInteracted = useRef(false);
 
   const selectReport = (id: ReportId) => {
     setActiveReport(id);
-    localStorage.setItem("hisaabo_reports_tab", id);
+    localStorage.setItem("fintranzact_reports_tab", id);
 
     // Show sticky-period hint on first tab switch (once per session)
     if (!hasInteracted.current && !sessionStorage.getItem(HINT_SESSION_KEY)) {

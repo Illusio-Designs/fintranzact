@@ -184,7 +184,7 @@ The lock is a local UX gate, not a new auth session. The session token remains i
 ### Happy path — biometric (Face ID / Fingerprint)
 
 1. App hydrates three stores in parallel: `useAuthStore`, `useBusinessStore`, `useBiometricStore`.
-2. Biometric store reads three SecureStore keys: `hisaabo_biometric_enabled`, `hisaabo_pin_hash`, `hisaabo_setup_prompted`.
+2. Biometric store reads three SecureStore keys: `fintranzact_biometric_enabled`, `fintranzact_pin_hash`, `fintranzact_setup_prompted`.
 3. If `biometricEnabled === true` or `pinEnabled === true` AND token exists → `authGate = "locked"`.
 4. `LockScreen` component renders as the only visible content.
 5. `LockScreen` calls `useBiometricStore.authenticate()` → `LocalAuthentication.authenticateAsync({ promptMessage: "Unlock Fintranzact", cancelLabel: "Use PIN" })`.
@@ -211,7 +211,7 @@ The lock is a local UX gate, not a new auth session. The session token remains i
 1. User opens Settings → Profile.
 2. Toggle "Fingerprint / Face ID" switch.
 3. `LocalAuthentication.authenticateAsync({ promptMessage: "Verify to enable biometric unlock" })` is triggered first to confirm the user is the device owner.
-4. On success → `biometricStore.enableBiometric()` → writes `hisaabo_biometric_enabled = "1"` to SecureStore.
+4. On success → `biometricStore.enableBiometric()` → writes `fintranzact_biometric_enabled = "1"` to SecureStore.
 5. For PIN: user taps "Set PIN" → 4-digit entry modal → confirm step → `biometricStore.setPin(pin)` → writes hash to SecureStore.
 
 ### Branch conditions
@@ -219,7 +219,7 @@ The lock is a local UX gate, not a new auth session. The session token remains i
 - **No biometric hardware / not enrolled**: `checkHardware()` returns `available: false`. Toggle is disabled in UI.
 - **Token exists but no biometric set**: `authGate = "ready"` immediately. `verifyTokenAndProceed()` called to confirm server session.
 - **No token**: `authGate = "login"` immediately. Lock screen never shown.
-- **First launch after update (setupPrompted)**`: `hisaabo_setup_prompted` key controls whether to prompt users to set up biometric. Not yet prompted → prompt is shown once.
+- **First launch after update (setupPrompted)**`: `fintranzact_setup_prompted` key controls whether to prompt users to set up biometric. Not yet prompted → prompt is shown once.
 
 ### Security note
 

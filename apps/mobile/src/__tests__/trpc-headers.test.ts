@@ -13,11 +13,11 @@
  *      subsequent request — even though the JS tRPC client never sets
  *      cookies itself.
  *   3. The API's CSRF middleware then rejected the replay because
- *      the JS tRPC client did not send `X-Requested-With: hisaabo`,
+ *      the JS tRPC client did not send `X-Requested-With: fintranzact`,
  *      returning a Hono-shaped `{error: "..."}` body that the tRPC
  *      HTTP link cannot deserialize.
  *
- * The fix (see `src/lib/trpc.ts`) adds `X-Requested-With: hisaabo` to
+ * The fix (see `src/lib/trpc.ts`) adds `X-Requested-With: fintranzact` to
  * every request unconditionally. This test pins that invariant so a
  * future refactor can't silently drop the header and re-break Android
  * login.
@@ -65,12 +65,12 @@ describe("mobile tRPC client header posture — CSRF sentinel", () => {
     jest.resetModules();
   });
 
-  it("mobile tRPC client always sends X-Requested-With: hisaabo so the API's CSRF middleware does not reject POSTs carrying stale native-cookie-jar session cookies", () => {
+  it("mobile tRPC client always sends X-Requested-With: fintranzact so the API's CSRF middleware does not reject POSTs carrying stale native-cookie-jar session cookies", () => {
     const { commonOptions } = require("../lib/trpc");
     const options = commonOptions();
     const headers = options.headers();
 
-    expect(headers["X-Requested-With"]).toBe("hisaabo");
+    expect(headers["X-Requested-With"]).toBe("fintranzact");
   });
 
   it("mobile tRPC client sends X-Requested-With even when no auth token is cached — the first anonymous call (auth.sendMagicLink) must pass the CSRF gate, which is exactly the call that was failing on Android", () => {
@@ -78,7 +78,7 @@ describe("mobile tRPC client header posture — CSRF sentinel", () => {
     const { commonOptions } = require("../lib/trpc");
     const headers = commonOptions().headers();
 
-    expect(headers["X-Requested-With"]).toBe("hisaabo");
+    expect(headers["X-Requested-With"]).toBe("fintranzact");
     expect(headers["Authorization"]).toBeUndefined();
   });
 
@@ -89,7 +89,7 @@ describe("mobile tRPC client header posture — CSRF sentinel", () => {
     const { commonOptions } = require("../lib/trpc");
     const headers = commonOptions().headers();
 
-    expect(headers["X-Requested-With"]).toBe("hisaabo");
+    expect(headers["X-Requested-With"]).toBe("fintranzact");
     expect(headers["Authorization"]).toBe("Bearer test-session-token-123");
   });
 
@@ -104,7 +104,7 @@ describe("mobile tRPC client header posture — CSRF sentinel", () => {
     const { commonOptions } = require("../lib/trpc");
     const headers = commonOptions().headers();
 
-    expect(headers["X-Requested-With"]).toBe("hisaabo");
+    expect(headers["X-Requested-With"]).toBe("fintranzact");
     expect(headers["x-business-id"]).toBe("biz-abc-123");
   });
 });

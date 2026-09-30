@@ -100,7 +100,7 @@ const allowedOrigins = [
 app.use("*", cors({
   origin: allowedOrigins,
   credentials: true,
-  allowHeaders: ["Content-Type", "x-business-id", "Authorization", "X-Requested-With", "X-Fintranzact-Client", "X-Hisaabo-Client"],
+  allowHeaders: ["Content-Type", "x-business-id", "Authorization", "X-Requested-With", "X-Fintranzact-Client", "X-Fintranzact-Client"],
   allowMethods: ["GET", "POST", "OPTIONS"],
   maxAge: 86400,
 }));
@@ -202,7 +202,7 @@ setInterval(() => {
 
 // ── CSRF protection (non-tRPC routes) ─────────────────────────
 // State-changing requests authenticated via cookies must include the
-// `X-Requested-With: fintranzact` header (legacy `hisaabo` still accepted). This blocks cross-origin form
+// `X-Requested-With: fintranzact` header. This blocks cross-origin form
 // submissions and navigation-based CSRF attacks.
 //
 // Scope:

@@ -23,7 +23,7 @@ const COOKIE_SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 /** Mirrors the isBearerClient() detection in auth.ts */
 function detectAuthMethod(req: Request): "cookie" | "bearer" {
-  const client = req.headers.get("x-hisaabo-client");
+  const client = req.headers.get("x-fintranzact-client");
   return client === "mobile" || client === "desktop" ? "bearer" : "cookie";
 }
 
@@ -67,36 +67,36 @@ function computeBearerSlide(
 // ─────────────────────────────────────────────────────────────────────────────
 // authMethod detection at session creation time
 // ─────────────────────────────────────────────────────────────────────────────
-describe("SECURITY — session authMethod is detected from x-hisaabo-client header at creation time", () => {
+describe("SECURITY — session authMethod is detected from x-fintranzact-client header at creation time", () => {
   /**
    * INVARIANT: At session creation there is no existing Bearer token yet — we
    * cannot use the Authorization header to detect client type. The
-   * x-hisaabo-client header is the authoritative signal. Both mobile and
+   * x-fintranzact-client header is the authoritative signal. Both mobile and
    * desktop clients send it; browsers do not.
    */
 
-  it("session creation records authMethod='bearer' when x-hisaabo-client is 'mobile'", () => {
+  it("session creation records authMethod='bearer' when x-fintranzact-client is 'mobile'", () => {
     const req = new Request("http://localhost/", {
-      headers: { "x-hisaabo-client": "mobile" },
+      headers: { "x-fintranzact-client": "mobile" },
     });
     expect(detectAuthMethod(req)).toBe("bearer");
   });
 
-  it("session creation records authMethod='bearer' when x-hisaabo-client is 'desktop'", () => {
+  it("session creation records authMethod='bearer' when x-fintranzact-client is 'desktop'", () => {
     const req = new Request("http://localhost/", {
-      headers: { "x-hisaabo-client": "desktop" },
+      headers: { "x-fintranzact-client": "desktop" },
     });
     expect(detectAuthMethod(req)).toBe("bearer");
   });
 
-  it("session creation records authMethod='cookie' when no x-hisaabo-client header is present — classic web browser path unchanged", () => {
+  it("session creation records authMethod='cookie' when no x-fintranzact-client header is present — classic web browser path unchanged", () => {
     const req = new Request("http://localhost/");
     expect(detectAuthMethod(req)).toBe("cookie");
   });
 
-  it("session creation records authMethod='cookie' for an unrecognised x-hisaabo-client value — unknown clients fall back to cookie semantics", () => {
+  it("session creation records authMethod='cookie' for an unrecognised x-fintranzact-client value — unknown clients fall back to cookie semantics", () => {
     const req = new Request("http://localhost/", {
-      headers: { "x-hisaabo-client": "cli" },
+      headers: { "x-fintranzact-client": "cli" },
     });
     expect(detectAuthMethod(req)).toBe("cookie");
   });

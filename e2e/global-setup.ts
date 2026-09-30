@@ -22,7 +22,7 @@ setup("authenticate", async ({ page, request }) => {
   const authDir = path.dirname(AUTH_FILE);
   if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
-  const email = `e2e-${Date.now()}@test.hisaabo.in`;
+  const email = `e2e-${Date.now()}@test.fintranzact.com`;
   const password = "Test@1234!";
   const name = "E2E Test User";
 

@@ -33,7 +33,7 @@ const ALL_ITEMS: MenuItem[] = [
   { label: "Settings", icon: "settings-outline", route: "/(more)/settings" },
 ];
 
-const RECENT_KEY = "hisaabo_recent_more";
+const RECENT_KEY = "fintranzact_recent_more";
 const MAX_RECENT = 4;
 
 /* ── Recent tracking ─────────────────────────────────────────── */

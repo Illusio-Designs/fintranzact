@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT } from "../../output.js";
 import { formatDate } from "../../format.js";
@@ -12,9 +12,9 @@ interface JournalOpts {
 }
 
 function handleError(e: unknown): never {
-  if (e instanceof HisaaboApiError) {
-    const err = e.hisaaboError;
-    if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+  if (e instanceof FintranzactApiError) {
+    const err = e.fintranzactError;
+    if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
     if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
   }
   fatalError(String(e instanceof Error ? e.message : e));
@@ -22,7 +22,7 @@ function handleError(e: unknown): never {
 
 export async function journalListCommand(opts: JournalOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.journal.list({
@@ -65,7 +65,7 @@ export async function journalListCommand(opts: JournalOpts): Promise<void> {
 
 export async function journalGetCommand(id: string, opts: { json?: boolean }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.journal.getById(id);
@@ -102,7 +102,7 @@ export async function journalGetCommand(id: string, opts: { json?: boolean }): P
 
 export async function journalVoidCommand(id: string, opts: { json?: boolean }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.journal.void(id);
@@ -121,7 +121,7 @@ export async function journalVoidCommand(id: string, opts: { json?: boolean }): 
 
 export async function journalTemplatesCommand(opts: { json?: boolean }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.journal.templateList();

@@ -439,8 +439,8 @@ describe("downloadCSV() — generates and triggers download of a BOM-prefixed CS
   });
 
   it("sets the download attribute to '<filename>.csv'", () => {
-    downloadCSV("hisaabo-parties", ["Name", "GSTIN"], [["Sharma Traders", "27AABCS1234A1Z5"]]);
-    expect(mockAnchor.download).toBe("hisaabo-parties.csv");
+    downloadCSV("fintranzact-parties", ["Name", "GSTIN"], [["Sharma Traders", "27AABCS1234A1Z5"]]);
+    expect(mockAnchor.download).toBe("fintranzact-parties.csv");
   });
 
   it("calls element.click() to trigger the browser download dialog", () => {

@@ -157,7 +157,7 @@ export const apiKeys = pgTable("api_keys", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   // Store the hash, never the raw key
   keyHash: text("key_hash").notNull(),
-  // First 20 chars of the raw key for display: "hisaabo_key_abc12345..."
+  // First 20 chars of the raw key for display: "fintranzact_key_abc12345..."
   keyPrefix: text("key_prefix").notNull(),
   name: text("name").notNull(), // User-given label like "CLI", "CI/CD", "MCP Server"
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),

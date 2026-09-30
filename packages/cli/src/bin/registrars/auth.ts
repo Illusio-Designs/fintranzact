@@ -2,7 +2,7 @@ import { Command } from "commander";
 import * as readline from "readline";
 import { login, loginWithToken, logout, whoami } from "../../auth.js";
 import { setConfig, requireAuth } from "../../config.js";
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { fatalError, success, EXIT, outputJSON } from "../../output.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ export function registerAuthCommands(program: Command): void {
     .option("--api-url <url>", "Server URL")
     .option("--email <email>", "Email address")
     .option("--password <password>", "Password (visible in shell history — prefer interactive prompt)")
-    .option("--token <token>", "API key (visible in shell history — prefer HISAABO_TOKEN env var)")
+    .option("--token <token>", "API key (visible in shell history — prefer FINTRANZACT_TOKEN env var)")
     .action(async (opts) => {
       let apiUrl = opts.apiUrl;
 
@@ -134,14 +134,14 @@ export function registerAuthCommands(program: Command): void {
     .action(async (opts) => {
       if (opts.all) {
         const cfg = requireAuth();
-        const client = new HisaaboClient(cfg);
+        const client = new FintranzactClient(cfg);
         try {
           await client.auth.logoutAll();
           await logout();
           success("Logged out from all sessions.");
         } catch (e) {
-          if (e instanceof HisaaboApiError) {
-            if (e.hisaaboError.code === "unauthorized") {
+          if (e instanceof FintranzactApiError) {
+            if (e.fintranzactError.code === "unauthorized") {
               // Session already invalid — still clear local config
               await logout();
               success("Logged out from all sessions.");
@@ -174,14 +174,14 @@ export function registerAuthCommands(program: Command): void {
     .description("Update your display name")
     .action(async (name: string) => {
       const cfg = requireAuth();
-      const client = new HisaaboClient(cfg);
+      const client = new FintranzactClient(cfg);
       try {
         await client.auth.updateName({ name });
         success(`Name updated to: ${name}`);
       } catch (e) {
-        if (e instanceof HisaaboApiError) {
-          const err = e.hisaaboError;
-          if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+        if (e instanceof FintranzactApiError) {
+          const err = e.fintranzactError;
+          if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
           if (err.code === "validation_failed") fatalError(String(err.fields?.["name"]?.[0] ?? "Validation failed."), EXIT.VALIDATION);
         }
         fatalError(String(e instanceof Error ? e.message : e));
@@ -196,7 +196,7 @@ export function registerAuthCommands(program: Command): void {
     .option("--json", "JSON output")
     .action(async (opts) => {
       const cfg = requireAuth();
-      const client = new HisaaboClient(cfg);
+      const client = new FintranzactClient(cfg);
       try {
         const businesses = await client.business.list();
         if (opts.json) { outputJSON(businesses); return; }
@@ -213,8 +213,8 @@ export function registerAuthCommands(program: Command): void {
         setConfig({ businessId: selected.id, businessName: selected.name });
         success(`Switched to: ${selected.name}`);
       } catch (e) {
-        if (e instanceof HisaaboApiError) {
-          if (e.hisaaboError.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+        if (e instanceof FintranzactApiError) {
+          if (e.fintranzactError.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
         }
         fatalError(String(e instanceof Error ? e.message : e));
       }

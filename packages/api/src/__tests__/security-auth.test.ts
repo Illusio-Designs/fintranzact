@@ -103,7 +103,7 @@ describe("SECURITY — session cache TTL boundary prevents stale authenticated s
 describe("SECURITY — API key authentication enforces prefix and deterministic hashing", () => {
   /**
    * INVARIANT: context.ts only enters the API key path if the token starts with
-   * `hisaabo_key_`. Any other Bearer token (including real session IDs, which
+   * `fintranzact_key_`. Any other Bearer token (including real session IDs, which
    * use nanoid(64) and contain no such prefix) must follow the session path
    * instead. This prevents an attacker from probing the apiKeys table with
    * arbitrary session IDs.
@@ -114,8 +114,8 @@ describe("SECURITY — API key authentication enforces prefix and deterministic 
    */
 
   function isApiKeyPath(sessionId: string): boolean {
-    // Mirrors: if (sessionId.startsWith("hisaabo_key_")) in context.ts
-    return sessionId.startsWith("hisaabo_key_");
+    // Mirrors: if (sessionId.startsWith("fintranzact_key_")) in context.ts
+    return sessionId.startsWith("fintranzact_key_");
   }
 
   function hashApiKey(rawKey: string): string {
@@ -123,12 +123,12 @@ describe("SECURITY — API key authentication enforces prefix and deterministic 
     return createHash("sha256").update(rawKey).digest("hex");
   }
 
-  it('token starting with "hisaabo_key_" routes to the API key path', () => {
-    expect(isApiKeyPath("hisaabo_key_abc123xyz")).toBe(true);
+  it('token starting with "fintranzact_key_" routes to the API key path', () => {
+    expect(isApiKeyPath("fintranzact_key_abc123xyz")).toBe(true);
   });
 
   it("plain nanoid session token does NOT route to API key path", () => {
-    // nanoid(64) produces tokens like "V_3d9AbcD..." — never starts with hisaabo_key_
+    // nanoid(64) produces tokens like "V_3d9AbcD..." — never starts with fintranzact_key_
     const nanoIdLike = "V_3d9AbcDeFgHiJkLmNoPqRsTuVwXyZ0123456789abcdefghijklmnopqrst";
     expect(isApiKeyPath(nanoIdLike)).toBe(false);
   });
@@ -142,7 +142,7 @@ describe("SECURITY — API key authentication enforces prefix and deterministic 
   });
 
   it("SHA-256 hash of a key is deterministic (same input always yields same hash)", () => {
-    const key = "hisaabo_key_vyapar_sharma_testkey_12345";
+    const key = "fintranzact_key_vyapar_sharma_testkey_12345";
     const hash1 = hashApiKey(key);
     const hash2 = hashApiKey(key);
     expect(hash1).toBe(hash2);
@@ -150,13 +150,13 @@ describe("SECURITY — API key authentication enforces prefix and deterministic 
   });
 
   it("SHA-256 hash differs from the raw key (raw key is never stored)", () => {
-    const key = "hisaabo_key_vyapar_sharma_testkey_12345";
+    const key = "fintranzact_key_vyapar_sharma_testkey_12345";
     expect(hashApiKey(key)).not.toBe(key);
   });
 
   it("different API keys produce different hashes (no hash collision at this scale)", () => {
-    const hash1 = hashApiKey("hisaabo_key_aaaa");
-    const hash2 = hashApiKey("hisaabo_key_bbbb");
+    const hash1 = hashApiKey("fintranzact_key_aaaa");
+    const hash2 = hashApiKey("fintranzact_key_bbbb");
     expect(hash1).not.toBe(hash2);
   });
 
@@ -204,7 +204,7 @@ describe("SECURITY — error formatter never leaks DB connection strings or stac
   }
 
   it("hides PostgreSQL connection string in internal error messages", () => {
-    const pgConnString = "postgresql://hisaabo_user:s3cr3tpwd@db.prod.internal:5432/hisaabo_tenant_x";
+    const pgConnString = "postgresql://fintranzact_user:s3cr3tpwd@db.prod.internal:5432/fintranzact_tenant_x";
     const result = applyErrorFormatter("INTERNAL_SERVER_ERROR", pgConnString);
     expect(result).not.toContain("postgresql://");
     expect(result).not.toContain("s3cr3tpwd");
@@ -214,7 +214,7 @@ describe("SECURITY — error formatter never leaks DB connection strings or stac
   });
 
   it("hides file system paths from stack traces", () => {
-    const stackTrace = "Error at /home/deploy/hisaabo/packages/api/src/routers/invoice.ts:142:23";
+    const stackTrace = "Error at /home/deploy/fintranzact/packages/api/src/routers/invoice.ts:142:23";
     const result = applyErrorFormatter("INTERNAL_SERVER_ERROR", stackTrace);
     expect(result).not.toContain("/home/deploy");
     expect(result).not.toContain("invoice.ts");

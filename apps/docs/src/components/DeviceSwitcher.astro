@@ -37,7 +37,7 @@
 <script is:inline>
   (function () {
     function getDefaultPlatform() {
-      var stored = localStorage.getItem('hisaabo-docs-platform');
+      var stored = localStorage.getItem('fintranzact-docs-platform');
       if (stored === 'desktop' || stored === 'mobile') return stored;
       var isMobile =
         /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -47,7 +47,7 @@
 
     function setPlatform(platform) {
       document.documentElement.setAttribute('data-platform', platform);
-      localStorage.setItem('hisaabo-docs-platform', platform);
+      localStorage.setItem('fintranzact-docs-platform', platform);
       document.querySelectorAll('.device-switcher-btn').forEach(function (btn) {
         var isActive = btn.getAttribute('data-platform-target') === platform;
         btn.classList.toggle('active', isActive);
