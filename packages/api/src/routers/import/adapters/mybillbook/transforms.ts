@@ -17,7 +17,9 @@ function str(v: unknown, fallback = ""): string {
 
 // Normalize a money string: empty or non-numeric → "0"
 function moneyStr(v: unknown): string {
-  const s = str(v, "0");
+  // Exports write amounts like "1,250.50" or "₹ 1,250.50"; parseFloat would
+  // stop at the comma and read 1.
+  const s = str(v, "0").replace(/[,\s₹]/g, "");
   if (s === "") return "0";
   // Keep the value if it looks like a valid money string
   if (/^-?\d+(\.\d{1,2})?$/.test(s)) return s;
