@@ -98,10 +98,10 @@ function PendingReport({ kind }: { kind: PendingKind }) {
           <div className="ml-auto">
             <ExportButton onClick={() => downloadCSV(
               copy.file,
-              ["Date", "Number", "Party", "Item", "Ordered", copy.done, "Pending", "Unit", "Rate", "Pending value", ...(copy.due ? ["Delivery by"] : [])],
+              ["Date", "Number", "Party", "Item", "Ordered", copy.done, "Pending", "Pending free", "Rejected", "Unit", "Rate", "Pending value", ...(copy.due ? ["Delivery by"] : [])],
               data.data.map((r) => [
                 formatDate(r.documentDate), r.documentNumber, r.partyName, r.itemName,
-                r.ordered, r.fulfilled, r.pending, r.unit ?? "", r.rate, r.pendingValue,
+                r.ordered, r.fulfilled, r.pending, r.freePending, r.rejected, r.unit ?? "", r.rate, r.pendingValue,
                 ...(copy.due ? [r.dueDate ? formatDate(r.dueDate) : ""] : []),
               ]),
             )} />
@@ -129,7 +129,13 @@ function PendingReport({ kind }: { kind: PendingKind }) {
             { label: "Item", render: (r) => r.itemName },
             { label: "Ordered", align: "right", hideBelow: "lg", render: (r) => formatQty(r.ordered, r.unit) },
             { label: copy.done, align: "right", hideBelow: "lg", render: (r) => formatQty(r.fulfilled) },
-            { label: "Pending", align: "right", render: (r) => <span className="font-semibold">{formatQty(r.pending, r.unit)}</span> },
+            { label: "Pending", align: "right", render: (r) => (
+              <div>
+                <span className="font-semibold">{formatQty(r.pending, r.unit)}</span>
+                {r.freePending > 0 && <span className="block text-xs text-text-tertiary">+ {formatQty(r.freePending)} free</span>}
+                {r.rejected > 0 && <span className="block text-xs text-amber-600">{formatQty(r.rejected)} rejected</span>}
+              </div>
+            ) },
             { label: "Value", align: "right", hideBelow: "md", render: (r) => formatCurrency(r.pendingValue) },
             ...(copy.due ? [{
               label: "Delivery by",

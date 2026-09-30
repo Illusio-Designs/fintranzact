@@ -150,11 +150,11 @@ export function StockLedgerReport({ fromDate, toDate }: { fromDate?: string; toD
     if (!data || !picked) return;
     downloadCSV(
       `stock-ledger-${picked.name}`,
-      ["Date", "Particulars", "Party", "Warehouse", "Inward", "Outward", "Balance"],
+      ["Date", "Particulars", "Party", "Warehouse", "Inward", "Outward", "Of which free", "Balance"],
       [
-        ["", "Opening balance", "", "", "", "", data.opening],
-        ...data.lines.map((l) => [formatDate(l.date), l.particulars, l.party ?? "", l.warehouse, l.inward || "", l.outward || "", l.balance]),
-        ["", "Closing balance", "", "", data.inward, data.outward, data.closing],
+        ["", "Opening balance", "", "", "", "", "", data.opening],
+        ...data.lines.map((l) => [formatDate(l.date), l.particulars, l.party ?? "", l.warehouse, l.inward || "", l.outward || "", l.free || "", l.balance]),
+        ["", "Closing balance", "", "", data.inward, data.outward, "", data.closing],
       ],
     );
   }
@@ -227,6 +227,8 @@ export function StockLedgerReport({ fromDate, toDate }: { fromDate?: string; toD
                 { label: "Warehouse", hideBelow: "md", render: (l) => <span className="text-text-secondary">{l.warehouse}</span> },
                 { label: "Inward", align: "right", render: (l) => (l.inward ? formatQty(l.inward) : "") },
                 { label: "Outward", align: "right", render: (l) => (l.outward ? formatQty(l.outward) : "") },
+                // Free goods ("10 + 1") within the movement: they move stock but carry no value.
+                { label: "Free", align: "right", hideBelow: "md", render: (l) => (l.free ? <span className="text-text-secondary">{formatQty(l.free)}</span> : "") },
                 { label: "Balance", align: "right", render: (l) => <span className="font-medium">{formatQty(l.balance)}</span> },
               ]}
             />

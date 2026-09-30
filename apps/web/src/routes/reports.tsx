@@ -745,6 +745,8 @@ interface SaleRegisterRow {
   amountPaid: string;
   status: string;
   taxBreakdown: TaxBreakdownItem[];
+  /** Free goods ("10 + 1") on the bill, summed over its lines. */
+  freeQuantity?: number;
 }
 
 interface PurchaseRegisterRow {
@@ -760,6 +762,8 @@ interface PurchaseRegisterRow {
   amountPaid: string;
   status: string;
   taxBreakdown: TaxBreakdownItem[];
+  /** Free goods ("10 + 1") on the bill, summed over its lines. */
+  freeQuantity?: number;
 }
 
 interface RegisterSummary {
@@ -767,6 +771,7 @@ interface RegisterSummary {
   totalTax: string;
   totalAmount: string;
   count: number;
+  totalFreeQuantity?: number;
 }
 
 interface SaleRegisterData {
@@ -846,6 +851,7 @@ function RegisterReport({
         "Customer",
         "GSTIN",
         "State",
+        "Free Qty",
         "Subtotal",
         "Discount",
         "Tax",
@@ -860,6 +866,7 @@ function RegisterReport({
         r.customerName,
         r.customerGstin ?? "",
         r.customerState ?? "",
+        r.freeQuantity ?? 0,
         r.subtotal,
         r.discountAmount,
         r.taxAmount,
@@ -875,6 +882,7 @@ function RegisterReport({
         "Invoice #",
         "Supplier",
         "GSTIN",
+        "Free Qty",
         "Subtotal",
         "Discount",
         "Tax",
@@ -887,6 +895,7 @@ function RegisterReport({
         r.invoiceNumber,
         r.supplierName,
         r.supplierGstin ?? "",
+        r.freeQuantity ?? 0,
         r.subtotal,
         r.discountAmount,
         r.taxAmount,
@@ -931,6 +940,18 @@ function RegisterReport({
   }
 
   const { summary } = data;
+  // Free goods are not priced, so the column only shows when there are some.
+  const showFree = (summary.totalFreeQuantity ?? 0) > 0;
+  const freeHeader = showFree && (
+    <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell" title="Given or received free on top of the billed quantity; not part of the taxable value">
+      Free Qty
+    </th>
+  );
+  const freeCell = (q?: number) => showFree && (
+    <td className="px-4 py-3 text-right hidden lg:table-cell">
+      <span className="text-text-secondary text-[13px] tabular-nums">{q ? q : "—"}</span>
+    </td>
+  );
 
   return (
     <div>
@@ -973,6 +994,7 @@ function RegisterReport({
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
                     GSTIN
                   </th>
+                  {freeHeader}
                   <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
                     Subtotal
                   </th>
@@ -1023,6 +1045,7 @@ function RegisterReport({
                         {row.customerGstin ?? "—"}
                       </span>
                     </td>
+                    {freeCell(row.freeQuantity)}
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
                       <span className="text-text-secondary text-[13px] tabular-nums">
                         {formatCurrency(row.subtotal)}
@@ -1075,6 +1098,7 @@ function RegisterReport({
                   <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
                     GSTIN
                   </th>
+                  {freeHeader}
                   <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
                     Subtotal
                   </th>
@@ -1117,6 +1141,7 @@ function RegisterReport({
                         {row.supplierGstin ?? "—"}
                       </span>
                     </td>
+                    {freeCell(row.freeQuantity)}
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
                       <span className="text-text-secondary text-[13px] tabular-nums">
                         {formatCurrency(row.subtotal)}
@@ -1860,6 +1885,8 @@ interface ItemSalesRow {
   category: string | null;
   unit: string | null;
   soldQty: string;
+  /** Given free on top of what was sold ("10 + 1"), in base units. */
+  freeQty?: string | null;
   totalRevenue: string;
   avgUnitPrice: string | null;
   invoiceCount: number;
@@ -2276,6 +2303,7 @@ function ItemSalesReport({
       "Category",
       "Unit",
       "Qty Sold",
+      "Free Qty",
       "Revenue",
       "Avg Price",
       "Invoices",
@@ -2288,6 +2316,7 @@ function ItemSalesReport({
       r.category ?? "",
       r.unit ?? "",
       r.soldQty,
+      r.freeQty ?? "0",
       r.totalRevenue,
       r.avgUnitPrice ?? "",
       r.invoiceCount,
@@ -2380,6 +2409,11 @@ function ItemSalesReport({
                         {parseFloat(parseFloat(row.soldQty).toFixed(2))}
                         {row.unit ? ` ${row.unit}` : ""}
                       </span>
+                      {parseFloat(row.freeQty ?? "0") > 0 && (
+                        <span className="block text-[11px] text-text-tertiary tabular-nums">
+                          + {parseFloat(parseFloat(row.freeQty!).toFixed(2))} free
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-text-primary text-[13px] font-semibold tabular-nums">

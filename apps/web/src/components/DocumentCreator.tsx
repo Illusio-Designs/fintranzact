@@ -7,7 +7,7 @@ import { Combobox } from "@/components/ui/Combobox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
-import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
+import { calcLineItem, calcInvoiceTotals, money, freeQuantityDocumentTypes, rejectionReasons } from "@fintranzact/shared";
 import { QuickPartyCreate } from "@/components/QuickPartyCreate";
 import { QuickItemCreate, type QuickItemCreateResult } from "@/components/QuickItemCreate";
 import { DateInput } from "@/components/ui/DateInput";
@@ -69,6 +69,11 @@ interface LineItem {
    */
   notes: string;
   quantity: string;
+  /** Free goods on top of the billed quantity ("10 + 1"); moves stock, adds no value. */
+  freeQuantity: string;
+  /** Goods receipt notes: received but rejected, and why. Never enters stock. */
+  rejectedQuantity: string;
+  rejectionReason: string;
   unitPrice: string;
   taxPercent: string;
   discountPercent: string;
@@ -114,12 +119,12 @@ function stockDirection(documentType: DocumentType, invoiceType: "sale" | "purch
   return 0;
 }
 
-/** Quantity of each item a set of lines takes, in the item's base unit. */
-function baseQuantities(lines: Array<{ itemId?: string | null; quantity: string; conversionFactor?: string | null }>) {
+/** Quantity of each item a set of lines takes (billed + free), in the item's base unit. */
+function baseQuantities(lines: Array<{ itemId?: string | null; quantity: string; freeQuantity?: string | null; conversionFactor?: string | null }>) {
   const need = new Map<string, number>();
   for (const li of lines) {
     if (!li.itemId) continue;
-    const q = parseFloat(li.quantity || "0") * parseFloat(li.conversionFactor || "1");
+    const q = (parseFloat(li.quantity || "0") + (parseFloat(li.freeQuantity || "0") || 0)) * parseFloat(li.conversionFactor || "1");
     if (Number.isFinite(q)) need.set(li.itemId, (need.get(li.itemId) ?? 0) + q);
   }
   return need;
@@ -131,11 +136,16 @@ function newLineItem(): LineItem {
     itemName: "",
     notes: "",
     quantity: "1",
+    freeQuantity: "",
+    rejectedQuantity: "",
+    rejectionReason: "",
     unitPrice: "",
     taxPercent: "0",
     discountPercent: "0",
   };
 }
+
+const positive = (v: string | null | undefined) => (parseFloat(v || "0") || 0) > 0;
 
 function calcLine(li: LineItem) {
   const result = calcLineItem({
@@ -164,6 +174,9 @@ export function DocumentCreator({
   initialPartyId,
 }: DocumentCreatorProps) {
   const invoiceType = fixedInvoiceType[documentType] ?? requestedInvoiceType;
+  // Free goods ("10 + 1") on any goods document; rejections only on a GRN.
+  const allowsFree = (freeQuantityDocumentTypes as readonly string[]).includes(documentType);
+  const isGrn = documentType === "goods_receipt_note";
   const [partyId, setPartyId] = useState(initialPartyId ?? "");
   const [invoiceDate, setInvoiceDate] = useState(todayISODate);
   const [dueDate, setDueDate] = useState(() => dayjs().add(7, "day").format("YYYY-MM-DD"));
@@ -321,6 +334,10 @@ export function DocumentCreator({
         itemName: li.itemName ?? "",
         notes: li.description ?? "",
         quantity: li.quantity,
+        freeQuantity: allowsFree && positive(li.freeQuantity) ? String(parseFloat(li.freeQuantity)) : "",
+        // Rejections belong to the GRN they were recorded on.
+        rejectedQuantity: isGrn && isEditing && positive(li.rejectedQuantity) ? String(parseFloat(li.rejectedQuantity)) : "",
+        rejectionReason: isGrn && isEditing ? li.rejectionReason ?? "" : "",
         unitPrice: li.unitPrice,
         taxPercent: li.taxPercent || "0",
         discountPercent: li.discountPercent || "0",
@@ -661,6 +678,17 @@ export function DocumentCreator({
       toast.error("Add at least one line item with an item name and price");
       return;
     }
+    const emptyLine = validItems.find((li) =>
+      !positive(li.quantity) && !(allowsFree && positive(li.freeQuantity)) && !(isGrn && positive(li.rejectedQuantity)));
+    if (emptyLine) {
+      toast.error(`Enter a quantity for ${emptyLine.itemName.trim()}`);
+      return;
+    }
+    const unexplained = isGrn && validItems.find((li) => positive(li.rejectedQuantity) && !li.rejectionReason.trim());
+    if (unexplained) {
+      toast.error(`Give a reason for rejecting ${unexplained.itemName.trim()}`);
+      return;
+    }
     if (!partyId) {
       toast.error(
         `Select a ${invoiceType === "sale" ? "customer" : "supplier"}`
@@ -679,7 +707,10 @@ export function DocumentCreator({
         itemId: li.itemId,
         itemName: li.itemName.trim(),
         description: trimmedNotes.length > 0 ? trimmedNotes : undefined,
-        quantity: li.quantity,
+        quantity: li.quantity || "0",
+        freeQuantity: allowsFree && positive(li.freeQuantity) ? li.freeQuantity : undefined,
+        rejectedQuantity: isGrn && positive(li.rejectedQuantity) ? li.rejectedQuantity : undefined,
+        rejectionReason: isGrn && positive(li.rejectedQuantity) ? li.rejectionReason.trim() : undefined,
         unitPrice: li.unitPrice,
         taxPercent: li.taxPercent,
         discountPercent: li.discountPercent,
@@ -954,26 +985,48 @@ export function DocumentCreator({
 
                 {/* Row 3: Numbers grid + total */}
                 <div className="flex items-end gap-2">
-                  <div className="grid grid-cols-4 gap-2 flex-1">
+                  <div className={cn("grid gap-2 flex-1", allowsFree ? "grid-cols-5" : "grid-cols-4")}>
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-qty`}
                         className="text-[10px] font-medium text-text-tertiary block mb-0.5"
                       >
-                        Qty
+                        {isGrn ? "Accepted" : "Qty"}
                       </label>
                       <input
                         id={`${lineItemIdPrefix}-${li.id}-qty`}
                         type="number"
                         value={li.quantity}
                         onChange={(e) => updateItem(li.id, "quantity", e.target.value)}
-                        min="0.001"
+                        min="0"
                         step="any"
-                        aria-label="Quantity"
+                        aria-label={isGrn ? "Accepted quantity" : "Quantity"}
                         className="input py-1.5 text-sm tabular-nums"
                         placeholder="1"
                       />
                     </div>
+                    {allowsFree && (
+                      <div>
+                        <label
+                          htmlFor={`${lineItemIdPrefix}-${li.id}-free`}
+                          className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                          title="Given free on top of the billed quantity (10 + 1). Moves stock; not charged or taxed."
+                        >
+                          Free
+                        </label>
+                        <input
+                          id={`${lineItemIdPrefix}-${li.id}-free`}
+                          type="number"
+                          value={li.freeQuantity}
+                          onChange={(e) => updateItem(li.id, "freeQuantity", e.target.value)}
+                          min="0"
+                          step="any"
+                          aria-label="Free quantity"
+                          className="input py-1.5 text-sm tabular-nums"
+                          placeholder="0"
+                        />
+                      </div>
+                    )}
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-price`}
@@ -1044,6 +1097,49 @@ export function DocumentCreator({
                   </div>
                 </div>
 
+                {isGrn && (
+                  <div className="grid grid-cols-[7rem_1fr] gap-2">
+                    <div>
+                      <label
+                        htmlFor={`${lineItemIdPrefix}-${li.id}-rejected`}
+                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                      >
+                        Rejected
+                      </label>
+                      <input
+                        id={`${lineItemIdPrefix}-${li.id}-rejected`}
+                        type="number"
+                        value={li.rejectedQuantity}
+                        onChange={(e) => updateItem(li.id, "rejectedQuantity", e.target.value)}
+                        min="0"
+                        step="any"
+                        aria-label="Rejected quantity"
+                        className="input py-1.5 text-sm tabular-nums"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor={`${lineItemIdPrefix}-${li.id}-reason`}
+                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                      >
+                        Reason for rejecting
+                      </label>
+                      <input
+                        id={`${lineItemIdPrefix}-${li.id}-reason`}
+                        list={`${lineItemIdPrefix}-reasons`}
+                        value={li.rejectionReason}
+                        onChange={(e) => updateItem(li.id, "rejectionReason", e.target.value)}
+                        disabled={!positive(li.rejectedQuantity)}
+                        maxLength={200}
+                        aria-label="Reason for rejecting"
+                        className="input py-1.5 text-sm disabled:opacity-50"
+                        placeholder={positive(li.rejectedQuantity) ? "Damaged, short expiry…" : "Nothing rejected"}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Row 4: Free-text notes for this line (optional). Stored
                     on the backend as `invoice_items.description` and
                     rendered as italic muted secondary text on the PDF and
@@ -1084,6 +1180,16 @@ export function DocumentCreator({
           >
             + Add line item
           </button>
+          {isGrn && (
+            <>
+              <datalist id={`${lineItemIdPrefix}-reasons`}>
+                {rejectionReasons.map((r) => <option key={r} value={r} />)}
+              </datalist>
+              <p className="text-xs text-text-tertiary">
+                Only the accepted and free quantities come into stock. Rejected goods stay pending on the purchase order and can go back on a purchase return or debit note.
+              </p>
+            </>
+          )}
         </div>
 
         {/* Totals summary */}

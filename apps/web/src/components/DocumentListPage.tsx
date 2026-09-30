@@ -12,6 +12,7 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { ShareLinkSection } from "@/components/ShareLinkSection";
 import { DocumentCreator, type DocumentType } from "@/components/DocumentCreator";
 import { ConvertDocumentDialog, type ConvertTarget } from "@/components/ConvertDocumentDialog";
+import { ReturnRejectedDialog } from "@/components/ReturnRejectedDialog";
 import { formatQty } from "@/components/inventory/shared";
 import { toast } from "@/hooks/useToast";
 
@@ -165,6 +166,8 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
   const [editId, setEditId] = useState<string | undefined>(undefined);
   const [convertId, setConvertId] = useState<string | null>(null);
+  // GRN whose rejected goods are going back on a purchase return / debit note.
+  const [returnRejectedId, setReturnRejectedId] = useState<string | null>(null);
 
   // Auto-open slider when navigated with ?id= param
   useEffect(() => {
@@ -567,17 +570,53 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                     <tbody className="divide-y divide-border-light">
                       {selectedFulfilment.lines.map((l) => (
                         <tr key={l.lineId}>
-                          <td className="px-3 py-2 text-text-primary">{l.itemName}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{formatQty(l.ordered, l.selectedUnit)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{formatQty(l.fulfilled)}</td>
-                          <td className={cn("px-3 py-2 text-right tabular-nums font-medium", l.pending > 0 ? "text-amber-600" : "text-text-tertiary")}>
+                          <td className="px-3 py-2 text-text-primary">
+                            {l.itemName}
+                            {l.rejected > 0 && (
+                              <span className="block text-[11px] text-amber-600">{formatQty(l.rejected)} rejected</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-text-secondary">
+                            {formatQty(l.ordered, l.selectedUnit)}
+                            {l.freeOrdered > 0 && <span className="block text-[11px]">+ {formatQty(l.freeOrdered)} free</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-text-secondary">
+                            {formatQty(l.fulfilled)}
+                            {l.freeFulfilled > 0 && <span className="block text-[11px]">+ {formatQty(l.freeFulfilled)} free</span>}
+                          </td>
+                          <td className={cn("px-3 py-2 text-right tabular-nums font-medium", l.pending > 0 || l.freePending > 0 ? "text-amber-600" : "text-text-tertiary")}>
                             {formatQty(l.pending)}
+                            {l.freePending > 0 && <span className="block text-[11px] font-normal">+ {formatQty(l.freePending)} free</span>}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                {selectedFulfilment.rejections.length > 0 && (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs dark:border-amber-900 dark:bg-amber-950/30">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium text-amber-800 dark:text-amber-300">Rejected on receipt</p>
+                      {selectedDoc.status !== "cancelled" && selectedFulfilment.rejections.some((r) => r.open > 0) && (
+                        <button
+                          type="button"
+                          onClick={() => setReturnRejectedId(selectedDoc.id)}
+                          className="text-xs px-2.5 py-1 rounded-lg font-medium text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                        >
+                          Return rejected goods
+                        </button>
+                      )}
+                    </div>
+                    <ul className="mt-1 space-y-0.5 text-amber-900 dark:text-amber-200">
+                      {selectedFulfilment.rejections.map((r) => (
+                        <li key={r.lineId}>
+                          {r.itemName}: {formatQty(r.rejected, r.selectedUnit)}{r.reason ? ` (${r.reason})` : ""}
+                          {r.returned > 0 && ` · ${formatQty(r.returned)} returned`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {selectedFulfilment.linkedDocuments.length > 0 && (
                   <ul className="mt-2 space-y-1">
                     {selectedFulfilment.linkedDocuments.map((d) => (
@@ -619,7 +658,17 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                             <p className="text-[11px] italic text-text-secondary mt-0.5">{li.description}</p>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{li.quantity}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-text-secondary">
+                          {li.quantity}
+                          {parseFloat(li.freeQuantity ?? "0") > 0 && (
+                            <span className="block text-[11px] text-emerald-700 dark:text-emerald-400">+ {parseFloat(li.freeQuantity)} free</span>
+                          )}
+                          {parseFloat(li.rejectedQuantity ?? "0") > 0 && (
+                            <span className="block text-[11px] text-amber-600" title={li.rejectionReason ?? undefined}>
+                              {parseFloat(li.rejectedQuantity)} rejected{li.rejectionReason ? ` (${li.rejectionReason})` : ""}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{formatCurrency(li.unitPrice)}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{li.taxPercent}%</td>
                         <td className="px-3 py-2 text-right tabular-nums font-medium text-text-primary">{formatCurrency(li.totalAmount)}</td>
@@ -720,6 +769,10 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
           targets={fulfilment.convertTo}
           onClose={() => setConvertId(null)}
         />
+      )}
+
+      {returnRejectedId && (
+        <ReturnRejectedDialog grnId={returnRejectedId} onClose={() => setReturnRejectedId(null)} />
       )}
     </div>
   );

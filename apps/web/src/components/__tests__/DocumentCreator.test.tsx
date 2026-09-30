@@ -32,8 +32,9 @@ import userEvent from "@testing-library/user-event";
 // reference normal top-level vars inside them. vi.hoisted() is the
 // official escape hatch — it runs BEFORE the hoisted factories so the
 // references are available at mock-initialisation time.
-const { invoiceCreateMutate, quotationCreateMutate, invalidateStub, businessListQuery, pricingResolveFetch } =
+const { invoiceCreateMutate, quotationCreateMutate, grnCreateMutate, invalidateStub, businessListQuery, pricingResolveFetch } =
   vi.hoisted(() => ({
+    grnCreateMutate: vi.fn(),
     // Price level lookups; rejects by default so lines keep the item price.
     pricingResolveFetch: vi.fn((): Promise<unknown> => Promise.reject(new Error("no pricing"))),
     invoiceCreateMutate: vi.fn(),
@@ -189,7 +190,7 @@ vi.mock("@/lib/trpc", () => ({
       list: { invalidate: invalidateStub },
     },
     goodsReceiptNote: {
-      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      create: { useMutation: () => ({ mutate: grnCreateMutate, isPending: false }) },
       list: { invalidate: invalidateStub },
     },
     dashboard: {
@@ -956,5 +957,90 @@ describe("DocumentCreator — price levels", () => {
     await user.click(await screen.findByRole("option", { name: /steel rod/i }));
     await new Promise((r) => setTimeout(r, 350));
     expect(pricingResolveFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("DocumentCreator — free quantities and rejections", () => {
+  beforeEach(() => {
+    invoiceCreateMutate.mockClear();
+    grnCreateMutate.mockClear();
+    vi.mocked(toast.error).mockClear();
+  });
+
+  it("sends a free quantity without changing the line amount", async () => {
+    renderCreator();
+    const user = userEvent.setup();
+    await pickParty(user);
+    await pickSteelRod(user);
+
+    const amountBefore = screen.getAllByText(/1,180/).length;
+    fireEvent.change(screen.getByLabelText("Free quantity"), { target: { value: "1" } });
+    // 1 × 1000 + 18% tax is still the amount: free goods aren't charged.
+    expect(screen.getAllByText(/1,180/).length).toBe(amountBefore);
+
+    await user.click(screen.getByRole("button", { name: /create invoice/i }));
+    await waitFor(() => expect(invoiceCreateMutate).toHaveBeenCalledTimes(1));
+    const li = invoiceCreateMutate.mock.calls[0][0].lineItems[0];
+    expect(li.quantity).toBe("1");
+    expect(li.freeQuantity).toBe("1");
+    expect(li.rejectedQuantity).toBeUndefined();
+  });
+
+  it("leaves freeQuantity out when none is given", async () => {
+    renderCreator();
+    const user = userEvent.setup();
+    await pickParty(user);
+    await pickSteelRod(user);
+    await user.click(screen.getByRole("button", { name: /create invoice/i }));
+    await waitFor(() => expect(invoiceCreateMutate).toHaveBeenCalledTimes(1));
+    expect(invoiceCreateMutate.mock.calls[0][0].lineItems[0].freeQuantity).toBeUndefined();
+  });
+
+  it("credit notes have no free quantity, and only a GRN has rejections", () => {
+    const { unmount } = renderCreator({ documentType: "credit_note" });
+    expect(screen.queryByLabelText("Free quantity")).not.toBeInTheDocument();
+    unmount();
+    renderCreator();
+    expect(screen.queryByLabelText("Rejected quantity")).not.toBeInTheDocument();
+  });
+
+  it("a GRN records accepted and rejected quantities and needs a reason", async () => {
+    renderCreator({ documentType: "goods_receipt_note", invoiceType: "purchase" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: /supplier/i }));
+    await user.click(screen.getByText("Ramesh Traders"));
+    await pickSteelRod(user);
+
+    expect(screen.getByLabelText("Accepted quantity")).toBeInTheDocument();
+    const reason = screen.getByLabelText("Reason for rejecting") as HTMLInputElement;
+    expect(reason).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Accepted quantity"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Rejected quantity"), { target: { value: "2" } });
+    expect(reason).not.toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /create goods receipt note/i }));
+    expect(grnCreateMutate).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Give a reason for rejecting Steel Rod");
+
+    fireEvent.change(reason, { target: { value: "Damaged" } });
+    await user.click(screen.getByRole("button", { name: /create goods receipt note/i }));
+    await waitFor(() => expect(grnCreateMutate).toHaveBeenCalledTimes(1));
+    const li = grnCreateMutate.mock.calls[0][0].lineItems[0];
+    expect(li).toMatchObject({ quantity: "8", rejectedQuantity: "2", rejectionReason: "Damaged" });
+  });
+
+  it("a GRN line can be wholly rejected", async () => {
+    renderCreator({ documentType: "goods_receipt_note", invoiceType: "purchase" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: /supplier/i }));
+    await user.click(screen.getByText("Ramesh Traders"));
+    await pickSteelRod(user);
+    fireEvent.change(screen.getByLabelText("Accepted quantity"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Rejected quantity"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Reason for rejecting"), { target: { value: "Wrong item" } });
+    await user.click(screen.getByRole("button", { name: /create goods receipt note/i }));
+    await waitFor(() => expect(grnCreateMutate).toHaveBeenCalledTimes(1));
+    expect(grnCreateMutate.mock.calls[0][0].lineItems[0]).toMatchObject({ quantity: "0", rejectedQuantity: "5" });
   });
 });

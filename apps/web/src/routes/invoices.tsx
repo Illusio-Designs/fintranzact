@@ -691,7 +691,12 @@ function InvoiceDetailPanel({
                           </p>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-text-secondary align-top">{li.quantity}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-text-secondary align-top">
+                        {li.quantity}
+                        {parseFloat(li.freeQuantity ?? "0") > 0 && (
+                          <span className="block text-[11px] text-emerald-700 dark:text-emerald-400">+ {parseFloat(li.freeQuantity)} free</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-text-secondary text-xs align-top">
                         {(li.selectedUnit || li.itemUnit)?.toUpperCase() || "—"}
                       </td>
