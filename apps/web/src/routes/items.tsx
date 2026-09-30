@@ -34,6 +34,7 @@ import {
 import { Icon } from "@/components/ui/Icon";
 import { ArrowDown01Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
+import { StockGroupFilter, StockGroupPicker } from "@/components/inventory/StockGroups";
 
 import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/items")({
@@ -122,6 +123,7 @@ function ItemsPage() {
   const [search] = usePageSearch("Search items…");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
+  const [groupFilter, setGroupFilter] = useState("");
   const [page, setPage] = useState(1);
   const [showAddModal, setShowAddModal] = useState(false);
   const deleteConfirm = useDeleteConfirmation();
@@ -135,11 +137,12 @@ function ItemsPage() {
   const debouncedSearch = useDebounce(search, 300);
 
   // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter, showLowStock]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter, showLowStock, groupFilter]);
 
   const { data, isLoading } = trpc.item.list.useQuery({
     search: debouncedSearch || undefined,
     lowStock: showLowStock || undefined,
+    stockGroupId: groupFilter || undefined,
     page,
     limit: ITEMS_PAGE_SIZE,
   });
@@ -170,6 +173,7 @@ function ItemsPage() {
       const result = await utils.item.list.fetch({
         search: debouncedSearch || undefined,
         lowStock: showLowStock || undefined,
+        stockGroupId: groupFilter || undefined,
         page: pg,
         limit: 100,
       });
@@ -296,6 +300,9 @@ function ItemsPage() {
         description="Products and services inventory"
         actions={
           <div className="flex items-center gap-2">
+            <Link to="/stock-groups" className="btn-secondary inline-flex items-center gap-2">
+              Stock groups
+            </Link>
             {barcodesOn && (
               <button
                 className="btn-secondary inline-flex items-center gap-2"
@@ -322,6 +329,7 @@ function ItemsPage() {
           value={typeFilter}
           onChange={setTypeFilter}
         />
+        <StockGroupFilter value={groupFilter} onChange={setGroupFilter} allowNone className="w-48" />
         {(lowStockCount ?? 0) > 0 && (
           <button
             onClick={() => setShowLowStock(!showLowStock)}
@@ -530,7 +538,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
-  const [category, setCategory] = useState("");
+  const [stockGroupId, setStockGroupId] = useState("");
   const [hsn, setHsn] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
@@ -639,7 +647,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
     setName("");
     setSku("");
     setBarcode("");
-    setCategory("");
+    setStockGroupId("");
     setHsn("");
     setSalePrice("");
     setPurchasePrice("");
@@ -678,7 +686,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
       name,
       sku: sku || undefined,
       barcode: barcode || undefined,
-      category: category || undefined,
+      stockGroupId: stockGroupId || undefined,
       hsn: hsn || undefined,
       salePrice: salePrice || undefined,
       purchasePrice: purchasePrice || undefined,
@@ -798,7 +806,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
         <div className="space-y-1">
           <Disclosure
             label="Identification"
-            count={countFilled(sku, hsn, category)}
+            count={countFilled(sku, hsn, stockGroupId)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -818,12 +826,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
               <ItemBarcodeField value={barcode} onChange={setBarcode} sku={sku} />
             </div>
             <div className="mt-3">
-              <InputField
-                label="Category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="e.g. Electronics, Food"
-              />
+              <StockGroupPicker value={stockGroupId} onChange={setStockGroupId} />
             </div>
           </Disclosure>
 
@@ -1088,7 +1091,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
-  const [category, setCategory] = useState("");
+  const [stockGroupId, setStockGroupId] = useState("");
   const [hsn, setHsn] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
@@ -1116,7 +1119,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
     setName(item.name);
     setSku(item.sku ?? "");
     setBarcode(item.barcode ?? "");
-    setCategory(item.category ?? "");
+    setStockGroupId(item.stockGroupId ?? "");
     setHsn(item.hsn ?? "");
     setSalePrice(item.salePrice ?? "");
     setPurchasePrice(item.purchasePrice ?? "");
@@ -1235,7 +1238,8 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         name,
         sku: sku || undefined,
         barcode: barcode || undefined,
-        category: category || undefined,
+        // Only when changed, so saving never touches a group set elsewhere.
+        ...(stockGroupId !== (item?.stockGroupId ?? "") ? { stockGroupId: stockGroupId || null } : {}),
         hsn: hsn || undefined,
         salePrice: salePrice || undefined,
         purchasePrice: purchasePrice || undefined,
@@ -1369,7 +1373,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         <div className="space-y-1">
           <Disclosure
             label="Identification"
-            count={countFilled(sku, hsn, category)}
+            count={countFilled(sku, hsn, stockGroupId)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -1390,12 +1394,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
               <ItemExtraCodes itemId={itemId} />
             </div>
             <div className="mt-3">
-              <InputField
-                label="Category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="e.g. Electronics, Food"
-              />
+              <StockGroupPicker value={stockGroupId} onChange={setStockGroupId} />
             </div>
           </Disclosure>
 

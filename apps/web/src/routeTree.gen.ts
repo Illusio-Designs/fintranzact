@@ -14,6 +14,7 @@ import { Route as WarehousesRouteImport } from './routes/warehouses'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StoreOrdersRouteImport } from './routes/store-orders'
 import { Route as StockTransfersRouteImport } from './routes/stock-transfers'
+import { Route as StockGroupsRouteImport } from './routes/stock-groups'
 import { Route as StockAdjustmentsRouteImport } from './routes/stock-adjustments'
 import { Route as ShipmentsRouteImport } from './routes/shipments'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -80,6 +81,11 @@ const StoreOrdersRoute = StoreOrdersRouteImport.update({
 const StockTransfersRoute = StockTransfersRouteImport.update({
   id: '/stock-transfers',
   path: '/stock-transfers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StockGroupsRoute = StockGroupsRouteImport.update({
+  id: '/stock-groups',
+  path: '/stock-groups',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StockAdjustmentsRoute = StockAdjustmentsRouteImport.update({
@@ -330,6 +336,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
+  '/stock-groups': typeof StockGroupsRoute
   '/stock-transfers': typeof StockTransfersRoute
   '/store-orders': typeof StoreOrdersRoute
   '/terms': typeof TermsRoute
@@ -379,6 +386,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
+  '/stock-groups': typeof StockGroupsRoute
   '/stock-transfers': typeof StockTransfersRoute
   '/store-orders': typeof StoreOrdersRoute
   '/terms': typeof TermsRoute
@@ -429,6 +437,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
+  '/stock-groups': typeof StockGroupsRoute
   '/stock-transfers': typeof StockTransfersRoute
   '/store-orders': typeof StoreOrdersRoute
   '/terms': typeof TermsRoute
@@ -480,6 +489,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
+    | '/stock-groups'
     | '/stock-transfers'
     | '/store-orders'
     | '/terms'
@@ -529,6 +539,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
+    | '/stock-groups'
     | '/stock-transfers'
     | '/store-orders'
     | '/terms'
@@ -578,6 +589,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
+    | '/stock-groups'
     | '/stock-transfers'
     | '/store-orders'
     | '/terms'
@@ -628,6 +640,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   ShipmentsRoute: typeof ShipmentsRoute
   StockAdjustmentsRoute: typeof StockAdjustmentsRoute
+  StockGroupsRoute: typeof StockGroupsRoute
   StockTransfersRoute: typeof StockTransfersRoute
   StoreOrdersRoute: typeof StoreOrdersRoute
   TermsRoute: typeof TermsRoute
@@ -676,6 +689,13 @@ declare module '@tanstack/react-router' {
       path: '/stock-transfers'
       fullPath: '/stock-transfers'
       preLoaderRoute: typeof StockTransfersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stock-groups': {
+      id: '/stock-groups'
+      path: '/stock-groups'
+      fullPath: '/stock-groups'
+      preLoaderRoute: typeof StockGroupsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/stock-adjustments': {
@@ -1012,6 +1032,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   ShipmentsRoute: ShipmentsRoute,
   StockAdjustmentsRoute: StockAdjustmentsRoute,
+  StockGroupsRoute: StockGroupsRoute,
   StockTransfersRoute: StockTransfersRoute,
   StoreOrdersRoute: StoreOrdersRoute,
   TermsRoute: TermsRoute,
