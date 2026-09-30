@@ -27,8 +27,8 @@ describe("plan.list — public plan catalogue", () => {
 });
 
 describe("GET /api/plans payload", () => {
-  it("sends unlimited limits as null so the JSON is valid", () => {
-    const json = JSON.parse(JSON.stringify(listPublicPlansJson()));
+  it("sends unlimited limits as null so the JSON is valid", async () => {
+    const json = JSON.parse(JSON.stringify(await listPublicPlansJson()));
     const free = json.find((p: { id: string }) => p.id === "forever_free");
     expect(free.limits.maxBusinesses).toBeNull();
     const pro = json.find((p: { id: string }) => p.id === "pro");

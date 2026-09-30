@@ -30,6 +30,7 @@ import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PhysicalStockRouteImport } from './routes/physical-stock'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PartnersRouteImport } from './routes/partners'
+import { Route as PartnerStatusRouteImport } from './routes/partner-status'
 import { Route as PartiesRouteImport } from './routes/parties'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
@@ -161,6 +162,11 @@ const PaymentsRoute = PaymentsRouteImport.update({
 const PartnersRoute = PartnersRouteImport.update({
   id: '/partners',
   path: '/partners',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnerStatusRoute = PartnerStatusRouteImport.update({
+  id: '/partner-status',
+  path: '/partner-status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PartiesRoute = PartiesRouteImport.update({
@@ -321,6 +327,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partner-status': typeof PartnerStatusRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
@@ -371,6 +378,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partner-status': typeof PartnerStatusRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
@@ -422,6 +430,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partner-status': typeof PartnerStatusRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
@@ -474,6 +483,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
+    | '/partner-status'
     | '/partners'
     | '/payments'
     | '/physical-stock'
@@ -524,6 +534,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
+    | '/partner-status'
     | '/partners'
     | '/payments'
     | '/physical-stock'
@@ -574,6 +585,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/parties'
+    | '/partner-status'
     | '/partners'
     | '/payments'
     | '/physical-stock'
@@ -625,6 +637,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
   PartiesRoute: typeof PartiesRoute
+  PartnerStatusRoute: typeof PartnerStatusRoute
   PartnersRoute: typeof PartnersRoute
   PaymentsRoute: typeof PaymentsRoute
   PhysicalStockRoute: typeof PhysicalStockRoute
@@ -801,6 +814,13 @@ declare module '@tanstack/react-router' {
       path: '/partners'
       fullPath: '/partners'
       preLoaderRoute: typeof PartnersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partner-status': {
+      id: '/partner-status'
+      path: '/partner-status'
+      fullPath: '/partner-status'
+      preLoaderRoute: typeof PartnerStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/parties': {
@@ -1017,6 +1037,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
   PartiesRoute: PartiesRoute,
+  PartnerStatusRoute: PartnerStatusRoute,
   PartnersRoute: PartnersRoute,
   PaymentsRoute: PaymentsRoute,
   PhysicalStockRoute: PhysicalStockRoute,

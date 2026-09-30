@@ -30,7 +30,7 @@ async function tick() {
       for (const tenant of activeTenants) {
         try {
           const db = await getTenantDb(tenant.id);
-          await processDueTemplates(db, getLimits(tenant.plan ?? "free").recurringRunsPerMonth);
+          await processDueTemplates(db, (await getLimits(tenant.plan ?? "free")).recurringRunsPerMonth);
         } catch (err) {
           console.error(`[recurring-scheduler] tenant ${tenant.id} error:`, err);
         }

@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, count, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
-import { controlDb, getTenantDb, tenants, tenantMembers, users, businesses } from "@fintranzact/db";
+import { controlDb, getTenantDb, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts } from "@fintranzact/db";
+import { ensureReferralCode, getPartnerStats } from "../lib/partner-program.js";
+import { PLAN_DEFAULTS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema } from "@fintranzact/shared";
+import { getPlanCatalog, invalidatePlanCatalog } from "../lib/plan-catalog.js";
 import { router, protectedProcedure } from "../trpc.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { isPlatformAdmin } from "../lib/platform-admin.js";
@@ -21,6 +24,23 @@ const platformAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 const OWNER_ROLES = ["owner", "superadmin"] as const;
 
 export const PLAN_IDS = ["forever_free", "free", "pro", "business", "enterprise"] as const;
+
+/** Numbers as the admin console edits them: Infinity is sent as null. */
+function planForAdmin(plan: Awaited<ReturnType<typeof getPlanCatalog>>[number], orgCount: number) {
+  return {
+    id: plan.id,
+    name: plan.name,
+    tagline: plan.tagline,
+    monthlyPriceInr: plan.monthlyPriceInr,
+    features: plan.features,
+    highlight: !!plan.highlight,
+    visible: plan.visible,
+    limits: limitsToStored(plan.limits),
+    edited: plan.edited,
+    updatedAt: plan.updatedAt,
+    orgCount,
+  };
+}
 
 export const platformRouter = router({
   /** Whether the signed-in user is a platform admin (shows or hides the admin link). */
@@ -118,6 +138,7 @@ export const platformRouter = router({
           slug: tenants.slug,
           plan: tenants.plan,
           status: tenants.status,
+          partnerId: tenants.partnerId,
           createdAt: tenants.createdAt,
         })
         .from(tenants)
@@ -156,8 +177,17 @@ export const platformRouter = router({
             .orderBy(businesses.createdAt)
         : [];
 
+      const [referredBy] = tenant.partnerId
+        ? await controlDb
+            .select({ id: partners.id, companyName: partners.companyName, referralCode: partners.referralCode })
+            .from(partners)
+            .where(eq(partners.id, tenant.partnerId))
+            .limit(1)
+        : [];
+
       return {
         ...tenant,
+        referredBy: referredBy ?? null,
         createdAt: tenant.createdAt.toISOString(),
         members: members.map((m) => ({ ...m, joinedAt: m.joinedAt.toISOString() })),
         businesses: businessRows.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() })),
@@ -174,6 +204,243 @@ export const platformRouter = router({
         .where(eq(tenants.id, input.tenantId))
         .returning({ id: tenants.id, plan: tenants.plan });
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation not found" });
+      return row;
+    }),
+
+  // ── Plans ────────────────────────────────────────────────────
+
+  /** Every plan as it is now, with how many organisations are on it. */
+  plans: platformAdminProcedure.query(async () => {
+    const [catalog, counts] = await Promise.all([
+      getPlanCatalog(),
+      controlDb.select({ plan: tenants.plan, n: count() }).from(tenants).groupBy(tenants.plan),
+    ]);
+    const countOf = new Map(counts.map((c) => [c.plan, c.n]));
+    return catalog.map((plan) => planForAdmin(plan, countOf.get(plan.id) ?? 0));
+  }),
+
+  /** Change a plan's name, price, features, visibility or limits. */
+  savePlan: platformAdminProcedure
+    .input(z.object({ plan: z.enum(PLAN_IDS), settings: planSettingsSchema }))
+    .mutation(async ({ input, ctx }) => {
+      const { settings } = input;
+      const values = {
+        name: settings.name,
+        tagline: settings.tagline,
+        monthlyPriceInr: settings.monthlyPriceInr,
+        features: settings.features,
+        highlight: settings.highlight,
+        visible: settings.visible,
+        limits: settings.limits,
+        updatedAt: new Date(),
+        updatedByUserId: ctx.user.id,
+      };
+      await controlDb
+        .insert(planSettings)
+        .values({ plan: input.plan, ...values })
+        .onConflictDoUpdate({ target: planSettings.plan, set: values });
+      invalidatePlanCatalog();
+      const plan = (await getPlanCatalog()).find((p) => p.id === input.plan)!;
+      return planForAdmin(plan, 0);
+    }),
+
+  /** Undo every edit to a plan and go back to its built-in definition. */
+  resetPlan: platformAdminProcedure
+    .input(z.object({ plan: z.enum(PLAN_IDS) }))
+    .mutation(async ({ input }) => {
+      await controlDb.delete(planSettings).where(eq(planSettings.plan, input.plan));
+      invalidatePlanCatalog();
+      return { plan: input.plan, name: PLAN_DEFAULTS[input.plan].name };
+    }),
+
+  // ── Partners ─────────────────────────────────────────────────
+
+  /** Partner applications, newest first, with a count per status. */
+  partners: platformAdminProcedure
+    .input(
+      z.object({
+        status: z.enum(partnerStatuses).optional(),
+        search: z.string().trim().max(100).optional(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(25),
+      }),
+    )
+    .query(async ({ input }) => {
+      const term = input.search ? `%${escapeLike(input.search)}%` : null;
+      const searchFilter = term
+        ? or(
+            ilike(partners.companyName, term),
+            ilike(partners.contactName, term),
+            ilike(partners.email, term),
+            ilike(partners.city, term),
+          )
+        : undefined;
+      const where = and(input.status ? eq(partners.status, input.status) : undefined, searchFilter);
+      const [rows, [total], byStatus] = await Promise.all([
+        controlDb
+          .select()
+          .from(partners)
+          .where(where)
+          .orderBy(desc(partners.createdAt))
+          .limit(input.limit)
+          .offset((input.page - 1) * input.limit),
+        controlDb.select({ n: count() }).from(partners).where(where),
+        controlDb.select({ status: partners.status, n: count() }).from(partners).where(searchFilter).groupBy(partners.status),
+      ]);
+      const stats = await getPartnerStats(rows);
+      return {
+        data: rows.map((r) => {
+          const st = stats.get(r.id)!;
+          return {
+            ...r,
+            createdAt: r.createdAt.toISOString(),
+            reviewedAt: r.reviewedAt?.toISOString() ?? null,
+            badge: st.badge.id,
+            referred: st.referred,
+            paidReferrals: st.paidReferrals,
+          };
+        }),
+        total: total?.n ?? 0,
+        page: input.page,
+        limit: input.limit,
+        counts: Object.fromEntries(partnerStatuses.map((s) => [s, byStatus.find((b) => b.status === s)?.n ?? 0])) as Record<
+          (typeof partnerStatuses)[number],
+          number
+        >,
+      };
+    }),
+
+  /** Approve or reject a partner, change their type, or keep notes on them. */
+  updatePartner: platformAdminProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        status: z.enum(partnerStatuses).optional(),
+        partnerType: z.enum(partnerTypes).optional(),
+        adminNotes: z.string().trim().max(2000).optional(),
+        listPublicly: z.boolean().optional(),
+        /** Null goes back to the badge's rate. */
+        commissionPercent: z.number().int().min(0).max(100).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, status, ...rest } = input;
+      const [row] = await controlDb
+        .update(partners)
+        .set({
+          ...rest,
+          ...(status ? { status, reviewedAt: new Date(), reviewedByUserId: ctx.user.id } : {}),
+        })
+        .where(eq(partners.id, id))
+        .returning({ id: partners.id, status: partners.status, companyName: partners.companyName });
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Partner not found" });
+      // Approved partners get the referral code they share with businesses.
+      const referralCode = row.status === "approved" ? await ensureReferralCode(row.id) : null;
+      return { ...row, referralCode };
+    }),
+
+  /** One partner: their referral code, badge, the organisations they brought in, and payouts. */
+  partner: platformAdminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const [partner] = await controlDb.select().from(partners).where(eq(partners.id, input.id)).limit(1);
+      if (!partner) throw new TRPCError({ code: "NOT_FOUND", message: "Partner not found" });
+      const [stats, referred, payouts, catalog] = await Promise.all([
+        getPartnerStats([partner]),
+        controlDb
+          .select({ id: tenants.id, name: tenants.name, plan: tenants.plan, status: tenants.status, createdAt: tenants.createdAt })
+          .from(tenants)
+          .where(eq(tenants.partnerId, partner.id))
+          .orderBy(desc(tenants.createdAt)),
+        controlDb.select().from(partnerPayouts).where(eq(partnerPayouts.partnerId, partner.id)).orderBy(desc(partnerPayouts.period)),
+        getPlanCatalog(),
+      ]);
+      const plans = new Map(catalog.map((p) => [p.id, p]));
+      const st = stats.get(partner.id)!;
+      return {
+        ...partner,
+        createdAt: partner.createdAt.toISOString(),
+        reviewedAt: partner.reviewedAt?.toISOString() ?? null,
+        stats: { ...st, badge: st.badge.id, next: st.next ? { badge: st.next.badge.id, needed: st.next.needed } : null },
+        referred: referred.map((t) => ({
+          ...t,
+          createdAt: t.createdAt.toISOString(),
+          planName: plans.get(t.plan)?.name ?? t.plan,
+          monthlyPriceInr: plans.get(t.plan)?.monthlyPriceInr ?? 0,
+        })),
+        payouts: payouts.map((p) => ({
+          ...p,
+          createdAt: p.createdAt.toISOString(),
+          paidAt: p.paidAt?.toISOString() ?? null,
+        })),
+      };
+    }),
+
+  /** Record what a partner is owed for a month. */
+  recordPayout: platformAdminProcedure
+    .input(
+      z.object({
+        partnerId: z.string().uuid(),
+        period: payoutPeriodSchema,
+        amount: z.string().regex(/^\d{1,10}(\.\d{1,2})?$/, "Enter an amount like 1500 or 1500.50"),
+        notes: z.string().trim().max(500).optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const [partner] = await controlDb
+        .select({ status: partners.status })
+        .from(partners)
+        .where(eq(partners.id, input.partnerId))
+        .limit(1);
+      if (!partner) throw new TRPCError({ code: "NOT_FOUND", message: "Partner not found" });
+      if (partner.status !== "approved") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Only approved partners can be paid" });
+      }
+      const [row] = await controlDb
+        .insert(partnerPayouts)
+        .values({ ...input, notes: input.notes || null, createdByUserId: ctx.user.id })
+        .onConflictDoNothing()
+        .returning();
+      if (!row) {
+        throw new TRPCError({ code: "CONFLICT", message: `A payout for ${input.period} is already recorded for this partner` });
+      }
+      return row;
+    }),
+
+  /** Mark a payout paid (with the bank / UPI reference) or back to pending. */
+  updatePayout: platformAdminProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        status: z.enum(partnerPayoutStatuses),
+        reference: z.string().trim().max(120).optional(),
+        notes: z.string().trim().max(500).optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const [row] = await controlDb
+        .update(partnerPayouts)
+        .set({
+          status: input.status,
+          paidAt: input.status === "paid" ? new Date() : null,
+          ...(input.reference !== undefined ? { reference: input.reference || null } : {}),
+          ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
+        })
+        .where(eq(partnerPayouts.id, input.id))
+        .returning();
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Payout not found" });
+      return row;
+    }),
+
+  /** Remove a payout recorded by mistake. Paid payouts stay as a record. */
+  deletePayout: platformAdminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input }) => {
+      const [row] = await controlDb
+        .delete(partnerPayouts)
+        .where(and(eq(partnerPayouts.id, input.id), eq(partnerPayouts.status, "pending")))
+        .returning({ id: partnerPayouts.id });
+      if (!row) throw new TRPCError({ code: "BAD_REQUEST", message: "Only a pending payout can be removed" });
       return row;
     }),
 });

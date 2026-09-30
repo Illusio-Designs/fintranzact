@@ -13,12 +13,14 @@ import { cn } from "@/lib/utils";
 export type AuthMode = "login" | "register";
 
 /** Search params shared by /login and /register (the invite flow sets them). */
-export type AuthSearch = { invite?: string; error?: string };
+export type AuthSearch = { invite?: string; error?: string; ref?: string };
 
 export function validateAuthSearch(search: Record<string, unknown>): AuthSearch {
   return {
     ...(typeof search.invite === "string" ? { invite: search.invite } : {}),
     ...(typeof search.error === "string" ? { error: search.error } : {}),
+    // Partner referral links: /register?ref=FTZ-7K2M9Q
+    ...(typeof search.ref === "string" && search.ref.length <= 50 ? { ref: search.ref } : {}),
   };
 }
 
@@ -163,7 +165,16 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
-  const [referralCode, setReferralCode] = useState("");
+  // A partner's referral link (?ref=) is remembered for this visit, so it
+  // still applies if the visitor moves between log in and register.
+  const [referralCode, setReferralCode] = useState(() => {
+    try {
+      if (search.ref) sessionStorage.setItem("referralCode", search.ref);
+      return search.ref ?? sessionStorage.getItem("referralCode") ?? "";
+    } catch {
+      return search.ref ?? "";
+    }
+  });
   const [error, setError] = useState("");
   const [linkSentTo, setLinkSentTo] = useState("");
   const [cooldown, setCooldown] = useState(0);
@@ -248,7 +259,14 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
       setError("Enter your email address first, then we'll send you a sign-in link.");
       return;
     }
-    withTurnstile((token) => magicLinkMutation.mutate({ email: email.trim(), turnstileToken: token, source: isDesktop() ? "desktop" : "web" }));
+    withTurnstile((token) =>
+      magicLinkMutation.mutate({
+        email: email.trim(),
+        turnstileToken: token,
+        source: isDesktop() ? "desktop" : "web",
+        referralCode: referralCode.trim() || undefined,
+      }),
+    );
   }
 
   function handleRegister(e: FormEvent) {
@@ -332,6 +350,11 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
               {search.error === "email_mismatch" && (
                 <Banner tone="error">
                   This invitation was sent to a different email address. Log in with that address to accept it.
+                </Banner>
+              )}
+              {search.ref && mode === "register" && (
+                <Banner tone="info">
+                  Referral code <strong>{search.ref.toUpperCase()}</strong> will be applied to your new account.
                 </Banner>
               )}
               {error && <Banner tone="error">{error}</Banner>}

@@ -1,5 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useCallback, useRef, useState, type FormEvent } from "react";
+import { partnerApplicationSchema, partnerBadges, partnerClientCounts, partnerTypeInfo, type PartnerType } from "@fintranzact/shared";
+import { trpc } from "@/lib/trpc";
+import { TurnstileModal } from "@/components/ui/TurnstileModal";
+import { PartnerBadge } from "@/components/ui/PartnerBadge";
+import { Link } from "@tanstack/react-router";
 import {
   CONTACT_EMAIL,
   CtaBand,
@@ -18,6 +23,8 @@ import {
   Target02Icon,
   UserGroupIcon,
   BookOpen01Icon,
+  Location01Icon,
+  Globe02Icon,
 } from "@hugeicons/core-free-icons";
 import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
 import { InputField, SelectField, TextareaField } from "@/components/ui/FormField";
@@ -28,7 +35,7 @@ export const Route = createFileRoute("/partners")({
   component: PartnersPage,
 });
 
-type ProgramId = "accountant" | "reseller" | "technology";
+type ProgramId = PartnerType;
 
 const PROGRAMS: Array<{ id: ProgramId; icon: IconSvgElement; title: string; apply: string; body: string; points: string[] }> = [
   {
@@ -70,6 +77,8 @@ const STEPS: Array<[string, string]> = [
   ["Grow together", "Bring clients on, and we support you and them along the way."],
 ];
 
+type FieldErrors = Partial<Record<"contactName" | "companyName" | "email" | "phone" | "city" | "website", string>>;
+
 function PartnersPage() {
   const [program, setProgram] = useState<ProgramId>("accountant");
   const [name, setName] = useState("");
@@ -77,25 +86,51 @@ function PartnersPage() {
   const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
   const [city, setCity] = useState("");
+  const [website, setWebsite] = useState("");
+  const [clientCount, setClientCount] = useState("");
   const [message, setMessage] = useState("");
+  const [listPublicly, setListPublicly] = useState(true);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [sent, setSent] = useState(false);
 
-  // No backend endpoint for applications yet: open the visitor's mail client
-  // with everything filled in, so nothing typed here is lost.
+  const submit = trpc.partner.submitApplication.useMutation({ onSuccess: () => setSent(true) });
+
+  // Bot protection: the Turnstile modal hands us a token, then we submit.
+  const [showTurnstile, setShowTurnstile] = useState(false);
+  const pendingRef = useRef<((token: string) => void) | null>(null);
+  const onVerified = useCallback((token: string) => {
+    setShowTurnstile(false);
+    pendingRef.current?.(token);
+    pendingRef.current = null;
+  }, []);
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const programName = PROGRAMS.find((p) => p.id === program)?.title ?? program;
-    const subject = `Partner application: ${company || name}`;
-    const body = [
-      `Programme: ${programName}`,
-      `Name: ${name}`,
-      `Company / firm: ${company}`,
-      `Email: ${email}`,
-      `Phone: ${phone}`,
-      `City: ${city}`,
-      "",
+    const application = {
+      contactName: name,
+      companyName: company,
+      email,
+      phone,
+      city,
+      website,
+      partnerType: program,
+      clientCount: clientCount ? (clientCount as (typeof partnerClientCounts)[number]) : undefined,
       message,
-    ].join("\n");
-    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      listPublicly,
+    };
+    const parsed = partnerApplicationSchema.safeParse(application);
+    if (!parsed.success) {
+      const next: FieldErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as keyof FieldErrors;
+        if (key && !next[key]) next[key] = issue.message;
+      }
+      setErrors(next);
+      return;
+    }
+    setErrors({});
+    pendingRef.current = (turnstileToken) => submit.mutate({ ...application, turnstileToken });
+    setShowTurnstile(true);
   }
 
   return (
@@ -105,12 +140,20 @@ function PartnersPage() {
         title="Grow your practice with Fintranzact"
         subtitle="Join our partner programme for accountants, resellers and technology companies serving Indian businesses."
       >
-        <a
-          href="#apply"
-          className="mt-8 inline-flex h-[52px] items-center rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
-        >
-          Become a partner
-        </a>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href="#apply"
+            className="inline-flex h-[52px] items-center rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
+          >
+            Become a partner
+          </a>
+          <Link
+            to="/partner-status"
+            className="inline-flex h-[52px] items-center rounded-xl border border-border-medium bg-surface-0 px-6 text-base font-semibold text-text-primary transition hover:border-brand-500"
+          >
+            Check partner status
+          </Link>
+        </div>
       </PageHero>
 
       <section className="bg-surface-1">
@@ -174,6 +217,29 @@ function PartnersPage() {
         </div>
       </section>
 
+      <section className="border-t border-border-light">
+        <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
+          <p className={cn(EYEBROW, "text-center")}>Partner badges</p>
+          <h2 className={cn(HEADING, "mt-3 text-center text-3xl md:text-[40px]")}>Earn more as you grow</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-[15px] leading-relaxed text-text-tertiary">
+            Every approved partner gets a referral code. Businesses that sign up with it are yours, and your badge and commission rise
+            with the number of them on a paid plan.
+          </p>
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {partnerBadges.map((b) => (
+              <div key={b.id} className="rounded-2xl border border-border-light bg-surface-0 p-6 text-center">
+                <PartnerBadge badge={b.id} size="md" />
+                <p className="mt-4 font-display text-3xl font-extrabold text-text-primary">{b.commissionPercent}%</p>
+                <p className="text-sm text-text-tertiary">commission on plan fees</p>
+                <p className="mt-3 text-sm font-semibold text-text-secondary">
+                  {b.minPaidReferrals === 0 ? "When you're approved" : `${b.minPaidReferrals}+ paying businesses`}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section id="apply" className="scroll-mt-24 bg-surface-1">
         <div className="mx-auto grid max-w-6xl items-start gap-10 px-4 py-20 md:px-6 lg:grid-cols-5">
           <div className="lg:col-span-2">
@@ -193,8 +259,19 @@ function PartnersPage() {
             </div>
           </div>
 
+          {sent ? (
+            <div className="rounded-[22px] border border-border-light bg-surface-0 p-9 text-center shadow-[0_24px_60px_-34px_rgba(15,27,61,.35)] lg:col-span-3">
+              <IconCircle icon={CheckmarkCircle02Icon} size="lg" className="mx-auto" />
+              <h3 className="mt-5 text-xl font-bold text-text-primary">Application received</h3>
+              <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-text-tertiary">
+                Thank you, {name.split(" ")[0] || "partner"}. Our partner team will review it and get back to you at {email} within two
+                business days.
+              </p>
+            </div>
+          ) : (
           <form
             onSubmit={handleSubmit}
+            noValidate
             className="rounded-[22px] border border-border-light bg-surface-0 p-7 shadow-[0_24px_60px_-34px_rgba(15,27,61,.35)] md:p-9 lg:col-span-3"
           >
             <SelectField
@@ -210,10 +287,12 @@ function PartnersPage() {
               ))}
             </SelectField>
             <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              <InputField label="Name" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Your full name" />
+              <InputField label="Name" required value={name} error={errors.contactName} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Your full name" />
               <InputField
                 label="Company or firm"
+                required
                 value={company}
+                error={errors.companyName}
                 onChange={(e) => setCompany(e.target.value)}
                 autoComplete="organization"
                 placeholder="Firm or company name"
@@ -223,12 +302,23 @@ function PartnersPage() {
                 type="email"
                 required
                 value={email}
+                error={errors.email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
                 placeholder="you@yourfirm.com"
               />
-              <PhoneInput label="Phone" value={phone} onChange={setPhone} />
-              <InputField label="City" value={city} onChange={(e) => setCity(e.target.value)} autoComplete="address-level2" placeholder="Mumbai" />
+              <div>
+                <PhoneInput label="Phone" value={phone} onChange={setPhone} />
+                {errors.phone ? <p className="mt-1 text-xs text-red-600">{errors.phone}</p> : null}
+              </div>
+              <InputField label="City" required value={city} error={errors.city} onChange={(e) => setCity(e.target.value)} autoComplete="address-level2" placeholder="Mumbai" />
+              <InputField label="Website" value={website} error={errors.website} onChange={(e) => setWebsite(e.target.value)} autoComplete="url" placeholder="yourfirm.com" />
+              <SelectField label="Clients you serve" value={clientCount} onChange={(e) => setClientCount(e.target.value)}>
+                <option value="">Choose…</option>
+                {partnerClientCounts.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </SelectField>
             </div>
             <div className="mt-5">
               <TextareaField
@@ -239,19 +329,123 @@ function PartnersPage() {
                 placeholder="How many clients you serve, the tools you use today, anything we should know."
               />
             </div>
+            <label className="mt-5 flex items-start gap-3 text-sm text-text-secondary">
+              <input
+                type="checkbox"
+                checked={listPublicly}
+                onChange={(e) => setListPublicly(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-border-medium accent-brand-600"
+              />
+              <span>Once approved, list my firm in the Fintranzact partner directory (company name, city and website only).</span>
+            </label>
+            {submit.error ? (
+              <p role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+                {submit.error.message}
+              </p>
+            ) : null}
             <button
               type="submit"
-              className="mt-7 inline-flex h-[52px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
+              disabled={submit.isPending}
+              className="mt-7 inline-flex h-[52px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700 disabled:opacity-60"
             >
               <Icon icon={SentIcon} size={18} />
-              Send application
+              {submit.isPending ? "Sending…" : "Send application"}
             </button>
-            <p className="mt-3 text-xs text-text-tertiary">Your email app opens with the application ready to send.</p>
+            <p className="mt-3 text-xs text-text-tertiary">We usually reply within two business days.</p>
           </form>
+          )}
         </div>
       </section>
 
+      <PartnerDirectory />
+
+      <TurnstileModal
+        open={showTurnstile}
+        onVerified={onVerified}
+        onClose={() => {
+          setShowTurnstile(false);
+          pendingRef.current = null;
+        }}
+      />
+
       <CtaBand title="Want to try it first?" body="Create a free account and see how Fintranzact works for your clients." />
     </MarketingLayout>
+  );
+}
+
+/** Approved partners who chose to be listed. */
+function PartnerDirectory() {
+  const { data } = trpc.partner.directory.useQuery();
+  const [type, setType] = useState<PartnerType | "all">("all");
+  const [query, setQuery] = useState("");
+  if (!data?.length) return null;
+
+  const q = query.trim().toLowerCase();
+  const shown = data.filter(
+    (p) =>
+      (type === "all" || p.partnerType === type) &&
+      (!q || [p.companyName, p.city, p.state].some((v) => v?.toLowerCase().includes(q))),
+  );
+
+  return (
+    <section id="find-a-partner" className="scroll-mt-24">
+      <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
+        <p className={cn(EYEBROW, "text-center")}>Find a partner</p>
+        <h2 className={cn(HEADING, "mt-3 text-center text-3xl md:text-[40px]")}>Work with a Fintranzact partner near you</h2>
+        <div className="mx-auto mt-10 flex max-w-2xl flex-col gap-3 sm:flex-row">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name or city"
+            aria-label="Search partners"
+            className="h-12 flex-1 rounded-xl border border-border-light bg-surface-0 px-4 text-[15px] text-text-primary outline-none focus:border-brand-500"
+          />
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as PartnerType | "all")}
+            aria-label="Partner type"
+            className="h-12 rounded-xl border border-border-light bg-surface-0 px-3 text-[15px] text-text-primary"
+          >
+            <option value="all">All partners</option>
+            {Object.entries(partnerTypeInfo).map(([id, info]) => (
+              <option key={id} value={id}>{info.label}</option>
+            ))}
+          </select>
+        </div>
+        {shown.length === 0 ? (
+          <p className="mt-10 text-center text-[15px] text-text-tertiary">No partners match that search yet.</p>
+        ) : (
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {shown.map((p) => (
+              <div key={p.id} className="rounded-2xl border border-border-light bg-surface-0 p-6">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+                    {partnerTypeInfo[p.partnerType as PartnerType]?.label ?? p.partnerType}
+                  </span>
+                  <PartnerBadge badge={p.badge} />
+                </div>
+                <h3 className="mt-4 text-base font-bold text-text-primary">{p.companyName}</h3>
+                <p className="mt-1.5 flex items-center gap-1.5 text-sm text-text-tertiary">
+                  <Icon icon={Location01Icon} size={15} />
+                  {[p.city, p.state].filter(Boolean).join(", ")}
+                </p>
+                {p.website ? (
+                  <a
+                    href={p.website.startsWith("http") ? p.website : `https://${p.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="mt-1.5 flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline dark:text-brand-300"
+                  >
+                    <Icon icon={Globe02Icon} size={15} />
+                    {p.website.replace(/^https?:\/\//, "")}
+                  </a>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

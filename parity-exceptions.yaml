@@ -175,6 +175,18 @@ exceptions:
       - platform.tenants
       - platform.tenant
       - platform.setPlan
+      - platform.plans
+      - platform.savePlan
+      - platform.resetPlan
+      - platform.partners
+      - platform.updatePartner
+      - partner.submitApplication
+      - partner.directory
+      - partner.checkStatus
+      - platform.partner
+      - platform.recordPayout
+      - platform.updatePayout
+      - platform.deletePayout
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
 
@@ -350,6 +362,18 @@ exceptions:
       - platform.tenants
       - platform.tenant
       - platform.setPlan
+      - platform.plans
+      - platform.savePlan
+      - platform.resetPlan
+      - platform.partners
+      - platform.updatePartner
+      - partner.submitApplication
+      - partner.directory
+      - partner.checkStatus
+      - platform.partner
+      - platform.recordPayout
+      - platform.updatePayout
+      - platform.deletePayout
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
 
@@ -489,6 +513,18 @@ exceptions:
       - platform.tenants
       - platform.tenant
       - platform.setPlan
+      - platform.plans
+      - platform.savePlan
+      - platform.resetPlan
+      - platform.partners
+      - platform.updatePartner
+      - partner.submitApplication
+      - partner.directory
+      - partner.checkStatus
+      - platform.partner
+      - platform.recordPayout
+      - platform.updatePayout
+      - platform.deletePayout
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
 

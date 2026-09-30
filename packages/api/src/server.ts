@@ -303,9 +303,9 @@ app.get("/pay/upi", async (c) => {
 });
 
 // Public plan catalogue (prices, features, enforced limits). Unlimited = null.
-app.get("/api/plans", (c) => {
-  c.header("Cache-Control", "public, max-age=300");
-  return c.json({ plans: listPublicPlansJson() });
+app.get("/api/plans", async (c) => {
+  c.header("Cache-Control", "public, max-age=60");
+  return c.json({ plans: await listPublicPlansJson() });
 });
 
 app.get("/health", async (c) => {

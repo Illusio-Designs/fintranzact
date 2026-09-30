@@ -6,6 +6,8 @@ import { createHash, randomBytes } from "node:crypto";
 import * as argon2 from "argon2";
 import { isPlatformAdmin } from "../lib/platform-admin.js";
 import { controlDb, users, sessions, tenants, tenantMembers, magicLinkTokens, invitations, accessTokens, provisionTenantDatabase, cleanupTenantDatabase, type TenantDbConfig } from "@fintranzact/db";
+import { normalizeReferralCode } from "@fintranzact/shared";
+import { partnerForReferralCode } from "../lib/partner-program.js";
 import { loginSchema, registerSchema, magicLinkRequestSchema, magicLinkVerifySchema, completeProfileSchema } from "@fintranzact/shared";
 import { router, publicProcedure, protectedProcedure } from "../trpc.js";
 import { emailService } from "../lib/email.js";
@@ -96,7 +98,12 @@ function isBearerClient(req: Request): boolean {
 // Every new sign-up gets their own organization and becomes the owner.
 type ControlTx = Parameters<Parameters<typeof controlDb.transaction>[0]>[0];
 
-async function createTenantForUser(userId: string, displayName: string, parentTx?: ControlTx): Promise<string> {
+async function createTenantForUser(
+  userId: string,
+  displayName: string,
+  parentTx?: ControlTx,
+  referralCode: string | null = null,
+): Promise<string> {
   const run = async (tx: ControlTx) => {
     const tenantName = `${displayName.trim() || "My Organization"}'s Organization`;
     const slug = generateSlug(tenantName);
@@ -105,6 +112,8 @@ async function createTenantForUser(userId: string, displayName: string, parentTx
       name: tenantName,
       slug,
       plan: "forever_free",
+      referralCode: normalizeReferralCode(referralCode),
+      partnerId: await partnerForReferralCode(tx, referralCode),
     }).returning({ id: tenants.id });
 
     await tx.insert(tenantMembers).values({
@@ -226,7 +235,10 @@ async function writeNewTenantRows(
     dbUser: provisioned.dbConfig.dbUser,
     dbPassword: provisioned.dbConfig.dbPassword,
     plan: "forever_free",
-    referralCode: referralCode || null,
+    referralCode: normalizeReferralCode(referralCode),
+    // A partner's code links the organisation to that partner (referrals,
+    // badge and commission). Any other code is kept as typed.
+    partnerId: await partnerForReferralCode(tx, referralCode),
   }).returning({ id: tenants.id });
   await tx.insert(tenantMembers).values({
     tenantId: tenant.id,
@@ -371,7 +383,7 @@ export const authRouter = router({
             await writeNewTenantRows(tx, user.id, provisioned, input.referralCode?.trim() || null);
             markUsed();
           } else {
-            await createTenantForUser(user.id, displayName, tx);
+            await createTenantForUser(user.id, displayName, tx, input.referralCode?.trim() || null);
           }
 
           const sessionId = nanoid(64);
@@ -503,6 +515,7 @@ export const authRouter = router({
       tokenHash: tokenH,
       expiresAt: new Date(Date.now() + 15 * 60 * 1000),
       ipAddress: getClientIpFromRequest(ctx.req),
+      referralCode: normalizeReferralCode(input.referralCode),
     });
 
     const baseUrl = process.env.APP_URL || "http://localhost:5173";
@@ -638,6 +651,7 @@ export const authRouter = router({
             isNew = true;
             const [newUser] = await tx.insert(users).values({
               email: emailLocal,
+              referralCode: tokenRow.referralCode,
               emailVerified: true,
             }).returning({ id: users.id, email: users.email, name: users.name });
             user = newUser;
@@ -666,11 +680,11 @@ export const authRouter = router({
                   message: "Sign-in state changed — please try again.",
                 });
               }
-              await writeNewTenantRows(tx, user.id, provisioned, null);
+              await writeNewTenantRows(tx, user.id, provisioned, tokenRow.referralCode);
               markUsed();
             } else {
               const assignedName = user.name ?? emailLocal.split("@")[0] ?? "My Organization";
-              await createTenantForUser(user.id, assignedName, tx);
+              await createTenantForUser(user.id, assignedName, tx, tokenRow.referralCode);
             }
           } else {
             // Existing user path — mark email verified

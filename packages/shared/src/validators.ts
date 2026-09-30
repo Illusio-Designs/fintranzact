@@ -66,6 +66,8 @@ export const magicLinkRequestSchema = z.object({
   email: z.string().email().max(255),
   turnstileToken: z.string().optional(),
   source: z.enum(["web", "desktop", "mobile"]).default("web"),
+  /** Partner referral code; applied if this link creates a new organisation. */
+  referralCode: z.string().trim().max(50).optional(),
 });
 
 export const magicLinkVerifySchema = z.object({
