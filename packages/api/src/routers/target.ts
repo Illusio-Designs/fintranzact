@@ -1,7 +1,7 @@
 import { eq, and, sql, desc, gte, lte, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { salesTargets, invoices, invoiceItems } from "@fintranzact/db";
+import { salesTargets, invoices, invoiceItems, items } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -139,6 +139,13 @@ async function computeTargetProgress(
 
 // ── Router ─────────────────────────────────────────────────────
 
+/** An item target's item must be a live item of this business. */
+async function assertTargetItem(db: TenantDatabase, businessId: string, itemId: string) {
+  const [item] = await db.select({ id: items.id }).from(items)
+    .where(and(eq(items.id, itemId), eq(items.businessId, businessId), isNull(items.deletedAt))).limit(1);
+  if (!item) throw new TRPCError({ code: "BAD_REQUEST", message: "Item not found in this business" });
+}
+
 export const targetRouter = router({
   // Admin: create a target for a seller
   create: adminProcedure.input(createTargetSchema).mutation(async ({ input, ctx }) => {
@@ -150,6 +157,8 @@ export const targetRouter = router({
         message: "itemId is required for item_quantity target type",
       });
     }
+
+    if (input.itemId) await assertTargetItem(ctx.db, ctx.businessId, input.itemId);
 
     const periodStart = new Date(input.periodStart);
     const periodEnd = new Date(input.periodEnd);
@@ -271,7 +280,13 @@ export const targetRouter = router({
     const { id, ...fields } = input;
 
     const [existing] = await ctx.db
-      .select({ id: salesTargets.id })
+      .select({
+        id: salesTargets.id,
+        targetType: salesTargets.targetType,
+        itemId: salesTargets.itemId,
+        periodStart: salesTargets.periodStart,
+        periodEnd: salesTargets.periodEnd,
+      })
       .from(salesTargets)
       .where(
         and(
@@ -284,6 +299,18 @@ export const targetRouter = router({
     if (!existing) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Target not found" });
     }
+
+    // The same rules as create, on the target as it will be after the update.
+    const start = fields.periodStart !== undefined ? new Date(fields.periodStart) : existing.periodStart;
+    const end = fields.periodEnd !== undefined ? new Date(fields.periodEnd) : existing.periodEnd;
+    if (end <= start) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "periodEnd must be after periodStart" });
+    }
+    const itemId = "itemId" in fields ? fields.itemId ?? null : existing.itemId;
+    if (existing.targetType === "item_quantity" && !itemId) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "itemId is required for item_quantity target type" });
+    }
+    if (fields.itemId) await assertTargetItem(ctx.db, ctx.businessId, fields.itemId);
 
     const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
