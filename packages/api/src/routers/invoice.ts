@@ -643,6 +643,7 @@ export const invoiceRouter = router({
               pincode: party.pincode,
               phone: party.phone,
               email: party.email,
+              gstRegistrationType: party.gstRegistrationType,
             },
             {
               gstin: biz.gstin,

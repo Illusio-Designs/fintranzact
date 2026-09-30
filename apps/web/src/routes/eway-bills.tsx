@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { trpc } from "@/lib/trpc";
+import { trpc, getBusinessId } from "@/lib/trpc";
 import { formatDate, cn } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
 import { Badge } from "@/components/ui/Badge";
@@ -208,6 +208,13 @@ function EWayBillsPage() {
 
   const { data: expiringData, isLoading: expiringLoading } = trpc.ewayBill.expiringList.useQuery();
 
+  // The business may override the statutory ₹50,000 threshold in Settings;
+  // the server enforces the same value on generate.
+  const { data: businessList } = trpc.business.list.useQuery();
+  const configuredThreshold = businessList?.find((b) => b.id === getBusinessId())?.eWayBillThreshold;
+  const thresholdValue = configuredThreshold != null && configuredThreshold !== "" ? Number(configuredThreshold) : NaN;
+  const thresholdLabel = `₹${(Number.isFinite(thresholdValue) ? thresholdValue : 50000).toLocaleString("en-IN")}`;
+
   // ── Mutations ──────────────────────────────────────────────────────────────
 
   const generateMutation = trpc.ewayBill.generate.useMutation({
@@ -302,7 +309,7 @@ function EWayBillsPage() {
     <div>
       <PageHeader
         title="E-Way Bills"
-        description="Generate and manage E-Way Bills for goods movement above ₹50,000"
+        description={`Generate and manage E-Way Bills for goods movement above ${thresholdLabel}`}
         actions={
           <button
             className="btn-primary"
@@ -389,7 +396,7 @@ function EWayBillsPage() {
         open={showGenerateModal}
         onClose={() => setShowGenerateModal(false)}
         title="Generate E-Way Bill"
-        description="Provide transport details to generate an EWB for a goods invoice above ₹50,000"
+        description={`Provide transport details to generate an EWB for a goods invoice above ${thresholdLabel}`}
         footer={
           <div className="flex justify-end gap-3">
             <button
@@ -494,7 +501,7 @@ function EWayBillsPage() {
             />
           </div>
           <p className="text-xs text-text-tertiary">
-            The EWB will be generated for invoices with goods above ₹50,000. Services-only invoices are not eligible.
+            The EWB will be generated for invoices with goods above {thresholdLabel}. Services-only invoices are not eligible.
           </p>
         </div>
       </SlideOver>

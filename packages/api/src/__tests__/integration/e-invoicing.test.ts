@@ -439,6 +439,93 @@ describe("mapInvoiceToIRP", () => {
     expect(result.DocDtls.Typ).toBe("CRN");
   });
 
+  // Regression: every inter-state supply was sent as SupTyp "EXPWP" (export
+  // with payment) instead of B2B with IGST.
+  describe("supply type", () => {
+    const inv = {
+      invoiceNumber: "INV-SUP",
+      invoiceDate: new Date("2026-04-02"),
+      type: "sale",
+      documentType: "invoice",
+      subtotal: "10000.00",
+      taxAmount: "1800.00",
+      discountAmount: null,
+      additionalCharges: null,
+      roundOff: null,
+      totalAmount: "11800.00",
+      isReverseCharge: false,
+    };
+    const line = (taxPercent = "18") => [
+      {
+        itemName: "Steel Pipes",
+        description: null,
+        quantity: "10",
+        unitPrice: "1000.00",
+        taxPercent,
+        taxAmount: "1800.00",
+        discountPercent: "0",
+        totalAmount: "11800.00",
+        selectedUnit: "pcs",
+        itemType: "product",
+        itemHsn: "7306",
+      },
+    ];
+    const seller = {
+      gstin: "27AABCU9603R1ZM", legalName: null, name: "Acme", address: null, city: null,
+      state: "Maharashtra", stateCode: "27", pincode: "400001", phone: null, email: null,
+    };
+    const buyer = (over: Record<string, unknown> = {}) => ({
+      gstin: "29AABCG0000R1ZM", name: "Buyer", billingAddress: null, city: null,
+      state: "Karnataka", stateCode: "29", pincode: "560001", phone: null, email: null,
+      ...over,
+    });
+
+    it("inter-state regular buyer is B2B with IGST, not an export", () => {
+      const r = mapInvoiceToIRP(inv, line(), buyer({ gstRegistrationType: "regular" }), seller);
+      expect(r.TranDtls.SupTyp).toBe("B2B");
+      expect(r.BuyerDtls.Pos).toBe("29");
+      expect(r.ValDtls.IgstVal).toBe(1800);
+      expect(r.ValDtls.CgstVal).toBe(0);
+      expect(r.ValDtls.SgstVal).toBe(0);
+    });
+
+    it("intra-state buyer is B2B with CGST+SGST", () => {
+      const r = mapInvoiceToIRP(inv, line(), buyer({ gstin: "27AABCM0000R1ZM", stateCode: "27" }), seller);
+      expect(r.TranDtls.SupTyp).toBe("B2B");
+      expect(r.ValDtls.IgstVal).toBe(0);
+      expect(r.ValDtls.CgstVal).toBe(900);
+      expect(r.ValDtls.SgstVal).toBe(900);
+    });
+
+    it("derives place of supply from the GSTIN when the party has no state code", () => {
+      const r = mapInvoiceToIRP(inv, line(), buyer({ stateCode: null }), seller);
+      expect(r.TranDtls.SupTyp).toBe("B2B");
+      expect(r.BuyerDtls.Pos).toBe("29");
+      expect(r.ValDtls.IgstVal).toBe(1800);
+    });
+
+    it("SEZ buyer is SEZWP/SEZWOP and always IGST, even in the same state", () => {
+      const sameStateSez = buyer({ gstin: "27AABCS0000R1ZM", stateCode: "27", gstRegistrationType: "sez" });
+      const withPay = mapInvoiceToIRP(inv, line(), sameStateSez, seller);
+      expect(withPay.TranDtls.SupTyp).toBe("SEZWP");
+      expect(withPay.ValDtls.IgstVal).toBe(1800);
+      expect(withPay.ValDtls.CgstVal).toBe(0);
+
+      const lut = mapInvoiceToIRP(inv, line("0"), sameStateSez, seller);
+      expect(lut.TranDtls.SupTyp).toBe("SEZWOP");
+    });
+
+    it("overseas buyer is an export (EXPWP/EXPWOP) with POS 96", () => {
+      const overseas = buyer({ gstin: null, stateCode: null, gstRegistrationType: "overseas" });
+      const r = mapInvoiceToIRP(inv, line(), overseas, seller);
+      expect(r.TranDtls.SupTyp).toBe("EXPWP");
+      expect(r.BuyerDtls.Gstin).toBe("URP");
+      expect(r.BuyerDtls.Pos).toBe("96");
+      expect(r.ValDtls.IgstVal).toBe(1800);
+      expect(mapInvoiceToIRP(inv, line("0"), overseas, seller).TranDtls.SupTyp).toBe("EXPWOP");
+    });
+  });
+
   it("throws if business has no GSTIN", () => {
     expect(() =>
       mapInvoiceToIRP(

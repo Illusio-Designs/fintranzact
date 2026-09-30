@@ -53,7 +53,19 @@ import type { TransportDetails, InvoiceForEWB, LineItemForEWB } from "../lib/inv
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const EWB_MIN_VALUE = 50000; // ₹50,000 threshold for mandatory EWB
+const EWB_MIN_VALUE = 50000; // statutory ₹50,000 threshold for mandatory EWB
+
+/**
+ * The consignment value at which an EWB is required for this business.
+ * businesses.e_way_bill_threshold overrides the statutory default (some
+ * states notify a different limit for intra-state movement); null/blank or
+ * an unparseable value falls back to ₹50,000.
+ */
+function resolveEwbThreshold(configured: string | null | undefined): number {
+  if (configured == null || configured === "") return EWB_MIN_VALUE;
+  const v = parseFloat(configured);
+  return Number.isFinite(v) && v >= 0 ? v : EWB_MIN_VALUE;
+}
 
 /**
  * Build an EWBClient for a business.
@@ -134,7 +146,7 @@ export const ewayBillRouter = router({
    * Validates:
    *   - Invoice belongs to the business
    *   - Invoice is a goods invoice (at least one product item)
-   *   - Invoice total > ₹50,000
+   *   - Invoice total >= the business's E-Way Bill threshold (default ₹50,000)
    *   - No existing active/generated EWB for this invoice
    */
   generate: adminProcedure
@@ -200,15 +212,6 @@ export const ewayBillRouter = router({
         });
       }
 
-      // ── 4. Validate ₹50,000 threshold ────────────────────────────────────
-      const total = parseFloat(invoice.totalAmount) || 0;
-      if (total < EWB_MIN_VALUE) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `Invoice total (₹${total.toFixed(2)}) is below the ₹50,000 threshold for E-Way Bill`,
-        });
-      }
-
       // ── 5. Check for existing active EWB ──────────────────────────────────
       const [existingEwb] = await ctx.db
         .select({ id: ewayBills.id, status: ewayBills.status })
@@ -247,6 +250,16 @@ export const ewayBillRouter = router({
 
       if (!business) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Business not found" });
+      }
+
+      // ── 4. Validate threshold (business setting, default ₹50,000) ────────
+      const threshold = resolveEwbThreshold(business.eWayBillThreshold);
+      const total = parseFloat(invoice.totalAmount) || 0;
+      if (total < threshold) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Invoice total (₹${total.toFixed(2)}) is below the ₹${threshold.toLocaleString("en-IN")} threshold for E-Way Bill`,
+        });
       }
 
       // ── 7. Build EWB payload ──────────────────────────────────────────────

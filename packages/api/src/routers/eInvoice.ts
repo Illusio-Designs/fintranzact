@@ -143,6 +143,7 @@ async function generateIRNForInvoice(
       pincode: party.pincode,
       phone: party.phone,
       email: party.email,
+      gstRegistrationType: party.gstRegistrationType,
     },
     {
       gstin: business.gstin,

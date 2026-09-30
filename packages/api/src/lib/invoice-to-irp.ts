@@ -38,6 +38,12 @@ export interface IRPParty {
   pincode: string | null;
   phone: string | null;
   email: string | null;
+  /**
+   * parties.gst_registration_type — regular | composition | unregistered |
+   * sez | overseas | uin. Only "sez" and "overseas" change the supply type;
+   * everything else is an ordinary B2B supply.
+   */
+  gstRegistrationType?: string | null;
 }
 
 export interface IRPInvoice {
@@ -162,15 +168,33 @@ export function mapInvoiceToIRP(
   if (!business.gstin) {
     throw new Error("Business GSTIN is required for e-invoicing");
   }
-  if (!party.gstin) {
+  const regType = party.gstRegistrationType?.toLowerCase() ?? null;
+  const isExport = regType === "overseas";
+  const isSez = regType === "sez";
+
+  if (!party.gstin && !isExport) {
     throw new Error("Party GSTIN is required for e-invoicing (B2B only)");
   }
 
   const sellerStateCode = business.stateCode ?? "00";
-  const buyerStateCode = party.stateCode ?? sellerStateCode;
-  const isInterState = sellerStateCode !== buyerStateCode;
+  // Place of supply: the buyer's state. Fall back to the GSTIN's 2-digit
+  // state prefix, then to the seller's state. Exports use "96" (Other Country).
+  const buyerStateCode = isExport
+    ? "96"
+    : party.stateCode ?? party.gstin?.slice(0, 2) ?? sellerStateCode;
+  // Supplies to SEZ units and exports are zero-rated inter-state supplies
+  // (IGST Act s.16) — IGST applies even when the SEZ is in the seller's state.
+  const isInterState = isExport || isSez || sellerStateCode !== buyerStateCode;
 
-  const supplyType = isInterState ? "EXPWP" : "B2B";
+  // Inter-state is NOT an export: an ordinary registered buyer in another
+  // state is still B2B (with IGST). Only SEZ / overseas buyers get the
+  // SEZ*/EXP* supply types, "with payment" when IGST is actually charged.
+  const chargesTax = lineItems.some((li) => n(li.taxPercent) > 0);
+  const supplyType = isExport
+    ? chargesTax ? "EXPWP" : "EXPWOP"
+    : isSez
+      ? chargesTax ? "SEZWP" : "SEZWOP"
+      : "B2B";
 
   // Map line items
   const itemList = lineItems.map((li, idx) => {
@@ -259,13 +283,14 @@ export function mapInvoiceToIRP(
       Em: business.email ?? undefined,
     },
     BuyerDtls: {
-      Gstin: party.gstin,
+      // Unregistered overseas recipients are reported as "URP".
+      Gstin: party.gstin ?? "URP",
       LglNm: party.name.slice(0, 100),
       TrdNm: party.name.slice(0, 100),
       Pos: buyerStateCode,
       Addr1: (party.billingAddress ?? "").slice(0, 100),
       Loc: (party.city ?? party.state ?? "").slice(0, 50),
-      Pin: isNaN(buyerPin) ? 0 : buyerPin,
+      Pin: isExport ? 999999 : isNaN(buyerPin) ? 0 : buyerPin,
       Stcd: buyerStateCode,
       Ph: party.phone ?? undefined,
       Em: party.email ?? undefined,
