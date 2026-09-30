@@ -34,6 +34,8 @@ import {
   createExpenseSchema,
   // Pagination
   paginationSchema,
+  mergePartyShippingAddresses,
+  MAX_ADDITIONAL_SHIPPING_ADDRESSES,
 } from "../validators.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -969,5 +971,28 @@ describe("panFromGstin — the PAN is characters 3-12 of a GSTIN", () => {
     expect(panFromGstin("")).toBeNull();
     expect(panFromGstin(undefined)).toBeNull();
     expect(panFromGstin(null)).toBeNull();
+  });
+});
+
+describe("mergePartyShippingAddresses", () => {
+  it("keeps the target's default and every other address once", () => {
+    expect(
+      mergePartyShippingAddresses(
+        { shippingAddress: "A Road", additionalShippingAddresses: [{ address: "B Road" }] },
+        { shippingAddress: "a  road", additionalShippingAddresses: [{ address: "C Road", label: "Branch" }, { address: "b road" }] },
+      ),
+    ).toEqual({ shippingAddress: "A Road", additionalShippingAddresses: [{ address: "B Road" }, { address: "C Road", label: "Branch" }] });
+  });
+
+  it("takes the source's default when the target has none", () => {
+    expect(mergePartyShippingAddresses({ shippingAddress: "" }, { shippingAddress: "X Road" }))
+      .toEqual({ shippingAddress: "X Road", additionalShippingAddresses: null });
+  });
+
+  it("stays within the extra-address limit", () => {
+    const many = Array.from({ length: 15 }, (_, i) => ({ address: `Shop ${i}` }));
+    const more = Array.from({ length: 15 }, (_, i) => ({ address: `Store ${i}` }));
+    const result = mergePartyShippingAddresses({ additionalShippingAddresses: many }, { additionalShippingAddresses: more });
+    expect(result.additionalShippingAddresses).toHaveLength(MAX_ADDITIONAL_SHIPPING_ADDRESSES);
   });
 });
