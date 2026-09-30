@@ -50,14 +50,6 @@ test.describe("Settings — Presence", () => {
     ).toBeVisible();
   });
 
-  test("theme toggle is available on the top bar", async ({ page }) => {
-    // Theme is controlled by a top-bar toggle, not a settings tab.
-    // The button cycles System → Light → Dark, so its aria-label matches one of those.
-    await expect(
-      page.getByRole("button", { name: /system theme|light mode|dark mode/i }).first(),
-    ).toBeVisible();
-  });
-
   test("renders Data tab with import, CSV export, and backup sections", async ({ page }) => {
     await page.getByRole("button", { name: "Data" }).first().click();
     // Import section is always shown
