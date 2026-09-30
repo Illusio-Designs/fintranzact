@@ -4,7 +4,6 @@ import {
   AiChat02Icon,
   ApiIcon,
   BarCode01Icon,
-  Building03Icon,
   Calculator01Icon,
   Calendar03Icon,
   Cancel01Icon,
