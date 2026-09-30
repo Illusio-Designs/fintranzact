@@ -21,7 +21,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#5b5bd6"
+        "backgroundColor": "#3B5EAA"
       },
       "package": "in.fintranzact.app",
       "intentFilters": [
