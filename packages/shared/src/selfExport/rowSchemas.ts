@@ -291,6 +291,9 @@ export const itemRowSchema = z.object({
   // Absent in archives exported before stock groups existed.
   stockGroupId: uuidNullable.optional(),
   taxInclusive: z.boolean(),
+  // Absent in archives exported before batch tracking existed.
+  trackBatches: z.boolean().optional(),
+  trackExpiry: z.boolean().optional(),
   source: z.string().nullable(),
   storeEnabled: z.boolean(),
   storePrice: money2Nullable,
@@ -316,6 +319,19 @@ export const itemVariantRowSchema = z.object({
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
   deletedAt: isoDatetimeNullable,
+});
+
+export const itemBatchRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  itemId: uuid,
+  variantId: uuidNullable,
+  batchNumber: z.string(),
+  mfgDate: z.string().nullable(),
+  expiryDate: z.string().nullable(),
+  mrp: money2Nullable,
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
 });
 
 export const salesTargetRowSchema = z.object({
@@ -395,6 +411,8 @@ export const invoiceItemRowSchema = z.object({
   freeQuantity: money3.default("0"),
   rejectedQuantity: money3.default("0"),
   rejectionReason: z.string().nullable().default(null),
+  // Absent in archives exported before batch tracking existed.
+  batchId: uuidNullable.optional(),
 });
 
 export const paymentRowSchema = z.object({
@@ -789,6 +807,7 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   stock_groups: stockGroupRowSchema,
   items: itemRowSchema,
   item_variants: itemVariantRowSchema,
+  item_batches: itemBatchRowSchema,
   sales_targets: salesTargetRowSchema,
   invoices: invoiceRowSchema,
   invoice_items: invoiceItemRowSchema,

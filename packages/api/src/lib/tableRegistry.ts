@@ -9,6 +9,7 @@ import {
   eInvoiceConfigs,
   items,
   itemVariants,
+  itemBatches,
   stockGroups,
   salesTargets,
   invoices,
@@ -228,6 +229,19 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
     chunkSize: 5000,
     recomputeOnImport: ["stockQuantity"],
     scope: { type: "child", parentTable: "items", parentFk: "item_id" },
+  },
+
+  // 9b. Item Batches — batch / lot master; depends on items and item_variants.
+  //     Invoice lines point at it, so it comes before invoices.
+  {
+    tableName: "item_batches",
+    drizzleTable: itemBatches,
+    redactedFields: [],
+    importable: true,
+    selfFkFields: [],
+    chunkSize: 5000,
+    recomputeOnImport: [],
+    scope: { type: "direct" },
   },
 
   // 10. Sales Targets — depends on businesses + items (nullable FK).

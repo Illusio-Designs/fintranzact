@@ -246,6 +246,13 @@
       "when": 1790795644081,
       "tag": "0034_free_qty_rejections",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790798365903,
+      "tag": "0035_item_batches",
+      "breakpoints": true
     }
   ]
 }
