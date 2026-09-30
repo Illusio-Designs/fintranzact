@@ -496,3 +496,106 @@ export function DeadStockReport() {
     </div>
   );
 }
+
+// ── Stock group summary ────────────────────────────────────────
+
+type GroupSummaryRow =
+  | { kind: "group"; id: string; name: string; itemCount: number; quantity: number; value: number }
+  | { kind: "item"; id: string; name: string; unit: string; quantity: number; rate: number; value: number };
+
+/** Groups not in any group; drilled into like a group. */
+const UNGROUPED = "none";
+
+/**
+ * Tally's stock group summary: each group's closing quantity and value
+ * (including the groups under it). Click a group to see what's inside it.
+ */
+export function StockGroupSummaryReport({ toDate }: { toDate?: string }) {
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const { data, isLoading, error } = trpc.inventoryReports.stockGroupSummary.useQuery({ asOf: toDate });
+  if (isLoading) return <Loading />;
+  if (error || !data) return <LoadError what="the stock group summary" />;
+
+  const byId = new Map(data.groups.map((g) => [g.id, g]));
+  const current = groupId && groupId !== UNGROUPED ? byId.get(groupId) ?? null : null;
+  // Breadcrumb from the top down to the open group.
+  const path: Array<{ id: string; name: string }> = [];
+  for (let g = current; g; g = g.parentId ? byId.get(g.parentId) ?? null : null) path.unshift({ id: g.id, name: g.name });
+  if (groupId === UNGROUPED) path.push({ id: UNGROUPED, name: "Not in a group" });
+
+  const parentKey = groupId === UNGROUPED ? undefined : current?.id ?? null;
+  const rows: GroupSummaryRow[] = [
+    ...data.groups
+      .filter((g) => parentKey !== undefined && (g.parentId ?? null) === parentKey && (g.itemCount > 0 || g.value !== 0))
+      .map((g) => ({ kind: "group" as const, id: g.id, name: g.name, itemCount: g.itemCount, quantity: g.quantity, value: g.value })),
+    ...(groupId === null && data.ungrouped.itemCount > 0
+      ? [{ kind: "group" as const, id: UNGROUPED, name: "Not in a group", ...data.ungrouped }]
+      : []),
+    ...(groupId !== null
+      ? data.items
+          .filter((i) => (groupId === UNGROUPED ? i.groupId === null : i.groupId === groupId))
+          .map((i) => ({ kind: "item" as const, id: `${i.itemId}:${i.variantId ?? ""}`, name: i.name, unit: i.unit, quantity: i.quantity, rate: i.rate, value: i.value }))
+      : []),
+  ];
+  const levelValue = rows.reduce((s, r) => s + r.value, 0);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <nav className="flex items-center gap-1 text-sm" aria-label="Stock group path">
+          <button className={cn("font-medium", groupId ? "text-brand-600 hover:underline dark:text-brand-400" : "text-text-primary")} onClick={() => setGroupId(null)}>
+            All groups
+          </button>
+          {path.map((p, i) => (
+            <span key={p.id} className="flex items-center gap-1">
+              <span className="text-text-tertiary">›</span>
+              <button
+                className={cn("font-medium", i < path.length - 1 ? "text-brand-600 hover:underline dark:text-brand-400" : "text-text-primary")}
+                onClick={() => setGroupId(p.id)}
+              >
+                {p.name}
+              </button>
+            </span>
+          ))}
+        </nav>
+        <p className="text-xs text-text-tertiary">
+          · Value at {valuationLabel(data.valuationMethod)}: <span className="font-semibold text-text-primary">{formatCurrency(levelValue)}</span>
+          {groupId && <> of {formatCurrency(data.totalValue)}</>}
+        </p>
+        <div className="ml-auto">
+          <ExportButton onClick={() => downloadCSV(
+            "stock-group-summary",
+            ["Group", "Parent", "Items", "Quantity", "Value"],
+            [
+              ...data.groups.map((g) => [g.name, g.parentId ? byId.get(g.parentId)?.name ?? "" : "", g.itemCount, g.quantity, g.value]),
+              ["Not in a group", "", data.ungrouped.itemCount, data.ungrouped.quantity, data.ungrouped.value],
+            ],
+          )} />
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={<Icon icon={Alert02Icon} size={20} className="text-text-tertiary" />}
+          title="No stock here"
+          description={groupId ? "Nothing in this group holds stock." : "Add stock groups under Inventory → Stock Groups and file your items in them."}
+        />
+      ) : (
+        <ReportTable
+          rows={rows}
+          rowKey={(r) => `${r.kind}:${r.id}`}
+          columns={[
+            { label: "Particulars", render: (r) => r.kind === "group" ? (
+              <button className="text-left font-medium text-brand-600 hover:underline dark:text-brand-400" onClick={() => setGroupId(r.id)}>
+                {r.name}
+                <span className="ml-1.5 text-xs font-normal text-text-tertiary">{r.itemCount} item{r.itemCount === 1 ? "" : "s"}</span>
+              </button>
+            ) : r.name },
+            { label: "Quantity", align: "right", render: (r) => formatQty(r.quantity, r.kind === "item" ? r.unit : undefined) },
+            { label: "Rate", align: "right", hideBelow: "md", render: (r) => (r.kind === "item" ? formatCurrency(r.rate) : "") },
+            { label: "Value", align: "right", render: (r) => <span className="font-medium">{formatCurrency(r.value)}</span> },
+          ]}
+        />
+      )}
+    </div>
+  );
+}

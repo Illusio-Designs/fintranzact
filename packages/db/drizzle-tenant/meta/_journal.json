@@ -148,6 +148,13 @@
       "when": 1790770857818,
       "tag": "0020_orders_and_grn",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790773436914,
+      "tag": "0021_stock_groups",
+      "breakpoints": true
     }
   ]
 }

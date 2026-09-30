@@ -7,11 +7,13 @@
  * lib/stock-valuation), so they agree with the stock summary, the P&L and the
  * balance sheet.
  */
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { stockGroups } from "@fintranzact/db";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { unitKey, valueStock } from "../lib/stock-valuation.js";
+import { descendantIds, orderTree, type StockGroupRow } from "../lib/stock-groups.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -30,14 +32,16 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 function unitsSql(businessId: string) {
   return sql`
     SELECT i.id AS item_id, NULL::uuid AS variant_id, i.name AS name, i.sku, i.unit::text AS unit,
-           i.category, i.stock_quantity::numeric AS total, i.low_stock_alert::numeric AS low_stock
+           i.category, i.stock_quantity::numeric AS total, i.low_stock_alert::numeric AS low_stock,
+           i.stock_group_id
     FROM items i
     WHERE i.business_id = ${businessId} AND i.deleted_at IS NULL
       AND i.item_type = 'product' AND i.item_mode <> 'variants'
     UNION ALL
     SELECT i.id, v.id,
            i.name || ' — ' || COALESCE((SELECT string_agg(value, ' / ') FROM jsonb_each_text(v.attribute_values)), 'Variant'),
-           COALESCE(v.sku, i.sku), i.unit::text, i.category, v.stock_quantity::numeric, v.low_stock_alert::numeric
+           COALESCE(v.sku, i.sku), i.unit::text, i.category, v.stock_quantity::numeric, v.low_stock_alert::numeric,
+           i.stock_group_id
     FROM item_variants v
     JOIN items i ON i.id = v.item_id
     WHERE i.business_id = ${businessId} AND i.deleted_at IS NULL AND v.deleted_at IS NULL
@@ -54,6 +58,7 @@ type UnitRow = {
   category: string | null;
   total: string;
   low_stock: string | null;
+  stock_group_id: string | null;
 };
 
 async function loadUnits(db: Db, businessId: string): Promise<UnitRow[]> {
@@ -466,6 +471,83 @@ export const inventoryReportsRouter = router({
         days,
         data: data.sort((a, b) => b.value - a.value),
         totalValue: round2(data.reduce((s, r) => s + r.value, 0)),
+      };
+    }),
+
+  /**
+   * Tally's stock group summary: quantity and value per stock group at a
+   * date, each group including the groups under it, plus the stock units
+   * (items and variants) so the screen can drill into a group. Quantities
+   * of different units are added as they are, as Tally does.
+   */
+  stockGroupSummary: viewerProcedure
+    .input(z.object({ asOf: dateString.optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      requireCan(ctx.ability, "read", "Report");
+      const asOf = input?.asOf ? new Date(input.asOf) : new Date();
+      const [units, groups, valuation] = await Promise.all([
+        loadUnits(ctx.db, ctx.businessId),
+        ctx.db
+          .select({ id: stockGroups.id, name: stockGroups.name, parentId: stockGroups.parentId })
+          .from(stockGroups)
+          .where(eq(stockGroups.businessId, ctx.businessId)) as Promise<StockGroupRow[]>,
+        valueStock(ctx.db, ctx.businessId, asOf),
+      ]);
+
+      const groupIds = new Set(groups.map((g) => g.id));
+      const rows = units.flatMap((u) => {
+        const v = valuation.units.get(unitKey(u.item_id, u.variant_id));
+        const quantity = v?.quantity ?? 0;
+        const value = v?.value ?? 0;
+        if (Math.abs(quantity) < 0.0005 && !value) return [];
+        return [{
+          itemId: u.item_id,
+          variantId: u.variant_id,
+          name: u.name,
+          unit: u.unit,
+          groupId: u.stock_group_id && groupIds.has(u.stock_group_id) ? u.stock_group_id : null,
+          quantity: round3(quantity),
+          rate: v?.rate ?? 0,
+          value: round2(value),
+        }];
+      });
+
+      type Totals = { quantity: number; value: number; items: Set<string> };
+      const direct = new Map<string | null, Totals>();
+      for (const r of rows) {
+        const t = direct.get(r.groupId) ?? { quantity: 0, value: 0, items: new Set<string>() };
+        t.quantity += r.quantity;
+        t.value += r.value;
+        t.items.add(r.itemId);
+        direct.set(r.groupId, t);
+      }
+
+      const summary = orderTree(groups).map((g) => {
+        let quantity = 0;
+        let value = 0;
+        let itemCount = 0;
+        for (const id of descendantIds(groups, g.id)) {
+          const t = direct.get(id);
+          if (!t) continue;
+          quantity += t.quantity;
+          value += t.value;
+          itemCount += t.items.size;
+        }
+        return { ...g, quantity: round3(quantity), value: round2(value), itemCount };
+      });
+      const ungrouped = direct.get(null);
+
+      return {
+        asOf: asOf.toISOString(),
+        groups: summary,
+        ungrouped: {
+          quantity: round3(ungrouped?.quantity ?? 0),
+          value: round2(ungrouped?.value ?? 0),
+          itemCount: ungrouped?.items.size ?? 0,
+        },
+        items: rows,
+        totalValue: round2(rows.reduce((s, r) => s + r.value, 0)),
+        valuationMethod: valuation.method,
       };
     }),
 });

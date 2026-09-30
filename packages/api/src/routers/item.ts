@@ -10,6 +10,7 @@ import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { ensureDefaultWarehouse, recordOpeningStock, updateStockBalance } from "../lib/inventory-service.js";
 import { applyStockAdjustment } from "./stock.js";
+import { groupSubtreeSql, resolveItemGroup } from "../lib/stock-groups.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
@@ -87,6 +88,8 @@ export const itemRouter = router({
       itemType: z.enum(itemTypes).nullish(),
       itemMode: z.enum(itemModes).nullish(),
       category: z.string().nullish(),
+      // A group and everything under it, or "none" for items in no group.
+      stockGroupId: z.union([z.string().uuid(), z.literal("none")]).nullish(),
       ...paginationSchema.shape,
     }))
     .query(async ({ input, ctx }) => {
@@ -110,6 +113,11 @@ export const itemRouter = router({
       }
       if (input.category) {
         conditions.push(eq(items.category, input.category));
+      }
+      if (input.stockGroupId === "none") {
+        conditions.push(isNull(items.stockGroupId));
+      } else if (input.stockGroupId) {
+        conditions.push(sql`${items.stockGroupId} IN ${groupSubtreeSql(input.stockGroupId)}`);
       }
 
       const offset = (input.page - 1) * input.limit;
@@ -219,9 +227,10 @@ export const itemRouter = router({
 
   create: memberProcedure.input(createItemSchema).mutation(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "Item");
-    const { variants: initialVariants, ...itemData } = input;
+    const { variants: initialVariants, stockGroupId, category, ...itemData } = input;
 
     return ctx.db.transaction(async (tx) => {
+      const group = await resolveItemGroup(tx, ctx.businessId, { stockGroupId, category });
       // A code scans to exactly one item, variant or extra code.
       const newCodes = [itemData.barcode, ...(initialVariants ?? []).map((v) => v.barcode)]
         .map((c) => c?.trim())
@@ -233,6 +242,7 @@ export const itemRouter = router({
 
       const [inserted] = await tx.insert(items).values({
         ...itemData,
+        ...group,
         // Opening stock is recorded as a movement below, which sets the total.
         stockQuantity: "0",
         // Blank means "no barcode". Storing "" instead of NULL would make
@@ -406,7 +416,7 @@ export const itemRouter = router({
       // Active-mutation contract: a soft-deleted item cannot be edited via
       // the public API. Re-activation would require an explicit restore
       // endpoint, which is deferred per FIXES.md.
-      const { stockQuantity, ...data } = input.data;
+      const { stockQuantity, stockGroupId, category, ...data } = input.data;
       const item = await ctx.db.transaction(async (tx) => {
         const [before] = await tx.select({ stockQuantity: items.stockQuantity })
           .from(items)
@@ -431,9 +441,11 @@ export const itemRouter = router({
           });
         }
 
+        const group = await resolveItemGroup(tx, ctx.businessId, { stockGroupId, category });
         const [updated] = await tx.update(items)
           .set({
             ...data,
+            ...group,
             // Same NULL-vs-"" rule as create; only touched when supplied.
             ...(data.barcode !== undefined
               ? { barcode: data.barcode?.trim() || null }
@@ -1160,6 +1172,7 @@ export const itemRouter = router({
         if (!target.hsn && source.hsn) updates.hsn = source.hsn;
         if (!target.sku && source.sku) updates.sku = source.sku;
         if (!target.category && source.category) updates.category = source.category;
+        if (!target.stockGroupId && source.stockGroupId) updates.stockGroupId = source.stockGroupId;
         if (!target.description && source.description) updates.description = source.description;
         if (!target.purchasePrice && source.purchasePrice) updates.purchasePrice = source.purchasePrice;
         if (!target.lowStockAlert && source.lowStockAlert) updates.lowStockAlert = source.lowStockAlert;

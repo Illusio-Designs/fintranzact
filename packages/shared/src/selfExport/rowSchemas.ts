@@ -249,6 +249,15 @@ export const eInvoiceConfigRowSchema = z.object({
   updatedAt: isoDatetime,
 });
 
+export const stockGroupRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  name: z.string(),
+  parentId: uuidNullable,
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
 export const itemRowSchema = z.object({
   id: uuid,
   businessId: uuid,
@@ -267,6 +276,8 @@ export const itemRowSchema = z.object({
   description: z.string().nullable(),
   itemType: itemType,
   category: z.string().nullable(),
+  // Absent in archives exported before stock groups existed.
+  stockGroupId: uuidNullable.optional(),
   taxInclusive: z.boolean(),
   source: z.string().nullable(),
   storeEnabled: z.boolean(),
@@ -758,6 +769,7 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   bank_statement_templates: bankStatementTemplateRowSchema,
   payment_gateway_configs: paymentGatewayConfigRowSchema,
   e_invoice_configs: eInvoiceConfigRowSchema,
+  stock_groups: stockGroupRowSchema,
   items: itemRowSchema,
   item_variants: itemVariantRowSchema,
   sales_targets: salesTargetRowSchema,

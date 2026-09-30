@@ -7,7 +7,6 @@ import { StatCard } from "@/components/ui/StatCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { PartyCombobox } from "@/components/ui/PartyCombobox";
-import { Combobox } from "@/components/ui/Combobox";
 import { Select } from "@/components/ui/Select";
 import { useDateRange } from "@/hooks/useDateRange";
 import { Icon } from "@/components/ui/Icon";
@@ -21,6 +20,7 @@ import {
   ReorderStatusReport,
   StockAgeingReport,
   StockLedgerReport,
+  StockGroupSummaryReport,
 } from "@/components/reports/InventoryReports";
 import {
   PendingDeliveryChallansReport,
@@ -28,6 +28,7 @@ import {
   PendingPurchaseOrdersReport,
   PendingSalesOrdersReport,
 } from "@/components/reports/OrderReports";
+import { StockGroupFilter } from "@/components/inventory/StockGroups";
 export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
@@ -45,6 +46,7 @@ type ReportId =
   | "stock-ledger"
   | "stock-movement"
   | "godown-summary"
+  | "stock-group-summary"
   | "stock-ageing"
   | "reorder-status"
   | "dead-stock"
@@ -88,6 +90,7 @@ const REPORT_GROUPS: Array<{ label: string; reports: ReportDef[] }> = [
       { id: "stock-summary", label: "Stock Summary", description: "Current stock levels by item", tabular: true },
       { id: "stock-ledger", label: "Stock Ledger", description: "Every movement of an item with its running balance", tabular: true },
       { id: "stock-movement", label: "Movement Summary", description: "Opening, inward, outward and closing stock per item", tabular: true },
+      { id: "stock-group-summary", label: "Stock Group Summary", description: "Stock quantity and value per stock group, with drill-down to items", tabular: true },
       { id: "godown-summary", label: "Godown Summary", description: "Stock held and its value in each warehouse", tabular: true },
       { id: "stock-ageing", label: "Stock Ageing", description: "How long current stock has been held", tabular: true },
       { id: "reorder-status", label: "Reorder Status", description: "Items at or below their reorder level, with a suggested order", tabular: true },
@@ -1466,11 +1469,11 @@ interface StockSummaryData {
 
 function StockSummaryReport() {
   const [showZeroStock, setShowZeroStock] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
   const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
 
   const { data, isLoading, error } = (trpc as any).reports.stockSummary.useQuery(
-    { showZeroStock, category: categoryFilter || undefined }
+    { showZeroStock, stockGroupId: groupFilter || undefined }
   ) as { data: StockSummaryData | undefined; isLoading: boolean; error: unknown };
 
   function toggleVariant(itemId: string) {
@@ -1530,14 +1533,6 @@ function StockSummaryReport() {
     downloadCSV("stock-summary", headers, rows);
   }
 
-  // Collect unique categories from loaded data for the filter dropdown
-  const categories = data
-    ? Array.from(new Set([
-        ...(data.simpleItems.map((i) => i.category).filter(Boolean) as string[]),
-        ...(data.variantItems.map((i) => i.category).filter(Boolean) as string[]),
-      ])).sort()
-    : [];
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -1580,19 +1575,7 @@ function StockSummaryReport() {
 
       {/* Filters + Export */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {categories.length > 0 && (
-          <div className="w-48">
-            <Combobox
-              value={categoryFilter}
-              onChange={setCategoryFilter}
-              options={[
-                { value: "", label: "All Categories" },
-                ...categories.map((cat) => ({ value: cat, label: cat })),
-              ]}
-              placeholder="Filter category…"
-            />
-          </div>
-        )}
+        <StockGroupFilter value={groupFilter} onChange={setGroupFilter} className="w-48" />
         <button
           onClick={() => setShowZeroStock((v) => !v)}
           className={cn(
@@ -2939,6 +2922,8 @@ function ReportsPage() {
         return <StockLedgerReport fromDate={fromDate} toDate={toDate} />;
       case "stock-movement":
         return <MovementSummaryReport fromDate={fromDate} toDate={toDate} />;
+      case "stock-group-summary":
+        return <StockGroupSummaryReport toDate={toDate} />;
       case "godown-summary":
         return <GodownSummaryReport />;
       case "stock-ageing":
