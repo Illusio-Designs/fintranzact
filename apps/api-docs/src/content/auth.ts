@@ -14,9 +14,12 @@ export const authEndpoints: EndpointGroup = {
       auth: "public",
       input: [
         { name: "email", type: "string", required: true, description: "Valid email address (max 255 chars)" },
-        { name: "name", type: "string", required: true, description: "Display name (2–100 chars)" },
+        { name: "name", type: "string", required: false, description: "Display name (2–100 chars, trimmed). Either `name` or `username` must be supplied (validation error on `username` otherwise)." },
+        { name: "username", type: "string", required: false, description: "Alternative to `name` (3–50 chars, trimmed); takes precedence when both are sent" },
         { name: "password", type: "string", required: true, description: "Password (8–128 chars)" },
         { name: "confirmPassword", type: "string", required: true, description: "Must match `password`" },
+        { name: "referralCode", type: "string", required: false, description: "Optional referral code (max 50 chars, or empty string)" },
+        { name: "turnstileToken", type: "string", required: false, description: "Cloudflare Turnstile token. Required when the server has `TURNSTILE_SECRET_KEY` set, except for desktop clients." },
       ],
       output: {
         description: "Authenticated user object and session token. An HttpOnly `session_id` cookie is also set automatically.",
@@ -53,6 +56,7 @@ session_token = data["sessionToken"]`,
       },
       gotchas: [
         "Returns CONFLICT (409) if the email is already registered.",
+        "Returns BAD_REQUEST \"Turnstile verification required\" when Turnstile is enabled and no token is sent, and FORBIDDEN when the token fails verification.",
         "Password is hashed with Argon2id (memoryCost=65536, timeCost=3, parallelism=4) — never stored in plaintext.",
         "The `sessionToken` in the response is for mobile clients. Web clients should use the `session_id` HttpOnly cookie set automatically.",
       ],
@@ -109,6 +113,8 @@ session_token = data["sessionToken"]`,
       auth: "public",
       input: [
         { name: "email", type: "string", required: true, description: "Email address to send the magic link to (max 255 chars)" },
+        { name: "turnstileToken", type: "string", required: false, description: "Cloudflare Turnstile token; verified when present (FORBIDDEN if invalid)" },
+        { name: "source", type: "enum", required: false, description: "Client requesting the link; `desktop`/`mobile` add `&source=…` to the link so it can hand off to the app", default: "web", enumValues: ["web", "desktop", "mobile"] },
       ],
       output: {
         description: "Always returns success to prevent email enumeration.",
@@ -513,6 +519,49 @@ httpx.post(
         "The session cache is invalidated immediately \u2014 the revoked session will fail on the next API call.",
       ],
       relatedEndpoints: ["auth-list-sessions", "auth-logout"],
+    },
+    {
+      id: "auth-issue-access-token",
+      method: "mutation",
+      path: "auth.issueAccessToken",
+      title: "Issue Access Token",
+      description: "Mint a short-lived access token (`at_…`, valid for 15 minutes) from a long-lived Bearer session. Mobile and desktop clients keep the session ID from `auth.login` / `auth.verifyMagicLink` as a refresh token and send the access token as `Authorization: Bearer at_…` on normal API calls, calling this again shortly before it expires. The access token resolves to the same user and selected organization as its parent session. Web clients use the HttpOnly cookie and cannot call this.",
+      auth: "protected",
+      input: [],
+      output: {
+        description: "The new access token and its absolute expiry (15 minutes from issue, no sliding).",
+        example: {
+          accessToken: "at_q3Vx9mK2pL7wR4nT8yB1cD6fH0jZ5sA2eG9uI4oP7kM3xN8vQ1wE6rT0yU5iO2pA9sD4fG7hJ3kL8zX1cV6bN0m",
+          expiresAt: "2026-09-30T10:45:00.000Z",
+        },
+      },
+      codeExamples: {
+        curl: `# Call with the long-lived session token (refresh token), NOT an at_ token
+curl -X POST ${import.meta.env.API_URL}/api/trpc/auth.issueAccessToken \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -d '{"json":{}}'`,
+        javascript: `// refreshClient is configured with the session token as its Bearer header
+const { accessToken, expiresAt } = await refreshClient.auth.issueAccessToken.mutate();
+// Use accessToken for API calls until shortly before expiresAt, then call again`,
+        python: `import httpx
+
+resp = httpx.post(
+    "${import.meta.env.API_URL}/api/trpc/auth.issueAccessToken",
+    headers={"Authorization": f"Bearer {session_token}"},
+    json={"json": {}},
+)
+data = resp.json()["result"]["data"]["json"]
+access_token = data["accessToken"]`,
+      },
+      gotchas: [
+        "Any authenticated user can call it for their own session — there is no role or permission check; the restriction is on how you authenticate.",
+        "BAD_REQUEST when called with an access token (\"Cannot issue an access token using another access token…\") — access tokens cannot mint other access tokens.",
+        "BAD_REQUEST when called from a cookie session (\"Access tokens are only issued for Bearer sessions (mobile/desktop)…\"), and when the session row was created with the `cookie` auth method.",
+        "UNAUTHORIZED \"No session found\" / \"Session not found\" when the request carries no session ID (e.g. authenticated with an API key).",
+        "Access token hits do not extend the parent session; only refresh-token (session ID) requests slide its expiry. Revoking the session (`auth.revokeSession`, `auth.logout`) invalidates its access tokens too.",
+      ],
+      relatedEndpoints: ["auth-login", "auth-verify-magic-link", "auth-revoke-session"],
     },
   ],
 };

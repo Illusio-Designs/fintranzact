@@ -282,7 +282,8 @@ resp = httpx.get(
 org = resp.json()["result"]["data"]["json"]`,
       },
       gotchas: [
-        "Uses `tenantProcedure` — requires a session with a selected organization. Returns UNAUTHORIZED if no tenant is selected.",
+        "Uses `tenantProcedure` — requires a session with a selected organization. Returns BAD_REQUEST \"No organization selected\" if no tenant is selected (UNAUTHORIZED only when there is no session at all).",
+        "The full `tenants` row is returned, so the response also contains `referralCode`, `updatedAt` and the tenant database connection fields (`dbName`, `dbHost`, `dbPort`, `dbUser`, `dbPassword` — the password encrypted at rest when `DB_ENCRYPTION_KEY` is set; all null in self-hosted mode).",
         "Returns `null` if the tenant row no longer exists (edge case after deletion).",
       ],
     },
@@ -629,6 +630,43 @@ httpx.post(
         "Available roles: `admin` (full access), `seller_manager` (manage sellers), `seller` (create invoices), `accountant` (financial access).",
       ],
       relatedEndpoints: ["tenant-members", "tenant-remove-member"],
+    },
+    {
+      id: "tenant-update-plan",
+      method: "mutation",
+      path: "tenant.updatePlan",
+      title: "Change Organization Plan",
+      description: "Switch an organization to a self-serve plan. Only the free plans (`forever_free`, `free`) can be chosen this way; paid plans (`pro`, `business`, `enterprise`) are arranged with the Fintranzact team and applied by a platform admin. Targets the organization selected in the session; if none is selected it falls back to an organization the caller owns (useful during onboarding, before `tenant.select`).",
+      auth: "protected",
+      input: [
+        { name: "plan", type: "enum", required: true, description: "Target plan. Paid plans are only accepted if they equal the organization's current plan (a no-op).", enumValues: ["forever_free", "free", "pro", "business", "enterprise"] },
+      ],
+      output: {
+        description: "The plan that was saved.",
+        example: { plan: "free" },
+      },
+      codeExamples: {
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.updatePlan \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -d '{"json":{"plan":"free"}}'`,
+        javascript: `const { plan } = await trpc.tenant.updatePlan.mutate({ plan: "free" });
+console.log("Organization is now on", plan);`,
+        python: `import httpx
+
+resp = httpx.post(
+    "${API_BASE_URL}/api/trpc/tenant.updatePlan",
+    headers={"Authorization": f"Bearer {session_token}"},
+    json={"json": {"plan": "free"}},
+)`,
+      },
+      gotchas: [
+        "Returns FORBIDDEN \"Paid plans are set up by the Fintranzact team. Contact us to upgrade.\" for `pro`, `business` or `enterprise` unless the organization is already on that plan.",
+        "Returns NOT_FOUND \"No organization selected to update.\" when the session has no selected organization and the caller owns none.",
+        "No organization role is checked when an organization is selected in the session: any member (seller, accountant, …) can switch it to a free plan — including downgrading a paid organization to `free`.",
+        "Not audit-logged. Plan limits (businesses, members, exports) change immediately on the next request.",
+      ],
+      relatedEndpoints: ["tenant-current", "tenant-list"],
     },
   ],
 };
