@@ -365,6 +365,12 @@ export const documentRouter = router({
           selectedUnit: li.selectedUnit,
           conversionFactor: li.conversionFactor,
           variantId: li.variantId,
+          // The batch travels with the goods: an invoice billed from a
+          // challan prints the challan's batches, a return goes back into
+          // the batch it came from. Returning an expired batch to the
+          // supplier is the usual case, so a purchase return allows it.
+          batchId: li.batchId,
+          ...(li.batchId && targetType === "purchase_return" ? { allowExpired: true } : {}),
         })),
       });
 

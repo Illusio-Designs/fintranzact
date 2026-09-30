@@ -1,6 +1,8 @@
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { getDocumentWarehouseId, getDefaultWarehouse, resolveInvoiceWarehouse, syncDocumentStock } from "../lib/inventory-service.js";
+import { documentStockDirection, getDocumentWarehouseId, getDefaultWarehouse, resolveDocumentWarehouseId, resolveInvoiceWarehouse, syncDocumentStock } from "../lib/inventory-service.js";
+import { resolveLineBatches } from "../lib/batches.js";
+import { lineBatchDetails } from "../lib/batch-display.js";
 import {
   invoices,
   invoiceItems,
@@ -191,9 +193,11 @@ export const invoiceRouter = router({
         }
       }
 
+      const batchDetails = await lineBatchDetails(ctx.db, ctx.businessId, lineItems);
       const lineItemsWithUnit = lineItems.map(li => ({
         ...li,
         itemUnit: li.itemId ? (itemUnitMap.get(li.itemId) ?? null) : null,
+        batch: li.batchId ? batchDetails.get(li.batchId) ?? null : null,
       }));
 
       // Fetch child documents (CN/SR) that reference this invoice
@@ -349,9 +353,33 @@ export const invoiceRouter = router({
         .where(eq(businesses.id, ctx.businessId));
 
       assertLineExtras("invoice", input.lineItems);
+      // Check a picked warehouse before anything reads stock in it.
+      if (input.warehouseId && !input.skipStockAdjustment) {
+        await resolveInvoiceWarehouse(tx, {
+          businessId: ctx.businessId,
+          operation: input.type === "sale" ? "sale" : "purchase",
+          warehouseId: input.warehouseId,
+        });
+      }
+
+      // Lines of batch-tracked items get their batch: created or picked on a
+      // purchase, first-expiry-first-out on a sale. A sale line may split
+      // into one line per batch.
+      const stockDoc = { documentType: "invoice", type: input.type, warehouseId: input.warehouseId ?? null };
+      const invoiceDate = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
+      const lineItems = await resolveLineBatches(tx, {
+        businessId: ctx.businessId,
+        lines: input.lineItems,
+        direction: input.skipStockAdjustment ? 0 : documentStockDirection(stockDoc),
+        warehouseId: input.skipStockAdjustment
+          ? null
+          : await resolveDocumentWarehouseId(tx, { businessId: ctx.businessId, doc: stockDoc }),
+        documentDate: invoiceDate,
+        strict: true,
+      });
 
       // Calculate line item totals using fixed-point arithmetic
-      const processedItems = input.lineItems.map((li, idx) => {
+      const processedItems = lineItems.map((li, idx) => {
         const calc = calcLineItem({
           quantity: li.quantity,
           unitPrice: li.unitPrice,
@@ -373,12 +401,13 @@ export const invoiceRouter = router({
           conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
           variantId: li.variantId || null,
           ...lineExtras(li),
+          batchId: li.batchId,
         };
       });
 
       const charges = input.charges ?? [];
       const totals = calcInvoiceTotals({
-        lineItems: input.lineItems.map((li) => ({
+        lineItems: lineItems.map((li) => ({
           quantity: li.quantity,
           unitPrice: li.unitPrice,
           taxPercent: li.taxPercent || "0",
@@ -397,22 +426,13 @@ export const invoiceRouter = router({
       // A built-in delivery method, or one of the business's own.
       const deliveryMethod = await resolveDeliveryMethod(tx, ctx.businessId, input.deliveryMethod || "self_pickup");
 
-      // Check a picked warehouse before the invoice row references it.
-      if (input.warehouseId && !input.skipStockAdjustment) {
-        await resolveInvoiceWarehouse(tx, {
-          businessId: ctx.businessId,
-          operation: input.type === "sale" ? "sale" : "purchase",
-          warehouseId: input.warehouseId,
-        });
-      }
-
       const [invoice] = await tx.insert(invoices).values({
         businessId: ctx.businessId,
         partyId: input.partyId,
         type: input.type,
         documentType: "invoice",
         invoiceNumber,
-        invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
+        invoiceDate,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         subtotal: totals.subtotal,
         taxAmount: totals.taxTotal,
@@ -906,15 +926,43 @@ export const invoiceRouter = router({
         }
 
         // 4. Handle line items — delete old, insert new, recalculate totals
+        let lineItems: typeof input.lineItems = input.lineItems;
         if (input.lineItems) {
 
           assertLineExtras(existing.documentType, input.lineItems);
+          // Batches for the new lines, counting what this invoice already
+          // holds as available again.
+          const newWarehouseId = input.warehouseId !== undefined
+            ? input.warehouseId ?? (await getDefaultWarehouse(tx, {
+                businessId: ctx.businessId,
+                operation: existing.type === "sale" ? "sale" : "purchase",
+              })).id
+            : undefined;
+          if (input.warehouseId) {
+            await resolveInvoiceWarehouse(tx, {
+              businessId: ctx.businessId,
+              operation: existing.type === "sale" ? "sale" : "purchase",
+              warehouseId: input.warehouseId,
+            });
+          }
+          const moves = existing.stockMode !== "none";
+          lineItems = await resolveLineBatches(tx, {
+            businessId: ctx.businessId,
+            lines: input.lineItems,
+            direction: moves ? documentStockDirection(existing) : 0,
+            warehouseId: moves
+              ? await resolveDocumentWarehouseId(tx, { businessId: ctx.businessId, doc: existing, warehouseId: newWarehouseId })
+              : null,
+            documentDate: input.invoiceDate ? new Date(input.invoiceDate) : existing.invoiceDate,
+            documentId: existing.id,
+            strict: true,
+          });
 
           // Step 3: Delete existing line items
           await tx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, input.id));
 
           // Step 4: Process and insert new line items using fixed-point arithmetic
-          const processedItems = input.lineItems.map((li, idx) => {
+          const processedItems = lineItems.map((li, idx) => {
             const calc = calcLineItem({
               quantity: li.quantity,
               unitPrice: li.unitPrice,
@@ -937,6 +985,7 @@ export const invoiceRouter = router({
               conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
               variantId: li.variantId || null,
               ...lineExtras(li),
+              batchId: li.batchId,
             };
           });
 
@@ -950,12 +999,7 @@ export const invoiceRouter = router({
             documentId: input.id,
             event: "UPDATE",
             // null picks the business default again.
-            warehouseId: input.warehouseId !== undefined
-              ? input.warehouseId ?? (await getDefaultWarehouse(tx, {
-                  businessId: ctx.businessId,
-                  operation: existing.type === "sale" ? "sale" : "purchase",
-                })).id
-              : undefined,
+            warehouseId: newWarehouseId,
             enforceStock: true,
             actorUserId: ctx.user!.id,
           });
@@ -971,7 +1015,7 @@ export const invoiceRouter = router({
           input.invoiceDiscount !== undefined ||
           input.roundOff !== undefined
         ) {
-          const linesForTotals = input.lineItems ?? await tx
+          const linesForTotals = lineItems ?? await tx
             .select({
               quantity: invoiceItems.quantity,
               unitPrice: invoiceItems.unitPrice,

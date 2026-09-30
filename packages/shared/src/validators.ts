@@ -385,6 +385,17 @@ export const itemVariantSchema = z.object({
 
 export type ItemVariant = z.infer<typeof itemVariantSchema>;
 
+/** A calendar date, YYYY-MM-DD. */
+export const dateOnlyStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
+
+/** Batch number, dates and MRP of one batch of an item that tracks batches. */
+export const batchFieldsSchema = z.object({
+  batchNumber: z.string().trim().min(1, "Enter a batch number").max(60),
+  mfgDate: dateOnlyStr.nullish(),
+  expiryDate: dateOnlyStr.nullish(),
+  mrp: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).nullish(),
+});
+
 const createItemBaseSchema = z.object({
   name: z.string().min(1).max(200),
   hsn: z.string().max(20).optional(),
@@ -414,6 +425,11 @@ const createItemBaseSchema = z.object({
   // group's name; null clears it.
   stockGroupId: z.string().uuid().nullish(),
   taxInclusive: z.boolean().default(false),
+  // Batch / lot tracking (see item_batches). Off by default.
+  trackBatches: z.boolean().optional(),
+  trackExpiry: z.boolean().optional(),
+  // Opening stock of a new batch-tracked item goes into this batch.
+  openingBatch: batchFieldsSchema.optional(),
   unitVariants: z.array(unitVariantSchema).optional(),
   variantAttributes: z.array(z.string().min(1).max(50)).max(5).optional(),
   variants: z.array(itemVariantSchema).optional(),
@@ -473,6 +489,22 @@ export const invoiceChargeSchema = z.object({
   shipmentId: z.string().uuid().optional(),
 });
 
+/**
+ * Batch fields on a document line, for items that track batches.
+ * Inward lines name the batch by id, or by number (created if new, with its
+ * dates and MRP). Outward lines name a batch, or leave it empty to have
+ * stock taken first-expiry-first-out; an expired batch goes out only with
+ * `allowExpired`.
+ */
+export const lineBatchFields = {
+  batchId: z.string().uuid().nullish(),
+  batchNumber: z.string().trim().max(60).nullish(),
+  mfgDate: dateOnlyStr.nullish(),
+  expiryDate: dateOnlyStr.nullish(),
+  batchMrp: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).nullish(),
+  allowExpired: z.boolean().nullish(),
+};
+
 const lineQuantityStr = z.string().regex(/^\d+(\.\d{1,3})?$/);
 
 /**
@@ -514,6 +546,7 @@ const invoiceLineItemBaseSchema = z.object({
   /** Goods receipt notes only: received but rejected, in the line's unit. Never enters stock. */
   rejectedQuantity: lineQuantityStr.nullish(),
   rejectionReason: z.string().max(200).nullish(),
+  ...lineBatchFields,
 });
 
 export const invoiceLineItemSchema = invoiceLineItemBaseSchema.superRefine((li, ctx) => {

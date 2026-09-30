@@ -18,7 +18,9 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { logAudit } from "./audit.js";
-import { resolveInvoiceWarehouse, syncDocumentStock } from "./inventory-service.js";
+import { documentStockDirection, resolveDocumentWarehouseId, resolveInvoiceWarehouse, syncDocumentStock } from "./inventory-service.js";
+import { resolveLineBatches } from "./batches.js";
+import { lineBatchDetails } from "./batch-display.js";
 import { requireCan } from "./permissions.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
@@ -259,7 +261,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
         if (!invoice) return null;
 
-        const [lineItems, [party]] = await Promise.all([
+        const [lineRows, [party]] = await Promise.all([
           ctx.db
             .select()
             .from(invoiceItems)
@@ -267,6 +269,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             .orderBy(invoiceItems.sortOrder),
           ctx.db.select().from(parties).where(eq(parties.id, invoice.partyId)).limit(1),
         ]);
+        const batchDetails = await lineBatchDetails(ctx.db, ctx.businessId, lineRows);
+        const lineItems = lineRows.map((li) => ({ ...li, batch: li.batchId ? batchDetails.get(li.batchId) ?? null : null }));
 
         return { ...invoice, lineItems, party: party ?? null };
       }),
@@ -357,9 +361,31 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           }
 
           assertLineExtras(docType, input.lineItems);
+          // Check a picked warehouse before anything reads stock in it.
+          const movesStock = config.stockEffect !== "none" && !input.skipStockAdjustment;
+          if (input.warehouseId && movesStock) {
+            await resolveInvoiceWarehouse(tx, {
+              businessId: ctx.businessId,
+              operation: "sale",
+              warehouseId: input.warehouseId,
+            });
+          }
+
+          // Lines of batch-tracked items get their batch (see lib/batches).
+          const stockDoc = { documentType: docType, type: config.fixedType ?? input.type, warehouseId: input.warehouseId ?? null };
+          const docDate = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
+          const direction = movesStock ? documentStockDirection(stockDoc) : 0;
+          const lineItems = await resolveLineBatches(tx, {
+            businessId: ctx.businessId,
+            lines: input.lineItems,
+            direction,
+            warehouseId: direction === 0 ? null : await resolveDocumentWarehouseId(tx, { businessId: ctx.businessId, doc: stockDoc }),
+            documentDate: docDate,
+            strict: true,
+          });
 
           // Calculate line item totals using fixed-point arithmetic
-          const processedItems = input.lineItems.map((li, idx) => {
+          const processedItems = lineItems.map((li, idx) => {
             const calc = calcLineItem({
               quantity: li.quantity,
               unitPrice: li.unitPrice,
@@ -381,12 +407,13 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
               variantId: li.variantId || null,
               ...lineExtras(li),
+              batchId: li.batchId,
             };
           });
 
           const charges = input.charges ?? [];
           const totals = calcInvoiceTotals({
-            lineItems: input.lineItems.map((li) => ({
+            lineItems: lineItems.map((li) => ({
               quantity: li.quantity,
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent || "0",
@@ -470,15 +497,6 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           // A built-in delivery method, or one of the business's own.
           const deliveryMethod = await resolveDeliveryMethod(tx, ctx.businessId, input.deliveryMethod || "self_pickup");
 
-          // Check a picked warehouse before the document row references it.
-          if (input.warehouseId && config.stockEffect !== "none" && !input.skipStockAdjustment) {
-            await resolveInvoiceWarehouse(tx, {
-              businessId: ctx.businessId,
-              operation: "sale",
-              warehouseId: input.warehouseId,
-            });
-          }
-
           const [result] = await tx
             .insert(invoices)
             .values({
@@ -488,7 +506,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               // ALWAYS use config.documentType — never trust client-supplied value
               documentType: docType as DocumentType,
               invoiceNumber: docNumber,
-              invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
+              invoiceDate: docDate,
               dueDate: input.dueDate ? new Date(input.dueDate) : null,
               subtotal: totals.subtotal,
               taxAmount: totals.taxTotal,

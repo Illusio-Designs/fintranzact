@@ -17,6 +17,8 @@ import {
   businessMembers,
   inventorySettings,
   itemBarcodes,
+  itemBatches,
+  items,
   physicalStockCounts,
   stockAdjustments,
   warehousePermissions,
@@ -35,6 +37,14 @@ import {
 import { escapeLike } from "../lib/escape-like.js";
 import { getValuationMethod } from "../lib/stock-valuation.js";
 import { getBarcodeSetup, requireBarcodesEnabled, resolveCodes } from "../lib/barcode-setup.js";
+import {
+  allocateFefo,
+  batchBalance,
+  businessDay,
+  findOrCreateBatch,
+  type Allocation,
+} from "../lib/batches.js";
+import { batchFieldsSchema } from "@fintranzact/shared";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
@@ -47,6 +57,90 @@ const lineKey = z.object({
   itemId: z.string().uuid(),
   variantId: z.string().uuid().nullish(),
 });
+
+/** Batch on a transfer or adjustment line (items that track batches). */
+const lineBatch = {
+  batchId: z.string().uuid().nullish(),
+  /** Adjustments that add stock: a new or existing batch by number. */
+  newBatch: batchFieldsSchema.nullish(),
+};
+
+async function itemTracking(tx: Tx, businessId: string, itemId: string) {
+  const [row] = await tx
+    .select({ name: items.name, trackBatches: items.trackBatches, trackExpiry: items.trackExpiry })
+    .from(items)
+    .where(and(eq(items.id, itemId), eq(items.businessId, businessId)))
+    .limit(1);
+  return row as { name: string; trackBatches: boolean; trackExpiry: boolean } | undefined;
+}
+
+/** A picked batch must be one of this item's (and variant's). */
+export async function assertBatchOf(tx: Tx, businessId: string, batchId: string, itemId: string, variantId?: string | null) {
+  const [b] = await tx
+    .select()
+    .from(itemBatches)
+    .where(and(eq(itemBatches.id, batchId), eq(itemBatches.businessId, businessId)))
+    .limit(1);
+  if (!b || b.itemId !== itemId || (b.variantId ?? null) !== (variantId ?? null)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That batch doesn't belong to this item" });
+  }
+  return b as typeof itemBatches.$inferSelect;
+}
+
+/**
+ * Where outgoing stock of one line comes from: the batch picked, or — for an
+ * item that tracks batches — its batches first expiry first, expired ones
+ * included (transfers and write-offs move expired stock too), then the
+ * unbatched pool. With `enforce`, a picked batch can't go below zero and
+ * nothing may come up short.
+ */
+async function outgoingPieces(
+  tx: Tx,
+  input: {
+    businessId: string;
+    warehouseId: string;
+    itemId: string;
+    variantId?: string | null;
+    quantity: number; // positive
+    batchId?: string | null;
+    date: Date;
+    enforce: boolean;
+  },
+): Promise<Allocation[]> {
+  if (input.batchId) {
+    const b = await assertBatchOf(tx, input.businessId, input.batchId, input.itemId, input.variantId);
+    if (input.enforce) {
+      const available = await batchBalance(tx, input.businessId, input.warehouseId, b.id);
+      if (available < input.quantity - 0.0005) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Not enough stock in batch ${b.batchNumber}: ${qty(Math.max(available, 0)).replace(/\.?0+$/, "")} available`,
+        });
+      }
+    }
+    return [{ batchId: b.id, quantity: input.quantity }];
+  }
+  const item = await itemTracking(tx, input.businessId, input.itemId);
+  if (!item?.trackBatches) return [{ batchId: null, quantity: input.quantity }];
+  const { allocations, shortfall } = await allocateFefo(tx, {
+    businessId: input.businessId,
+    warehouseId: input.warehouseId,
+    itemId: input.itemId,
+    variantId: input.variantId ?? null,
+    quantity: input.quantity,
+    day: businessDay(input.date),
+    includeExpired: true,
+  });
+  if (shortfall >= 0.0005) {
+    if (input.enforce) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `Not enough stock of ${item.name} in its batches` });
+    }
+    const pool = allocations.find((a) => a.batchId === null);
+    if (pool) pool.quantity += shortfall;
+    else allocations.push({ batchId: null, quantity: shortfall });
+  }
+  return allocations;
+}
 
 /** Roles that manage stock in every warehouse without per-warehouse grants. */
 const ADMIN_ROLES = new Set(["admin", "superadmin"]);
@@ -118,6 +212,10 @@ export async function applyStockAdjustment(
     referenceType?: "STOCK_ADJUSTMENT" | "PHYSICAL_STOCK";
     /** Refuse to take the warehouse below zero. */
     enforceWarehouseBalance?: boolean;
+    /** Batch the stock goes into or comes out of. Without one, stock taken
+     *  from an item that tracks batches comes out of its batches earliest
+     *  expiry first; stock added goes to the unbatched pool. */
+    batchId?: string | null;
   },
 ) {
   const previousTotal = await placeUnplacedStock(tx, input.businessId, input.itemId, input.variantId);
@@ -132,34 +230,60 @@ export async function applyStockAdjustment(
     }
   }
 
-  const [adjustment] = await tx.insert(stockAdjustments).values({
-    businessId: input.businessId,
-    itemId: input.itemId,
-    variantId: input.variantId ?? null,
-    quantity: qty(input.quantity),
-    previousStock: qty(previousTotal),
-    newStock: qty(previousTotal + input.quantity),
-    reason: input.reason,
-    adjustmentDate: input.date,
-    createdByUserId: input.user.id,
-    createdByName: input.user.name,
-  }).returning();
+  // One adjustment (and movement) per batch the change touches.
+  const pieces: Allocation[] = input.quantity < 0
+    ? (await outgoingPieces(tx, {
+        businessId: input.businessId,
+        warehouseId: input.warehouseId,
+        itemId: input.itemId,
+        variantId: input.variantId,
+        quantity: -input.quantity,
+        batchId: input.batchId,
+        date: input.date,
+        enforce: !!input.enforceWarehouseBalance,
+      })).map((p) => ({ ...p, quantity: -p.quantity }))
+    : [{
+        batchId: input.batchId
+          ? (await assertBatchOf(tx, input.businessId, input.batchId, input.itemId, input.variantId)).id
+          : null,
+        quantity: input.quantity,
+      }];
 
-  // Updates the warehouse balance and the item total together.
-  await recordStockMovement(tx, {
-    businessId: input.businessId,
-    warehouseId: input.warehouseId,
-    itemId: input.itemId,
-    variantId: input.variantId ?? undefined,
-    referenceType: input.referenceType ?? "STOCK_ADJUSTMENT",
-    referenceId: adjustment.id,
-    movementType: "ADJUSTMENT",
-    quantity: qty(input.quantity),
-    movementDate: input.date,
-    actorUserId: input.user.id,
-  });
+  let running = previousTotal;
+  let first: typeof stockAdjustments.$inferSelect | undefined;
+  for (const piece of pieces) {
+    const [adjustment] = await tx.insert(stockAdjustments).values({
+      businessId: input.businessId,
+      itemId: input.itemId,
+      variantId: input.variantId ?? null,
+      quantity: qty(piece.quantity),
+      previousStock: qty(running),
+      newStock: qty(running + piece.quantity),
+      reason: input.reason,
+      adjustmentDate: input.date,
+      createdByUserId: input.user.id,
+      createdByName: input.user.name,
+    }).returning();
+    running += piece.quantity;
+    first ??= adjustment;
 
-  return adjustment;
+    // Updates the warehouse balance and the item total together.
+    await recordStockMovement(tx, {
+      businessId: input.businessId,
+      warehouseId: input.warehouseId,
+      itemId: input.itemId,
+      variantId: input.variantId ?? undefined,
+      batchId: piece.batchId,
+      referenceType: input.referenceType ?? "STOCK_ADJUSTMENT",
+      referenceId: adjustment.id,
+      movementType: "ADJUSTMENT",
+      quantity: qty(piece.quantity),
+      movementDate: input.date,
+      actorUserId: input.user.id,
+    });
+  }
+
+  return first!;
 }
 
 /** Stock units: simple items, plus one unit per variant for variant items. */
@@ -168,14 +292,16 @@ function stockUnitsSql(businessId: string, search?: string | null) {
   return sql`
     WITH units AS (
       SELECT i.id AS item_id, NULL::uuid AS variant_id, i.name AS name, i.sku, i.unit::text AS unit,
-             i.stock_quantity::numeric AS total, i.low_stock_alert::numeric AS low_stock
+             i.stock_quantity::numeric AS total, i.low_stock_alert::numeric AS low_stock,
+             i.track_batches, i.track_expiry
       FROM items i
       WHERE i.business_id = ${businessId} AND i.deleted_at IS NULL
         AND i.item_type = 'product' AND i.item_mode <> 'variants'
       UNION ALL
       SELECT i.id, v.id,
              i.name || ' — ' || COALESCE((SELECT string_agg(value, ' / ') FROM jsonb_each_text(v.attribute_values)), 'Variant'),
-             COALESCE(v.sku, i.sku), i.unit::text, v.stock_quantity::numeric, v.low_stock_alert::numeric
+             COALESCE(v.sku, i.sku), i.unit::text, v.stock_quantity::numeric, v.low_stock_alert::numeric,
+             i.track_batches, i.track_expiry
       FROM item_variants v
       JOIN items i ON i.id = v.item_id
       WHERE i.business_id = ${businessId} AND i.deleted_at IS NULL AND v.deleted_at IS NULL
@@ -432,6 +558,7 @@ export const stockRouter = router({
           WITH units AS (${stockUnitsSql(ctx.businessId, input.search)})
           SELECT u.item_id AS "itemId", u.variant_id AS "variantId", u.name, u.sku, u.unit,
                  u.total::text AS total, u.low_stock::text AS "lowStock",
+                 u.track_batches AS "trackBatches", u.track_expiry AS "trackExpiry",
                  COALESCE((
                    SELECT json_object_agg(b.warehouse_id, b.qty)
                    FROM (
@@ -447,7 +574,8 @@ export const stockRouter = router({
           LIMIT ${input.limit} OFFSET ${offset}
         `) as unknown as Promise<Array<{
           itemId: string; variantId: string | null; name: string; sku: string | null; unit: string;
-          total: string; lowStock: string | null; byWarehouse: Record<string, string>;
+          total: string; lowStock: string | null; trackBatches: boolean; trackExpiry: boolean;
+          byWarehouse: Record<string, string>;
         }>>,
         ctx.db.execute(sql`
           WITH units AS (${stockUnitsSql(ctx.businessId, input.search)})
@@ -474,7 +602,7 @@ export const stockRouter = router({
       sourceWarehouseId: z.string().uuid(),
       destinationWarehouseId: z.string().uuid(),
       date: z.string().datetime().optional(),
-      lines: z.array(lineKey.extend({ quantity: quantityString })).min(1).max(100),
+      lines: z.array(lineKey.extend({ quantity: quantityString, batchId: lineBatch.batchId })).min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
@@ -499,19 +627,33 @@ export const stockRouter = router({
           if (available < amount - 0.0005) {
             throw new TRPCError({ code: "BAD_REQUEST", message: `Not enough stock to transfer: ${available} available` });
           }
-          const common = {
+          // A batch keeps its number and expiry wherever it goes.
+          const pieces = await outgoingPieces(tx, {
             businessId: ctx.businessId,
+            warehouseId: input.sourceWarehouseId,
             itemId: line.itemId,
-            variantId: line.variantId ?? undefined,
-            sourceWarehouseId: input.sourceWarehouseId,
-            destinationWarehouseId: input.destinationWarehouseId,
-            referenceType: "STOCK_TRANSFER",
-            referenceId,
-            movementDate: date,
-            actorUserId: ctx.user.id,
-          };
-          await recordStockMovement(tx, { ...common, warehouseId: input.sourceWarehouseId, movementType: "TRANSFER_OUT", quantity: qty(-amount) });
-          await recordStockMovement(tx, { ...common, warehouseId: input.destinationWarehouseId, movementType: "TRANSFER_IN", quantity: qty(amount) });
+            variantId: line.variantId,
+            quantity: amount,
+            batchId: line.batchId,
+            date,
+            enforce: true,
+          });
+          for (const piece of pieces) {
+            const common = {
+              businessId: ctx.businessId,
+              itemId: line.itemId,
+              variantId: line.variantId ?? undefined,
+              batchId: piece.batchId,
+              sourceWarehouseId: input.sourceWarehouseId,
+              destinationWarehouseId: input.destinationWarehouseId,
+              referenceType: "STOCK_TRANSFER",
+              referenceId,
+              movementDate: date,
+              actorUserId: ctx.user.id,
+            };
+            await recordStockMovement(tx, { ...common, warehouseId: input.sourceWarehouseId, movementType: "TRANSFER_OUT", quantity: qty(-piece.quantity) });
+            await recordStockMovement(tx, { ...common, warehouseId: input.destinationWarehouseId, movementType: "TRANSFER_IN", quantity: qty(piece.quantity) });
+          }
         }
         return { referenceId };
       });
@@ -536,11 +678,14 @@ export const stockRouter = router({
                  json_agg(json_build_object(
                    'name', i.name || COALESCE(' — ' || (SELECT string_agg(value, ' / ') FROM jsonb_each_text(v.attribute_values)), ''),
                    'unit', i.unit,
-                   'quantity', (-m.quantity::numeric)::text
+                   'quantity', (-m.quantity::numeric)::text,
+                   'batchNumber', bt.batch_number,
+                   'expiryDate', bt.expiry_date
                  ) ORDER BY i.name) AS lines
           FROM stock_movements m
           JOIN items i ON i.id = m.item_id
           LEFT JOIN item_variants v ON v.id = m.variant_id
+          LEFT JOIN item_batches bt ON bt.id = m.batch_id
           JOIN warehouses sw ON sw.id = m.warehouse_id
           LEFT JOIN warehouses dw ON dw.id = COALESCE(m.destination_warehouse_id, (
             SELECT x.warehouse_id FROM stock_movements x
@@ -554,7 +699,8 @@ export const stockRouter = router({
         `) as unknown as Promise<Array<{
           referenceId: string; date: string; sourceWarehouseId: string; sourceName: string;
           destinationWarehouseId: string | null; destinationName: string | null; lineCount: number;
-          totalQuantity: string; lines: Array<{ name: string; unit: string; quantity: string }>;
+          totalQuantity: string;
+          lines: Array<{ name: string; unit: string; quantity: string; batchNumber: string | null; expiryDate: string | null }>;
         }>>,
         ctx.db.execute(sql`
           SELECT COUNT(DISTINCT reference_id)::int AS count FROM stock_movements
@@ -572,6 +718,7 @@ export const stockRouter = router({
       reason: z.string().min(1, "Give a reason").max(500),
       lines: z.array(lineKey.extend({
         quantity: quantityString.refine((v) => parseFloat(v) !== 0, "Quantity cannot be zero"),
+        ...lineBatch,
       })).min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -581,7 +728,26 @@ export const stockRouter = router({
         await assertWarehouses(tx, ctx.businessId, [input.warehouseId]);
         await assertWarehousePermission(tx, ctx, [input.warehouseId], "canAdjust");
         for (const line of input.lines) {
+          // Stock added to an item that tracks batches goes into a named batch.
+          let batchId = line.batchId ?? null;
+          if (!batchId && parseFloat(line.quantity) > 0) {
+            const item = await itemTracking(tx, ctx.businessId, line.itemId);
+            if (item?.trackBatches) {
+              if (!line.newBatch) {
+                throw new TRPCError({ code: "BAD_REQUEST", message: `Enter a batch number for ${item.name}` });
+              }
+              batchId = (await findOrCreateBatch(tx, {
+                businessId: ctx.businessId,
+                itemId: line.itemId,
+                variantId: line.variantId ?? null,
+                itemName: item.name,
+                ...line.newBatch,
+                requireExpiry: item.trackExpiry,
+              })).id;
+            }
+          }
           await applyStockAdjustment(tx, {
+            batchId,
             businessId: ctx.businessId,
             warehouseId: input.warehouseId,
             itemId: line.itemId,
@@ -611,19 +777,21 @@ export const stockRouter = router({
                  a.reason, a.created_by_name AS "createdByName",
                  i.name || COALESCE(' — ' || (SELECT string_agg(value, ' / ') FROM jsonb_each_text(v.attribute_values)), '') AS "itemName",
                  i.unit, w.name AS "warehouseName",
+                 bt.batch_number AS "batchNumber", bt.expiry_date AS "expiryDate",
                  COALESCE(m.reference_type = 'PHYSICAL_STOCK', false) AS physical
           FROM stock_adjustments a
           JOIN items i ON i.id = a.item_id
           LEFT JOIN item_variants v ON v.id = a.variant_id
           LEFT JOIN stock_movements m ON m.reference_id = a.id AND m.reference_type IN ('STOCK_ADJUSTMENT', 'PHYSICAL_STOCK')
           LEFT JOIN warehouses w ON w.id = m.warehouse_id
+          LEFT JOIN item_batches bt ON bt.id = m.batch_id
           WHERE a.business_id = ${ctx.businessId} ${kindFilter}
           ORDER BY a.adjustment_date DESC, a.created_at DESC
           LIMIT ${input.limit} OFFSET ${offset}
         `) as unknown as Promise<Array<{
           id: string; date: string; quantity: string; previousStock: string; newStock: string;
           reason: string | null; createdByName: string | null; itemName: string; unit: string;
-          warehouseName: string | null; physical: boolean;
+          warehouseName: string | null; batchNumber: string | null; expiryDate: string | null; physical: boolean;
         }>>,
         ctx.db.execute(sql`
           SELECT COUNT(*)::int AS count

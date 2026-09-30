@@ -10,7 +10,8 @@ import {
 } from "@fintranzact/db";
 import { calcLineItem, calcInvoiceTotals } from "@fintranzact/shared";
 import type { TenantDatabase } from "../trpc.js";
-import { syncDocumentStock } from "./inventory-service.js";
+import { documentStockDirection, resolveDocumentWarehouseId, syncDocumentStock } from "./inventory-service.js";
+import { resolveLineBatches } from "./batches.js";
 
 interface TemplateRow {
   id: string;
@@ -120,8 +121,19 @@ export async function generateInvoiceFromTemplate(
       .set({ nextInvoiceNumber: biz.nextNum + 1 })
       .where(eq(businesses.id, template.businessId));
 
+    // Lines of batch-tracked items take stock first-expiry-first-out.
+    const stockDoc = { documentType: "invoice", type: template.type };
+    const lineItems = await resolveLineBatches(tx, {
+      businessId: template.businessId,
+      lines: template.lineItems,
+      direction: documentStockDirection(stockDoc),
+      warehouseId: await resolveDocumentWarehouseId(tx, { businessId: template.businessId, doc: stockDoc }),
+      documentDate: new Date(),
+      strict: false,
+    });
+
     // Calculate line item totals
-    const processedItems = template.lineItems.map((li, idx) => {
+    const processedItems = lineItems.map((li, idx) => {
       const calc = calcLineItem({
         quantity: li.quantity,
         unitPrice: li.unitPrice,
@@ -142,12 +154,13 @@ export async function generateInvoiceFromTemplate(
         selectedUnit: li.selectedUnit || null,
         conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
         variantId: li.variantId || null,
+        batchId: li.batchId,
       };
     });
 
     const charges = template.charges ?? [];
     const totals = calcInvoiceTotals({
-      lineItems: template.lineItems.map((li) => ({
+      lineItems: lineItems.map((li) => ({
         quantity: li.quantity,
         unitPrice: li.unitPrice,
         taxPercent: li.taxPercent || "0",

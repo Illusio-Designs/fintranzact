@@ -59,6 +59,10 @@ export interface InvoicePDFData {
     /** Goods receipt notes: received but rejected, with the reason, shown under the name. */
     rejectedQuantity?: string | null;
     rejectionReason?: string | null;
+    /** Batch / lot the line's goods came from, shown under the name when set. */
+    batchNumber?: string | null;
+    /** Expiry of that batch (YYYY-MM-DD), shown as MM/YYYY next to it. */
+    expiryDate?: string | null;
     taxPercent: string;
     taxAmount: string;
     discountPercent: string;
@@ -1540,6 +1544,21 @@ function renderStatusStamp(
 
 // ── Public API ─────────────────────────────────────────────────
 
+/** Fold each line's batch and expiry into its sub-line, like the MRP. */
+export function withBatchNotes(data: InvoicePDFData): InvoicePDFData {
+  if (!data.lineItems.some((li) => li.batchNumber)) return data;
+  return {
+    ...data,
+    lineItems: data.lineItems.map((li) => {
+      if (!li.batchNumber) return li;
+      const [y, m] = (li.expiryDate ?? "").split("-");
+      const batch = `Batch ${li.batchNumber}${y && m ? ` · Exp ${m}/${y}` : ""}`;
+      const note = li.description?.trim();
+      return { ...li, description: note ? `${note} · ${batch}` : batch };
+    }),
+  };
+}
+
 /** Fold each line's MRP into its sub-line, so every template shows it without a new column. */
 export function withMrpNotes(data: InvoicePDFData): InvoicePDFData {
   if (!data.lineItems.some((li) => li.mrp && parseFloat(li.mrp) > 0)) return data;
@@ -1583,7 +1602,7 @@ export function withQuantityNotes(data: InvoicePDFData): InvoicePDFData {
 }
 
 export function generateInvoicePDF(input: InvoicePDFData, format: PDFFormat = "a5"): InstanceType<typeof PDFDocument> {
-  const data = withMrpNotes(withQuantityNotes(input));
+  const data = withMrpNotes(withBatchNotes(withQuantityNotes(input)));
   let docSize: string | number[];
   let docMargin: number;
 

@@ -273,6 +273,30 @@ function documentReferencePrefix(doc: { documentType: string }) {
   return doc.documentType === "invoice" ? "INVOICE" : "DOCUMENT";
 }
 
+/**
+ * The warehouse a document moves its stock through, the same way
+ * syncDocumentStock picks it: an explicit choice, else the document's saved
+ * warehouse, else where it already holds stock, else the business default for
+ * the operation. Null when the document moves no stock.
+ */
+export async function resolveDocumentWarehouseId(
+  tx: InventoryDb,
+  input: {
+    businessId: string;
+    doc: { id?: string | null; documentType: string; type: string; warehouseId?: string | null };
+    warehouseId?: string | null;
+  },
+): Promise<string | null> {
+  if (documentStockDirection(input.doc) === 0) return null;
+  if (input.warehouseId) return input.warehouseId;
+  if (input.doc.warehouseId) return input.doc.warehouseId;
+  if (input.doc.id) {
+    const current = await currentDocumentWarehouse(tx, input.businessId, input.doc.id, documentReferencePrefix(input.doc));
+    if (current) return current;
+  }
+  return (await getDefaultWarehouse(tx, { businessId: input.businessId, operation: documentOperation(input.doc) })).id;
+}
+
 export type DocumentStockEvent = "CREATE" | "UPDATE" | "CANCEL" | "REINSTATE" | "DELETE";
 
 /**
@@ -356,14 +380,18 @@ export async function syncDocumentStock(
       ?? (await getDefaultWarehouse(tx, { businessId: input.businessId, operation: documentOperation(doc) })).id
     : null;
 
-  // Desired holding per (item, variant) at one warehouse, minus the net already
-  // recorded per (warehouse, item, variant). Free goods move with the billed
-  // quantity; goods rejected on a GRN never come in. Each line rounds to the 3 decimals
-  // stock quantities are stored with, the same as when it was posted.
+  // Desired holding per (item, variant, batch) at one warehouse, minus the net
+  // already recorded per (warehouse, item, variant, batch). Free goods move
+  // with the billed quantity (and in the line's batch); goods rejected on a
+  // GRN never come in. Each line rounds to the 3 decimals stock quantities
+  // are stored with, the same as when it was posted. Lines without a batch
+  // (items that don't track batches) group under a null batch, which is how
+  // their movements are recorded too.
   const diffs = (await tx.execute(sql`
     WITH desired AS (
       SELECT COALESCE(li.item_id, v.item_id) AS item_id,
              li.variant_id,
+             li.batch_id,
              SUM(ROUND((li.quantity::numeric + COALESCE(li.free_quantity, 0)::numeric)
                * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END, 3))
                * ${direction} AS qty
@@ -372,30 +400,35 @@ export async function syncDocumentStock(
       WHERE li.invoice_id = ${doc.id}
         AND ${holdsStock ? sql`TRUE` : sql`FALSE`}
         AND COALESCE(li.item_id, v.item_id) IS NOT NULL
-      GROUP BY 1, 2
+      GROUP BY 1, 2, 3
     ),
     held AS (
-      SELECT warehouse_id, item_id, variant_id, SUM(quantity::numeric) AS qty
+      SELECT warehouse_id, item_id, variant_id, batch_id, SUM(quantity::numeric) AS qty
       FROM stock_movements
       WHERE business_id = ${input.businessId}
         AND reference_id = ${doc.id}
         AND reference_type LIKE ${prefix + "%"}
-      GROUP BY 1, 2, 3
+      GROUP BY 1, 2, 3, 4
     )
     SELECT COALESCE(h.warehouse_id, ${warehouseId}::uuid) AS warehouse_id,
            COALESCE(d.item_id, h.item_id) AS item_id,
            COALESCE(d.variant_id, h.variant_id) AS variant_id,
+           COALESCE(d.batch_id, h.batch_id) AS batch_id,
            (COALESCE(d.qty, 0) - COALESCE(h.qty, 0))::text AS diff
     FROM desired d
     FULL OUTER JOIN held h
       ON h.warehouse_id = ${warehouseId}::uuid
      AND h.item_id = d.item_id
      AND h.variant_id IS NOT DISTINCT FROM d.variant_id
+     AND h.batch_id IS NOT DISTINCT FROM d.batch_id
     WHERE COALESCE(d.qty, 0) - COALESCE(h.qty, 0) <> 0
-  `)) as unknown as Array<{ warehouse_id: string; item_id: string; variant_id: string | null; diff: string }>;
+  `)) as unknown as Array<{ warehouse_id: string; item_id: string; variant_id: string | null; batch_id: string | null; diff: string }>;
 
   if (input.enforceStock && diffs.some((d) => Number(d.diff) < 0)) {
-    await assertStockAvailable(tx, input.businessId, diffs);
+    // A batch never goes below zero on a change a user makes, whatever the
+    // negative stock policy; the item as a whole follows the policy.
+    await assertBatchesAvailable(tx, input.businessId, diffs);
+    await assertStockAvailable(tx, input.businessId, sumByItem(diffs));
   }
 
   const movementType = documentMovementType(doc);
@@ -408,6 +441,7 @@ export async function syncDocumentStock(
       warehouseId: row.warehouse_id,
       itemId: row.item_id,
       variantId: row.variant_id,
+      batchId: row.batch_id,
       referenceType,
       referenceId: doc.id,
       movementType: sameWay ? movementType : `${movementType}_REVERSAL`,
@@ -429,6 +463,7 @@ export async function recordOpeningStock(
     businessId: string;
     itemId: string;
     variantId?: string | null;
+    batchId?: string | null;
     quantity: string | null | undefined;
     actorUserId?: string | null;
   },
@@ -443,6 +478,7 @@ export async function recordOpeningStock(
     warehouseId: warehouse.id,
     itemId: input.itemId,
     variantId: input.variantId ?? null,
+    batchId: input.batchId ?? null,
     referenceType: "OPENING_BALANCE",
     referenceId: input.variantId ?? input.itemId,
     movementType: "OPENING",
@@ -491,12 +527,13 @@ export async function postNewDocumentsStock(
   const totals = (await tx.execute(sql`
     WITH ins AS (
       INSERT INTO stock_movements
-        (business_id, warehouse_id, item_id, variant_id, reference_type, reference_id,
+        (business_id, warehouse_id, item_id, variant_id, batch_id, reference_type, reference_id,
          movement_type, quantity, movement_date, actor_user_id)
       SELECT i.business_id,
              ${warehouse},
              COALESCE(li.item_id, v.item_id),
              li.variant_id,
+             li.batch_id,
              CASE WHEN i.document_type = 'invoice' THEN 'INVOICE' ELSE 'DOCUMENT' END,
              i.id,
              CASE WHEN i.document_type = 'invoice'
@@ -518,7 +555,7 @@ export async function postNewDocumentsStock(
         AND ${direction} <> 0
         AND COALESCE(li.item_id, v.item_id) IS NOT NULL
       GROUP BY i.id, i.business_id, i.document_type, i.type, i.invoice_date,
-               COALESCE(li.item_id, v.item_id), li.variant_id
+               COALESCE(li.item_id, v.item_id), li.variant_id, li.batch_id
       RETURNING warehouse_id, item_id, variant_id, quantity
     )
     SELECT warehouse_id, item_id, variant_id, SUM(quantity)::text AS quantity
@@ -585,6 +622,60 @@ async function assertStockAvailable(
       code: "BAD_REQUEST",
       message: `Not enough stock — ${short.join("; ")}`,
     });
+  }
+}
+
+type StockChange = { warehouse_id: string; item_id: string; variant_id: string | null; diff: string };
+
+/** Net change per (warehouse, item, variant), batches added together. */
+function sumByItem(changes: Array<StockChange & { batch_id?: string | null }>): StockChange[] {
+  const out = new Map<string, StockChange & { n: number }>();
+  for (const c of changes) {
+    const key = `${c.warehouse_id}:${c.item_id}:${c.variant_id ?? ""}`;
+    const cur = out.get(key) ?? { warehouse_id: c.warehouse_id, item_id: c.item_id, variant_id: c.variant_id, diff: "0", n: 0 };
+    cur.n += Number(c.diff);
+    cur.diff = qty3(cur.n);
+    out.set(key, cur);
+  }
+  return [...out.values()].map(({ n: _n, ...c }) => c);
+}
+
+/**
+ * Refuse to take any batch below zero in a warehouse. Unlike the item-level
+ * check this doesn't depend on the negative stock policy: a batch that isn't
+ * on the shelf can't be sold, whatever the books allow.
+ */
+async function assertBatchesAvailable(
+  tx: InventoryDb,
+  businessId: string,
+  changes: Array<{ warehouse_id: string; item_id: string; batch_id: string | null; diff: string }>,
+) {
+  // Lock the items whose batches go down, so concurrent changes queue up.
+  const itemIds = [...new Set(changes.filter((c) => Number(c.diff) < 0 && c.batch_id).map((c) => c.item_id))].sort();
+  if (itemIds.length > 0) {
+    await tx.execute(sql`SELECT id FROM items WHERE id IN ${itemIds} ORDER BY id FOR UPDATE`);
+  }
+  const short: string[] = [];
+  for (const c of changes) {
+    const change = Number(c.diff);
+    if (change >= 0 || !c.batch_id) continue;
+    const [row] = (await tx.execute(sql`
+      SELECT COALESCE(SUM(m.quantity::numeric), 0)::text AS qty, b.batch_number, i.name, i.unit::text AS unit
+      FROM item_batches b
+      JOIN items i ON i.id = b.item_id
+      LEFT JOIN stock_movements m ON m.batch_id = b.id AND m.warehouse_id = ${c.warehouse_id} AND m.business_id = ${businessId}
+      WHERE b.id = ${c.batch_id} AND b.business_id = ${businessId}
+      GROUP BY b.batch_number, i.name, i.unit
+    `)) as unknown as Array<{ qty: string; batch_number: string; name: string; unit: string }>;
+    if (!row) continue;
+    const available = parseFloat(row.qty);
+    if (available + change < -0.0005) {
+      const trim = (n: number) => qty3(n).replace(/\.?0+$/, "");
+      short.push(`${row.name} batch ${row.batch_number}: ${trim(Math.max(available, 0))} ${row.unit} available, ${trim(-change)} needed`);
+    }
+  }
+  if (short.length > 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `Not enough stock in batch — ${short.join("; ")}` });
   }
 }
 
