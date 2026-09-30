@@ -213,7 +213,7 @@ export function BiometricSetupPrompt({ visible, onDismiss }: Props) {
                   onPress={handleEnableBiometric}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="finger-print" size={20} color={colors.textPrimary} />
+                  <Ionicons name="finger-print" size={20} color={colors.onBrand} />
                   <Text style={styles.primaryBtnText}>Enable {biometricType}</Text>
                 </TouchableOpacity>
               )}
@@ -380,7 +380,7 @@ const useStyles = makeStyles((colors) => ({
   primaryBtnText: {
     fontSize: 16,
     fontWeight: "700",
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   secondaryBtn: {
     flexDirection: "row",

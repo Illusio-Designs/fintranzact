@@ -43,6 +43,7 @@ import {
   ReceiptDollarIcon,
   ReturnRequestIcon,
   Settings01Icon,
+  UserShield01Icon,
   ShippingTruck01Icon,
   ShoppingCart01Icon,
   TaxesIcon,
@@ -704,6 +705,11 @@ function RootLayout() {
   // We could not find out whether the visitor is signed in. Never treat that
   // as "signed out" (that is what used to bounce people to /login at random).
   const sessionUnknown = !session && sessionCheckFailed;
+  // Platform admins (set by the server's PLATFORM_ADMIN_EMAIL) get /platform.
+  const { data: platformMe } = trpc.platform.me.useQuery(undefined, {
+    enabled: !!session?.user,
+  });
+  const isPlatformAdmin = !!platformMe?.isPlatformAdmin;
   const {
     data: tenantList,
     isLoading: tenantListLoading,
@@ -1112,7 +1118,17 @@ function RootLayout() {
 
     // Already signed in: the login and register pages have nothing to do.
     if (pathname === "/login" || pathname === "/register") {
-      navigate({ to: "/", replace: true });
+      navigate({ to: isPlatformAdmin && !session.tenantId ? "/platform" : "/", replace: true });
+      return;
+    }
+
+    // The platform admin page needs a signed-in user only — no organisation,
+    // plan or business.
+    if (pathname === "/platform" || pathname.startsWith("/platform/")) return;
+
+    // A platform admin who is not part of any organisation has nothing else to open.
+    if (isPlatformAdmin && !session.tenantId && tenantList && tenantList.length === 0) {
+      navigate({ to: "/platform", replace: true });
       return;
     }
 
@@ -1204,6 +1220,7 @@ function RootLayout() {
     tenantListLoading,
     tenantListFetching,
     hasCompletedPlanSelection,
+    isPlatformAdmin,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select single tenant
@@ -1266,6 +1283,9 @@ function RootLayout() {
     return <Outlet />;
   }
 
+  // The platform admin page has its own full-page layout and access check.
+  if (pathname === "/platform" || pathname.startsWith("/platform/")) return <Outlet />;
+
   // Authenticated but no tenant selected
   if (!session.tenantId) {
     // Auth flow pages (complete-profile, invite) handle tenant resolution
@@ -1275,6 +1295,9 @@ function RootLayout() {
     if (isAuthFlow) return <Outlet />;
 
     if (!tenantList) return loadingSpinner;
+
+    // Platform admin without an organisation: the redirect to /platform is in flight.
+    if (tenantList.length === 0 && isPlatformAdmin) return loadingSpinner;
 
     if (tenantList.length === 0) {
       // If a pending invite token exists, show spinner — the redirect useEffect
@@ -1663,6 +1686,21 @@ function RootLayout() {
 
             {/* Sidebar footer: settings, then the signed-in user */}
             <div className="shrink-0 border-t border-white/10 px-2 py-2">
+              {isPlatformAdmin ? (
+                <Tooltip label="Platform admin" disabled={!navCollapsed}>
+                  <Link
+                    to="/platform"
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-[9px] py-2 text-[13.5px] text-[#c3cee6] transition-colors hover:bg-white/[.07] hover:text-white",
+                      navCollapsed ? "px-3 md:justify-center md:px-0" : "px-3",
+                    )}
+                  >
+                    <Icon icon={UserShield01Icon} size={16} className="shrink-0" />
+                    <span className={cn(navCollapsed && "md:hidden")}>Platform admin</span>
+                  </Link>
+                </Tooltip>
+              ) : null}
               <Tooltip label="Settings" disabled={!navCollapsed}>
                 <Link
                   to="/settings"

@@ -14,8 +14,8 @@ import Constants from "expo-constants";
 import { trpc } from "../../../../src/lib/trpc";
 import { useAuthStore } from "../../../../src/stores/auth";
 import { makeStyles } from "../../../../src/lib/makeStyles";
-import { useColors } from "../../../../src/contexts/ThemeContext";
-import { PressableRow } from "../../../../src/components/ui";
+import { useColors, useTheme } from "../../../../src/contexts/ThemeContext";
+import { PressableRow, Logo } from "../../../../src/components/ui";
 import { OrgSwitcherSheet } from "../../../../src/components/OrgSwitcherSheet";
 import { queryClient } from "../../../../src/lib/query-client";
 
@@ -23,26 +23,42 @@ interface SettingItem {
   label: string;
   icon: string;
   description: string;
-  danger?: boolean;
-  route?: string;
+  route: string;
 }
 
-const SETTINGS: SettingItem[] = [
-  { label: "Business Details", icon: "business-outline", description: "Name, GST, address", route: "/(more)/settings/business" },
-  { label: "Documents", icon: "document-text-outline", description: "Prefixes and sequence numbers", route: "/(more)/settings/documents" },
-  { label: "Team", icon: "people-outline", description: "Members and roles", route: "/(more)/settings/team" },
-  { label: "Online Store", icon: "storefront-outline", description: "Store settings and items", route: "/(more)/settings/store" },
-  { label: "Appearance", icon: "color-palette-outline", description: "Light, dark, or system", route: "/(more)/settings/appearance" },
-  { label: "Profile", icon: "person-outline", description: "Name, email, password", route: "/(more)/settings/profile" },
-  { label: "Account", icon: "shield-checkmark-outline", description: "Sessions and activity log", route: "/(more)/settings/account" },
-  { label: "API Keys", icon: "key-outline", description: "Programmatic access tokens", route: "/(more)/settings/api-keys" },
-  { label: "Sign Out", icon: "log-out-outline", description: "End your session", danger: true },
+const GROUPS: { title: string; items: SettingItem[] }[] = [
+  {
+    title: "Business",
+    items: [
+      { label: "Business details", icon: "business-outline", description: "Name, GSTIN, address", route: "/(more)/settings/business" },
+      { label: "Documents", icon: "document-text-outline", description: "Prefixes and numbering", route: "/(more)/settings/documents" },
+      { label: "Team", icon: "people-outline", description: "Members and roles", route: "/(more)/settings/team" },
+      { label: "Online store", icon: "storefront-outline", description: "Store link and items", route: "/(more)/settings/store" },
+    ],
+  },
+  {
+    title: "App",
+    items: [
+      { label: "Appearance", icon: "sunny-outline", description: "Light, dark or system", route: "/(more)/settings/appearance" },
+      { label: "App lock", icon: "lock-closed-outline", description: "PIN or fingerprint on open", route: "/(more)/settings/profile" },
+    ],
+  },
+  {
+    title: "Security",
+    items: [
+      { label: "Account", icon: "shield-checkmark-outline", description: "Password and active sessions", route: "/(more)/settings/account" },
+      { label: "API keys", icon: "key-outline", description: "Connect other software", route: "/(more)/settings/api-keys" },
+    ],
+  },
 ];
+
+const MODE_LABEL = { light: "Light", dark: "Dark", system: "System" } as const;
 
 export default function SettingsScreen() {
   const styles = useStyles();
   const colors = useColors();
   const router = useRouter();
+  const { mode } = useTheme();
   const logout = useAuthStore((s) => s.logout);
   const utils = trpc.useUtils();
   const [showOrgSwitcher, setShowOrgSwitcher] = useState(false);
@@ -80,41 +96,40 @@ export default function SettingsScreen() {
     },
   });
 
-  const handleItemPress = (item: SettingItem) => {
-    if (item.danger) {
-      Alert.alert(
-        "Sign Out",
-        "Are you sure you want to sign out?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Sign Out",
-            style: "destructive",
-            onPress: () => logoutMutation.mutate(),
-          },
-        ]
-      );
-      return;
-    }
-    if (item.route) {
-      router.push(item.route as any);
-      return;
-    }
-    Alert.alert(item.label, "This setting is coming soon");
+  const handleSignOut = () => {
+    Alert.alert("Sign out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign out", style: "destructive", onPress: () => logoutMutation.mutate() },
+    ]);
   };
+
+  const userName = session?.user?.name ?? "Your profile";
+  const userInitials = userName.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Settings</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Profile */}
+        <PressableRow style={styles.profileCard} onPress={() => router.push("/(more)/settings/profile" as any)}>
+          <View style={styles.profileAvatar}>
+            <Text style={styles.profileAvatarText}>{userInitials || "?"}</Text>
+          </View>
+          <View style={styles.flexText}>
+            <Text style={styles.profileName} numberOfLines={1}>{userName}</Text>
+            <Text style={styles.profileSub} numberOfLines={1}>{session?.user?.email ?? "Name, email, password"}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </PressableRow>
+
         {/* Organization */}
         {tenantList && tenantList.length > 0 && (
           <TouchableOpacity
@@ -127,7 +142,7 @@ export default function SettingsScreen() {
                 {(session?.tenantName ?? "O").charAt(0).toUpperCase()}
               </Text>
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={styles.flexText}>
               <Text style={styles.orgName} numberOfLines={1}>{session?.tenantName ?? "Organization"}</Text>
               <Text style={styles.orgLabel}>Organization</Text>
             </View>
@@ -135,53 +150,54 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Settings List */}
-        <View style={styles.settingsList}>
-          {SETTINGS.map((item, index) => {
-            const isLast = index === SETTINGS.length - 1;
-            const isSignOut = item.danger;
-            return (
-              <PressableRow
-                key={item.label}
-                style={[
-                  styles.settingRow,
-                  !isLast && styles.settingRowBorder,
-                ]}
-                onPress={() => handleItemPress(item)}
-                disabled={logoutMutation.isPending && isSignOut}
-              >
-                <View style={[
-                  styles.settingIconWrapper,
-                  { backgroundColor: isSignOut ? "rgba(239,68,68,0.12)" : colors.brandLight },
-                ]}>
-                  <Ionicons
-                    name={item.icon as any}
-                    size={20}
-                    color={isSignOut ? colors.danger : colors.brand}
-                  />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={[styles.settingLabel, isSignOut && styles.settingLabelDanger]}>
-                    {item.label}
-                  </Text>
-                  <Text style={styles.settingDescription}>{item.description}</Text>
-                </View>
-                {logoutMutation.isPending && isSignOut ? (
-                  <ActivityIndicator color={colors.danger} size="small" />
-                ) : (
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={isSignOut ? colors.danger : colors.textMuted}
-                  />
-                )}
-              </PressableRow>
-            );
-          })}
-        </View>
+        {GROUPS.map((group) => (
+          <View key={group.title} style={styles.section}>
+            <Text style={styles.sectionTitle}>{group.title.toUpperCase()}</Text>
+            <View style={styles.settingsList}>
+              {group.items.map((item, index) => (
+                <PressableRow
+                  key={item.label}
+                  style={[styles.settingRow, index > 0 && styles.settingRowBorder]}
+                  onPress={() => router.push(item.route as any)}
+                >
+                  <View style={styles.settingIconWrapper}>
+                    <Ionicons name={item.icon as any} size={19} color={colors.textPrimary} />
+                  </View>
+                  <View style={styles.settingText}>
+                    <Text style={styles.settingLabel} numberOfLines={1}>{item.label}</Text>
+                    <Text style={styles.settingDescription} numberOfLines={1}>{item.description}</Text>
+                  </View>
+                  {item.label === "Appearance" ? (
+                    <Text style={styles.settingValue}>{MODE_LABEL[mode]}</Text>
+                  ) : null}
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </PressableRow>
+              ))}
+            </View>
+          </View>
+        ))}
 
-        {/* Footer */}
-        <Text style={styles.footer}>Fintranzact v{Constants.expoConfig?.version ?? "0.4.0"}</Text>
+        <TouchableOpacity
+          style={styles.signOutBtn}
+          onPress={handleSignOut}
+          disabled={logoutMutation.isPending}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+        >
+          {logoutMutation.isPending ? (
+            <ActivityIndicator color={colors.danger} size="small" />
+          ) : (
+            <>
+              <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+              <Text style={styles.signOutText}>Sign out</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.footerRow}>
+          <Logo size={20} />
+          <Text style={styles.footer}>Fintranzact {Constants.expoConfig?.version ?? ""}</Text>
+        </View>
       </ScrollView>
 
       {/* Org Switcher Sheet */}
@@ -201,91 +217,60 @@ export default function SettingsScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 20, fontWeight: "700", color: colors.textPrimary },
-  content: { padding: 16, paddingBottom: 48 },
-
-  // Settings List
-  settingsList: {
+  header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
-    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: "hidden",
-  },
-  settingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    gap: 14,
-  },
-  settingRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  settingRowDanger: {},
-  settingIconWrapper: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  settingText: { flex: 1 },
-  settingLabel: { fontSize: 15, fontWeight: "600", color: colors.textPrimary },
-  settingLabelDanger: { color: colors.danger },
-  settingDescription: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-
-  // Org card
+  title: { flex: 1, fontSize: 24, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.5 },
+  content: { paddingHorizontal: 20, paddingBottom: 32, gap: 20 },
+  flexText: { flex: 1, minWidth: 0, gap: 3 },
+  profileCard: {
+    flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 22,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+  },
+  profileAvatar: {
+    width: 52, height: 52, borderRadius: 16, backgroundColor: colors.hero,
+    alignItems: "center", justifyContent: "center",
+  },
+  profileAvatarText: { color: colors.heroText, fontSize: 17, fontWeight: "800" },
+  profileName: { fontSize: 17, fontWeight: "700", color: colors.textPrimary },
+  profileSub: { fontSize: 13, color: colors.textMuted },
   orgCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 16,
+    flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 18,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginTop: -8,
   },
   orgAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.brand,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 40, height: 40, borderRadius: 12, backgroundColor: colors.brandLight,
+    alignItems: "center", justifyContent: "center",
   },
-  orgAvatarText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#fff",
+  orgAvatarText: { color: colors.brand, fontSize: 15, fontWeight: "800" },
+  orgName: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
+  orgLabel: { fontSize: 12, color: colors.textMuted },
+  section: { gap: 8 },
+  sectionTitle: { fontSize: 12, fontWeight: "700", letterSpacing: 0.7, color: colors.textMuted, paddingLeft: 4 },
+  settingsList: { backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  settingRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 60 },
+  settingRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  settingIconWrapper: {
+    width: 36, height: 36, borderRadius: 11, backgroundColor: colors.surfaceHover,
+    alignItems: "center", justifyContent: "center",
   },
-  orgName: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.textPrimary,
+  settingText: { flex: 1, gap: 2 },
+  settingLabel: { fontSize: 15, fontWeight: "600", color: colors.textPrimary },
+  settingDescription: { fontSize: 13, color: colors.textMuted },
+  settingValue: { fontSize: 14, color: colors.textMuted },
+  signOutBtn: {
+    flexDirection: "row", gap: 8, height: 54, borderRadius: 16, backgroundColor: colors.dangerBg,
+    alignItems: "center", justifyContent: "center",
   },
-  orgLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1,
-  },
-
-  footer: {
-    textAlign: "center",
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 32,
-  },
+  signOutText: { fontSize: 15, fontWeight: "700", color: colors.danger },
+  footerRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  footer: { fontSize: 13, color: colors.textMuted },
 }));

@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { createHash, randomBytes } from "node:crypto";
 import * as argon2 from "argon2";
+import { isPlatformAdmin } from "../lib/platform-admin.js";
 import { controlDb, users, sessions, tenants, tenantMembers, magicLinkTokens, invitations, accessTokens, provisionTenantDatabase, cleanupTenantDatabase, type TenantDbConfig } from "@fintranzact/db";
 import { loginSchema, registerSchema, magicLinkRequestSchema, magicLinkVerifySchema, completeProfileSchema } from "@fintranzact/shared";
 import { router, publicProcedure, protectedProcedure } from "../trpc.js";
@@ -456,7 +457,9 @@ export const authRouter = router({
       .from(tenantMembers)
       .where(eq(tenantMembers.userId, user.id));
 
-    if (memberships.length === 0) {
+    // Platform admins (set by the server environment) may have no organisation
+    // of their own; they sign in to use /platform.
+    if (memberships.length === 0 && !(await isPlatformAdmin(user.id))) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Account has no organization membership" });
     }
 

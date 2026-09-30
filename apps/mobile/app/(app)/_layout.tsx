@@ -10,10 +10,13 @@ import { useColors } from "../../src/contexts/ThemeContext";
 import { queryClient } from "../../src/lib/query-client";
 import { BusinessSwitcherProvider } from "../../src/contexts/BusinessSwitcherContext";
 import { MaintenanceBanner } from "../../src/components/MaintenanceBanner";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { fontFamilies } from "../../src/lib/theme";
 
 export default function AppLayout() {
   const styles = useStyles();
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const token = useAuthStore((s) => s.token);
   const router = useRouter();
   const utils = trpc.useUtils();
@@ -131,7 +134,7 @@ export default function AppLayout() {
               onPress={() => router.push("/(app)/create-business")}
               activeOpacity={0.8}
             >
-              <Ionicons name="add" size={18} color={colors.textPrimary} />
+              <Ionicons name="add" size={18} color={colors.onBrand} />
               <Text style={styles.createBizBtnText}>Create Business</Text>
             </TouchableOpacity>
           </View>
@@ -152,7 +155,7 @@ export default function AppLayout() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <MaintenanceBanner />
       <BusinessSwitcherProvider
         businesses={businesses ?? []}
@@ -163,38 +166,57 @@ export default function AppLayout() {
         <Tabs
           screenOptions={{
             headerShown: false,
-            tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.surface },
+            sceneStyle: { backgroundColor: colors.bg },
+            // A rounded bar inset from the screen edges. It stays in the normal
+            // layout (not absolutely positioned) so it never covers content.
+            tabBarStyle: {
+              backgroundColor: colors.surface,
+              borderTopWidth: 0,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 24,
+              marginHorizontal: 12,
+              marginBottom: Math.max(insets.bottom, 12),
+              height: 68,
+              paddingTop: 8,
+              paddingBottom: 8,
+              elevation: 8,
+              shadowColor: "#0f1b3d",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.12,
+              shadowRadius: 20,
+            },
             tabBarActiveTintColor: colors.brand,
             tabBarInactiveTintColor: colors.textMuted,
-            tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+            tabBarLabelStyle: { fontSize: 11, fontFamily: fontFamilies.body[700] },
           }}
         >
           <Tabs.Screen
             name="(home)"
             options={{
               title: "Home",
-              tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
+              tabBarIcon: ({ color, focused }) => <TabIcon name="home-outline" color={color} focused={focused} />,
             }}
           />
           <Tabs.Screen
             name="(invoices)"
             options={{
               title: "Invoices",
-              tabBarIcon: ({ color, size }) => <Ionicons name="receipt-outline" size={size} color={color} />,
+              tabBarIcon: ({ color, focused }) => <TabIcon name="receipt-outline" color={color} focused={focused} />,
             }}
           />
           <Tabs.Screen
             name="(parties)"
             options={{
               title: "Parties",
-              tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
+              tabBarIcon: ({ color, focused }) => <TabIcon name="people-outline" color={color} focused={focused} />,
             }}
           />
           <Tabs.Screen
             name="(payments)"
             options={{
               title: "Payments",
-              tabBarIcon: ({ color, size }) => <Ionicons name="card-outline" size={size} color={color} />,
+              tabBarIcon: ({ color, focused }) => <TabIcon name="card-outline" color={color} focused={focused} />,
             }}
           />
           <Tabs.Screen
@@ -213,11 +235,30 @@ export default function AppLayout() {
             name="(more)"
             options={{
               title: "More",
-              tabBarIcon: ({ color, size }) => <Ionicons name="menu-outline" size={size} color={color} />,
+              tabBarIcon: ({ color, focused }) => <TabIcon name="grid-outline" color={color} focused={focused} />,
             }}
           />
         </Tabs>
       </BusinessSwitcherProvider>
+    </View>
+  );
+}
+
+/** Tab icon with a soft pill behind it when active. */
+function TabIcon({ name, color, focused }: { name: keyof typeof Ionicons.glyphMap; color: string; focused: boolean }) {
+  const colors = useColors();
+  return (
+    <View
+      style={{
+        width: 44,
+        height: 28,
+        borderRadius: 10,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: focused ? colors.brandLight : "transparent",
+      }}
+    >
+      <Ionicons name={name} size={21} color={color} />
     </View>
   );
 }
@@ -262,7 +303,7 @@ const useStyles = makeStyles((colors) => ({
     marginTop: 8,
   },
   createBizBtnText: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
     fontWeight: "700",
     fontSize: 15,
   },

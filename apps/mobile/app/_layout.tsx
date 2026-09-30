@@ -18,6 +18,36 @@ import { useBusinessStore } from "../src/stores/business";
 import { useBiometricStore } from "../src/stores/biometric";
 import { LockScreen } from "../src/components/LockScreen";
 import { vanillaTRPC } from "../src/lib/trpc";
+import { Logo } from "../src/components/ui/Logo";
+import * as Font from "expo-font";
+import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
+  DMSans_800ExtraBold,
+} from "@expo-google-fonts/dm-sans";
+import {
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from "@expo-google-fonts/plus-jakarta-sans";
+
+/** Brand fonts; names match `fontFamilies` in src/lib/theme.ts. */
+function loadBrandFonts() {
+  return Font.loadAsync({
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
+    DMSans_800ExtraBold,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  }).catch(() => {
+    // Missing fonts fall back to the system font; never block start-up on them.
+  });
+}
 
 // Keep the native splash screen visible while we hydrate stores
 SplashScreen.preventAutoHideAsync();
@@ -25,19 +55,16 @@ SplashScreen.preventAutoHideAsync();
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 /* --- Brand Colors -------------------------------------------------------- */
-// The splash is an intentional brand visual that renders before the theme
-// context hydrates. It always uses the dark brand palette (`#141417` matches
-// the themed dark `bg`), so the handoff into a dark-mode app is seamless.
-// Light-mode users see a single dark splash flash on cold boot; this is
-// accepted as part of the brand identity.
+// The splash renders before the theme context hydrates, so it uses the fixed
+// brand navy (the same as the lock screen and the web sidebar) in both modes.
 const C = {
-  bg: "#141417",
-  brand: "#5b5bd6",
-  brandLight: "rgba(91, 91, 214, 0.15)",
-  brandBorder: "rgba(91, 91, 214, 0.25)",
-  amber: "#fbbf24",
+  bg: "#0f1b3d",
+  brand: "#3b5eaa",
+  brandLight: "rgba(59, 94, 170, 0.28)",
+  brandBorder: "rgba(255, 255, 255, 0.10)",
+  amber: "#f59e0b",
   textPrimary: "#ffffff",
-  textMuted: "#6b7280",
+  textMuted: "#b3bfdd",
 } as const;
 
 /* --- Animated Background Mesh -------------------------------------------- */
@@ -98,71 +125,9 @@ function SplashBackgroundMesh({
   );
 }
 
-/* --- Splash Logo Icon (4-square brand pattern) --------------------------- */
+/* --- Splash Logo ---------------------------------------------------------- */
 function SplashLogoIcon({ size = 72 }: { size?: number }) {
-  const squareSize = (size - 16) / 2 - 2;
-  const radius = squareSize * 0.22;
-
-  return (
-    <View
-      style={[
-        splashStyles.logoContainer,
-        {
-          width: size,
-          height: size,
-          borderRadius: size * 0.27,
-        },
-      ]}
-    >
-      <View
-        style={[
-          splashStyles.logoGrid,
-          {
-            width: squareSize * 2 + 4,
-            height: squareSize * 2 + 4,
-          },
-        ]}
-      >
-        {/* Top-left: white 0.9 */}
-        <View
-          style={{
-            width: squareSize,
-            height: squareSize,
-            borderRadius: radius,
-            backgroundColor: "rgba(255, 255, 255, 0.9)",
-          }}
-        />
-        {/* Top-right: white 0.7 */}
-        <View
-          style={{
-            width: squareSize,
-            height: squareSize,
-            borderRadius: radius,
-            backgroundColor: "rgba(255, 255, 255, 0.7)",
-          }}
-        />
-        {/* Bottom-left: white 0.6 */}
-        <View
-          style={{
-            width: squareSize,
-            height: squareSize,
-            borderRadius: radius,
-            backgroundColor: "rgba(255, 255, 255, 0.6)",
-          }}
-        />
-        {/* Bottom-right: amber with glow overlay */}
-        <View
-          style={{
-            width: squareSize,
-            height: squareSize,
-            borderRadius: radius,
-            backgroundColor: C.amber,
-            opacity: 0.9,
-          }}
-        />
-      </View>
-    </View>
-  );
+  return <Logo size={size} variant="light" />;
 }
 
 /* --- Animated Splash Screen ---------------------------------------------- */
@@ -512,7 +477,7 @@ function RootLayoutInner() {
   // --- Step 1: Hydrate all stores ----------------------------------------
   useEffect(() => {
     async function prepare() {
-      await Promise.all([hydrate(), hydrateBusinessStore(), hydrateBiometric()]);
+      await Promise.all([hydrate(), hydrateBusinessStore(), hydrateBiometric(), loadBrandFonts()]);
       // Hide the native splash to reveal our custom animated one
       await SplashScreen.hideAsync();
       // Signal the custom splash to begin its exit animation

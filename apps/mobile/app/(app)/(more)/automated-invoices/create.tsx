@@ -478,7 +478,7 @@ export default function CreateRecurringInvoiceScreen() {
             activeOpacity={0.85}
           >
             {createMutation.isPending ? (
-              <ActivityIndicator color={colors.textPrimary} size="small" />
+              <ActivityIndicator color={colors.onBrand} size="small" />
             ) : (
               <Text style={styles.submitBtnText}>Create Template</Text>
             )}
@@ -628,7 +628,7 @@ const useStyles = makeStyles((colors) => ({
     marginTop: 8,
   },
   submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { color: colors.textPrimary, fontSize: 16, fontWeight: "700" },
+  submitBtnText: { color: colors.onBrand, fontSize: 16, fontWeight: "700" },
 }));
 
 /* ── Modal Styles ──────────────────────────────────────────────── */

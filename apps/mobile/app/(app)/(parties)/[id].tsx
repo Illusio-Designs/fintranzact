@@ -230,7 +230,7 @@ export default function PartyDetailScreen() {
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.topNavActions}>
           <TouchableOpacity
@@ -377,8 +377,8 @@ export default function PartyDetailScreen() {
             style={[styles.actionButton, styles.actionButtonPrimary]}
             activeOpacity={0.7}
           >
-            <Ionicons name="receipt-outline" size={20} color={colors.textPrimary} />
-            <Text style={[styles.actionButtonText, { color: colors.textPrimary }]}>
+            <Ionicons name="receipt-outline" size={20} color={colors.onBrand} />
+            <Text style={[styles.actionButtonText, { color: colors.onBrand }]}>
               New Invoice
             </Text>
           </TouchableOpacity>
@@ -1255,7 +1255,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
   },
   tabTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   tabContent: {
     paddingTop: 12,

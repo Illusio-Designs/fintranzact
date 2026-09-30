@@ -13,14 +13,15 @@ import { trpc } from "../../src/lib/trpc";
 import { useAuthStore } from "../../src/stores/auth";
 
 const colors = {
-  bg: "#0f0f1a",
-  surface: "#1a1a2e",
-  border: "#2d2d44",
-  brand: "#6366f1",
-  brandLight: "rgba(99,102,241,0.12)",
+  bg: "#070c1b",
+  surface: "#0f1730",
+  border: "#212c4d",
+  brand: "#3b5eaa",
+  brandLight: "rgba(59, 94, 170,0.12)",
+  onBrand: "#ffffff",
   textPrimary: "#ffffff",
-  textSecondary: "#9ca3af",
-  textMuted: "#6b7280",
+  textSecondary: "#a3aecb",
+  textMuted: "#8390b0",
   danger: "#ef4444",
 } as const;
 
@@ -134,5 +135,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     marginTop: 24,
   },
-  buttonText: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
+  buttonText: { fontSize: 15, fontWeight: "700", color: colors.onBrand },
 });

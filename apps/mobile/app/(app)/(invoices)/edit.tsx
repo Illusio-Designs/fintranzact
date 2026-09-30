@@ -532,7 +532,7 @@ export default function InvoiceEditScreen() {
       {/* Header */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.topBarCenter}>
           <Text style={styles.topBarTitle}>Edit Invoice</Text>
@@ -545,7 +545,7 @@ export default function InvoiceEditScreen() {
           activeOpacity={0.8}
         >
           {updateMutation.isPending ? (
-            <ActivityIndicator size="small" color={colors.textPrimary} />
+            <ActivityIndicator size="small" color={colors.onBrand} />
           ) : (
             <Text style={styles.saveBtnText}>Save</Text>
           )}
@@ -694,9 +694,9 @@ const useStyles = makeStyles((colors) => ({
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -715,7 +715,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: "center",
   },
   saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
+  saveBtnText: { fontSize: 15, fontWeight: "700", color: colors.onBrand },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
   sectionLabel: {

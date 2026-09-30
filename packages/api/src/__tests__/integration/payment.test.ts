@@ -440,6 +440,10 @@ describe("payment.list", () => {
     for (const p of result.data) {
       expect(p.partyName).toBeDefined();
     }
+
+    // partyType tells the app which way the money went (customer → in, supplier → out)
+    const fromParty1 = result.data.find((p) => p.partyId === world.party1.id);
+    expect(fromParty1?.partyType).toBe(world.party1.type);
   });
 
   it("filters by partyId returns only payments for that party", async () => {

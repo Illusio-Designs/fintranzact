@@ -518,7 +518,7 @@ describe("SECURITY — rate limit origin detection scopes limits correctly", () 
     if (!origin) return true; // No origin = server-side call
     if (corsOrigins.some((allowed) => origin === allowed)) return true;
     // Match *.fintranzact.com subdomains — mirrors server.ts regex
-    if (/^https?:\/\/([a-z0-9-]+\.)?fintranzact\.in$/i.test(origin)) return true;
+    if (/^https?:\/\/([a-z0-9-]+\.)?fintranzact\.com$/i.test(origin)) return true;
     return false;
   }
 

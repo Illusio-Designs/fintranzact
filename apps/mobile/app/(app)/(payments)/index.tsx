@@ -19,30 +19,25 @@ import { formatCurrency, formatDateShort } from "../../../src/lib/utils";
 import { accumulatePages } from "../../../src/lib/accumulate-pages";
 import { makeStyles } from "../../../src/lib/makeStyles";
 import { useColors } from "../../../src/contexts/ThemeContext";
-import { FAB, SearchBar, PressableRow, EmptyState } from "../../../src/components/ui";
+import { SearchBar, PressableRow, EmptyState } from "../../../src/components/ui";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-type PaymentMode = "cash" | "bank" | "upi" | "cheque" | "other";
 
-const MODE_COLORS: Record<PaymentMode, { bg: string; text: string }> = {
-  cash: { bg: "rgba(34, 197, 94, 0.15)", text: "#22c55e" },
-  upi: { bg: "rgba(168, 85, 247, 0.15)", text: "#a855f7" },
-  bank: { bg: "rgba(59, 130, 246, 0.15)", text: "#3b82f6" },
-  cheque: { bg: "rgba(245, 158, 11, 0.15)", text: "#f59e0b" },
-  other: { bg: "rgba(156, 163, 175, 0.15)", text: "#9ca3af" },
+
+const MODE_LABELS: Record<string, string> = {
+  cash: "Cash", upi: "UPI", bank: "Bank", cheque: "Cheque", other: "Other",
+  credit_card: "Card", debit_card: "Card", net_banking: "Net banking", wallet: "Wallet",
 };
 
+/** Neutral mode tag ("UPI", "Bank"); the direction icon carries the colour. */
 function ModeBadge({ mode }: { mode: string }) {
   const styles = useStyles();
-  const modeColors = MODE_COLORS[mode as PaymentMode] ?? MODE_COLORS.other;
   return (
-    <View style={[styles.badge, { backgroundColor: modeColors.bg }]}>
-      <Text style={[styles.badgeText, { color: modeColors.text }]}>
-        {mode.charAt(0).toUpperCase() + mode.slice(1)}
-      </Text>
+    <View style={styles.badge}>
+      <Text style={styles.badgeText}>{MODE_LABELS[mode] ?? mode}</Text>
     </View>
   );
 }
@@ -176,11 +171,16 @@ export default function PaymentsScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
         <Text style={styles.title}>Payments</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity
+          style={styles.recordBtn}
+          onPress={() => router.push("/(payments)/create" as never)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
+          <Ionicons name="add" size={18} color={colors.onBrand} />
+          <Text style={styles.recordBtnText}>Record</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
@@ -188,7 +188,7 @@ export default function PaymentsScreen() {
         <SearchBar
           value={search}
           onChangeText={handleSearch}
-          placeholder="Search payments or parties..."
+          placeholder="Search party or payment number"
         />
       </View>
 
@@ -224,19 +224,35 @@ export default function PaymentsScreen() {
               style={styles.card}
               onPress={() => router.push(`/(more)/payments/${item.id}` as never)}
             >
-              <View style={styles.cardRow}>
-                <View style={styles.cardLeft}>
-                  <Text style={styles.paymentNumber}>{item.paymentNumber}</Text>
-                  <Text style={styles.partyName} numberOfLines={1}>{item.partyName}</Text>
-                </View>
-                <Text style={styles.amount}>{formatCurrency(item.amount)}</Text>
-              </View>
-              <View style={styles.cardFooter}>
-                <Text style={styles.date}>
-                  {item.paymentDate ? formatDateShort(item.paymentDate) : "—"}
-                </Text>
-                <ModeBadge mode={item.mode} />
-              </View>
+              {(() => {
+                // Customers pay you; you pay suppliers.
+                const isIn = item.partyType !== "supplier";
+                return (
+                  <>
+                    <View style={[styles.dirIcon, { backgroundColor: isIn ? colors.successBg : colors.dangerBg }]}>
+                      <Ionicons
+                        name={isIn ? "arrow-down-outline" : "arrow-up-outline"}
+                        size={18}
+                        color={isIn ? colors.success : colors.danger}
+                        style={{ transform: [{ rotate: "45deg" }] }}
+                      />
+                    </View>
+                    <View style={styles.cardLeft}>
+                      <Text style={styles.partyName} numberOfLines={1}>{item.partyName}</Text>
+                      <View style={styles.metaRow}>
+                        <Text style={styles.date} numberOfLines={1}>
+                          {item.paymentDate ? formatDateShort(item.paymentDate) : "—"}
+                          {item.paymentNumber ? ` · ${item.paymentNumber}` : ""}
+                        </Text>
+                        <ModeBadge mode={item.mode} />
+                      </View>
+                    </View>
+                    <Text style={[styles.amount, { color: isIn ? colors.success : colors.textPrimary }]} numberOfLines={1}>
+                      {isIn ? "+" : "−"}{formatCurrency(item.amount)}
+                    </Text>
+                  </>
+                );
+              })()}
             </PressableRow>
           )}
           onEndReached={() => {
@@ -255,7 +271,6 @@ export default function PaymentsScreen() {
         />
       )}
 
-      <FAB onPress={() => router.push("/(payments)/create" as never)} />
     </SafeAreaView>
   );
 }
@@ -263,54 +278,33 @@ export default function PaymentsScreen() {
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.bg },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12,
   },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 20, fontWeight: "700", color: colors.textPrimary },
-  searchWrapper: {
-    margin: 16,
+  title: { fontSize: 28, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.6 },
+  recordBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6, height: 44, paddingLeft: 12, paddingRight: 16,
+    borderRadius: 14, backgroundColor: colors.brand,
+    shadowColor: "#0f1b3d", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 4,
   },
-  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
+  recordBtnText: { color: colors.onBrand, fontSize: 14, fontWeight: "700" },
+  searchWrapper: { marginHorizontal: 20, marginBottom: 12 },
+  listContent: { paddingHorizontal: 20, paddingBottom: 24 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 10,
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8,
   },
-  cardRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
-  cardLeft: { flex: 1, marginRight: 12 },
-  paymentNumber: { fontSize: 13, fontWeight: "600", color: colors.textSecondary },
-  partyName: { fontSize: 16, fontWeight: "600", color: colors.textPrimary, marginTop: 2 },
-  amount: { fontSize: 17, fontWeight: "700", color: colors.textPrimary },
-  cardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  date: { fontSize: 12, color: colors.textMuted },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeText: { fontSize: 11, fontWeight: "600", textTransform: "capitalize" },
-  footer: {
-    paddingVertical: 20,
-    alignItems: "center",
-  },
+  dirIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  cardLeft: { flex: 1, gap: 4 },
+  partyName: { fontSize: 15, fontWeight: "600", color: colors.textPrimary },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  amount: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
+  date: { flexShrink: 1, fontSize: 13, color: colors.textMuted },
+  badge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: colors.surfaceHover },
+  badgeText: { fontSize: 11, fontWeight: "700", color: colors.textPrimary },
+  footer: { paddingVertical: 20, alignItems: "center" },
 }));
 
 const useBannerStyles = makeStyles((colors) => ({

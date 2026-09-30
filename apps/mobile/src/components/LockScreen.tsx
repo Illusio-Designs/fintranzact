@@ -7,16 +7,16 @@ import {
   Animated,
   Easing,
   Dimensions,
-  Platform,
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useBiometricStore } from "../stores/biometric";
+import { Logo } from "./ui/Logo";
 import { makeStyles } from "../lib/makeStyles";
 import { useColors } from "../contexts/ThemeContext";
 import { haptic } from "../lib/haptics";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const PIN_LENGTH = 4;
 
@@ -198,7 +198,7 @@ export function LockScreen({ onUnlock, onSignOut }: LockScreenProps) {
         <View style={styles.content}>
           <LogoIcon size={64} />
           <Text style={styles.brandName}>Fintranzact</Text>
-          <ActivityIndicator size="small" color={colors.brand} style={{ marginTop: 24 }} />
+          <ActivityIndicator size="small" color={colors.heroText} style={{ marginTop: 24 }} />
           <Text style={styles.verifyingText}>Verifying session...</Text>
         </View>
       </Animated.View>
@@ -222,11 +222,7 @@ export function LockScreen({ onUnlock, onSignOut }: LockScreenProps) {
             onPress={attemptBiometric}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name={Platform.OS === "ios" ? "finger-print" : "finger-print"}
-              size={48}
-              color={colors.brand}
-            />
+            <Ionicons name="finger-print" size={44} color={colors.heroText} />
           </TouchableOpacity>
           <Text style={styles.tapHint}>Tap to unlock</Text>
 
@@ -248,7 +244,9 @@ export function LockScreen({ onUnlock, onSignOut }: LockScreenProps) {
         </View>
       ) : (
         <Animated.View style={[styles.content, { transform: [{ translateX: shakeAnim }] }]}>
+          <LogoIcon size={40} />
           <Text style={styles.pinTitle}>Enter your PIN</Text>
+          <Text style={styles.pinHint}>Unlock Fintranzact</Text>
 
           {/* Dot indicators */}
           <View style={styles.dotRow}>
@@ -276,17 +274,36 @@ export function LockScreen({ onUnlock, onSignOut }: LockScreenProps) {
               <View key={rowIndex} style={styles.numRow}>
                 {row.map((key) => {
                   if (key === "") {
-                    return <View key="empty" style={styles.numKeyEmpty} />;
+                    if (!biometricEnabled) return <View key="empty" style={styles.numKeyEmpty} />;
+                    return (
+                      <TouchableOpacity
+                        key="bio"
+                        style={styles.numKeyGhost}
+                        onPress={() => {
+                          setMode("biometric");
+                          setError("");
+                          setPin("");
+                          setBiometricFailCount(0);
+                        }}
+                        activeOpacity={0.6}
+                        accessibilityRole="button"
+                        accessibilityLabel="Unlock with fingerprint"
+                      >
+                        <Ionicons name="finger-print" size={26} color={colors.heroText} />
+                      </TouchableOpacity>
+                    );
                   }
                   if (key === "del") {
                     return (
                       <TouchableOpacity
                         key="del"
-                        style={styles.numKey}
+                        style={styles.numKeyGhost}
                         onPress={handlePinDelete}
                         activeOpacity={0.6}
+                        accessibilityRole="button"
+                        accessibilityLabel="Delete"
                       >
-                        <Ionicons name="backspace-outline" size={24} color={colors.textSecondary} />
+                        <Ionicons name="backspace-outline" size={24} color={colors.heroText} />
                       </TouchableOpacity>
                     );
                   }
@@ -305,221 +322,98 @@ export function LockScreen({ onUnlock, onSignOut }: LockScreenProps) {
             ))}
           </View>
 
-          {/* Switch to biometric */}
-          {biometricEnabled && (
-            <TouchableOpacity
-              style={styles.switchRow}
-              onPress={() => {
-                setMode("biometric");
-                setError("");
-                setPin("");
-                setBiometricFailCount(0);
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="finger-print" size={18} color={colors.brand} />
-              <Text style={styles.switchModeText}>Use fingerprint</Text>
-            </TouchableOpacity>
-          )}
         </Animated.View>
       )}
 
       {/* Sign out link — always visible at the bottom */}
       <TouchableOpacity style={styles.signOutButton} onPress={onSignOut} activeOpacity={0.7}>
-        <Text style={styles.signOutText}>Sign out</Text>
+        <Text style={styles.signOutText}>Forgot PIN? Sign out and sign in again</Text>
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
-/* -- Mini Logo Icon (reused from splash pattern) ------------ */
+/* -- Logo ------------------------------------------------- */
 
 function LogoIcon({ size = 64 }: { size?: number }) {
-  const squareSize = (size - 12) / 2 - 2;
-  const r = squareSize * 0.22;
-
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.27,
-        backgroundColor: "rgba(99, 102, 241, 0.15)",
-        borderWidth: 1,
-        borderColor: "rgba(99, 102, 241, 0.25)",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          flexWrap: "wrap",
-          width: squareSize * 2 + 4,
-          height: squareSize * 2 + 4,
-          gap: 3,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <View style={{ width: squareSize, height: squareSize, borderRadius: r, backgroundColor: "rgba(255,255,255,0.9)" }} />
-        <View style={{ width: squareSize, height: squareSize, borderRadius: r, backgroundColor: "rgba(255,255,255,0.7)" }} />
-        <View style={{ width: squareSize, height: squareSize, borderRadius: r, backgroundColor: "rgba(255,255,255,0.6)" }} />
-        <View style={{ width: squareSize, height: squareSize, borderRadius: r, backgroundColor: "#fbbf24", opacity: 0.9 }} />
-      </View>
-    </View>
-  );
+  return <Logo size={size} variant="light" />;
 }
 
 /* -- Styles ------------------------------------------------- */
 
 const useStyles = makeStyles((colors) => ({
+  // Always the navy brand surface, in light and dark mode.
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.hero,
     zIndex: 999,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   ambientGlow: {
     position: "absolute",
-    width: SCREEN_WIDTH * 0.8,
-    height: SCREEN_WIDTH * 0.8,
-    borderRadius: SCREEN_WIDTH * 0.4,
-    backgroundColor: colors.brand,
-    top: SCREEN_HEIGHT * 0.1,
+    width: SCREEN_WIDTH * 0.9,
+    height: SCREEN_WIDTH * 0.9,
+    borderRadius: SCREEN_WIDTH * 0.45,
+    borderWidth: 1,
+    borderColor: colors.heroText,
+    top: -SCREEN_WIDTH * 0.35,
+    left: -SCREEN_WIDTH * 0.3,
   },
   content: {
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 40,
+    paddingHorizontal: 32,
   },
   brandName: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: colors.textPrimary,
-    letterSpacing: -0.5,
+    fontSize: 22,
+    fontWeight: "800",
+    color: colors.heroText,
+    letterSpacing: -0.4,
     marginTop: 16,
     marginBottom: 40,
   },
   biometricButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.brandLight,
-    borderWidth: 1,
-    borderColor: "rgba(99, 102, 241, 0.3)",
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.heroChip,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
   },
-  tapHint: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginBottom: 8,
-  },
-  verifyingText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginTop: 12,
-  },
-  errorText: {
-    fontSize: 13,
-    color: colors.danger,
-    marginTop: 12,
-    textAlign: "center",
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginTop: 32,
-    marginBottom: 16,
-  },
-  dividerLine: {
-    width: 40,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  dividerText: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  switchModeText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.brand,
-  },
-  switchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 24,
-  },
+  tapHint: { fontSize: 15, color: colors.heroMuted, marginBottom: 8 },
+  verifyingText: { fontSize: 14, color: colors.heroMuted, marginTop: 12 },
+  errorText: { fontSize: 14, fontWeight: "600", color: "#fda4af", marginTop: 12, textAlign: "center" },
+  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 32, marginBottom: 8 },
+  dividerLine: { width: 40, height: 1, backgroundColor: colors.heroChip },
+  dividerText: { fontSize: 12, color: colors.heroMuted },
+  switchModeText: { fontSize: 15, fontWeight: "700", color: colors.heroText, paddingVertical: 12 },
 
-  // Sign out
-  signOutButton: {
-    position: "absolute",
-    bottom: 48,
-  },
-  signOutText: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
+  signOutButton: { position: "absolute", bottom: 40, paddingVertical: 12, paddingHorizontal: 16 },
+  signOutText: { fontSize: 14, fontWeight: "700", color: colors.heroMuted },
 
   // PIN mode
-  pinTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.textPrimary,
-    marginBottom: 24,
-  },
-  dotRow: {
-    flexDirection: "row",
-    gap: 16,
-    marginBottom: 16,
-  },
-  dot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-  },
-  dotFilled: {
-    backgroundColor: colors.brand,
-  },
-  dotEmpty: {
-    backgroundColor: "transparent",
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
+  pinTitle: { fontSize: 22, fontWeight: "800", color: colors.heroText, marginTop: 20, letterSpacing: -0.3 },
+  pinHint: { fontSize: 15, color: colors.heroMuted, marginTop: 6, marginBottom: 28 },
+  dotRow: { flexDirection: "row", gap: 18, marginBottom: 8 },
+  dot: { width: 16, height: 16, borderRadius: 8 },
+  dotFilled: { backgroundColor: colors.heroText },
+  dotEmpty: { backgroundColor: "transparent", borderWidth: 2, borderColor: colors.heroMuted },
 
   // Number pad
-  numPad: {
-    marginTop: 24,
-    gap: 12,
-  },
-  numRow: {
-    flexDirection: "row",
-    gap: 20,
-    justifyContent: "center",
-  },
+  numPad: { marginTop: 36, gap: 16 },
+  numRow: { flexDirection: "row", gap: 28, justifyContent: "center" },
   numKey: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.heroChip,
     alignItems: "center",
     justifyContent: "center",
   },
-  numKeyEmpty: {
-    width: 64,
-    height: 64,
-  },
-  numKeyText: {
-    fontSize: 24,
-    fontWeight: "600",
-    color: colors.textPrimary,
-  },
+  numKeyGhost: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  numKeyEmpty: { width: 72, height: 72 },
+  numKeyText: { fontSize: 28, fontWeight: "600", color: colors.heroText },
 }));

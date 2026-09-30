@@ -30,6 +30,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PriceLevelsRouteImport } from './routes/price-levels'
 import { Route as PosRouteImport } from './routes/pos'
+import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PhysicalStockRouteImport } from './routes/physical-stock'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PartnersRouteImport } from './routes/partners'
@@ -167,6 +168,11 @@ const PriceLevelsRoute = PriceLevelsRouteImport.update({
 const PosRoute = PosRouteImport.update({
   id: '/pos',
   path: '/pos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformRoute = PlatformRouteImport.update({
+  id: '/platform',
+  path: '/platform',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PhysicalStockRoute = PhysicalStockRouteImport.update({
@@ -363,6 +369,7 @@ export interface FileRoutesByFullPath {
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
+  '/platform': typeof PlatformRoute
   '/pos': typeof PosRoute
   '/price-levels': typeof PriceLevelsRoute
   '/pricing': typeof PricingRoute
@@ -419,6 +426,7 @@ export interface FileRoutesByTo {
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
+  '/platform': typeof PlatformRoute
   '/pos': typeof PosRoute
   '/price-levels': typeof PriceLevelsRoute
   '/pricing': typeof PricingRoute
@@ -476,6 +484,7 @@ export interface FileRoutesById {
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
+  '/platform': typeof PlatformRoute
   '/pos': typeof PosRoute
   '/price-levels': typeof PriceLevelsRoute
   '/pricing': typeof PricingRoute
@@ -534,6 +543,7 @@ export interface FileRouteTypes {
     | '/partners'
     | '/payments'
     | '/physical-stock'
+    | '/platform'
     | '/pos'
     | '/price-levels'
     | '/pricing'
@@ -590,6 +600,7 @@ export interface FileRouteTypes {
     | '/partners'
     | '/payments'
     | '/physical-stock'
+    | '/platform'
     | '/pos'
     | '/price-levels'
     | '/pricing'
@@ -646,6 +657,7 @@ export interface FileRouteTypes {
     | '/partners'
     | '/payments'
     | '/physical-stock'
+    | '/platform'
     | '/pos'
     | '/price-levels'
     | '/pricing'
@@ -703,6 +715,7 @@ export interface RootRouteChildren {
   PartnersRoute: typeof PartnersRoute
   PaymentsRoute: typeof PaymentsRoute
   PhysicalStockRoute: typeof PhysicalStockRoute
+  PlatformRoute: typeof PlatformRoute
   PosRoute: typeof PosRoute
   PriceLevelsRoute: typeof PriceLevelsRoute
   PricingRoute: typeof PricingRoute
@@ -879,6 +892,13 @@ declare module '@tanstack/react-router' {
       path: '/pos'
       fullPath: '/pos'
       preLoaderRoute: typeof PosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/platform': {
+      id: '/platform'
+      path: '/platform'
+      fullPath: '/platform'
+      preLoaderRoute: typeof PlatformRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/physical-stock': {
@@ -1143,6 +1163,7 @@ const rootRouteChildren: RootRouteChildren = {
   PartnersRoute: PartnersRoute,
   PaymentsRoute: PaymentsRoute,
   PhysicalStockRoute: PhysicalStockRoute,
+  PlatformRoute: PlatformRoute,
   PosRoute: PosRoute,
   PriceLevelsRoute: PriceLevelsRoute,
   PricingRoute: PricingRoute,

@@ -26,6 +26,7 @@ import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, pa
 import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
+import { seedPlatformAdmin } from "./lib/platform-admin.js";
 import { logger } from "./lib/logger.js";
 import { syncDocumentStock } from "./lib/inventory-service.js";
 import { validateEnv } from "./lib/env.js";
@@ -2164,6 +2165,8 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   logger.info({ port: info.port }, `Fintranzact API running on http://localhost:${info.port}`);
   logger.info({ port: info.port }, `  tRPC endpoint: http://localhost:${info.port}/api/trpc`);
   startRecurringScheduler();
+  // Create the platform admin from PLATFORM_ADMIN_EMAIL / _PASSWORD if set.
+  seedPlatformAdmin().catch((err) => logger.error({ err }, "Could not create the platform admin account"));
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────
