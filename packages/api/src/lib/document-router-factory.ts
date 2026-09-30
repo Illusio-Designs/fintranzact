@@ -19,6 +19,7 @@ import {
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { logAudit } from "./audit.js";
 import { resolveInvoiceWarehouse, syncDocumentStock } from "./inventory-service.js";
+import { requireCan } from "./permissions.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
 import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
@@ -142,6 +143,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
         })
       )
       .query(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "read", "Invoice");
         const conditions = [
           eq(invoices.businessId, ctx.businessId),
           eq(invoices.documentType, docType as DocumentType),
@@ -239,6 +241,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
     getById: viewerProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "read", "Invoice");
         const [invoice] = await ctx.db
           .select()
           .from(invoices)
@@ -268,6 +271,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
     create: memberProcedure
       .input(createInvoiceSchema)
       .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "create", "Invoice");
         const doc = await ctx.db.transaction(async (tx) => {
           // Security: validate that partyId belongs to the current business.
           const [partyCheck] = await tx.select({ id: parties.id })
@@ -540,6 +544,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
         })
       )
       .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "update", "Invoice");
         const doc = await ctx.db.transaction(async (tx) => {
           const [before] = await tx
             .select({ status: invoices.status })
@@ -601,6 +606,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
     delete: adminProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "delete", "Invoice");
         const deleteResult = await ctx.db.transaction(async (tx) => {
           const [doc] = await tx
             .select()

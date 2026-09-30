@@ -6,6 +6,7 @@ import { router, memberProcedure, createCallerFactory } from "../trpc.js";
 import { createDocumentRouter } from "../lib/document-router-factory.js";
 import { logAudit } from "../lib/audit.js";
 import { FULFILLED_BY, isPendingTracked, loadPendingLines } from "../lib/order-fulfilment.js";
+import { requireCan } from "../lib/permissions.js";
 
 // ── Per-document-type routers ───────────────────────────────────
 
@@ -123,6 +124,11 @@ export const documentRouter = router({
   convert: memberProcedure
     .input(convertDocumentSchema)
     .mutation(async ({ input, ctx }) => {
+      // Converting reads the source document and creates a new one; both
+      // are Invoice-table documents, so enforce the same CASL checks as invoices.
+      requireCan(ctx.ability, "read", "Invoice");
+      requireCan(ctx.ability, "create", "Invoice");
+
       // 1. Fetch source document with line items
       const [sourceDoc] = await ctx.db
         .select()
