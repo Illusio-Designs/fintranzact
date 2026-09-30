@@ -94,10 +94,10 @@ export default function DeliveryChallanDetailScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.headerBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Delivery Challan</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.brand} />
@@ -111,10 +111,10 @@ export default function DeliveryChallanDetailScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.headerBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Delivery Challan</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={48} color={colors.danger} />
@@ -134,10 +134,10 @@ export default function DeliveryChallanDetailScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.headerBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.screenTitle}>Delivery Challan</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView
@@ -257,10 +257,10 @@ export default function DeliveryChallanDetailScreen() {
               disabled={isMutating}
             >
               {convertMutation.isPending ? (
-                <ActivityIndicator size="small" color={colors.textPrimary} />
+                <ActivityIndicator size="small" color={colors.onBrand} />
               ) : (
                 <>
-                  <Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />
+                  <Ionicons name="swap-horizontal-outline" size={18} color={colors.onBrand} />
                   <Text style={styles.actionBtnConvertText}>Convert to Invoice</Text>
                 </>
               )}
@@ -289,9 +289,9 @@ const useStyles = makeStyles((colors) => ({
     marginBottom: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -312,7 +312,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.brand,
     borderRadius: 12,
   },
-  retryBtnText: { fontSize: 14, fontWeight: "600", color: colors.textPrimary },
+  retryBtnText: { fontSize: 14, fontWeight: "600", color: colors.onBrand },
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",
@@ -418,5 +418,5 @@ const useStyles = makeStyles((colors) => ({
     borderBottomWidth: 0,
     justifyContent: "center",
   },
-  actionBtnConvertText: { fontSize: 14, fontWeight: "700", color: colors.textPrimary, flex: 1 },
+  actionBtnConvertText: { fontSize: 14, fontWeight: "700", color: colors.onBrand, flex: 1 },
 }));

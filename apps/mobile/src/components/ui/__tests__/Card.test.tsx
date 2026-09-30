@@ -12,7 +12,7 @@
  * load-bearing for the design system:
  *   - `backgroundColor: colors.surface` — differentiates the card from the
  *     page background (dark: #141417 → #1a1a1f; light: #ffffff → #f8f9fa)
- *   - `borderRadius: 16` — the signature rounded corner of the Fintranzact design
+ *   - `borderRadius: 20` — the signature rounded corner of the Fintranzact design
  *   - `borderWidth: 1` + `borderColor: colors.border` — subtle definition
  *   - `padding: 16` — consistent content spacing
  *
@@ -94,7 +94,7 @@ describe("Card — surface container for invoice, party, and dashboard data", ()
   });
 
   // -------------------------------------------------------------------------
-  it("applies borderRadius: 16 for the signature rounded corners", () => {
+  it("applies borderRadius: 20 for the signature rounded corners", () => {
     // WHAT: The Card's rounded corners (16pt radius) are the signature visual
     //       element of the Fintranzact design system.
     // WHY: If borderRadius is changed or removed, every card in the app
@@ -112,7 +112,7 @@ describe("Card — surface container for invoice, party, and dashboard data", ()
       ? Object.assign({}, ...card.props.style.map((s: any) => s || {}))
       : card.props.style;
 
-    expect(style.borderRadius).toBe(16);
+    expect(style.borderRadius).toBe(20);
   });
 
   // -------------------------------------------------------------------------

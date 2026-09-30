@@ -263,7 +263,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textSecondary,
   },
   avatarTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   orgInfo: {
     flex: 1,

@@ -1,16 +1,15 @@
 import { Platform } from "react-native";
 
 /**
- * Palette values are kept in sync with `apps/web/src/styles/globals.css`
- * (`:root` = light, `.dark` = dark) and `apps/web/tailwind.config.js` for
- * brand/accent scales. When updating either side, keep both in lockstep so
- * the web and mobile surfaces stay visually identical.
+ * Palette values are kept in sync with the web app (`apps/web/src/styles/globals.css`
+ * and `apps/web/tailwind.config.js`) so web, desktop and mobile look the same:
+ * navy `#0f1b3d` text and hero surfaces, brand blue `#3b5eaa`, a cool grey
+ * page with white cards in light mode and deep navy in dark mode.
  *
- * - `brand` → `--brand-600` (#5b5bd6) — shared across modes
- * - Semantic (success/warning/danger/info) — we use the web light values for
- *   light mode and brighter tailwind-500 variants for dark mode, since the
- *   web darkens/shifts them via surface contrast rather than by overriding
- *   the CSS var.
+ * - `brand` is the button / active colour; put text on it with `onBrand`.
+ * - `hero*` style the navy highlight cards (totals, invoice amount, lock screen).
+ * - Semantic colours (success / warning / danger / info) come with a soft
+ *   `*Bg` tint for pills and banners.
  */
 
 export type Colors = {
@@ -22,6 +21,17 @@ export type Colors = {
   brand: string;
   brandLight: string;
   brandDark: string;
+  /** Text and icons placed on a `brand` background. */
+  onBrand: string;
+  /** Navy highlight card and the lock screen. */
+  hero: string;
+  heroBorder: string;
+  heroText: string;
+  heroMuted: string;
+  /** Translucent chip / tile on a `hero` surface. */
+  heroChip: string;
+  /** Floating tab bar and sticky bottom bars. */
+  bar: string;
   amber: string;
   amberBg: string;
   textPrimary: string;
@@ -38,51 +48,65 @@ export type Colors = {
 };
 
 export const lightColors: Colors = {
-  bg: "#ffffff",
-  surface: "#f8f9fa",
-  surfaceHover: "#f1f3f5",
-  border: "#dee2e6",
-  borderLight: "#e9ecef",
-  brand: "#5b5bd6",
-  brandLight: "rgba(91, 91, 214, 0.10)",
-  brandDark: "#5050c0",
-  amber: "#fbbf24",
-  amberBg: "rgba(251, 191, 36, 0.12)",
-  textPrimary: "#1a1a2e",
-  textSecondary: "#495057",
-  textMuted: "#868e96",
-  success: "#2b8a3e",
-  successBg: "rgba(43, 138, 62, 0.12)",
-  danger: "#dc2626",
-  dangerBg: "rgba(220, 38, 38, 0.10)",
-  warning: "#d97706",
-  warningBg: "rgba(217, 119, 6, 0.12)",
+  bg: "#f4f6fb",
+  surface: "#ffffff",
+  surfaceHover: "#eef2f9",
+  border: "#e3e8f2",
+  borderLight: "#e9edf5",
+  brand: "#3b5eaa",
+  brandLight: "#e8eefa",
+  brandDark: "#2f4f95",
+  onBrand: "#ffffff",
+  hero: "#0f1b3d",
+  heroBorder: "#223261",
+  heroText: "#ffffff",
+  heroMuted: "#b3bfdd",
+  heroChip: "rgba(255, 255, 255, 0.09)",
+  bar: "rgba(255, 255, 255, 0.96)",
+  amber: "#d97706",
+  amberBg: "#fdf1dc",
+  textPrimary: "#0f1b3d",
+  textSecondary: "#56627d",
+  textMuted: "#6b7690",
+  success: "#15803d",
+  successBg: "#e3f4e8",
+  danger: "#b42318",
+  dangerBg: "#fdebea",
+  warning: "#b45309",
+  warningBg: "#fdf1dc",
   info: "#2563eb",
-  infoBg: "rgba(37, 99, 235, 0.12)",
+  infoBg: "#e6efff",
 };
 
 export const darkColors: Colors = {
-  bg: "#141417",
-  surface: "#1a1a1f",
-  surfaceHover: "#232329",
-  border: "#2c2c35",
-  borderLight: "#232329",
-  brand: "#5b5bd6",
-  brandLight: "rgba(91, 91, 214, 0.15)",
-  brandDark: "#5050c0",
+  bg: "#070c1b",
+  surface: "#0f1730",
+  surfaceHover: "#16203d",
+  border: "#212c4d",
+  borderLight: "#1a2442",
+  brand: "#86a4ea",
+  brandLight: "#1a2649",
+  brandDark: "#6f8fdc",
+  onBrand: "#0a1024",
+  hero: "#131f42",
+  heroBorder: "#26356a",
+  heroText: "#ffffff",
+  heroMuted: "#a9b7dd",
+  heroChip: "rgba(255, 255, 255, 0.08)",
+  bar: "rgba(15, 23, 48, 0.96)",
   amber: "#fbbf24",
-  amberBg: "rgba(251, 191, 36, 0.12)",
-  textPrimary: "#e4e4e8",
-  textSecondary: "#a1a1aa",
-  textMuted: "#71717a",
-  success: "#10b981",
-  successBg: "rgba(16, 185, 129, 0.12)",
-  danger: "#ef4444",
-  dangerBg: "rgba(239, 68, 68, 0.10)",
-  warning: "#f59e0b",
-  warningBg: "rgba(245, 158, 11, 0.12)",
-  info: "#3b82f6",
-  infoBg: "rgba(59, 130, 246, 0.12)",
+  amberBg: "#33260b",
+  textPrimary: "#eaeef8",
+  textSecondary: "#a3aecb",
+  textMuted: "#8390b0",
+  success: "#4ade80",
+  successBg: "#12301f",
+  danger: "#fb7185",
+  dangerBg: "#3a1620",
+  warning: "#fbbf24",
+  warningBg: "#33260b",
+  info: "#60a5fa",
+  infoBg: "#132647",
 };
 
 /**
@@ -104,13 +128,62 @@ export const spacing = {
 } as const;
 
 export const radius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 24,
   full: 999,
 } as const;
 
 export const fonts = {
   mono: Platform.OS === "ios" ? "Menlo" : "monospace",
 } as const;
+
+/**
+ * Brand typefaces, loaded in `app/_layout.tsx`: DM Sans for text and
+ * Plus Jakarta Sans for headings and big numbers (same as the web app).
+ * Custom fonts ship one file per weight, so a weight is picked by family
+ * name rather than `fontWeight`.
+ */
+export const fontFamilies = {
+  body: {
+    400: "DMSans_400Regular",
+    500: "DMSans_500Medium",
+    600: "DMSans_600SemiBold",
+    700: "DMSans_700Bold",
+    800: "DMSans_800ExtraBold",
+  },
+  display: {
+    600: "PlusJakartaSans_600SemiBold",
+    700: "PlusJakartaSans_700Bold",
+    800: "PlusJakartaSans_800ExtraBold",
+  },
+} as const;
+
+type Weight = 400 | 500 | 600 | 700 | 800;
+
+function toWeight(fontWeight: unknown): Weight {
+  if (fontWeight === "bold") return 700;
+  const n = Number(fontWeight);
+  if (!Number.isFinite(n) || n <= 400) return 400;
+  if (n >= 800) return 800;
+  return (Math.round(n / 100) * 100) as Weight;
+}
+
+/** Headings: bold text at 20px and up uses the display face. */
+const DISPLAY_MIN_SIZE = 20;
+
+/**
+ * Give a text style the brand font for its weight. Styles that already name
+ * a `fontFamily` (monospace numbers, icons) are left alone.
+ */
+export function withBrandFont<T extends { fontFamily?: string; fontWeight?: unknown; fontSize?: number }>(style: T): T {
+  if (style.fontFamily || (style.fontWeight === undefined && style.fontSize === undefined)) return style;
+  const weight = toWeight(style.fontWeight);
+  const display = weight >= 600 && (style.fontSize ?? 0) >= DISPLAY_MIN_SIZE;
+  const fontFamily = display
+    ? fontFamilies.display[weight === 600 ? 600 : weight === 700 ? 700 : 800]
+    : fontFamilies.body[weight];
+  const { fontWeight: _dropped, ...rest } = style;
+  return { ...rest, fontFamily } as T;
+}

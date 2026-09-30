@@ -158,7 +158,7 @@ export default function ApiKeysScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>API Keys</Text>
         {!isFree ? (
@@ -167,10 +167,10 @@ export default function ApiKeysScreen() {
             onPress={() => setShowCreateModal(true)}
             activeOpacity={0.7}
           >
-            <Ionicons name="add" size={20} color={colors.textPrimary} />
+            <Ionicons name="add" size={20} color={colors.onBrand} />
           </TouchableOpacity>
         ) : (
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         )}
       </View>
 
@@ -413,7 +413,7 @@ export default function ApiKeysScreen() {
                   activeOpacity={0.8}
                 >
                   {createMutation.isPending ? (
-                    <ActivityIndicator color={colors.textPrimary} size="small" />
+                    <ActivityIndicator color={colors.onBrand} size="small" />
                   ) : (
                     <Text style={styles.submitBtnText}>Create</Text>
                   )}
@@ -441,8 +441,12 @@ const useStyles = makeStyles((colors) => ({
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -674,7 +678,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
   },
   expiryPillTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   submitBtn: {
     backgroundColor: colors.brand,
@@ -683,7 +687,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: "center",
   },
   submitBtnText: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "700",
   },
@@ -738,7 +742,7 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.success + "40",
   },
   copyBtnText: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
     fontSize: 14,
     fontWeight: "700",
   },

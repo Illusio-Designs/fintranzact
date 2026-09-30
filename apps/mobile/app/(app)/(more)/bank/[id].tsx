@@ -237,10 +237,10 @@ export default function BankAccountDetailScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Account Not Found</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
         <View style={styles.centered}>
           <Text style={styles.notFoundText}>This account could not be found.</Text>
@@ -260,7 +260,7 @@ export default function BankAccountDetailScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{account.accountName}</Text>
         <View style={styles.headerActions}>
@@ -349,7 +349,7 @@ export default function BankAccountDetailScreen() {
               onPress={() => setShowAddTx(true)}
               activeOpacity={0.8}
             >
-              <Ionicons name="add-circle-outline" size={18} color={colors.textPrimary} />
+              <Ionicons name="add-circle-outline" size={18} color={colors.onBrand} />
               <Text style={styles.addTxBtnText}>Add Transaction</Text>
             </TouchableOpacity>
 
@@ -440,9 +440,9 @@ const useStyles = makeStyles((colors) => ({
     gap: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -532,7 +532,7 @@ const useStyles = makeStyles((colors) => ({
     shadowRadius: 6,
     elevation: 4,
   },
-  addTxBtnText: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
+  addTxBtnText: { fontSize: 14, fontWeight: "700", color: colors.onBrand },
   txHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 },
   sectionLabel: { fontSize: 11, fontWeight: "700", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
   txCount: { fontSize: 12, color: colors.textMuted },

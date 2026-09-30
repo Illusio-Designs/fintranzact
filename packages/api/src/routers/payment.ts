@@ -48,6 +48,7 @@ export const paymentRouter = router({
           notes: payments.notes,
           partyName: parties.name,
           partyId: parties.id,
+          partyType: parties.type,
           invoiceId: payments.invoiceId,
           bankAccountId: payments.bankAccountId,
         }).from(payments)

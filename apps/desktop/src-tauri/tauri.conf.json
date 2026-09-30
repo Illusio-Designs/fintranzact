@@ -39,6 +39,10 @@
       "nsis": {
         "installMode": "currentUser"
       }
+    },
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "10.15"
     }
   },
   "plugins": {

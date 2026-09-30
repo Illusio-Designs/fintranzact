@@ -51,7 +51,7 @@ export default function VerifyScreen() {
       <View style={styles.inner}>
         {verifying ? (
           <>
-            <ActivityIndicator size="large" color="#6366f1" />
+            <ActivityIndicator size="large" color="#3b5eaa" />
             <Text style={styles.text}>Signing you in...</Text>
           </>
         ) : (
@@ -75,23 +75,23 @@ export default function VerifyScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f0f1a" },
+  container: { flex: 1, backgroundColor: "#070c1b" },
   inner: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 24 },
-  text: { fontSize: 16, color: "#9ca3af", marginTop: 16 },
+  text: { fontSize: 16, color: "#a3aecb", marginTop: 16 },
   iconCircle: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#1a1a2e",
+    backgroundColor: "#0f1730",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 24,
   },
   iconText: { fontSize: 36 },
   title: { fontSize: 20, fontWeight: "700", color: "#ffffff", marginBottom: 8 },
-  description: { fontSize: 14, color: "#9ca3af", textAlign: "center", lineHeight: 20 },
+  description: { fontSize: 14, color: "#a3aecb", textAlign: "center", lineHeight: 20 },
   button: {
-    backgroundColor: "#6366f1",
+    backgroundColor: "#3b5eaa",
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 32,

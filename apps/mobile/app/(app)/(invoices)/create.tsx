@@ -1888,7 +1888,7 @@ export default function InvoiceCreateScreen() {
       {/* Header */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>New Invoice</Text>
         <View style={styles.typeToggle}>
@@ -2042,11 +2042,15 @@ export default function InvoiceCreateScreen() {
           </View>
 
           {/* Bottom spacer for footer */}
-          <View style={{ height: 100 }} />
+          <View style={{ height: 24 }} />
         </ScrollView>
 
         {/* Sticky Create Button */}
         <View style={styles.footer}>
+          <View style={styles.footerTotalRow}>
+            <Text style={styles.footerTotalLabel}>Total incl. GST</Text>
+            <Text style={styles.footerTotalValue} numberOfLines={1}>{formatCurrency(totals.total)}</Text>
+          </View>
           <TouchableOpacity
             style={[styles.createBtn, (createMutation.isPending || !selectedParty || !lineItems.some((li) => li.itemName.trim() && li.unitPrice)) && styles.createBtnDisabled]}
             onPress={handleCreate}
@@ -2054,11 +2058,11 @@ export default function InvoiceCreateScreen() {
             disabled={createMutation.isPending || !selectedParty || !lineItems.some((li) => li.itemName.trim() && li.unitPrice)}
           >
             {createMutation.isPending ? (
-              <ActivityIndicator color={colors.textPrimary} size="small" />
+              <ActivityIndicator color={colors.onBrand} size="small" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle-outline" size={20} color={colors.textPrimary} />
-                <Text style={styles.createBtnText}>Create Invoice</Text>
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.onBrand} />
+                <Text style={styles.createBtnText}>Create invoice</Text>
               </>
             )}
           </TouchableOpacity>
@@ -2102,9 +2106,9 @@ const useStyles = makeStyles((colors) => ({
     gap: 10,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -2139,7 +2143,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
   },
   typeBtnTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   scroll: {
     flex: 1,
@@ -2381,21 +2385,26 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textPrimary,
   },
   footer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 14,
+    gap: 12,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surface,
   },
+  footerTotalRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 },
+  footerTotalLabel: { fontSize: 14, color: colors.textMuted },
+  footerTotalValue: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5, color: colors.textPrimary },
   createBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.brand,
     borderRadius: 16,
-    paddingVertical: 16,
+    height: 54,
     gap: 10,
-    shadowColor: colors.brand,
+    shadowColor: "#0f1b3d",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
@@ -2407,7 +2416,7 @@ const useStyles = makeStyles((colors) => ({
   createBtnText: {
     fontSize: 16,
     fontWeight: "700",
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
 }));
 

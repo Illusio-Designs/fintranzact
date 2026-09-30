@@ -6,7 +6,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import { makeStyles } from "../../../src/lib/makeStyles";
 import { useColors } from "../../../src/contexts/ThemeContext";
-import { PressableRow } from "../../../src/components/ui";
+import { PressableRow, Logo } from "../../../src/components/ui";
+import { useBusinessStore } from "../../../src/stores/business";
+import { useBusinessSwitcherContext } from "../../../src/contexts/BusinessSwitcherContext";
 
 /* ── Menu items ──────────────────────────────────────────────── */
 
@@ -14,24 +16,27 @@ interface MenuItem {
   label: string;
   icon: string;
   route: string;
+  group: "Sales" | "Money" | "Stock & orders" | "Tax & reports";
 }
 
 const ALL_ITEMS: MenuItem[] = [
-  { label: "Items", icon: "cube-outline", route: "/(items)" },
-  { label: "Expenses", icon: "receipt-outline", route: "/(more)/expenses" },
-  { label: "Cash & Bank", icon: "wallet-outline", route: "/(more)/bank" },
-  { label: "Quotations", icon: "document-text-outline", route: "/(more)/quotations" },
-  { label: "Credit Notes", icon: "return-down-back-outline", route: "/(more)/credit-notes" },
-  { label: "Delivery Challans", icon: "car-outline", route: "/(more)/delivery-challans" },
-  { label: "Proforma Invoices", icon: "document-text-outline", route: "/(more)/proforma-invoices" },
-  { label: "Sales Returns", icon: "return-down-back-outline", route: "/(more)/sales-returns" },
-  { label: "Store Orders", icon: "storefront-outline", route: "/(more)/store-orders" },
-  { label: "Recurring Invoices", icon: "repeat-outline", route: "/(more)/automated-invoices" },
-  { label: "GST Returns", icon: "pie-chart-outline", route: "/(more)/gst" },
-  { label: "Shipments", icon: "boat-outline", route: "/(more)/shipments" },
-  { label: "Business Reports", icon: "bar-chart-outline", route: "/(more)/reports" },
-  { label: "Settings", icon: "settings-outline", route: "/(more)/settings" },
+  { label: "Quotations", icon: "document-text-outline", route: "/(more)/quotations", group: "Sales" },
+  { label: "Proforma invoices", icon: "document-attach-outline", route: "/(more)/proforma-invoices", group: "Sales" },
+  { label: "Delivery challans", icon: "car-outline", route: "/(more)/delivery-challans", group: "Sales" },
+  { label: "Credit notes", icon: "return-down-back-outline", route: "/(more)/credit-notes", group: "Sales" },
+  { label: "Sales returns", icon: "return-up-back-outline", route: "/(more)/sales-returns", group: "Sales" },
+  { label: "Recurring invoices", icon: "repeat-outline", route: "/(more)/automated-invoices", group: "Sales" },
+  { label: "Expenses", icon: "wallet-outline", route: "/(more)/expenses", group: "Money" },
+  { label: "Cash & bank", icon: "business-outline", route: "/(more)/bank", group: "Money" },
+  { label: "Stock items", icon: "cube-outline", route: "/(items)", group: "Stock & orders" },
+  { label: "Store orders", icon: "bag-handle-outline", route: "/(more)/store-orders", group: "Stock & orders" },
+  { label: "Shipments", icon: "boat-outline", route: "/(more)/shipments", group: "Stock & orders" },
+  { label: "GST returns", icon: "pie-chart-outline", route: "/(more)/gst", group: "Tax & reports" },
+  { label: "Business reports", icon: "bar-chart-outline", route: "/(more)/reports", group: "Tax & reports" },
+  { label: "Settings", icon: "settings-outline", route: "/(more)/settings", group: "Tax & reports" },
 ];
+
+const GROUPS: MenuItem["group"][] = ["Sales", "Money", "Stock & orders", "Tax & reports"];
 
 const RECENT_KEY = "fintranzact_recent_more";
 const MAX_RECENT = 4;
@@ -57,7 +62,10 @@ async function trackRecent(route: string) {
 
 export default function MoreScreen() {
   const s = useS();
+  const colors = useColors();
   const router = useRouter();
+  const businessName = useBusinessStore((st) => st.businessName);
+  const { openSwitcher } = useBusinessSwitcherContext();
   const [recentRoutes, setRecentRoutes] = useState<string[]>([]);
 
   useEffect(() => {
@@ -70,58 +78,69 @@ export default function MoreScreen() {
     router.push(item.route as any);
   }
 
-  // Split items into recent and the rest
   const recentItems = recentRoutes
     .map((route) => ALL_ITEMS.find((i) => i.route === route))
     .filter((i): i is MenuItem => !!i);
 
-  const recentSet = new Set(recentRoutes);
-  const otherItems = ALL_ITEMS.filter((i) => !recentSet.has(i.route));
+  const initials = (businessName || "My Business")
+    .split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
       <View style={s.header}>
         <Text style={s.title}>More</Text>
+        <Logo size={32} />
       </View>
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        {/* Recent section */}
-        {recentItems.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Recent</Text>
-            <View style={s.grid}>
-              {recentItems.map((item) => (
-                <GridItem key={item.route} item={item} onPress={() => handlePress(item)} />
-              ))}
-            </View>
+        {/* Active business */}
+        <View style={s.bizCard}>
+          <View style={s.bizAvatar}>
+            <Text style={s.bizAvatarText}>{initials}</Text>
           </View>
+          <View style={s.bizText}>
+            <Text style={s.bizName} numberOfLines={1}>{businessName || "My Business"}</Text>
+            <Text style={s.bizSub} numberOfLines={1}>Active business</Text>
+          </View>
+          <PressableRow
+            style={s.bizSwitch}
+            onPress={openSwitcher}
+          >
+            <Ionicons name="swap-horizontal" size={18} color={colors.heroText} accessibilityLabel="Switch business" />
+          </PressableRow>
+        </View>
+
+        {recentItems.length > 0 && (
+          <MenuGroup title="Recent" items={recentItems} onPress={handlePress} />
         )}
 
-        {/* All other items */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>{recentItems.length > 0 ? "All Features" : "Features"}</Text>
-          <View style={s.grid}>
-            {otherItems.map((item) => (
-              <GridItem key={item.route} item={item} onPress={() => handlePress(item)} />
-            ))}
-          </View>
-        </View>
+        {GROUPS.map((g) => (
+          <MenuGroup key={g} title={g} items={ALL_ITEMS.filter((i) => i.group === g)} onPress={handlePress} />
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-/* ── Grid item ───────────────────────────────────────────────── */
+/* ── Group of rows ───────────────────────────────────────────── */
 
-function GridItem({ item, onPress }: { item: MenuItem; onPress: () => void }) {
+function MenuGroup({ title, items, onPress }: { title: string; items: MenuItem[]; onPress: (i: MenuItem) => void }) {
   const s = useS();
   const colors = useColors();
   return (
-    <PressableRow style={s.card} onPress={onPress}>
-      <View style={s.iconWrap}>
-        <Ionicons name={item.icon as any} size={22} color={colors.brand} />
+    <View style={s.section}>
+      <Text style={s.sectionTitle}>{title.toUpperCase()}</Text>
+      <View style={s.group}>
+        {items.map((item, i) => (
+          <PressableRow key={item.route} style={[s.row, i > 0 && s.rowBorder]} onPress={() => onPress(item)}>
+            <View style={s.iconWrap}>
+              <Ionicons name={item.icon as never} size={18} color={colors.brand} />
+            </View>
+            <Text style={s.label} numberOfLines={1}>{item.label}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </PressableRow>
+        ))}
       </View>
-      <Text style={s.cardLabel} numberOfLines={2}>{item.label}</Text>
-    </PressableRow>
+    </View>
   );
 }
 
@@ -129,49 +148,37 @@ function GridItem({ item, onPress }: { item: MenuItem; onPress: () => void }) {
 
 const useS = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
-  title: { fontSize: 28, fontWeight: "700", color: colors.textPrimary, letterSpacing: -0.5 },
-  content: { paddingHorizontal: 16, paddingBottom: 32 },
-
-  section: { marginTop: 20 },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 10,
+  header: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12,
   },
-
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+  title: { fontSize: 28, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.6 },
+  content: { paddingHorizontal: 20, paddingBottom: 24, gap: 20 },
+  bizCard: {
+    flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderRadius: 22,
+    backgroundColor: colors.hero, borderWidth: 1, borderColor: colors.heroBorder,
+    shadowColor: "#0f1b3d", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 5,
   },
-  card: {
-    width: "48%",
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+  bizAvatar: {
+    width: 48, height: 48, borderRadius: 15, backgroundColor: "#ffffff",
+    alignItems: "center", justifyContent: "center",
   },
+  bizAvatarText: { fontSize: 16, fontWeight: "800", color: "#0f1b3d" },
+  bizText: { flex: 1, gap: 3 },
+  bizName: { fontSize: 16, fontWeight: "700", color: colors.heroText },
+  bizSub: { fontSize: 13, color: colors.heroMuted },
+  bizSwitch: {
+    width: 44, height: 44, borderRadius: 12, backgroundColor: colors.heroChip,
+    alignItems: "center", justifyContent: "center",
+  },
+  section: { gap: 8 },
+  sectionTitle: { fontSize: 12, fontWeight: "700", letterSpacing: 0.7, color: colors.textMuted, paddingLeft: 4 },
+  group: { backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 11, minHeight: 56 },
+  rowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: colors.brandLight,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 34, height: 34, borderRadius: 11, backgroundColor: colors.brandLight,
+    alignItems: "center", justifyContent: "center",
   },
-  cardLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.textPrimary,
-    flex: 1,
-  },
+  label: { flex: 1, fontSize: 15, fontWeight: "600", color: colors.textPrimary },
 }));
