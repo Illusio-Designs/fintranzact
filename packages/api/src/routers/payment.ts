@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { payments, paymentAllocations, invoices, parties, businesses, bankAccounts, bankTransactions } from "@fintranzact/db";
 import { createPaymentSchema, updatePaymentSchema, paginationSchema, money } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
+import { applyInvoicePayment } from "../lib/invoice-status.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
@@ -257,18 +258,8 @@ export const paymentRouter = router({
           }
         }
 
-        // Single SQL: update amountPaid and status atomically
-        await tx.execute(sql`
-          UPDATE invoices SET
-            amount_paid = amount_paid::numeric + ${alloc.amount}::numeric,
-            status = CASE
-              WHEN (amount_paid::numeric + ${alloc.amount}::numeric) >= total_amount::numeric THEN 'paid'
-              WHEN (amount_paid::numeric + ${alloc.amount}::numeric) > 0 THEN 'partial'
-              ELSE status
-            END,
-            updated_at = NOW()
-          WHERE id = ${alloc.invoiceId} AND business_id = ${ctx.businessId}
-        `);
+        // Paid amount and status (payments and notes against it) in one place.
+        await applyInvoicePayment(tx, ctx.businessId, alloc.invoiceId, alloc.amount);
       }
 
       // ── Write payment allocations to junction table ──────────────────────
@@ -465,32 +456,12 @@ export const paymentRouter = router({
 
       if (existingAllocations.length > 0) {
         for (const alloc of existingAllocations) {
-          await tx.execute(sql`
-            UPDATE invoices SET
-              amount_paid = GREATEST(amount_paid::numeric - ${alloc.amount}::numeric, 0),
-              status = CASE
-                WHEN GREATEST(amount_paid::numeric - ${alloc.amount}::numeric, 0) >= total_amount::numeric THEN 'paid'::invoice_status
-                WHEN GREATEST(amount_paid::numeric - ${alloc.amount}::numeric, 0) > 0 THEN 'partial'::invoice_status
-                ELSE 'sent'::invoice_status
-              END,
-              updated_at = NOW()
-            WHERE id = ${alloc.invoiceId} AND business_id = ${ctx.businessId}
-          `);
+          await applyInvoicePayment(tx, ctx.businessId, alloc.invoiceId, money.sub("0", alloc.amount));
         }
         await tx.delete(paymentAllocations).where(eq(paymentAllocations.paymentId, existing.id));
       } else if (existing.invoiceId) {
         // Legacy fallback: no allocation rows, reverse full amount on single invoice
-        await tx.execute(sql`
-          UPDATE invoices SET
-            amount_paid = GREATEST(amount_paid::numeric - ${existing.amount}::numeric, 0),
-            status = CASE
-              WHEN GREATEST(amount_paid::numeric - ${existing.amount}::numeric, 0) >= total_amount::numeric THEN 'paid'::invoice_status
-              WHEN GREATEST(amount_paid::numeric - ${existing.amount}::numeric, 0) > 0 THEN 'partial'::invoice_status
-              ELSE 'sent'::invoice_status
-            END,
-            updated_at = NOW()
-          WHERE id = ${existing.invoiceId} AND business_id = ${ctx.businessId}
-        `);
+        await applyInvoicePayment(tx, ctx.businessId, existing.invoiceId, money.sub("0", existing.amount));
       }
 
       // 3a. Reverse old gateway operations (before reversing the main bank txn)
@@ -577,18 +548,8 @@ export const paymentRouter = router({
           }
         }
 
-        // Single SQL: update amountPaid and status atomically
-        await tx.execute(sql`
-          UPDATE invoices SET
-            amount_paid = amount_paid::numeric + ${alloc.amount}::numeric,
-            status = CASE
-              WHEN (amount_paid::numeric + ${alloc.amount}::numeric) >= total_amount::numeric THEN 'paid'
-              WHEN (amount_paid::numeric + ${alloc.amount}::numeric) > 0 THEN 'partial'
-              ELSE status
-            END,
-            updated_at = NOW()
-          WHERE id = ${alloc.invoiceId} AND business_id = ${ctx.businessId}
-        `);
+        // Paid amount and status (payments and notes against it) in one place.
+        await applyInvoicePayment(tx, ctx.businessId, alloc.invoiceId, alloc.amount);
       }
 
       // Write new payment allocations to junction table
@@ -698,32 +659,12 @@ export const paymentRouter = router({
 
         if (existingAllocations.length > 0) {
           for (const alloc of existingAllocations) {
-            await tx.execute(sql`
-              UPDATE invoices SET
-                amount_paid = GREATEST(amount_paid::numeric - ${alloc.amount}::numeric, 0),
-                status = CASE
-                  WHEN GREATEST(amount_paid::numeric - ${alloc.amount}::numeric, 0) >= total_amount::numeric THEN 'paid'::invoice_status
-                  WHEN GREATEST(amount_paid::numeric - ${alloc.amount}::numeric, 0) > 0 THEN 'partial'::invoice_status
-                  ELSE 'sent'::invoice_status
-                END,
-                updated_at = NOW()
-              WHERE id = ${alloc.invoiceId} AND business_id = ${ctx.businessId}
-            `);
+            await applyInvoicePayment(tx, ctx.businessId, alloc.invoiceId, money.sub("0", alloc.amount));
           }
           await tx.delete(paymentAllocations).where(eq(paymentAllocations.paymentId, payment.id));
         } else if (payment.invoiceId) {
           // Legacy fallback: no allocation rows, reverse full amount on single invoice
-          await tx.execute(sql`
-            UPDATE invoices SET
-              amount_paid = GREATEST(amount_paid::numeric - ${payment.amount}::numeric, 0),
-              status = CASE
-                WHEN GREATEST(amount_paid::numeric - ${payment.amount}::numeric, 0) >= total_amount::numeric THEN 'paid'::invoice_status
-                WHEN GREATEST(amount_paid::numeric - ${payment.amount}::numeric, 0) > 0 THEN 'partial'::invoice_status
-                ELSE 'sent'::invoice_status
-              END,
-              updated_at = NOW()
-            WHERE id = ${payment.invoiceId} AND business_id = ${ctx.businessId}
-          `);
+          await applyInvoicePayment(tx, ctx.businessId, payment.invoiceId, money.sub("0", payment.amount));
         }
 
         // Reverse gateway operations before the main bank txn reversal

@@ -1,5 +1,3 @@
-import { sql } from "drizzle-orm";
-
 // ── Date parsing helper ──────────────────────────────────────────────────────
 // Handles: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, MM/DD/YYYY, "22 Mar 2026", ISO strings
 export function parseFlexibleDate(str: string): Date | null {
@@ -32,19 +30,4 @@ export function parseFlexibleDate(str: string): Date | null {
   if (!isNaN(fallback.getTime())) return fallback;
 
   return null;
-}
-
-// ── Shared invoice status UPDATE SQL ────────────────────────────────────────
-export function buildInvoiceStatusUpdate(invoiceId: string, businessId: string, addAmount: string) {
-  return sql`
-    UPDATE invoices SET
-      amount_paid = amount_paid::numeric + ${addAmount}::numeric,
-      status = CASE
-        WHEN (amount_paid::numeric + ${addAmount}::numeric) >= total_amount::numeric THEN 'paid'
-        WHEN (amount_paid::numeric + ${addAmount}::numeric) > 0 THEN 'partial'
-        ELSE status
-      END,
-      updated_at = NOW()
-    WHERE id = ${invoiceId} AND business_id = ${businessId}
-  `;
 }

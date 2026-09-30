@@ -1204,6 +1204,30 @@ describe("DocumentCreator — purchase return from a purchase invoice", () => {
     expect(toast.error).toHaveBeenCalledWith("Only 5 of Steel Rod was on the invoice");
   });
 
+  it("doesn't offer drafts, cancelled or fully adjusted invoices", async () => {
+    const row = (id: string, invoiceNumber: string, status: string) => ({ id, invoiceNumber, status, invoiceDate: sourceInvoice.invoiceDate, totalAmount: "100.00", partyName: "Ramesh Traders" });
+    invoiceListQuery.mockReturnValue({
+      data: {
+        data: [
+          row(sourceInvoice.id, "PINV-00007", "sent"),
+          row("22222222-2222-4222-8222-222222222222", "PINV-00008", "paid"),
+          row("33333333-3333-4333-8333-333333333333", "PINV-00009", "adjusted"),
+          row("44444444-4444-4444-8444-444444444444", "PINV-00010", "draft"),
+          row("55555555-5555-4555-8555-555555555555", "PINV-00011", "cancelled"),
+        ],
+      },
+      isFetching: false,
+    });
+    renderCreator({ documentType: "purchase_return", invoiceType: "purchase" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: /against purchase invoice/i }));
+    expect(await screen.findByRole("option", { name: /PINV-00007/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /PINV-00008/ })).toBeInTheDocument();
+    for (const n of ["PINV-00009", "PINV-00010", "PINV-00011"]) {
+      expect(screen.queryByRole("option", { name: new RegExp(n) })).not.toBeInTheDocument();
+    }
+  });
+
   it("has no invoice picker when opened from the invoice itself", () => {
     renderCreator({ documentType: "purchase_return", invoiceType: "purchase", prefillFromInvoiceId: sourceInvoice.id });
     expect(screen.queryByRole("combobox", { name: /against purchase invoice/i })).not.toBeInTheDocument();

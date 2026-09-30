@@ -26,6 +26,7 @@ import { ensureBarcodeForStock } from "../lib/barcode-setup.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 import { assertLineExtras, lineExtras } from "../lib/line-extras.js";
 import { resolveDeliveryMethod } from "../lib/delivery-methods.js";
+import { recomputeInvoiceStatus, recomputeReferencedInvoice } from "../lib/invoice-status.js";
 
 export const invoiceRouter = router({
   list: viewerProcedure
@@ -762,6 +763,8 @@ export const invoiceRouter = router({
             enforceStock: !isCancelled,
             actorUserId: ctx.user!.id,
           });
+          // A cancelled or reinstated note or return changes what settles its invoice.
+          await recomputeReferencedInvoice(tx, ctx.businessId, updated);
         }
         return updated;
       });
@@ -1008,7 +1011,15 @@ export const invoiceRouter = router({
         // 5. Apply update
         const [result] = await tx.update(invoices).set(updates).where(eq(invoices.id, input.id)).returning();
 
-
+        // A new total changes how much of it is settled: for a note or return,
+        // on the invoice it adjusts; for an invoice, on itself.
+        if (updates.totalAmount !== undefined && updates.totalAmount !== existing.totalAmount) {
+          await recomputeReferencedInvoice(tx, ctx.businessId, result);
+          if (result.documentType === "invoice") {
+            const status = await recomputeInvoiceStatus(tx, ctx.businessId, result.id);
+            if (status) result.status = status;
+          }
+        }
 
         return result;
       });
@@ -1076,6 +1087,11 @@ export const invoiceRouter = router({
           event: "DELETE",
           actorUserId: ctx.user!.id,
         });
+
+        // A deleted note or return no longer settles its invoice.
+        const [deleted] = await tx.select({ documentType: invoices.documentType, referenceDocumentId: invoices.referenceDocumentId })
+          .from(invoices).where(eq(invoices.id, input.id)).limit(1);
+        if (deleted) await recomputeReferencedInvoice(tx, ctx.businessId, deleted);
       });
 
       await logAudit(ctx.db, {

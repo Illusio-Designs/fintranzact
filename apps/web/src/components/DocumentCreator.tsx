@@ -840,9 +840,10 @@ export function DocumentCreator({
       description: p.type === "customer" ? "Customer" : "Supplier",
     })) ?? [];
 
-  // Drafts and cancelled invoices can't take a return.
+  // Drafts, cancelled invoices and ones already fully credited or returned
+  // can't take a return.
   const sourceOptions: Array<{ value: string; label: string; description: string }> = (sourceInvoices?.data ?? [])
-    .filter((inv: { status: string }) => inv.status !== "draft" && inv.status !== "cancelled")
+    .filter((inv: { status: string }) => !["draft", "cancelled", "adjusted"].includes(inv.status))
     .map((inv: { id: string; invoiceNumber: string; invoiceDate: string | Date; totalAmount: string; partyName?: string | null }) => ({
       value: inv.id,
       label: inv.invoiceNumber,

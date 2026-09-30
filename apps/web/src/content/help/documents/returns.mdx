@@ -58,7 +58,7 @@ Sales returns and credit notes share one limit per invoice:
 - The invoice's balance due goes down by the return's total.
 - Once they cover the whole invoice, the invoice shows as **Adjusted**.
 
-Cancelling or deleting the return takes the stock back out and removes it from the invoice's adjusted amount.
+Cancelling or deleting the return takes the stock back out and removes it from the invoice's adjusted amount. The invoice's status is worked out again from what still settles it: **Paid** if payments and the remaining notes cover it, **Partial** if part of it has been paid, **Overdue** if nothing is paid and the due date has passed, otherwise **Sent**. Reinstating a cancelled return, or editing a return's total, does the same. Draft and cancelled invoices keep their status.
 
 ### Returns from the Sales Returns page
 

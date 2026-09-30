@@ -1,7 +1,7 @@
 import { parties, invoices, payments, paymentAllocations, businesses } from "@fintranzact/db";
 import { eq, and, sql } from "drizzle-orm";
 import { money } from "@fintranzact/shared";
-import { buildInvoiceStatusUpdate } from "../helpers.js";
+import { applyInvoicePayment } from "../../../lib/invoice-status.js";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalPayment } from "../types.js";
 
@@ -209,7 +209,7 @@ export async function runPaymentsImport(
 
       // Apply one UPDATE per affected invoice
       for (const [invoiceId, totalAlloc] of invoiceUpdates) {
-        await tx.execute(buildInvoiceStatusUpdate(invoiceId, businessId, totalAlloc.toFixed(2)));
+        await applyInvoicePayment(tx, businessId, invoiceId, totalAlloc.toFixed(2));
       }
 
       // Bulk insert payment allocation records
@@ -295,7 +295,7 @@ export async function runPaymentsImport(
 
         // Update amountPaid + status on these invoices
         for (const dp of directPaymentRows) {
-          await tx.execute(buildInvoiceStatusUpdate(dp.invoiceId!, businessId, dp.amount));
+          await applyInvoicePayment(tx, businessId, dp.invoiceId!, dp.amount);
         }
 
         directCreated = directPaymentRows.length;

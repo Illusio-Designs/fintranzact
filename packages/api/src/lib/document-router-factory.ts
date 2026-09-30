@@ -25,6 +25,7 @@ import { escapeLike } from "./escape-like.js";
 import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
 import { assertLineExtras, lineExtras } from "./line-extras.js";
 import { resolveDeliveryMethod } from "./delivery-methods.js";
+import { recomputeReferencedInvoice } from "./invoice-status.js";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 
@@ -522,34 +523,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             actorUserId: ctx.user!.id,
           });
 
-          // Auto-update referenced invoice status to "adjusted" when fully covered
-          if (adjustsBill && input.referenceDocumentId) {
-            const [{ totalAdj }] = await tx
-              .select({
-                totalAdj: sql<string>`COALESCE(SUM(${invoices.totalAmount}::numeric), 0)`,
-              })
-              .from(invoices)
-              .where(and(
-                eq(invoices.referenceDocumentId, input.referenceDocumentId),
-                eq(invoices.businessId, ctx.businessId),
-                sql`${invoices.documentType} IN ('credit_note', 'sales_return', 'purchase_return')`,
-                sql`${invoices.status} NOT IN ('cancelled')`,
-                isNull(invoices.deletedAt),
-              ));
-
-            const [{ refTotal }] = await tx
-              .select({ refTotal: invoices.totalAmount })
-              .from(invoices)
-              .where(eq(invoices.id, input.referenceDocumentId))
-              .limit(1);
-
-            if (parseFloat(totalAdj) >= parseFloat(refTotal) - 0.01) {
-              await tx
-                .update(invoices)
-                .set({ status: "adjusted", updatedAt: new Date() })
-                .where(eq(invoices.id, input.referenceDocumentId));
-            }
-          }
+          // The invoice it adjusts: adjusted, paid, partial... from what now settles it.
+          await recomputeReferencedInvoice(tx, ctx.businessId, result);
 
           return result;
         });
@@ -617,6 +592,10 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               enforceStock: !isCancelled,
               actorUserId: ctx.user!.id,
             });
+          }
+          // A cancelled or reinstated note or return changes what settles its invoice.
+          if (wasCancelled !== isCancelled) {
+            await recomputeReferencedInvoice(tx, ctx.businessId, updated);
           }
           return updated;
         });
@@ -689,6 +668,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             event: "DELETE",
             actorUserId: ctx.user!.id,
           });
+
+          // A deleted note or return no longer settles its invoice.
+          await recomputeReferencedInvoice(tx, ctx.businessId, doc);
 
           return { success: true, invoiceNumber: doc.invoiceNumber, deleted: true };
         });
