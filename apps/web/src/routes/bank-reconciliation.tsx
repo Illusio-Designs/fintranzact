@@ -9,7 +9,6 @@ import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Modal } from "@/components/ui/Modal";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
@@ -700,16 +699,27 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
           </button>
         </div>
 
-        {/* Save-as-template modal */}
-        <Modal
+        {/* Save-as-template slide-over */}
+        <SlideOver
           open={showSaveTemplateModal}
           title="Save as Template"
+          description="Save the current column mapping as a reusable template for future imports."
           onClose={() => setShowSaveTemplateModal(false)}
+          footer={
+            <div className="flex justify-end gap-3">
+              <button type="button" className="btn-secondary" onClick={() => setShowSaveTemplateModal(false)}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleSaveTemplate}
+                disabled={saveTemplateMutation.isPending}
+              >
+                {saveTemplateMutation.isPending ? <Spinner size="sm" /> : "Save Template"}
+              </button>
+            </div>
+          }
         >
-          <div className="space-y-4 p-1">
-            <p className="text-sm text-text-secondary">
-              Save the current column mapping as a reusable template for future imports.
-            </p>
+          <div className="space-y-4">
             <InputField
               label="Bank Name *"
               value={saveTemplateName}
@@ -722,18 +732,8 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
               onChange={(e) => setSaveTemplateLabel(e.target.value)}
               placeholder="e.g. Savings account format"
             />
-            <div className="flex gap-3 pt-1">
-              <button className="btn-secondary flex-1" onClick={() => setShowSaveTemplateModal(false)}>Cancel</button>
-              <button
-                className="btn-primary flex-1"
-                onClick={handleSaveTemplate}
-                disabled={saveTemplateMutation.isPending}
-              >
-                {saveTemplateMutation.isPending ? <Spinner size="sm" /> : "Save Template"}
-              </button>
-            </div>
           </div>
-        </Modal>
+        </SlideOver>
       </div>
     );
   }
@@ -1558,13 +1558,32 @@ function RulesTab() {
         />
       )}
 
-      {/* Rule form modal */}
-      <Modal
+      {/* Rule form slide-over */}
+      <SlideOver
         open={showForm}
         title={editId ? "Edit Rule" : "New Rule"}
         onClose={() => { setShowForm(false); setEditId(null); }}
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => { setShowForm(false); setEditId(null); }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Spinner size="sm" /> : editId ? "Update Rule" : "Create Rule"}
+            </button>
+          </div>
+        }
       >
-        <div className="space-y-4 p-1">
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1">Match Field</label>
@@ -1630,24 +1649,8 @@ function RulesTab() {
               placeholder="e.g. Food & Beverages"
             />
           )}
-
-          <div className="flex gap-3 pt-1">
-            <button
-              className="btn-secondary flex-1"
-              onClick={() => { setShowForm(false); setEditId(null); }}
-            >
-              Cancel
-            </button>
-            <button
-              className="btn-primary flex-1"
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? <Spinner size="sm" /> : editId ? "Update Rule" : "Create Rule"}
-            </button>
-          </div>
         </div>
-      </Modal>
+      </SlideOver>
 
       {/* Delete confirm */}
       <DeleteConfirmDialog

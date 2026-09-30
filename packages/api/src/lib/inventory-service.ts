@@ -1,4 +1,5 @@
 import { and, eq, sql, type SQL } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import {
   businesses,
   invoiceItems,
@@ -564,4 +565,27 @@ export async function updateLegacyStockQuantity(
         eq(items.businessId, input.businessId),
       ),
     );
+}
+/**
+ * The warehouse an invoice moves stock through: the one the user picked, or
+ * the business default for the operation. A picked warehouse must belong to
+ * the business and be active.
+ */
+export async function resolveInvoiceWarehouse(
+  tx: InventoryDb,
+  input: { businessId: string; operation: InventoryOperation; warehouseId?: string | null },
+) {
+  if (!input.warehouseId) return getDefaultWarehouse(tx, input);
+  const [warehouse] = await tx
+    .select({ id: warehouses.id, name: warehouses.name, status: warehouses.status })
+    .from(warehouses)
+    .where(and(eq(warehouses.id, input.warehouseId), eq(warehouses.businessId, input.businessId)))
+    .limit(1);
+  if (!warehouse) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Warehouse not found in this business" });
+  }
+  if (warehouse.status !== "active") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That warehouse is inactive" });
+  }
+  return warehouse;
 }

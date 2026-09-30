@@ -19,7 +19,8 @@ import { appRouter } from "./router.js";
 import { createContext, getSessionIdFromRequest } from "./context.js";
 import type { InvoicePDFData } from "./lib/invoice-pdf.js";
 import { generateLedgerPDF } from "./lib/ledger-pdf.js";
-import { generateLabelSheetPDF, LABEL_PRESETS } from "./lib/label-pdf.js";
+import { generateLabelSheetPDF, LABEL_PRESETS, TYPE_PRESET } from "./lib/label-pdf.js";
+import { asBarcodeType } from "./lib/barcode-setup.js";
 import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, tenantMembers, magicLinkTokens, bankAccounts, storeOrders, payments, assertMigrationsPresent } from "@fintranzact/db";
 import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
@@ -1658,7 +1659,8 @@ app.post("/store/:slug/order", async (c) => {
 // Label print request. Quantities are bounded here as well as in the PDF
 // generator so an absurd payload is rejected before any work happens.
 const labelRequestSchema = z.object({
-  presetId: z.enum(Object.keys(LABEL_PRESETS) as [string, ...string[]]),
+  // Omitted = the fixed label for the business's barcode type.
+  presetId: z.enum(Object.keys(LABEL_PRESETS) as [string, ...string[]]).optional(),
   showPrice: z.boolean().default(true),
   showName: z.boolean().default(true),
   lines: z.array(z.object({
@@ -1707,8 +1709,15 @@ app.post("/api/items/labels", async (c) => {
   }
   const body = parsed.data;
 
-  const [biz] = await db.select({ name: businesses.name })
-    .from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  const [biz] = await db.select({
+    name: businesses.name,
+    barcodesEnabled: businesses.barcodesEnabled,
+    barcodeType: businesses.barcodeType,
+  }).from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  if (!biz?.barcodesEnabled) {
+    return c.json({ error: "Barcodes are switched off for this business" }, 403);
+  }
+  const symbology = asBarcodeType(biz.barcodeType);
 
   // Read the catalogue rows server-side: the client sends ids and counts, and
   // never the printed values, so a tampered request cannot put arbitrary text
@@ -1753,7 +1762,8 @@ app.post("/api/items/labels", async (c) => {
 
   const { pdf, printed, skipped } = await generateLabelSheetPDF({
     businessName: biz?.name ?? "",
-    presetId: body.presetId,
+    presetId: body.presetId ?? TYPE_PRESET[symbology],
+    symbology,
     items: labelItems,
     showPrice: body.showPrice,
     showName: body.showName,

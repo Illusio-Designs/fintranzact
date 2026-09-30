@@ -1,3 +1,4 @@
+import { assertCodeFree, getBarcodeSetup, resolveCodes } from "../lib/barcode-setup.js";
 import { eq, and, ilike, sql, desc, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { items, itemVariants, invoiceItems, invoices, parties, stockAdjustments } from "@fintranzact/db";
@@ -128,41 +129,24 @@ export const itemRouter = router({
       const code = input.code.trim();
       if (!code) return null;
 
-      const [byBarcode] = await ctx.db.select().from(items)
-        .where(and(
-          eq(items.businessId, ctx.businessId),
-          eq(items.barcode, code),
-          isNull(items.deletedAt),
-        ))
-        .limit(1);
-      if (byBarcode) return { item: byBarcode, variant: null, matchedOn: "barcode" as const };
+      const setup = await getBarcodeSetup(ctx.db, ctx.businessId);
+      const hit = (await resolveCodes(ctx.db, ctx.businessId, [code], setup.mode)).get(code);
+      if (!hit) return null;
 
-      // Variants have no businessId of their own, so scope through the join.
-      const [variantHit] = await ctx.db
-        .select({ item: items, variant: itemVariants })
-        .from(itemVariants)
-        .innerJoin(items, eq(itemVariants.itemId, items.id))
-        .where(and(
-          eq(items.businessId, ctx.businessId),
-          eq(itemVariants.barcode, code),
-          isNull(items.deletedAt),
-          isNull(itemVariants.deletedAt),
-        ))
+      const [item] = await ctx.db.select().from(items)
+        .where(and(eq(items.id, hit.itemId), eq(items.businessId, ctx.businessId)))
         .limit(1);
-      if (variantHit) {
-        return { item: variantHit.item, variant: variantHit.variant, matchedOn: "barcode" as const };
-      }
-
-      const [bySku] = await ctx.db.select().from(items)
-        .where(and(
-          eq(items.businessId, ctx.businessId),
-          eq(items.sku, code),
-          isNull(items.deletedAt),
-        ))
-        .limit(1);
-      if (bySku) return { item: bySku, variant: null, matchedOn: "sku" as const };
-
-      return null;
+      if (!item) return null;
+      const [variant] = hit.variantId
+        ? await ctx.db.select().from(itemVariants).where(eq(itemVariants.id, hit.variantId)).limit(1)
+        : [null];
+      return {
+        item,
+        variant: variant ?? null,
+        // A box or carton code stands for several pieces in one scan.
+        packQty: hit.packQty,
+        matchedOn: hit.matchedOn === "sku" ? ("sku" as const) : ("barcode" as const),
+      };
     }),
 
   create: memberProcedure.input(createItemSchema).mutation(async ({ input, ctx }) => {
@@ -170,6 +154,15 @@ export const itemRouter = router({
     const { variants: initialVariants, ...itemData } = input;
 
     return ctx.db.transaction(async (tx) => {
+      // A code scans to exactly one item, variant or extra code.
+      const newCodes = [itemData.barcode, ...(initialVariants ?? []).map((v) => v.barcode)]
+        .map((c) => c?.trim())
+        .filter((c): c is string => !!c);
+      if (new Set(newCodes).size !== newCodes.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "The same barcode is used twice on this item" });
+      }
+      for (const code of newCodes) await assertCodeFree(tx, ctx.businessId, code, {});
+
       const [item] = await tx.insert(items).values({
         ...itemData,
         // Blank means "no barcode". Storing "" instead of NULL would make
@@ -325,6 +318,9 @@ export const itemRouter = router({
     .input(z.object({ id: z.string().uuid(), data: updateItemSchema }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Item");
+      if (input.data.barcode?.trim()) {
+        await assertCodeFree(ctx.db, ctx.businessId, input.data.barcode.trim(), { itemId: input.id });
+      }
       // Active-mutation contract: a soft-deleted item cannot be edited via
       // the public API. Re-activation would require an explicit restore
       // endpoint, which is deferred per FIXES.md.
@@ -742,6 +738,9 @@ export const itemRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Item is not in variants mode" });
       }
 
+      if (input.variant.barcode?.trim()) {
+        await assertCodeFree(ctx.db, ctx.businessId, input.variant.barcode.trim(), {});
+      }
       const [variant] = await ctx.db.insert(itemVariants).values({
         itemId: input.itemId,
         attributeValues: input.variant.attributeValues,
@@ -793,7 +792,15 @@ export const itemRouter = router({
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.data.attributeValues !== undefined) updates.attributeValues = input.data.attributeValues;
       if (input.data.sku !== undefined) updates.sku = input.data.sku || null;
-      if (input.data.barcode !== undefined) updates.barcode = input.data.barcode || null;
+      if (input.data.barcode !== undefined) {
+        if (input.data.barcode?.trim()) {
+          await assertCodeFree(ctx.db, ctx.businessId, input.data.barcode.trim(), {
+            itemId: existing.itemId,
+            variantId: input.variantId,
+          });
+        }
+        updates.barcode = input.data.barcode?.trim() || null;
+      }
       if (input.data.salePrice !== undefined) updates.salePrice = input.data.salePrice || null;
       if (input.data.purchasePrice !== undefined) updates.purchasePrice = input.data.purchasePrice || null;
       if (input.data.stockQuantity !== undefined) updates.stockQuantity = input.data.stockQuantity;
@@ -892,6 +899,11 @@ export const itemRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Item is not in variants mode" });
       }
 
+      const bulkCodes = input.variants.map((v) => v.barcode?.trim()).filter((c): c is string => !!c);
+      if (new Set(bulkCodes).size !== bulkCodes.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "The same barcode is used twice" });
+      }
+      for (const code of bulkCodes) await assertCodeFree(ctx.db, ctx.businessId, code, {});
       const created = await ctx.db.insert(itemVariants).values(
         input.variants.map((v) => ({
           itemId: input.itemId,
