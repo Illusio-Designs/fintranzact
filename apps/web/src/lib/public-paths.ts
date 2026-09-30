@@ -17,6 +17,17 @@ export const MARKETING_PATHS = [
   "/widgets",
 ];
 
+// ── Solutions pages ─────────────────────────────────────────────
+/** The /solutions index; every /solutions/<slug> page under it is public too. */
+export const SOLUTION_PATHS = ["/solutions"];
+
+/** /solutions and any /solutions/<slug> (an unknown slug shows a not-found page). */
+export function isSolutionPath(pathname: string) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return SOLUTION_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+}
+// ────────────────────────────────────────────────────────────────
+
 /** Sign-in and invite pages a signed-out visitor may open. */
 export const AUTH_PUBLIC_PATHS = [
   "/login",
@@ -29,7 +40,7 @@ export const AUTH_PUBLIC_PATHS = [
 
 export function isMarketingPath(pathname: string) {
   const path = pathname.replace(/\/+$/, "") || "/";
-  return MARKETING_PATHS.includes(path);
+  return MARKETING_PATHS.includes(path) || isSolutionPath(path);
 }
 
 export function isAuthPublicPath(pathname: string) {

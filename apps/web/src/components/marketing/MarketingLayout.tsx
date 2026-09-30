@@ -23,6 +23,7 @@ const FOOTER_COLUMNS: Array<{
     links: [
       { label: "Features", to: "/features" },
       { label: "Pricing", to: "/pricing" },
+      { label: "Solutions", to: "/solutions" },
       { label: "Help & docs", href: DOCS_URL },
     ],
   },
