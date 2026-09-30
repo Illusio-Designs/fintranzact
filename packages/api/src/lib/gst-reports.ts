@@ -3,7 +3,7 @@ import { invoices, invoiceItems, parties, businesses, items as itemsTable } from
 import type { TenantDatabase } from "@fintranzact/db";
 import { gstUqcForUnit } from "@fintranzact/shared";
 import { buildBusinessDateFilter } from "./business-date.js";
-import { formatIstDate } from "./ist-date.js";
+import { formatIstDate, istPeriodRange } from "./ist-date.js";
 
 // Split a tax amount exactly in half using paise-level integer arithmetic
 // to avoid floating-point rounding errors on odd amounts (e.g. ₹1.01).
@@ -60,9 +60,21 @@ export type GstNoteSection = "cdnr" | "cdnur" | "b2cs";
 /**
  * Invoice value above which an inter-state supply to an unregistered person
  * is reported invoice-wise in B2CL (and its credit/debit notes in CDNUR)
- * rather than netted in B2CS.
+ * rather than netted in B2CS. Notification 12/2024-Central Tax lowered it
+ * from ₹2,50,000 to ₹1,00,000 for invoices dated on or after 1 Aug 2024.
  */
-export const B2CL_INVOICE_THRESHOLD = 250000;
+export const B2CL_INVOICE_THRESHOLD = 100000;
+/** The B2CL limit for invoices dated before 1 Aug 2024. */
+export const B2CL_INVOICE_THRESHOLD_BEFORE_AUG_2024 = 250000;
+/** 1 Aug 2024, 00:00 IST — the day the lower B2CL limit applies from. */
+const B2CL_THRESHOLD_CHANGE = istPeriodRange(2024, 8).from;
+
+/** The B2CL invoice-value limit for an invoice dated `invoiceDate`. */
+export function b2clThresholdFor(invoiceDate: Date): number {
+  return invoiceDate.getTime() >= B2CL_THRESHOLD_CHANGE.getTime()
+    ? B2CL_INVOICE_THRESHOLD
+    : B2CL_INVOICE_THRESHOLD_BEFORE_AUG_2024;
+}
 
 export interface GSTR1Report {
   period: string; // e.g. "Apr 2025"
@@ -82,7 +94,7 @@ export interface GSTR1Report {
     totalInvoiceValue: number;
     rateItems?: GstRateLine[];
   }>;
-  // B2C Large - to unregistered (> B2CL_INVOICE_THRESHOLD inter-state)
+  // B2C Large - to unregistered, inter-state, above b2clThresholdFor(date)
   b2cLarge: Array<{
     state: string;
     taxableValue: number;
@@ -231,8 +243,8 @@ export async function generateGSTR1(
   month: number, // 1-12
   db: TenantDatabase
 ): Promise<GSTR1Report> {
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59);
+  // The return month as the calendar month in India
+  const { from: startDate, to: endDate } = istPeriodRange(year, month);
 
   const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
 
@@ -258,7 +270,7 @@ export async function generateGSTR1(
       isNull(invoices.deletedAt),
       ...buildBusinessDateFilter(invoices, { from: startDate, to: endDate }),
     ))
-    .orderBy(invoices.invoiceDate);
+    .orderBy(invoices.invoiceDate, invoices.invoiceNumber);
 
   // Get line items for all these invoices
   const allInvoiceIds = saleInvoices.map((inv) => inv.id);
@@ -367,7 +379,7 @@ export async function generateGSTR1(
         totalInvoiceValue: total,
         rateItems: groupLinesByRate(lineItems, !!sameState),
       });
-    } else if (!sameState && total > B2CL_INVOICE_THRESHOLD) {
+    } else if (!sameState && total > b2clThresholdFor(inv.invoiceDate)) {
       // B2C Large: inter-state above the B2CL limit
       const state = inv.partyState || "Unknown";
       const existing = b2cLargeMap.get(state) || { state, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, invoices: [] };
@@ -457,7 +469,7 @@ export async function generateGSTR1(
       isNull(invoices.deletedAt),
       ...buildBusinessDateFilter(invoices, { from: startDate, to: endDate }),
     ))
-    .orderBy(invoices.invoiceDate);
+    .orderBy(invoices.invoiceDate, invoices.invoiceNumber);
 
   // Fix 2: Fetch debit notes for the period
   const rawDebitNotes = await db.select({
@@ -482,7 +494,7 @@ export async function generateGSTR1(
       isNull(invoices.deletedAt),
       ...buildBusinessDateFilter(invoices, { from: startDate, to: endDate }),
     ))
-    .orderBy(invoices.invoiceDate);
+    .orderBy(invoices.invoiceDate, invoices.invoiceNumber);
 
   // Resolve original invoice numbers for credit/debit notes that reference an invoice
   const noteRefIds = [
@@ -491,12 +503,17 @@ export async function generateGSTR1(
   ].filter((id): id is string => id !== null && id !== undefined);
 
   const refInvoiceNumbers = noteRefIds.length > 0
-    ? await db.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber, totalAmount: invoices.totalAmount })
+    ? await db.select({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        invoiceDate: invoices.invoiceDate,
+        totalAmount: invoices.totalAmount,
+      })
         .from(invoices)
         .where(inArray(invoices.id, noteRefIds))
     : [];
   const refInvoiceMap = new Map(refInvoiceNumbers.map((r) => [r.id, r.invoiceNumber]));
-  const refInvoiceTotal = new Map(refInvoiceNumbers.map((r) => [r.id, parseFloat(r.totalAmount)]));
+  const refInvoiceById = new Map(refInvoiceNumbers.map((r) => [r.id, r]));
 
   // Line items for notes — needed for the per-rate breakdown in the portal JSON
   const noteIds = [...rawCreditNotes, ...rawDebitNotes].map((n) => n.id);
@@ -531,9 +548,11 @@ export async function generateGSTR1(
   const noteSection = (n: typeof rawCreditNotes[0]): GstNoteSection => {
     if (n.partyGstin) return "cdnr";
     if (isSameState(n.partyState, n.partyStateCode)) return "b2cs";
-    const supplyValue = (n.referenceDocumentId ? refInvoiceTotal.get(n.referenceDocumentId) : undefined)
-      ?? parseFloat(n.totalAmount);
-    return supplyValue > B2CL_INVOICE_THRESHOLD ? "cdnur" : "b2cs";
+    // The original invoice decides (its value, and its date for the limit)
+    const original = n.referenceDocumentId ? refInvoiceById.get(n.referenceDocumentId) : undefined;
+    const supplyValue = original ? parseFloat(original.totalAmount) : parseFloat(n.totalAmount);
+    const supplyDate = original ? original.invoiceDate : n.invoiceDate;
+    return supplyValue > b2clThresholdFor(supplyDate) ? "cdnur" : "b2cs";
   };
 
   const toNote = (n: typeof rawCreditNotes[0], sign: 1 | -1): GSTR1Report["creditNotes"][0] => {
@@ -624,8 +643,8 @@ export async function generateGSTR3B(
   const gstr1 = await generateGSTR1(businessId, year, month, db);
 
   // Get purchase invoices for ITC
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59);
+  // The return month as the calendar month in India
+  const { from: startDate, to: endDate } = istPeriodRange(year, month);
 
   const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
 

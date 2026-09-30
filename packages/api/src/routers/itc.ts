@@ -18,12 +18,12 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { istReturnPeriod } from "../lib/ist-date.js";
 
 // ── Helpers ──────────────────────────────────────────────────
 
 function currentReturnPeriod(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return istReturnPeriod(new Date());
 }
 
 const ZERO = "0.00";

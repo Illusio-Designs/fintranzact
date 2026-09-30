@@ -52,7 +52,7 @@ One row per invoice. Intra-state invoices have CGST and SGST values; inter-state
 
 ### B2CL — B2C Large
 
-Inter-state sale invoices to **unregistered parties** (no GSTIN) where the invoice total exceeds ₹2,50,000.
+Inter-state sale invoices to **unregistered parties** (no GSTIN) where the invoice total exceeds ₹1,00,000 (Notification 12/2024-Central Tax). Invoices dated before 1 August 2024 keep the earlier limit of ₹2,50,000, so returns for those periods don't change.
 
 Shown aggregated by state:
 
@@ -64,7 +64,7 @@ Shown aggregated by state:
 
 ### B2CS — B2C Small
 
-All other sales to unregistered parties — intra-state sales of any amount, and small inter-state sales under ₹2,50,000.
+All other sales to unregistered parties — intra-state sales of any amount, and inter-state sales up to the B2CL limit (₹1,00,000, or ₹2,50,000 for invoices dated before 1 August 2024).
 
 Shown aggregated by tax rate and place of supply: intra-state sales form one row per rate, and inter-state sales one row per rate for each destination state (the portal needs them apart).
 
@@ -117,7 +117,7 @@ Where each note goes in the portal GSTR-1 JSON depends on the customer:
 | Customer | Portal table |
 |---|---|
 | Has a GSTIN | **CDNR**, grouped by the customer's GSTIN |
-| No GSTIN, and the note is on a B2CL invoice (inter-state, invoice total above ₹2,50,000; for a note not linked to an invoice, the note's own total is used) | **CDNUR**, type `B2CL` |
+| No GSTIN, and the note is on a B2CL invoice (inter-state, invoice total above the B2CL limit for the invoice's date; for a note not linked to an invoice, the note's own total and date are used) | **CDNUR**, type `B2CL` |
 | Any other customer without a GSTIN | Netted into the **B2CS** rows (see above) |
 
 ### Debit Notes
@@ -158,7 +158,7 @@ The CSV includes all sections (B2B, B2CS, B2CL, HSN summary) separated by blank 
 ## What invoices are included
 
 The GSTR-1 report includes all sale invoices (`type = sale`, `documentType = invoice`) where:
-- The invoice date is within the selected month and year
+- The invoice date is within the selected month and year (the calendar month in India, from midnight IST on the 1st)
 - The invoice status is **not** `cancelled`
 
 Excluded:
@@ -179,4 +179,4 @@ GSTR-1 amendments are handled on the GST portal directly. Correct the invoice in
 GSTR-2A/2B reflects your suppliers' filings, not your own. The discrepancy is normal if your suppliers are yet to file or if there are timing differences. Fintranzact's GSTR-1 only covers your outward supplies.
 
 **A large B2C invoice is not appearing in B2CL. Why?**
-Check that the party's state code is different from your business's state code (it must be inter-state) and that the party has no GSTIN (unregistered). Also confirm the invoice total exceeds ₹2,50,000.
+Check that the party's state code is different from your business's state code (it must be inter-state) and that the party has no GSTIN (unregistered). Also confirm the invoice total exceeds ₹1,00,000 (₹2,50,000 for invoices dated before 1 August 2024).

@@ -28,6 +28,34 @@ export function istDateParts(date: Date | string): { dd: string; mm: string; yyy
   return { dd, mm, yyyy };
 }
 
+/** India Standard Time is UTC+05:30 all year (no daylight saving). */
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+
+/** The instant of midnight IST at the start of the given calendar day (month 1-12; overflow rolls over). */
+function istMidnight(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month - 1, day) - IST_OFFSET_MS);
+}
+
+/**
+ * The range of instants covering `months` calendar months in India, starting
+ * with `month` (1-12) of `year`: from midnight IST on the 1st to the last
+ * millisecond before midnight IST on the 1st of the following period. GST
+ * returns are filed per Indian calendar month, so period filters must cut
+ * there, not at the server's (UTC) midnight — otherwise an invoice dated the
+ * 1st (stored as 18:30 UTC the previous day) lands in the previous return.
+ */
+export function istPeriodRange(year: number, month: number, months = 1): { from: Date; to: Date } {
+  const from = istMidnight(year, month, 1);
+  const to = new Date(istMidnight(year, month + months, 1).getTime() - 1);
+  return { from, to };
+}
+
+/** The GST return period ("YYYY-MM") that `date` falls in, by the calendar in India. */
+export function istReturnPeriod(date: Date | string): string {
+  const { mm, yyyy } = istDateParts(date);
+  return `${yyyy}-${mm}`;
+}
+
 /** Format `date` as DD<sep>MM<sep>YYYY in India Standard Time. */
 export function formatIstDate(date: Date | string, sep: "-" | "/" = "-"): string {
   const { dd, mm, yyyy } = istDateParts(date);

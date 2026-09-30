@@ -18,7 +18,7 @@ Use a return when goods physically move back:
 | Statuses | Draft, Sent, Cancelled | Draft, Sent, Cancelled |
 | Stock | Comes **in**, into your sales-return warehouse | Goes **out**, from your purchase-return warehouse |
 | Party ledger | Credit — the customer owes you less | Debit — you owe the supplier less |
-| GSTR-1 | **Credit Notes** section | **Debit Notes** section |
+| GST returns | GSTR-1 **Credit Notes** section; reduces GSTR-3B outward tax | Not in GSTR-1; reverses ITC in GSTR-3B |
 | Where to create | Web and mobile app | [CLI](/help/ai/cli) or [MCP server](/help/ai/mcp-server) only |
 
 If nothing comes back and you are only correcting the amount, use a [credit note](/help/documents/credit-and-debit-notes) instead.
@@ -99,15 +99,14 @@ A purchase return:
 - takes the goods **out** of stock, from the purchase-return warehouse in your inventory settings (or the warehouse you pass);
 - reduces what you owe the supplier in the [party ledger](/help/parties/party-ledger);
 - is posted in the derived accounts as **Dr Payable / Cr Purchase Returns + Input GST**;
-- appears in the **Debit Notes** section of GSTR-1.
+- takes its tax back out of the ITC in GSTR-3B Table 4. It is an inward document, so it does not appear in GSTR-1.
 
 Warehouses and the default return warehouses are covered in [Warehouses](/help/inventory/warehouses).
 
 <ForCA>
 :::caution[GST treatment to check]
-- Sales returns appear under GSTR-1 **Credit Notes** but are **not** deducted from GSTR-1 totals or GSTR-3B outward tax. Adjust 3B yourself.
-- Purchase returns appear under GSTR-1 **Debit Notes**, although they are inward documents. Remove them from the CDNR you file.
-- GSTR-3B's ITC total currently **adds** the tax on purchase returns instead of reversing it. Reverse that ITC manually.
+- Sales returns appear under GSTR-1 **Credit Notes** and are reported like sale credit notes: CDNR for a registered customer, CDNUR for an unregistered customer on a B2CL invoice, and netted into B2CS otherwise. GSTR-3B Table 3.1(a) is already net of them — don't deduct them again.
+- Purchase returns are not in GSTR-1. GSTR-3B Table 4 already reverses their ITC, in the month of the return's date.
 :::
 </ForCA>
 

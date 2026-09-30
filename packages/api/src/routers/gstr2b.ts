@@ -34,6 +34,7 @@ import {
   type PurchaseInvoice,
 } from "../lib/gstr2b-parser.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
+import { istPeriodRange } from "../lib/ist-date.js";
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -504,8 +505,8 @@ export const gstr2bRouter = router({
 
       // Determine period date range
       const [year, month] = input.returnPeriod.split("-").map(Number);
-      const periodStart = new Date(year!, month! - 1, 1);
-      const periodEnd   = new Date(year!, month!, 0, 23, 59, 59);
+      // The return month as the calendar month in India
+      const { from: periodStart, to: periodEnd } = istPeriodRange(year!, month!);
 
       const purchaseRows = await ctx.db
         .select({

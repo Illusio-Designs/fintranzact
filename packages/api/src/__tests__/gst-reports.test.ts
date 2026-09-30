@@ -15,7 +15,8 @@
  *
  * 2. B2B/B2C classification — determines which section of GSTR-1 each invoice
  *    belongs to. B2B requires a GSTIN; B2C Large requires inter-state + total
- *    > ₹2.5L; everything else is B2C Small.
+ *    above the B2CL limit (₹1,00,000 from 1 Aug 2024, ₹2,50,000 before);
+ *    everything else is B2C Small.
  *
  * 3. Tax split — converts a single tax amount into CGST/SGST (intra-state) or
  *    IGST (inter-state). The split formula is tax/2 each for intra-state.
@@ -39,7 +40,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { gstr1ToCSV, gstr1ToPortalJson, type GSTR1Report } from "../lib/gst-reports.js";
+import { b2clThresholdFor, gstr1ToCSV, gstr1ToPortalJson, type GSTR1Report } from "../lib/gst-reports.js";
 
 // =============================================================================
 // Pure functions — extracted verbatim from lib/gst-reports.ts
@@ -94,18 +95,25 @@ function splitTax(
  * B2B/B2C classification — mirrors gst-reports.ts:222-255.
  *
  * Returns the section an invoice should be filed under.
- * Note: total is the invoice total (taxable + tax), used for the ₹2.5L threshold.
+ * Note: total is the invoice total (taxable + tax), compared with the B2CL
+ * limit for the invoice's date (b2clThresholdFor).
  */
 type InvoiceSection = "b2b" | "b2cLarge" | "b2cSmall";
+
+/** An invoice date after the B2CL limit dropped to ₹1,00,000 (1 Aug 2024). */
+const CURRENT_RULE_DATE = new Date("2025-08-15T12:00:00+05:30");
+/** An invoice date under the old ₹2,50,000 B2CL limit. */
+const OLD_RULE_DATE = new Date("2024-07-15T12:00:00+05:30");
 
 function classifyInvoice(
   partyGstin: string | null | undefined,
   sameState: boolean,
-  total: number
+  total: number,
+  invoiceDate: Date = CURRENT_RULE_DATE,
 ): InvoiceSection {
   if (partyGstin) {
     return "b2b";
-  } else if (!sameState && total > 250000) {
+  } else if (!sameState && total > b2clThresholdFor(invoiceDate)) {
     return "b2cLarge";
   } else {
     return "b2cSmall";
@@ -272,7 +280,9 @@ describe("classifyInvoice — B2B vs B2C Large vs B2C Small", () => {
   /**
    * Classification rules (in order of priority):
    *   1. Party has GSTIN → B2B (regardless of amount or state)
-   *   2. No GSTIN + inter-state + total > ₹2.5L → B2C Large (B2CL)
+   *   2. No GSTIN + inter-state + total above the B2CL limit → B2C Large
+   *      (B2CL). The limit is ₹1,00,000 for invoices dated from 1 Aug 2024
+   *      (Notification 12/2024-CT) and ₹2,50,000 before.
    *   3. Everything else → B2C Small (B2CS)
    */
 
@@ -288,32 +298,41 @@ describe("classifyInvoice — B2B vs B2C Large vs B2C Small", () => {
     expect(classifyInvoice("29XYZAB5678G1Z9", false, 300000)).toBe("b2b");
   });
 
-  it("classifies as B2B when party has GSTIN — even below ₹2.5L threshold", () => {
-    expect(classifyInvoice("07PQRST9999H1Z3", false, 100000)).toBe("b2b");
+  it("classifies as B2B when party has GSTIN — even below the B2CL limit", () => {
+    expect(classifyInvoice("07PQRST9999H1Z3", false, 50000)).toBe("b2b");
   });
 
   // ── B2C Large ────────────────────────────────────────────────────────────────
 
-  it("classifies as B2C Large — inter-state, total > ₹2.5L, no GSTIN", () => {
+  it("classifies as B2C Large — inter-state, total > ₹1L, no GSTIN", () => {
     // Walk-in customer from Gujarat, large purchase
     expect(classifyInvoice(null, false, 300000)).toBe("b2cLarge");
+    expect(classifyInvoice(null, false, 200000)).toBe("b2cLarge");
   });
 
-  it("classifies as B2C Large — inter-state, total exactly ₹250001", () => {
-    // One rupee above the threshold flips to B2C Large
-    expect(classifyInvoice(null, false, 250001)).toBe("b2cLarge");
+  it("classifies as B2C Large — inter-state, total exactly ₹100001", () => {
+    // One rupee above the limit flips to B2C Large
+    expect(classifyInvoice(null, false, 100001)).toBe("b2cLarge");
   });
 
-  it("boundary: total exactly ₹250000 is B2C Small, NOT B2C Large", () => {
-    /**
-     * The condition in the source is `total > 250000` (strictly greater than).
-     * ₹250000 exactly does NOT qualify as B2C Large.
-     */
-    expect(classifyInvoice(null, false, 250000)).toBe("b2cSmall");
+  it("boundary: total exactly ₹100000 is B2C Small, NOT B2C Large", () => {
+    // The limit is strict: the total must exceed ₹1,00,000
+    expect(classifyInvoice(null, false, 100000)).toBe("b2cSmall");
   });
 
-  it("boundary: total ₹249999 is B2C Small", () => {
-    expect(classifyInvoice(null, false, 249999)).toBe("b2cSmall");
+  it("boundary: total ₹99999 is B2C Small", () => {
+    expect(classifyInvoice(null, false, 99999)).toBe("b2cSmall");
+  });
+
+  it("invoices dated before 1 Aug 2024 keep the ₹2,50,000 limit", () => {
+    expect(classifyInvoice(null, false, 200000, OLD_RULE_DATE)).toBe("b2cSmall");
+    expect(classifyInvoice(null, false, 250000, OLD_RULE_DATE)).toBe("b2cSmall");
+    expect(classifyInvoice(null, false, 250001, OLD_RULE_DATE)).toBe("b2cLarge");
+  });
+
+  it("the limit changes at midnight IST on 1 Aug 2024", () => {
+    expect(b2clThresholdFor(new Date("2024-07-31T23:59:59+05:30"))).toBe(250000);
+    expect(b2clThresholdFor(new Date("2024-08-01T00:00:00+05:30"))).toBe(100000);
   });
 
   // ── B2C Small ────────────────────────────────────────────────────────────────
@@ -323,13 +342,13 @@ describe("classifyInvoice — B2B vs B2C Large vs B2C Small", () => {
     expect(classifyInvoice(null, true, 500000)).toBe("b2cSmall");
   });
 
-  it("classifies as B2C Small — intra-state, no GSTIN, amount below ₹2.5L", () => {
+  it("classifies as B2C Small — intra-state, no GSTIN, amount below the limit", () => {
     expect(classifyInvoice(null, true, 50000)).toBe("b2cSmall");
   });
 
-  it("classifies as B2C Small — inter-state, no GSTIN, amount <= ₹2.5L", () => {
+  it("classifies as B2C Small — inter-state, no GSTIN, amount <= ₹1L", () => {
     // Inter-state but small invoice → B2C Small
-    expect(classifyInvoice(null, false, 200000)).toBe("b2cSmall");
+    expect(classifyInvoice(null, false, 90000)).toBe("b2cSmall");
   });
 
   it("classifies as B2C Small — undefined GSTIN treated same as null", () => {

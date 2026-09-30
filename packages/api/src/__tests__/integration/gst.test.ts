@@ -833,6 +833,38 @@ describe("Composition scheme enforcement", () => {
     expect(cmp08.taxableValue).toBe("10000.00");
     expect(cmp08.taxPayable).toBe("100.00");
   });
+
+  // Regression: quarters were cut at the server's (UTC) midnight, so an
+  // invoice dated 1 Jan in India (2025-12-31T18:30Z) fell in the previous
+  // quarter, and one dated early on 1 Apr fell in Q1.
+  it("CMP-08 cuts quarters at midnight IST on both edges", async () => {
+    const tenantDb = getTenantTestDb();
+    const party = await createParty(tenantDb, compositionBusiness.id, {
+      name: "Q1 Buyer", type: "customer", gstin: null,
+      city: "Nashik", state: "Maharashtra", stateCode: "27", openingBalance: "0.00",
+    });
+    const sale = (unitPrice: string, invoiceDate: Date) =>
+      createInvoiceWithItems(
+        tenantDb, compositionBusiness.id, party.id,
+        [{ description: "Groceries", quantity: "1", unitPrice, taxPercent: "0" }],
+        { type: "sale", documentType: "invoice", status: "sent", invoiceDate },
+      );
+    await sale("1000.00", new Date("2026-01-01T00:00:00+05:30")); // first moment of Q1
+    await sale("300.00", new Date("2026-03-31T23:30:00+05:30"));  // last day of Q1
+    await sale("7000.00", new Date("2026-04-01T01:00:00+05:30")); // Q2, though still 31 Mar in UTC
+
+    const caller = createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: compositionBusiness.id,
+    });
+    expect((await caller.gst.cmp08({ year: 2026, quarter: 1 })).taxableValue).toBe("1300.00");
+    expect((await caller.gst.cmp08({ year: 2026, quarter: 2 })).taxableValue).toBe("7000.00");
+    // Q4 2025 still holds only its own invoices
+    expect((await caller.gst.cmp08({ year: 2025, quarter: 4 })).taxableValue).toBe("10000.00");
+  });
 });
 
 // ── GSTR-3B Table 4 — ITC must not be double counted ─────────────────────────
@@ -1321,5 +1353,103 @@ describe("GSTR-1 — notes to unregistered customers, HSN rate rows and IST date
     expect(inv?.idt).toBe("16-07-2026");
     type CDNR = { nt: Array<{ nt_dt: string }> };
     expect((json.cdnr as CDNR[])[0].nt[0].nt_dt).toBe("16-07-2026");
+  });
+});
+
+// ── Return months are calendar months in India ───────────────────────────────
+
+describe("GST returns — months are cut at midnight IST", () => {
+  // Regression: months were cut at the server's (UTC) midnight. An invoice
+  // dated 1 Aug in India is stored as 2026-07-31T18:30Z and fell in July's
+  // return; one dated early on 1 Sep (still 31 Aug in UTC) fell in August's.
+  beforeAll(async () => {
+    const tenantDb = getTenantTestDb();
+    const b2b = (invoiceNumber: string, unitPrice: string, invoiceDate: Date, type: "sale" | "purchase" = "sale") =>
+      createInvoiceWithItems(
+        tenantDb, world.business1.id, world.party1.id,
+        [{ description: "Fabric", quantity: "1", unitPrice, taxPercent: "18.00" }],
+        { type, documentType: "invoice", status: "sent", invoiceDate, invoiceNumber },
+      );
+    await b2b("EDGE-AUG-FIRST", "1000.00", new Date("2026-08-01T00:00:00+05:30"));
+    await b2b("EDGE-AUG-LAST", "2000.00", new Date("2026-08-31T23:59:00+05:30"));
+    await b2b("EDGE-SEP-FIRST", "4000.00", new Date("2026-09-01T02:00:00+05:30"));
+    await b2b("EDGE-PUR-AUG", "500.00", new Date("2026-08-01T00:00:00+05:30"), "purchase");
+  });
+
+  function caller() {
+    return createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: world.business1.id,
+    });
+  }
+
+  const edgeInvoices = (report: { b2b: Array<{ invoiceNumber: string }> }) =>
+    report.b2b.map((r) => r.invoiceNumber).filter((n) => n.startsWith("EDGE-")).sort();
+
+  it("GSTR-1 for a month holds invoices from midnight IST on the 1st to the end of its last day", async () => {
+    expect(edgeInvoices(await caller().gst.gstr1({ year: 2026, month: 7 }))).toEqual([]);
+    expect(edgeInvoices(await caller().gst.gstr1({ year: 2026, month: 8 }))).toEqual(["EDGE-AUG-FIRST", "EDGE-AUG-LAST"]);
+    expect(edgeInvoices(await caller().gst.gstr1({ year: 2026, month: 9 }))).toEqual(["EDGE-SEP-FIRST"]);
+  });
+
+  it("GSTR-3B outward supplies and ITC use the same month", async () => {
+    const aug = await caller().gst.gstr3b({ year: 2026, month: 8 });
+    expect(aug.outwardSupplies.taxable.taxableValue).toBe(3000);
+    expect(aug.itc.total).toBeCloseTo(90, 2);
+    const sep = await caller().gst.gstr3b({ year: 2026, month: 9 });
+    expect(sep.outwardSupplies.taxable.taxableValue).toBe(4000);
+    expect(sep.itc.total).toBe(0);
+  });
+});
+
+// ── B2CL limit: ₹1,00,000 from 1 Aug 2024 (Notification 12/2024-CT) ─────────
+
+describe("GSTR-1 — B2CL limit follows the invoice date", () => {
+  beforeAll(async () => {
+    const tenantDb = getTenantTestDb();
+    const guConsumer = await createParty(tenantDb, world.business1.id, {
+      name: "Surat Walk-in", type: "customer", gstin: null,
+      city: "Surat", state: "Gujarat", stateCode: "24", openingBalance: "0.00",
+    });
+    const sale = (invoiceNumber: string, unitPrice: string, invoiceDate: Date) =>
+      createInvoiceWithItems(
+        tenantDb, world.business1.id, guConsumer.id,
+        [{ description: "Cabinet", quantity: "1", unitPrice, taxPercent: "18.00" }],
+        { type: "sale", documentType: "invoice", status: "sent", invoiceDate, invoiceNumber },
+      );
+    // ₹1,77,000 each — above the new ₹1,00,000 limit, below the old ₹2,50,000
+    await sale("LIM-JUL24", "150000.00", new Date("2024-07-31T23:00:00+05:30"));
+    await sale("LIM-AUG24", "150000.00", new Date("2024-08-01T00:00:00+05:30"));
+    // ₹1,00,000 exactly is not above the limit
+    await sale("LIM-AUG24-EQ", "84745.76", new Date("2024-08-20T12:00:00+05:30"));
+  });
+
+  function caller() {
+    return createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: world.business1.id,
+    });
+  }
+
+  const b2clInvoices = (report: { b2cLarge: Array<{ invoices?: Array<{ invoiceNumber: string }> }> }) =>
+    report.b2cLarge.flatMap((s) => s.invoices ?? []).map((i) => i.invoiceNumber).sort();
+
+  it("keeps the ₹2,50,000 limit for invoices dated before 1 Aug 2024", async () => {
+    const jul = await caller().gst.gstr1({ year: 2024, month: 7 });
+    expect(b2clInvoices(jul)).toEqual([]);
+    expect(jul.b2cSmall.find((r) => r.pos === "24")?.taxableValue).toBe(150000);
+  });
+
+  it("reports inter-state unregistered invoices above ₹1,00,000 in B2CL from 1 Aug 2024", async () => {
+    const aug = await caller().gst.gstr1({ year: 2024, month: 8 });
+    expect(b2clInvoices(aug)).toEqual(["LIM-AUG24"]);
+    // The ₹1,00,000 invoice stays in B2CS
+    expect(aug.b2cSmall.find((r) => r.pos === "24")?.taxableValue).toBe(84745.76);
   });
 });
