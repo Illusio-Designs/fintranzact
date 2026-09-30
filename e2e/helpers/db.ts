@@ -120,6 +120,124 @@ export async function invoiceRow(id: string) {
     | undefined;
 }
 
+// ── Masters ─────────────────────────────────────────────────────
+
+export type PartyRow = {
+  id: string;
+  type: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  gstin: string | null;
+  pan: string | null;
+  state: string | null;
+  state_code: string | null;
+  billing_address: string | null;
+  shipping_address: string | null;
+  additional_shipping_addresses: Array<{ label?: string; address: string; city?: string; state?: string; stateCode?: string; pincode?: string }> | null;
+  opening_balance: string;
+  credit_limit: string | null;
+  credit_period_days: number | null;
+  price_level_id: string | null;
+};
+
+export async function partiesNamed(businessId: string, name: string) {
+  return (await db()`
+    select id, type, name, phone, email, gstin, pan, state, state_code, billing_address, shipping_address,
+           additional_shipping_addresses, opening_balance, credit_limit, credit_period_days, price_level_id
+    from parties where business_id = ${businessId} and name = ${name}`) as unknown as PartyRow[];
+}
+
+export async function invoicePartyIds(invoiceIds: string[]) {
+  return (await db()`select id, party_id, notes from invoices where id = any(${invoiceIds}::uuid[])`) as unknown as Array<{
+    id: string;
+    party_id: string;
+    notes: string | null;
+  }>;
+}
+
+export async function recurringTemplatesOf(partyId: string) {
+  return (await db()`select id, name from recurring_invoice_templates where party_id = ${partyId}`) as unknown as Array<{ id: string; name: string }>;
+}
+
+export type ItemRow = {
+  id: string;
+  name: string;
+  item_type: string;
+  item_mode: string;
+  hsn: string | null;
+  sku: string | null;
+  barcode: string | null;
+  unit: string;
+  unit_variants: Array<{ unit: string; conversionFactor: string; salePrice?: string }> | null;
+  variant_attributes: string[] | null;
+  sale_price: string | null;
+  purchase_price: string | null;
+  tax_percent: string;
+  stock_quantity: string;
+  stock_group_id: string | null;
+  track_batches: boolean;
+  track_expiry: boolean;
+  deleted_at: Date | null;
+};
+
+export async function itemsNamed(businessId: string, name: string) {
+  return (await db()`
+    select id, name, item_type, item_mode, hsn, sku, barcode, unit, unit_variants, variant_attributes, sale_price,
+           purchase_price, tax_percent, stock_quantity, stock_group_id, track_batches, track_expiry, deleted_at
+    from items where business_id = ${businessId} and name = ${name}`) as unknown as ItemRow[];
+}
+
+export async function itemVariants(itemId: string) {
+  return (await db()`
+    select id, attribute_values, sku, sale_price, stock_quantity, deleted_at from item_variants
+    where item_id = ${itemId} order by created_at`) as unknown as Array<{
+    id: string;
+    attribute_values: Record<string, string>;
+    sku: string | null;
+    sale_price: string | null;
+    stock_quantity: string;
+    deleted_at: Date | null;
+  }>;
+}
+
+export async function itemBatches(itemId: string) {
+  return (await db()`
+    select batch_number, expiry_date::text as expiry_date, mfg_date::text as mfg_date from item_batches
+    where item_id = ${itemId} order by created_at`) as unknown as Array<{ batch_number: string; expiry_date: string | null; mfg_date: string | null }>;
+}
+
+/** Stock movements of an item (opening stock, sales, adjustments…). */
+export async function stockMovements(itemId: string) {
+  return (await db()`
+    select sm.movement_type, sm.reference_type, sm.quantity, b.batch_number, sm.variant_id
+    from stock_movements sm left join item_batches b on b.id = sm.batch_id
+    where sm.item_id = ${itemId} order by sm.created_at`) as unknown as Array<{
+    movement_type: string;
+    reference_type: string | null;
+    quantity: string;
+    batch_number: string | null;
+    variant_id: string | null;
+  }>;
+}
+
+export async function stockGroupNamed(businessId: string, name: string) {
+  const [row] = await db()`select id, name, parent_id from stock_groups where business_id = ${businessId} and name = ${name}`;
+  return row as { id: string; name: string; parent_id: string | null } | undefined;
+}
+
+export async function priceListEntries(levelName: string, itemId: string) {
+  return (await db()`
+    select ple.price, ple.unit, ple.min_quantity from price_list_entries ple
+    join price_levels pl on pl.id = ple.price_level_id
+    where pl.name = ${levelName} and ple.item_id = ${itemId}`) as unknown as Array<{ price: string; unit: string | null; min_quantity: string }>;
+}
+
+export async function priceLevelNamed(businessId: string, name: string) {
+  const [row] = await db()`select id, name from price_levels where business_id = ${businessId} and name = ${name}`;
+  return row as { id: string; name: string } | undefined;
+}
+
 // ── Test plumbing (no UI exists for these) ───────────────────────
 
 /** Make an invoice look `hours` old (role rules depend on its age). */

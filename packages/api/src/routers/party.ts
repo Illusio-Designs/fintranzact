@@ -1,6 +1,6 @@
 import { eq, and, ilike, or, sql, desc, asc, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { parties, invoices, payments, expenses, items, invoiceItems, eInvoiceConfigs, shipments } from "@fintranzact/db";
+import { parties, invoices, payments, expenses, items, invoiceItems, eInvoiceConfigs, recurringInvoiceTemplates, shipments, bankCategorizationRules } from "@fintranzact/db";
 import {
   createPartySchema,
   updatePartySchema,
@@ -342,6 +342,29 @@ export const partyRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "Party");
+
+      // A party with transactions stays: invoices, payments and recurring
+      // invoices reference it (ON DELETE RESTRICT), which used to surface as
+      // a raw foreign-key error. Say why, and what to do instead.
+      const [inUse] = await ctx.db.select({ id: parties.id, name: parties.name })
+        .from(parties)
+        .where(and(
+          eq(parties.id, input.id),
+          eq(parties.businessId, ctx.businessId),
+          or(
+            sql`exists (select 1 from ${invoices} where ${invoices.partyId} = ${parties.id})`,
+            sql`exists (select 1 from ${payments} where ${payments.partyId} = ${parties.id})`,
+            sql`exists (select 1 from ${recurringInvoiceTemplates} where ${recurringInvoiceTemplates.partyId} = ${parties.id})`,
+          ),
+        ))
+        .limit(1);
+      if (inUse) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `"${inUse.name}" has invoices or payments, so it cannot be deleted. Merge it into another party instead.`,
+        });
+      }
+
       const deleted = await ctx.db.delete(parties)
         .where(and(eq(parties.id, input.id), eq(parties.businessId, ctx.businessId)))
         .returning();
@@ -449,10 +472,19 @@ export const partyRouter = router({
           .set({ partyId: input.targetId })
           .where(and(eq(payments.partyId, input.sourceId), eq(payments.businessId, ctx.businessId)));
 
-        // Shipments go with their invoices (deleting the source would blank them).
+        // Everything else that points at the source follows it. Recurring
+        // invoices reference the party with ON DELETE RESTRICT, so leaving
+        // them behind made the merge fail outright; shipments (which go with
+        // their invoices) and bank rules would silently lose their party.
+        await tx.update(recurringInvoiceTemplates)
+          .set({ partyId: input.targetId, updatedAt: new Date() })
+          .where(and(eq(recurringInvoiceTemplates.partyId, input.sourceId), eq(recurringInvoiceTemplates.businessId, ctx.businessId)));
         await tx.update(shipments)
           .set({ partyId: input.targetId, updatedAt: new Date() })
           .where(and(eq(shipments.partyId, input.sourceId), eq(shipments.businessId, ctx.businessId)));
+        await tx.update(bankCategorizationRules)
+          .set({ partyId: input.targetId })
+          .where(and(eq(bankCategorizationRules.partyId, input.sourceId), eq(bankCategorizationRules.businessId, ctx.businessId)));
 
         // Merge opening balances
         const mergedBalance = money.add(source.openingBalance || "0", target.openingBalance || "0");
@@ -466,10 +498,18 @@ export const partyRouter = router({
         if (!target.billingAddress && source.billingAddress) updates.billingAddress = source.billingAddress;
         if (!target.city && source.city) updates.city = source.city;
         if (!target.state && source.state) updates.state = source.state;
-        // The state code decides CGST+SGST vs IGST: take the source's, or the
-        // one the (possibly just copied) GSTIN carries.
-        if (!target.stateCode) {
-          const stateCode = source.stateCode || stateCodeFromGstin((updates.gstin as string | undefined) ?? target.gstin);
+        // The state code decides CGST+SGST vs IGST. A GSTIN copied from the
+        // source brings its state along (code and name), so place of supply
+        // stays right; otherwise fill a missing code from the source or from
+        // the target's own GSTIN.
+        if (updates.gstin) {
+          const stateCode = source.stateCode || stateCodeFromGstin(source.gstin);
+          if (stateCode) {
+            updates.stateCode = stateCode;
+            if (source.state) updates.state = source.state;
+          }
+        } else if (!target.stateCode) {
+          const stateCode = source.stateCode || stateCodeFromGstin(target.gstin);
           if (stateCode) updates.stateCode = stateCode;
         }
         if (!target.pincode && source.pincode) updates.pincode = source.pincode;

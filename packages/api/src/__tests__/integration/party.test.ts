@@ -19,6 +19,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
+import { recurringInvoiceTemplates } from "@fintranzact/db";
 import {
   getTenantTestDb,
   truncateAllTables,
@@ -527,10 +529,27 @@ describe("party.delete", () => {
       [{ description: "FK test item", quantity: "1", unitPrice: "100.00" }],
     );
 
-    // Delete should throw because invoices reference this party via FK
+    // Refused with a reason the user can act on (it used to be a raw FK error)
     await expect(
       callerRamesh.party.delete({ id: party.id })
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: `"Party With Invoice - Should Not Delete" has invoices or payments, so it cannot be deleted. Merge it into another party instead.`,
+    });
+    expect(await callerRamesh.party.getById({ id: party.id })).not.toBeNull();
+  });
+
+  it("rejects delete of a party that only has a recurring invoice", async () => {
+    const party = await createParty(getTenantTestDb(), business1.id, { name: "Recurring Only Party" });
+    await callerRamesh.recurringInvoice.create({
+      partyId: party.id,
+      name: "Monthly retainer",
+      type: "sale",
+      frequency: "monthly",
+      lineItems: [{ itemName: "Retainer", quantity: "1", unitPrice: "1000.00", taxPercent: "18.00" }],
+      startDate: new Date(Date.now() + 30 * 86400000).toISOString(),
+    });
+    await expect(callerRamesh.party.delete({ id: party.id })).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
   it("seller role cannot delete a party — permission denied by CASL", async () => {
@@ -1108,5 +1127,45 @@ describe("party.list N+1 detection", () => {
     } finally {
       counter.dispose();
     }
+  });
+});
+
+// ── party.merge ───────────────────────────────────────────────────────────────
+// Regression: merging a party that had a recurring invoice failed with a
+// foreign-key error (templates were left pointing at the deleted source).
+
+describe("party.merge moves everything that references the source", () => {
+  it("moves invoices and recurring invoices, adds opening balances and takes the GSTIN's state", async () => {
+    const db = getTenantTestDb();
+    const target = await createParty(db, business1.id, { name: "Merge Target Co", gstin: null, stateCode: null, state: null, openingBalance: "500.00" });
+    const source = await createParty(db, business1.id, {
+      name: "Merge Source Co",
+      gstin: "29AABCT1332L1ZT",
+      stateCode: "29",
+      state: "Karnataka",
+      openingBalance: "250.00",
+    });
+    const { invoice } = await createInvoiceWithItems(db, business1.id, source.id, [
+      { description: "Merged sale", quantity: "1", unitPrice: "100.00" },
+    ]);
+    const template = await callerRamesh.recurringInvoice.create({
+      partyId: source.id,
+      name: "Monthly AMC",
+      type: "sale",
+      frequency: "monthly",
+      lineItems: [{ itemName: "AMC", quantity: "1", unitPrice: "500.00", taxPercent: "18.00" }],
+      startDate: new Date(Date.now() + 30 * 86400000).toISOString(),
+    });
+
+    await callerRamesh.party.merge({ sourceId: source.id, targetId: target.id });
+
+    expect(await callerRamesh.party.getById({ id: source.id })).toBeNull();
+    const merged = await callerRamesh.party.getById({ id: target.id });
+    expect(merged).toMatchObject({ openingBalance: "750.00", gstin: "29AABCT1332L1ZT", stateCode: "29", state: "Karnataka" });
+    const moved = await callerRamesh.invoice.getById({ id: invoice.id });
+    expect(moved?.partyId).toBe(target.id);
+    const [tpl] = await db.select({ partyId: recurringInvoiceTemplates.partyId })
+      .from(recurringInvoiceTemplates).where(eq(recurringInvoiceTemplates.id, template.id));
+    expect(tpl.partyId).toBe(target.id);
   });
 });
