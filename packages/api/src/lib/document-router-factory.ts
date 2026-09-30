@@ -24,6 +24,7 @@ import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
 import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
 import { assertLineExtras, lineExtras } from "./line-extras.js";
+import { resolveDeliveryMethod } from "./delivery-methods.js";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 
@@ -418,7 +419,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           // This prevents over-crediting or over-returning against a single invoice.
           if (adjustsBill && input.referenceDocumentId) {
             const [refInvoice] = await tx
-              .select({ totalAmount: invoices.totalAmount })
+              .select({ totalAmount: invoices.totalAmount, type: invoices.type })
               .from(invoices)
               .where(and(
                 eq(invoices.id, input.referenceDocumentId),
@@ -428,6 +429,18 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
             if (!refInvoice) {
               throw new TRPCError({ code: "BAD_REQUEST", message: "Referenced invoice not found" });
+            }
+
+            // Goods go back the way they came: a sales return is against a
+            // sale, a purchase return against a purchase. Anything else would
+            // move stock and GST the wrong way.
+            if (config.fixedType && refInvoice.type !== config.fixedType) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: refInvoice.type === "purchase"
+                  ? "A purchase invoice is returned with a purchase return, not a sales return"
+                  : "A sale invoice is returned with a sales return, not a purchase return",
+              });
             }
 
             // Sum all existing CN/SR/PR already issued against this invoice
@@ -452,6 +465,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               });
             }
           }
+
+          // A built-in delivery method, or one of the business's own.
+          const deliveryMethod = await resolveDeliveryMethod(tx, ctx.businessId, input.deliveryMethod || "self_pickup");
 
           // Check a picked warehouse before the document row references it.
           if (input.warehouseId && config.stockEffect !== "none" && !input.skipStockAdjustment) {
@@ -483,6 +499,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               notes: input.notes,
               termsAndConditions: input.termsAndConditions,
               referenceDocumentId: input.referenceDocumentId || null,
+              deliveryMethod,
               stockMode: config.stockEffect === "none" || input.skipStockAdjustment ? "none" : "tracked",
               warehouseId: config.stockEffect === "none" || input.skipStockAdjustment ? null : input.warehouseId ?? null,
               createdByUserId: ctx.user!.id,

@@ -69,7 +69,7 @@ export function registerInvoiceCommands(program: Command): void {
     .option("--item <name>", "Item (repeatable)", (v, a: string[]) => [...a, v], [] as string[])
     .option("--qty <n>", "Quantity (per --item)", (v, a: string[]) => [...a, v], [] as string[])
     .option("--rate <n>", "Unit price (per --item)", (v, a: string[]) => [...a, v], [] as string[])
-    .option("--delivery <method>", "Delivery method")
+    .option("--delivery <method>", "Delivery method: self_pickup, hand_delivery, courier, bus, transport, post, or a custom method from Settings → Shipping")
     .option("--notes <text>", "Invoice notes")
     .option("--terms <text>", "Terms and conditions")
     .option("-y, --yes", "Skip confirmation prompts")

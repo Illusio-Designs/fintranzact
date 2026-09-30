@@ -7,6 +7,7 @@ import { createDocumentRouter } from "../lib/document-router-factory.js";
 import { logAudit } from "../lib/audit.js";
 import { FULFILLED_BY, isPendingTracked, loadPendingLines, loadRejectedLines } from "../lib/order-fulfilment.js";
 import { requireCan } from "../lib/permissions.js";
+import { findDeliveryMethod } from "../lib/delivery-methods.js";
 
 // ── Per-document-type routers ───────────────────────────────────
 
@@ -157,7 +158,12 @@ export const documentRouter = router({
         .where(eq(invoiceItems.invoiceId, sourceDoc.id))
         .orderBy(invoiceItems.sortOrder);
 
-      const targetType = input.targetDocumentType;
+      // Goods go back the way they came: returning a purchase makes a
+      // purchase return (stock out, ITC reversed) and returning a sale a
+      // sales return, whichever return the caller asked for.
+      let targetType = input.targetDocumentType;
+      if (targetType === "sales_return" && sourceDoc.type === "purchase") targetType = "purchase_return";
+      else if (targetType === "purchase_return" && sourceDoc.type === "sale") targetType = "sales_return";
       const fromRejected = !!input.fromRejected;
       const fulfils = !fromRejected
         && isPendingTracked(sourceDoc.documentType)
@@ -321,6 +327,11 @@ export const documentRouter = router({
         ? (sourceDoc.charges ?? []).map(({ label, amount }) => ({ label, amount }))
         : [];
 
+      // The delivery method goes along while the business still offers it.
+      const deliveryMethod = sourceDoc.deliveryMethod
+        ? await findDeliveryMethod(ctx.db, ctx.businessId, sourceDoc.deliveryMethod)
+        : null;
+
       const convertInput = createInvoiceSchema.parse({
         partyId: sourceDoc.partyId,
         type: sourceDoc.type,
@@ -337,6 +348,7 @@ export const documentRouter = router({
         roundOff: wholeDocument ? sourceDoc.roundOff : "0",
         referenceDocumentId: sourceDoc.id,
         warehouseId: input.warehouseId ?? undefined,
+        deliveryMethod: deliveryMethod ?? undefined,
         skipStockAdjustment,
         lineItems: lines.map(({ li, quantity, freeQuantity, rejectedQuantity, rejectionReason }) => ({
           itemId: li.itemId ?? undefined,

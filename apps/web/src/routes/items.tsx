@@ -1668,7 +1668,7 @@ const DOC_TYPE_ROUTE: Record<string, string> = {
   delivery_challan: "/delivery-challans",
   quotation: "/quotations",
   proforma: "/proforma-invoices",
-  purchase_return: "/invoices",
+  purchase_return: "/purchase-returns",
   debit_note: "/invoices",
 };
 

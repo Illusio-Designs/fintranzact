@@ -12,7 +12,7 @@ import {
   itcLedgerEntries,
   eInvoiceConfigs,
 } from "@fintranzact/db";
-import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
+import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, deliveryMethodSchema, calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
@@ -25,6 +25,7 @@ import { resolveIRPConfig } from "../lib/irp-config.js";
 import { ensureBarcodeForStock } from "../lib/barcode-setup.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 import { assertLineExtras, lineExtras } from "../lib/line-extras.js";
+import { resolveDeliveryMethod } from "../lib/delivery-methods.js";
 
 export const invoiceRouter = router({
   list: viewerProcedure
@@ -392,6 +393,9 @@ export const invoiceRouter = router({
         : (input.additionalCharges || "0");
       const roundOff = input.roundOff || "0";
 
+      // A built-in delivery method, or one of the business's own.
+      const deliveryMethod = await resolveDeliveryMethod(tx, ctx.businessId, input.deliveryMethod || "self_pickup");
+
       // Check a picked warehouse before the invoice row references it.
       if (input.warehouseId && !input.skipStockAdjustment) {
         await resolveInvoiceWarehouse(tx, {
@@ -420,7 +424,7 @@ export const invoiceRouter = router({
         termsAndConditions: input.termsAndConditions,
         referenceDocumentId: input.referenceDocumentId || null,
         warehouseId: input.skipStockAdjustment ? null : input.warehouseId ?? null,
-        deliveryMethod: input.deliveryMethod || "self_pickup",
+        deliveryMethod,
         isReverseCharge: input.isReverseCharge ?? false,
         source: input.source ?? null,
         stockMode: input.skipStockAdjustment ? "none" : "tracked",
@@ -471,7 +475,7 @@ export const invoiceRouter = router({
             businessId: ctx.businessId,
             invoiceId: invoice.id,
             partyId: input.partyId,
-            mode: input.deliveryMethod === "self_pickup" ? "hand_delivery" : (input.deliveryMethod || "hand_delivery"),
+            mode: deliveryMethod === "self_pickup" ? "hand_delivery" : deliveryMethod,
             cost: shippingCharge.amount,
             status: "pending",
           }).returning();
@@ -800,6 +804,8 @@ export const invoiceRouter = router({
       roundOff: z.string().regex(/^-?\d+(\.\d{1,2})?$/).optional(),
       lineItems: z.array(invoiceLineItemSchema).min(1).optional(),
       warehouseId: z.string().uuid().nullish(),
+      /** A built-in delivery method or one from Settings → Shipping. */
+      deliveryMethod: deliveryMethodSchema.optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Invoice");
@@ -867,6 +873,11 @@ export const invoiceRouter = router({
         if (input.dueDate !== undefined) updates.dueDate = input.dueDate ? new Date(input.dueDate) : null;
         if (input.notes !== undefined) updates.notes = input.notes;
         if (input.termsAndConditions !== undefined) updates.termsAndConditions = input.termsAndConditions;
+        // Keeping the saved method is always fine, even one since removed
+        // from Settings → Shipping; a change must be one the business offers.
+        if (input.deliveryMethod !== undefined && input.deliveryMethod !== existing.deliveryMethod) {
+          updates.deliveryMethod = await resolveDeliveryMethod(tx, ctx.businessId, input.deliveryMethod);
+        }
 
         // 3. Handle charges — preserve shipment-linked entries that should not be
         // directly edited by the user (they are managed via shipment mutations).

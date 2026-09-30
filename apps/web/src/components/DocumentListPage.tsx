@@ -29,6 +29,7 @@ export type TrpcRouterKey =
   | "proforma"
   | "deliveryChallan"
   | "salesReturn"
+  | "purchaseReturn"
   | "creditNote"
   | "salesOrder"
   | "purchaseOrder"
@@ -43,6 +44,8 @@ const DOCUMENT_PAGES: Record<string, string> = {
   sales_order: "/sales-orders",
   purchase_order: "/purchase-orders",
   goods_receipt_note: "/goods-receipt-notes",
+  sales_return: "/sales-returns",
+  purchase_return: "/purchase-returns",
 };
 
 /** Status tabs with these values filter on how much is still pending. */
@@ -61,7 +64,7 @@ export interface DocumentListPageConfig {
   documentType: DocumentType;
   /**
    * Fixed invoiceType for routes with no type toggle (quotations, proforma,
-   * sales-returns). Ignored when hasTypeFilter is true.
+   * sales-returns, purchase-returns). Ignored when hasTypeFilter is true.
    */
   defaultInvoiceType?: "sale" | "purchase";
   /** Show the sale/purchase SegmentedControl (delivery-challans, credit-notes) */
@@ -94,7 +97,7 @@ export interface DocumentListPageConfig {
    * Column 4 variant:
    * - "dueDate"    — shows doc.dueDate (delivery-challans, quotations, proforma)
    * - "refInvoice" — shows a "Linked" badge from doc.referenceDocumentId
-   *                  (sales-returns, credit-notes)
+   *                  (sales-returns, purchase-returns, credit-notes)
    */
   col4Variant: "dueDate" | "refInvoice";
   /** Column 4 header label */

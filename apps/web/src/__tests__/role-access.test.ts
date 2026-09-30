@@ -16,6 +16,7 @@
  * │ Invoices (CRUD)   │  CRUD  │ CRUD  │     CRUD       │  CRU   │     R      │
  * │ Quotations        │  CRUD  │ CRUD  │     CRUD       │  CRU   │     R      │
  * │ Sales Returns     │  CRUD  │ CRUD  │     CRUD       │  CRU   │     R      │
+ * │ Purchase Returns  │  CRUD  │ CRUD  │     CRUD       │  CRU   │     R      │
  * │ Credit Notes      │  CRUD  │ CRUD  │     CRUD       │  CRU   │     R      │
  * │ Delivery Challans │  CRUD  │ CRUD  │     CRUD       │  CRU   │     R      │
  * │ Proforma Invoices │  CRUD  │ CRUD  │     CRUD       │  CRU   │     R      │
@@ -185,6 +186,7 @@ const ALL_NAV_ITEMS = [
   "Invoices",
   "Quotations",
   "Sales Returns",
+  "Purchase Returns",
   "Credit Notes",
   "Delivery Challans",
   "Proforma Invoices",
@@ -231,6 +233,7 @@ const NAV_PERMISSION_MAP: NavItemPermission[] = [
   { navItem: "Invoices", resource: "Invoice", action: "read" },
   { navItem: "Quotations", resource: "Invoice", action: "read" },
   { navItem: "Sales Returns", resource: "Invoice", action: "read" },
+  { navItem: "Purchase Returns", resource: "Invoice", action: "read" },
   { navItem: "Credit Notes", resource: "Invoice", action: "read" },
   { navItem: "Delivery Challans", resource: "Invoice", action: "read" },
   { navItem: "Proforma Invoices", resource: "Invoice", action: "read" },
@@ -257,7 +260,7 @@ const NAV_PERMISSION_MAP: NavItemPermission[] = [
 const NAV_CONTRACT: Record<string, { visible: NavItem[]; hidden: NavItem[] }> = {
   superadmin: {
     visible: [
-      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Credit Notes",
+      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Purchase Returns", "Credit Notes",
       "Delivery Challans", "Proforma Invoices", "Store Orders", "Recurring Invoices",
       "Parties", "Items", "Payments", "Cash & Bank", "Expenses", "Shipments",
       "GST Returns", "Reports", "Settings",
@@ -266,7 +269,7 @@ const NAV_CONTRACT: Record<string, { visible: NavItem[]; hidden: NavItem[] }> = 
   },
   admin: {
     visible: [
-      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Credit Notes",
+      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Purchase Returns", "Credit Notes",
       "Delivery Challans", "Proforma Invoices", "Store Orders", "Recurring Invoices",
       "Parties", "Items", "Payments", "Cash & Bank", "Expenses", "Shipments",
       "GST Returns", "Reports", "Settings",
@@ -275,7 +278,7 @@ const NAV_CONTRACT: Record<string, { visible: NavItem[]; hidden: NavItem[] }> = 
   },
   seller_manager: {
     visible: [
-      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Credit Notes",
+      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Purchase Returns", "Credit Notes",
       "Delivery Challans", "Proforma Invoices", "Store Orders", "Recurring Invoices",
       "Parties", "Items", "Payments", "Cash & Bank", "Expenses",
       "Shipments", "Reports",
@@ -284,7 +287,7 @@ const NAV_CONTRACT: Record<string, { visible: NavItem[]; hidden: NavItem[] }> = 
   },
   seller: {
     visible: [
-      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Credit Notes",
+      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Purchase Returns", "Credit Notes",
       "Delivery Challans", "Proforma Invoices", "Store Orders", "Recurring Invoices",
       "Parties", "Items", "Payments", "Shipments",
     ],
@@ -292,7 +295,7 @@ const NAV_CONTRACT: Record<string, { visible: NavItem[]; hidden: NavItem[] }> = 
   },
   accountant: {
     visible: [
-      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Credit Notes",
+      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Purchase Returns", "Credit Notes",
       "Delivery Challans", "Proforma Invoices", "Store Orders", "Recurring Invoices",
       "Parties", "Items", "Payments", "Cash & Bank", "Expenses", "Shipments",
       "GST Returns", "Reports",

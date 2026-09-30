@@ -205,6 +205,12 @@ export const createBusinessSchema = z.object({
       }),
     )
     .max(50)
+    .refine((methods) => new Set(methods.map((m) => m.id)).size === methods.length, {
+      message: "Each delivery method needs its own id",
+    })
+    .refine((methods) => !methods.some((m) => isBuiltInDeliveryMethod(m.id)), {
+      message: "A custom delivery method can't reuse a built-in method's id",
+    })
     .nullable()
     .optional(),
 });
@@ -450,6 +456,17 @@ export const invoiceStatuses = ["draft", "unfulfilled", "sent", "paid", "partial
 export const deliveryMethods = ["self_pickup", "hand_delivery", "courier", "bus", "transport", "post"] as const;
 export type DeliveryMethod = (typeof deliveryMethods)[number];
 
+export function isBuiltInDeliveryMethod(method: string): method is DeliveryMethod {
+  return (deliveryMethods as readonly string[]).includes(method);
+}
+
+/**
+ * How the goods go out: a built-in method, or the id of one of the
+ * business's own methods from Settings → Shipping. Only the shape is checked
+ * here; the server checks custom ids against the business's list.
+ */
+export const deliveryMethodSchema = z.string().trim().min(1).max(100);
+
 export const invoiceChargeSchema = z.object({
   label: z.string().min(1).max(100),
   amount: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/),
@@ -531,7 +548,7 @@ export const createInvoiceSchema = z.object({
    */
   skipStockAdjustment: z.boolean().optional(),
   isReverseCharge: z.boolean().default(false),
-  deliveryMethod: z.enum(deliveryMethods).default("self_pickup"),
+  deliveryMethod: deliveryMethodSchema.default("self_pickup"),
   /**
    * Origin channel for this invoice. "pos" for the fullscreen register,
    * "online_store" for storefront orders, "webhook" for public-API /

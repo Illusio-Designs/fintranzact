@@ -1,16 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
-// ── Built-in delivery methods (always available) ─────────────────────────
-
-const BUILT_IN_METHODS = [
-  { id: "self_pickup", label: "Self Pickup", description: "Customer picks up from your location", hasTracking: false },
-  { id: "hand_delivery", label: "Self / Driver", description: "Delivered by you or your delivery person", hasTracking: false },
-  { id: "bus", label: "Bus / Parcel Service", description: "Sent via bus parcel — no tracking", hasTracking: false },
-  { id: "transport", label: "Transport", description: "Goods transport / logistics company", hasTracking: false },
-  { id: "courier", label: "Courier", description: "Courier service with tracking", hasTracking: true },
-  { id: "post", label: "India Post", description: "Speed Post / Registered Post", hasTracking: true },
-] as const;
+import { BUILT_IN_DELIVERY_METHODS as BUILT_IN_METHODS, isBuiltInDeliveryMethodId } from "@/lib/delivery-methods";
 
 // ── Known carriers for API integration ───────────────────────────────────
 
@@ -67,7 +58,15 @@ export function ShippingTab({ biz }: ShippingTabProps) {
   function addCustomMethod() {
     const label = newMethodLabel.trim();
     if (!label) return;
-    const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    if (!id) {
+      toast.error("Use letters or numbers in the method name");
+      return;
+    }
+    if (isBuiltInDeliveryMethodId(id) || BUILT_IN_METHODS.some((m) => m.label.toLowerCase() === label.toLowerCase())) {
+      toast.error("That is already a built-in method");
+      return;
+    }
     if (customMethods.some((m) => m.id === id)) {
       toast.error("A method with this name already exists");
       return;
@@ -99,7 +98,7 @@ export function ShippingTab({ biz }: ShippingTabProps) {
       <section>
         <h3 className="text-sm font-semibold text-text-primary mb-1">Built-in Delivery Methods</h3>
         <p className="text-xs text-text-tertiary mb-3">
-          These are always available when creating invoices. They cannot be removed.
+          Always offered in the <strong>Delivery method</strong> list on invoices and other documents. They cannot be removed.
         </p>
         <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
           <table className="w-full text-sm">
@@ -128,7 +127,10 @@ export function ShippingTab({ biz }: ShippingTabProps) {
       <section>
         <h3 className="text-sm font-semibold text-text-primary mb-1">Custom Delivery Methods</h3>
         <p className="text-xs text-text-tertiary mb-3">
-          Add your own shipping channels. These appear alongside built-in methods in the invoice form.
+          Add your own shipping channels. Once saved, they appear alongside the built-in methods in the{" "}
+          <strong>Delivery method</strong> list on sale invoices, quotations, proforma invoices, sales orders,
+          delivery challans and purchase returns, and in the mode list when you create a shipment. Removing one
+          doesn&apos;t change documents already saved with it.
         </p>
 
         {customMethods.length > 0 && (

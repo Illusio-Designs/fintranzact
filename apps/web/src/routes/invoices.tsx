@@ -18,6 +18,7 @@ import { LinkButton } from "@/components/ui/LinkButton";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { DocumentCreator } from "@/components/DocumentCreator";
 import { Select } from "@/components/ui/Select";
+import { deliveryMethodLabel, useDeliveryMethods } from "@/lib/delivery-methods";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -218,6 +219,8 @@ function InvoiceShipmentStatusBadge({ status }: { status: ShipmentStatus }) {
 
 function CreateShipmentForm({ invoiceId, partyId, onCreated }: { invoiceId: string; partyId: string; onCreated: () => void }) {
   const [mode, setMode] = useState("");
+  // The business's own methods from Settings → Shipping can be a shipment's mode too.
+  const customModes = useDeliveryMethods().filter((m) => m.custom);
   const [carrier, setCarrier] = useState("");
   const [tracking, setTracking] = useState("");
   const [cost, setCost] = useState("");
@@ -247,6 +250,9 @@ function CreateShipmentForm({ invoiceId, partyId, onCreated }: { invoiceId: stri
           <option value="courier">Courier</option>
           <option value="transport">Transport</option>
           <option value="post">Post</option>
+          {customModes.map((m) => (
+            <option key={m.id} value={m.id}>{m.label}</option>
+          ))}
         </Select>
         <input
           type="text"
@@ -303,6 +309,7 @@ function InvoiceShipmentCard({ invoiceId, partyId, invoiceStatus }: { invoiceId:
   const [trackingInput, setTrackingInput] = useState("");
 
   const utils = trpc.useUtils();
+  const deliveryOptions = useDeliveryMethods();
 
   const { data, isLoading } = trpc.shipment.list.useQuery(
     { invoiceId, limit: 1, page: 1 },
@@ -394,7 +401,7 @@ function InvoiceShipmentCard({ invoiceId, partyId, invoiceStatus }: { invoiceId:
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
               <p className="text-text-tertiary mb-0.5">Mode</p>
-              <p className="text-text-secondary">{INVOICE_MODE_LABELS[shipment.mode ?? ""] ?? shipment.mode ?? "—"}</p>
+              <p className="text-text-secondary">{INVOICE_MODE_LABELS[shipment.mode ?? ""] ?? deliveryMethodLabel(shipment.mode, deliveryOptions)}</p>
             </div>
             <div>
               <p className="text-text-tertiary mb-0.5">Carrier</p>
@@ -477,6 +484,7 @@ function InvoiceDetailPanel({
   onCreateSR,
 }: InvoiceDetailPanelProps) {
   const navigate = useNavigate();
+  const deliveryOptions = useDeliveryMethods();
   const { data: invoice, isLoading } = trpc.invoice.getById.useQuery(
     { id: invoiceId! },
     { enabled: !!invoiceId }
@@ -579,12 +587,13 @@ function InvoiceDetailPanel({
                   See {sr.invoiceNumber}
                 </a>
               ) : (
-                <span
+                <a
                   key={sr.id}
-                  className="inline-flex items-center text-xs px-2.5 py-1.5 rounded font-medium text-orange-600"
+                  href={`/purchase-returns?id=${sr.id}`}
+                  className="inline-flex items-center text-xs px-2.5 py-1.5 rounded font-medium text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950 transition-colors"
                 >
                   Returned on {sr.invoiceNumber}
-                </span>
+                </a>
               ))}
               {/* Create buttons — only when not fully adjusted */}
               {canConvert && (
@@ -656,6 +665,11 @@ function InvoiceDetailPanel({
               {invoice.dueDate && (
                 <DetailField label="Due Date">
                   <p>{formatDate(invoice.dueDate)}</p>
+                </DetailField>
+              )}
+              {invoice.type === "sale" && invoice.deliveryMethod && (
+                <DetailField label="Delivery">
+                  <p>{deliveryMethodLabel(invoice.deliveryMethod, deliveryOptions)}</p>
                 </DetailField>
               )}
             </div>

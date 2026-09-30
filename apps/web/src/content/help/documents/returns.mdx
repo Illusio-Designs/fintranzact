@@ -19,7 +19,7 @@ Use a return when goods physically move back:
 | Stock | Comes **in**, into your sales-return warehouse | Goes **out**, from your purchase-return warehouse |
 | Party ledger | Credit — the customer owes you less | Debit — you owe the supplier less |
 | GST returns | GSTR-1 **Credit Notes** section; reduces GSTR-3B outward tax | Not in GSTR-1; reverses ITC in GSTR-3B |
-| Where to create | Web and mobile app | [CLI](/help/ai/cli) or [MCP server](/help/ai/mcp-server) only |
+| Where to create | Web and mobile app | Web app, [CLI](/help/ai/cli) or [MCP server](/help/ai/mcp-server) |
 
 If nothing comes back and you are only correcting the amount, use a [credit note](/help/documents/credit-and-debit-notes) instead.
 
@@ -50,10 +50,6 @@ The invoice's detail panel then shows a **See SR-…** link to the return.
 The screen reminds you: *Creating a sales return will increment stock (goods returned by customer).*
 </ForMobile>
 
-:::caution
-**Create Sales Return** is also shown on **purchase** invoices on the web. Don't use it there: it creates a sales return on the purchases side that **adds** stock instead of removing it, and it won't appear on the **Sales Returns** page (which shows sales-side returns only). To send goods back to a supplier, use a purchase return.
-:::
-
 ### How a sales return adjusts the invoice
 
 Sales returns and credit notes share one limit per invoice:
@@ -64,10 +60,10 @@ Sales returns and credit notes share one limit per invoice:
 
 Cancelling or deleting the return takes the stock back out and removes it from the invoice's adjusted amount.
 
-### Standalone sales returns
+### Returns from the Sales Returns page
 
 <ForDesktop>
-Go to **VOUCHERS** → **Sales Returns** and click **+ New Sales Return**. The form has no field to link an invoice, so the return reduces the customer's overall balance but not any particular invoice.
+Go to **VOUCHERS** → **Sales Returns** and click **+ New Sales Return**. Pick the sale invoice in **Against sale invoice (optional)** to copy its customer and lines and count the return against it, then keep only what came back. Leave it empty for a return that reduces the customer's overall balance but not any particular invoice.
 </ForDesktop>
 
 <ForMobile>
@@ -96,7 +92,41 @@ If the invoice gave goods free ("10 + 1"), the return copies the **Free** quanti
 
 ## Purchase returns
 
-Purchase returns have no page of their own in the web or mobile app. On the web, goods rejected on a goods receipt note go back with **Return rejected goods** on the GRN — that return moves no stock, since rejected goods never came in (see [Rejections on goods receipt](/help/inventory/orders-and-grn)). Other purchase returns are created with the [CLI](/help/ai/cli) or the [MCP server](/help/ai/mcp-server). When you pass the original purchase invoice as the reference, the same rules as sales returns apply: the return counts toward that invoice's adjustable amount, and the invoice shows as **Adjusted** once fully covered.
+### Creating a purchase return
+
+<ForDesktop>
+From the purchase invoice:
+
+1. Go to **Invoices**, switch to **Purchases** and open the purchase invoice.
+2. Click **Create Purchase Return**. It is shown once the invoice is no longer a draft, is not cancelled, and has not been fully credited or returned.
+3. The **New Purchase Return** panel opens pre-filled with the supplier, lines, notes and terms, dated today. Each line shows how much was on the invoice (**of 5 invoiced**).
+4. Remove the lines not going back and lower the quantities to what you are sending. You can't return more of a line than the invoice had.
+5. If you have more than one active warehouse, choose **Dispatch from**. It starts at the purchase-return warehouse set in your inventory settings.
+6. Pick the **Delivery method** the goods go back by. Your own methods from **Settings → Shipping** are listed after the built-in ones.
+7. Click **Create Purchase Return**.
+
+The invoice's detail panel then shows **Returned on PR-…**; click it to open the return.
+
+From the Purchase Returns page: go to **VOUCHERS** → **Purchase Returns**, click **+ New Purchase Return**, and pick the invoice in **Against purchase invoice (optional)**. The panel fills in the same way. Leave the field empty for a return that isn't against a particular invoice.
+</ForDesktop>
+
+<ForMobile>
+The mobile app has no purchase return screen yet. Use the web app, the [CLI](/help/ai/cli) or the [MCP server](/help/ai/mcp-server).
+</ForMobile>
+
+Goods rejected on a goods receipt note go back with **Return rejected goods** on the GRN instead. That return moves no stock, since rejected goods never came in, and isn't held to the GRN's total (see [Rejections on goods receipt](/help/inventory/orders-and-grn)).
+
+Returns made from a purchase invoice through the API, CLI or MCP server (`document.convert`) are always purchase returns, even if a sales return is asked for, and a sales return can't be linked to a purchase invoice. This keeps the stock and the input tax credit going the right way.
+
+When the return is against a purchase invoice, the same rules as sales returns apply: purchase returns and credit notes together can't exceed the invoice total, and the invoice shows as **Adjusted** once fully covered.
+
+### Managing purchase returns
+
+<ForDesktop>
+The **Purchase Returns** page has status tabs **All**, **Draft**, **Sent** and **Cancelled** and a search box. Columns are **Party**, **Return #**, **Date**, **Ref. Invoice** (**Linked** when made from an invoice), **Status** and **Total**. Draft rows offer **Mark Sent** and **Delete** (Admin or Owner). Click a row to see its details and the **Reference Invoice** link; drafts can be edited from the detail panel. Purchase returns have no share link: those are for documents you send to customers.
+
+Anyone who can view invoices sees the page. Creating, editing and deleting follow the same permissions as sales returns.
+</ForDesktop>
 
 A purchase return (other than one for rejected goods):
 
@@ -125,8 +155,8 @@ Not against a linked invoice by value: sales returns and credit notes together c
 **I cancelled a sales return. Is the stock removed again?**
 Yes. Cancelling or deleting a return reverses its stock movement.
 
-**Why can't I find the Purchase Returns page?**
-There isn't one yet. Use the CLI or MCP server, or ask your developer to create them through the API.
+**Where is the Purchase Returns page?**
+In the web app, under **VOUCHERS** → **Purchase Returns**, below **Goods Receipts (GRN)**. The mobile app doesn't have one yet.
 
 **Does a sales return show on the customer's statement?**
 Yes. It appears in the party ledger as a credit that reduces what the customer owes.

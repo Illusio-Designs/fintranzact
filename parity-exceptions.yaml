@@ -389,6 +389,12 @@ exceptions:
 
   cli:
     not-applicable:
+      # --- Invoicing ---
+      # The web invoice form pre-selects the delivery method last used for the
+      # customer. Scripts and agents name the method outright (built-in value
+      # or a custom id from Settings → Shipping), so there is nothing to pre-fill.
+      - invoice.lastDeliveryMethod
+
       # --- Inventory (warehouses & stock) ---
       # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
       - stock.adjust
@@ -596,6 +602,12 @@ exceptions:
 
   mcp:
     not-applicable:
+      # --- Invoicing ---
+      # The web invoice form pre-selects the delivery method last used for the
+      # customer. Scripts and agents name the method outright (built-in value
+      # or a custom id from Settings → Shipping), so there is nothing to pre-fill.
+      - invoice.lastDeliveryMethod
+
       # --- Inventory (warehouses & stock) ---
       # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
       - stock.adjust
