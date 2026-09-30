@@ -12,6 +12,7 @@ import {
   jsonb,
   customType,
   date,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -460,6 +461,25 @@ export const warehouseLocations = pgTable("warehouse_locations", {
   ),
 ]);
 
+// ── Stock Groups ───────────────────────────────────────────────
+// Tally-style stock groups: a business-scoped tree that items hang off.
+// Replaces the free-text `items.category`. That column stays and is kept
+// equal to the group's name so older readers (CLI, mobile, store) still work.
+
+export const stockGroups = pgTable("stock_groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  // Nesting. Restrict: the API refuses to delete a group that still has
+  // children, so a group never points at a missing parent.
+  parentId: uuid("parent_id").references((): AnyPgColumn => stockGroups.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("stock_groups_business_name_idx").on(t.businessId, t.name),
+  index("stock_groups_parent_idx").on(t.parentId),
+]);
+
 // ── Items / Products ───────────────────────────────────────────
 
 export const items = pgTable("items", {
@@ -490,6 +510,8 @@ export const items = pgTable("items", {
   description: text("description"),
   itemType: itemTypeEnum("item_type").default("product").notNull(),
   category: text("category"),
+  // Stock group. When set, `category` mirrors the group's name.
+  stockGroupId: uuid("stock_group_id").references(() => stockGroups.id, { onDelete: "set null" }),
   taxInclusive: boolean("tax_inclusive").default(false).notNull(),
   source: text("source"),
   // ── Online Store fields ──
@@ -518,6 +540,7 @@ export const items = pgTable("items", {
     .on(t.businessId, t.barcode)
     .where(sql`${t.barcode} IS NOT NULL AND ${t.deletedAt} IS NULL`),
   index("items_store_idx").on(t.businessId, t.storeEnabled),
+  index("items_stock_group_idx").on(t.stockGroupId),
   // Partial index that mirrors the active-read path (`items.list`, catalog,
   // store, dashboards). The query planner picks this up for any WHERE that
   // includes `business_id` AND `deleted_at IS NULL`, keeping active-item
@@ -1731,7 +1754,15 @@ export const partiesRelations = relations(parties, ({ one, many }) => ({
 
 export const itemsRelations = relations(items, ({ one, many }) => ({
   business: one(businesses, { fields: [items.businessId], references: [businesses.id] }),
+  stockGroup: one(stockGroups, { fields: [items.stockGroupId], references: [stockGroups.id] }),
   variants: many(itemVariants),
+}));
+
+export const stockGroupsRelations = relations(stockGroups, ({ one, many }) => ({
+  business: one(businesses, { fields: [stockGroups.businessId], references: [businesses.id] }),
+  parent: one(stockGroups, { fields: [stockGroups.parentId], references: [stockGroups.id], relationName: "stockGroupParent" }),
+  children: many(stockGroups, { relationName: "stockGroupParent" }),
+  items: many(items),
 }));
 
 export const itemVariantsRelations = relations(itemVariants, ({ one }) => ({
