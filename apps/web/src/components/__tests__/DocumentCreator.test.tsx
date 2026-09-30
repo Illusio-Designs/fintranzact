@@ -933,7 +933,7 @@ describe("DocumentCreator — price levels", () => {
 
     fireEvent.change(priceInput, { target: { value: "950" } });
     pricingResolveFetch.mockResolvedValue(resolved("850.00"));
-    const qty = screen.getAllByLabelText(/quantity/i)[0] as HTMLInputElement;
+    const qty = screen.getAllByLabelText("Quantity")[0] as HTMLInputElement;
     fireEvent.change(qty, { target: { value: "20" } });
 
     await waitFor(() => expect(pricingResolveFetch).toHaveBeenCalledTimes(2));
@@ -950,7 +950,7 @@ describe("DocumentCreator — price levels", () => {
     await waitFor(() => expect(priceInput.value).toBe("900"));
 
     pricingResolveFetch.mockResolvedValue(resolved("850.00"));
-    const qty = screen.getAllByLabelText(/quantity/i)[0] as HTMLInputElement;
+    const qty = screen.getAllByLabelText("Quantity")[0] as HTMLInputElement;
     fireEvent.change(qty, { target: { value: "20" } });
     await waitFor(() => expect(priceInput.value).toBe("850"));
   });
@@ -1177,11 +1177,11 @@ describe("DocumentCreator — purchase return from a purchase invoice", () => {
     const user = userEvent.setup();
     await pickSource(user);
 
-    await waitFor(() => expect(screen.getAllByLabelText(/quantity/i)).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByLabelText("Quantity")).toHaveLength(2));
     expect(screen.getByText("of 5 invoiced")).toBeInTheDocument();
 
     // Return 2 of the 5 rods and none of the cement.
-    fireEvent.change(screen.getAllByLabelText(/quantity/i)[0], { target: { value: "2" } });
+    fireEvent.change(screen.getAllByLabelText("Quantity")[0], { target: { value: "2" } });
     await user.click(screen.getAllByRole("button", { name: "Remove line" })[1]);
 
     await user.click(screen.getByRole("button", { name: /create purchase return/i }));
@@ -1195,9 +1195,9 @@ describe("DocumentCreator — purchase return from a purchase invoice", () => {
     renderCreator({ documentType: "purchase_return", invoiceType: "purchase" });
     const user = userEvent.setup();
     await pickSource(user);
-    await waitFor(() => expect(screen.getAllByLabelText(/quantity/i)).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByLabelText("Quantity")).toHaveLength(2));
 
-    fireEvent.change(screen.getAllByLabelText(/quantity/i)[0], { target: { value: "6" } });
+    fireEvent.change(screen.getAllByLabelText("Quantity")[0], { target: { value: "6" } });
     await user.click(screen.getByRole("button", { name: /create purchase return/i }));
 
     expect(purchaseReturnCreateMutate).not.toHaveBeenCalled();
