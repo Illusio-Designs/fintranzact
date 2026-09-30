@@ -745,6 +745,7 @@ export const invoiceRouter = router({
           eq(invoices.partyId, input.partyId),
           eq(invoices.type, "sale"),
           eq(invoices.documentType, "invoice"),
+          isNull(invoices.deletedAt),
         ))
         .orderBy(desc(invoices.invoiceDate))
         .limit(1);

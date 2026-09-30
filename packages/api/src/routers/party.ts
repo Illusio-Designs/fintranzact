@@ -519,6 +519,7 @@ export const partyRouter = router({
       const paymentConditions = [
         eq(payments.partyId, input.partyId),
         eq(payments.businessId, ctx.businessId),
+        isNull(payments.deletedAt),
       ];
 
       invoiceConditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
@@ -640,6 +641,7 @@ export const partyRouter = router({
       const paymentConditions = [
         eq(payments.partyId, input.partyId),
         eq(payments.businessId, ctx.businessId),
+        isNull(payments.deletedAt),
       ];
 
       invoiceConditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
@@ -756,9 +758,15 @@ export const partyRouter = router({
         return `${dd}-${mm}-${yyyy}`;
       }
 
-      const invoiceConditions = [eq(invoices.businessId, ctx.businessId), eq(invoices.documentType, "invoice")];
-      const paymentConditions = [eq(payments.businessId, ctx.businessId)];
-      const expenseConditions = [eq(expenses.businessId, ctx.businessId)];
+      // Live vouchers only: no deleted or cancelled invoices, no deleted payments or expenses.
+      const invoiceConditions = [
+        eq(invoices.businessId, ctx.businessId),
+        eq(invoices.documentType, "invoice"),
+        isNull(invoices.deletedAt),
+        sql`${invoices.status} <> 'cancelled'`,
+      ];
+      const paymentConditions = [eq(payments.businessId, ctx.businessId), isNull(payments.deletedAt)];
+      const expenseConditions = [eq(expenses.businessId, ctx.businessId), isNull(expenses.deletedAt)];
 
       invoiceConditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
       paymentConditions.push(...buildBusinessDateFilter(payments, { from: input.fromDate, to: input.toDate }));

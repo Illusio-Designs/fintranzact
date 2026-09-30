@@ -706,6 +706,7 @@ export const itemRouter = router({
             eq(invoiceItems.itemId, input.id),
             eq(invoices.businessId, ctx.businessId),
             eq(invoices.documentType, "invoice"),
+            isNull(invoices.deletedAt),
           )
         )
         .orderBy(desc(invoices.invoiceDate))
@@ -779,6 +780,7 @@ export const itemRouter = router({
             and(
               eq(invoiceItems.itemId, input.id),
               eq(invoices.businessId, ctx.businessId),
+              isNull(invoices.deletedAt),
             )
           )
           .orderBy(invoices.id, desc(invoices.invoiceDate))
@@ -791,6 +793,7 @@ export const itemRouter = router({
             and(
               eq(invoiceItems.itemId, input.id),
               eq(invoices.businessId, ctx.businessId),
+              isNull(invoices.deletedAt),
             )
           ),
       ]);
@@ -819,7 +822,10 @@ export const itemRouter = router({
             eq(invoiceItems.itemId, input.id),
             eq(invoices.businessId, ctx.businessId),
             eq(invoices.documentType, "invoice"),
+            // Buyers: what the party bought from us, not what it sold us.
+            eq(invoices.type, "sale"),
             sql`${invoices.status} != 'cancelled'`,
+            isNull(invoices.deletedAt),
           )
         )
         .groupBy(invoices.partyId, parties.name, parties.type)
