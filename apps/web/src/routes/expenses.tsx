@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
@@ -14,7 +15,6 @@ import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
 import { Icon } from "@/components/ui/Icon";
 import { Delete02Icon, PencilEdit02Icon } from "@hugeicons/core-free-icons";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
@@ -72,7 +72,7 @@ const EMPTY_FORM: ExpenseFormState = {
 };
 
 function ExpensesPage() {
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search category or description…");
   const [categoryFilter, setCategoryFilter] = useState("");
   const dateRange = useDateRange("expenses", "this-month");
   const [page, setPage] = useState(1);
@@ -276,12 +276,6 @@ function ExpensesPage() {
       {/* Filters */}
       <div className="card mb-5 overflow-hidden">
         <div className="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-border-light">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search category or description..."
-            className="max-w-xs"
-          />
           <DateRangeBar
             preset={dateRange.preset}
             onPresetChange={dateRange.setPreset}

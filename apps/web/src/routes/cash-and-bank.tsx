@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { cn, formatCurrency, formatDate, formatDateInput, toISOString, toISOStringEndOfDay, todayISODate } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
@@ -16,7 +17,6 @@ import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Download04Icon, PencilEdit02Icon, StarIcon } from "@hugeicons/core-free-icons";
 import { Pagination } from "@/components/ui/Pagination";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { useDebounce } from "@/hooks/useDebounce";
 import { toast } from "@/hooks/useToast";
 import { getDatePreset } from "@/hooks/useDateRange";
@@ -38,7 +38,7 @@ function CashAndBankPage() {
   const [selectedUntracked, setSelectedUntracked] = useState<Set<string>>(new Set());
   const [selectAllMatching, setSelectAllMatching] = useState(false); // true = all across ALL pages
   const [assignAccountId, setAssignAccountId] = useState<string | null>(null);
-  const [untrackedSearch, setUntrackedSearch] = useState("");
+  const [untrackedSearch] = usePageSearch("Search party or payment #…");
   const [untrackedMode, setUntrackedMode] = useState("");
   const [untrackedPage, setUntrackedPage] = useState(1);
   const debouncedUntrackedSearch = useDebounce(untrackedSearch, 300);
@@ -578,12 +578,6 @@ function CashAndBankPage() {
 
           {/* Filters row */}
           <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <SearchInput
-              value={untrackedSearch}
-              onChange={setUntrackedSearch}
-              placeholder="Search party or payment #..."
-              className="max-w-xs"
-            />
             <PillTabs
               tabs={[
                 { value: "cash", label: "Cash" },

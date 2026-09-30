@@ -19,6 +19,7 @@ import {
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { logAudit } from "./audit.js";
 import { buildBusinessDateFilter } from "./business-date.js";
+import { escapeLike } from "./escape-like.js";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 
@@ -109,6 +110,14 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
         }
         if (input.partyId) conditions.push(eq(invoices.partyId, input.partyId));
         conditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
+        if (input.search) {
+          const term = `%${escapeLike(input.search)}%`;
+          conditions.push(
+            sql`(${invoices.invoiceNumber} ILIKE ${term} OR EXISTS (
+              SELECT 1 FROM ${parties} WHERE ${parties.id} = ${invoices.partyId} AND ${parties.name} ILIKE ${term}
+            ))`
+          );
+        }
 
         const offset = (input.page - 1) * input.limit;
 

@@ -4,7 +4,7 @@
  * Verifies the owner/admin experience on the "/" route:
  *   - Greeting heading ("Good morning/afternoon/evening, <name>")
  *   - DateRangeBar preset buttons (This Month, Last Month, etc.)
- *   - "+ New Invoice" link in the actions area
+ *   - no "New invoice" shortcut in the app header
  *   - Profit indicator cards (Gross Profit, Net Profit)
  *   - Chart sections render without crashing
  *
@@ -37,19 +37,10 @@ test.describe("Dashboard Flow", () => {
     ).toBeVisible();
   });
 
-  test("dashboard shows + New Invoice link", async ({ page }) => {
-    // Rendered as a <Link to="/invoices"> with class btn-primary; the dashboard
-    // CTA now deep-links the creator open via ?create=1.
-    const newInvoiceLink = page
-      .getByText("+ New Invoice")
-      .or(page.getByRole("link", { name: /new invoice/i }))
-      .first();
-    await expect(newInvoiceLink).toBeVisible();
-  });
-
-  test("+ New Invoice link points to /invoices", async ({ page }) => {
-    const link = page.getByRole("link", { name: /new invoice/i }).first();
-    await expect(link).toHaveAttribute("href", /^\/invoices(\?|$)/);
+  test("header has no New invoice shortcut", async ({ page }) => {
+    // Invoices are created from the Invoices page; the app header only holds
+    // search and account controls.
+    await expect(page.locator("header").getByRole("link", { name: /new invoice/i })).toHaveCount(0);
   });
 
   test("dashboard shows Gross Profit and Net Profit cards", async ({ page }) => {
