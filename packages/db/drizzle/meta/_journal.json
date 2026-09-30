@@ -239,6 +239,13 @@
       "when": 1790766398063,
       "tag": "0033_stock_valuation_method",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790770986734,
+      "tag": "0034_bom_manufacturing",
+      "breakpoints": true
     }
   ]
 }
