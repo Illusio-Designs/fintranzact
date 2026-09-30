@@ -50,7 +50,7 @@ The CLI validates the key, resolves your user and business context, and stores i
 To point the CLI at a specific Fintranzact API URL:
 
 ```bash
-fintranzact login --token fintranzact_key_xxx --api-url https://fintranzact-production.up.railway.app
+fintranzact login --token fintranzact_key_xxx --api-url https://fintranzact-web.vercel.app
 ```
 
 ### Environment variables (recommended for automation)
@@ -58,7 +58,7 @@ fintranzact login --token fintranzact_key_xxx --api-url https://fintranzact-prod
 For cron jobs and CI/CD pipelines, set credentials as environment variables instead of logging in:
 
 ```bash
-export FINTRANZACT_API_URL=https://your-fintranzact-instance.com
+export FINTRANZACT_API_URL=https://fintranzact-web.vercel.app
 export FINTRANZACT_API_KEY=fintranzact_key_xxxxxxxxxxxxxxxxxx
 export FINTRANZACT_BUSINESS_ID=your-business-uuid
 ```
@@ -1516,7 +1516,7 @@ export const fintranzactCLI = {
 
 ```bash
 # /etc/cron.d/fintranzact
-FINTRANZACT_API_URL=https://your-fintranzact-instance.com
+FINTRANZACT_API_URL=https://fintranzact-web.vercel.app
 FINTRANZACT_API_KEY=fintranzact_key_xxxxxxxxxxxxxxxxxx
 FINTRANZACT_BUSINESS_ID=business-uuid-here
 
@@ -1546,7 +1546,7 @@ The CLI reads from `~/.config/fintranzact/config.json`, created automatically on
 
 ```json
 {
-  "apiUrl": "https://your-fintranzact-instance.com",
+  "apiUrl": "https://fintranzact-web.vercel.app",
   "token": "fintranzact_key_xxxxxxxxxxxxxxxxxx",
   "tenantId": "tenant-uuid-here",
   "businessId": "business-uuid-here",

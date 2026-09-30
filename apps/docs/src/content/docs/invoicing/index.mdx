@@ -30,17 +30,17 @@ Within sale and purchase, Fintranzact supports multiple **document types**. Each
 | Proforma Invoice | Pre-delivery invoice for advance payment | PI |
 | Delivery Challan | Proof of goods dispatched, no tax invoice yet | DC |
 | Credit Note | Reducing the amount owed by the customer (sales return, price correction) | CN |
-| Debit Note | Increasing the amount owed by the customer (additional charges) | CN (shares credit note prefix and counter) |
-| Sales Return | Customer returning goods | CN (shares credit note prefix and counter) |
-| Purchase Return | Returning goods to supplier | CN (shares credit note prefix and counter) |
+| Debit Note | Increasing the amount owed (additional charges) | DN |
+| Sales Return | Customer returning goods | SR |
+| Purchase Return | Returning goods to supplier | PR |
 
 :::tip
-Change the default prefixes for each document type in Settings → Business Profile. You can also configure the starting number if you are migrating from another app.
+Change the prefixes and next numbers in **Settings → Documents**. You can move the next number forward (for example, to continue from another app's numbering) but not backward. See [Settings](/settings/#documents).
 :::
 
 <ForMobile>
 :::note[Mobile document types]
-The mobile app supports Invoice, Quotation, Proforma Invoice, Delivery Challan, Credit Note, and Sales Return. **Debit Notes** and **Purchase Returns** are currently available on the web app only.
+The mobile app supports Invoice, Quotation, Proforma Invoice, Delivery Challan, Credit Note, and Sales Return. **Debit Notes** and **Purchase Returns** have no screen in the web or mobile app yet — they can be created through the [CLI or MCP server](/ai). See [Other Documents](/documents/).
 :::
 </ForMobile>
 
@@ -53,7 +53,7 @@ Not all document types affect stock. Here is how each type interacts with invent
 | Invoice (sale) | Decrements stock |
 | Invoice (purchase) | Increments stock |
 | Delivery Challan | Decrements stock |
-| Credit Note | Increments stock (returned items go back into inventory) |
+| Credit Note | No stock effect (financial adjustment only — use a Sales Return to bring goods back into stock) |
 | Sales Return | Increments stock (returned items go back into inventory) |
 | Purchase Return | Decrements stock (items sent back to supplier) |
 | Quotation | No stock effect |

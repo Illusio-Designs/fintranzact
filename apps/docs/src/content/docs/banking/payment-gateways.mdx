@@ -30,21 +30,26 @@ Example: Customer pays ₹1,000 via credit card through Razorpay (2% charge).
    - Debit Card: 1.5%
    - UPI: 0%
    - Net Banking: 2%
-6. Click **Create**.
+
+   The **Default** rate (pre-filled at 2%) applies to any payment mode that has no rate of its own.
+6. Leave **Auto-settle to bank** on if you want the net amount moved to the settlement account automatically.
+7. Click **Create Account**.
 </ForDesktop>
 
 <ForMobile>
 1. Tap **More** in the bottom tab bar, then tap **Bank**.
 2. Tap the floating **+** button.
-3. Select **Payment Gateway** as the account type.
-4. Enter a name (e.g., "Razorpay").
+3. Select **Gateway** as the account type.
+4. Enter a **Gateway Name** (e.g., "Razorpay").
 5. Select your settlement bank account.
-6. Set charge rates per payment mode:
+6. Set charge rates per payment mode. You must set at least one rate.
    - Credit Card: 2%
    - Debit Card: 1.5%
    - UPI: 0%
    - Net Banking: 2%
-7. Tap **Create**.
+7. Tap **Create Account**.
+
+Gateway accounts created on mobile always auto-settle to the settlement account. The mobile form has no **Default** rate. To set one or to turn off auto-settle, edit the account in the web app.
 </ForMobile>
 
 ## How It Works
@@ -56,7 +61,9 @@ When you record a payment and select a gateway account:
 3. On confirmation:
    - Full amount deposited to gateway account
    - Charge expense auto-created
-   - Net amount auto-transferred to your bank
+   - Net amount auto-transferred to your settlement bank account, if **Auto-settle to bank** is on
+
+If you later delete the payment, Fintranzact reverses the charge expense and the settlement transfer too.
 
 ## Charge Configuration
 
@@ -75,7 +82,7 @@ Rates are inclusive (enter the total effective rate including GST on charges).
 ## Reports
 
 Gateway charges appear automatically in:
-- **Expenses** — categorized as "Payment Gateway Charges"
+- **Expenses**: filed under the gateway's **Expense Category**, which is "Payment Gateway Charges" by default
 - **Daybook** — full transaction trail
 - **Profit & Loss** — reduces profit by the charge amount
 

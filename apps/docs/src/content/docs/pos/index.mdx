@@ -1,0 +1,163 @@
+---
+title: Point of Sale
+description: Use Fintranzact's fullscreen POS register for retail counters — tap or scan items, hold up to five bills, take Cash or UPI payment, and print a thermal receipt. Every sale is saved as a regular GST invoice.
+sidebar:
+  order: 1
+---
+
+import ForBusiness from '../../../components/ForBusiness.astro';
+
+The **POS Register** is a fullscreen billing screen for retail counters. It has no sidebar or menus, just a product grid, a cart and a pay button. Each completed sale is saved as an ordinary sale invoice with a payment recorded against it, so POS sales appear in your invoices, stock, GST reports and party ledgers like any other sale.
+
+POS is available in the web and desktop app. It is not part of the mobile app.
+
+## Turning POS on
+
+POS is off by default and is switched on for each business separately.
+
+1. Go to **Settings → Point-of-Sale**. This tab is only shown to owners and admins.
+2. Turn on the **Point-of-Sale mode** switch. You'll see "POS mode enabled".
+3. A **Using POS mode** card appears with tips and an **Open POS in a new tab →** link.
+
+Once POS is on, a **Switch to POS** button appears next to **+ New Invoice** on the **Invoices** page. You can also go straight to `/pos` in the browser.
+
+If you open `/pos` while POS is off, you'll see "POS mode is off for (business name)" with an **Open Settings → POS** button.
+
+:::tip
+Each browser tab running `/pos` works as a separate till. Open two tabs for two counters on the same computer. Their carts are kept separate.
+:::
+
+## Who can bill
+
+Anyone who can create sale invoices and record payments can use the register: Owner, Admin, Seller Manager and Seller. Only owners and admins can turn POS mode on or off.
+
+## The register layout
+
+| Area | What it does |
+|---|---|
+| **Top bar** | **← Exit** (back to Invoices), the search box, the customer button (shows **Walk-in** or the chosen customer, <kbd>F3</kbd>), and **Hold** (<kbd>F6</kbd>) |
+| **Held bills strip** | One tab per open bill, labelled **Alt+1**, **Alt+2** … with the customer name and item count, plus a **+ Hold** button |
+| **Item grid** (left) | Tiles for your products. Each shows the name, price per unit and stock in hand. Stock of zero or less is shown in red. |
+| **Cart** (right) | Lines in the current bill, with **Subtotal**, **Discount** (when there is any), **Tax** and **Total** |
+| **Footer** | A shortcut reminder and the **Pay · F9** button |
+
+### What appears in the item grid
+
+The grid shows **products** only. Services aren't shown, and neither are deleted items. Up to 120 tiles are loaded, most recently updated first. Type in the search box to narrow the list.
+
+Items are expanded into one tile per sellable unit:
+
+- **Simple item:** one tile at the item's sale price.
+- **Item with alternate units:** one tile per unit, for example "Rice (kg)" and "Rice (bag)", each with its own price and stock converted into that unit.
+- **Item with variants:** one tile per variant, for example "T-shirt — Red / L", with the variant's own price and stock.
+
+Search matches item name, barcode and SKU.
+
+## Building a bill
+
+- **Tap a tile** to add it to the cart. Tapping the same tile again increases the quantity instead of adding a new line. Different units or variants of the same item stay on separate lines.
+- Use the **+** and **−** buttons on a cart line to change quantity. Quantity can't go below 1.
+- Click **Remove** to delete a line.
+
+Price, tax rate and unit come from the item. The register has no discount or price-override controls. For those, create the invoice from the normal **+ New Invoice** form.
+
+### Barcode scanning
+
+USB and Bluetooth barcode scanners work without any setup. The register tells a scanner apart from a person typing by speed. A burst of at least six characters typed quickly and ending in Enter counts as a scan, wherever the cursor is inside the register.
+
+When a code is scanned:
+
+1. Fintranzact looks the code up against item and variant barcodes and SKUs. Box or carton codes that stand for several pieces are recognised too.
+2. The matching tile is added to the cart. A carton barcode adds its full piece count in one go.
+3. If nothing matches, you'll see "No item found".
+
+See [Items & Inventory](/items/inventory/) for setting up barcodes.
+
+## Choosing the customer
+
+Every new bill starts with **Walk-in Customer**. This party is created with every new business, and for older businesses the first time POS is opened. To bill a known customer, click the customer button or press <kbd>F3</kbd>:
+
+- Search by name or phone and click a customer to attach them to the current bill.
+- **Walk-in Customer** is always listed first as the default.
+- Click **+ New customer** to add one on the spot with just a **Name** and an optional **Phone**, then **Add + Select**.
+
+## Held bills
+
+Park a bill when a customer steps away and serve the next person:
+
+- Click **Hold** or **+ Hold**, or press <kbd>F6</kbd>. The current bill is kept, and a fresh bill for Walk-in Customer becomes active.
+- Click a tab in the held-bills strip, or press <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>Alt</kbd>+<kbd>5</kbd>, to switch back.
+- Up to five bills can be open in one tab.
+
+Held bills are saved in the browser, so they survive a page refresh in the same tab. They are not shared with other tabs or computers.
+
+:::caution
+The **+ Hold** button is disabled when five bills are open, but **Hold** in the top bar and <kbd>F6</kbd> still work. If you hold a sixth bill, the least recently touched held bill is dropped without warning. Clear or complete bills before holding more than five.
+:::
+
+## Taking payment
+
+1. Click **Pay · F9** or press <kbd>F9</kbd>. The **Take Payment** sheet shows the bill total.
+2. Choose **Cash** or **UPI**. Cash is selected by default.
+3. Click **Confirm Cash** or **Confirm UPI**.
+
+Fintranzact then:
+
+1. Saves the sale as a **sale invoice**, numbered from your normal invoice series. The delivery method is **Self Pickup** and the invoice is tagged with POS as its source. Stock is reduced for each line using the correct unit or variant.
+2. Records a **payment** for the full invoice amount in the chosen mode, dated today.
+3. Prints the receipt, clears the bill, and shows "Sale complete".
+
+The register doesn't take a tendered amount or show change due, and it has no split or card payment. For those, record the payment from the invoice afterwards.
+
+:::note
+If the invoice is saved but recording the payment fails, you'll see "Sale saved but payment step failed". The invoice still exists, unpaid. Record the payment from **Vouchers → Invoices** or **Payments**.
+:::
+
+The total in the cart is a preview. The saved invoice uses the server's GST calculation, and the payment is recorded for the saved invoice total.
+
+## Receipt printing
+
+After each sale the register prints the invoice in the **80mm thermal** format (the same format as the thermal option in [Invoice PDF](/invoicing/invoice-pdf/)). It is sent to your system's default printer. The first print in a session shows the browser's print dialog. After that, the browser reuses your choice.
+
+To reprint, open the invoice from **Vouchers → Invoices** and download the thermal PDF.
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| <kbd>F2</kbd> | Jump to the item search box |
+| <kbd>F3</kbd> | Choose customer |
+| <kbd>F6</kbd> | Hold the current bill and start a new one |
+| <kbd>F9</kbd> | Open **Take Payment** |
+| <kbd>Esc</kbd> | Close the customer picker or payment sheet |
+| <kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>Alt</kbd>+<kbd>5</kbd> | Switch to held bill 1–5 |
+
+These shortcuts only work inside the register. The **Take Payment** sheet shows **F9** and **F10** hints on the Cash and UPI tiles, but those keys don't select a payment mode. Click the tile instead. See also [Keyboard Shortcuts](/reference/keyboard-shortcuts/).
+
+## Multiple counters
+
+When one register tab completes a sale, it tells the other register tabs for the same business in the same browser to refresh their stock figures. Tabs on other computers pick up the new stock the next time they load the grid.
+
+<ForBusiness>
+POS sales are normal invoices with normal payments. For a day-end cash check, review today's entries on the **Payments** page. There's no separate POS closing report.
+</ForBusiness>
+
+## Frequently asked questions
+
+**Is a POS sale a GST invoice?**
+Yes. Every POS sale is saved as a regular sale invoice with GST worked out from each item's tax rate, and it appears in your GST reports.
+
+**Can I give a discount at the counter?**
+Not in the register. Create the sale from **+ New Invoice** if a line needs a discount or a different price.
+
+**Why don't my services show up in the grid?**
+The POS grid lists products only. Bill services from the regular invoice form.
+
+**My scanner types the code into the search box instead of adding the item. Why?**
+The scan must arrive fast and end with Enter, and the cursor must be inside the register window. Check that your scanner is set to send an Enter suffix.
+
+**Can I use POS on my phone?**
+No. POS is only in the web and desktop app.
+
+**Where do I find POS sales afterwards?**
+In **Vouchers → Invoices**, like any other sale. Each one has a payment recorded in **Payments**.

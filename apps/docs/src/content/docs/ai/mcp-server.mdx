@@ -36,7 +36,7 @@ Expected output:
 ```json
 {
   "email": "owner@yourshop.in",
-  "apiUrl": "https://your-fintranzact-instance.com",
+  "apiUrl": "https://fintranzact-web.vercel.app",
   "token": "sess_VbK2mQ9xP4nR7wA1...",
   "tenantId": "tenant-uuid-here",
   "businessId": "business-uuid-here",
@@ -75,7 +75,7 @@ Add the `fintranzact` entry using the values from `fintranzact whoami --json`:
       "command": "npx",
       "args": ["@fintranzact/mcp"],
       "env": {
-        "FINTRANZACT_API_URL": "https://your-fintranzact-instance.com",
+        "FINTRANZACT_API_URL": "https://fintranzact-web.vercel.app",
         "FINTRANZACT_API_KEY": "sess_VbK2mQ9xP4nR7wA1...",
         "FINTRANZACT_TENANT_ID": "tenant-uuid-here",
         "FINTRANZACT_BUSINESS_ID": "business-uuid-here"
@@ -271,7 +271,7 @@ The MCP server is configured entirely through environment variables passed in th
 
 | Variable | Where to find it | Description |
 |---|---|---|
-| `FINTRANZACT_API_URL` | Your deployment URL | Base URL of your Fintranzact API, e.g. `https://your-fintranzact-instance.com` |
+| `FINTRANZACT_API_URL` | Your Fintranzact web address | Base URL of your Fintranzact account, e.g. `https://fintranzact-web.vercel.app` |
 | `FINTRANZACT_API_KEY` | `fintranzact whoami --json` → `token` | Session token (same as Bearer token used by the mobile app) |
 | `FINTRANZACT_TENANT_ID` | `fintranzact whoami --json` → `tenantId` | Your organization/tenant UUID |
 | `FINTRANZACT_BUSINESS_ID` | `fintranzact whoami --json` → `businessId` | The business to operate on |
@@ -323,7 +323,7 @@ fintranzact login
       "command": "npx",
       "args": ["@fintranzact/mcp"],
       "env": {
-        "FINTRANZACT_API_URL": "https://your-fintranzact-instance.com",
+        "FINTRANZACT_API_URL": "https://fintranzact-web.vercel.app",
         "FINTRANZACT_API_KEY": "sess_VbK2mQ9xP4nR7wA1...",
         "FINTRANZACT_TENANT_ID": "tenant-uuid-here",
         "FINTRANZACT_BUSINESS_ID": "business-uuid-here"
@@ -360,7 +360,7 @@ mcp_servers:
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_URL: "https://fintranzact-web.vercel.app"
       FINTRANZACT_API_KEY: "sess_VbK2mQ9xP4nR7wA1..."
       FINTRANZACT_TENANT_ID: "tenant-uuid-here"
       FINTRANZACT_BUSINESS_ID: "business-uuid-here"
