@@ -40,6 +40,7 @@ export const roadmapCategorySuggestions = [
   "Sales",
   "Mobile",
   "Online store",
+  "Website",
   "AI",
   "Integrations",
   "Security",

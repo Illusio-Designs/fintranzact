@@ -55,10 +55,10 @@ describe("starting roadmap", () => {
   it("fills an empty board the first time it is opened", async () => {
     const list = await adminCaller().platform.roadmapList();
     expect(list.data).toHaveLength(ROADMAP_SEED.length);
-    expect(ROADMAP_SEED.length).toBe(53);
+    expect(ROADMAP_SEED.length).toBe(58);
     expect(new Set(list.data.map((i) => i.title))).toEqual(new Set(ROADMAP_SEED.map((s) => s.title)));
     expect(list.counts.planned).toBe(ROADMAP_SEED.length);
-    expect(list.stageCounts).toEqual({ before_launch: 10, after_launch: 43 });
+    expect(list.stageCounts).toEqual({ before_launch: 15, after_launch: 43 });
     expect(list.categories).toEqual(expect.arrayContaining(["Payroll", "Inventory", "GST", "Mobile", "Platform", "Accounting"]));
     for (const item of list.data) {
       expect(item.description.length, item.title).toBeGreaterThan(80);
@@ -107,12 +107,32 @@ describe("starting roadmap", () => {
     expect(list.at(-1)).toMatchObject({ launchStage: "after_launch", priority: "low" });
   });
 
+  it("puts plans, trial and billing first, then the build order", async () => {
+    const list = (await adminCaller().platform.roadmapList()).data;
+    expect(list.slice(0, 6).map((i) => i.title.slice(0, 3))).toEqual(["P1.", "P2.", "P3.", "P4.", "P5.", "Onl"]);
+    for (const item of list.slice(0, 5)) expect(item.description).toMatch(/^\*\*Build order: 1\*\*/);
+    const afterHigh = list.filter((i) => i.launchStage === "after_launch" && i.priority === "high").map((i) => i.title);
+    expect(afterHigh.slice(0, 6).map((t) => t.split(/[—:]/)[0]!.trim())).toEqual([
+      "AI business assistant",
+      "Payroll",
+      "Payroll add-on billing",
+      "Store Pro add-on billing",
+      "Custom domain for stores",
+      "Store themes",
+    ]);
+    expect(list.find((i) => i.title.startsWith("P1."))!.description).toContain("No free plan");
+    expect(list.find((i) => i.title.startsWith("P2."))!.description).toContain("read-only");
+    expect(list.find((i) => i.title.startsWith("Payroll add-on billing"))!.priceNote).toContain("₹49");
+    expect(list.find((i) => i.title.startsWith("Store Pro"))!.priceNote).toContain("₹499");
+    expect(list.find((i) => i.title.startsWith("AI business assistant — Phase 1"))!.priceNote).toContain("₹299");
+  });
+
   it("filters by launch stage", async () => {
     const before = await adminCaller().platform.roadmapList({ launchStage: "before_launch" });
-    expect(before.data).toHaveLength(10);
+    expect(before.data).toHaveLength(15);
     expect(before.data.every((i) => i.launchStage === "before_launch")).toBe(true);
-    expect(before.counts.planned).toBe(10);
-    expect(before.stageCounts).toEqual({ before_launch: 10, after_launch: 43 });
+    expect(before.counts.planned).toBe(15);
+    expect(before.stageCounts).toEqual({ before_launch: 15, after_launch: 43 });
   });
 
   it("seeds only once, even if the board is emptied later", async () => {

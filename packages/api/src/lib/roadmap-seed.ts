@@ -23,7 +23,7 @@ export interface RoadmapSeedItem {
   checklist: string[];
 }
 
-const PAYROLL_PRICE = "Per active employee per month; pricing TBD";
+const PAYROLL_PRICE = "₹49 per active employee per month, minimum ₹499/month (covers 10); yearly 2 months free (ex-GST)";
 
 const PAYROLL_INVENTORY_AND_DOMAINS: RoadmapSeedItem[] = [
   // ── 1. Payroll phase 1 ──────────────────────────────────────────────
@@ -36,7 +36,9 @@ const PAYROLL_INVENTORY_AND_DOMAINS: RoadmapSeedItem[] = [
     phase: 1,
     billing: "paid_add_on",
     priceNote: PAYROLL_PRICE,
-    description: `The core of the Payroll add-on: keep employee records, mark attendance and leave, set up salary structures that follow the Labour Codes, run payroll every month, and post it to the books. Billing (see "Payroll add-on billing") is built alongside this phase.
+    description: `**Build order: 3** — Payroll Phase 1 + its billing (after 1 Plans, trial & billing and 2 AI Assistant Phase 1).
+
+The core of the Payroll add-on: keep employee records, mark attendance and leave, set up salary structures that follow the Labour Codes, run payroll every month, and post it to the books. Billing (see "Payroll add-on billing") is built alongside this phase.
 
 ### Employee master
 - Personal: name, date of birth, gender, father's/spouse's name, address, phone, email, photo
@@ -228,44 +230,41 @@ const PAYROLL_INVENTORY_AND_DOMAINS: RoadmapSeedItem[] = [
     priority: "high",
     phase: 1,
     billing: "paid_add_on",
-    priceNote: "Pricing model and amounts pending owner decision",
-    description: `Payroll is sold separately from plans: any plan can add Payroll. Build alongside Payroll Phase 1.
+    priceNote: PAYROLL_PRICE,
+    description: `**Build order: 3** — Payroll Phase 1 + this billing (after 1 Plans, trial & billing and 2 AI Assistant Phase 1).
+
+Payroll is sold separately from plans: any paid plan can add Payroll. Build alongside Payroll Phase 1.
+
+### Pricing (ex-18% GST, editable in admin)
+- ₹49 per active employee per month, minimum ₹499/month (covers 10 employees)
+- Yearly: 2 months free
+- Included in the Full Access Trial for up to 10 employees
 
 ### Admin controls
 - Enable / disable Payroll per organisation from the admin console
-- Set trial days per organisation, or give it free
-- Pricing editable in admin, like plans:
-  - Option A: per active employee per month, with a monthly minimum
-  - Option B: slabs (≤10 / ≤50 / 50+ employees)
-  - Optional extra for statutory filings on higher tiers
+- Extend the trial or grant Payroll free for an organisation
+- Price per employee, minimum and yearly discount editable in admin, like plans
 
 ### Billing
-- Billed monthly or yearly through Razorpay, together with the plan
+- Billed monthly or yearly through Razorpay subscriptions, together with the plan (see "Checkout & subscription billing")
 - Count = active employees in that month
 - GST invoice from Finvera Solutions LLP
 
 ### When Payroll is off, or unpaid after the grace period
-- The Payroll menu shows an "Add payroll" page with pricing and "Start trial"
+- The Payroll menu shows an "Add payroll" page with pricing
 - Existing data becomes read-only (old payslips can still be downloaded) and is never deleted
-- Every payroll API and screen checks the add-on — no bypass through the API, mobile app or CLI
+- Every payroll API and screen checks the add-on — no bypass through the API, mobile app, CLI or MCP
 
 ### Partners
 - Optional partner commission on Payroll, and credit towards partner badges
 
-### Owner decisions pending
-- Pricing model and amounts
-- Trial length (14 or 30 days)
-- Whether any plan includes Payroll free
-- Partner commission yes/no`,
+### Owner decision pending
+- Partner commission on Payroll yes/no`,
     checklist: [
-      "Decide pricing model and amounts (owner)",
-      "Decide trial length: 14 or 30 days (owner)",
-      "Decide whether any plan includes Payroll free (owner)",
       "Decide partner commission on Payroll yes/no (owner)",
       "Add-on on/off per organisation in admin",
-      "Trial days and free grant per organisation",
-      "Add-on pricing editable in admin (per employee + minimum, or slabs)",
-      "Optional statutory-filings extra on higher tiers",
+      "Trial (up to 10 employees) and free grant per organisation",
+      "Add-on pricing editable in admin (₹49/employee, ₹499 minimum, yearly 2 months free)",
       "Razorpay billing monthly/yearly with the plan",
       "Monthly active-employee count for billing",
       "GST invoice from Finvera Solutions LLP",
@@ -1068,7 +1067,9 @@ const ONLINE_STORE: RoadmapSeedItem[] = [
     "high",
     "Online store",
     "Online payments at store checkout",
-    `Let shoppers pay online when they order from a business's store, with the money going straight to that business.
+    `**Build order: 4** — part of Store Pro (payments, domain, themes).
+
+Let shoppers pay online when they order from a business's store, with the money going straight to that business.
 
 ### Payments
 - Razorpay on each business's own account, so money settles directly to them — either Razorpay Route (linked accounts) or the business's own API keys stored encrypted
@@ -1114,7 +1115,9 @@ const ONLINE_STORE: RoadmapSeedItem[] = [
     "high",
     "Online store",
     "Custom domain for stores",
-    `Let a business run its store on its own domain, e.g. shop.mybrand.com.
+    `**Build order: 4** — part of Store Pro (payments, domain, themes).
+
+Let a business run its store on its own domain, e.g. shop.mybrand.com.
 
 - Store settings → "Connect domain": enter the domain, then add a CNAME to stores.fintranzact.com and a TXT record for verification
 - Automatic HTTPS certificates via the Vercel Domains API or Cloudflare custom hostnames
@@ -1136,7 +1139,9 @@ const ONLINE_STORE: RoadmapSeedItem[] = [
     "high",
     "Online store",
     "Store themes",
-    `Ready-made looks so a store feels right for its trade.
+    `**Build order: 4** — part of Store Pro (payments, domain, themes).
+
+Ready-made looks so a store feels right for its trade.
 
 - 5–8 themes: Grocery, Fashion, Pharmacy, Electronics, Restaurant and more
 - Theme colours, fonts, logo and banner images
@@ -1236,8 +1241,14 @@ const ONLINE_STORE: RoadmapSeedItem[] = [
     launchStage: "after_launch",
     phase: null,
     billing: "paid_add_on",
-    priceNote: "Monthly/yearly add-on; pricing TBD",
-    description: `The basic online store stays free / included in plans. Store Pro is a paid add-on for businesses that want more.
+    priceNote: "₹499/month or ₹4,999/year (ex-GST)",
+    description: `**Build order: 4** — Store Pro (payments, domain, themes), after 1 Plans, trial & billing, 2 AI Assistant Phase 1 and 3 Payroll Phase 1.
+
+The basic online store is included in the Growth and Business plans. Store Pro is a paid add-on for businesses that want more.
+
+### Pricing (ex-18% GST, editable in admin)
+- ₹499 per month, or ₹4,999 per year
+- Included in the Full Access Trial (with domain connect)
 
 ### Store Pro includes
 - Own custom domain
@@ -1248,14 +1259,14 @@ const ONLINE_STORE: RoadmapSeedItem[] = [
 - Optional: embed widget and public Store API on a higher tier
 
 ### Billing and control
-- Enable / disable per organisation from the admin console, with trial days
-- Billed monthly or yearly through Razorpay, with the plan
+- Enable / disable per organisation from the admin console; extend or grant it
+- Billed monthly or yearly through Razorpay subscriptions, with the plan
 - Pro features switch off cleanly when the add-on ends (store stays live on the basic look)`,
     checklist: [
-      "Decide Store Pro pricing and trial length (owner)",
+      "Store Pro price editable in admin (₹499/month, ₹4,999/year)",
       "Add-on on/off per organisation in admin",
-      "Trial days per organisation",
-      "Razorpay billing monthly/yearly",
+      "Included in the Full Access Trial",
+      "Razorpay subscription billing monthly/yearly",
       "Gate Pro features (domain, themes, builder, payments, SEO, branding)",
       "Optional higher tier with widget/API",
       "Graceful fallback when the add-on ends",
@@ -1274,8 +1285,16 @@ const AI: RoadmapSeedItem[] = [
     launchStage: "after_launch",
     phase: 1,
     billing: "paid_add_on",
-    priceNote: "Plan quota (e.g. 20 questions/month free), then “AI Pro” add-on; pricing TBD",
-    description: `"Ask Fintranzact AI": a chat panel that answers questions about the business from its live data.
+    priceNote: "AI Assistant ₹299/month (300 questions); AI Plus ₹799/month (1,500); extra ₹99 per 100 (ex-GST)",
+    description: `**Build order: 2** — first after 1 Plans, trial & billing.
+
+"Ask Fintranzact AI": a chat panel that answers questions about the business from its live data.
+
+### Pricing (per organisation, ex-18% GST, editable in admin)
+- AI Assistant: ₹299/month including 300 questions
+- AI Plus: ₹799/month including 1,500 questions
+- Extra pack: ₹99 per 100 questions
+- Full Access Trial: up to 100 questions
 
 ### Where and how
 - Opens from the dashboard and the header: a right-hand panel on desktop, full screen on phones
@@ -1294,7 +1313,7 @@ const AI: RoadmapSeedItem[] = [
 
 ### Control, limits and cost
 - Owner can switch the assistant off for the organisation or for specific roles
-- Usage limits per plan (e.g. 20 questions a month free) or an "AI Pro" add-on
+- Question quotas per add-on tier; clear message and "buy more" when the quota runs out
 - Admin console shows usage and cost per organisation
 - Privacy policy note: business data is not used to train models`,
     checklist: [
@@ -1311,7 +1330,7 @@ const AI: RoadmapSeedItem[] = [
       "Conversation history per user",
       "Audit log entries “via AI assistant”",
       "Owner switch per organisation and per role",
-      "Usage limits per plan and AI Pro add-on",
+      "Question quotas: AI Assistant 300, AI Plus 1,500, ₹99 packs of 100, trial 100",
       "Admin: usage and cost per organisation",
       "Privacy policy: data not used for training",
     ],
@@ -1324,7 +1343,7 @@ const AI: RoadmapSeedItem[] = [
     launchStage: "after_launch",
     phase: 2,
     billing: "paid_add_on",
-    priceNote: "Part of the AI plan quota / AI Pro add-on",
+    priceNote: "Part of the AI Assistant / AI Plus add-on",
     description: `Let the assistant prepare work, with the user always in control.
 
 - Create an invoice, quotation or payment; add a party or item; send a payment reminder
@@ -1349,7 +1368,7 @@ const AI: RoadmapSeedItem[] = [
     launchStage: "after_launch",
     phase: 3,
     billing: "paid_add_on",
-    priceNote: "Part of the AI plan quota / AI Pro add-on",
+    priceNote: "Part of the AI Assistant / AI Plus add-on",
     description: `Make the assistant easier for everyone and more useful without being asked.
 
 - Voice input (speak the question) on web and mobile
@@ -1367,4 +1386,205 @@ const AI: RoadmapSeedItem[] = [
   },
 ];
 
-export const ROADMAP_SEED: RoadmapSeedItem[] = [...BEFORE_LAUNCH, ...PAYROLL_INVENTORY_AND_DOMAINS, ...AFTER_LAUNCH, ...ONLINE_STORE, ...AI];
+
+// ── Plans, trial and billing (build order 1) ──────────────────────────
+// Owner decision: no free plan. Every new organisation gets a Full Access
+// Trial and then chooses a paid plan.
+
+const BUILD_ORDER_1 = "**Build order: 1** — Plans, trial & billing (P1–P5), before everything else.";
+
+const PLANS_TRIAL_BILLING: RoadmapSeedItem[] = [
+  feature(
+    "before_launch",
+    "high",
+    "Platform",
+    "P1. Plans & pricing: paid plans only",
+    `${BUILD_ORDER_1}
+
+No free plan. Three paid plans; prices are ex-18% GST, yearly = 2 months free, and every price, limit and feature is editable in the admin console (Plans).
+
+### Starter — ₹299/month (₹2,999/year)
+- 1 business, 3 users
+- Invoices, quotations, payments, parties, items
+- GST reports, e-way bills
+- Basic inventory, recurring invoices, POS
+- No PDF branding
+
+### Growth — ₹699/month (₹6,999/year) — highlighted
+- 3 businesses, 10 users
+- Everything in Starter, plus e-invoicing, multi-warehouse, batches & expiry, bank reconciliation, basic online store, API access, data export
+
+### Business — ₹1,499/month (₹14,999/year)
+- Unlimited businesses and users
+- Everything in Growth, plus manufacturing / BOM, approvals, full audit history, priority support, onboarding help
+
+### Changes
+- Remove the free plan from the pricing page and the sign-up plan picker
+- Migrate the current plan ids and limits (forever_free / free / pro / business / enterprise) to Starter / Growth / Business, including stored plan_settings and tenants.plan
+- Add yearly prices to plan settings
+
+### Owner decision pending
+- Existing Forever Free organisations: grandfather them (unlimited) or move them to trial → paid`,
+    [
+      "Decide what happens to existing Forever Free organisations (owner)",
+      "New plan ids: starter, growth, business (enum + migration)",
+      "Migrate tenants and plan_settings from forever_free/free/pro/business/enterprise",
+      "Starter limits and features (1 business, 3 users, no PDF branding)",
+      "Growth limits and features (3 businesses, 10 users, e-invoicing, warehouses, batches, bank rec, store, API, export)",
+      "Business limits and features (unlimited, manufacturing, approvals, audit history, priority support)",
+      "Monthly and yearly prices (2 months free) in plan settings",
+      "All prices/limits editable in admin Plans",
+      "Remove free plan from pricing page and sign-up plan picker",
+      "Mark Growth as highlighted",
+      "Update plan-limit tests and docs",
+    ],
+  ),
+  feature(
+    "before_launch",
+    "high",
+    "Platform",
+    "P2. Full Access Trial",
+    `${BUILD_ORDER_1}
+
+Every new organisation starts on a Full Access Trial instead of a free plan.
+
+### Trial
+- 14 days (length editable in admin; owner to confirm 14 vs 30)
+- Unlocks the Business plan and all add-ons, with caps: AI 100 questions, Payroll up to 10 employees, Store Pro including domain connect
+- No card needed to start
+- Countdown banner in the app ("9 days left — choose a plan")
+- Reminders on day 7, 12 and 14 by email and in-app (WhatsApp later)
+
+### At expiry — no free fallback
+- The account becomes **read-only** until a plan is purchased: view, search, download/export PDFs and data; no new documents or edits
+- Data is never deleted
+- Buying any plan unlocks it immediately
+
+### Rules and admin
+- One trial per business: checked by phone, email and GSTIN
+- Admin can extend a trial or grant a custom trial
+- Partner referrals get a 30-day trial (owner to confirm)`,
+    [
+      "Confirm trial length 14 vs 30 days (owner)",
+      "Confirm 30-day partner referral trial (owner)",
+      "Trial fields on organisations (start, end, source)",
+      "Start trial on sign-up; trial length setting in admin",
+      "Trial unlocks Business plan + add-ons with caps (AI 100, Payroll 10 employees, Store Pro)",
+      "Countdown banner",
+      "Reminders day 7 / 12 / 14 (email + in-app)",
+      "Read-only mode at expiry (view, search, download, export only)",
+      "One trial per business: phone / email / GSTIN check",
+      "Admin: extend trial or grant custom trial",
+      "Partner referral trial length",
+    ],
+  ),
+  feature(
+    "before_launch",
+    "high",
+    "Platform",
+    "P3. Checkout & subscription billing",
+    `${BUILD_ORDER_1}
+
+Let organisations buy and manage their plan and add-ons themselves.
+
+### Payments
+- Razorpay subscriptions for the plan and each add-on (AI Assistant, Payroll, Store Pro), monthly or yearly
+- Auto-renew; upgrade / downgrade with proration
+- Failed-payment retries and a grace period, then read-only mode
+- Cancel at the end of the period
+- GST invoice for every payment from Finvera Solutions LLP (GSTIN when available), with the customer's GSTIN
+
+### Billing page (for owners)
+- Current plan and renewal date, add-ons, change plan, cancel
+- Usage: AI questions, employee count (Payroll), invoices this month
+- Invoices and payment history to download
+
+### Admin
+- All subscriptions with status, next renewal and failed payments
+- MRR and plan / add-on mix`,
+    [
+      "Razorpay plans for each plan and add-on (monthly/yearly)",
+      "Checkout from the plan picker and Billing page",
+      "Subscription webhooks (activated, charged, failed, cancelled)",
+      "Upgrade/downgrade with proration",
+      "Failed-payment retries and grace period",
+      "Cancel at period end",
+      "GST invoices from Finvera Solutions LLP",
+      "Billing page: plan, add-ons, usage, invoices, cancel",
+      "Admin: subscriptions list and MRR",
+    ],
+  ),
+  feature(
+    "before_launch",
+    "high",
+    "Security",
+    "P4. Plan & add-on access enforcement",
+    `${BUILD_ORDER_1}
+
+Plans, add-ons and trial status are enforced on the server, not only hidden in the UI.
+
+- Every screen and API (web, mobile, CLI, MCP) checks plan limits, add-on status and trial status
+- One shared entitlement check (plan + add-ons + trial + read-only) used by all routers
+- Read-only mode after trial end or failed payment: reads, search, PDF downloads and exports allowed; creating or editing refused with a clear "Choose a plan" message
+- Clear upgrade prompts in the apps when a limit or add-on blocks something`,
+    [
+      "Shared entitlement check (plan, add-ons, trial, read-only)",
+      "Enforce in every tRPC router and REST endpoint",
+      "Read-only middleware for writes after trial/expiry",
+      "Mobile app: limits, add-ons and read-only handling",
+      "CLI/MCP: same checks and clear errors",
+      "Upgrade prompts in web and mobile",
+      "Tests for each plan, add-on and read-only case",
+    ],
+  ),
+  feature(
+    "before_launch",
+    "high",
+    "Website",
+    "P5. Pricing page update",
+    `${BUILD_ORDER_1}
+
+Update the public pricing page for the paid-only plans.
+
+- Starter, Growth (highlighted) and Business with monthly/yearly toggle (2 months free)
+- Add-ons: AI Assistant / AI Plus, Payroll, Store Pro with their prices
+- "Start your 14-day Full Access Trial — no card needed" call to action
+- FAQ: what happens after the trial (read-only, data kept), GST, cancellation, add-ons
+- Note that prices are exclusive of 18% GST`,
+    [
+      "Plan cards from the admin plan catalogue",
+      "Monthly/yearly toggle",
+      "Add-ons section with prices",
+      "Trial call to action",
+      "FAQ (trial end, GST, cancel, add-ons)",
+      "GST note",
+      "Remove free-plan wording across the site and help centre",
+    ],
+  ),
+];
+
+/** Titles pulled to the front of their stage/priority group, in build order. */
+const BUILD_ORDER_TITLES = [
+  "AI business assistant — Phase 1",
+  "Payroll — Phase 1",
+  "Payroll add-on billing",
+  "Store Pro add-on billing",
+  "Online payments at store checkout",
+  "Custom domain for stores",
+  "Store themes",
+];
+
+const REST = [...BEFORE_LAUNCH, ...PAYROLL_INVENTORY_AND_DOMAINS, ...AFTER_LAUNCH, ...ONLINE_STORE, ...AI];
+const buildOrderIndex = (item: RoadmapSeedItem) => {
+  const i = BUILD_ORDER_TITLES.findIndex((t) => item.title.startsWith(t));
+  return i < 0 ? BUILD_ORDER_TITLES.length : i;
+};
+
+/**
+ * The board sorts by launch stage and priority first, then by this order:
+ * plans/trial/billing, then the build-order items, then everything else.
+ */
+export const ROADMAP_SEED: RoadmapSeedItem[] = [
+  ...PLANS_TRIAL_BILLING,
+  ...[...REST].sort((a, b) => buildOrderIndex(a) - buildOrderIndex(b)),
+];
