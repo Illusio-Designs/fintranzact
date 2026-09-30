@@ -25,7 +25,10 @@ export type DocumentType =
   | "delivery_challan"
   | "proforma"
   | "sales_return"
-  | "purchase_return";
+  | "purchase_return"
+  | "purchase_order"
+  | "sales_order"
+  | "goods_receipt_note";
 
 export interface DocumentCreatorProps {
   documentType: DocumentType;
@@ -90,13 +93,23 @@ const documentTypeLabels: Record<DocumentType, string> = {
   proforma: "Proforma Invoice",
   sales_return: "Sales Return",
   purchase_return: "Purchase Return",
+  purchase_order: "Purchase Order",
+  sales_order: "Sales Order",
+  goods_receipt_note: "Goods Receipt Note",
+};
+
+/** Orders and GRNs are always one side; the server enforces the same. */
+const fixedInvoiceType: Partial<Record<DocumentType, "sale" | "purchase">> = {
+  purchase_order: "purchase",
+  sales_order: "sale",
+  goods_receipt_note: "purchase",
 };
 
 /** Which way a document moves stock: -1 out, +1 in, 0 not at all (mirrors the server). */
 function stockDirection(documentType: DocumentType, invoiceType: "sale" | "purchase"): -1 | 0 | 1 {
   if (documentType === "invoice") return invoiceType === "sale" ? -1 : 1;
   if (documentType === "delivery_challan" || documentType === "purchase_return") return -1;
-  if (documentType === "sales_return") return 1;
+  if (documentType === "sales_return" || documentType === "goods_receipt_note") return 1;
   return 0;
 }
 
@@ -142,13 +155,14 @@ function calcLine(li: LineItem) {
 
 export function DocumentCreator({
   documentType,
-  invoiceType,
+  invoiceType: requestedInvoiceType,
   onClose,
   onSuccess,
   editInvoiceId,
   prefillFromInvoiceId,
   initialPartyId,
 }: DocumentCreatorProps) {
+  const invoiceType = fixedInvoiceType[documentType] ?? requestedInvoiceType;
   const [partyId, setPartyId] = useState(initialPartyId ?? "");
   const [invoiceDate, setInvoiceDate] = useState(todayISODate);
   const [dueDate, setDueDate] = useState(() => dayjs().add(7, "day").format("YYYY-MM-DD"));
@@ -258,7 +272,7 @@ export function DocumentCreator({
     const fallback =
       documentType === "sales_return" ? inventorySettings.salesReturnWarehouseId
       : documentType === "purchase_return" ? inventorySettings.purchaseReturnWarehouseId
-      : documentType === "invoice" && invoiceType === "purchase" ? inventorySettings.purchaseWarehouseId
+      : (documentType === "invoice" && invoiceType === "purchase") || documentType === "goods_receipt_note" ? inventorySettings.purchaseWarehouseId
       : inventorySettings.salesWarehouseId;
     if (fallback) setWarehouseId(fallback);
   }, [inventorySettings, warehouseId, isEditing, documentType, invoiceType]);
@@ -313,6 +327,10 @@ export function DocumentCreator({
     utils.proforma.list.invalidate();
     utils.salesReturn.list.invalidate();
     utils.purchaseReturn.list.invalidate();
+    utils.purchaseOrder.list.invalidate();
+    utils.salesOrder.list.invalidate();
+    utils.goodsReceiptNote.list.invalidate();
+    utils.orders.invalidate();
     utils.dashboard.summary.invalidate();
     utils.dashboard.shippingSummary.invalidate();
     utils.item.list.invalidate();
@@ -412,6 +430,18 @@ export function DocumentCreator({
     onSuccess: handleSuccess,
     onError: handleError,
   });
+  const purchaseOrderMutation = trpc.purchaseOrder.create.useMutation({
+    onSuccess: handleSuccess,
+    onError: handleError,
+  });
+  const salesOrderMutation = trpc.salesOrder.create.useMutation({
+    onSuccess: handleSuccess,
+    onError: handleError,
+  });
+  const goodsReceiptNoteMutation = trpc.goodsReceiptNote.create.useMutation({
+    onSuccess: handleSuccess,
+    onError: handleError,
+  });
 
   const updateMutation = trpc.invoice.update.useMutation({
     onSuccess: handleSuccess,
@@ -427,6 +457,9 @@ export function DocumentCreator({
     proforma: proformaMutation,
     sales_return: salesReturnMutation,
     purchase_return: purchaseReturnMutation,
+    purchase_order: purchaseOrderMutation,
+    sales_order: salesOrderMutation,
+    goods_receipt_note: goodsReceiptNoteMutation,
   };
 
   const createMutation = mutationMap[documentType];
@@ -811,7 +844,7 @@ export function DocumentCreator({
           </div>
           {!["credit_note", "sales_return", "purchase_return"].includes(documentType) && (
             <div>
-              <label className="label">Due date</label>
+              <label className="label">{documentType === "sales_order" || documentType === "purchase_order" ? "Delivery by" : "Due date"}</label>
               <DateInput
                 value={dueDate}
                 onChange={(e) => { setDueDate(e.target.value); setDueDateManuallySet(true); }}

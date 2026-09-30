@@ -37,6 +37,14 @@ exceptions:
       - inventoryReports.ageing
       - inventoryReports.reorderStatus
       - inventoryReports.deadStock
+      # Purchase/sales orders, GRNs, pending tracking and short-close are web screens for now.
+      - purchaseOrder.create
+      - salesOrder.create
+      - goodsReceiptNote.create
+      - orders.pending
+      - orders.fulfilment
+      - orders.close
+      - orders.reopen
       # Warehouse management (edit, locations, member access, default warehouses) is a web screen for now.
       - warehouse.accessList
       - warehouse.accessSet
@@ -347,6 +355,14 @@ exceptions:
       - inventoryReports.ageing
       - inventoryReports.reorderStatus
       - inventoryReports.deadStock
+      # Purchase/sales orders, GRNs, pending tracking and short-close are web screens for now.
+      - purchaseOrder.create
+      - salesOrder.create
+      - goodsReceiptNote.create
+      - orders.pending
+      - orders.fulfilment
+      - orders.close
+      - orders.reopen
       # Warehouse management (edit, locations, member access, default warehouses) is a web screen for now.
       - warehouse.accessList
       - warehouse.accessSet
@@ -491,6 +507,14 @@ exceptions:
       - inventoryReports.ageing
       - inventoryReports.reorderStatus
       - inventoryReports.deadStock
+      # Purchase/sales orders, GRNs, pending tracking and short-close are web screens for now.
+      - purchaseOrder.create
+      - salesOrder.create
+      - goodsReceiptNote.create
+      - orders.pending
+      - orders.fulfilment
+      - orders.close
+      - orders.reopen
       # Warehouse management (edit, locations, member access, default warehouses) is a web screen for now.
       - warehouse.accessList
       - warehouse.accessSet

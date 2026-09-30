@@ -178,6 +178,18 @@ vi.mock("@/lib/trpc", () => ({
       create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       list: { invalidate: invalidateStub },
     },
+    purchaseOrder: {
+      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      list: { invalidate: invalidateStub },
+    },
+    salesOrder: {
+      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      list: { invalidate: invalidateStub },
+    },
+    goodsReceiptNote: {
+      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      list: { invalidate: invalidateStub },
+    },
     dashboard: {
       summary: { invalidate: invalidateStub },
       shippingSummary: { invalidate: invalidateStub },
@@ -194,6 +206,10 @@ vi.mock("@/lib/trpc", () => ({
       proforma: { list: { invalidate: invalidateStub } },
       salesReturn: { list: { invalidate: invalidateStub } },
       purchaseReturn: { list: { invalidate: invalidateStub } },
+      purchaseOrder: { list: { invalidate: invalidateStub } },
+      salesOrder: { list: { invalidate: invalidateStub } },
+      goodsReceiptNote: { list: { invalidate: invalidateStub } },
+      orders: { invalidate: invalidateStub },
       dashboard: {
         summary: { invalidate: invalidateStub },
         shippingSummary: { invalidate: invalidateStub },

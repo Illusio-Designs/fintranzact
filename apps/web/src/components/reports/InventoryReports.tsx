@@ -24,7 +24,7 @@ type Column<T> = {
   render: (row: T) => ReactNode;
 };
 
-function ReportTable<T>({ columns, rows, rowKey, footer }: {
+export function ReportTable<T>({ columns, rows, rowKey, footer }: {
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
@@ -72,7 +72,7 @@ function ReportTable<T>({ columns, rows, rowKey, footer }: {
   );
 }
 
-function Loading() {
+export function Loading() {
   return (
     <div className="flex items-center justify-center py-16">
       <Spinner size="md" className="text-brand-600" />
@@ -80,7 +80,7 @@ function Loading() {
   );
 }
 
-function LoadError({ what }: { what: string }) {
+export function LoadError({ what }: { what: string }) {
   return (
     <EmptyState
       icon={<Icon icon={Alert02Icon} size={20} className="text-text-tertiary" />}
@@ -90,7 +90,7 @@ function LoadError({ what }: { what: string }) {
   );
 }
 
-function ExportButton({ onClick }: { onClick: () => void }) {
+export function ExportButton({ onClick }: { onClick: () => void }) {
   return (
     <button onClick={onClick} className="btn-secondary inline-flex items-center gap-1.5 text-xs">
       <Icon icon={Download04Icon} size={14} />

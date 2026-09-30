@@ -22,6 +22,12 @@ import {
   StockAgeingReport,
   StockLedgerReport,
 } from "@/components/reports/InventoryReports";
+import {
+  PendingDeliveryChallansReport,
+  PendingGrnReport,
+  PendingPurchaseOrdersReport,
+  PendingSalesOrdersReport,
+} from "@/components/reports/OrderReports";
 export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
@@ -42,6 +48,10 @@ type ReportId =
   | "stock-ageing"
   | "reorder-status"
   | "dead-stock"
+  | "pending-sales-orders"
+  | "pending-purchase-orders"
+  | "pending-grns"
+  | "pending-delivery-challans"
   | "item-wise-sales"
   | "payment-summary"
   | "tax-summary"
@@ -83,6 +93,15 @@ const REPORT_GROUPS: Array<{ label: string; reports: ReportDef[] }> = [
       { id: "reorder-status", label: "Reorder Status", description: "Items at or below their reorder level, with a suggested order", tabular: true },
       { id: "dead-stock", label: "Dead Stock", description: "Stock that hasn't sold in a while", tabular: true },
       { id: "item-wise-sales", label: "Item-wise Sales", description: "Sales quantity and value per item", tabular: true },
+    ],
+  },
+  {
+    label: "Orders",
+    reports: [
+      { id: "pending-sales-orders", label: "Pending Sales Orders", description: "Ordered by customers and not yet delivered", tabular: true },
+      { id: "pending-purchase-orders", label: "Pending Purchase Orders", description: "Ordered from suppliers and not yet received", tabular: true },
+      { id: "pending-grns", label: "Pending GRNs", description: "Goods received and not yet billed", tabular: true },
+      { id: "pending-delivery-challans", label: "Pending Delivery Challans", description: "Goods delivered and not yet billed", tabular: true },
     ],
   },
   {
@@ -2928,6 +2947,14 @@ function ReportsPage() {
         return <ReorderStatusReport />;
       case "dead-stock":
         return <DeadStockReport />;
+      case "pending-sales-orders":
+        return <PendingSalesOrdersReport />;
+      case "pending-purchase-orders":
+        return <PendingPurchaseOrdersReport />;
+      case "pending-grns":
+        return <PendingGrnReport />;
+      case "pending-delivery-challans":
+        return <PendingDeliveryChallansReport />;
       case "payment-summary":
         return <PaymentSummaryReport fromDate={fromDate} toDate={toDate} />;
       case "tax-summary":

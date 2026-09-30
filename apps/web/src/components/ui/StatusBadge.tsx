@@ -42,6 +42,22 @@ const statusConfig: Record<string, StatusConfig> = {
     text: "text-text-tertiary",
     dot: "bg-text-tertiary",
   },
+  // Order fulfilment ("partial" above covers part-delivered orders too).
+  open: {
+    bg: "bg-blue-50 dark:bg-blue-950",
+    text: "text-blue-700 dark:text-blue-400",
+    dot: "bg-blue-500",
+  },
+  fulfilled: {
+    bg: "bg-emerald-50 dark:bg-emerald-950",
+    text: "text-emerald-700 dark:text-emerald-400",
+    dot: "bg-emerald-500",
+  },
+  closed: {
+    bg: "bg-surface-2",
+    text: "text-text-secondary",
+    dot: "bg-text-tertiary",
+  },
   adjusted: {
     bg: "bg-purple-50 dark:bg-purple-950",
     text: "text-purple-700 dark:text-purple-400",
@@ -58,9 +74,11 @@ const defaultConfig: StatusConfig = {
 interface StatusBadgeProps {
   status: string;
   size?: "sm" | "md";
+  /** Text to show instead of the capitalised status. */
+  label?: string;
 }
 
-export function StatusBadge({ status, size = "md" }: StatusBadgeProps) {
+export function StatusBadge({ status, size = "md", label }: StatusBadgeProps) {
   const config = statusConfig[status] ?? defaultConfig;
   const sizeClass = size === "sm" ? "text-[11px] px-2 py-0.5" : "text-xs px-2.5 py-1";
 
@@ -74,7 +92,7 @@ export function StatusBadge({ status, size = "md" }: StatusBadgeProps) {
       )}
     >
       <span className={cn("rounded-full w-1.5 h-1.5 shrink-0", config.dot)} />
-      {status.charAt(0).toUpperCase() + status.slice(1)}
+      {label ?? status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
 }

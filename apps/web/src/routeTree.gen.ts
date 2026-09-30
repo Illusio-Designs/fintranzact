@@ -18,10 +18,12 @@ import { Route as StockAdjustmentsRouteImport } from './routes/stock-adjustments
 import { Route as ShipmentsRouteImport } from './routes/shipments'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SalesReturnsRouteImport } from './routes/sales-returns'
+import { Route as SalesOrdersRouteImport } from './routes/sales-orders'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as RefundPolicyRouteImport } from './routes/refund-policy'
 import { Route as QuotationsRouteImport } from './routes/quotations'
+import { Route as PurchaseOrdersRouteImport } from './routes/purchase-orders'
 import { Route as ProformaInvoicesRouteImport } from './routes/proforma-invoices'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -38,6 +40,7 @@ import { Route as ItcRouteImport } from './routes/itc'
 import { Route as InvoicesRouteImport } from './routes/invoices'
 import { Route as Gstr2bRouteImport } from './routes/gstr2b'
 import { Route as GstRouteImport } from './routes/gst'
+import { Route as GoodsReceiptNotesRouteImport } from './routes/goods-receipt-notes'
 import { Route as FeaturesRouteImport } from './routes/features'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as EwayBillsRouteImport } from './routes/eway-bills'
@@ -102,6 +105,11 @@ const SalesReturnsRoute = SalesReturnsRouteImport.update({
   path: '/sales-returns',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SalesOrdersRoute = SalesOrdersRouteImport.update({
+  id: '/sales-orders',
+  path: '/sales-orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -120,6 +128,11 @@ const RefundPolicyRoute = RefundPolicyRouteImport.update({
 const QuotationsRoute = QuotationsRouteImport.update({
   id: '/quotations',
   path: '/quotations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PurchaseOrdersRoute = PurchaseOrdersRouteImport.update({
+  id: '/purchase-orders',
+  path: '/purchase-orders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProformaInvoicesRoute = ProformaInvoicesRouteImport.update({
@@ -200,6 +213,11 @@ const Gstr2bRoute = Gstr2bRouteImport.update({
 const GstRoute = GstRouteImport.update({
   id: '/gst',
   path: '/gst',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GoodsReceiptNotesRoute = GoodsReceiptNotesRouteImport.update({
+  id: '/goods-receipt-notes',
+  path: '/goods-receipt-notes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeaturesRoute = FeaturesRouteImport.update({
@@ -306,6 +324,7 @@ export interface FileRoutesByFullPath {
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
   '/features': typeof FeaturesRoute
+  '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
   '/gstr2b': typeof Gstr2bRoute
   '/invoices': typeof InvoicesRoute
@@ -322,10 +341,12 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/proforma-invoices': typeof ProformaInvoicesRoute
+  '/purchase-orders': typeof PurchaseOrdersRoute
   '/quotations': typeof QuotationsRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
+  '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
@@ -355,6 +376,7 @@ export interface FileRoutesByTo {
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
   '/features': typeof FeaturesRoute
+  '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
   '/gstr2b': typeof Gstr2bRoute
   '/invoices': typeof InvoicesRoute
@@ -371,10 +393,12 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/proforma-invoices': typeof ProformaInvoicesRoute
+  '/purchase-orders': typeof PurchaseOrdersRoute
   '/quotations': typeof QuotationsRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
+  '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
@@ -405,6 +429,7 @@ export interface FileRoutesById {
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
   '/features': typeof FeaturesRoute
+  '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
   '/gstr2b': typeof Gstr2bRoute
   '/invoices': typeof InvoicesRoute
@@ -421,10 +446,12 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/proforma-invoices': typeof ProformaInvoicesRoute
+  '/purchase-orders': typeof PurchaseOrdersRoute
   '/quotations': typeof QuotationsRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
+  '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
@@ -456,6 +483,7 @@ export interface FileRouteTypes {
     | '/eway-bills'
     | '/expenses'
     | '/features'
+    | '/goods-receipt-notes'
     | '/gst'
     | '/gstr2b'
     | '/invoices'
@@ -472,10 +500,12 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/privacy'
     | '/proforma-invoices'
+    | '/purchase-orders'
     | '/quotations'
     | '/refund-policy'
     | '/register'
     | '/reports'
+    | '/sales-orders'
     | '/sales-returns'
     | '/settings'
     | '/shipments'
@@ -505,6 +535,7 @@ export interface FileRouteTypes {
     | '/eway-bills'
     | '/expenses'
     | '/features'
+    | '/goods-receipt-notes'
     | '/gst'
     | '/gstr2b'
     | '/invoices'
@@ -521,10 +552,12 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/privacy'
     | '/proforma-invoices'
+    | '/purchase-orders'
     | '/quotations'
     | '/refund-policy'
     | '/register'
     | '/reports'
+    | '/sales-orders'
     | '/sales-returns'
     | '/settings'
     | '/shipments'
@@ -554,6 +587,7 @@ export interface FileRouteTypes {
     | '/eway-bills'
     | '/expenses'
     | '/features'
+    | '/goods-receipt-notes'
     | '/gst'
     | '/gstr2b'
     | '/invoices'
@@ -570,10 +604,12 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/privacy'
     | '/proforma-invoices'
+    | '/purchase-orders'
     | '/quotations'
     | '/refund-policy'
     | '/register'
     | '/reports'
+    | '/sales-orders'
     | '/sales-returns'
     | '/settings'
     | '/shipments'
@@ -604,6 +640,7 @@ export interface RootRouteChildren {
   EwayBillsRoute: typeof EwayBillsRoute
   ExpensesRoute: typeof ExpensesRoute
   FeaturesRoute: typeof FeaturesRoute
+  GoodsReceiptNotesRoute: typeof GoodsReceiptNotesRoute
   GstRoute: typeof GstRoute
   Gstr2bRoute: typeof Gstr2bRoute
   InvoicesRoute: typeof InvoicesRoute
@@ -620,10 +657,12 @@ export interface RootRouteChildren {
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
   ProformaInvoicesRoute: typeof ProformaInvoicesRoute
+  PurchaseOrdersRoute: typeof PurchaseOrdersRoute
   QuotationsRoute: typeof QuotationsRoute
   RefundPolicyRoute: typeof RefundPolicyRoute
   RegisterRoute: typeof RegisterRoute
   ReportsRoute: typeof ReportsRoute
+  SalesOrdersRoute: typeof SalesOrdersRoute
   SalesReturnsRoute: typeof SalesReturnsRoute
   SettingsRoute: typeof SettingsRoute
   ShipmentsRoute: typeof ShipmentsRoute
@@ -706,6 +745,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SalesReturnsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sales-orders': {
+      id: '/sales-orders'
+      path: '/sales-orders'
+      fullPath: '/sales-orders'
+      preLoaderRoute: typeof SalesOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reports': {
       id: '/reports'
       path: '/reports'
@@ -732,6 +778,13 @@ declare module '@tanstack/react-router' {
       path: '/quotations'
       fullPath: '/quotations'
       preLoaderRoute: typeof QuotationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/purchase-orders': {
+      id: '/purchase-orders'
+      path: '/purchase-orders'
+      fullPath: '/purchase-orders'
+      preLoaderRoute: typeof PurchaseOrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/proforma-invoices': {
@@ -844,6 +897,13 @@ declare module '@tanstack/react-router' {
       path: '/gst'
       fullPath: '/gst'
       preLoaderRoute: typeof GstRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/goods-receipt-notes': {
+      id: '/goods-receipt-notes'
+      path: '/goods-receipt-notes'
+      fullPath: '/goods-receipt-notes'
+      preLoaderRoute: typeof GoodsReceiptNotesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/features': {
@@ -988,6 +1048,7 @@ const rootRouteChildren: RootRouteChildren = {
   EwayBillsRoute: EwayBillsRoute,
   ExpensesRoute: ExpensesRoute,
   FeaturesRoute: FeaturesRoute,
+  GoodsReceiptNotesRoute: GoodsReceiptNotesRoute,
   GstRoute: GstRoute,
   Gstr2bRoute: Gstr2bRoute,
   InvoicesRoute: InvoicesRoute,
@@ -1004,10 +1065,12 @@ const rootRouteChildren: RootRouteChildren = {
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
   ProformaInvoicesRoute: ProformaInvoicesRoute,
+  PurchaseOrdersRoute: PurchaseOrdersRoute,
   QuotationsRoute: QuotationsRoute,
   RefundPolicyRoute: RefundPolicyRoute,
   RegisterRoute: RegisterRoute,
   ReportsRoute: ReportsRoute,
+  SalesOrdersRoute: SalesOrdersRoute,
   SalesReturnsRoute: SalesReturnsRoute,
   SettingsRoute: SettingsRoute,
   ShipmentsRoute: ShipmentsRoute,

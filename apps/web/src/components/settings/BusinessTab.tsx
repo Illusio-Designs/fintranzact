@@ -331,6 +331,15 @@ export function BusinessForm({
   const [purchaseReturnPrefix, setPurchaseReturnPrefix] = useState(
     existing?.purchaseReturnPrefix || "PR",
   );
+  const [salesOrderPrefix, setSalesOrderPrefix] = useState(
+    existing?.salesOrderPrefix || "SO",
+  );
+  const [purchaseOrderPrefix, setPurchaseOrderPrefix] = useState(
+    existing?.purchaseOrderPrefix || "PO",
+  );
+  const [goodsReceiptNotePrefix, setGoodsReceiptNotePrefix] = useState(
+    existing?.goodsReceiptNotePrefix || "GRN",
+  );
   const [annualTurnover, setAnnualTurnover] = useState(
     existing?.annualTurnover != null ? String(existing.annualTurnover) : "",
   );
@@ -559,6 +568,24 @@ export function BusinessForm({
             label="Purchase Return Prefix"
             value={purchaseReturnPrefix}
             onChange={(e) => setPurchaseReturnPrefix(e.target.value)}
+          />
+
+          <InputField
+            label="Sales Order Prefix"
+            value={salesOrderPrefix}
+            onChange={(e) => setSalesOrderPrefix(e.target.value)}
+          />
+
+          <InputField
+            label="Purchase Order Prefix"
+            value={purchaseOrderPrefix}
+            onChange={(e) => setPurchaseOrderPrefix(e.target.value)}
+          />
+
+          <InputField
+            label="Goods Receipt Note Prefix"
+            value={goodsReceiptNotePrefix}
+            onChange={(e) => setGoodsReceiptNotePrefix(e.target.value)}
           />
         </div>
       </div>
@@ -1396,6 +1423,9 @@ export function BusinessForm({
                 <li>Debit Note: {debitNotePrefix}</li>
                 <li>Sales Return: {salesReturnPrefix}</li>
                 <li>Purchase Return: {purchaseReturnPrefix}</li>
+                <li>Sales Order: {salesOrderPrefix}</li>
+                <li>Purchase Order: {purchaseOrderPrefix}</li>
+                <li>Goods Receipt Note: {goodsReceiptNotePrefix}</li>
                 <li>
                   Round-off: {defaultRoundOff ? "Enabled" : "Disabled"}
                 </li>
@@ -1520,6 +1550,9 @@ export function BusinessForm({
       debitNotePrefix: debitNotePrefix || "DN",
       salesReturnPrefix: salesReturnPrefix || "SR",
       purchaseReturnPrefix: purchaseReturnPrefix || "PR",
+      salesOrderPrefix: salesOrderPrefix || "SO",
+      purchaseOrderPrefix: purchaseOrderPrefix || "PO",
+      goodsReceiptNotePrefix: goodsReceiptNotePrefix || "GRN",
       annualTurnover:
         annualTurnover.trim() === "" ? null : Number(annualTurnover),
 

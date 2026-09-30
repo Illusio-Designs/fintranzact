@@ -11,6 +11,8 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { ShareLinkSection } from "@/components/ShareLinkSection";
 import { DocumentCreator, type DocumentType } from "@/components/DocumentCreator";
+import { ConvertDocumentDialog, type ConvertTarget } from "@/components/ConvertDocumentDialog";
+import { formatQty } from "@/components/inventory/shared";
 import { toast } from "@/hooks/useToast";
 
 import { Icon, type IconSvgElement } from "@/components/ui/Icon";
@@ -26,7 +28,24 @@ export type TrpcRouterKey =
   | "proforma"
   | "deliveryChallan"
   | "salesReturn"
-  | "creditNote";
+  | "creditNote"
+  | "salesOrder"
+  | "purchaseOrder"
+  | "goodsReceiptNote";
+
+/** List page of each document type, for links to a referenced document. */
+const DOCUMENT_PAGES: Record<string, string> = {
+  invoice: "/invoices",
+  quotation: "/quotations",
+  proforma: "/proforma-invoices",
+  delivery_challan: "/delivery-challans",
+  sales_order: "/sales-orders",
+  purchase_order: "/purchase-orders",
+  goods_receipt_note: "/goods-receipt-notes",
+};
+
+/** Status tabs with these values filter on how much is still pending. */
+const FULFILMENT_FILTERS = ["open", "partial", "fulfilled", "closed"];
 
 export interface ConvertConfig {
   /** The id of the document currently being converted (null if none) */
@@ -90,6 +109,15 @@ export interface DocumentListPageConfig {
    * Pass a ConvertConfig from the route wrapper that owns the convert mutation.
    */
   convert?: ConvertConfig;
+  /**
+   * Orders, challans and GRNs: show what is still pending, convert all or
+   * part of it into these document types, and short-close.
+   */
+  fulfilment?: {
+    convertTo: ConvertTarget[];
+    /** Labels for open / partial / fulfilled / closed, e.g. "Unbilled" on a challan. */
+    labels?: Partial<Record<"open" | "partial" | "fulfilled" | "closed", string>>;
+  };
 }
 
 // ── Component ─────────────────────────────────────────────────────
@@ -123,6 +151,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
     markSent = false,
     markPaid = false,
     convert,
+    fulfilment,
   } = config;
 
   const [type, setType] = useState<"sale" | "purchase">(
@@ -134,6 +163,8 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteNumber, setDeleteNumber] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
+  const [editId, setEditId] = useState<string | undefined>(undefined);
+  const [convertId, setConvertId] = useState<string | null>(null);
 
   // Auto-open slider when navigated with ?id= param
   useEffect(() => {
@@ -158,9 +189,16 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
     { enabled: !!refDocId }
   );
 
+  const { data: selectedFulfilment } = trpc.orders.fulfilment.useQuery(
+    { id: selectedId! },
+    { enabled: !!selectedId && !!fulfilment },
+  );
+
+  const byFulfilment = !!fulfilment && FULFILMENT_FILTERS.includes(status);
   const { data, isLoading } = router.list.useQuery({
     type,
-    status: (status || undefined) as never,
+    status: (status && !byFulfilment ? status : undefined) as never,
+    fulfilment: byFulfilment ? status : undefined,
     search: search.trim() || undefined,
     page: 1,
     limit: 50,
@@ -188,6 +226,30 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
       setDeleteId(null);
     },
   });
+
+  const closeMutation = trpc.orders.close.useMutation({
+    onSuccess: () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (utils as any)[trpcRouter].list.invalidate();
+      utils.orders.invalidate();
+      toast.success("Closed — nothing more is expected against it");
+    },
+    onError: (err) => toast.error("Failed to close", err.message),
+  });
+  const reopenMutation = trpc.orders.reopen.useMutation({
+    onSuccess: () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (utils as any)[trpcRouter].list.invalidate();
+      utils.orders.invalidate();
+      toast.success("Reopened");
+    },
+    onError: (err) => toast.error("Failed to reopen", err.message),
+  });
+
+  function fulfilmentLabel(s: string) {
+    const key = s as "open" | "partial" | "fulfilled" | "closed";
+    return fulfilment?.labels?.[key] ?? s.charAt(0).toUpperCase() + s.slice(1);
+  }
 
   function confirmDelete(id: string, number: string) {
     setDeleteId(id);
@@ -254,6 +316,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                   <th>Date</th>
                   <th>{col4Header}</th>
                   <th>Status</th>
+                  {fulfilment && <th>Pending</th>}
                   <th className="text-right">Total</th>
                   <th></th>
                 </tr>
@@ -287,6 +350,15 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                     <td>
                       <StatusBadge status={doc.status} size="sm" />
                     </td>
+                    {fulfilment && (
+                      <td>
+                        {doc.fulfilmentStatus && doc.fulfilmentStatus !== "cancelled" ? (
+                          <StatusBadge status={doc.fulfilmentStatus} label={fulfilmentLabel(doc.fulfilmentStatus)} size="sm" />
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    )}
                     <td className="text-right tabular-nums font-medium">
                       {formatCurrency(doc.totalAmount)}
                     </td>
@@ -321,6 +393,14 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                             {convert.convertingId === doc.id
                               ? "Converting…"
                               : "Convert to Invoice"}
+                          </button>
+                        )}
+                        {fulfilment && (doc.fulfilmentStatus === "open" || doc.fulfilmentStatus === "partial") && (
+                          <button
+                            onClick={() => setConvertId(doc.id)}
+                            className="text-xs px-2 py-1 rounded font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950 transition-colors"
+                          >
+                            Convert
                           </button>
                         )}
                         {doc.status === "draft" && (
@@ -366,10 +446,39 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                 )}
               </div>
               <div className="flex gap-2">
+                {fulfilment && selectedFulfilment && selectedDoc.status !== "cancelled" && (
+                  selectedFulfilment.closedAt ? (
+                    <button
+                      onClick={() => reopenMutation.mutate({ id: selectedDoc.id })}
+                      disabled={reopenMutation.isPending}
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium text-text-secondary hover:bg-surface-2 border border-border-light transition-colors disabled:opacity-50"
+                    >
+                      Reopen
+                    </button>
+                  ) : selectedFulfilment.status !== "fulfilled" && (
+                    <button
+                      onClick={() => closeMutation.mutate({ id: selectedDoc.id })}
+                      disabled={closeMutation.isPending}
+                      title="Nothing more is expected against it, whatever is still pending"
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium text-text-secondary hover:bg-surface-2 border border-border-light transition-colors disabled:opacity-50"
+                    >
+                      Short-close
+                    </button>
+                  )
+                )}
+                {fulfilment && (selectedFulfilment?.status === "open" || selectedFulfilment?.status === "partial") && (
+                  <button
+                    onClick={() => setConvertId(selectedDoc.id)}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium text-white bg-brand-600 hover:bg-brand-700 transition-colors"
+                  >
+                    Convert
+                  </button>
+                )}
                 {selectedDoc.status === "draft" && (
                   <button
                     onClick={() => {
                       setSelectedId(null);
+                      setEditId(selectedDoc.id);
                       setShowCreate(true);
                     }}
                     className="text-xs px-3 py-1.5 rounded-lg font-medium text-text-secondary hover:bg-surface-2 border border-border-light transition-colors"
@@ -418,11 +527,14 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                 )}
                 {selectedDoc.referenceDocumentId && (
                   <div>
-                    <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Reference Invoice</p>
+                    <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">
+                      {refDoc && refDoc.documentType !== "invoice" ? `Made from ${getDocumentTypeLabel(refDoc.documentType)}` : "Reference Invoice"}
+                    </p>
                     <button
                       onClick={() => {
                         setSelectedId(null);
-                        window.location.href = `/invoices?id=${selectedDoc.referenceDocumentId}`;
+                        const page = (refDoc && DOCUMENT_PAGES[refDoc.documentType]) || "/invoices";
+                        window.location.href = `${page}?id=${selectedDoc.referenceDocumentId}`;
                       }}
                       className="text-sm font-mono text-brand-600 hover:text-brand-700 hover:underline"
                     >
@@ -432,6 +544,57 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                 )}
               </div>
             </div>
+
+            {/* What is still pending, and what was made from it */}
+            {fulfilment && selectedFulfilment && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">Fulfilment</p>
+                  {selectedFulfilment.status !== "cancelled" && (
+                    <StatusBadge status={selectedFulfilment.status} label={fulfilmentLabel(selectedFulfilment.status)} size="sm" />
+                  )}
+                </div>
+                <div className="overflow-hidden rounded-xl border border-border-light">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-surface-1 border-b border-border-light">
+                        <th className="px-3 py-2 text-left font-medium text-text-tertiary">Item</th>
+                        <th className="px-3 py-2 text-right font-medium text-text-tertiary">Ordered</th>
+                        <th className="px-3 py-2 text-right font-medium text-text-tertiary">Done</th>
+                        <th className="px-3 py-2 text-right font-medium text-text-tertiary">Pending</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-light">
+                      {selectedFulfilment.lines.map((l) => (
+                        <tr key={l.lineId}>
+                          <td className="px-3 py-2 text-text-primary">{l.itemName}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{formatQty(l.ordered, l.selectedUnit)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{formatQty(l.fulfilled)}</td>
+                          <td className={cn("px-3 py-2 text-right tabular-nums font-medium", l.pending > 0 ? "text-amber-600" : "text-text-tertiary")}>
+                            {formatQty(l.pending)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {selectedFulfilment.linkedDocuments.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {selectedFulfilment.linkedDocuments.map((d) => (
+                      <li key={d.id} className="flex items-center justify-between text-xs">
+                        <span className="text-text-secondary">
+                          {getDocumentTypeLabel(d.documentType)}{" "}
+                          <span className="font-mono text-text-primary">{d.invoiceNumber}</span>
+                          {" · "}
+                          {formatDate(d.invoiceDate)}
+                        </span>
+                        <StatusBadge status={d.status} size="sm" />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             {/* Line items */}
             <div>
@@ -543,7 +706,19 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
         <DocumentCreator
           documentType={documentType}
           invoiceType={type}
-          onClose={() => setShowCreate(false)}
+          editInvoiceId={editId}
+          onClose={() => {
+            setShowCreate(false);
+            setEditId(undefined);
+          }}
+        />
+      )}
+
+      {convertId && fulfilment && (
+        <ConvertDocumentDialog
+          sourceId={convertId}
+          targets={fulfilment.convertTo}
+          onClose={() => setConvertId(null)}
         />
       )}
     </div>
