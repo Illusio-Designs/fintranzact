@@ -569,7 +569,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
       )
       .mutation(async ({ input, ctx }) => {
         requireCan(ctx.ability, "update", "Invoice");
-        const doc = await ctx.db.transaction(async (tx) => {
+        const { doc, fromStatus } = await ctx.db.transaction(async (tx) => {
           const [before] = await tx
             .select({ status: invoices.status })
             .from(invoices)
@@ -590,7 +590,10 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               and(
                 eq(invoices.id, input.id),
                 eq(invoices.businessId, ctx.businessId),
-                eq(invoices.documentType, docType as DocumentType)
+                eq(invoices.documentType, docType as DocumentType),
+                // A deleted document stays deleted: reinstating it here
+                // would put its stock back while it's still hidden.
+                isNull(invoices.deletedAt),
               )
             )
             .returning();
@@ -615,7 +618,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           if (wasCancelled !== isCancelled) {
             await recomputeReferencedInvoice(tx, ctx.businessId, updated);
           }
-          return updated;
+          return { doc: updated, fromStatus: before?.status ?? null };
         });
 
         logAudit(ctx.db, {
@@ -624,7 +627,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           action: `${config.documentType}.updateStatus`,
           entityType: config.documentType,
           entityId: input.id,
-          metadata: { invoiceNumber: doc.invoiceNumber, fromStatus: input.status },
+          metadata: { invoiceNumber: doc.invoiceNumber, fromStatus, toStatus: input.status },
           ipAddress: ctx.ipAddress,
         });
 
