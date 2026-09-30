@@ -16,7 +16,7 @@
 import { z } from "zod";
 import { eq, and, sql, desc, isNull, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { gstr2bUploads, gstr2bRecords, invoices, parties } from "@fintranzact/db";
+import { gstr2bUploads, gstr2bRecords, invoices, parties, businesses } from "@fintranzact/db";
 import {
   gstr2bUploadSchema,
   gstr2bRecordsInputSchema,
@@ -97,23 +97,32 @@ export const gstr2bRouter = router({
           ),
         );
 
-      // For each purchase invoice, derive tax split.
-      // We use a simple heuristic: if IGST > 0 in the invoice taxAmount and no
-      // CGST/SGST recorded at invoice level we treat full tax as IGST.
-      // This is approximate — for exact matching the router stores CGST/SGST/IGST
-      // per invoice item but for reconciliation purposes this is sufficient.
+      const [biz] = await ctx.db
+        .select({ stateCode: businesses.stateCode, gstin: businesses.gstin })
+        .from(businesses)
+        .where(eq(businesses.id, ctx.businessId))
+        .limit(1);
+      const recipientState = biz?.stateCode || biz?.gstin?.substring(0, 2) || null;
+
+      // For each purchase invoice, derive the tax split. Supplier state (party
+      // stateCode, falling back to its GSTIN prefix) vs our own state decides
+      // the place-of-supply treatment: same state → CGST+SGST (paise-exact
+      // halves, as in the ITC ledger), different state → IGST.
       const purchaseInvoices: PurchaseInvoice[] = purchaseRows.map((r) => {
-        const taxAmt = parseFloat(r.taxAmount ?? "0");
-        const half = (taxAmt / 2).toFixed(2);
+        const taxPaise = Math.round(parseFloat(r.taxAmount ?? "0") * 100);
+        const supplierState = r.partyStateCode || r.partyGstin?.substring(0, 2) || null;
+        // Unknown state on either side: treat as intra-state
+        const interState = !!(recipientState && supplierState && recipientState !== supplierState);
+        const halfPaise = Math.floor(taxPaise / 2);
         return {
           id: r.id,
           invoiceNumber: r.invoiceNumber,
           invoiceDate: r.invoiceDate,
           partyGstin: r.partyGstin ?? null,
           subtotal: r.subtotal,
-          cgst: half,
-          sgst: half,
-          igst: ZERO,
+          cgst: interState ? ZERO : (halfPaise / 100).toFixed(2),
+          sgst: interState ? ZERO : ((taxPaise - halfPaise) / 100).toFixed(2),
+          igst: interState ? (taxPaise / 100).toFixed(2) : ZERO,
           cess: ZERO,
         };
       });

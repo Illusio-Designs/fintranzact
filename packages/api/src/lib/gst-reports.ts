@@ -12,6 +12,48 @@ function splitTax(amount: number): number {
 
 // ── Types ──────────────────────────────────────────────────────
 
+/**
+ * Per-rate breakdown of a document's line items. The GSTN portal schema
+ * requires one `itms[].itm_det` entry per distinct tax rate (`rt`), so each
+ * document section carries this breakdown for the portal JSON export.
+ */
+export interface GstRateLine {
+  rate: number;
+  taxableValue: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** Group line items by tax rate and split tax into CGST+SGST or IGST. */
+function groupLinesByRate(
+  lines: Array<{ taxPercent: string; totalAmount: string; taxAmount: string }>,
+  sameState: boolean,
+): GstRateLine[] {
+  const byRate = new Map<number, { taxable: number; tax: number }>();
+  for (const li of lines) {
+    const rate = parseFloat(li.taxPercent);
+    const tax = parseFloat(li.taxAmount);
+    const existing = byRate.get(rate) ?? { taxable: 0, tax: 0 };
+    existing.taxable += parseFloat(li.totalAmount) - tax;
+    existing.tax += tax;
+    byRate.set(rate, existing);
+  }
+  return Array.from(byRate.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([rate, { taxable, tax }]) => ({
+      rate,
+      taxableValue: round2(taxable),
+      cgst: sameState ? splitTax(tax) : 0,
+      sgst: sameState ? splitTax(tax) : 0,
+      igst: sameState ? 0 : round2(tax),
+    }));
+}
+
 export interface GSTR1Report {
   period: string; // e.g. "Apr 2025"
   businessGstin: string;
@@ -28,6 +70,7 @@ export interface GSTR1Report {
     sgst: number;
     igst: number;
     totalInvoiceValue: number;
+    rateItems?: GstRateLine[];
   }>;
   // B2C Large - to unregistered (> ₹2.5L inter-state)
   b2cLarge: Array<{
@@ -36,6 +79,7 @@ export interface GSTR1Report {
     cgst: number;
     sgst: number;
     igst: number;
+    rateItems?: GstRateLine[];
   }>;
   // B2C Small - to unregistered (≤ ₹2.5L or intra-state)
   b2cSmall: Array<{
@@ -66,6 +110,7 @@ export interface GSTR1Report {
     totalAmount: string;
     taxableAmount: string;
     taxAmount: string;
+    rateItems?: GstRateLine[];
   }>;
   // Debit Notes (additional charges to buyer, increasing output tax)
   debitNotes: Array<{
@@ -77,6 +122,7 @@ export interface GSTR1Report {
     totalAmount: string;
     taxableAmount: string;
     taxAmount: string;
+    rateItems?: GstRateLine[];
   }>;
   // Totals
   totalTaxableValue: number;
@@ -244,13 +290,23 @@ export async function generateGSTR1(
         taxableValue: taxable,
         cgst, sgst, igst,
         totalInvoiceValue: total,
+        rateItems: groupLinesByRate(lineItems, !!sameState),
       });
     } else if (!sameState && total > 250000) {
       // B2C Large: inter-state > ₹2.5L
       const state = inv.partyState || "Unknown";
-      const existing = b2cLargeMap.get(state) || { state, taxableValue: 0, cgst: 0, sgst: 0, igst: 0 };
+      const existing = b2cLargeMap.get(state) || { state, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, rateItems: [] };
       existing.taxableValue += taxable;
       existing.igst += igst;
+      for (const line of groupLinesByRate(lineItems, false)) {
+        const sameRate = existing.rateItems?.find((r) => r.rate === line.rate);
+        if (sameRate) {
+          sameRate.taxableValue = round2(sameRate.taxableValue + line.taxableValue);
+          sameRate.igst = round2(sameRate.igst + line.igst);
+        } else {
+          existing.rateItems?.push(line);
+        }
+      }
       b2cLargeMap.set(state, existing);
     } else {
       // B2C Small
@@ -299,6 +355,7 @@ export async function generateGSTR1(
 
   // Fix 2: Fetch credit notes for the period
   const rawCreditNotes = await db.select({
+    id: invoices.id,
     invoiceNumber: invoices.invoiceNumber,
     invoiceDate: invoices.invoiceDate,
     totalAmount: invoices.totalAmount,
@@ -307,6 +364,8 @@ export async function generateGSTR1(
     referenceDocumentId: invoices.referenceDocumentId,
     partyName: parties.name,
     partyGstin: parties.gstin,
+    partyState: parties.state,
+    partyStateCode: parties.stateCode,
   }).from(invoices)
     .innerJoin(parties, eq(parties.id, invoices.partyId))
     .where(and(
@@ -320,6 +379,7 @@ export async function generateGSTR1(
 
   // Fix 2: Fetch debit notes for the period
   const rawDebitNotes = await db.select({
+    id: invoices.id,
     invoiceNumber: invoices.invoiceNumber,
     invoiceDate: invoices.invoiceDate,
     totalAmount: invoices.totalAmount,
@@ -328,6 +388,8 @@ export async function generateGSTR1(
     referenceDocumentId: invoices.referenceDocumentId,
     partyName: parties.name,
     partyGstin: parties.gstin,
+    partyState: parties.state,
+    partyStateCode: parties.stateCode,
   }).from(invoices)
     .innerJoin(parties, eq(parties.id, invoices.partyId))
     .where(and(
@@ -352,6 +414,20 @@ export async function generateGSTR1(
     : [];
   const refInvoiceMap = new Map(refInvoiceNumbers.map((r) => [r.id, r.invoiceNumber]));
 
+  // Line items for notes — needed for the per-rate breakdown in the portal JSON
+  const noteIds = [...rawCreditNotes, ...rawDebitNotes].map((n) => n.id);
+  const noteLineItems = noteIds.length > 0
+    ? await db.select().from(invoiceItems).where(inArray(invoiceItems.invoiceId, noteIds))
+    : [];
+  const noteLinesByNote = new Map<string, typeof noteLineItems>();
+  for (const li of noteLineItems) {
+    const existing = noteLinesByNote.get(li.invoiceId) || [];
+    existing.push(li);
+    noteLinesByNote.set(li.invoiceId, existing);
+  }
+  const noteRateItems = (n: typeof rawCreditNotes[0]) =>
+    groupLinesByRate(noteLinesByNote.get(n.id) || [], !!isSameState(n.partyState, n.partyStateCode));
+
   const creditNotes: GSTR1Report["creditNotes"] = rawCreditNotes.map((n) => ({
     invoiceNumber: n.invoiceNumber,
     originalInvoiceNumber: n.referenceDocumentId ? refInvoiceMap.get(n.referenceDocumentId) : undefined,
@@ -361,6 +437,7 @@ export async function generateGSTR1(
     totalAmount: n.totalAmount,
     taxableAmount: n.subtotal,
     taxAmount: n.taxAmount,
+    rateItems: noteRateItems(n),
   }));
 
   const debitNotes: GSTR1Report["debitNotes"] = rawDebitNotes.map((n) => ({
@@ -372,6 +449,7 @@ export async function generateGSTR1(
     totalAmount: n.totalAmount,
     taxableAmount: n.subtotal,
     taxAmount: n.taxAmount,
+    rateItems: noteRateItems(n),
   }));
 
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -421,7 +499,10 @@ export async function generateGSTR3B(
     .where(and(
       eq(invoices.businessId, businessId),
       eq(invoices.type, "purchase"),
-      notOrderDocument(),
+      // Only tax invoices carry ITC. Purchase orders (quotation), proformas and
+      // challans share type "purchase" and are converted into an invoice with
+      // the same tax — including them counted the same ITC twice.
+      eq(invoices.documentType, "invoice"),
       sql`${invoices.status} != 'cancelled'`,
       isNull(invoices.deletedAt),
       ...buildBusinessDateFilter(invoices, { from: startDate, to: endDate }),
@@ -571,6 +652,40 @@ function isoToPortalDate(isoDate: string): string {
   return `${day}-${month}-${year}`;
 }
 
+// Valid GST rate slabs (percent) accepted by the portal for `rt`.
+const GST_RATE_SLABS = [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28, 40];
+
+/**
+ * Derive the GST rate from taxable value and tax when no line-level breakdown
+ * is available. Snaps to the nearest valid slab to absorb paise rounding
+ * (₹4237.29 taxable with ₹762.71 tax is 17.9999…% → 18).
+ */
+function deriveRate(taxable: number, tax: number): number {
+  if (!(taxable > 0) || !(tax > 0)) return 0;
+  const raw = (tax / taxable) * 100;
+  const nearest = GST_RATE_SLABS.reduce((best, r) => (Math.abs(r - raw) < Math.abs(best - raw) ? r : best));
+  return Math.abs(nearest - raw) <= 0.05 ? nearest : round2(raw);
+}
+
+/** Build the portal `itms` array: one entry per tax rate, numbered from 1. */
+function toPortalItms(
+  rateItems: GstRateLine[] | undefined,
+  fallback: GstRateLine,
+): Array<{ num: number; itm_det: Record<string, number> }> {
+  const lines = rateItems && rateItems.length > 0 ? rateItems : [fallback];
+  return lines.map((line, idx) => ({
+    num: idx + 1,
+    itm_det: {
+      txval: line.taxableValue,
+      rt: line.rate,
+      iamt: line.igst,
+      camt: line.cgst,
+      samt: line.sgst,
+      csamt: 0,
+    },
+  }));
+}
+
 /**
  * Transforms a GSTR1Report into the JSON schema required by the GST portal's
  * offline tool. The returned object can be serialised to JSON and uploaded
@@ -600,19 +715,13 @@ export function gstr1ToPortalJson(
       pos: ctin.substring(0, 2),
       rchrg: "N",
       inv_typ: "R",
-      itms: [
-        {
-          num: 1,
-          itm_det: {
-            txval: inv.taxableValue,
-            rt: 0,
-            iamt: inv.igst,
-            camt: inv.cgst,
-            samt: inv.sgst,
-            csamt: 0,
-          },
-        },
-      ],
+      itms: toPortalItms(inv.rateItems, {
+        rate: deriveRate(inv.taxableValue, inv.igst + inv.cgst + inv.sgst),
+        taxableValue: inv.taxableValue,
+        igst: inv.igst,
+        cgst: inv.cgst,
+        sgst: inv.sgst,
+      }),
     });
     b2bMap.set(ctin, existing);
   }
@@ -623,10 +732,17 @@ export function gstr1ToPortalJson(
   for (const entry of report.b2cLarge) {
     const pos = stateNameToCode(entry.state);
     const existing = b2clMap.get(pos) ?? { pos, inv: [] };
+    const lines = entry.rateItems && entry.rateItems.length > 0
+      ? entry.rateItems
+      : [{ rate: deriveRate(entry.taxableValue, entry.igst), taxableValue: entry.taxableValue, igst: entry.igst }];
     existing.inv.push({
       txval: entry.taxableValue,
       iamt: entry.igst,
       csamt: 0,
+      itms: lines.map((line, idx) => ({
+        num: idx + 1,
+        itm_det: { txval: line.taxableValue, rt: line.rate, iamt: line.igst, csamt: 0 },
+      })),
     });
     b2clMap.set(pos, existing);
   }
@@ -650,6 +766,9 @@ export function gstr1ToPortalJson(
   const pushNote = (note: GSTR1Report["creditNotes"][0], ntty: "C" | "D") => {
     const ctin = note.partyGstin;
     const existing = cdnrMap.get(ctin) ?? { ctin, nt: [] };
+    const noteTaxable = parseFloat(note.taxableAmount);
+    const noteTax = parseFloat(note.taxAmount);
+    const noteIntra = ctin.substring(0, 2) === gstin.substring(0, 2);
     existing.nt.push({
       ntty,
       nt_num: note.invoiceNumber,
@@ -658,19 +777,13 @@ export function gstr1ToPortalJson(
       pos: ctin.substring(0, 2),
       rchrg: "N",
       inv_typ: "R",
-      itms: [
-        {
-          num: 1,
-          itm_det: {
-            txval: parseFloat(note.taxableAmount),
-            rt: 0,
-            iamt: 0,
-            camt: 0,
-            samt: 0,
-            csamt: 0,
-          },
-        },
-      ],
+      itms: toPortalItms(note.rateItems, {
+        rate: deriveRate(noteTaxable, noteTax),
+        taxableValue: noteTaxable,
+        igst: noteIntra ? 0 : noteTax,
+        cgst: noteIntra ? splitTax(noteTax) : 0,
+        sgst: noteIntra ? splitTax(noteTax) : 0,
+      }),
     });
     cdnrMap.set(ctin, existing);
   };

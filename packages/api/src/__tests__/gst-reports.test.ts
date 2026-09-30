@@ -1212,6 +1212,77 @@ describe("gstr1ToPortalJson — B2CL section", () => {
     expect(entry.pos).toBeDefined();
     expect(typeof entry.pos).toBe("string");
   });
+
+  it("b2cl itms carry the GST rate per rate group", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({
+        b2cLarge: [{
+          state: "Karnataka",
+          taxableValue: 300000,
+          cgst: 0,
+          sgst: 0,
+          igst: 46000,
+          rateItems: [
+            { rate: 12, taxableValue: 100000, cgst: 0, sgst: 0, igst: 12000 },
+            { rate: 18, taxableValue: 200000, cgst: 0, sgst: 0, igst: 34000 },
+          ],
+        }],
+      }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    type B2CLEntry = { pos: string; inv: Array<{ itms: Array<{ num: number; itm_det: Record<string, number> }> }> };
+    const entry = (json.b2cl as B2CLEntry[])[0];
+    expect(entry.pos).toBe("29");
+    expect(entry.inv[0].itms).toEqual([
+      { num: 1, itm_det: { txval: 100000, rt: 12, iamt: 12000, csamt: 0 } },
+      { num: 2, itm_det: { txval: 200000, rt: 18, iamt: 34000, csamt: 0 } },
+    ]);
+  });
+});
+
+describe("gstr1ToPortalJson — rt fallback without a rate breakdown", () => {
+  it("derives rt 18 for a b2b invoice from txval 4237.29 and IGST 762.71", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({
+        b2b: [{
+          partyGstin: "29XYZAB5678G1Z9",
+          partyName: "Test Party",
+          invoiceNumber: "INV-00001",
+          invoiceDate: new Date("2025-08-15").toISOString(),
+          invoiceType: "Regular",
+          taxableValue: 4237.29,
+          cgst: 0,
+          sgst: 0,
+          igst: 762.71,
+          totalInvoiceValue: 5000,
+        }],
+      }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    type B2BEntry = { inv: Array<{ itms: Array<{ itm_det: { rt: number } }> }> };
+    expect((json.b2b as B2BEntry[])[0].inv[0].itms[0].itm_det.rt).toBe(18);
+  });
+
+  it("derives rt 18 and splits CGST/SGST for an intra-state credit note", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({
+        creditNotes: [{
+          invoiceNumber: "CN-00001",
+          invoiceDate: new Date("2025-08-25").toISOString(),
+          partyName: "Test Party",
+          partyGstin: "27ABCDE1234F1Z5",
+          totalAmount: "1180.00",
+          taxableAmount: "1000.00",
+          taxAmount: "180.00",
+        }],
+      }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    type CDNREntry = { nt: Array<{ itms: Array<{ itm_det: Record<string, number> }> }> };
+    expect((json.cdnr as CDNREntry[])[0].nt[0].itms[0].itm_det).toEqual({
+      txval: 1000, rt: 18, iamt: 0, camt: 90, samt: 90, csamt: 0,
+    });
+  });
 });
 
 describe("gstr1ToPortalJson — B2CS section", () => {

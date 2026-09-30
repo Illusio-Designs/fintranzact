@@ -774,3 +774,130 @@ describe("Composition scheme enforcement", () => {
     expect(typeof cmp08.quarterEnd).toBe("string");
   });
 });
+
+// ── GSTR-3B Table 4 — ITC must not be double counted ─────────────────────────
+
+describe("GSTR-3B — ITC counts only purchase invoices (no double counting)", () => {
+  // Separate month so the shared fixture month is not affected
+  const ITC_YEAR = 2026;
+  const ITC_MONTH = 2; // February 2026
+
+  beforeAll(async () => {
+    const tenantDb = getTenantTestDb();
+    const date = new Date(ITC_YEAR, ITC_MONTH - 1, 12, 12, 0, 0);
+    const lines = [
+      { description: "Steel sheets", quantity: "10", unitPrice: "1000.00", taxPercent: "18.00" },
+    ];
+
+    // Purchase order (type purchase, documentType quotation): 10,000 @ 18%
+    const { invoice: po } = await createInvoiceWithItems(
+      tenantDb, world.business1.id, world.party1.id, lines,
+      { type: "purchase", documentType: "quotation", status: "sent", invoiceDate: date },
+    );
+
+    // The same order converted into the supplier's tax invoice — 1,800 ITC
+    await createInvoiceWithItems(
+      tenantDb, world.business1.id, world.party1.id, lines,
+      { type: "purchase", documentType: "invoice", status: "sent", invoiceDate: date, referenceDocumentId: po.id },
+    );
+
+    // Purchase proforma — never an ITC document
+    await createInvoiceWithItems(
+      tenantDb, world.business1.id, world.party1.id, lines,
+      { type: "purchase", documentType: "proforma", status: "sent", invoiceDate: date },
+    );
+  });
+
+  it("claims 1,800 ITC (900 CGST + 900 SGST), not 3x for PO + proforma + invoice", async () => {
+    const caller = createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: world.business1.id,
+    });
+
+    const report = await caller.gst.gstr3b({ year: ITC_YEAR, month: ITC_MONTH });
+
+    expect(report.itc.cgst).toBeCloseTo(900, 2);
+    expect(report.itc.sgst).toBeCloseTo(900, 2);
+    expect(report.itc.igst).toBeCloseTo(0, 2);
+    expect(report.itc.total).toBeCloseTo(1800, 2);
+    // No sales this month → net = -ITC (credit carried forward)
+    expect(report.netTax.total).toBeCloseTo(-1800, 2);
+  });
+});
+
+// ── GSTR-1 portal JSON — rt must carry the real GST rate ──────────────────────
+
+describe("GSTR-1 portal JSON — emits the GST rate per rate group", () => {
+  const RT_YEAR = 2026;
+  const RT_MONTH = 1; // January 2026
+
+  function caller() {
+    return createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: world.business1.id,
+    });
+  }
+
+  beforeAll(async () => {
+    const tenantDb = getTenantTestDb();
+    const date = new Date(RT_YEAR, RT_MONTH - 1, 20, 12, 0, 0);
+
+    // Intra-state B2B invoice with two rates:
+    //   10,000 @ 18% = 1,800 → 900 CGST + 900 SGST
+    //    4,000 @  5% =   200 → 100 CGST + 100 SGST
+    await createInvoiceWithItems(
+      tenantDb, world.business1.id, world.party1.id,
+      [
+        { description: "Laptop bag", quantity: "10", unitPrice: "1000.00", taxPercent: "18.00" },
+        { description: "Textbook cover", quantity: "20", unitPrice: "200.00", taxPercent: "5.00" },
+      ],
+      { type: "sale", documentType: "invoice", status: "sent", invoiceDate: date, invoiceNumber: "RT-INV-1" },
+    );
+
+    // Inter-state B2B credit note: 2,000 @ 12% = 240 IGST
+    const kaParty = await createParty(tenantDb, world.business1.id, {
+      name: "Karnataka Returns Co",
+      type: "customer",
+      gstin: "29AABCR1234R1ZM",
+      city: "Mysuru",
+      state: "Karnataka",
+      stateCode: "29",
+      openingBalance: "0.00",
+    });
+    await createInvoiceWithItems(
+      tenantDb, world.business1.id, kaParty.id,
+      [{ description: "Returned chairs", quantity: "2", unitPrice: "1000.00", taxPercent: "12.00" }],
+      { type: "sale", documentType: "credit_note", status: "sent", invoiceDate: date, invoiceNumber: "RT-CN-1" },
+    );
+  });
+
+  it("b2b itms carry rt 5 and 18 with the matching txval/camt/samt", async () => {
+    const { json } = await caller().gst.gstr1Json({ year: RT_YEAR, month: RT_MONTH });
+
+    type ItmDet = { txval: number; rt: number; iamt: number; camt: number; samt: number; csamt: number };
+    type B2B = { ctin: string; inv: Array<{ inum: string; itms: Array<{ num: number; itm_det: ItmDet }> }> };
+    const inv = (json.b2b as B2B[]).flatMap((c) => c.inv).find((i) => i.inum === "RT-INV-1");
+    expect(inv).toBeDefined();
+    expect(inv!.itms.map((i) => i.num)).toEqual([1, 2]);
+    expect(inv!.itms.map((i) => i.itm_det)).toEqual([
+      { txval: 4000, rt: 5, iamt: 0, camt: 100, samt: 100, csamt: 0 },
+      { txval: 10000, rt: 18, iamt: 0, camt: 900, samt: 900, csamt: 0 },
+    ]);
+  });
+
+  it("cdnr itms carry rt 12 and IGST 240 for an inter-state credit note", async () => {
+    const { json } = await caller().gst.gstr1Json({ year: RT_YEAR, month: RT_MONTH });
+
+    type CDNR = { ctin: string; nt: Array<{ nt_num: string; itms: Array<{ itm_det: Record<string, number> }> }> };
+    const note = (json.cdnr as CDNR[]).flatMap((c) => c.nt).find((n) => n.nt_num === "RT-CN-1");
+    expect(note).toBeDefined();
+    expect(note!.itms).toHaveLength(1);
+    expect(note!.itms[0].itm_det).toEqual({ txval: 2000, rt: 12, iamt: 240, camt: 0, samt: 0, csamt: 0 });
+  });
+});
