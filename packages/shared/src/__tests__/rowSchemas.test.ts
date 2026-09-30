@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { businessRowSchema } from "../selfExport/rowSchemas.js";
+import { businessRowSchema, partyRowSchema } from "../selfExport/rowSchemas.js";
 
 // A minimum valid businesses-row skeleton. Each test overrides just the
 // logo fields so the rest of the schema doesn't obscure the assertion.
@@ -226,5 +226,31 @@ describe("businessRowSchema — companion logo metadata (mime/width/height/updat
   it("rejects a non-ISO logoUpdatedAt — `2026-04-19` without time is not ISO-8601 datetime", () => {
     const row = withLogoFields({ logoUpdatedAt: "2026-04-19" });
     expect(businessRowSchema.safeParse(row).success).toBe(false);
+  });
+});
+
+describe("partyRowSchema extra shipping addresses", () => {
+  const party = {
+    id: "00000000-0000-4000-8000-000000000001",
+    businessId: "00000000-0000-4000-8000-000000000002",
+    type: "customer",
+    name: "Sharma Traders",
+    phone: null, email: null, gstin: null, pan: null,
+    billingAddress: null, shippingAddress: "12 MG Road, Pune",
+    city: null, state: null, stateCode: null, pincode: null,
+    openingBalance: "0.00", category: null, creditPeriodDays: null, creditLimit: null,
+    contactPersonName: null, contactPersonDob: null,
+    bankAccountNumber: null, bankIfsc: null, bankName: null, source: null,
+    createdAt: "2026-09-30T00:00:00.000Z", updatedAt: "2026-09-30T00:00:00.000Z",
+  };
+
+  it("keeps extra shipping addresses through a backup", () => {
+    const extra = [{ label: "Godown", address: "Plot 4, MIDC Bhosari, Pune", pincode: "411026" }];
+    const parsed = partyRowSchema.parse({ ...party, additionalShippingAddresses: extra });
+    expect(parsed.additionalShippingAddresses).toEqual(extra);
+  });
+
+  it("still reads backups made before extra addresses existed", () => {
+    expect(partyRowSchema.parse(party).additionalShippingAddresses).toBeUndefined();
   });
 });

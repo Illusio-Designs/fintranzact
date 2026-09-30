@@ -245,6 +245,38 @@ export const partyShippingAddressSchema = z.object({
 });
 export type PartyShippingAddress = z.infer<typeof partyShippingAddressSchema>;
 
+/** A party can keep up to this many extra shipping addresses. */
+export const MAX_ADDITIONAL_SHIPPING_ADDRESSES = 20;
+
+const addressKey = (address: string) => address.trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * Shipping addresses for the party that survives a merge. The target keeps its
+ * default address (or takes the source's when it has none); every other
+ * address from both parties is kept as an extra one, without repeats.
+ */
+export function mergePartyShippingAddresses(
+  target: { shippingAddress?: string | null; additionalShippingAddresses?: readonly PartyShippingAddress[] | null },
+  source: { shippingAddress?: string | null; additionalShippingAddresses?: readonly PartyShippingAddress[] | null },
+): { shippingAddress: string | null; additionalShippingAddresses: PartyShippingAddress[] | null } {
+  const shippingAddress = target.shippingAddress?.trim() || source.shippingAddress?.trim() || null;
+  const seen = new Set(shippingAddress ? [addressKey(shippingAddress)] : []);
+  const extras: PartyShippingAddress[] = [];
+  const candidates: PartyShippingAddress[] = [
+    ...(target.additionalShippingAddresses ?? []),
+    ...(source.shippingAddress?.trim() ? [{ address: source.shippingAddress.trim() }] : []),
+    ...(source.additionalShippingAddresses ?? []),
+  ];
+  for (const entry of candidates) {
+    const key = addressKey(entry.address ?? "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    extras.push(entry);
+  }
+  const kept = extras.slice(0, MAX_ADDITIONAL_SHIPPING_ADDRESSES);
+  return { shippingAddress, additionalShippingAddresses: kept.length ? kept : null };
+}
+
 // Fields shared by create and update.
 const partyFields = {
   type: z.enum(partyTypes),
@@ -255,7 +287,7 @@ const partyFields = {
   pan: z.string().regex(PAN_REGEX).optional().or(z.literal("")),
   billingAddress: z.string().max(500).optional(),
   shippingAddress: z.string().max(500).optional(),
-  additionalShippingAddresses: z.array(partyShippingAddressSchema).max(20).optional(),
+  additionalShippingAddresses: z.array(partyShippingAddressSchema).max(MAX_ADDITIONAL_SHIPPING_ADDRESSES).optional(),
   city: z.string().max(100).optional(),
   state: z.string().max(100).optional(),
   stateCode: z.string().max(2).optional(),
