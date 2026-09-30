@@ -4,7 +4,7 @@
  * resolver the entry forms use to price a sale line for a party.
  */
 
-import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { items, itemVariants, parties, priceLevels, priceListEntries } from "@fintranzact/db";
@@ -12,7 +12,8 @@ import { money, priceSlabSchema, decimalStr } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
-import { dayOf, levelForParty, resolvePrices } from "../lib/pricing.js";
+import { escapeLike } from "../lib/escape-like.js";
+import { dayOf, resolvePrices } from "../lib/pricing.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -26,7 +27,7 @@ const levelFields = {
   sortOrder: z.number().int().min(0).max(10000).optional(),
 };
 
-async function getLevel(db: Db, businessId: string, id: string) {
+export async function getLevel(db: Db, businessId: string, id: string) {
   const [level] = await db.select().from(priceLevels)
     .where(and(eq(priceLevels.id, id), eq(priceLevels.businessId, businessId))).limit(1);
   if (!level) throw new TRPCError({ code: "NOT_FOUND", message: "Price level not found" });
@@ -252,7 +253,7 @@ export const priceLevelRouter = router({
         .orderBy(asc(priceLevels.sortOrder), asc(priceLevels.name));
       const conds = [eq(items.businessId, ctx.businessId), isNull(items.deletedAt), eq(items.itemType, "product")];
       if (input?.category) conds.push(eq(items.category, input.category));
-      if (input?.search) conds.push(sql`${items.name} ilike ${"%" + input.search.replace(/[%_\\]/g, "\\$&") + "%"}`);
+      if (input?.search) conds.push(ilike(items.name, `%${escapeLike(input.search)}%`));
       const itemRows = await ctx.db.select({
         id: items.id, name: items.name, unit: items.unit, category: items.category,
         itemMode: items.itemMode, salePrice: items.salePrice, mrp: items.mrp,
@@ -447,35 +448,5 @@ export const priceLevelRouter = router({
         };
       });
       return { date: day, levels, rows };
-    }),
-});
-
-export const pricingRouter = router({
-  /**
-   * Unit price for sale lines: the given level, else the party's, else the
-   * default level; best slab on the date; else the item's own sale price.
-   */
-  resolve: viewerProcedure
-    .input(z.object({
-      partyId: z.string().uuid().nullable().optional(),
-      priceLevelId: z.string().uuid().nullable().optional(),
-      date: z.string().max(40).nullable().optional(),
-      lines: z.array(z.object({
-        itemId: z.string().uuid(),
-        variantId: z.string().uuid().nullable().optional(),
-        unit: z.string().max(50).nullable().optional(),
-        quantity: z.union([z.string().max(30), z.number()]).nullable().optional(),
-      })).max(500),
-    }))
-    .query(async ({ input, ctx }) => {
-      requireCan(ctx.ability, "read", "Item");
-      let level: { id: string; name: string } | null = null;
-      if (input.priceLevelId) {
-        level = await getLevel(ctx.db, ctx.businessId, input.priceLevelId);
-      } else {
-        level = await levelForParty(ctx.db, ctx.businessId, input.partyId);
-      }
-      const lines = await resolvePrices(ctx.db, ctx.businessId, level?.id ?? null, input.lines, input.date);
-      return { priceLevel: level ? { id: level.id, name: level.name } : null, lines };
     }),
 });
