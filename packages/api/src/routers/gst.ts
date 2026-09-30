@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { invoices, businesses } from "@fintranzact/db";
+import { istPeriodRange } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { generateGSTR1, generateGSTR3B, gstr1ToCSV, gstr1ToPortalJson } from "../lib/gst-reports.js";
 import { generateGSTR9, gstr9ToPortalJson } from "../lib/gstr9-generator.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
-import { istPeriodRange } from "../lib/ist-date.js";
 
 /** Sale documents that add to CMP-08 outward supplies. */
 const CMP08_ADDING_DOCUMENTS = ["invoice", "debit_note"] as const;

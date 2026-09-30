@@ -14,14 +14,13 @@ import {
   itcLedgerEntries,
   eInvoiceConfigs,
 } from "@fintranzact/db";
-import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, deliveryMethodSchema, calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
+import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, deliveryMethodSchema, calcLineItem, calcInvoiceTotals, istReturnPeriod, money } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
-import { istReturnPeriod } from "../lib/ist-date.js";
 import { IRPClient, IRPError } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { ensureBarcodeForStock } from "../lib/barcode-setup.js";
@@ -406,6 +405,9 @@ export const invoiceRouter = router({
       });
 
       const charges = input.charges ?? [];
+      // A flat additionalCharges (no itemised charges) is part of the total too —
+      // it used to be stored but left out of totalAmount.
+      const flatCharges = charges.length > 0 ? charges : [{ amount: input.additionalCharges || "0" }];
       const totals = calcInvoiceTotals({
         lineItems: lineItems.map((li) => ({
           quantity: li.quantity,
@@ -413,14 +415,12 @@ export const invoiceRouter = router({
           taxPercent: li.taxPercent || "0",
           discountPercent: li.discountPercent || "0",
         })),
-        charges: charges.length > 0 ? charges : undefined,
+        charges: flatCharges,
         invoiceDiscount: input.invoiceDiscount || "0",
         invoiceDiscountType: input.invoiceDiscountType || "amount",
         roundOff: input.roundOff || "0",
       });
-      const additionalCharges = charges.length > 0
-        ? totals.chargesTotal
-        : (input.additionalCharges || "0");
+      const additionalCharges = totals.chargesTotal;
       const roundOff = input.roundOff || "0";
 
       // A built-in delivery method, or one of the business's own.
@@ -1029,9 +1029,14 @@ export const invoiceRouter = router({
           // Use merged charges (updates.charges) if charges were modified; otherwise
           // fall back to existing charges. This ensures shipment-linked charge entries
           // are included in the total even when the user didn't touch charges.
-          const chargesForTotals = updates.charges !== undefined
+          const itemisedCharges = updates.charges !== undefined
             ? (updates.charges as Array<{ amount: string }> | null) ?? []
             : (existing.charges as Array<{ amount: string }> | null) ?? [];
+          // An invoice with a flat additionalCharges and no itemised charges
+          // keeps counting it, as it did when it was created.
+          const chargesForTotals = itemisedCharges.length > 0 || updates.charges !== undefined
+            ? itemisedCharges
+            : [{ amount: existing.additionalCharges ?? "0" }];
           const roundOffStr = input.roundOff !== undefined ? input.roundOff : existing.roundOff;
           // A stored discount is always an amount; a new one may be a percent.
           const totals = calcInvoiceTotals({

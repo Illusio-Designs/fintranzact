@@ -159,6 +159,8 @@ export async function generateInvoiceFromTemplate(
     });
 
     const charges = template.charges ?? [];
+    // A flat additionalCharges (no itemised charges) counts in the total too.
+    const flatCharges = charges.length > 0 ? charges : [{ amount: template.additionalCharges || "0" }];
     const totals = calcInvoiceTotals({
       lineItems: lineItems.map((li) => ({
         quantity: li.quantity,
@@ -166,14 +168,12 @@ export async function generateInvoiceFromTemplate(
         taxPercent: li.taxPercent || "0",
         discountPercent: li.discountPercent || "0",
       })),
-      charges: charges.length > 0 ? charges : undefined,
+      charges: flatCharges,
       invoiceDiscount: "0",
       invoiceDiscountType: "amount",
       roundOff: "0",
     });
-    const additionalCharges = charges.length > 0
-      ? totals.chargesTotal
-      : (template.additionalCharges || "0");
+    const additionalCharges = totals.chargesTotal;
 
     // Create invoice
     const [invoice] = await tx.insert(invoices).values({

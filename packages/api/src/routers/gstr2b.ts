@@ -23,6 +23,7 @@ import {
   gstr2bSummaryInputSchema,
   gstr2bLinkInvoiceSchema,
   gstr2bIgnoreRecordSchema,
+  istPeriodRange,
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -34,7 +35,6 @@ import {
   type PurchaseInvoice,
 } from "../lib/gstr2b-parser.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
-import { istPeriodRange } from "../lib/ist-date.js";
 
 // ── Helpers ───────────────────────────────────────────────────
 

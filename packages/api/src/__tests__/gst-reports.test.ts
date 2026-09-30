@@ -17,6 +17,8 @@
  *    belongs to. B2B requires a GSTIN; B2C Large requires inter-state + total
  *    above the B2CL limit (₹1,00,000 from 1 Aug 2024, ₹2,50,000 before);
  *    everything else is B2C Small.
+ *    isSameState and classifyInvoice call the shared rules in
+ *    @fintranzact/shared (gst.ts) that generateGSTR1 uses.
  *
  * 3. Tax split — converts a single tax amount into CGST/SGST (intra-state) or
  *    IGST (inter-state). The split formula is tax/2 each for intra-state.
@@ -41,6 +43,7 @@
 
 import { describe, it, expect } from "vitest";
 import { b2clThresholdFor, gstr1ToCSV, gstr1ToPortalJson, type GSTR1Report } from "../lib/gst-reports.js";
+import { gstr1Section, isIntraStateSupply } from "@fintranzact/shared";
 
 // =============================================================================
 // Pure functions — extracted verbatim from lib/gst-reports.ts
@@ -60,18 +63,12 @@ function makeIsSameState(biz: {
   stateCode?: string | null;
   state?: string | null;
 }) {
+  // Now calls the shared rule generateGSTR1 uses (unknown state → inter-state).
   return function isSameState(
     partyState: string | null,
     partyStateCode: string | null
-  ): boolean | undefined {
-    // Prefer state code comparison (2-digit GST codes — more reliable)
-    if (biz?.stateCode && partyStateCode) {
-      return biz.stateCode === partyStateCode;
-    }
-    // Fallback to text comparison
-    return biz?.state && partyState
-      ? biz.state.toLowerCase() === partyState.toLowerCase()
-      : false;
+  ): boolean {
+    return isIntraStateSupply(biz, { state: partyState, stateCode: partyStateCode }) ?? false;
   };
 }
 
@@ -111,13 +108,7 @@ function classifyInvoice(
   total: number,
   invoiceDate: Date = CURRENT_RULE_DATE,
 ): InvoiceSection {
-  if (partyGstin) {
-    return "b2b";
-  } else if (!sameState && total > b2clThresholdFor(invoiceDate)) {
-    return "b2cLarge";
-  } else {
-    return "b2cSmall";
-  }
+  return gstr1Section({ partyGstin, intraState: sameState, invoiceValue: total, invoiceDate });
 }
 
 /**
@@ -1032,6 +1023,18 @@ describe("gstr1ToPortalJson — B2B section", () => {
     );
     type B2BEntry = { ctin: string; inv: Array<{ idt: string }> };
     expect((json.b2b as B2BEntry[])[0].inv[0].idt).toBe("15-08-2025");
+  });
+
+  it("dates on the Indian calendar: 1 April picked in India (18:30 UTC on 31 March) is 01-04 (regression: 31-03)", () => {
+    const row = {
+      partyGstin: "29XYZAB5678G1Z9", partyName: "Test Party", invoiceNumber: "INV-00002",
+      invoiceDate: "2026-03-31T18:30:00.000Z", invoiceType: "Regular",
+      taxableValue: 100, cgst: 0, sgst: 0, igst: 18, totalInvoiceValue: 118,
+    };
+    const json = gstr1ToPortalJson(makePortalReport({ b2b: [row] }), "27AABCA0000R1ZM", "2026-27", "042026");
+    type B2BEntry = { ctin: string; inv: Array<{ idt: string }> };
+    expect((json.b2b as B2BEntry[])[0].inv[0].idt).toBe("01-04-2026");
+    expect(gstr1ToCSV(makePortalReport({ b2b: [row] }))).toContain(",INV-00002,01/04/2026,");
   });
 
   it("invoice value (val) is a number, not a string", () => {

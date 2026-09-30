@@ -29,6 +29,8 @@ import {
   paymentSummaryInputSchema,
   money,
   MSME_PAYMENT_DAYS,
+  financialYearOf,
+  istStartOfDay,
 } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -1436,14 +1438,11 @@ export const reportsRouter = router({
         .where(eq(businesses.id, ctx.businessId))
         .limit(1);
 
-      const fyStartMonth = (biz?.financialYearStart ?? 4) - 1; // 0-indexed
-      const fyYear =
-        asOf.getMonth() < fyStartMonth
-          ? asOf.getFullYear() - 1
-          : asOf.getFullYear();
+      const fyStartMonth = biz?.financialYearStart ?? 4; // 1-indexed
+      // Read on the Indian calendar, whatever the server's time zone.
       const from = input.fromDate
         ? new Date(input.fromDate)
-        : new Date(fyYear, fyStartMonth, 1);
+        : istStartOfDay(financialYearOf(asOf, fyStartMonth), fyStartMonth, 1);
 
       const entries = await deriveFullLedger(ctx.db, ctx.businessId, from, asOf);
 

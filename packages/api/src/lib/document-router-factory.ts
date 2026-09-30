@@ -412,6 +412,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           });
 
           const charges = input.charges ?? [];
+          // A flat additionalCharges (no itemised charges) is part of the total too —
+          // it used to be stored but left out of totalAmount.
+          const flatCharges = charges.length > 0 ? charges : [{ amount: input.additionalCharges || "0" }];
           const totals = calcInvoiceTotals({
             lineItems: lineItems.map((li) => ({
               quantity: li.quantity,
@@ -419,14 +422,12 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               taxPercent: li.taxPercent || "0",
               discountPercent: li.discountPercent || "0",
             })),
-            charges: charges.length > 0 ? charges : undefined,
+            charges: flatCharges,
             invoiceDiscount: input.invoiceDiscount || "0",
             invoiceDiscountType: input.invoiceDiscountType || "amount",
             roundOff: input.roundOff || "0",
           });
-          const additionalCharges = charges.length > 0
-            ? totals.chargesTotal
-            : (input.additionalCharges || "0");
+          const additionalCharges = totals.chargesTotal;
           const roundOff = input.roundOff || "0";
 
           // A return or note made from a goods receipt note sends back goods

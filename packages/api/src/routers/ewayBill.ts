@@ -61,7 +61,7 @@ const EWB_MIN_VALUE = 50000; // statutory ₹50,000 threshold for mandatory EWB
  * states notify a different limit for intra-state movement); null/blank or
  * an unparseable value falls back to ₹50,000.
  */
-function resolveEwbThreshold(configured: string | null | undefined): number {
+export function resolveEwbThreshold(configured: string | null | undefined): number {
   if (configured == null || configured === "") return EWB_MIN_VALUE;
   const v = parseFloat(configured);
   return Number.isFinite(v) && v >= 0 ? v : EWB_MIN_VALUE;

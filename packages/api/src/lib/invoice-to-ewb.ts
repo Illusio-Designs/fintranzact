@@ -14,9 +14,9 @@
  *   - Monetary values: string → number (NIC API expects numeric JSON values)
  */
 
+import { formatIstDate } from "@fintranzact/shared";
 import type { GenerateEWBPayload, EWBItemPayload } from "./ewb-client.js";
 import { transportModeCode } from "./ewb-client.js";
-import { formatIstDate } from "./ist-date.js";
 
 // ── Input types ───────────────────────────────────────────────────────────────
 
@@ -237,9 +237,11 @@ export function mapInvoiceToEWB(
   const itemList: EWBItemPayload[] = lineItems.map((li) => {
     const taxPct   = parseFloat(li.taxPercent) || 0;
     const qty      = parseFloat(li.quantity) || 0;
-    const price    = parseFloat(li.unitPrice) || 0;
     const taxAmt   = parseFloat(li.taxAmount) || 0;
-    const taxable  = qty * price; // pre-tax amount per line
+    // Taxable value is the line after its discount (line total less tax), so
+    // the items add up to the invoice's taxable value (subtotal). qty × price
+    // ignored the line discount.
+    const taxable  = (parseFloat(li.totalAmount) || 0) - taxAmt;
 
     totalTax += taxAmt;
 

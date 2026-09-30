@@ -11,9 +11,8 @@
  * We parse only at the boundary here — never accumulate JS floats.
  */
 
-import { gstUqcForUnit } from "@fintranzact/shared";
+import { calcLineItem, formatIstDate, gstUqcForUnit } from "@fintranzact/shared";
 import type { IRPInvoiceJson } from "./irp-client.js";
-import { formatIstDate } from "./ist-date.js";
 
 // ── Types (subset of what we need from DB rows) ────────────────────────────────
 
@@ -180,12 +179,20 @@ export function mapInvoiceToIRP(
     const qty = n(li.quantity);
     const unitPrice = n(li.unitPrice);
     const taxPct = n(li.taxPercent);
-    const discPct = n(li.discountPercent);
 
-    const grossAmt = round2(qty * unitPrice);
-    const discAmt = round2(grossAmt * discPct / 100);
-    const assAmt = round2(grossAmt - discAmt);
-    const totalTax = round2(assAmt * taxPct / 100);
+    // Same paise maths the invoice was saved with. Float qty × price
+    // rounded differently (1.5 × 10.03 → 15.04, the invoice has 15.05), so
+    // AssVal stopped matching the invoice's taxable value.
+    const calc = calcLineItem({
+      quantity: li.quantity,
+      unitPrice: li.unitPrice,
+      taxPercent: li.taxPercent || "0",
+      discountPercent: li.discountPercent || "0",
+    });
+    const grossAmt = n(calc.subtotal);
+    const discAmt = n(calc.discountAmount);
+    const assAmt = n(calc.afterDiscount);
+    const totalTax = n(calc.taxAmount);
 
     let cgstAmt = 0;
     let sgstAmt = 0;
@@ -230,7 +237,10 @@ export function mapInvoiceToIRP(
   const cgstVal = round2(itemList.reduce((sum, item) => sum + item.CgstAmt, 0));
   const sgstVal = round2(itemList.reduce((sum, item) => sum + item.SgstAmt, 0));
   const igstVal = round2(itemList.reduce((sum, item) => sum + item.IgstAmt, 0));
-  const discountTotal = round2(itemList.reduce((sum, item) => sum + item.Discount, 0));
+  // ValDtls.Discount is the invoice-level discount. Line discounts are
+  // already out of each AssAmt, so summing them here took them off twice and
+  // TotInvVal no longer added up (AssVal + tax + OthChrg - Discount + RndOff).
+  const invoiceDiscount = n(invoice.discountAmount);
   const othChrg = n(invoice.additionalCharges);
   const rndOffAmt = n(invoice.roundOff);
   const totInvVal = n(invoice.totalAmount);
@@ -281,7 +291,7 @@ export function mapInvoiceToIRP(
       CgstVal: cgstVal,
       SgstVal: sgstVal,
       IgstVal: igstVal,
-      Discount: discountTotal,
+      Discount: invoiceDiscount,
       OthChrg: othChrg > 0 ? othChrg : undefined,
       RndOffAmt: rndOffAmt !== 0 ? rndOffAmt : undefined,
       TotInvVal: totInvVal,
