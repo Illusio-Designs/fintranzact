@@ -298,6 +298,11 @@ exceptions:
       - barcode.addItemCode
       - barcode.removeItemCode
       - barcode.symbol
+      # Public share links for documents. Web-only for now; mobile gets a
+      # "Share link" button in a later chunk.
+      - share.get
+      - share.create
+      - share.revoke
 
   cli:
     not-applicable:
@@ -417,6 +422,11 @@ exceptions:
       - barcode.addItemCode
       - barcode.removeItemCode
       - barcode.symbol
+      # Public share links for documents. Web-only for now; mobile gets a
+      # "Share link" button in a later chunk.
+      - share.get
+      - share.create
+      - share.revoke
 
   mcp:
     not-applicable:
@@ -565,3 +575,8 @@ exceptions:
       - barcode.addItemCode
       - barcode.removeItemCode
       - barcode.symbol
+      # Public share links for documents. Web-only for now; mobile gets a
+      # "Share link" button in a later chunk.
+      - share.get
+      - share.create
+      - share.revoke

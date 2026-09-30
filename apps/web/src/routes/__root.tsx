@@ -66,7 +66,7 @@ import { formatRole } from "@/lib/roles";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { LandingPage } from "@/components/LandingPage";
-import { AUTH_PUBLIC_PATHS, isMarketingPath } from "@/lib/public-paths";
+import { AUTH_PUBLIC_PATHS, isMarketingPath, isSharePath } from "@/lib/public-paths";
 import { isDesktop } from "@/lib/isDesktop";
 import { clearDesktopToken } from "@/lib/desktop-session";
 
@@ -1024,9 +1024,12 @@ function RootLayout() {
   // Marketing pages (/pricing, /about, …) are public for everyone, signed in
   // or not, and render outside the app shell.
   const showsMarketingPage = isMarketingPath(pathname) && !isDesktop();
+  // A shared document is public and opens on its own page for anyone.
+  const showsSharedDocument = isSharePath(pathname);
+  const showsStandalonePage = showsMarketingPage || showsSharedDocument;
 
   useEffect(() => {
-    if (showsMarketingPage) return;
+    if (showsStandalonePage) return;
     if (sessionLoading || sessionFetching) return;
     if (sessionUnknown) return;
 
@@ -1169,7 +1172,7 @@ function RootLayout() {
     </div>
   );
 
-  if (showsMarketingPage) return <Outlet />;
+  if (showsStandalonePage) return <Outlet />;
 
   // Loading session. Sign-in pages don't need the answer to render; if the
   // visitor turns out to be signed in, the effect above moves them on.
