@@ -19,6 +19,7 @@ import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, docum
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
+import { assertInBusiness } from "../lib/business-scope.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
@@ -247,6 +248,9 @@ export const invoiceRouter = router({
       if (!partyCheck) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Party not found in this business" });
       }
+      // Stored references must be this business's documents.
+      await assertInBusiness(tx, invoices, input.referenceDocumentId, ctx.businessId, "Referenced document");
+      await assertInBusiness(tx, shipments, (input.charges ?? []).map((c) => c.shipmentId), ctx.businessId, "Shipment");
 
       // Composition scheme: block inter-state sale invoices.
       // Composition dealers may only make intra-state outward supplies (GST rule).

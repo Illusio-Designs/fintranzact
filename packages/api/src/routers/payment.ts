@@ -6,6 +6,7 @@ import { createPaymentSchema, updatePaymentSchema, paginationSchema, money } fro
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { applyInvoicePayment } from "../lib/invoice-status.js";
 import { requireCan } from "../lib/permissions.js";
+import { assertInBusiness } from "../lib/business-scope.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
@@ -199,6 +200,16 @@ export const paymentRouter = router({
       if (!partyCheck) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Party not found in this business" });
       }
+      // The account and the allocated invoices are stored on the payment and
+      // its allocation rows, so they must be this business's too.
+      await assertInBusiness(tx, bankAccounts, input.bankAccountId, ctx.businessId, "Bank account");
+      await assertInBusiness(
+        tx,
+        invoices,
+        [input.invoiceId, ...(input.allocations ?? []).map((a) => a.invoiceId)],
+        ctx.businessId,
+        "Invoice",
+      );
 
       // Atomically generate payment number
       const [biz] = await tx.select({
@@ -506,6 +517,14 @@ export const paymentRouter = router({
       const newAmount = input.amount ?? existing.amount;
       const newMode = input.mode ?? existing.mode;
       const newBankAccountId = input.bankAccountId === null ? null : (input.bankAccountId ?? existing.bankAccountId);
+      await assertInBusiness(tx, bankAccounts, input.bankAccountId, ctx.businessId, "Bank account");
+      await assertInBusiness(
+        tx,
+        invoices,
+        (input.allocations ?? []).map((a) => a.invoiceId),
+        ctx.businessId,
+        "Invoice",
+      );
       const newDate = input.paymentDate ? new Date(input.paymentDate) : existing.paymentDate;
 
       const primaryInvoiceId = input.allocations?.length

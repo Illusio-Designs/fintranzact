@@ -74,9 +74,9 @@ describe("business members", () => {
   });
 
   it("another organization's admin can't see or change this business's team", async () => {
-    await expectCode(other().business.members({ businessId: world.business1.id }), "NOT_FOUND");
-    await expectCode(other().business.updateMemberRole({ businessId: world.business1.id, userId: world.suresh.id, role: "admin" }), "NOT_FOUND");
-    await expectCode(other().business.removeMember({ businessId: world.business1.id, userId: world.suresh.id }), "NOT_FOUND");
+    await expectCode(other().business.members({ businessId: world.business1.id }), "FORBIDDEN");
+    await expectCode(other().business.updateMemberRole({ businessId: world.business1.id, userId: world.suresh.id, role: "admin" }), "FORBIDDEN");
+    await expectCode(other().business.removeMember({ businessId: world.business1.id, userId: world.suresh.id }), "FORBIDDEN");
     const [row] = await getTenantTestDb().select().from(businessMembers)
       .where(and(eq(businessMembers.businessId, world.business1.id), eq(businessMembers.userId, world.suresh.id)));
     expect(row!.role).toBe("member");
@@ -116,10 +116,10 @@ describe("business logo and signature", () => {
     await expectCode(caller().business.uploadLogo({ id, data: { dataUrl: PNG, width: 0, height: 1 } }), "BAD_REQUEST");
   });
 
-  it("NOT_FOUND for unknown businesses; sellers refused", async () => {
-    await expectCode(caller().business.uploadLogo({ id: UNKNOWN, data: { dataUrl: PNG, width: 1, height: 1 } }), "NOT_FOUND");
-    await expectCode(caller().business.deleteLogo({ id: UNKNOWN }), "NOT_FOUND");
-    await expectCode(caller().business.deleteSignature({ id: UNKNOWN }), "NOT_FOUND");
+  it("FORBIDDEN for unknown businesses; sellers refused", async () => {
+    await expectCode(caller().business.uploadLogo({ id: UNKNOWN, data: { dataUrl: PNG, width: 1, height: 1 } }), "FORBIDDEN");
+    await expectCode(caller().business.deleteLogo({ id: UNKNOWN }), "FORBIDDEN");
+    await expectCode(caller().business.deleteSignature({ id: UNKNOWN }), "FORBIDDEN");
     await expectCode(seller().business.uploadLogo({ id: world.business1.id, data: { dataUrl: PNG, width: 1, height: 1 } }), "FORBIDDEN");
     await expectCode(seller().business.deleteSignature({ id: world.business1.id }), "FORBIDDEN");
   });
@@ -127,12 +127,12 @@ describe("business logo and signature", () => {
   it("another organization's admin can't change this business's images or settings", async () => {
     const id = world.business1.id;
     await caller().business.uploadLogo({ id, data: { dataUrl: PNG, width: 3, height: 3 } });
-    await expectCode(other().business.deleteLogo({ id }), "NOT_FOUND");
-    await expectCode(other().business.uploadSignature({ id, data: { dataUrl: PNG, width: 1, height: 1 } }), "NOT_FOUND");
-    await expectCode(other().business.deleteSignature({ id }), "NOT_FOUND");
-    await expectCode(other().business.uploadLogo({ id, data: { dataUrl: PNG, width: 1, height: 1 } }), "NOT_FOUND");
-    await expectCode(other().business.update({ id, data: { name: "Hijacked" } }), "NOT_FOUND");
-    await expectCode(other().business.setPosEnabled({ id, enabled: true }), "NOT_FOUND");
+    await expectCode(other().business.deleteLogo({ id }), "FORBIDDEN");
+    await expectCode(other().business.uploadSignature({ id, data: { dataUrl: PNG, width: 1, height: 1 } }), "FORBIDDEN");
+    await expectCode(other().business.deleteSignature({ id }), "FORBIDDEN");
+    await expectCode(other().business.uploadLogo({ id, data: { dataUrl: PNG, width: 1, height: 1 } }), "FORBIDDEN");
+    await expectCode(other().business.update({ id, data: { name: "Hijacked" } }), "FORBIDDEN");
+    await expectCode(other().business.setPosEnabled({ id, enabled: true }), "FORBIDDEN");
     const [row] = await getTenantTestDb().select().from(businesses).where(eq(businesses.id, id));
     expect(row).toMatchObject({ logoWidth: 3, name: world.business1.name, posEnabled: false });
   });

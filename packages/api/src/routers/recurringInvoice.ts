@@ -2,13 +2,30 @@ import { eq, and, sql, desc, gte, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
-  recurringInvoiceTemplates, recurringInvoiceRuns, parties, invoices, items,
+  recurringInvoiceTemplates, recurringInvoiceRuns, parties, invoices, items, shipments,
 } from "@fintranzact/db";
 import {
   createRecurringInvoiceSchema, updateRecurringInvoiceSchema, paginationSchema,
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { assertInBusiness, assertVariantsInBusiness } from "../lib/business-scope.js";
+import type { TenantDatabase } from "../trpc.js";
+
+/** Items, variants and shipments a template names must be this business's. */
+async function assertTemplateRefs(
+  db: TenantDatabase,
+  businessId: string,
+  data: {
+    lineItems?: Array<{ itemId?: string | null; variantId?: string | null }>;
+    charges?: Array<{ shipmentId?: string | null }>;
+  },
+) {
+  const lines = data.lineItems ?? [];
+  await assertLineItems(db, businessId, lines.map((li) => ({ itemId: li.itemId ?? undefined })));
+  await assertVariantsInBusiness(db, lines.map((li) => li.variantId), businessId);
+  await assertInBusiness(db, shipments, (data.charges ?? []).map((c) => c.shipmentId), businessId, "Shipment");
+}
 import { logAudit } from "../lib/audit.js";
 import { generateInvoiceFromTemplate, computeNextRunDate } from "../lib/recurring-invoice-generator.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
@@ -119,7 +136,7 @@ export const recurringInvoiceRouter = router({
       .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
       .limit(1);
     if (!partyCheck) throw new TRPCError({ code: "BAD_REQUEST", message: "Party not found in this business" });
-    await assertLineItems(ctx.db, ctx.businessId, input.lineItems);
+    await assertTemplateRefs(ctx.db, ctx.businessId, input);
 
     const startDate = new Date(input.startDate);
     const nextRunDate = startDate > new Date() ? startDate : computeNextRunDate(new Date(), input.frequency, input.customIntervalDays);
@@ -178,7 +195,7 @@ export const recurringInvoiceRouter = router({
           .limit(1);
         if (!partyCheck) throw new TRPCError({ code: "BAD_REQUEST", message: "Party not found" });
       }
-      await assertLineItems(ctx.db, ctx.businessId, input.data.lineItems);
+      await assertTemplateRefs(ctx.db, ctx.businessId, input.data);
       // Same rule as create: a custom schedule needs its interval.
       const frequency = input.data.frequency ?? existing.frequency;
       if (frequency === "custom" && !(input.data.customIntervalDays ?? existing.customIntervalDays)) {

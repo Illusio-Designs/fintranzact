@@ -9,6 +9,7 @@ import {
   itemVariants,
   businesses,
   parties,
+  shipments,
 } from "@fintranzact/db";
 import {
   createInvoiceSchema,
@@ -23,6 +24,7 @@ import { documentStockDirection, resolveDocumentWarehouseId, resolveInvoiceWareh
 import { resolveLineBatches } from "./batches.js";
 import { lineBatchDetails } from "./batch-display.js";
 import { requireCan } from "./permissions.js";
+import { assertInBusiness } from "./business-scope.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
 import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
@@ -306,6 +308,11 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               throw new TRPCError({ code: "BAD_REQUEST", message: "One or more items do not belong to this business" });
             }
           }
+
+          // Stored references must be this business's records, for every
+          // document type (the credit-note check below also caps amounts).
+          await assertInBusiness(tx, invoices, input.referenceDocumentId, ctx.businessId, "Referenced document");
+          await assertInBusiness(tx, shipments, (input.charges ?? []).map((c) => c.shipmentId), ctx.businessId, "Shipment");
 
           // Security: validate variantIds belong to items in this business.
           const variantIds = input.lineItems

@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { expenses, bankAccounts, bankTransactions, bankStatementLines } from "@fintranzact/db";
 import { createExpenseSchema, paginationSchema, money } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
+import { assertInBusiness } from "../lib/business-scope.js";
 import { reopenLinesMatchedTo } from "./bankRecon.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
@@ -64,6 +65,7 @@ export const expenseRouter = router({
     requireCan(ctx.ability, "create", "Expense");
 
     const expense = await ctx.db.transaction(async (tx) => {
+      await assertInBusiness(tx, bankAccounts, input.bankAccountId, ctx.businessId, "Bank account");
       const [newExpense] = await tx.insert(expenses).values({
         ...input,
         businessId: ctx.businessId,
@@ -163,6 +165,7 @@ export const expenseRouter = router({
           .limit(1);
 
         if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Expense not found" });
+        await assertInBusiness(tx, bankAccounts, input.data.bankAccountId, ctx.businessId, "Bank account");
 
         // Reverse old bank transaction if one exists
         const [oldBankTx] = await tx.select({

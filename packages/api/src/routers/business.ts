@@ -2,7 +2,7 @@ import { eq, and, sql, desc, gte, lte, inArray, count, getTableColumns } from "d
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { ensureDefaultWarehouse } from "../lib/inventory-service.js";
-import { backfillLegacyBusinessMembers, isBusinessMember } from "../lib/business-membership.js";
+import { backfillLegacyBusinessMembers, verifyBusinessAccess } from "../lib/business-membership.js";
 import {
   businesses,
   businessMembers,
@@ -22,7 +22,7 @@ import {
   ewayBillConfigs,
 } from "@fintranzact/db";
 import { createBusinessSchema, updateBusinessSchema, updateSequenceNumberSchema, uploadBusinessLogoSchema, uploadBusinessSignatureSchema } from "@fintranzact/shared";
-import { router, tenantProcedure, viewerProcedure, adminProcedure } from "../trpc.js";
+import { router, tenantProcedure, viewerProcedure, adminProcedure, type TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { validateLogoDataUrl } from "../lib/validate-logo.js";
@@ -160,27 +160,24 @@ async function requireTenantAdmin(userId: string, tenantId: string) {
 }
 
 /**
- * The business must be one of this organization's. In self-hosted mode all
- * organizations share one database, so an id alone could name another
- * organization's business; as in the hasBusinessAccess middleware, it
- * belongs here when its creator is a member of this tenant.
+ * Tenant-level procedures take the business id from their input, so the
+ * hasBusinessAccess middleware never saw it. Apply the same rule here: the
+ * business must belong to the caller's organisation and the caller must be a
+ * member of it. "Exists in ctx.db" is not enough — in self-hosted mode every
+ * organisation shares one database, so that alone reaches other orgs'
+ * businesses.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function assertBusinessInTenant(db: any, tenantId: string, businessId: string) {
-  const [biz] = await db
-    .select({ createdByUserId: businesses.createdByUserId })
-    .from(businesses)
-    .where(eq(businesses.id, businessId))
-    .limit(1);
-  if (biz) {
-    const [creator] = await controlDb
-      .select({ userId: tenantMembers.userId })
-      .from(tenantMembers)
-      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, biz.createdByUserId)))
-      .limit(1);
-    if (creator) return;
+async function requireBusinessAccess(
+  ctx: { db: TenantDatabase; tenantId: string; user: { id: string } },
+  businessId: string,
+) {
+  const access = await verifyBusinessAccess(ctx.db, businessId, ctx.tenantId, ctx.user.id);
+  if (!access.ok) {
+    throw new TRPCError({
+      code: access.error === "Business not found" ? "NOT_FOUND" : "FORBIDDEN",
+      message: access.error,
+    });
   }
-  throw new TRPCError({ code: "NOT_FOUND", message: "Business not found" });
 }
 
 export const businessRouter = router({
@@ -207,7 +204,7 @@ export const businessRouter = router({
     .input(z.object({ businessId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.businessId);
+      await requireBusinessAccess(ctx, input.businessId);
 
       const rows = await ctx.db
         .select({
@@ -236,21 +233,7 @@ export const businessRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.businessId);
-
-      // Verify the business exists in this tenant.
-      const [business] = await ctx.db
-        .select({ id: businesses.id })
-        .from(businesses)
-        .where(eq(businesses.id, input.businessId))
-        .limit(1);
-
-      if (!business) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Business not found",
-        });
-      }
+      await requireBusinessAccess(ctx, input.businessId);
 
       // User must already belong to the tenant.
       const [tenantMembership] = await controlDb
@@ -306,7 +289,7 @@ export const businessRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.businessId);
+      await requireBusinessAccess(ctx, input.businessId);
 
       const [membership] = await ctx.db
         .update(businessMembers)
@@ -334,7 +317,7 @@ export const businessRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.businessId);
+      await requireBusinessAccess(ctx, input.businessId);
 
       // Prevent removing the last company admin.
       const [target] = await ctx.db
@@ -392,24 +375,9 @@ export const businessRouter = router({
   getById: tenantProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
-      await backfillLegacyBusinessMembers(ctx.db, ctx.tenantId);
-      const [membership] = await ctx.db
-        .select({ userId: businessMembers.userId })
-        .from(businessMembers)
-        .where(
-          and(
-            eq(businessMembers.businessId, input.id),
-            eq(businessMembers.userId, ctx.user.id),
-          ),
-        )
-        .limit(1);
-
-      if (!membership) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You do not have access to this business",
-        });
-      }
+      // Membership alone is not enough in self-hosted mode (one shared
+      // database): the business must also belong to this organisation.
+      await requireBusinessAccess(ctx, input.id);
 
       const { logoData: _logoData, ...cols } = getTableColumns(businesses);
 
@@ -529,7 +497,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), data: updateBusinessSchema }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
+      await requireBusinessAccess(ctx, input.id);
 
       // Encrypt carrier credentials if present in the update payload
       const data = { ...input.data } as Record<string, unknown>;
@@ -605,7 +573,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), data: uploadBusinessLogoSchema }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
+      await requireBusinessAccess(ctx, input.id);
 
       const { bytes, mime: actualMime } = validateLogoDataUrl(input.data.dataUrl);
 
@@ -644,7 +612,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), data: uploadBusinessSignatureSchema }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
+      await requireBusinessAccess(ctx, input.id);
 
       const { bytes, mime: actualMime } = validateLogoDataUrl(input.data.dataUrl);
 
@@ -680,7 +648,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
+      await requireBusinessAccess(ctx, input.id);
 
       const [biz] = await ctx.db
         .update(businesses)
@@ -713,7 +681,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
+      await requireBusinessAccess(ctx, input.id);
 
       const [biz] = await ctx.db
         .update(businesses)
@@ -749,7 +717,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), enabled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-      await assertBusinessInTenant(ctx.db, ctx.tenantId!, input.id);
+      await requireBusinessAccess(ctx, input.id);
 
       const [biz] = await ctx.db
         .update(businesses)
@@ -786,13 +754,8 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       // tenantProcedure does not check the business; the id comes from the
-      // input, so the caller must be a member of it (as getById requires).
-      if (!(await isBusinessMember(ctx.db, ctx.tenantId, input.id, ctx.user.id))) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You do not have access to this business",
-        });
-      }
+      // input, so apply the same rule as getById.
+      await requireBusinessAccess(ctx, input.id);
 
       const [existing] = await ctx.db
         .select({ id: parties.id })

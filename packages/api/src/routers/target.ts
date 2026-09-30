@@ -1,7 +1,7 @@
 import { eq, and, sql, desc, gte, lte, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { salesTargets, invoices, invoiceItems, items } from "@fintranzact/db";
+import { salesTargets, invoices, invoiceItems, items, businessMembers } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -159,6 +159,15 @@ export const targetRouter = router({
     }
 
     if (input.itemId) await assertTargetItem(ctx.db, ctx.businessId, input.itemId);
+    // The target is for a member of this business.
+    const [member] = await ctx.db
+      .select({ id: businessMembers.id })
+      .from(businessMembers)
+      .where(and(eq(businessMembers.businessId, ctx.businessId), eq(businessMembers.userId, input.userId)))
+      .limit(1);
+    if (!member) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "User is not a member of this business" });
+    }
 
     const periodStart = new Date(input.periodStart);
     const periodEnd = new Date(input.periodEnd);

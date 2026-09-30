@@ -63,8 +63,8 @@ export const shipmentRouter = router({
           partyName: parties.name,
         })
           .from(shipments)
-          .leftJoin(invoices, eq(invoices.id, shipments.invoiceId))
-          .leftJoin(parties, eq(parties.id, shipments.partyId))
+          .leftJoin(invoices, and(eq(invoices.id, shipments.invoiceId), eq(invoices.businessId, shipments.businessId)))
+          .leftJoin(parties, and(eq(parties.id, shipments.partyId), eq(parties.businessId, shipments.businessId)))
           .where(and(...conditions))
           .orderBy(desc(shipments.createdAt))
           .limit(input.limit)
@@ -105,8 +105,8 @@ export const shipmentRouter = router({
         partyName: parties.name,
       })
         .from(shipments)
-        .leftJoin(invoices, eq(invoices.id, shipments.invoiceId))
-        .leftJoin(parties, eq(parties.id, shipments.partyId))
+        .leftJoin(invoices, and(eq(invoices.id, shipments.invoiceId), eq(invoices.businessId, shipments.businessId)))
+        .leftJoin(parties, and(eq(parties.id, shipments.partyId), eq(parties.businessId, shipments.businessId)))
         .where(and(eq(shipments.id, input.id), eq(shipments.businessId, ctx.businessId)))
         .limit(1);
       return row ?? null;
@@ -137,6 +137,16 @@ export const shipmentRouter = router({
       const autoUrl = buildTrackingUrl(input.carrier || null, input.trackingNumber || null);
 
       const shipment = await ctx.db.transaction(async (tx) => {
+        // The invoice and party must be this business's: list/getById join
+        // them to show their numbers and names.
+        if (input.partyId) {
+          const [party] = await tx
+            .select({ id: parties.id })
+            .from(parties)
+            .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
+            .limit(1);
+          if (!party) throw new TRPCError({ code: "NOT_FOUND", message: "Party not found" });
+        }
         // Block creation if invoice is paid (pre-check before row-lock in sync helper)
         if (input.invoiceId) {
           const [inv] = await tx
@@ -144,7 +154,8 @@ export const shipmentRouter = router({
             .from(invoices)
             .where(and(eq(invoices.id, input.invoiceId), eq(invoices.businessId, ctx.businessId)))
             .limit(1);
-          if (inv?.status === "paid") {
+          if (!inv) throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" });
+          if (inv.status === "paid") {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot modify shipment on a paid invoice" });
           }
         }

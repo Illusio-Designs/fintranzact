@@ -45,6 +45,27 @@ export async function backfillLegacyBusinessMembers(db: TenantDatabase, tenantId
 }
 
 /**
+ * Ids of the businesses that belong to organisation `tenantId`.
+ *
+ * In cloud mode the tenant DB holds only this organisation's data. In
+ * self-hosted mode every organisation shares one database, so a business
+ * belongs to the organisation its creator is a member of — the same rule
+ * hasBusinessAccess and verifyBusinessAccess apply.
+ */
+export async function tenantBusinessIds(db: TenantDatabase, tenantId: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: businesses.id, createdByUserId: businesses.createdByUserId })
+    .from(businesses);
+  if (process.env.MULTI_TENANT === "true") return rows.map((r) => r.id);
+  const team = await controlDb
+    .select({ userId: tenantMembers.userId })
+    .from(tenantMembers)
+    .where(eq(tenantMembers.tenantId, tenantId));
+  const members = new Set(team.map((m) => m.userId));
+  return rows.filter((r) => members.has(r.createdByUserId)).map((r) => r.id);
+}
+
+/**
  * True when `userId` is a member of `businessId`. On a miss the legacy
  * backfill runs once and the lookup is retried, exactly as the
  * hasBusinessAccess tRPC middleware does, so a business created before
