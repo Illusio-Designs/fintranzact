@@ -1,8 +1,8 @@
-import { eq, and, sql, desc, gte } from "drizzle-orm";
+import { eq, and, sql, desc, gte, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
-  recurringInvoiceTemplates, recurringInvoiceRuns, parties, invoices,
+  recurringInvoiceTemplates, recurringInvoiceRuns, parties, invoices, items,
 } from "@fintranzact/db";
 import {
   createRecurringInvoiceSchema, updateRecurringInvoiceSchema, paginationSchema,
@@ -13,6 +13,18 @@ import { logAudit } from "../lib/audit.js";
 import { generateInvoiceFromTemplate, computeNextRunDate } from "../lib/recurring-invoice-generator.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { recurringRunLimit } from "../lib/plan-limits.js";
+
+/** Every item on the lines must be a live item of this business. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function assertLineItems(db: any, businessId: string, lineItems: Array<{ itemId?: string }> | undefined) {
+  const ids = [...new Set((lineItems ?? []).map((li) => li.itemId).filter((id): id is string => !!id))];
+  if (ids.length === 0) return;
+  const owned = await db.select({ id: items.id }).from(items)
+    .where(and(inArray(items.id, ids), eq(items.businessId, businessId), isNull(items.deletedAt)));
+  if (owned.length !== ids.length) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "One or more items were not found in this business" });
+  }
+}
 
 export const recurringInvoiceRouter = router({
   list: viewerProcedure
@@ -107,6 +119,7 @@ export const recurringInvoiceRouter = router({
       .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
       .limit(1);
     if (!partyCheck) throw new TRPCError({ code: "BAD_REQUEST", message: "Party not found in this business" });
+    await assertLineItems(ctx.db, ctx.businessId, input.lineItems);
 
     const startDate = new Date(input.startDate);
     const nextRunDate = startDate > new Date() ? startDate : computeNextRunDate(new Date(), input.frequency, input.customIntervalDays);
@@ -147,7 +160,12 @@ export const recurringInvoiceRouter = router({
     .input(z.object({ id: z.string().uuid(), data: updateRecurringInvoiceSchema }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "RecurringInvoice");
-      const [existing] = await ctx.db.select({ id: recurringInvoiceTemplates.id, status: recurringInvoiceTemplates.status })
+      const [existing] = await ctx.db.select({
+        id: recurringInvoiceTemplates.id,
+        status: recurringInvoiceTemplates.status,
+        frequency: recurringInvoiceTemplates.frequency,
+        customIntervalDays: recurringInvoiceTemplates.customIntervalDays,
+      })
         .from(recurringInvoiceTemplates)
         .where(and(eq(recurringInvoiceTemplates.id, input.id), eq(recurringInvoiceTemplates.businessId, ctx.businessId)))
         .limit(1);
@@ -159,6 +177,12 @@ export const recurringInvoiceRouter = router({
           .where(and(eq(parties.id, input.data.partyId), eq(parties.businessId, ctx.businessId)))
           .limit(1);
         if (!partyCheck) throw new TRPCError({ code: "BAD_REQUEST", message: "Party not found" });
+      }
+      await assertLineItems(ctx.db, ctx.businessId, input.data.lineItems);
+      // Same rule as create: a custom schedule needs its interval.
+      const frequency = input.data.frequency ?? existing.frequency;
+      if (frequency === "custom" && !(input.data.customIntervalDays ?? existing.customIntervalDays)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "customIntervalDays is required when frequency is 'custom'" });
       }
 
       const [updated] = await ctx.db.update(recurringInvoiceTemplates)
@@ -188,8 +212,10 @@ export const recurringInvoiceRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "RecurringInvoice");
-      await ctx.db.delete(recurringInvoiceTemplates)
-        .where(and(eq(recurringInvoiceTemplates.id, input.id), eq(recurringInvoiceTemplates.businessId, ctx.businessId)));
+      const deleted = await ctx.db.delete(recurringInvoiceTemplates)
+        .where(and(eq(recurringInvoiceTemplates.id, input.id), eq(recurringInvoiceTemplates.businessId, ctx.businessId)))
+        .returning({ id: recurringInvoiceTemplates.id });
+      if (deleted.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
 
       logAudit(ctx.db, {
         businessId: ctx.businessId,
@@ -216,7 +242,14 @@ export const recurringInvoiceRouter = router({
           eq(recurringInvoiceTemplates.status, "active"),
         ))
         .returning();
-      if (!updated) throw new TRPCError({ code: "BAD_REQUEST", message: "Template is not active" });
+      if (!updated) {
+        const [found] = await ctx.db.select({ id: recurringInvoiceTemplates.id })
+          .from(recurringInvoiceTemplates)
+          .where(and(eq(recurringInvoiceTemplates.id, input.id), eq(recurringInvoiceTemplates.businessId, ctx.businessId)))
+          .limit(1);
+        if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Template is not active" });
+      }
 
       logAudit(ctx.db, {
         businessId: ctx.businessId,
@@ -378,6 +411,7 @@ export const recurringInvoiceRouter = router({
       .where(and(
         eq(invoices.businessId, ctx.businessId),
         eq(invoices.documentType, "invoice"),
+        isNull(invoices.deletedAt),
         ...buildBusinessDateFilter(invoices, { from: lookbackDate }),
       ))
       .orderBy(invoices.partyId, invoices.invoiceDate);
