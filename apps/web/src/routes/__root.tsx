@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { trpc, setBusinessId, queryClient } from "@/lib/trpc";
+import { canAccess } from "@/lib/permissions";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useIndiaTimeTheme } from "@/hooks/useTheme";
 import { CommandPalette } from "@/components/ui/CommandPalette";
@@ -110,64 +111,6 @@ function RootError({ error }: { error: Error }) {
       </div>
     </div>
   );
-}
-
-// ── Role-based access control ──────────────────────────────────
-
-const ROLE_ABILITIES: Record<string, Set<string>> = {
-  owner: new Set(["*"]),
-  admin: new Set(["*"]),
-  seller_manager: new Set([
-    "Invoice:read",
-    "Invoice:create",
-    "Party:read",
-    "Item:read",
-    "Payment:read",
-    "Store:read",
-    "RecurringInvoice:read",
-    "Business:read",
-  ]),
-  seller: new Set([
-    "Invoice:read",
-    "Invoice:create",
-    "Party:read",
-    "Item:read",
-    "Payment:read",
-    "Store:read",
-    "Business:read",
-    "RecurringInvoice:read",
-  ]),
-  accountant: new Set([
-    "Payment:read",
-    "Expense:read",
-    "BankAccount:read",
-    "Invoice:read",
-    "Party:read",
-    "Item:read",
-    "Store:read",
-    "RecurringInvoice:read",
-    "Report:read",
-    "GstReport:read",
-    "Business:read",
-    // Mirrors the API: accountants manage the books and read compliance docs
-    "Account:read",
-    "BankReconciliation:read",
-    "ITC:read",
-    "EInvoice:read",
-    "EWayBill:read",
-  ]),
-};
-
-function canAccess(
-  role: string | null | undefined,
-  resource: string,
-  action: string,
-): boolean {
-  if (!role) return true; // graceful degradation while loading
-  const abilities = ROLE_ABILITIES[role];
-  if (!abilities) return true; // unknown role — show all
-  if (abilities.has("*")) return true;
-  return abilities.has(`${resource}:${action}`);
 }
 
 const NAV_COLLAPSED_KEY = "fintranzact:nav-collapsed";
@@ -1264,7 +1207,8 @@ function RootLayout() {
       if (
         pathname !== "/onboarding" &&
         !pathname.startsWith("/auth/plan-selection") &&
-        !pathname.startsWith("/business/create")
+        !pathname.startsWith("/business/create") &&
+        !pathname.startsWith("/invite")
       ) {
         navigate({ to: "/onboarding" });
       }
@@ -1425,6 +1369,9 @@ function RootLayout() {
   // already typed, e.g. their name on the complete-profile page.
   if (
     pathname.startsWith("/auth/complete-profile") ||
+    // The invite page shows "You've joined …" and lets the member choose how
+    // to continue; the company picker must not replace it once they join.
+    pathname.startsWith("/invite") ||
     pathname.startsWith("/auth/plan-selection") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/business/create")

@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { trpc, getBusinessId } from "@/lib/trpc";
+import { canAccess } from "@/lib/permissions";
 import { formatCurrency, cn, formatDateShort, formatMonthYearShort } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -1323,6 +1324,7 @@ function DashboardPage() {
 
   const isSellerRole =
     session?.role === "seller" || session?.role === "seller_manager";
+  const canCreateInvoice = canAccess(session?.role, "Invoice", "create");
 
   // Sales targets — only fetched for sellers and seller managers.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1356,9 +1358,11 @@ function DashboardPage() {
         <PageHeader
           title="Dashboard"
           actions={
-            <Link to="/invoices" search={{ create: "1" }} className="btn-primary">
-              + New Invoice
-            </Link>
+            canCreateInvoice ? (
+              <Link to="/invoices" search={{ create: "1" }} className="btn-primary">
+                + New Invoice
+              </Link>
+            ) : undefined
           }
         />
         <EmptyState

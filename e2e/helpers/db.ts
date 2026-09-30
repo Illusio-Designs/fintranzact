@@ -89,7 +89,43 @@ export async function activeSessionCount(userId: string) {
   return (row as { n: number }).n;
 }
 
+export async function tenantMembers(tenantId: string) {
+  return (await db()`
+    select u.email, tm.role, tm.accepted_at from tenant_members tm join users u on u.id = tm.user_id
+    where tm.tenant_id = ${tenantId} order by tm.created_at`) as unknown as Array<{ email: string; role: string; accepted_at: Date | null }>;
+}
+
+export async function invitationsFor(tenantId: string, email: string) {
+  return (await db()`
+    select role, accepted_at, expires_at, token from invitations
+    where tenant_id = ${tenantId} and lower(email) = lower(${email}) order by created_at`) as unknown as Array<{
+    role: string;
+    accepted_at: Date | null;
+    expires_at: Date;
+    token: string;
+  }>;
+}
+
+/** Tenants the user's live sessions are pointed at (null = no organisation). */
+export async function sessionTenants(userId: string) {
+  const rows = await db()`select tenant_id from sessions where user_id = ${userId} and expires_at > now()`;
+  return rows.map((r) => (r as { tenant_id: string | null }).tenant_id);
+}
+
+export async function invoiceRow(id: string) {
+  const [row] = await db()`
+    select id, status, invoice_number, total_amount, amount_paid, deleted_at, created_at from invoices where id = ${id}`;
+  return row as
+    | { id: string; status: string; invoice_number: string; total_amount: string; amount_paid: string; deleted_at: Date | null; created_at: Date }
+    | undefined;
+}
+
 // ── Test plumbing (no UI exists for these) ───────────────────────
+
+/** Make an invoice look `hours` old (role rules depend on its age). */
+export async function backdateInvoice(id: string, hours: number) {
+  await db()`update invoices set created_at = now() - make_interval(hours => ${hours}) where id = ${id}`;
+}
 
 /**
  * The API only stores a hash of each magic-link token and "sends" the raw

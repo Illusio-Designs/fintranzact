@@ -39,13 +39,13 @@ export default defineConfig({
       name: "journeys-desktop",
       testMatch: /journeys\/.*\.spec\.ts/,
       timeout: 180_000,
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 }, actionTimeout: 15_000 },
     },
     {
       name: "journeys-phone",
       testMatch: /journeys\/.*\.spec\.ts/,
       timeout: 180_000,
-      use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, hasTouch: true },
+      use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, hasTouch: true, actionTimeout: 15_000 },
     },
     {
       name: "chromium",

@@ -66,6 +66,37 @@ export async function tenantBusinessIds(db: TenantDatabase, tenantId: string): P
 }
 
 /**
+ * Give a member who just joined the organisation access to its businesses.
+ *
+ * Business access is per business, but nothing in the app lets an owner
+ * assign it, so an invited member used to join and then see no business at
+ * all (a seller got "Business setup is restricted"; an admin was pushed into
+ * creating a new business). Joining through an invitation now opens the
+ * organisation's existing businesses (tenantBusinessIds): tenant
+ * owners/admins as business admins, everyone else as members acting with
+ * their tenant role — the same mapping the legacy backfill uses. Existing
+ * memberships are left as they are.
+ */
+export async function grantTenantBusinessesToMember(
+  db: TenantDatabase,
+  tenantId: string,
+  userId: string,
+  tenantRole: string,
+): Promise<void> {
+  const businessIds = await tenantBusinessIds(db, tenantId);
+  if (businessIds.length === 0) return;
+
+  await db
+    .insert(businessMembers)
+    .values(businessIds.map((businessId) => ({
+      businessId,
+      userId,
+      role: ADMIN_TENANT_ROLES.has(tenantRole) ? ("admin" as const) : ("member" as const),
+    })))
+    .onConflictDoNothing();
+}
+
+/**
  * True when `userId` is a member of `businessId`. On a miss the legacy
  * backfill runs once and the lookup is retried, exactly as the
  * hasBusinessAccess tRPC middleware does, so a business created before

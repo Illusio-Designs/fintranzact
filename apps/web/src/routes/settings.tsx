@@ -245,7 +245,7 @@ function SettingsPage() {
   return (
     <div>
       <PageHeader title="Settings" description="Manage your business and preferences" />
-      <div className="flex gap-8 mt-2">
+      <div className="flex flex-col gap-2 mt-2 md:flex-row md:gap-8">
         <SettingsNav value={tab} onChange={handleTabChange} role={session?.role} />
         <div className="flex-1 min-w-0">
           {tab === "business" && <BusinessTab biz={biz} />}

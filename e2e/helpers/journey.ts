@@ -137,22 +137,50 @@ export async function expectNoHorizontalScroll(page: Page, screen: string) {
   if (!isPhone(page)) return;
   // Let layout settle (fonts, lazy panels) before measuring.
   await page.waitForLoadState("domcontentloaded");
-  await expect
-    .poll(
-      () =>
-        page.evaluate(() => {
-          const doc = document.documentElement;
-          const body = document.body;
-          const docOverflow = Math.max(doc.scrollWidth, body.scrollWidth) - doc.clientWidth;
-          // Inside the app shell the page scrolls in its content pane, not
-          // the document: sideways overflow there is page-level too.
-          const pane = document.querySelector<HTMLElement>('[data-testid="app-content"]');
-          const paneOverflow = pane ? pane.scrollWidth - pane.clientWidth : 0;
-          return Math.max(docOverflow, paneOverflow);
-        }),
-      { message: `horizontal page scroll at 390px on ${screen}`, timeout: 5_000 },
-    )
-    .toBeLessThanOrEqual(0);
+  const measure = () =>
+    page.evaluate(() => {
+      const doc = document.documentElement;
+      const body = document.body;
+      const docOverflow = Math.max(doc.scrollWidth, body.scrollWidth) - doc.clientWidth;
+      // Inside the app shell the page scrolls in its content pane, not
+      // the document: sideways overflow there is page-level too.
+      const pane = document.querySelector<HTMLElement>('[data-testid="app-content"]');
+      const paneOverflow = pane ? pane.scrollWidth - pane.clientWidth : 0;
+      return Math.max(docOverflow, paneOverflow);
+    });
+  try {
+    await expect.poll(measure, { timeout: 5_000 }).toBeLessThanOrEqual(0);
+  } catch {
+    // Name the widest offenders so the failure says what to fix.
+    const culprits = await page.evaluate(() => {
+      const vw = document.documentElement.clientWidth;
+      const pane = document.querySelector('[data-testid="app-content"]');
+      // Content inside its own sideways scroller (a tab strip, a wide table
+      // wrapper) does not scroll the page.
+      const inOwnScroller = (el: HTMLElement) => {
+        for (let p = el.parentElement; p && p !== pane && p !== document.body; p = p.parentElement) {
+          if (["auto", "scroll", "hidden", "clip"].includes(getComputedStyle(p).overflowX)) return true;
+        }
+        return false;
+      };
+      const wide = [...document.querySelectorAll<HTMLElement>("body *")].filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.right > vw + 1 && getComputedStyle(el).position !== "fixed" && !inOwnScroller(el);
+      });
+      const leaves = wide.filter((el) => !wide.some((o) => o !== el && el.contains(o)));
+      return leaves.slice(0, 5).map((el) => {
+        const r = el.getBoundingClientRect();
+        const cls = typeof el.className === "string" ? el.className.slice(0, 60) : "";
+        return `<${el.tagName.toLowerCase()} class="${cls}"> right=${Math.round(r.right)} "${(el.textContent ?? "").trim().slice(0, 30)}"`;
+      });
+    });
+    expect(await measure(), `horizontal page scroll at 390px on ${screen}:\n${culprits.join("\n")}`).toBeLessThanOrEqual(0);
+  }
+}
+
+/** A toast (title or description) in the app's notification area. */
+export function toast(page: Page, text: string | RegExp) {
+  return page.getByLabel(/^Notifications/).getByText(text).first();
 }
 
 /** Open a sidebar destination the way the user would at this width. */
@@ -192,6 +220,9 @@ export async function newJourneyContext(
 ) {
   const { theme = "light", ...rest } = options;
   const context = await browser.newContext({ storageState: { cookies: [], origins: [] }, ...rest });
+  // Same bound on actions as the project's own pages: a missing element fails
+  // the step instead of hanging until the test times out.
+  context.setDefaultTimeout(15_000);
   guard.watch(context);
   await stubExternalServices(context);
   await pinTheme(context, theme);
