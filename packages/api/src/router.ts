@@ -36,6 +36,7 @@ import { ewayBillRouter } from "./routers/ewayBill.js";
 import { bankReconRouter } from "./routers/bankRecon.js";
 import { gstr2bRouter } from "./routers/gstr2b.js";
 import { systemRouter } from "./routers/system.js";
+import { platformRouter } from "./routers/platform.js";
 import { planRouter } from "./routers/plan.js";
 import { selfExportRouter } from "./routers/selfExport.js";
 import { selfImportRouter } from "./routers/selfImport.js";
@@ -81,6 +82,7 @@ export const appRouter = router({
   bankRecon: bankReconRouter,
   gstr2b: gstr2bRouter,
   system: systemRouter,
+  platform: platformRouter,
   plan: planRouter,
   selfExport: selfExportRouter,
   selfImport: selfImportRouter,
