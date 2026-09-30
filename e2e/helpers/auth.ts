@@ -1,10 +1,11 @@
 /**
  * Login-page helpers shared by the auth setup and flow specs.
  *
- * Sign-up lives at /register and sign-in at /login. Register asks for a
- * username, email, optional referral code, password and a retyped password,
- * and submits with "Create free account"; Login asks for email + password and
- * submits with "Log in" (scoped to the form, since the page also links to it).
+ * Sign-up lives at /register and sign-in at /login; both pages show
+ * "Register" / "Log in" tabs (links with role="tab"). Register asks for a
+ * username, optional referral code, email, password and a retyped password,
+ * and submits with "Create free account"; Log in asks for email + password
+ * and submits with "Log in".
  *
  * Both submit through a Cloudflare Turnstile check. The script is replaced with
  * a stub that passes immediately, so the suite doesn't depend on reaching
@@ -48,7 +49,7 @@ export async function fillRegisterForm(
   await page.locator("form").getByRole("button", { name: "Create free account" }).click();
 }
 
-/** Registers a new user through the UI and waits until the app leaves the sign-up page. */
+/** Registers a new user through the UI and waits until the app leaves the auth pages. */
 export async function registerViaUI(
   page: Page,
   user: { username: string; email: string; password: string },

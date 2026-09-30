@@ -85,8 +85,7 @@ async function createRoleUser(
   await openRegisterForm(page);
   await fillRegisterForm(page, { username: name, email, password });
 
-  // Wait for redirect off the sign-up page — the user has a pending invite so
-  // may land differently
+  // Wait for redirect — user has a pending invite so may land differently
   await expect(page).not.toHaveURL(/\/(login|register)/, { timeout: 15_000 });
 
   // Step 3: Visit the invite acceptance page

@@ -16,6 +16,19 @@ schema_version: "2.0"
 exceptions:
   mobile:
     not-applicable:
+      # --- Inventory (warehouses & stock) ---
+      # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
+      - stock.adjust
+      - stock.adjustments
+      - stock.balances
+      - stock.setup
+      - stock.transfer
+      - stock.transfers
+      - stock.verify
+      - stock.warehouses
+      - warehouse.premiseList
+      - warehouse.warehouseCreate
+
       # --- Multi-Tenancy ---
       # Mobile derives current tenant info from auth.me; the standalone
       # procedure is not needed.
@@ -30,6 +43,9 @@ exceptions:
       # Mobile displays the logo via /api/businesses/:id/logo but doesn't edit.
       - business.uploadLogo
       - business.deleteLogo
+      # Invoice signature upload/delete are web-only for the same reason as the logo.
+      - business.uploadSignature
+      - business.deleteSignature
       # Point-of-Sale mode is a web/desktop-only fullscreen register.
       # Mobile doesn't have a POS terminal surface.
       - business.setPosEnabled
@@ -121,6 +137,7 @@ exceptions:
       # Complex reporting workflows; intentionally desktop-only.
       - reports.daybook
       - reports.outstanding
+      - reports.msmePayables
       - reports.salesRegister
       - reports.purchaseRegister
       - reports.taxSummary
@@ -297,6 +314,19 @@ exceptions:
 
   cli:
     not-applicable:
+      # --- Inventory (warehouses & stock) ---
+      # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
+      - stock.adjust
+      - stock.adjustments
+      - stock.balances
+      - stock.setup
+      - stock.transfer
+      - stock.transfers
+      - stock.verify
+      - stock.warehouses
+      - warehouse.premiseList
+      - warehouse.warehouseCreate
+
       # --- Auth ---
       # Browser-only flows requiring email verification links / callbacks.
       - auth.requestEmailChange
@@ -323,6 +353,9 @@ exceptions:
       # Logo upload/delete are browser-only (canvas resize + file picker).
       - business.uploadLogo
       - business.deleteLogo
+      # Invoice signature image — same browser-only upload flow as the logo.
+      - business.uploadSignature
+      - business.deleteSignature
       # Point-of-Sale is a browser-only UI feature — no CLI command surface.
       - business.setPosEnabled
       - business.ensureWalkInParty
@@ -347,6 +380,10 @@ exceptions:
       # --- Parties ---
       # Tally accounting integration — desktop-specific export format.
       - party.tallyExport
+      # GSTIN lookup auto-fills the interactive party form; scripts pass fields directly.
+      - party.lookupGstin
+      # MSME payables is a web report view built on reports.outstanding data.
+      - reports.msmePayables
 
       # --- Bank Reconciliation ---
       # Interactive CSV upload + review workflow — not suited for CLI.
@@ -409,6 +446,19 @@ exceptions:
 
   mcp:
     not-applicable:
+      # --- Inventory (warehouses & stock) ---
+      # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
+      - stock.adjust
+      - stock.adjustments
+      - stock.balances
+      - stock.setup
+      - stock.transfer
+      - stock.transfers
+      - stock.verify
+      - stock.warehouses
+      - warehouse.premiseList
+      - warehouse.warehouseCreate
+
       # --- Auth ---
       # MCP runs as a pre-authenticated server-side agent. It does not
       # manage user sessions, login flows, or account registration.
@@ -448,6 +498,9 @@ exceptions:
       # Logo is a browser UI concern; MCP agents don't manage brand assets.
       - business.uploadLogo
       - business.deleteLogo
+      # Invoice signature image — a browser UI concern like the logo.
+      - business.uploadSignature
+      - business.deleteSignature
       # POS mode is a web/desktop-only cashier surface; not an MCP workflow.
       - business.setPosEnabled
       - business.ensureWalkInParty
@@ -485,6 +538,10 @@ exceptions:
       # --- Parties ---
       # Tally accounting integration — desktop-specific export format.
       - party.tallyExport
+      # GSTIN lookup auto-fills the interactive party form; agents pass fields directly.
+      - party.lookupGstin
+      # MSME payables is a web report view built on reports.outstanding data.
+      - reports.msmePayables
 
       # --- Bank Reconciliation ---
       # Interactive CSV upload flow — MCP agents use structured data.

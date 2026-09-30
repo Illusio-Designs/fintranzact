@@ -40,8 +40,8 @@ export class CreditNotesPage extends BasePage {
   }
 
   async expectTypeFilter() {
-    await expect(this.page.getByText("Sales").first()).toBeVisible();
-    await expect(this.page.getByText("Purchases").first()).toBeVisible();
+    await expect(this.page.locator("main").getByText("Sales", { exact: true }).first()).toBeVisible();
+    await expect(this.page.locator("main").getByText("Purchases", { exact: true }).first()).toBeVisible();
   }
 
   async expectStatusTabs() {
@@ -76,13 +76,12 @@ export class CreditNotesPage extends BasePage {
     await expect(this.detailPanel).toBeVisible({ timeout: 5_000 });
   }
 
-  // Scoped to the page body: the sidebar also has "Sales"/"Purchases" text.
   async switchToSales() {
-    await this.page.locator("main").getByRole("button", { name: "Sales", exact: true }).click();
+    await this.page.locator("main").getByText("Sales", { exact: true }).first().click();
   }
 
   async switchToPurchases() {
-    await this.page.locator("main").getByRole("button", { name: "Purchases", exact: true }).click();
+    await this.page.locator("main").getByText("Purchases", { exact: true }).first().click();
   }
 
   async clickStatusTab(label: string) {

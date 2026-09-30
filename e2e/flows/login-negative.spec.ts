@@ -9,31 +9,36 @@ import { test, expect } from "../helpers/fixtures";
 import { openLoginForm, openRegisterForm, fillRegisterForm } from "../helpers/auth";
 
 test.describe("Login Negative Paths", () => {
-  test("register page shows the sign-up form", async ({ browser }) => {
-    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
-    const page = await ctx.newPage();
-
-    await page.goto("/register");
-
-    await expect(page.getByText("Fintranzact").first()).toBeVisible();
-    await expect(page.getByText("Create your account").first()).toBeVisible();
-    await expect(page.getByPlaceholder("Enter username")).toBeVisible();
-    await expect(page.getByPlaceholder("Retype password")).toBeVisible();
-    await expect(page.locator("form").getByRole("button", { name: "Create free account" })).toBeVisible();
-
-    await page.close();
-    await ctx.close();
-  });
-
-  test("login page shows email and password fields", async ({ browser }) => {
+  test("login page shows the Log in form with a Register tab", async ({ browser }) => {
     const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await ctx.newPage();
 
     await page.goto("/login");
 
+    // Should show Fintranzact branding
+    await expect(page.getByText("Fintranzact").first()).toBeVisible();
+
+    await expect(page.getByRole("tab", { name: "Register" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Log in" })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByPlaceholder("you@yourcompany.com")).toBeVisible();
     await expect(page.getByPlaceholder("Enter password")).toBeVisible();
     await expect(page.locator("form").getByRole("button", { name: "Log in" })).toBeVisible();
+
+    await page.close();
+    await ctx.close();
+  });
+
+  test("the Register tab opens the sign-up form", async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const page = await ctx.newPage();
+
+    await page.goto("/login");
+    await page.getByRole("tab", { name: "Register" }).click();
+
+    await expect(page).toHaveURL(/\/register/);
+    await expect(page.getByText("Create your account")).toBeVisible();
+    await expect(page.getByPlaceholder("Enter username")).toBeVisible();
+    await expect(page.getByPlaceholder("Retype password")).toBeVisible();
 
     await page.close();
     await ctx.close();

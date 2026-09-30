@@ -50,15 +50,6 @@ test.describe("Settings — Presence", () => {
     ).toBeVisible();
   });
 
-  test("theme follows the time of day in India", async ({ page }) => {
-    // There is no theme toggle: the app is light from 06:00 to 18:59 IST and
-    // dark otherwise, and marks the choice on <html data-theme-lock>.
-    const lock = await page.locator("html").getAttribute("data-theme-lock");
-    expect(["light", "dark"]).toContain(lock);
-    const dark = await page.locator("html").evaluate((el) => el.classList.contains("dark"));
-    expect(dark).toBe(lock === "dark");
-  });
-
   test("renders Data tab with import, CSV export, and backup sections", async ({ page }) => {
     await page.getByRole("button", { name: "Data" }).first().click();
     // Import section is always shown

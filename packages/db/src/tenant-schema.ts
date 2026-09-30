@@ -305,6 +305,15 @@ export const parties = pgTable("parties", {
   pan: text("pan"),
   billingAddress: text("billing_address"),
   shippingAddress: text("shipping_address"),
+  // Extra delivery locations beyond shippingAddress (e.g. branches, godowns).
+  additionalShippingAddresses: jsonb("additional_shipping_addresses").$type<Array<{
+    label?: string;
+    address: string;
+    city?: string;
+    state?: string;
+    stateCode?: string;
+    pincode?: string;
+  }>>(),
   city: text("city"),
   state: text("state"),
   stateCode: text("state_code"), // 2-digit GST state code for inter/intra-state detection
@@ -318,6 +327,19 @@ export const parties = pgTable("parties", {
   bankAccountNumber: text("bank_account_number"),
   bankIfsc: text("bank_ifsc"),
   bankName: text("bank_name"),
+  // GST registration details — filled from a GSTIN lookup where available.
+  legalName: text("legal_name"), // name as registered for GST
+  tradeName: text("trade_name"), // name the party does business under
+  gstRegistrationType: text("gst_registration_type"), // regular | composition | unregistered | sez | overseas | uin
+  constitution: text("constitution"), // proprietorship | partnership | llp | company | huf | trust | government | other
+  gstinStatus: text("gstin_status"), // active | cancelled | suspended | inactive (from the last lookup)
+  gstinVerifiedAt: timestamp("gstin_verified_at", { withTimezone: true }),
+  // MSME (Udyam) — drives the 45-day payment rule for micro/small suppliers.
+  isMsme: boolean("is_msme").default(false).notNull(),
+  udyamNumber: text("udyam_number"),
+  msmeCategory: text("msme_category"), // micro | small | medium
+  // TDS applicable on payments to this party (see @fintranzact/shared tds.ts).
+  tdsSection: text("tds_section"),
   source: text("source"), // null = manual, "mybillbook", "tally", etc.
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
