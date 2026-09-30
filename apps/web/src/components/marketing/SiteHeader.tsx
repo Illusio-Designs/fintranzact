@@ -541,7 +541,7 @@ export function SiteHeader() {
       className="sticky top-0 z-20 border-b border-border-light bg-surface-0/95 backdrop-blur"
       onMouseLeave={scheduleClose}
     >
-      <div className="mx-auto flex h-[72px] max-w-7xl items-center gap-4 px-4 md:px-6">
+      <div className="mx-auto flex h-[72px] max-w-7xl items-center gap-2 px-4 sm:gap-4 md:px-6">
         <Link to="/" className="flex shrink-0 items-center gap-2.5" onMouseEnter={() => hoverOpen(null)}>
           <Logo className="h-[34px] w-[34px]" />
           <span className="font-display text-[19px] font-extrabold tracking-tight text-[#0f1b3d] dark:text-white">
@@ -586,7 +586,7 @@ export function SiteHeader() {
           </Link>
           <Link
             to="/register"
-            className="inline-flex h-11 items-center whitespace-nowrap rounded-[10px] bg-brand-600 px-5 text-[15px] font-semibold text-white shadow-[0_6px_16px_-6px_rgba(59,94,170,.6)] transition hover:bg-brand-700"
+            className="inline-flex h-11 items-center whitespace-nowrap rounded-[10px] bg-brand-600 px-3.5 text-[15px] sm:px-5 font-semibold text-white shadow-[0_6px_16px_-6px_rgba(59,94,170,.6)] transition hover:bg-brand-700"
           >
             Start free
           </Link>

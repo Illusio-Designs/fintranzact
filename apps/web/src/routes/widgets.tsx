@@ -198,7 +198,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="card rounded-2xl p-5 md:p-6">
+    <section aria-labelledby={id} className="card min-w-0 rounded-2xl p-5 md:p-6">
       <div className="mb-5 flex items-center gap-3">
         <IconCircle icon={icon} />
         <div>
@@ -470,6 +470,7 @@ function NavigationSection() {
         <div>
           <Label>Pill tabs</Label>
           <PillTabs
+            className="flex-wrap gap-y-1"
             value={pill}
             onChange={setPill}
             tabs={[

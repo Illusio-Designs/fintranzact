@@ -25,6 +25,8 @@ const PUBLIC_SOURCES = [
   "lib/solutions-content.ts",
   "lib/partner-programs.ts",
   "lib/security-disclosure.ts",
+  "lib/feature-pages",
+  "lib/legal.ts",
   "routes/about.tsx",
   "routes/contact.tsx",
   "routes/pricing.tsx",
@@ -41,13 +43,6 @@ const PUBLIC_SOURCES = [
   "routes/help",
   "routes/developers",
 ];
-
-/**
- * routes/features.tsx is the old single features page with an in-page table
- * of contents. The feature-pages work replaces it with routes/features/index.tsx
- * and one page per feature; this exception does nothing once that file is gone.
- */
-const LEGACY = new Set(["routes/features.tsx"]);
 
 function sourceFiles(rel: string): string[] {
   const full = path.join(SRC, rel);
@@ -75,7 +70,6 @@ describe("public pages link to pages, not sections", () => {
   it("has no #anchor links, hash props or old docs hosts", () => {
     const problems: string[] = [];
     for (const file of FILES) {
-      if (LEGACY.has(file)) continue;
       const lines = readFileSync(path.join(SRC, file), "utf-8").split("\n");
       lines.forEach((line, i) => {
         // The docs hosts may be named in a comment explaining they were retired.

@@ -51,7 +51,7 @@ import type { FeaturePage } from "./types";
  * gstr2b, itc, eInvoice, ewayBill, reports, store, apiKey, target), the web
  * routes, packages/mcp and packages/cli, apps/mobile and apps/desktop, and the
  * help centre articles under src/content/help. Where the product has a known
- * limit (for example, GSTR-1 is exported as CSV rather than portal JSON, and
+ * limit (for example, the app exports GSTR-1 as CSV; its portal JSON is API-only, and
  * e-invoicing, e-way bills and GSTR-2B are not in the mobile app) the copy
  * says so or stays silent rather than overpromising.
  */
@@ -149,7 +149,7 @@ export const GST_PLATFORM_PAGES: FeaturePage[] = [
     faqs: [
       {
         q: "Does Fintranzact file my return on the GST portal?",
-        a: "No. Fintranzact prepares the figures and the files; you or your CA upload and file on the GST portal. GSTR-1 is exported as a CSV for review or conversion, and GSTR-9 can be downloaded as portal-format JSON.",
+        a: "No. Fintranzact prepares the figures and the files; you or your CA upload and file on the GST portal. In the app GSTR-1 is exported as a CSV for review, and GSTR-9 can be downloaded as portal-format JSON. A portal-format GSTR-1 JSON is also available through the API.",
       },
       {
         q: "Why is a sale missing from my GSTR-1?",
@@ -351,7 +351,7 @@ export const GST_PLATFORM_PAGES: FeaturePage[] = [
       {
         heading: "Checks before a bill is generated",
         points: [
-          "The invoice total, including GST, is at least ₹50,000.",
+          "The invoice total, including GST, reaches your e-way bill threshold: ₹50,000 unless you set your own in business settings.",
           "At least one line is goods; service-only invoices are refused.",
           "The invoice is not cancelled and does not already have an active e-way bill.",
           "Transport by road, rail, air or ship, over 1 to 4,000 km.",
@@ -383,7 +383,7 @@ export const GST_PLATFORM_PAGES: FeaturePage[] = [
       },
       {
         q: "Can I use a lower threshold than ₹50,000?",
-        a: "Not yet. Generation always requires the invoice total to be at least ₹50,000, whatever threshold is entered in settings.",
+        a: "Yes. Enter your own E-Way Bill Threshold in business settings (some states set a lower limit for movement within the state). Leave it blank to use the ₹50,000 limit.",
       },
       {
         q: "How do I extend a bill that is about to expire?",
