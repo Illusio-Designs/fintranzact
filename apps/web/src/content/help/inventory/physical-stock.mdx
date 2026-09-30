@@ -1,0 +1,111 @@
+---
+title: Physical Stock
+description: Count the stock on your shelves by scanning barcodes, get a report of what's missing, short or extra, and post the differences as stock adjustments.
+sidebar:
+  order: 4
+---
+
+import { ForBusiness } from "@/components/help/mdx";
+
+**Physical Stock** is how you check your books against what's really on the shelves. You scan every barcode in a godown or shop; when you press **End scan**, Fintranzact compares what you scanned with what your books say and lists every difference. You can then post those differences as [stock adjustments](/help/inventory/stock-adjustments) in one click.
+
+Open it from the sidebar: **Inventory → Physical Stock**.
+
+:::note[Barcodes must be switched on]
+Physical stock works by scanning barcodes. The sidebar entry only appears when barcodes are switched on in **Settings → Barcodes** (see [Barcodes](/help/inventory/barcodes)). If they're off, the page shows "Barcodes are switched off" with an **Open barcode settings** button.
+
+There's no screen for typing counted quantities by hand. To correct a few items without scanning, use a [stock adjustment](/help/inventory/stock-adjustments).
+:::
+
+## Counting stock
+
+### 1. Start
+
+1. Under **Count stock at**, pick the warehouse you're counting.
+2. Click **Start scanning**.
+
+Count one warehouse at a time.
+
+### 2. Scan everything
+
+The scanning screen ("Scanning · *warehouse name*") has a box labelled **Scan or type a barcode**. Scan with a barcode scanner, or type a code and press <kbd>Enter</kbd>.
+
+- After each scan, a status line shows what was found, for example `8901234567890 → Basmati Rice 1 kg +1`.
+- A **pack code** (for example a carton barcode set to "1 scan = 12") adds the whole pack in one scan.
+- A code that isn't in the system is noted as **unknown**; keep scanning.
+- Made a mistake? Click **Undo last scan**.
+- The counter shows how many scans, items found and unknown codes you have so far.
+
+The **Expected here** panel lists what your books say should be in this warehouse. Switch between **Not scanned** (what you haven't found yet) and **All**. Each row shows scanned against the book quantity.
+
+If some items in stock have no barcode, a card tells you how many. Those items can't be counted by scanning. Give them a code on the Stock Items page before your next count.
+
+:::tip[Your scans are saved as you go]
+Scans are kept in your browser. If the page reloads or you close the tab, start the same warehouse again on the same computer and you'll see "Scan resumed — N scans from before were kept."
+:::
+
+To throw the count away, click **Cancel count**. Your scans are discarded and stock doesn't change.
+
+### 3. End scan and review the report
+
+Click **End scan** when every shelf is done. The **Physical stock report** shows:
+
+**Summary cards**
+
+| Card | Meaning |
+|---|---|
+| **Expected** | Items your books say are in this warehouse |
+| **Matched** | Items where the scan matches the books |
+| **Missing** | In the books but never scanned |
+| **Short / extra** | Scanned, but fewer or more than the books |
+| **Stock value change** | The value of the differences, at each item's purchase price |
+
+**Differences.** Each item that doesn't match, tagged **Missing**, **Short** or **Extra**, with the **Books** quantity, **Scanned** quantity, the **Diff** and its **Value**. These are what become adjustments when you post.
+
+**Unknown barcodes.** Codes you scanned that aren't in the system, with how many times each was scanned. They are not adjusted. Create the item (the **Add as item** link opens Stock Items), or add the code to an existing item.
+
+**Not counted — no barcode.** Items in stock that have no barcode. They are left untouched.
+
+You can add an optional **Note** (for example "Month-end count"). Click **Back to scanning** if you missed a shelf.
+
+### 4. Post or save
+
+- **Post N adjustments** sets each differing item to the quantity you scanned. Missing items go to **0**. Each change is recorded as a stock adjustment with the reason "Physical stock verification (scan)", plus your note if you wrote one. If nothing differs, the button reads **Post count**.
+- **Save report only** keeps the report without changing any stock. You can open it later and post it.
+
+:::caution[Posting a saved report uses today's stock]
+When you post a report that was saved earlier, each item is set to what was scanned, compared against the stock *at the moment you post*. If there have been sales or purchases since the count, post soon after counting, or count again.
+:::
+
+## Past counts
+
+The **Past counts** table on the Physical Stock page lists every count: **Date**, **Warehouse**, **Scans**, **Items checked**, **Differences**, **Status** ("Posted · N adjusted" or "Saved, not posted") and **By**. Click a row to open its report. A saved report has a **Post adjustments** button. Counts can't be deleted.
+
+Posted adjustments also appear on the **Stock Adjustments** page under the **From physical counts** tab.
+
+## Who can count
+
+- Anyone who can change stock items can scan and **Save report only**.
+- To **post** adjustments, owners and admins can post anywhere; seller managers need the **Adjust & count** permission on that warehouse's **Access** tab (see [Warehouses](/help/inventory/warehouses)).
+
+:::caution[Count the whole warehouse before posting]
+A count covers the entire warehouse. Anything in the books that you didn't scan is treated as **Missing** and set to 0 when you post. If you only scanned part of a warehouse, use **Save report only**, or check the Differences table carefully before posting.
+:::
+
+<ForBusiness>
+Pick a quiet time, such as before opening or on a holiday, so no sales or deliveries happen while you scan. Then post the count straight away, and the books match the shelves from that moment.
+</ForBusiness>
+
+## Frequently asked questions
+
+**Which codes are recognised when I scan?**
+An item's (or variant's) main barcode, any extra or pack barcodes (if your business uses "Many barcodes per item"), and the item's SKU. SKU scans may show as "not in the system" on the scanning screen, but the report at End scan does match them.
+
+**What happens to "unplaced" stock during a count?**
+When you count your sales default warehouse, the book quantity includes any [unplaced stock](/help/inventory/warehouses), so it's counted there.
+
+**Is there a limit on how much I can scan?**
+A single count can hold up to 5,000 different codes.
+
+**Can two people scan the same warehouse together?**
+Each scanning session lives in one browser, so two people scanning at once would create two separate counts, each missing the other's items. For a big godown, have one person scan with one device, moving shelf by shelf.

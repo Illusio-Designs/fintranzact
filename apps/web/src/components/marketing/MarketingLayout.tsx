@@ -1,6 +1,14 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { Logo } from "@/components/ui/Logo";
+import {
+  GRIEVANCE_ACKNOWLEDGE_WITHIN,
+  GRIEVANCE_OFFICER,
+  GRIEVANCE_RESOLVE_WITHIN,
+  LEGAL_ENTITY_NAME,
+  REGISTERED_ADDRESS,
+  REGISTERED_ADDRESS_LINES,
+} from "@/lib/legal";
 import { absoluteUrl, resolveSiteUrl } from "@/lib/seo";
 
 import { API_DOCS_URL, CONTACT_EMAIL, DOCS_URL, SiteHeader } from "./SiteHeader";
@@ -26,8 +34,8 @@ const FOOTER_COLUMNS: Array<{
       { label: "Pricing", to: "/pricing" },
       { label: "Solutions", to: "/solutions" },
       { label: "Widget gallery", to: "/widgets" },
-      { label: "Help & docs", href: DOCS_URL },
-      { label: "API docs", href: API_DOCS_URL },
+      { label: "Help & docs", to: DOCS_URL },
+      { label: "API docs", to: API_DOCS_URL },
     ],
   },
   {
@@ -47,6 +55,7 @@ const FOOTER_COLUMNS: Array<{
       { label: "Terms of service", to: "/terms" },
       { label: "Refund policy", to: "/refund-policy" },
       { label: "Security", to: "/security" },
+      { label: "Report a vulnerability", to: "/security/report" },
     ],
   },
 ];
@@ -142,7 +151,8 @@ export function MarketingLayout({
   const { pathname, hash } = useLocation();
   const year = new Date().getFullYear();
 
-  // New page: start at the top, or at the linked section (e.g. /features#gst-compliance).
+  // New page: start at the top. The site no longer links to #sections, but an
+  // old bookmark with a hash still lands on that section if it exists.
   useEffect(() => {
     const target = hash ? document.getElementById(hash) : null;
     if (target) target.scrollIntoView({ block: "start" });
@@ -205,9 +215,16 @@ export function MarketingLayout({
           ))}
         </div>
         <div className="border-t border-white/10">
-          <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-5 text-[13px] text-[#7f90b5] md:flex-row md:items-center md:justify-between md:px-6">
-            <span>© {year} Fintranzact. All rights reserved.</span>
-            <span>Made in India for Indian businesses</span>
+          <div className="mx-auto max-w-6xl px-4 py-5 text-[13px] text-[#7f90b5] md:px-6">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <span>
+                © {year} {LEGAL_ENTITY_NAME}. All rights reserved.
+              </span>
+              <span>Made in India for Indian businesses</span>
+            </div>
+            <address className="mt-3 not-italic leading-relaxed">
+              Fintranzact is operated by {LEGAL_ENTITY_NAME}. Registered office: {REGISTERED_ADDRESS}.
+            </address>
           </div>
         </div>
       </footer>
@@ -300,5 +317,75 @@ export function LegalPage({
         {children}
       </article>
     </MarketingLayout>
+  );
+}
+
+/** An email address that wraps after the "@" on narrow screens instead of mid-word. */
+export function EmailText({ email }: { email: string }) {
+  const at = email.indexOf("@");
+  if (at < 0) return <>{email}</>;
+  return (
+    <span className="[overflow-wrap:anywhere]">
+      {email.slice(0, at + 1)}
+      <wbr />
+      {email.slice(at + 1)}
+    </span>
+  );
+}
+
+/** The operator's name and registered office, as an address block in legal prose. */
+export function RegisteredOffice() {
+  return (
+    <address className="mt-3 not-italic">
+      <span className="block font-semibold text-text-primary">{LEGAL_ENTITY_NAME}</span>
+      {REGISTERED_ADDRESS_LINES.map((line) => (
+        <span key={line} className="block">
+          {line}
+        </span>
+      ))}
+    </address>
+  );
+}
+
+/**
+ * The Grievance Officer section of a legal page: who to write to, how to
+ * reach them and how quickly we respond. `children` is the page's own
+ * introduction to the section.
+ */
+export function GrievanceOfficerSection({ children }: { children: ReactNode }) {
+  const officer = GRIEVANCE_OFFICER;
+  return (
+    <>
+      <h2>Grievance Officer</h2>
+      {children}
+      <address className="mt-4 rounded-xl border border-border-light bg-surface-1 p-5 not-italic">
+        <span className="block font-semibold text-text-primary">{officer.name}</span>
+        <span className="block">
+          {officer.role}, {officer.organization}
+        </span>
+        {REGISTERED_ADDRESS_LINES.map((line) => (
+          <span key={line} className="block">
+            {line}
+          </span>
+        ))}
+        <span className="mt-3 block">
+          Email:{" "}
+          <a href={`mailto:${officer.email}`}>
+            <EmailText email={officer.email} />
+          </a>
+        </span>
+        <span className="block">
+          Phone: <a href={officer.phoneHref}>{officer.phone}</a>
+        </span>
+      </address>
+      <ul>
+        <li>We acknowledge every complaint within {GRIEVANCE_ACKNOWLEDGE_WITHIN} of receiving it.</li>
+        <li>We resolve it within {GRIEVANCE_RESOLVE_WITHIN} of receiving it and tell you the outcome.</li>
+      </ul>
+      <p>
+        To help us act quickly, include your name, how to reach you, the name of your business on Fintranzact (if you
+        have an account) and what the complaint is about.
+      </p>
+    </>
   );
 }

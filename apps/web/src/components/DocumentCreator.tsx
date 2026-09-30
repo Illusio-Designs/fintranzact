@@ -108,8 +108,8 @@ const fixedInvoiceType: Partial<Record<DocumentType, "sale" | "purchase">> = {
 
 /** Which way a document moves stock: -1 out, +1 in, 0 not at all (mirrors the server). */
 function stockDirection(documentType: DocumentType, invoiceType: "sale" | "purchase"): -1 | 0 | 1 {
-  if (documentType === "invoice") return invoiceType === "sale" ? -1 : 1;
-  if (documentType === "delivery_challan" || documentType === "purchase_return") return -1;
+  if (documentType === "invoice" || documentType === "delivery_challan") return invoiceType === "sale" ? -1 : 1;
+  if (documentType === "purchase_return") return -1;
   if (documentType === "sales_return" || documentType === "goods_receipt_note") return 1;
   return 0;
 }
@@ -282,7 +282,7 @@ export function DocumentCreator({
     const fallback =
       documentType === "sales_return" ? inventorySettings.salesReturnWarehouseId
       : documentType === "purchase_return" ? inventorySettings.purchaseReturnWarehouseId
-      : (documentType === "invoice" && invoiceType === "purchase") || documentType === "goods_receipt_note" ? inventorySettings.purchaseWarehouseId
+      : ((documentType === "invoice" || documentType === "delivery_challan") && invoiceType === "purchase") || documentType === "goods_receipt_note" ? inventorySettings.purchaseWarehouseId
       : inventorySettings.salesWarehouseId;
     if (fallback) setWarehouseId(fallback);
   }, [inventorySettings, warehouseId, isEditing, documentType, invoiceType]);

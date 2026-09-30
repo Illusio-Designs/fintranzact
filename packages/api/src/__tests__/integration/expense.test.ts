@@ -14,9 +14,11 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createTestWorld, createExpense, type TestWorld } from "../helpers/fixtures.js";
+import { and, eq } from "drizzle-orm";
+import { bankTransactions } from "@fintranzact/db";
+import { createTestWorld, createExpense, createBankAccount, type TestWorld } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
-import { truncateAllTables, closeTestDb } from "../helpers/test-db.js";
+import { getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -281,6 +283,85 @@ describe("expense.update", () => {
         data: { amount: "1.00" },
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  // Regression: update re-created the withdrawal on the default account for
+  // the mode, ignoring the account the expense was recorded against.
+  describe("bank account", () => {
+    const withdrawalsFor = (expenseId: string) =>
+      getTenantTestDb()
+        .select()
+        .from(bankTransactions)
+        .where(and(
+          eq(bankTransactions.referenceType, "expense"),
+          eq(bankTransactions.referenceId, expenseId),
+        ));
+
+    it("keeps the withdrawal on the expense's own account when the mode is unchanged", async () => {
+      const db = getTenantTestDb();
+      const caller = createTestCaller({
+        userId: world.ramesh.id,
+        email: world.ramesh.email,
+        name: world.ramesh.name,
+        tenantId: world.tenant1.id,
+        businessId: world.business1.id,
+      });
+      await createBankAccount(db, world.business1.id, { accountName: "Default Current", isDefault: true });
+      const second = await createBankAccount(db, world.business1.id, {
+        accountName: "Second Current",
+        accountNumber: "5550001112223",
+        isDefault: false,
+      });
+
+      const created = await caller.expense.create({
+        category: "Utilities",
+        amount: "600.00",
+        mode: "bank",
+        bankAccountId: second.id,
+      });
+      await caller.expense.update({ id: created.id, data: { amount: "650.00", mode: "bank" } });
+
+      const txns = await withdrawalsFor(created.id);
+      expect(txns).toHaveLength(1);
+      expect(txns[0]!.bankAccountId).toBe(second.id);
+      expect(txns[0]!.amount).toBe("650.00");
+    });
+
+    it("moves the withdrawal to the new mode's account when the mode changes", async () => {
+      const db = getTenantTestDb();
+      const caller = createTestCaller({
+        userId: world.ramesh.id,
+        email: world.ramesh.email,
+        name: world.ramesh.name,
+        tenantId: world.tenant1.id,
+        businessId: world.business1.id,
+      });
+      const bank = await createBankAccount(db, world.business1.id, {
+        accountName: "Pinned Current",
+        accountNumber: "5550001112224",
+        isDefault: false,
+      });
+      const cash = await createBankAccount(db, world.business1.id, {
+        accountName: "Cash in hand",
+        accountNumber: null,
+        ifsc: null,
+        bankName: null,
+        accountType: "cash",
+      });
+
+      const created = await caller.expense.create({
+        category: "Utilities",
+        amount: "250.00",
+        mode: "bank",
+        bankAccountId: bank.id,
+      });
+      const updated = await caller.expense.update({ id: created.id, data: { mode: "cash" } });
+
+      expect(updated.bankAccountId).toBeNull();
+      const txns = await withdrawalsFor(created.id);
+      expect(txns).toHaveLength(1);
+      expect(txns[0]!.bankAccountId).toBe(cash.id);
+    });
   });
 });
 

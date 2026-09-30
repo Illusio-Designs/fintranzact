@@ -1,11 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { invoices, invoiceItems } from "@fintranzact/db";
-import { convertDocumentSchema, createInvoiceSchema, type DocumentType } from "@fintranzact/shared";
+import { calcInvoiceTotals, convertDocumentSchema, createInvoiceSchema, money, type DocumentType } from "@fintranzact/shared";
 import { router, memberProcedure, createCallerFactory } from "../trpc.js";
 import { createDocumentRouter } from "../lib/document-router-factory.js";
 import { logAudit } from "../lib/audit.js";
 import { FULFILLED_BY, isPendingTracked, loadPendingLines } from "../lib/order-fulfilment.js";
+import { requireCan } from "../lib/permissions.js";
 
 // ── Per-document-type routers ───────────────────────────────────
 
@@ -55,6 +56,7 @@ export const salesReturnRouter = createDocumentRouter({
   counterColumn: "nextCreditNoteNumber",
   allowedStatuses: ["draft", "sent", "cancelled"],
   stockEffect: "increment", // returned items come back into stock
+  fixedType: "sale", // goods back from a customer
 });
 
 export const purchaseReturnRouter = createDocumentRouter({
@@ -63,6 +65,7 @@ export const purchaseReturnRouter = createDocumentRouter({
   counterColumn: "nextCreditNoteNumber",
   allowedStatuses: ["draft", "sent", "cancelled"],
   stockEffect: "decrement", // sending items back reduces stock
+  fixedType: "purchase", // goods back to a supplier
 });
 
 export const purchaseOrderRouter = createDocumentRouter({
@@ -123,6 +126,11 @@ export const documentRouter = router({
   convert: memberProcedure
     .input(convertDocumentSchema)
     .mutation(async ({ input, ctx }) => {
+      // Converting reads the source document and creates a new one; both
+      // are Invoice-table documents, so enforce the same CASL checks as invoices.
+      requireCan(ctx.ability, "read", "Invoice");
+      requireCan(ctx.ability, "create", "Invoice");
+
       // 1. Fetch source document with line items
       const [sourceDoc] = await ctx.db
         .select()
@@ -210,6 +218,27 @@ export const documentRouter = router({
       // dated today.
       const fromOrder = ORDER_SOURCES.has(sourceDoc.documentType);
 
+      // The document-level discount goes along with the lines: all of it for
+      // the whole document, else the share of the lines' value taken.
+      const sourceDiscount = sourceDoc.discountAmount ?? "0";
+      let invoiceDiscount = wholeDocument ? sourceDiscount : "0";
+      if (!wholeDocument && money.isPositive(sourceDiscount) && money.isPositive(sourceDoc.subtotal)) {
+        const { subtotal } = calcInvoiceTotals({
+          lineItems: lines.map(({ li, quantity }) => ({
+            quantity,
+            unitPrice: li.unitPrice,
+            taxPercent: li.taxPercent,
+            discountPercent: li.discountPercent,
+          })),
+        });
+        invoiceDiscount = money.mul(sourceDiscount, money.toNumber(subtotal) / money.toNumber(sourceDoc.subtotal));
+      }
+      // Itemised charges travel as they are; the shipments behind any stay
+      // with the source document.
+      const sourceCharges = wholeDocument
+        ? (sourceDoc.charges ?? []).map(({ label, amount }) => ({ label, amount }))
+        : [];
+
       const convertInput = createInvoiceSchema.parse({
         partyId: sourceDoc.partyId,
         type: sourceDoc.type,
@@ -220,6 +249,9 @@ export const documentRouter = router({
         termsAndConditions: sourceDoc.termsAndConditions ?? undefined,
         // Part of a document doesn't take its charges and round-off along.
         additionalCharges: wholeDocument ? sourceDoc.additionalCharges : "0",
+        charges: sourceCharges.length > 0 ? sourceCharges : undefined,
+        invoiceDiscount,
+        invoiceDiscountType: "amount",
         roundOff: wholeDocument ? sourceDoc.roundOff : "0",
         referenceDocumentId: sourceDoc.id,
         warehouseId: input.warehouseId ?? undefined,

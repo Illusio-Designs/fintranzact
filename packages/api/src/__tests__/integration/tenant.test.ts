@@ -3,6 +3,7 @@
  *
  * Covers:
  *   - tenant.list: memberships returned, role per tenant
+ *   - tenant.current: never exposes the org's DB connection details
  *   - tenant.select: session tenantId updated, non-member rejection
  *   - tenant.members: full member list with user info
  *   - tenant.updateMemberRole: owner can change role, cannot touch owner/superadmin
@@ -198,6 +199,48 @@ describe("tenant.select", () => {
       code: "FORBIDDEN",
       message: "Not a member of this organization",
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenant.current — must never expose the organisation's DB credentials
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("tenant.current", () => {
+  const DB_SECRET = "s3cr3t-tenant-db-password-do-not-leak";
+  const DB_FIELDS = ["dbName", "dbHost", "dbPort", "dbUser", "dbPassword"];
+
+  it("does not return the database connection details to an owner or a regular member", async () => {
+    // A multi-tenant style org whose row carries dedicated-DB credentials.
+    const org = await createTenant({
+      name: "Provisioned Org",
+      dbName: "tenant_provisioned_db",
+      dbHost: "db-internal.example",
+      dbPort: "5432",
+      dbUser: "tenant_provisioned_user",
+      dbPassword: DB_SECRET,
+    });
+    const owner = await createUser({ email: "owner.dbsecret@acme.in", name: "Org Owner" });
+    const member = await createUser({ email: "member.dbsecret@acme.in", name: "Org Member" });
+    await addMember(org.id, owner.id, "owner");
+    await addMember(org.id, member.id, "seller");
+    const ownerSession = await createSession(owner.id, org.id);
+    const memberSession = await createSession(member.id, org.id);
+
+    for (const [session, user] of [[ownerSession, owner], [memberSession, member]] as const) {
+      const current = await callerForTenant(session.id, user, org.id).tenant.current();
+      expect(current).not.toBeNull();
+      expect(current!.id).toBe(org.id);
+      expect(current!.name).toBe("Provisioned Org");
+      for (const field of DB_FIELDS) expect(current).not.toHaveProperty(field);
+      const serialized = JSON.stringify(current);
+      expect(serialized).not.toContain(DB_SECRET);
+      expect(serialized).not.toContain("db-internal.example");
+      expect(serialized).not.toContain("tenant_provisioned_user");
+
+      const list = await callerNoTenant(session.id, user).tenant.list();
+      expect(JSON.stringify(list)).not.toContain(DB_SECRET);
+    }
   });
 });
 

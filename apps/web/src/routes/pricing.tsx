@@ -189,7 +189,7 @@ function PricingPage() {
         <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
           <p className={cn(EYEBROW, "text-center")}>Compare plans</p>
           <h2 className={cn(HEADING, "mt-3 text-center text-3xl md:text-[40px]")}>Find the plan that fits</h2>
-          <div className="mt-12 overflow-x-auto rounded-2xl border border-border-light bg-surface-0">
+          <div className="relative mt-12 overflow-x-auto rounded-2xl border border-border-light bg-surface-0">
             <table className="w-full min-w-[640px] text-left">
               <caption className="sr-only">Features by plan</caption>
               <thead>

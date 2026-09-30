@@ -572,7 +572,8 @@ export const invoiceRouter = router({
           if (!inv) return;
 
           const [party] = await db.select().from(parties).where(eq(parties.id, inv.partyId)).limit(1);
-          if (!party?.gstin) return; // B2C — skip
+          // B2C — skip. Exports to overseas buyers (no GSTIN) are e-invoiced.
+          if (!party || (!party.gstin && party.gstRegistrationType !== "overseas")) return;
 
           const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
           if (!biz) return;
@@ -643,6 +644,7 @@ export const invoiceRouter = router({
               pincode: party.pincode,
               phone: party.phone,
               email: party.email,
+              gstRegistrationType: party.gstRegistrationType,
             },
             {
               gstin: biz.gstin,
@@ -702,6 +704,7 @@ export const invoiceRouter = router({
   lastDeliveryMethod: viewerProcedure
     .input(z.object({ partyId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Invoice");
       const [row] = await ctx.db.select({ deliveryMethod: invoices.deliveryMethod })
         .from(invoices)
         .where(and(
@@ -932,8 +935,27 @@ export const invoiceRouter = router({
             actorUserId: ctx.user!.id,
           });
           if (input.warehouseId !== undefined) updates.warehouseId = input.warehouseId ?? null;
+        }
 
-          // Recalculate totals using fixed-point arithmetic.
+        // Recalculate totals whenever anything they're made of changes — the
+        // lines, or just the charges, discount or round-off — so the saved
+        // total always matches its parts.
+        if (
+          input.lineItems ||
+          input.charges !== undefined ||
+          input.invoiceDiscount !== undefined ||
+          input.roundOff !== undefined
+        ) {
+          const linesForTotals = input.lineItems ?? await tx
+            .select({
+              quantity: invoiceItems.quantity,
+              unitPrice: invoiceItems.unitPrice,
+              taxPercent: invoiceItems.taxPercent,
+              discountPercent: invoiceItems.discountPercent,
+            })
+            .from(invoiceItems)
+            .where(eq(invoiceItems.invoiceId, input.id));
+
           // Use merged charges (updates.charges) if charges were modified; otherwise
           // fall back to existing charges. This ensures shipment-linked charge entries
           // are included in the total even when the user didn't touch charges.
@@ -941,16 +963,17 @@ export const invoiceRouter = router({
             ? (updates.charges as Array<{ amount: string }> | null) ?? []
             : (existing.charges as Array<{ amount: string }> | null) ?? [];
           const roundOffStr = input.roundOff !== undefined ? input.roundOff : existing.roundOff;
+          // A stored discount is always an amount; a new one may be a percent.
           const totals = calcInvoiceTotals({
-            lineItems: input.lineItems.map((li) => ({
+            lineItems: linesForTotals.map((li) => ({
               quantity: li.quantity,
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent || "0",
               discountPercent: li.discountPercent || "0",
             })),
             charges: chargesForTotals.length > 0 ? chargesForTotals : undefined,
-            invoiceDiscount: input.invoiceDiscount || existing.discountAmount || "0",
-            invoiceDiscountType: input.invoiceDiscountType || "amount",
+            invoiceDiscount: input.invoiceDiscount ?? existing.discountAmount ?? "0",
+            invoiceDiscountType: input.invoiceDiscount !== undefined ? input.invoiceDiscountType || "amount" : "amount",
             roundOff: roundOffStr,
           });
 

@@ -344,4 +344,4 @@ For local development, set `FINTRANZACT_API_URL=http://localhost:3000` and use a
 
 ## Full Documentation
 
-[docs.fintranzact.com/ai/mcp-server](https://docs.fintranzact.com/ai/mcp-server/) — Setup guide, all tools with input/output schemas, security considerations, and integration examples.
+[Help centre: MCP Server](https://fintranzact-web.vercel.app/help/ai/mcp-server) — Setup guide, all tools with input/output schemas, security considerations, and integration examples.

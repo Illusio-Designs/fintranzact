@@ -75,7 +75,7 @@ function PartnerPortalPage() {
               again with an email link to open your partner portal.
             </p>
           )}
-          <Link to="/partners" hash="apply" className="btn-primary inline-flex">
+          <Link to="/partners/apply" className="btn-primary inline-flex">
             Become a partner
           </Link>
         </div>

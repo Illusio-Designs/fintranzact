@@ -1,0 +1,248 @@
+---
+title: Settings
+description: Configure your Fintranzact business profile, document numbering, shipping methods, sales targets, data import and backup, POS, barcodes, team members, and account preferences.
+sidebar:
+  order: 1
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+import { ForMobile } from "@/components/help/mdx";
+
+Settings is where you configure your business profile, document numbering, shipping methods, team access, and personal account preferences.
+
+<ForDesktop>
+Click **Settings** in the sidebar (or press <kbd>G</kbd> then <kbd>S</kbd>). The settings tabs are listed down the left side of the page:
+
+| Tab | What it covers | Who sees it |
+|---|---|---|
+| **Business** | Business profile, GST, statutory details, logo and signature | Everyone |
+| **Documents** | Number prefixes, next numbers, round-off and standard terms | Everyone |
+| **Shipping** | Delivery methods offered on invoices and shipments | Everyone |
+| **Team** | Members, roles and invitations | Everyone |
+| **Sales Targets** | Targets for your sales team | Everyone (only owners, admins and seller managers can set targets) |
+| **Data** | Import, CSV export, full backup | Everyone (full backup is owner-only) |
+| **Account** | Your profile, sessions, API keys, activity log | Everyone |
+| **Online Store** | Storefront settings | Everyone |
+| **Point-of-Sale** | Switch POS mode on or off | Owners and admins |
+| **Barcodes** | Barcode setup for items | Owners and admins |
+
+The app remembers the last tab you opened for the rest of your browser session.
+</ForDesktop>
+
+<ForMobile>
+Tap **More** at the bottom, then tap **Settings**. Settings are grouped into **Business** (Business details, Documents, Team, Online store), **App** (Appearance, App lock) and **Security** (Account, API keys). Shipping, Sales Targets, Data, Point-of-Sale and Barcodes settings are only available in the web and desktop app.
+</ForMobile>
+
+## Business Profile
+
+<ForDesktop>
+Found in **Settings → Business**.
+</ForDesktop>
+
+<ForMobile>
+Found in **More → Settings → Business details**.
+</ForMobile>
+
+Update your business name, legal name, contact details, and address. The most critical fields here are:
+
+- **State Code** — the 2-digit GST state code. Used for CGST/SGST vs IGST determination. See [Create Your Business](/help/getting-started/create-business).
+- **GST Registration Type** — Regular, Composition, or Unregistered.
+- **GSTIN** — your GST Identification Number, printed on all invoices and GST reports.
+
+Changes to the business profile take effect immediately on all future documents. Existing invoices are not retrospectively updated.
+
+### Financial Year
+
+**Financial Year Start Date** (in the business information section) controls when your financial year begins. Fintranzact uses the month of the date you pick; the default is April. Pick a date in January for a calendar year, or any other month if your business uses a different cycle.
+
+The financial year start affects:
+- Dashboard "this financial year" totals
+- Financial-year date ranges in reports and GST returns
+
+## Documents
+
+<ForDesktop>
+Found in **Settings → Documents**. The tab has two cards: **Document Prefixes** and **Document Defaults**.
+</ForDesktop>
+
+<ForMobile>
+Found in **More → Settings → Documents**. The screen shows **Document Prefixes** and **Current Sequence Numbers**. Document defaults (round-off and terms) are set in the web or desktop app.
+</ForMobile>
+
+### Document prefixes and numbering
+
+Document numbers are built from the prefix, a hyphen, and a 5-digit counter — for example `INV-00001`. Each document type has its own prefix and counter:
+
+| Document Type | Default Prefix |
+|---|---|
+| Invoice | INV |
+| Payment Receipt | PAY |
+| Quotation | QTN |
+| Credit Note | CN |
+| Delivery Challan | DC |
+| Proforma Invoice | PI |
+| Sales Order | SO |
+| Purchase Order | PO |
+| Goods Receipt Note | GRN |
+
+Prefixes are converted to upper case and can be up to 10 characters. After editing prefixes, click **Save**.
+
+The **Next #** value shows the number the next document of that type will get. To change it, click **Change** next to the document type, enter the **Next number**, and click **Confirm Change**.
+
+:::caution[Numbers can only move forward]
+The new number must be the same as or higher than the current one — Fintranzact rejects a lower number so that two documents can never end up with the same number. To start a fresh series (for example, at the start of a new financial year), change the **prefix** instead.
+:::
+
+Debit notes (`DN`), sales returns (`SR`) and purchase returns (`PR`) also have their own prefixes and counters, set when the business is created. Store orders from the [online store](/help/online-store) use the `ORD` prefix.
+
+### Document defaults
+
+These apply to every new invoice, quotation and credit note, and can always be changed on an individual document:
+
+- **Round invoice totals down to nearest integer** — on by default. Fills in the Round Off field on new invoices so the grand total drops to a whole rupee (for example ₹1,180.60 becomes ₹1,180). Once you edit Round Off by hand on an invoice, the automatic fill stops for that invoice.
+- **Standard Terms & Conditions** — up to 2,000 characters, pre-filled into the Terms & Conditions field of every new document. Leave blank to skip.
+
+Click **Save** on the card to apply changes.
+
+## Shipping
+
+Found in **Settings → Shipping** (web and desktop app). This controls the delivery methods you can pick on invoices and shipments:
+
+- **Built-in Delivery Methods** — Self Pickup, Self / Driver, Bus / Parcel Service, Transport, Courier (with tracking) and India Post (with tracking). These are always available.
+- **Custom Delivery Methods** — a form to add your own methods, such as "Porter" or "Local Tempo", with a **Method name** and whether it has a tracking number.
+- **Carrier API Integration** — marked **Coming Soon**; carrier accounts cannot be connected yet.
+
+:::caution[Custom methods are not saved yet]
+In the current version, custom delivery methods cannot be saved — clicking **Save Shipping Settings** does not store them, and they do not appear on the invoice form. Use the built-in methods for now.
+:::
+
+See [Shipments](/help/invoicing/shipments) for how delivery methods are used.
+
+## Online Store
+
+See [Online Store Overview](/help/online-store) for full documentation. Key settings:
+
+- **Enable/Disable Store** — toggle the store on or off
+- **Store Slug** — the URL path for your storefront
+- **Accent Colour** — brand colour for the storefront
+- **WhatsApp Number** — appears as a contact button on the storefront
+- **Min Order Amount** — minimum cart value to place an order
+
+## Team
+
+Manage team members from **Settings → Team**. See [Team & Roles](/help/team) for the full guide.
+
+## Sales Targets
+
+Found in **Settings → Sales Targets** (web and desktop app). Set performance targets for the sellers in your team and track progress against them. Owners, admins and seller managers can create, edit and delete targets; other members can only view them.
+
+Click **+ Set Target** and fill in:
+
+| Field | Options |
+|---|---|
+| **Seller** | The team member the target is for |
+| **Target type** | **Order Count** (number of sale invoices), **Order Value** (total invoice amount in ₹), or **Item Quantity** (units sold of one **Item**) |
+| **Period** | Daily, Weekly, Monthly, Quarterly, or Custom range, with start and end dates |
+| **Notes** | Optional |
+
+Progress counts the seller's own sale invoices (invoices they created) dated within the period, excluding drafts and cancelled invoices. Each target card shows the amount achieved, the percentage, what remains, and the days left. The percentage turns green once the target is achieved and amber when the seller is behind the pace needed for the time elapsed. Use the seller filter to see one person's targets, and the active-only checkbox to hide targets whose period has ended.
+
+## Data
+
+Found in **Settings → Data** (web and desktop app):
+
+- **Import data** — click **Start import** to migrate from myBillBook, Tally, or CSV files into the current business. See [Import Data](/help/getting-started/import-data).
+- **Export as CSV** — click **Export CSV bundle** to download a ZIP of CSV files (parties, items, invoices, invoice line items, payments, expenses) for the current business. This is for spreadsheets and other tools; it cannot be used to restore.
+- **Full backup (restorable)** — owners only. Click **Download backup** for a complete snapshot of the whole organization (all businesses). Limited to 2 backups per day. See [Backup & Restore](/help/settings/backup-restore).
+
+## Account
+
+<ForDesktop>
+Personal account settings and security, found in **Settings → Account**.
+
+- **Profile** — your display name and email. Changing email requires re-verification.
+- **Sessions** — view all active sessions across devices with browser, OS, IP address, and last activity. Revoke individual sessions or sign out all other devices.
+- **API Keys** — create and manage programmatic access tokens for the CLI and MCP server. Not available on the older Free plan (see [Plans & Billing](/help/settings/plans)).
+- **Activity Log** — audit trail of all actions (invoice creation, payment recording, party updates, etc.) with user attribution and time filtering (This Week, This Month, All Time).
+</ForDesktop>
+
+<ForMobile>
+Personal account settings, found in **More → Settings → Profile**.
+
+- **Profile** — your display name and email. Changing email requires re-verification.
+- **App Lock** — biometric unlock and PIN lock (see below).
+</ForMobile>
+
+## App Lock (Mobile)
+
+<ForDesktop>
+App lock is a mobile-only feature. Switch to the **Mobile** view using the toggle in the header to see the full guide.
+</ForDesktop>
+
+<ForMobile>
+Fintranzact can lock the app when it's not in use, requiring fingerprint, face recognition, or a 4-digit PIN to unlock. This prevents unauthorized access to your business data if someone else picks up your phone.
+
+### First-time setup prompt
+
+After your first login, Fintranzact shows a **"Secure your app"** bottom sheet on the dashboard. You have three options:
+
+1. **Enable Fingerprint / Face ID** — authenticates with your device's biometric sensor. After enabling, you're optionally asked to also set a backup PIN.
+2. **Set up PIN instead** — creates a 4-digit numeric PIN for unlocking. Useful if your device doesn't support biometrics or you prefer a PIN.
+3. **Skip for now** — dismisses the prompt. The app remains unlocked. You won't be prompted again automatically.
+
+### Enabling app lock later
+
+If you skipped the initial prompt, you can enable app lock at any time:
+
+1. Go to **More → Settings → Profile**
+2. Scroll to the **Security** section
+3. Toggle **Fingerprint** (or **Face ID**) on — the system biometric prompt appears to verify your identity
+4. Optionally, tap **Set PIN** to add a backup PIN
+
+### How unlocking works
+
+When the app launches (or returns from background), the lock screen appears:
+
+- **Biometric mode** — a fingerprint icon is shown. Tap it to authenticate. If biometric fails 3 times and you have a PIN configured, the app switches to PIN mode automatically.
+- **PIN mode** — a numeric keypad appears. Enter your 4-digit PIN to unlock.
+- You can switch between biometric and PIN modes using the links on the lock screen.
+- A **Sign out** link at the bottom lets you sign out entirely if needed.
+
+### Managing app lock
+
+From **More → Settings → Profile → Security**:
+
+| Action | How |
+|---|---|
+| Enable biometrics | Toggle the **Fingerprint / Face ID** switch on |
+| Disable biometrics | Toggle the switch off |
+| Set or change PIN | Tap **Set PIN** (or **Change PIN**) and enter a new 4-digit PIN twice |
+| Remove PIN | Tap **Remove PIN** and confirm |
+
+:::tip[Privacy, not security]
+App lock is a local privacy feature — it prevents casual access to your phone. Your actual account security is handled by your session token stored in the device's secure keychain. App lock does not encrypt your data; it adds a visual barrier to opening the app.
+:::
+</ForMobile>
+
+## Point-of-Sale
+
+Found in **Settings → Point-of-Sale** (web and desktop app; owners and admins only). Turn on the **Point-of-Sale mode** switch to enable the fullscreen cashier register at `/pos` — with an item grid, parked sales, thermal receipt printing and barcode-scanner support. When it's on, the tab shows quick usage notes and an **Open POS in a new tab** link, and a **Switch to POS** button appears on the **Invoices** page. Each browser tab running `/pos` works as an independent terminal.
+
+See [Point of Sale](/help/pos) for the full guide.
+
+## Barcodes
+
+Found in **Settings → Barcodes** (web and desktop app; owners and admins only). Switch barcodes on for the business, then choose the barcode type (EAN-13, Code 128 or QR) and whether each item has one barcode or many. The type and per-item choice are locked for the business once confirmed, and the label size follows the barcode type.
+
+See [Barcodes](/help/inventory/barcodes) for barcode labels and scanning, and [Physical stock](/help/inventory/physical-stock) for counts.
+
+## Frequently asked questions
+
+**Can I change my business's GSTIN?**
+Yes. Update it in Business Profile. All future invoices will show the new GSTIN. Existing invoices (already generated PDFs) are not affected unless you regenerate the PDF.
+
+**I want to start fresh invoice numbering for the new financial year. How?**
+Go to **Settings → Documents** and change the **Invoice** prefix to include the year — for example `INV2627` — then click **Save**. The next invoice becomes `INV2627-` followed by the running counter. The counter itself cannot be set lower than its current value, so a new prefix is how you mark a new series.
+
+**Can I change the currency?**
+Fintranzact defaults to INR for all monetary values. The currency field exists in the database but the UI always displays amounts as INR. Multi-currency support is not available in the current version.

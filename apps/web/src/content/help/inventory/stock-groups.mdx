@@ -1,0 +1,84 @@
+---
+title: Stock Groups
+description: Organise your items into Tally-style stock groups, nested as deep as you like, and see stock and value per group.
+sidebar:
+  order: 8
+---
+
+import { ForCA } from "@/components/help/mdx";
+
+**Stock groups** organise your items the way Tally does: Electronics → Mobiles → Smartphones, or Groceries → Rice → Basmati. Items in a group count towards every group above it in reports, so you can see stock value for "Electronics" as a whole or drill down to one shelf of products.
+
+Open it from the sidebar: **Inventory → Stock Groups**, or click **Stock groups** on the Stock Items page header.
+
+## Adding a group
+
+1. Click **+ Add group**.
+2. Enter a **Name**, for example "Electronics". Names are unique within your business, whatever the capitalisation. "electronics" and "Electronics" count as the same.
+3. Choose **Under**:
+   - **Primary (top level)** for a main group, or
+   - an existing group, to make it a sub-group.
+4. Click **Save**.
+
+You can nest groups as many levels deep as you need.
+
+## The groups list
+
+Groups are shown as a tree, with sub-groups indented under their parent and sorted by name.
+
+| Column | Shows |
+|---|---|
+| **Group** | Group name, indented by level |
+| **Sub-groups** | Number of groups directly inside it |
+| **Items** | Items in this group **and every group below it**. If some are in the sub-groups, the count of items directly in this group is shown as "(N direct)". |
+
+If some items aren't in any group, a note at the bottom says how many. Open Stock Items to file them.
+
+## Renaming or moving a group
+
+Click **Edit** on a group, change its **Name** or **Under**, and click **Save**. Moving a group takes all its sub-groups and items with it. A group can't be moved under itself or one of its own sub-groups.
+
+## Deleting a group
+
+Only owners and admins can delete groups. Click **Delete** on the group:
+
+- An empty group is simply removed.
+- If the group has items, choose **Move its items to**: another group, or **No group**. Its sub-groups move up one level, to the deleted group's parent.
+
+Click **Delete group** to confirm.
+
+## Putting items in a group
+
+Open an item (**Inventory → Stock Items**), expand **Identification**, and pick a **Stock group**. The list shows your groups as a tree, plus:
+
+- **No group**, and
+- **+ New group…**, to create a top-level group right there without leaving the item.
+
+To see the items in a group, use the group filter on the Stock Items page. Choosing a group also shows the items in all its sub-groups; **No group** shows items that aren't filed yet.
+
+:::note[Stock groups and Category]
+Stock groups replace the old free-text **Category**. An item's category is now always its stock group's name, and renaming a group updates the category on all its items. When items are imported with a category, Fintranzact files them into the group with that name, or creates a new top-level group for it.
+:::
+
+## Reports
+
+- **[Stock Group Summary](/help/inventory/reports)**: quantity and value per group, with drill-down to sub-groups and items.
+- **[Stock Summary](/help/inventory/reports)**: filter by group (includes its sub-groups).
+
+<ForCA>
+The Stock Group Summary totals include every sub-group, like Tally's Stock Summary grouped by stock group. Values follow the business's [valuation method](/help/inventory/stock-valuation). Quantities are simply added up across items, so a group mixing kg and pieces shows a quantity that isn't meaningful; rely on the value column.
+</ForCA>
+
+## Frequently asked questions
+
+**Can one item be in two groups?**
+No. Each item is in one group (or none). It counts towards every group above that one.
+
+**How many levels can I nest?**
+There's no limit.
+
+**What happens to items when I delete their group?**
+They move to the group you choose under **Move its items to**, or become ungrouped if you choose **No group**.
+
+**Who can create and edit groups?**
+Owners, admins and seller managers can add and edit groups. Only owners and admins can delete them.

@@ -1,0 +1,185 @@
+/* Help centre: article typography and the device / persona switchers. */
+
+/* Show only the instructions for the reader's device and role (set on the
+   help layout's root; "all" personas shows both). */
+[data-help-platform="mobile"] .help-platform-desktop,
+[data-help-platform="desktop"] .help-platform-mobile,
+[data-help-persona="ca"] .help-persona-business,
+[data-help-persona="business"] .help-persona-ca {
+  display: none;
+}
+
+.help-prose {
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.75;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.help-prose > :first-child,
+.help-prose .help-platform-desktop > :first-child,
+.help-prose .help-platform-mobile > :first-child,
+.help-prose .help-aside-body > :first-child {
+  margin-top: 0;
+}
+
+.help-prose h2,
+.help-prose h3,
+.help-prose h4 {
+  color: var(--text-primary);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  scroll-margin-top: 140px;
+}
+.help-prose h2 {
+  font-family: var(--font-display, inherit);
+  font-size: 1.5rem;
+  line-height: 1.3;
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-light);
+}
+.help-prose h3 {
+  font-size: 1.2rem;
+  line-height: 1.4;
+  margin-top: 2rem;
+}
+.help-prose h4 {
+  font-size: 1.05rem;
+  margin-top: 1.5rem;
+}
+
+.help-prose p,
+.help-prose ul,
+.help-prose ol {
+  margin-top: 1rem;
+}
+.help-prose ul {
+  list-style: disc;
+  padding-left: 1.4rem;
+}
+.help-prose ol {
+  list-style: decimal;
+  padding-left: 1.4rem;
+}
+.help-prose li {
+  margin-top: 0.4rem;
+}
+.help-prose li > ul,
+.help-prose li > ol,
+.help-prose li > p {
+  margin-top: 0.4rem;
+}
+.help-prose strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.help-prose a {
+  color: #3b5eaa;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.dark .help-prose a {
+  color: #8fa6d6;
+}
+.help-prose a:hover {
+  text-decoration-thickness: 2px;
+}
+.help-prose hr {
+  border: 0;
+  border-top: 1px solid var(--border-light);
+  margin: 2rem 0;
+}
+.help-prose blockquote {
+  border-left: 3px solid var(--border-color);
+  padding-left: 1rem;
+  margin-top: 1rem;
+  color: var(--text-tertiary);
+}
+
+/* Inline code */
+.help-prose :not(pre) > code {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.875em;
+  word-break: break-word;
+}
+
+/* Code blocks: always dark, scroll inside their own box. */
+.help-prose pre {
+  background: #0f1b3d;
+  color: #dbe4f5;
+  border-radius: 12px;
+  padding: 1rem 3rem 1rem 1rem;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+  max-width: 100%;
+}
+.dark .help-prose pre {
+  background: #0b1120;
+  box-shadow: inset 0 0 0 1px var(--border-light);
+}
+.help-prose pre code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: none;
+  padding: 0;
+}
+
+/* Tables (wrapped in .help-table, which scrolls sideways on phones). */
+.help-prose .help-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.help-prose .help-table th {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-weight: 700;
+  text-align: left;
+}
+.help-prose .help-table th,
+.help-prose .help-table td {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: top;
+  min-width: 7rem;
+}
+.help-prose .help-table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* <Steps> */
+.help-steps > ol {
+  list-style: none;
+  padding-left: 0;
+  counter-reset: help-step;
+}
+.help-steps > ol > li {
+  counter-increment: help-step;
+  position: relative;
+  padding-left: 2.5rem;
+  margin-top: 1.25rem;
+}
+.help-steps > ol > li::before {
+  content: counter(help-step);
+  position: absolute;
+  left: 0;
+  top: 0.1rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: #3b5eaa;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

@@ -503,7 +503,8 @@ function InvoiceDetailPanel({
 
   // Compute how much has been credited/returned against this invoice (combined limit)
   const relatedCNs = invoice?.relatedDocuments?.filter((d: any) => d.documentType === "credit_note") ?? [];
-  const relatedSRs = invoice?.relatedDocuments?.filter((d: any) => d.documentType === "sales_return") ?? [];
+  // Goods back from a customer are a sales return; goods back to a supplier a purchase return.
+  const relatedSRs = invoice?.relatedDocuments?.filter((d: any) => d.documentType === "sales_return" || d.documentType === "purchase_return") ?? [];
   const allRelated = [...relatedCNs, ...relatedSRs];
   const totalAdjusted = allRelated.reduce((sum: number, d: any) => sum + parseFloat(d.totalAmount), 0);
   const invoiceTotal = invoice ? parseFloat(invoice.totalAmount) : 0;
@@ -569,7 +570,7 @@ function InvoiceDetailPanel({
                   See {cn.invoiceNumber}
                 </a>
               ))}
-              {relatedSRs.map((sr: any) => (
+              {relatedSRs.map((sr: any) => sr.documentType === "sales_return" ? (
                 <a
                   key={sr.id}
                   href={`/sales-returns?id=${sr.id}`}
@@ -577,6 +578,13 @@ function InvoiceDetailPanel({
                 >
                   See {sr.invoiceNumber}
                 </a>
+              ) : (
+                <span
+                  key={sr.id}
+                  className="inline-flex items-center text-xs px-2.5 py-1.5 rounded font-medium text-orange-600"
+                >
+                  Returned on {sr.invoiceNumber}
+                </span>
               ))}
               {/* Create buttons — only when not fully adjusted */}
               {canConvert && (
@@ -591,7 +599,7 @@ function InvoiceDetailPanel({
                     onClick={() => { onClose(); onCreateSR?.(invoice.id, invoice.type as "sale" | "purchase"); }}
                     className="inline-flex items-center text-xs px-2.5 py-1.5 rounded font-medium text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950 transition-colors"
                   >
-                    Create Sales Return
+                    {invoice.type === "purchase" ? "Create Purchase Return" : "Create Sales Return"}
                   </button>
                 </>
               )}
@@ -1318,7 +1326,7 @@ function InvoicesPage() {
       {/* DocumentCreator pre-filled from source invoice for Sales Return */}
       {srSource && (
         <DocumentCreator
-          documentType="sales_return"
+          documentType={srSource.type === "purchase" ? "purchase_return" : "sales_return"}
           invoiceType={srSource.type}
           prefillFromInvoiceId={srSource.id}
           onClose={() => setSrSource(null)}

@@ -194,6 +194,19 @@ export const createBusinessSchema = z.object({
   annualTurnover: z.number().nonnegative().nullable().optional(),
   defaultRoundOff: z.boolean().default(true),
   defaultTermsAndConditions: z.string().max(2000).nullable().optional(),
+
+  // Settings → Shipping: user-defined delivery methods shown in the invoice form.
+  customShippingMethods: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(100),
+        label: z.string().min(1).max(100),
+        hasTracking: z.boolean(),
+      }),
+    )
+    .max(50)
+    .nullable()
+    .optional(),
 });
 
 export const updateBusinessSchema = createBusinessSchema.partial();

@@ -19,6 +19,7 @@ import {
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { logAudit } from "./audit.js";
 import { resolveInvoiceWarehouse, syncDocumentStock } from "./inventory-service.js";
+import { requireCan } from "./permissions.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
 import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
@@ -142,6 +143,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
         })
       )
       .query(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "read", "Invoice");
         const conditions = [
           eq(invoices.businessId, ctx.businessId),
           eq(invoices.documentType, docType as DocumentType),
@@ -239,6 +241,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
     getById: viewerProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "read", "Invoice");
         const [invoice] = await ctx.db
           .select()
           .from(invoices)
@@ -268,6 +271,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
     create: memberProcedure
       .input(createInvoiceSchema)
       .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "create", "Invoice");
         const doc = await ctx.db.transaction(async (tx) => {
           // Security: validate that partyId belongs to the current business.
           const [partyCheck] = await tx.select({ id: parties.id })
@@ -383,7 +387,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               discountPercent: li.discountPercent || "0",
             })),
             charges: charges.length > 0 ? charges : undefined,
-            roundOff: charges.length > 0 ? (input.roundOff || "0") : undefined,
+            invoiceDiscount: input.invoiceDiscount || "0",
+            invoiceDiscountType: input.invoiceDiscountType || "amount",
+            roundOff: input.roundOff || "0",
           });
           const additionalCharges = charges.length > 0
             ? totals.chargesTotal
@@ -454,7 +460,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               dueDate: input.dueDate ? new Date(input.dueDate) : null,
               subtotal: totals.subtotal,
               taxAmount: totals.taxTotal,
-              discountAmount: "0.00",
+              discountAmount: totals.invoiceDiscountAmount,
               charges: charges.length > 0 ? charges : null,
               additionalCharges,
               roundOff,
@@ -540,6 +546,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
         })
       )
       .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "update", "Invoice");
         const doc = await ctx.db.transaction(async (tx) => {
           const [before] = await tx
             .select({ status: invoices.status })
@@ -601,6 +608,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
     delete: adminProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "delete", "Invoice");
         const deleteResult = await ctx.db.transaction(async (tx) => {
           const [doc] = await tx
             .select()
@@ -620,6 +628,17 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
           // Already soft-deleted — return early
           if (doc.deletedAt) return { success: true, invoiceNumber: doc.invoiceNumber, deleted: false };
+
+          // seller_manager: same limit as invoice.delete — unpaid, within 2 hours of creation
+          if (ctx.role === "seller_manager") {
+            if (doc.status === "paid") {
+              throw new TRPCError({ code: "FORBIDDEN", message: "Cannot delete paid documents" });
+            }
+            const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+            if (doc.createdAt < twoHoursAgo) {
+              throw new TRPCError({ code: "FORBIDDEN", message: "Can only delete documents within 2 hours of creation" });
+            }
+          }
 
           await assertNotBilled(tx, ctx.businessId, doc);
 

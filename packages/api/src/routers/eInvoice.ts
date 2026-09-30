@@ -74,10 +74,12 @@ async function generateIRNForInvoice(
   if (!invoice) throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" });
 
   const [party] = await db.select().from(parties).where(eq(parties.id, invoice.partyId)).limit(1);
-  if (!party?.gstin) {
+  // B2B needs the buyer's GSTIN; an export to an overseas buyer has none
+  // (the mapper reports it as "URP").
+  if (!party || (!party.gstin && party.gstRegistrationType !== "overseas")) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "E-invoicing requires the customer to have a GSTIN (B2B only)",
+      message: "E-invoicing requires the customer to have a GSTIN (B2B) or to be an overseas buyer (export)",
     });
   }
 
@@ -143,6 +145,7 @@ async function generateIRNForInvoice(
       pincode: party.pincode,
       phone: party.phone,
       email: party.email,
+      gstRegistrationType: party.gstRegistrationType,
     },
     {
       gstin: business.gstin,

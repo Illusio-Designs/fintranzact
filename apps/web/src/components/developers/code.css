@@ -1,0 +1,47 @@
+/* Prism token colours for the API reference code blocks (always on a dark background). */
+.dev-code .token.comment,
+.dev-code .token.prolog,
+.dev-code .token.doctype,
+.dev-code .token.cdata {
+  color: #7383a6;
+  font-style: italic;
+}
+.dev-code .token.punctuation {
+  color: #94a3b8;
+}
+.dev-code .token.property,
+.dev-code .token.tag,
+.dev-code .token.boolean,
+.dev-code .token.number,
+.dev-code .token.constant,
+.dev-code .token.symbol,
+.dev-code .token.deleted {
+  color: #fca5a5;
+}
+.dev-code .token.selector,
+.dev-code .token.attr-name,
+.dev-code .token.string,
+.dev-code .token.char,
+.dev-code .token.builtin,
+.dev-code .token.inserted {
+  color: #86efac;
+}
+.dev-code .token.operator,
+.dev-code .token.entity,
+.dev-code .token.url {
+  color: #fcd34d;
+}
+.dev-code .token.atrule,
+.dev-code .token.attr-value,
+.dev-code .token.keyword {
+  color: #a9bde6;
+}
+.dev-code .token.function,
+.dev-code .token.class-name {
+  color: #67e8f9;
+}
+.dev-code .token.regex,
+.dev-code .token.important,
+.dev-code .token.variable {
+  color: #fdba74;
+}

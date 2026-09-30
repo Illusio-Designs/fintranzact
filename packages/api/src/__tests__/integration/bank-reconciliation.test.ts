@@ -20,11 +20,14 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
+  bankAccounts,
   bankStatementImports,
   bankStatementLines,
+  bankTransactions,
 } from "@fintranzact/db";
+import { money } from "@fintranzact/shared";
 import {
   createTestWorld,
   createBankAccount,
@@ -506,6 +509,98 @@ describe("Bank Reconciliation — CSV Import", () => {
     expect(refreshed[0]!.matchedExpenseId).toBe(expense.id);
   });
 
+  it("records the bank withdrawal for an expense created from a debit line", async () => {
+    const caller = callerForRamesh();
+    const db = getTenantTestDb();
+
+    const csv = [
+      "Date,Description,Debit,Credit,Balance",
+      "05/04/2026,Courier charges,1250.50,,95000.00",
+      "06/04/2026,Refund received,,400.00,95400.00",
+    ].join("\n");
+
+    const upload = await caller.bankRecon.uploadCSV({
+      bankAccountId: account.id,
+      fileName: "withdrawal-test.csv",
+      csvContent: csv,
+    });
+    await caller.bankRecon.confirmMapping({
+      importId: upload.importId,
+      csvContent: csv,
+      columnMapping: {
+        date: 0,
+        narration: 1,
+        debit: 2,
+        credit: 3,
+        balance: 4,
+        dateFormat: "DD/MM/YYYY",
+        skipRows: 1,
+      },
+    });
+
+    const lines = await db
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.importId, upload.importId));
+    const debitLine = lines.find((l) => parseFloat(l.debit) > 0)!;
+    const creditLine = lines.find((l) => parseFloat(l.credit) > 0)!;
+    expect(debitLine.matchStatus).toBe("unmatched");
+
+    const [before] = await db
+      .select({ currentBalance: bankAccounts.currentBalance })
+      .from(bankAccounts)
+      .where(eq(bankAccounts.id, account.id));
+
+    const expense = await caller.bankRecon.createExpense({
+      lineId: debitLine.id,
+      expense: {
+        category: "Freight",
+        amount: "1250.50",
+        mode: "bank",
+        expenseDate: new Date("2026-04-05").toISOString(),
+      },
+    });
+
+    expect(expense.bankAccountId).toBe(account.id);
+
+    const txns = await db
+      .select()
+      .from(bankTransactions)
+      .where(and(
+        eq(bankTransactions.referenceType, "expense"),
+        eq(bankTransactions.referenceId, expense.id),
+      ));
+    expect(txns).toHaveLength(1);
+    expect(txns[0]!.type).toBe("withdrawal");
+    expect(txns[0]!.bankAccountId).toBe(account.id);
+    expect(txns[0]!.amount).toBe("1250.50");
+
+    const [after] = await db
+      .select({ currentBalance: bankAccounts.currentBalance })
+      .from(bankAccounts)
+      .where(eq(bankAccounts.id, account.id));
+    expect(parseFloat(after!.currentBalance)).toBeCloseTo(
+      parseFloat(before!.currentBalance) - 1250.5,
+      2,
+    );
+
+    const [line] = await db
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.id, debitLine.id));
+    expect(line!.matchStatus).toBe("created");
+    expect(line!.matchedExpenseId).toBe(expense.id);
+    expect(line!.matchedBankTransactionId).toBe(txns[0]!.id);
+
+    // A credit (deposit) line is not a withdrawal — no expense can be created.
+    await expect(
+      caller.bankRecon.createExpense({
+        lineId: creditLine.id,
+        expense: { category: "Misc", amount: "400.00", mode: "bank" },
+      }),
+    ).rejects.toThrow(/debit/);
+  });
+
   it("applies a categorization rule to auto-categorize a matching line on import", async () => {
     const caller = callerForRamesh();
 
@@ -590,5 +685,189 @@ describe("Bank Reconciliation — CSV Import", () => {
 
     expect(importRecord!.templateId).toBe(hdfcTemplate!.id);
     expect(importRecord!.templateVersion).toBe(hdfcTemplate!.version);
+  });
+});
+
+// ── Expense created from a statement line: its lifecycle ─────────────────────
+
+describe("Bank Reconciliation — expense created from a line", () => {
+  /** Import a one-line debit statement on `bankAccountId` and return the line. */
+  async function importDebitLine(bankAccountId: string, row: string) {
+    const caller = callerForRamesh();
+    const csv = ["Date,Description,Debit,Credit,Balance", row].join("\n");
+    const upload = await caller.bankRecon.uploadCSV({
+      bankAccountId,
+      fileName: "single-line.csv",
+      csvContent: csv,
+    });
+    await caller.bankRecon.confirmMapping({
+      importId: upload.importId,
+      csvContent: csv,
+      columnMapping: {
+        date: 0,
+        narration: 1,
+        debit: 2,
+        credit: 3,
+        balance: 4,
+        dateFormat: "DD/MM/YYYY",
+        skipRows: 1,
+      },
+    });
+    const [line] = await getTenantTestDb()
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.importId, upload.importId));
+    expect(line!.matchStatus).toBe("unmatched");
+    return line!;
+  }
+
+  async function balanceOf(bankAccountId: string) {
+    const [row] = await getTenantTestDb()
+      .select({ currentBalance: bankAccounts.currentBalance })
+      .from(bankAccounts)
+      .where(eq(bankAccounts.id, bankAccountId));
+    return row!.currentBalance;
+  }
+
+  async function withdrawalsFor(expenseId: string) {
+    return getTenantTestDb()
+      .select()
+      .from(bankTransactions)
+      .where(and(
+        eq(bankTransactions.referenceType, "expense"),
+        eq(bankTransactions.referenceId, expenseId),
+      ));
+  }
+
+  // Regression: the "is the line still unmatched?" check ran outside the
+  // transaction, so a double-submit recorded two expenses and two withdrawals.
+  it("records the withdrawal exactly once when the request is sent twice", async () => {
+    const caller = callerForRamesh();
+    const line = await importDebitLine(account.id, "11/05/2026,Printer toner,777.77,,90000.00");
+    const before = await balanceOf(account.id);
+
+    const expense = {
+      category: "Office Supplies",
+      amount: "777.77",
+      mode: "bank" as const,
+      expenseDate: new Date("2026-05-11").toISOString(),
+    };
+    const results = await Promise.allSettled([
+      caller.bankRecon.createExpense({ lineId: line.id, expense }),
+      caller.bankRecon.createExpense({ lineId: line.id, expense }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+
+    const db = getTenantTestDb();
+    const txns = await db
+      .select()
+      .from(bankTransactions)
+      .where(and(
+        eq(bankTransactions.bankAccountId, account.id),
+        eq(bankTransactions.amount, "777.77"),
+      ));
+    expect(txns).toHaveLength(1);
+    expect(money.sub(before, await balanceOf(account.id))).toBe("777.77");
+
+    const [refreshed] = await db
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.id, line.id));
+    expect(refreshed!.matchStatus).toBe("created");
+    expect(refreshed!.matchedBankTransactionId).toBe(txns[0]!.id);
+  });
+
+  // Regression: deleting the expense reversed the withdrawal but left the line
+  // "created" and pointing at the deleted expense, so it could never be
+  // reconciled again (unmatch and createExpense both refused it).
+  it("deleting the expense reverses the withdrawal and reopens the line", async () => {
+    const caller = callerForRamesh();
+    const line = await importDebitLine(account.id, "12/05/2026,Stationery,333.33,,89000.00");
+    const before = await balanceOf(account.id);
+
+    const expense = await caller.bankRecon.createExpense({
+      lineId: line.id,
+      expense: { category: "Stationery", amount: "333.33", mode: "bank" },
+    });
+    expect(await withdrawalsFor(expense.id)).toHaveLength(1);
+
+    await caller.expense.delete({ id: expense.id });
+
+    expect(await withdrawalsFor(expense.id)).toHaveLength(0);
+    expect(await balanceOf(account.id)).toBe(before);
+
+    const db = getTenantTestDb();
+    const [reopened] = await db
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.id, line.id));
+    expect(reopened!.matchStatus).toBe("unmatched");
+    expect(reopened!.matchedExpenseId).toBeNull();
+    expect(reopened!.matchedBankTransactionId).toBeNull();
+
+    const [imp] = await db
+      .select()
+      .from(bankStatementImports)
+      .where(eq(bankStatementImports.id, line.importId));
+    expect(imp!.unmatchedLines).toBe(1);
+    expect(imp!.matchedLines).toBe(0);
+
+    // The line can be reconciled again.
+    const again = await caller.bankRecon.createExpense({
+      lineId: line.id,
+      expense: { category: "Stationery", amount: "333.33", mode: "bank" },
+    });
+    expect(await withdrawalsFor(again.id)).toHaveLength(1);
+  });
+
+  // Regression: expense.update re-created the withdrawal on the default account
+  // for the payment mode, moving it off the statement's account and leaving
+  // the line linked to a deleted bank transaction.
+  it("editing the expense keeps the withdrawal on the statement's account", async () => {
+    const caller = callerForRamesh();
+    const db = getTenantTestDb();
+    const other = await createBankAccount(db, world.business1.id, {
+      accountName: "ICICI Current Account",
+      accountNumber: "99887766554433",
+      ifsc: "ICIC0000001",
+      bankName: "ICICI Bank",
+      accountType: "current",
+      openingBalance: "50000.00",
+      currentBalance: "50000.00",
+      isDefault: false,
+    });
+    const line = await importDebitLine(other.id, "13/05/2026,Internet bill,1111.00,,48889.00");
+    const defaultBefore = await balanceOf(account.id);
+
+    const expense = await caller.bankRecon.createExpense({
+      lineId: line.id,
+      expense: { category: "Internet", amount: "1111.00", mode: "bank" },
+    });
+    expect(await balanceOf(other.id)).toBe("48889.00");
+
+    // What the Expenses page sends when the user edits the description.
+    await caller.expense.update({
+      id: expense.id,
+      data: {
+        category: "Internet",
+        description: "Broadband for May",
+        amount: "1111.00",
+        mode: "bank",
+        expenseDate: new Date("2026-05-13").toISOString(),
+      },
+    });
+
+    const txns = await withdrawalsFor(expense.id);
+    expect(txns).toHaveLength(1);
+    expect(txns[0]!.bankAccountId).toBe(other.id);
+    expect(await balanceOf(other.id)).toBe("48889.00");
+    expect(await balanceOf(account.id)).toBe(defaultBefore);
+
+    const [refreshed] = await db
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.id, line.id));
+    expect(refreshed!.matchStatus).toBe("created");
+    expect(refreshed!.matchedBankTransactionId).toBe(txns[0]!.id);
   });
 });

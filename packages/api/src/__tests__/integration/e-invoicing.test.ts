@@ -439,6 +439,119 @@ describe("mapInvoiceToIRP", () => {
     expect(result.DocDtls.Typ).toBe("CRN");
   });
 
+  // Regression: every inter-state supply was sent as SupTyp "EXPWP" (export
+  // with payment) instead of B2B with IGST.
+  describe("supply type", () => {
+    const inv = {
+      invoiceNumber: "INV-SUP",
+      invoiceDate: new Date("2026-04-02"),
+      type: "sale",
+      documentType: "invoice",
+      subtotal: "10000.00",
+      taxAmount: "1800.00",
+      discountAmount: null,
+      additionalCharges: null,
+      roundOff: null,
+      totalAmount: "11800.00",
+      isReverseCharge: false,
+    };
+    const line = (taxPercent = "18") => [
+      {
+        itemName: "Steel Pipes",
+        description: null,
+        quantity: "10",
+        unitPrice: "1000.00",
+        taxPercent,
+        taxAmount: "1800.00",
+        discountPercent: "0",
+        totalAmount: "11800.00",
+        selectedUnit: "pcs",
+        itemType: "product",
+        itemHsn: "7306",
+      },
+    ];
+    const seller = {
+      gstin: "27AABCU9603R1ZM", legalName: null, name: "Acme", address: null, city: null,
+      state: "Maharashtra", stateCode: "27", pincode: "400001", phone: null, email: null,
+    };
+    const buyer = (over: Record<string, unknown> = {}) => ({
+      gstin: "29AABCG0000R1ZM", name: "Buyer", billingAddress: null, city: null,
+      state: "Karnataka", stateCode: "29", pincode: "560001", phone: null, email: null,
+      ...over,
+    });
+
+    it("inter-state regular buyer is B2B with IGST, not an export", () => {
+      const r = mapInvoiceToIRP(inv, line(), buyer({ gstRegistrationType: "regular" }), seller);
+      expect(r.TranDtls.SupTyp).toBe("B2B");
+      expect(r.BuyerDtls.Pos).toBe("29");
+      expect(r.ValDtls.IgstVal).toBe(1800);
+      expect(r.ValDtls.CgstVal).toBe(0);
+      expect(r.ValDtls.SgstVal).toBe(0);
+    });
+
+    it("intra-state buyer is B2B with CGST+SGST", () => {
+      const r = mapInvoiceToIRP(inv, line(), buyer({ gstin: "27AABCM0000R1ZM", stateCode: "27" }), seller);
+      expect(r.TranDtls.SupTyp).toBe("B2B");
+      expect(r.ValDtls.IgstVal).toBe(0);
+      expect(r.ValDtls.CgstVal).toBe(900);
+      expect(r.ValDtls.SgstVal).toBe(900);
+    });
+
+    it("derives place of supply from the GSTIN when the party has no state code", () => {
+      const r = mapInvoiceToIRP(inv, line(), buyer({ stateCode: null }), seller);
+      expect(r.TranDtls.SupTyp).toBe("B2B");
+      expect(r.BuyerDtls.Pos).toBe("29");
+      expect(r.ValDtls.IgstVal).toBe(1800);
+    });
+
+    it("SEZ buyer is SEZWP/SEZWOP and always IGST, even in the same state", () => {
+      const sameStateSez = buyer({ gstin: "27AABCS0000R1ZM", stateCode: "27", gstRegistrationType: "sez" });
+      const withPay = mapInvoiceToIRP(inv, line(), sameStateSez, seller);
+      expect(withPay.TranDtls.SupTyp).toBe("SEZWP");
+      expect(withPay.ValDtls.IgstVal).toBe(1800);
+      expect(withPay.ValDtls.CgstVal).toBe(0);
+
+      const lut = mapInvoiceToIRP(inv, line("0"), sameStateSez, seller);
+      expect(lut.TranDtls.SupTyp).toBe("SEZWOP");
+    });
+
+    it("overseas buyer is an export (EXPWP/EXPWOP) with POS 96", () => {
+      const overseas = buyer({ gstin: null, stateCode: null, gstRegistrationType: "overseas" });
+      const r = mapInvoiceToIRP(inv, line(), overseas, seller);
+      expect(r.TranDtls.SupTyp).toBe("EXPWP");
+      expect(r.BuyerDtls.Gstin).toBe("URP");
+      expect(r.BuyerDtls.Pos).toBe("96");
+      expect(r.ValDtls.IgstVal).toBe(1800);
+      expect(mapInvoiceToIRP(inv, line("0"), overseas, seller).TranDtls.SupTyp).toBe("EXPWOP");
+    });
+
+    // Regression: the GSTIN lookup maps IRP taxpayer type NRT (a non-resident
+    // taxable person, registered in India with a GSTIN) to "overseas", and
+    // every "overseas" party was sent as an export — POS 96, PIN 999999, but
+    // with a real GSTIN as the buyer.
+    it("an overseas-typed buyer holding a GSTIN is B2B, not an export", () => {
+      const nrt = buyer({
+        gstin: "27AABCN0000R1ZM", stateCode: "27", pincode: "400002", gstRegistrationType: "overseas",
+      });
+      const r = mapInvoiceToIRP(inv, line(), nrt, seller);
+      expect(r.TranDtls.SupTyp).toBe("B2B");
+      expect(r.BuyerDtls.Gstin).toBe("27AABCN0000R1ZM");
+      expect(r.BuyerDtls.Pos).toBe("27");
+      expect(r.BuyerDtls.Stcd).toBe("27");
+      expect(r.BuyerDtls.Pin).toBe(400002);
+      expect(r.ValDtls.CgstVal).toBe(900);
+      expect(r.ValDtls.SgstVal).toBe(900);
+      expect(r.ValDtls.IgstVal).toBe(0);
+    });
+
+    it("treats a blank party state code as missing when deriving place of supply", () => {
+      const r = mapInvoiceToIRP(inv, line(), buyer({ stateCode: "" }), seller);
+      expect(r.BuyerDtls.Pos).toBe("29");
+      expect(r.BuyerDtls.Stcd).toBe("29");
+      expect(r.ValDtls.IgstVal).toBe(1800);
+    });
+  });
+
   it("throws if business has no GSTIN", () => {
     expect(() =>
       mapInvoiceToIRP(
@@ -529,6 +642,41 @@ describe("eInvoice.generate", () => {
     await expect(
       caller.eInvoice.generate({ invoiceId: invoice.id }),
     ).rejects.toThrow("GSTIN");
+  });
+
+  // Regression: generate rejected every party without a GSTIN, so an export
+  // to an overseas buyer could never be e-invoiced and the EXPWP mapping
+  // (Gstin "URP", POS 96) was unreachable.
+  it("generates an IRN for an export to an overseas buyer without a GSTIN", async () => {
+    const mockModule = await import("../../lib/irp-client.js") as unknown as {
+      __mockGenerateIRN: ReturnType<typeof vi.fn>;
+    };
+    const db = getTenantTestDb();
+    await setupEInvoiceConfig();
+    const caller = callerForRamesh();
+
+    const overseas = await createParty(db, world.business1.id, {
+      name: "Acme Imports LLC",
+      type: "customer",
+      gstin: null,
+      gstRegistrationType: "overseas",
+      openingBalance: "0.00",
+    });
+    const { invoice } = await createInvoiceWithItems(
+      db,
+      world.business1.id,
+      overseas.id,
+      [{ description: "Handicrafts", quantity: "2", unitPrice: "5000.00", taxPercent: "18" }],
+    );
+
+    mockModule.__mockGenerateIRN.mockClear();
+    const result = await caller.eInvoice.generate({ invoiceId: invoice.id });
+
+    expect(result!.eInvoiceStatus).toBe("generated");
+    const payload = mockModule.__mockGenerateIRN.mock.calls[0]![0];
+    expect(payload.TranDtls.SupTyp).toBe("EXPWP");
+    expect(payload.BuyerDtls.Gstin).toBe("URP");
+    expect(payload.BuyerDtls.Pos).toBe("96");
   });
 
   it("marks invoice as failed when IRP returns 400 error", async () => {

@@ -8,6 +8,8 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
+import { createFileRoute } from '@tanstack/react-router'
+
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WidgetsRouteImport } from './routes/widgets'
 import { Route as WarehousesRouteImport } from './routes/warehouses'
@@ -18,7 +20,6 @@ import { Route as StockGroupsRouteImport } from './routes/stock-groups'
 import { Route as StockAdjustmentsRouteImport } from './routes/stock-adjustments'
 import { Route as ShipmentsRouteImport } from './routes/shipments'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SalesReturnsRouteImport } from './routes/sales-returns'
 import { Route as SalesOrdersRouteImport } from './routes/sales-orders'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -34,7 +35,6 @@ import { Route as PosRouteImport } from './routes/pos'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PhysicalStockRouteImport } from './routes/physical-stock'
 import { Route as PaymentsRouteImport } from './routes/payments'
-import { Route as PartnersRouteImport } from './routes/partners'
 import { Route as PartnerPortalRouteImport } from './routes/partner-portal'
 import { Route as PartiesRouteImport } from './routes/parties'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
@@ -48,7 +48,6 @@ import { Route as Gstr2bRouteImport } from './routes/gstr2b'
 import { Route as GstRouteImport } from './routes/gst'
 import { Route as GoodsReceiptNotesRouteImport } from './routes/goods-receipt-notes'
 import { Route as FindAPartnerRouteImport } from './routes/find-a-partner'
-import { Route as FeaturesRouteImport } from './routes/features'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as EwayBillsRouteImport } from './routes/eway-bills'
 import { Route as EInvoicingRouteImport } from './routes/e-invoicing'
@@ -62,14 +61,37 @@ import { Route as AutomatedInvoicesRouteImport } from './routes/automated-invoic
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SolutionsIndexRouteImport } from './routes/solutions/index'
+import { Route as SecurityIndexRouteImport } from './routes/security/index'
+import { Route as PartnersIndexRouteImport } from './routes/partners/index'
+import { Route as HelpIndexRouteImport } from './routes/help/index'
+import { Route as FeaturesIndexRouteImport } from './routes/features/index'
 import { Route as SolutionsSlugRouteImport } from './routes/solutions/$slug'
+import { Route as SecurityReportRouteImport } from './routes/security/report'
+import { Route as PartnersApplyRouteImport } from './routes/partners/apply'
 import { Route as InviteTokenRouteImport } from './routes/invite/$token'
 import { Route as ITokenRouteImport } from './routes/i/$token'
+import { Route as HelpSplatRouteImport } from './routes/help/$'
+import { Route as FeaturesSlugRouteImport } from './routes/features/$slug'
 import { Route as BusinessCreateRouteImport } from './routes/business/create'
 import { Route as AuthVerifyEmailChangeRouteImport } from './routes/auth/verify-email-change'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthPlanSelectionRouteImport } from './routes/auth/plan-selection'
 import { Route as AuthCompleteProfileRouteImport } from './routes/auth/complete-profile'
+
+const DevelopersIndexLazyRouteImport = createFileRoute('/developers/')()
+const DevelopersFaqLazyRouteImport = createFileRoute('/developers/faq')()
+const DevelopersConventionsLazyRouteImport = createFileRoute(
+  '/developers/conventions',
+)()
+const DevelopersAuthenticationLazyRouteImport = createFileRoute(
+  '/developers/authentication',
+)()
+const DevelopersSectionIndexLazyRouteImport = createFileRoute(
+  '/developers/$section/',
+)()
+const DevelopersSectionEndpointLazyRouteImport = createFileRoute(
+  '/developers/$section/$endpoint',
+)()
 
 const WidgetsRoute = WidgetsRouteImport.update({
   id: '/widgets',
@@ -114,11 +136,6 @@ const ShipmentsRoute = ShipmentsRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SecurityRoute = SecurityRouteImport.update({
-  id: '/security',
-  path: '/security',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SalesReturnsRoute = SalesReturnsRouteImport.update({
@@ -196,11 +213,6 @@ const PaymentsRoute = PaymentsRouteImport.update({
   path: '/payments',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PartnersRoute = PartnersRouteImport.update({
-  id: '/partners',
-  path: '/partners',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PartnerPortalRoute = PartnerPortalRouteImport.update({
   id: '/partner-portal',
   path: '/partner-portal',
@@ -266,11 +278,6 @@ const FindAPartnerRoute = FindAPartnerRouteImport.update({
   path: '/find-a-partner',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FeaturesRoute = FeaturesRouteImport.update({
-  id: '/features',
-  path: '/features',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ExpensesRoute = ExpensesRouteImport.update({
   id: '/expenses',
   path: '/expenses',
@@ -331,14 +338,74 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevelopersIndexLazyRoute = DevelopersIndexLazyRouteImport.update({
+  id: '/developers/',
+  path: '/developers/',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/developers/index.lazy').then((d) => d.Route),
+)
 const SolutionsIndexRoute = SolutionsIndexRouteImport.update({
   id: '/solutions/',
   path: '/solutions/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SecurityIndexRoute = SecurityIndexRouteImport.update({
+  id: '/security/',
+  path: '/security/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnersIndexRoute = PartnersIndexRouteImport.update({
+  id: '/partners/',
+  path: '/partners/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpIndexRoute = HelpIndexRouteImport.update({
+  id: '/help/',
+  path: '/help/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeaturesIndexRoute = FeaturesIndexRouteImport.update({
+  id: '/features/',
+  path: '/features/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevelopersFaqLazyRoute = DevelopersFaqLazyRouteImport.update({
+  id: '/developers/faq',
+  path: '/developers/faq',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/developers/faq.lazy').then((d) => d.Route),
+)
+const DevelopersConventionsLazyRoute =
+  DevelopersConventionsLazyRouteImport.update({
+    id: '/developers/conventions',
+    path: '/developers/conventions',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/developers/conventions.lazy').then((d) => d.Route),
+  )
+const DevelopersAuthenticationLazyRoute =
+  DevelopersAuthenticationLazyRouteImport.update({
+    id: '/developers/authentication',
+    path: '/developers/authentication',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/developers/authentication.lazy').then((d) => d.Route),
+  )
 const SolutionsSlugRoute = SolutionsSlugRouteImport.update({
   id: '/solutions/$slug',
   path: '/solutions/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityReportRoute = SecurityReportRouteImport.update({
+  id: '/security/report',
+  path: '/security/report',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnersApplyRoute = PartnersApplyRouteImport.update({
+  id: '/partners/apply',
+  path: '/partners/apply',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
@@ -349,6 +416,16 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
 const ITokenRoute = ITokenRouteImport.update({
   id: '/i/$token',
   path: '/i/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpSplatRoute = HelpSplatRouteImport.update({
+  id: '/help/$',
+  path: '/help/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeaturesSlugRoute = FeaturesSlugRouteImport.update({
+  id: '/features/$slug',
+  path: '/features/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BusinessCreateRoute = BusinessCreateRouteImport.update({
@@ -376,6 +453,22 @@ const AuthCompleteProfileRoute = AuthCompleteProfileRouteImport.update({
   path: '/auth/complete-profile',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevelopersSectionIndexLazyRoute =
+  DevelopersSectionIndexLazyRouteImport.update({
+    id: '/developers/$section/',
+    path: '/developers/$section/',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/developers/$section/index.lazy').then((d) => d.Route),
+  )
+const DevelopersSectionEndpointLazyRoute =
+  DevelopersSectionEndpointLazyRouteImport.update({
+    id: '/developers/$section/$endpoint',
+    path: '/developers/$section/$endpoint',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/developers/$section/$endpoint.lazy').then((d) => d.Route),
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -390,7 +483,6 @@ export interface FileRoutesByFullPath {
   '/e-invoicing': typeof EInvoicingRoute
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
-  '/features': typeof FeaturesRoute
   '/find-a-partner': typeof FindAPartnerRoute
   '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
@@ -404,7 +496,6 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/partner-portal': typeof PartnerPortalRoute
-  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/platform': typeof PlatformRoute
@@ -420,7 +511,6 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
-  '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
@@ -435,10 +525,24 @@ export interface FileRoutesByFullPath {
   '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
+  '/features/$slug': typeof FeaturesSlugRoute
+  '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/partners/apply': typeof PartnersApplyRoute
+  '/security/report': typeof SecurityReportRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
+  '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
+  '/developers/conventions': typeof DevelopersConventionsLazyRoute
+  '/developers/faq': typeof DevelopersFaqLazyRoute
+  '/features/': typeof FeaturesIndexRoute
+  '/help/': typeof HelpIndexRoute
+  '/partners/': typeof PartnersIndexRoute
+  '/security/': typeof SecurityIndexRoute
   '/solutions/': typeof SolutionsIndexRoute
+  '/developers/': typeof DevelopersIndexLazyRoute
+  '/developers/$section/$endpoint': typeof DevelopersSectionEndpointLazyRoute
+  '/developers/$section/': typeof DevelopersSectionIndexLazyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -453,7 +557,6 @@ export interface FileRoutesByTo {
   '/e-invoicing': typeof EInvoicingRoute
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
-  '/features': typeof FeaturesRoute
   '/find-a-partner': typeof FindAPartnerRoute
   '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
@@ -467,7 +570,6 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/partner-portal': typeof PartnerPortalRoute
-  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/platform': typeof PlatformRoute
@@ -483,7 +585,6 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
-  '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
@@ -498,10 +599,24 @@ export interface FileRoutesByTo {
   '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
+  '/features/$slug': typeof FeaturesSlugRoute
+  '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/partners/apply': typeof PartnersApplyRoute
+  '/security/report': typeof SecurityReportRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
+  '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
+  '/developers/conventions': typeof DevelopersConventionsLazyRoute
+  '/developers/faq': typeof DevelopersFaqLazyRoute
+  '/features': typeof FeaturesIndexRoute
+  '/help': typeof HelpIndexRoute
+  '/partners': typeof PartnersIndexRoute
+  '/security': typeof SecurityIndexRoute
   '/solutions': typeof SolutionsIndexRoute
+  '/developers': typeof DevelopersIndexLazyRoute
+  '/developers/$section/$endpoint': typeof DevelopersSectionEndpointLazyRoute
+  '/developers/$section': typeof DevelopersSectionIndexLazyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -517,7 +632,6 @@ export interface FileRoutesById {
   '/e-invoicing': typeof EInvoicingRoute
   '/eway-bills': typeof EwayBillsRoute
   '/expenses': typeof ExpensesRoute
-  '/features': typeof FeaturesRoute
   '/find-a-partner': typeof FindAPartnerRoute
   '/goods-receipt-notes': typeof GoodsReceiptNotesRoute
   '/gst': typeof GstRoute
@@ -531,7 +645,6 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/partner-portal': typeof PartnerPortalRoute
-  '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/platform': typeof PlatformRoute
@@ -547,7 +660,6 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/sales-orders': typeof SalesOrdersRoute
   '/sales-returns': typeof SalesReturnsRoute
-  '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
   '/shipments': typeof ShipmentsRoute
   '/stock-adjustments': typeof StockAdjustmentsRoute
@@ -562,10 +674,24 @@ export interface FileRoutesById {
   '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
+  '/features/$slug': typeof FeaturesSlugRoute
+  '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/partners/apply': typeof PartnersApplyRoute
+  '/security/report': typeof SecurityReportRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
+  '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
+  '/developers/conventions': typeof DevelopersConventionsLazyRoute
+  '/developers/faq': typeof DevelopersFaqLazyRoute
+  '/features/': typeof FeaturesIndexRoute
+  '/help/': typeof HelpIndexRoute
+  '/partners/': typeof PartnersIndexRoute
+  '/security/': typeof SecurityIndexRoute
   '/solutions/': typeof SolutionsIndexRoute
+  '/developers/': typeof DevelopersIndexLazyRoute
+  '/developers/$section/$endpoint': typeof DevelopersSectionEndpointLazyRoute
+  '/developers/$section/': typeof DevelopersSectionIndexLazyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -582,7 +708,6 @@ export interface FileRouteTypes {
     | '/e-invoicing'
     | '/eway-bills'
     | '/expenses'
-    | '/features'
     | '/find-a-partner'
     | '/goods-receipt-notes'
     | '/gst'
@@ -596,7 +721,6 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/parties'
     | '/partner-portal'
-    | '/partners'
     | '/payments'
     | '/physical-stock'
     | '/platform'
@@ -612,7 +736,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales-orders'
     | '/sales-returns'
-    | '/security'
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
@@ -627,10 +750,24 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
+    | '/features/$slug'
+    | '/help/$'
     | '/i/$token'
     | '/invite/$token'
+    | '/partners/apply'
+    | '/security/report'
     | '/solutions/$slug'
+    | '/developers/authentication'
+    | '/developers/conventions'
+    | '/developers/faq'
+    | '/features/'
+    | '/help/'
+    | '/partners/'
+    | '/security/'
     | '/solutions/'
+    | '/developers/'
+    | '/developers/$section/$endpoint'
+    | '/developers/$section/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -645,7 +782,6 @@ export interface FileRouteTypes {
     | '/e-invoicing'
     | '/eway-bills'
     | '/expenses'
-    | '/features'
     | '/find-a-partner'
     | '/goods-receipt-notes'
     | '/gst'
@@ -659,7 +795,6 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/parties'
     | '/partner-portal'
-    | '/partners'
     | '/payments'
     | '/physical-stock'
     | '/platform'
@@ -675,7 +810,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales-orders'
     | '/sales-returns'
-    | '/security'
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
@@ -690,10 +824,24 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
+    | '/features/$slug'
+    | '/help/$'
     | '/i/$token'
     | '/invite/$token'
+    | '/partners/apply'
+    | '/security/report'
     | '/solutions/$slug'
+    | '/developers/authentication'
+    | '/developers/conventions'
+    | '/developers/faq'
+    | '/features'
+    | '/help'
+    | '/partners'
+    | '/security'
     | '/solutions'
+    | '/developers'
+    | '/developers/$section/$endpoint'
+    | '/developers/$section'
   id:
     | '__root__'
     | '/'
@@ -708,7 +856,6 @@ export interface FileRouteTypes {
     | '/e-invoicing'
     | '/eway-bills'
     | '/expenses'
-    | '/features'
     | '/find-a-partner'
     | '/goods-receipt-notes'
     | '/gst'
@@ -722,7 +869,6 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/parties'
     | '/partner-portal'
-    | '/partners'
     | '/payments'
     | '/physical-stock'
     | '/platform'
@@ -738,7 +884,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales-orders'
     | '/sales-returns'
-    | '/security'
     | '/settings'
     | '/shipments'
     | '/stock-adjustments'
@@ -753,10 +898,24 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
+    | '/features/$slug'
+    | '/help/$'
     | '/i/$token'
     | '/invite/$token'
+    | '/partners/apply'
+    | '/security/report'
     | '/solutions/$slug'
+    | '/developers/authentication'
+    | '/developers/conventions'
+    | '/developers/faq'
+    | '/features/'
+    | '/help/'
+    | '/partners/'
+    | '/security/'
     | '/solutions/'
+    | '/developers/'
+    | '/developers/$section/$endpoint'
+    | '/developers/$section/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -772,7 +931,6 @@ export interface RootRouteChildren {
   EInvoicingRoute: typeof EInvoicingRoute
   EwayBillsRoute: typeof EwayBillsRoute
   ExpensesRoute: typeof ExpensesRoute
-  FeaturesRoute: typeof FeaturesRoute
   FindAPartnerRoute: typeof FindAPartnerRoute
   GoodsReceiptNotesRoute: typeof GoodsReceiptNotesRoute
   GstRoute: typeof GstRoute
@@ -786,7 +944,6 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   PartiesRoute: typeof PartiesRoute
   PartnerPortalRoute: typeof PartnerPortalRoute
-  PartnersRoute: typeof PartnersRoute
   PaymentsRoute: typeof PaymentsRoute
   PhysicalStockRoute: typeof PhysicalStockRoute
   PlatformRoute: typeof PlatformRoute
@@ -802,7 +959,6 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   SalesOrdersRoute: typeof SalesOrdersRoute
   SalesReturnsRoute: typeof SalesReturnsRoute
-  SecurityRoute: typeof SecurityRoute
   SettingsRoute: typeof SettingsRoute
   ShipmentsRoute: typeof ShipmentsRoute
   StockAdjustmentsRoute: typeof StockAdjustmentsRoute
@@ -817,10 +973,24 @@ export interface RootRouteChildren {
   AuthVerifyRoute: typeof AuthVerifyRoute
   AuthVerifyEmailChangeRoute: typeof AuthVerifyEmailChangeRoute
   BusinessCreateRoute: typeof BusinessCreateRoute
+  FeaturesSlugRoute: typeof FeaturesSlugRoute
+  HelpSplatRoute: typeof HelpSplatRoute
   ITokenRoute: typeof ITokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
+  PartnersApplyRoute: typeof PartnersApplyRoute
+  SecurityReportRoute: typeof SecurityReportRoute
   SolutionsSlugRoute: typeof SolutionsSlugRoute
+  DevelopersAuthenticationLazyRoute: typeof DevelopersAuthenticationLazyRoute
+  DevelopersConventionsLazyRoute: typeof DevelopersConventionsLazyRoute
+  DevelopersFaqLazyRoute: typeof DevelopersFaqLazyRoute
+  FeaturesIndexRoute: typeof FeaturesIndexRoute
+  HelpIndexRoute: typeof HelpIndexRoute
+  PartnersIndexRoute: typeof PartnersIndexRoute
+  SecurityIndexRoute: typeof SecurityIndexRoute
   SolutionsIndexRoute: typeof SolutionsIndexRoute
+  DevelopersIndexLazyRoute: typeof DevelopersIndexLazyRoute
+  DevelopersSectionEndpointLazyRoute: typeof DevelopersSectionEndpointLazyRoute
+  DevelopersSectionIndexLazyRoute: typeof DevelopersSectionIndexLazyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -886,13 +1056,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/security': {
-      id: '/security'
-      path: '/security'
-      fullPath: '/security'
-      preLoaderRoute: typeof SecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sales-returns': {
@@ -1000,13 +1163,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PaymentsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/partners': {
-      id: '/partners'
-      path: '/partners'
-      fullPath: '/partners'
-      preLoaderRoute: typeof PartnersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/partner-portal': {
       id: '/partner-portal'
       path: '/partner-portal'
@@ -1098,13 +1254,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FindAPartnerRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/features': {
-      id: '/features'
-      path: '/features'
-      fullPath: '/features'
-      preLoaderRoute: typeof FeaturesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/expenses': {
       id: '/expenses'
       path: '/expenses'
@@ -1189,6 +1338,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/developers/': {
+      id: '/developers/'
+      path: '/developers'
+      fullPath: '/developers/'
+      preLoaderRoute: typeof DevelopersIndexLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/solutions/': {
       id: '/solutions/'
       path: '/solutions'
@@ -1196,11 +1352,74 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SolutionsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/security/': {
+      id: '/security/'
+      path: '/security'
+      fullPath: '/security/'
+      preLoaderRoute: typeof SecurityIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partners/': {
+      id: '/partners/'
+      path: '/partners'
+      fullPath: '/partners/'
+      preLoaderRoute: typeof PartnersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help/': {
+      id: '/help/'
+      path: '/help'
+      fullPath: '/help/'
+      preLoaderRoute: typeof HelpIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/features/': {
+      id: '/features/'
+      path: '/features'
+      fullPath: '/features/'
+      preLoaderRoute: typeof FeaturesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers/faq': {
+      id: '/developers/faq'
+      path: '/developers/faq'
+      fullPath: '/developers/faq'
+      preLoaderRoute: typeof DevelopersFaqLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers/conventions': {
+      id: '/developers/conventions'
+      path: '/developers/conventions'
+      fullPath: '/developers/conventions'
+      preLoaderRoute: typeof DevelopersConventionsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers/authentication': {
+      id: '/developers/authentication'
+      path: '/developers/authentication'
+      fullPath: '/developers/authentication'
+      preLoaderRoute: typeof DevelopersAuthenticationLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/solutions/$slug': {
       id: '/solutions/$slug'
       path: '/solutions/$slug'
       fullPath: '/solutions/$slug'
       preLoaderRoute: typeof SolutionsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security/report': {
+      id: '/security/report'
+      path: '/security/report'
+      fullPath: '/security/report'
+      preLoaderRoute: typeof SecurityReportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partners/apply': {
+      id: '/partners/apply'
+      path: '/partners/apply'
+      fullPath: '/partners/apply'
+      preLoaderRoute: typeof PartnersApplyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
@@ -1215,6 +1434,20 @@ declare module '@tanstack/react-router' {
       path: '/i/$token'
       fullPath: '/i/$token'
       preLoaderRoute: typeof ITokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help/$': {
+      id: '/help/$'
+      path: '/help/$'
+      fullPath: '/help/$'
+      preLoaderRoute: typeof HelpSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/features/$slug': {
+      id: '/features/$slug'
+      path: '/features/$slug'
+      fullPath: '/features/$slug'
+      preLoaderRoute: typeof FeaturesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/business/create': {
@@ -1252,6 +1485,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCompleteProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/developers/$section/': {
+      id: '/developers/$section/'
+      path: '/developers/$section'
+      fullPath: '/developers/$section/'
+      preLoaderRoute: typeof DevelopersSectionIndexLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers/$section/$endpoint': {
+      id: '/developers/$section/$endpoint'
+      path: '/developers/$section/$endpoint'
+      fullPath: '/developers/$section/$endpoint'
+      preLoaderRoute: typeof DevelopersSectionEndpointLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1268,7 +1515,6 @@ const rootRouteChildren: RootRouteChildren = {
   EInvoicingRoute: EInvoicingRoute,
   EwayBillsRoute: EwayBillsRoute,
   ExpensesRoute: ExpensesRoute,
-  FeaturesRoute: FeaturesRoute,
   FindAPartnerRoute: FindAPartnerRoute,
   GoodsReceiptNotesRoute: GoodsReceiptNotesRoute,
   GstRoute: GstRoute,
@@ -1282,7 +1528,6 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   PartiesRoute: PartiesRoute,
   PartnerPortalRoute: PartnerPortalRoute,
-  PartnersRoute: PartnersRoute,
   PaymentsRoute: PaymentsRoute,
   PhysicalStockRoute: PhysicalStockRoute,
   PlatformRoute: PlatformRoute,
@@ -1298,7 +1543,6 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   SalesOrdersRoute: SalesOrdersRoute,
   SalesReturnsRoute: SalesReturnsRoute,
-  SecurityRoute: SecurityRoute,
   SettingsRoute: SettingsRoute,
   ShipmentsRoute: ShipmentsRoute,
   StockAdjustmentsRoute: StockAdjustmentsRoute,
@@ -1313,10 +1557,24 @@ const rootRouteChildren: RootRouteChildren = {
   AuthVerifyRoute: AuthVerifyRoute,
   AuthVerifyEmailChangeRoute: AuthVerifyEmailChangeRoute,
   BusinessCreateRoute: BusinessCreateRoute,
+  FeaturesSlugRoute: FeaturesSlugRoute,
+  HelpSplatRoute: HelpSplatRoute,
   ITokenRoute: ITokenRoute,
   InviteTokenRoute: InviteTokenRoute,
+  PartnersApplyRoute: PartnersApplyRoute,
+  SecurityReportRoute: SecurityReportRoute,
   SolutionsSlugRoute: SolutionsSlugRoute,
+  DevelopersAuthenticationLazyRoute: DevelopersAuthenticationLazyRoute,
+  DevelopersConventionsLazyRoute: DevelopersConventionsLazyRoute,
+  DevelopersFaqLazyRoute: DevelopersFaqLazyRoute,
+  FeaturesIndexRoute: FeaturesIndexRoute,
+  HelpIndexRoute: HelpIndexRoute,
+  PartnersIndexRoute: PartnersIndexRoute,
+  SecurityIndexRoute: SecurityIndexRoute,
   SolutionsIndexRoute: SolutionsIndexRoute,
+  DevelopersIndexLazyRoute: DevelopersIndexLazyRoute,
+  DevelopersSectionEndpointLazyRoute: DevelopersSectionEndpointLazyRoute,
+  DevelopersSectionIndexLazyRoute: DevelopersSectionIndexLazyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

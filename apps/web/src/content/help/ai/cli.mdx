@@ -1,0 +1,1569 @@
+---
+title: CLI Tool
+description: The Fintranzact CLI for terminal-based business management. Built with Ink 5 and Commander.js. Full command reference, power user workflows, and copy-paste ready automation scripts.
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem } from "@/components/help/mdx";
+
+The Fintranzact CLI (`fintranzact`) brings your entire business management workflow to the terminal. Built with [Ink 5](https://github.com/vadimdemedes/ink) (React for the terminal) and Commander.js, it renders rich interactive tables, colored status badges, and INR-formatted numbers directly in your shell.
+
+It is useful for three things: quick lookups without opening a browser, automation scripts and cron jobs, and AI agent workflows that execute shell commands as part of a broader pipeline.
+
+By default, commands render a pretty table with color. Pass `--json` to get clean JSON output for piping into `jq` or other tools.
+
+---
+
+## Installation
+
+```bash
+npm install -g @fintranzact/cli
+```
+
+Or use without installing:
+
+```bash
+npx @fintranzact/cli <command>
+```
+
+Verify the installation:
+
+```bash
+fintranzact --version
+```
+
+---
+
+## Authentication
+
+### Login with API key (recommended)
+
+Generate an API key in the Fintranzact web app under **Settings → API Keys** (available on paid plans), then:
+
+```bash
+fintranzact login --token fintranzact_key_xxxxxxxxxxxxxxxxxx
+```
+
+The CLI validates the key, resolves your user and business context, and stores it in `~/.config/fintranzact/config.json`. API keys do not expire unless you set an expiry date during creation.
+
+To point the CLI at a specific Fintranzact API URL:
+
+```bash
+fintranzact login --token fintranzact_key_xxx --api-url https://fintranzact-web.vercel.app
+```
+
+### Environment variables (recommended for automation)
+
+For cron jobs and CI/CD pipelines, set credentials as environment variables instead of logging in:
+
+```bash
+export FINTRANZACT_API_URL=https://fintranzact-web.vercel.app
+export FINTRANZACT_API_KEY=fintranzact_key_xxxxxxxxxxxxxxxxxx
+export FINTRANZACT_BUSINESS_ID=your-business-uuid
+```
+
+### Business creation and switching
+
+Create a new business or switch between existing ones:
+
+```bash
+# List all businesses on your account
+fintranzact business list
+
+# Create a new business (interactive prompts for name, GSTIN, address)
+fintranzact business create
+
+# Switch the active business (interactive picker — arrow keys + Enter)
+fintranzact switch
+
+# Switch non-interactively
+fintranzact switch <business-id>
+```
+
+Switching updates the stored `businessId` in `~/.config/fintranzact/config.json`. All subsequent commands operate on the newly selected business. To override the active business for a single command without switching, pass `--business <id>`.
+
+**Web app:** Tap the business name in the sidebar to open a popover that lists all your businesses and includes a "Create New Business" option. Selecting a business reloads all data for that context.
+
+**Mobile app:** Tap the business name on the home dashboard to open a bottom sheet with the same business list and create option.
+
+### Register and profile management
+
+```bash
+# Register a new account
+fintranzact auth register --email you@example.com --name "Your Name"
+
+# Complete profile setup after an invite-based registration
+fintranzact auth complete-profile --name "Your Name"
+
+# Update your display name
+fintranzact auth update-name --name "New Name"
+
+# Sign out of all active sessions (useful after a credential change)
+fintranzact auth logout-all
+```
+
+---
+
+## Command Reference
+
+### `fintranzact dashboard`
+
+Display key business metrics.
+
+```bash
+fintranzact dashboard
+fintranzact dashboard --period today
+fintranzact dashboard --period this-week
+fintranzact dashboard --period this-month
+fintranzact dashboard --period last-month
+fintranzact dashboard --period this-year
+fintranzact dashboard --from 2026-01-01 --to 2026-03-31
+```
+
+| Flag | Description |
+|---|---|
+| `--period` | `today`, `this-week`, `this-month`, `last-month`, `this-year` |
+| `--from` / `--to` | Custom date range (ISO 8601) |
+| `--json` | Raw JSON output |
+
+**Example output:**
+
+```
+Business Dashboard — March 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Revenue:        ₹4,82,500
+Expenses:       ₹1,23,400
+Net Profit:     ₹3,59,100
+Outstanding:    ₹78,250 (6 overdue invoices)
+
+Top customers this month:
+  Gupta Enterprises      ₹1,42,000
+  Sharma Traders         ₹98,500
+  Vinod & Sons           ₹67,000
+
+Low stock alerts: 3 items
+```
+
+---
+
+### `fintranzact invoice`
+
+#### `fintranzact invoice list`
+
+```bash
+fintranzact invoice list
+fintranzact invoice list --status overdue
+fintranzact invoice list --status paid
+fintranzact invoice list --party "Sharma Traders"
+fintranzact invoice list --from 2026-03-01 --to 2026-03-31
+fintranzact invoice list --status overdue --sort oldest-first
+fintranzact invoice list --type purchase
+fintranzact invoice list --json
+```
+
+| Flag | Description |
+|---|---|
+| `--status` | `draft`, `sent`, `paid`, `overdue`, `cancelled` |
+| `--type` | `sale` (default) or `purchase` |
+| `--party` | Party name or ID |
+| `--from` / `--to` | Date range |
+| `--sort` | `newest-first` (default), `oldest-first`, `amount-asc`, `amount-desc` |
+| `--limit` | Max results (default 50, max 100) |
+| `--json` | Raw JSON output |
+
+#### `fintranzact invoice get`
+
+```bash
+fintranzact invoice get BB-12948
+fintranzact invoice get inv_xxxxxxxxxx --json
+```
+
+#### `fintranzact invoice create`
+
+Interactive wizard when run without flags. Or pass flags for scripting:
+
+```bash
+fintranzact invoice create \
+  --party "Montu Arora" \
+  --item "Spinach" --quantity 7.3 --unit kg --price 65 \
+  --item "Tomato" --quantity 5 --unit kg --price 40 \
+  --date 2026-03-26 \
+  --due-date 2026-04-10
+```
+
+For complex invoices with many line items, pass a JSON file:
+
+```bash
+fintranzact invoice create --from-file invoice.json
+```
+
+Where `invoice.json` follows the format:
+
+```json
+{
+  "party": "Gupta Enterprises",
+  "date": "2026-03-26",
+  "dueDate": "2026-04-10",
+  "items": [
+    { "item": "Basmati Rice 25kg", "quantity": 10, "unit": "bag", "price": "1250.00" },
+    { "item": "Mustard Oil 15L", "quantity": 5, "unit": "can", "price": "2100.00" }
+  ],
+  "notes": "Delivery to warehouse on 28th"
+}
+```
+
+#### `fintranzact invoice pdf`
+
+```bash
+# Download PDF to current directory
+fintranzact invoice pdf BB-12948
+
+# Specify output path
+fintranzact invoice pdf BB-12948 --output /tmp/invoices/
+
+# Thermal (58mm) format
+fintranzact invoice pdf BB-12948 --format thermal
+```
+
+#### `fintranzact invoice update`
+
+Update fields on an existing invoice. Only draft invoices can be fully edited; sent or paid invoices accept a limited set of changes.
+
+```bash
+fintranzact invoice update BB-12948 \
+  --notes "Updated payment terms: 30 days net" \
+  --due-date 2026-04-30
+```
+
+Pass `--from-file invoice.json` to replace the full invoice body from a JSON file (same format as `invoice create`).
+
+#### `fintranzact invoice delete`
+
+```bash
+fintranzact invoice delete BB-12948
+```
+
+Only draft invoices can be deleted. Sent or paid invoices must be cancelled via status update.
+
+---
+
+### `fintranzact party`
+
+#### `fintranzact party list`
+
+```bash
+fintranzact party list
+fintranzact party list --type customer
+fintranzact party list --type supplier
+fintranzact party list --search "sharma"
+fintranzact party list --outstanding   # only parties with unpaid balance
+fintranzact party list --json
+```
+
+#### `fintranzact party get`
+
+```bash
+fintranzact party get "Sharma Traders"
+fintranzact party get party_xxxxxxxxxx --ledger
+fintranzact party get "Gupta Enterprises" --ledger --from 2026-01-01
+```
+
+#### `fintranzact party create`
+
+```bash
+fintranzact party create \
+  --name "Mehta & Sons" \
+  --type customer \
+  --phone 9876543210 \
+  --gstin 27AABCU9603R1ZX \
+  --city Mumbai \
+  --state Maharashtra
+```
+
+#### `fintranzact party ledger-report`
+
+Full ledger report with opening balance, all transactions, and closing balance for a date range:
+
+```bash
+fintranzact party ledger-report --party "Gupta Enterprises" --from 2026-04-01 --to 2026-03-31
+fintranzact party ledger-report --party party_xxxxxxxxxx --json
+```
+
+#### `fintranzact party stats`
+
+Aggregate transaction statistics (total sales, purchases, payments) for a party:
+
+```bash
+fintranzact party stats party_xxxxxxxxxx
+fintranzact party stats "Sharma Traders" --json
+```
+
+#### `fintranzact party top-items`
+
+Items most frequently bought from or sold to a party, ranked by quantity or value:
+
+```bash
+fintranzact party top-items party_xxxxxxxxxx
+fintranzact party top-items "Gupta Enterprises" --limit 10 --json
+```
+
+#### `fintranzact party merge`
+
+Merge two duplicate party records. All invoices, payments, and ledger entries are reassigned to the target party and the source is deleted.
+
+```bash
+fintranzact party merge --source party_xxxxxxxxxx --target party_yyyyyyyyyy
+```
+
+#### `fintranzact party delete`
+
+```bash
+fintranzact party delete party_xxxxxxxxxx
+```
+
+Fails if the party has any invoices or payments on record.
+
+---
+
+### `fintranzact item`
+
+#### `fintranzact item list`
+
+```bash
+fintranzact item list
+fintranzact item list --low-stock
+fintranzact item list --search "rice"
+fintranzact item list --category "Grains"
+fintranzact item list --json
+```
+
+#### `fintranzact item get`
+
+```bash
+fintranzact item get "Basmati Rice 25kg"
+fintranzact item get item_xxxxxxxxxx --json
+```
+
+#### `fintranzact item create`
+
+```bash
+fintranzact item create \
+  --name "Mustard Oil 15L" \
+  --unit can \
+  --price 2100 \
+  --hsn 1514 \
+  --gst 5 \
+  --category "Oils & Ghee" \
+  --opening-stock 20 \
+  --low-stock-threshold 5
+```
+
+#### `fintranzact item delete`
+
+```bash
+fintranzact item delete item_xxxxxxxxxx
+```
+
+Fails if the item appears on any invoice.
+
+#### `fintranzact item stock`
+
+Adjust stock quantity:
+
+```bash
+# Add stock (positive adjustment)
+fintranzact item stock "Basmati Rice 25kg" --adjustment +50 --reason "Purchase from supplier"
+
+# Remove stock (negative adjustment)
+fintranzact item stock "Mustard Oil 15L" --adjustment -3 --reason "Damaged in transit"
+```
+
+#### `fintranzact item stock-history`
+
+Full log of every stock adjustment ever made on an item:
+
+```bash
+fintranzact item stock-history "Basmati Rice 25kg"
+fintranzact item stock-history item_xxxxxxxxxx --from 2026-01-01 --json
+```
+
+#### `fintranzact item stock-movements`
+
+Every stock movement including invoice deductions, purchase additions, and manual adjustments:
+
+```bash
+fintranzact item stock-movements "Mustard Oil 15L"
+fintranzact item stock-movements item_xxxxxxxxxx --json
+```
+
+#### `fintranzact item low-stock-count`
+
+Quick count of items currently at or below their low-stock threshold:
+
+```bash
+fintranzact item low-stock-count
+```
+
+#### `fintranzact item price-history`
+
+Historical sale price changes for an item:
+
+```bash
+fintranzact item price-history "Basmati Rice 25kg"
+fintranzact item price-history item_xxxxxxxxxx --json
+```
+
+#### `fintranzact item sales-stats`
+
+Total units sold and revenue for an item over a period:
+
+```bash
+fintranzact item sales-stats "Basmati Rice 25kg" --from 2026-04-01 --to 2026-03-31
+fintranzact item sales-stats item_xxxxxxxxxx --json
+```
+
+#### `fintranzact item variants`
+
+Manage variants (size, grade, colour, etc.) for an item that has multiple options at different prices or units.
+
+```bash
+# List variants
+fintranzact item variants list item_xxxxxxxxxx
+
+# Add a variant
+fintranzact item variants create \
+  --item item_xxxxxxxxxx \
+  --name "500g Pack" \
+  --price 120 \
+  --unit pack
+
+# Update a variant
+fintranzact item variants update variant_xxxxxxxxxx --price 130
+
+# Delete a variant
+fintranzact item variants delete variant_xxxxxxxxxx
+```
+
+#### `fintranzact item merge`
+
+Merge two duplicate item records. All line items and stock history are reassigned to the target and the source is deleted.
+
+```bash
+fintranzact item merge --source item_xxxxxxxxxx --target item_yyyyyyyyyy
+```
+
+#### `fintranzact item switch-base-unit`
+
+Change the base unit of measurement for an item (e.g. `kg` to `g`). Provide the conversion factor.
+
+```bash
+fintranzact item switch-base-unit item_xxxxxxxxxx --new-unit g --factor 1000
+```
+
+#### `fintranzact item rename-unit`
+
+Rename a unit on an item without changing any quantities (e.g. rename `pcs` to `pieces`):
+
+```bash
+fintranzact item rename-unit item_xxxxxxxxxx --from pcs --to pieces
+```
+
+---
+
+### `fintranzact payment`
+
+#### `fintranzact payment list`
+
+```bash
+fintranzact payment list
+fintranzact payment list --party "Sharma Traders"
+fintranzact payment list --from 2026-03-01 --to 2026-03-31
+fintranzact payment list --mode upi
+fintranzact payment list --json
+```
+
+#### `fintranzact payment create`
+
+```bash
+# Payment received from customer
+fintranzact payment create \
+  --party "Sharma Traders" \
+  --amount 25000 \
+  --mode upi \
+  --date 2026-03-26 \
+  --reference "UTR123456789" \
+  --allocate BB-12800 BB-12801
+
+# Bulk payment (no specific invoice allocation)
+fintranzact payment create \
+  --party "Gupta Enterprises" \
+  --amount 50000 \
+  --mode bank \
+  --reference "NEFT20260326"
+```
+
+#### `fintranzact payment delete`
+
+```bash
+fintranzact payment delete pay_xxxxxxxxxx
+```
+
+#### `fintranzact payment unpaid-invoices`
+
+List invoices that still have an outstanding balance — useful before recording a payment to see what to allocate:
+
+```bash
+fintranzact payment unpaid-invoices
+fintranzact payment unpaid-invoices --party "Sharma Traders" --json
+```
+
+#### `fintranzact payment untracked`
+
+Payments that were recorded but have not been linked to any invoice:
+
+```bash
+fintranzact payment untracked
+fintranzact payment untracked --json
+```
+
+#### `fintranzact payment default-account`
+
+Show the bank account that is currently set as the default for incoming payments:
+
+```bash
+fintranzact payment default-account
+```
+
+#### `fintranzact payment assign-account`
+
+Assign a bank account to an existing payment record:
+
+```bash
+fintranzact payment assign-account --payment pay_xxxxxxxxxx --account account_xxxxxxxxxx
+```
+
+---
+
+### `fintranzact expense`
+
+#### `fintranzact expense list`
+
+```bash
+fintranzact expense list
+fintranzact expense list --category "Transport"
+fintranzact expense list --from 2026-03-01 --to 2026-03-31
+fintranzact expense list --json
+```
+
+#### `fintranzact expense create`
+
+```bash
+fintranzact expense create \
+  --amount 1500 \
+  --category "Transport" \
+  --date 2026-03-26 \
+  --description "Delivery to Sector 15 warehouse"
+```
+
+#### `fintranzact expense delete`
+
+```bash
+fintranzact expense delete exp_xxxxxxxxxx
+```
+
+---
+
+### `fintranzact gst`
+
+#### `fintranzact gst r1`
+
+Get GSTR-1 data (outward supplies):
+
+```bash
+fintranzact gst r1 --month 3 --year 2026
+fintranzact gst r1 --month 3 --year 2026 --json
+fintranzact gst r1 --month 3 --year 2026 --csv --output /var/gst-reports/
+```
+
+#### `fintranzact gst r3b`
+
+Get GSTR-3B summary (monthly return):
+
+```bash
+fintranzact gst r3b --month 3 --year 2026
+fintranzact gst r3b --month 3 --year 2026 --csv --output /var/gst-reports/
+```
+
+---
+
+### `fintranzact automated-invoice`
+
+Manage recurring invoice templates that auto-generate invoices on a schedule.
+
+#### `fintranzact automated-invoice list`
+
+```bash
+fintranzact automated-invoice list [--status active|paused|completed|expired] [--json]
+```
+
+Lists all recurring invoice templates with name, party, frequency, status, next run date, and run count.
+
+#### `fintranzact automated-invoice get`
+
+```bash
+fintranzact automated-invoice get <template-id> [--json]
+```
+
+Shows full template details including line items and execution history.
+
+#### `fintranzact automated-invoice create`
+
+```bash
+fintranzact automated-invoice create \
+  --name "Monthly Rent to Gupta Ji" \
+  --party-id <uuid> \
+  --type sale \
+  --frequency monthly \
+  --start-date 2026-04-01T00:00:00Z \
+  --line-items '[{"description":"Office Rent","quantity":"1","unitPrice":"25000.00","taxPercent":"18"}]' \
+  [--end-date 2027-03-31T00:00:00Z] \
+  [--max-runs 12] \
+  [--notes "Annual rent agreement"] \
+  [--json]
+```
+
+#### `fintranzact automated-invoice pause`
+
+```bash
+fintranzact automated-invoice pause <template-id> [--json]
+```
+
+Pauses an active template. No invoices will be generated until resumed.
+
+#### `fintranzact automated-invoice resume`
+
+```bash
+fintranzact automated-invoice resume <template-id> [--json]
+```
+
+Resumes a paused template. Next run date is recalculated from now.
+
+#### `fintranzact automated-invoice run-now`
+
+```bash
+fintranzact automated-invoice run-now <template-id> [--json]
+```
+
+Manually trigger immediate invoice generation from a template.
+
+#### `fintranzact automated-invoice delete`
+
+```bash
+fintranzact automated-invoice delete <template-id> [-y] [--json]
+```
+
+Permanently deletes a template and all its execution history.
+
+---
+
+### `fintranzact shipment`
+
+#### `fintranzact shipment list`
+
+```bash
+fintranzact shipment list
+fintranzact shipment list --status in_transit
+fintranzact shipment list --from 2026-03-01 --json
+```
+
+#### `fintranzact shipment get`
+
+```bash
+fintranzact shipment get ship_xxxxxxxxxx
+```
+
+Shows full tracking event history.
+
+#### `fintranzact shipment create`
+
+```bash
+fintranzact shipment create \
+  --invoice BB-14821 \
+  --mode "Delhivery" \
+  --tracking "DEL9876543210" \
+  --dispatch-date 2026-03-27
+```
+
+#### `fintranzact shipment update`
+
+```bash
+fintranzact shipment update ship_xxxxxxxxxx \
+  --status delivered \
+  --notes "Delivered to reception, signed by Ramesh"
+```
+
+---
+
+### `fintranzact bank`
+
+#### `fintranzact bank list`
+
+```bash
+fintranzact bank list
+fintranzact bank list --json
+```
+
+Shows all bank accounts and cash accounts with current balances.
+
+#### `fintranzact bank get`
+
+```bash
+fintranzact bank get account_xxxxxxxxxx
+fintranzact bank get "SBI Current" --transactions --from 2026-03-01
+```
+
+#### `fintranzact bank create`
+
+```bash
+fintranzact bank create \
+  --name "HDFC Current Account" \
+  --type bank \
+  --account-number "1234567890" \
+  --ifsc "HDFC0001234" \
+  --opening-balance 50000
+```
+
+#### `fintranzact bank transfer`
+
+```bash
+fintranzact bank transfer \
+  --from "SBI Current" \
+  --to "Petty Cash" \
+  --amount 5000 \
+  --date 2026-03-26 \
+  --notes "Weekly petty cash replenishment"
+```
+
+#### `fintranzact bank transactions`
+
+```bash
+fintranzact bank transactions "HDFC Current Account"
+fintranzact bank transactions account_xxxxxxxxxx --from 2026-03-01 --to 2026-03-31 --json
+```
+
+#### `fintranzact bank gateway-config`
+
+View the gateway configuration (charge rates, settlement account) for a payment gateway account.
+
+```bash
+fintranzact bank gateway-config <accountId>
+fintranzact bank gateway-config <accountId> --json
+```
+
+#### `fintranzact bank update-gateway`
+
+Update gateway charge rates or settlement account.
+
+```bash
+fintranzact bank update-gateway <accountId> --charge-credit-card 2.5 --charge-upi 0
+fintranzact bank update-gateway <accountId> --settlement-account <bankAccountId>
+```
+
+Charge values are percentages by default. Use `flat:20` for a flat ₹20 charge.
+
+---
+
+### `fintranzact report`
+
+#### `fintranzact report daybook`
+
+All transactions for a date range, ordered by date:
+
+```bash
+fintranzact report daybook --from 2026-03-01 --to 2026-03-31
+fintranzact report daybook --from 2026-03-26 --to 2026-03-26 --json
+```
+
+#### `fintranzact report outstanding`
+
+Receivables and payables with aging buckets:
+
+```bash
+fintranzact report outstanding
+fintranzact report outstanding --type receivable
+fintranzact report outstanding --json
+```
+
+#### `fintranzact report tax-summary`
+
+Taxable turnover and GST by rate for a period:
+
+```bash
+fintranzact report tax-summary --from 2026-01-01 --to 2026-03-31
+fintranzact report tax-summary --from 2026-04-01 --to 2026-03-31 --json
+```
+
+#### `fintranzact report item-sales`
+
+Top items by sales quantity and revenue:
+
+```bash
+fintranzact report item-sales --period this-month
+fintranzact report item-sales --from 2026-04-01 --to 2026-03-31 --json
+```
+
+#### `fintranzact report stock`
+
+Current stock value and opening/closing comparison:
+
+```bash
+fintranzact report stock
+fintranzact report stock --json
+```
+
+---
+
+### `fintranzact target`
+
+#### `fintranzact target list`
+
+```bash
+fintranzact target list
+fintranzact target list --period monthly --json
+```
+
+#### `fintranzact target create`
+
+```bash
+fintranzact target create \
+  --name "Q1 Revenue Target" \
+  --type order_value \
+  --value 500000 \
+  --period monthly
+```
+
+#### `fintranzact target my`
+
+Show targets assigned to you (useful for sales team members):
+
+```bash
+fintranzact target my
+fintranzact target my --json
+```
+
+---
+
+### `fintranzact import`
+
+#### `fintranzact import parties`
+
+```bash
+# From CSV
+fintranzact import parties --file parties.csv --format csv
+
+# From JSON
+fintranzact import parties --file parties.json --format json
+
+# Preview without importing
+fintranzact import parties --file parties.csv --dry-run
+```
+
+#### `fintranzact import items`
+
+```bash
+fintranzact import items --file catalog.csv --format csv
+fintranzact import items --file catalog.json --dry-run
+```
+
+---
+
+### `fintranzact export`
+
+Download a full tenant backup as a `.tar.gz` archive. This is a tenant-level operation — it does not require a business to be selected.
+
+```bash
+# Export by tenant slug
+fintranzact export --tenant my-company -o backup.tar.gz
+
+# Export by tenant UUID
+fintranzact export --tenant 550e8400-e29b-41d4-a716-446655440000 -o /tmp/backup.tar.gz
+```
+
+| Flag | Description |
+|---|---|
+| `--tenant` | Tenant slug or UUID to export (required) |
+| `-o, --output` | Output file path (required) |
+
+On success, prints the file size, SHA256 hash, and download time.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Not authenticated or insufficient permissions |
+| 2 | Rate limit reached (max 2 exports per day) |
+| 5 | Server or network error |
+
+:::note
+Only tenant owners can export. The CLI does not need a `--business` flag or `FINTRANZACT_BUSINESS_ID` for this command — just authentication and a tenant.
+:::
+
+---
+
+### `fintranzact restore`
+
+Upload a `.tar.gz` backup archive into an empty tenant. The target tenant must have zero businesses.
+
+```bash
+# Restore by tenant slug (interactive confirmation)
+fintranzact restore --tenant my-company -i backup.tar.gz
+
+# Skip confirmation prompt
+fintranzact restore --tenant my-company -i backup.tar.gz --yes
+
+# Restore by tenant UUID
+fintranzact restore --tenant 550e8400-e29b-41d4-a716-446655440000 -i backup.tar.gz -y
+```
+
+| Flag | Description |
+|---|---|
+| `--tenant` | Target tenant slug or UUID — must be empty (required) |
+| `-i, --input` | Input backup file path (required) |
+| `-y, --yes` | Skip confirmation prompt |
+
+On success, prints rows inserted per table, skipped rows, warnings, and upload time.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Not authenticated or insufficient permissions |
+| 3 | Target tenant is not empty |
+| 4 | Input file missing, unreadable, or empty |
+| 5 | Server or network error |
+
+:::note
+Restore only works on a completely empty tenant (no businesses created). To restore into an existing organization, create a new empty tenant first, restore there, then delete the old one if desired.
+:::
+
+---
+
+### `fintranzact store`
+
+#### `fintranzact store settings`
+
+```bash
+fintranzact store settings
+fintranzact store settings --json
+```
+
+#### `fintranzact store orders`
+
+```bash
+fintranzact store orders
+fintranzact store orders --status pending
+fintranzact store orders --from 2026-03-01 --json
+```
+
+#### `fintranzact store order confirm`
+
+Mark a pending store order as confirmed and begin fulfillment:
+
+```bash
+fintranzact store order confirm order_xxxxxxxxxx
+```
+
+#### `fintranzact store order cancel`
+
+Cancel a store order:
+
+```bash
+fintranzact store order cancel order_xxxxxxxxxx --reason "Out of stock"
+```
+
+#### `fintranzact store check-slug`
+
+Check whether a URL slug is available before updating your store URL:
+
+```bash
+fintranzact store check-slug my-store-name
+```
+
+#### `fintranzact store items`
+
+List items currently shown in your online store:
+
+```bash
+fintranzact store items
+fintranzact store items --json
+```
+
+#### `fintranzact store items toggle`
+
+Bulk enable or disable items in the store without editing each one individually:
+
+```bash
+# Enable multiple items
+fintranzact store items toggle --enable item_aaa item_bbb item_ccc
+
+# Disable multiple items
+fintranzact store items toggle --disable item_ddd item_eee
+```
+
+---
+
+### `fintranzact tenant`
+
+Manage the tenant (organisation) that owns your businesses. Most users operate within a single tenant and never need these commands. They are most relevant to agency operators who manage multiple tenants.
+
+#### `fintranzact tenant list`
+
+```bash
+fintranzact tenant list
+fintranzact tenant list --json
+```
+
+#### `fintranzact tenant select`
+
+Switch the active tenant. All subsequent commands operate in the context of the selected tenant.
+
+```bash
+fintranzact tenant select tenant_xxxxxxxxxx
+```
+
+#### `fintranzact tenant members`
+
+List members of the current tenant:
+
+```bash
+fintranzact tenant members
+fintranzact tenant members --json
+```
+
+#### `fintranzact tenant invite`
+
+Invite a new member by email:
+
+```bash
+fintranzact tenant invite --email colleague@example.com --role member
+```
+
+Available roles: `owner`, `admin`, `member`.
+
+#### `fintranzact tenant remove`
+
+Remove a member from the tenant:
+
+```bash
+fintranzact tenant remove user_xxxxxxxxxx
+```
+
+#### `fintranzact tenant role`
+
+Update a member's role:
+
+```bash
+fintranzact tenant role user_xxxxxxxxxx --role admin
+```
+
+#### `fintranzact tenant invitations`
+
+List pending invitations for the current tenant.
+
+```bash
+fintranzact tenant invitations
+fintranzact tenant invitations --json
+```
+
+#### `fintranzact tenant revoke-invitation`
+
+Revoke a pending invitation.
+
+```bash
+fintranzact tenant revoke-invitation <invitationId>
+```
+
+---
+
+### Document types
+
+Beyond standard invoices, Fintranzact supports six additional document types. Each type has the same five operations: `list`, `get`, `create`, `status`, and `delete`.
+
+#### Quotation
+
+```bash
+fintranzact quotation list
+fintranzact quotation list --party "Gupta Enterprises" --json
+fintranzact quotation get quot_xxxxxxxxxx
+fintranzact quotation create \
+  --party "Mehta & Sons" \
+  --item "Basmati Rice 25kg" --quantity 50 --unit bag --price 1250 \
+  --valid-until 2026-04-30
+fintranzact quotation status quot_xxxxxxxxxx accepted
+fintranzact quotation delete quot_xxxxxxxxxx
+```
+
+#### Credit Note
+
+```bash
+fintranzact credit-note list
+fintranzact credit-note get cn_xxxxxxxxxx
+fintranzact credit-note create --party "Sharma Traders" --invoice BB-12948 --reason "Goods returned"
+fintranzact credit-note status cn_xxxxxxxxxx issued
+fintranzact credit-note delete cn_xxxxxxxxxx
+```
+
+#### Debit Note
+
+```bash
+fintranzact debit-note list
+fintranzact debit-note get dn_xxxxxxxxxx
+fintranzact debit-note create --party "Vinod & Sons" --invoice BB-12900 --reason "Short supply"
+fintranzact debit-note status dn_xxxxxxxxxx issued
+fintranzact debit-note delete dn_xxxxxxxxxx
+```
+
+#### Delivery Challan
+
+```bash
+fintranzact challan list
+fintranzact challan get dc_xxxxxxxxxx
+fintranzact challan create \
+  --party "Gupta Enterprises" \
+  --item "Mustard Oil 15L" --quantity 10 --unit can
+fintranzact challan status dc_xxxxxxxxxx delivered
+fintranzact challan delete dc_xxxxxxxxxx
+```
+
+#### Proforma Invoice
+
+```bash
+fintranzact proforma list
+fintranzact proforma get pf_xxxxxxxxxx
+fintranzact proforma create \
+  --party "Mehta & Sons" \
+  --item "Toor Dal 50kg" --quantity 5 --unit bag --price 4200
+fintranzact proforma status pf_xxxxxxxxxx approved
+fintranzact proforma delete pf_xxxxxxxxxx
+```
+
+#### Sales Return
+
+```bash
+fintranzact sales-return list
+fintranzact sales-return get sr_xxxxxxxxxx
+fintranzact sales-return create --party "Sharma Traders" --invoice BB-12948
+fintranzact sales-return status sr_xxxxxxxxxx processed
+fintranzact sales-return delete sr_xxxxxxxxxx
+```
+
+#### Purchase Return
+
+```bash
+fintranzact purchase-return list
+fintranzact purchase-return get pr_xxxxxxxxxx
+fintranzact purchase-return create --party "Vinod & Sons" --invoice BB-12900
+fintranzact purchase-return status pr_xxxxxxxxxx processed
+fintranzact purchase-return delete pr_xxxxxxxxxx
+```
+
+#### Convert a document
+
+Convert one document type to another. The most common use case is converting a delivery challan into a tax invoice after goods are delivered.
+
+```bash
+# Convert a delivery challan to a sale invoice
+fintranzact document convert \
+  --from dc_xxxxxxxxxx \
+  --from-type delivery_challan \
+  --to-type invoice
+```
+
+The `--skip-stock-adjustment` flag is available when converting a challan to an invoice to avoid double-deducting stock that was already deducted when the challan was created.
+
+---
+
+### `fintranzact session`
+
+Manage active sessions across devices.
+
+#### `fintranzact session list`
+
+List all active sessions for the current user.
+
+```bash
+fintranzact session list
+fintranzact session list --expired
+fintranzact session list --json
+```
+
+Shows device/browser, IP address, last activity time, creation date, and marks the current session.
+
+#### `fintranzact session revoke`
+
+Terminate a specific session by ID.
+
+```bash
+fintranzact session revoke <sessionId>
+```
+
+The revoked session is immediately invalidated. The user on that device will be redirected to the login page.
+
+#### `fintranzact session revoke-all`
+
+Sign out from all devices (including the current one).
+
+```bash
+fintranzact session revoke-all
+```
+
+---
+
+### `fintranzact api-key`
+
+Generate and manage API keys for automation scripts, CI/CD pipelines, and third-party integrations.
+
+#### `fintranzact api-key list`
+
+```bash
+fintranzact api-key list
+fintranzact api-key list --json
+```
+
+Shows key name, creation date, expiry date, and last-used timestamp. The key secret is only shown once at creation time.
+
+#### `fintranzact api-key create`
+
+```bash
+fintranzact api-key create --name "CI Pipeline" --expires 2027-04-01
+fintranzact api-key create --name "Read-only export script"
+```
+
+Copy the returned key immediately — it is not shown again.
+
+#### `fintranzact api-key revoke`
+
+```bash
+fintranzact api-key revoke apikey_xxxxxxxxxx
+```
+
+Revoked keys stop working instantly.
+
+---
+
+### Global flags
+
+These flags work on every command:
+
+| Flag | Description |
+|---|---|
+| `--json` | Output raw JSON instead of formatted tables |
+| `--business <id>` | Override the active business for this command |
+| `--api-url <url>` | Override the API URL for this command |
+| `--quiet` | Suppress all output except errors |
+| `--no-color` | Disable color output (useful for log files) |
+| `--help` | Show help for any command |
+
+---
+
+## Practical Examples
+
+### Morning dashboard check
+
+```bash
+fintranzact dashboard --period today
+```
+
+Or with the full picture:
+
+```bash
+#!/bin/bash
+echo "=== $(date +"%d %b %Y") ==="
+fintranzact dashboard --period today
+echo ""
+echo "--- Overdue invoices ---"
+fintranzact invoice list --status overdue --sort oldest-first --limit 10
+echo ""
+echo "--- Low stock ---"
+fintranzact item list --low-stock
+```
+
+### Creating an invoice from the terminal
+
+```bash
+fintranzact invoice create \
+  --party "Gupta Enterprises" \
+  --item "Basmati Rice 25kg" --quantity 20 --unit bag --price 1250 \
+  --item "Toor Dal 50kg" --quantity 5 --unit bag --price 4200 \
+  --due-date 2026-04-10
+```
+
+Then immediately get the PDF:
+
+```bash
+INVOICE_ID=$(fintranzact invoice create \
+  --party "Gupta Enterprises" \
+  --item "Basmati Rice 25kg" --quantity 20 --unit bag --price 1250 \
+  --json | jq -r '.id')
+
+fintranzact invoice pdf "$INVOICE_ID" --output /tmp/
+echo "PDF saved: /tmp/${INVOICE_ID}.pdf"
+```
+
+### Checking overdue invoices
+
+```bash
+# Human-readable table
+fintranzact invoice list --status overdue --sort oldest-first
+
+# Pipe to jq for custom formatting
+fintranzact invoice list --status overdue --json | jq -r \
+  '.[] | "\(.invoiceNumber)  \(.party.name)  ₹\(.totalAmount)  \(.daysOverdue) days overdue"'
+
+# Total amount overdue
+fintranzact invoice list --status overdue --json | \
+  jq '[.[].totalAmount | tonumber] | add'
+```
+
+### GST filing prep (export GSTR-1)
+
+```bash
+#!/bin/bash
+MONTH=3
+YEAR=2026
+OUTPUT_DIR="/var/gst-reports/${YEAR}-${MONTH}"
+mkdir -p "$OUTPUT_DIR"
+
+# Human-readable summary
+fintranzact gst r1 --month "$MONTH" --year "$YEAR"
+
+# Export CSV for CA or GST portal upload
+fintranzact gst r1 --month "$MONTH" --year "$YEAR" \
+  --csv --output "$OUTPUT_DIR/gstr1-${YEAR}-${MONTH}.csv"
+
+fintranzact gst r3b --month "$MONTH" --year "$YEAR" \
+  --csv --output "$OUTPUT_DIR/gstr3b-${YEAR}-${MONTH}.csv"
+
+echo "GST exports ready in $OUTPUT_DIR"
+```
+
+### Scripting with `--json | jq`
+
+```bash
+# Top 5 customers by outstanding balance
+fintranzact party list --outstanding --json | \
+  jq 'sort_by(.outstandingBalance | tonumber) | reverse | .[0:5] |
+      .[] | "\(.name): ₹\(.outstandingBalance)"'
+
+# Items needing reorder with suggested quantity
+fintranzact item list --low-stock --json | jq -r \
+  '.[] | "REORDER \(.name): have \(.stockQuantity) \(.unit), min \(.lowStockThreshold) \(.unit)"'
+
+# Monthly revenue from dashboard
+fintranzact dashboard --period this-month --json | jq -r '.totalSales'
+
+# Count invoices by status
+fintranzact invoice list --json | jq 'group_by(.status) | .[] | {status: .[0].status, count: length}'
+```
+
+---
+
+## Power User Workflows
+
+### Morning brief with overdue and low-stock checks
+
+```bash
+#!/bin/bash
+# morning-brief.sh — add to cron: 0 8 * * *
+
+DASH=$(fintranzact dashboard --period today --json)
+OVERDUE=$(fintranzact invoice list --status overdue --sort oldest-first --limit 5 --json)
+LOW=$(fintranzact item list --low-stock --json)
+
+echo "=== MORNING BRIEF — $(date +"%d %b %Y") ==="
+echo ""
+echo "Revenue today:    $(echo $DASH | jq -r '.totalSales')"
+echo "Outstanding:      $(echo $DASH | jq -r '.receivable')"
+echo ""
+
+OVERDUE_COUNT=$(echo $OVERDUE | jq 'length')
+if [ "$OVERDUE_COUNT" -gt 0 ]; then
+  echo "OVERDUE ($OVERDUE_COUNT):"
+  echo $OVERDUE | jq -r \
+    '.[] | "  \(.invoiceNumber) — \(.party.name) — ₹\(.totalAmount) (\(.daysOverdue) days)"'
+  echo ""
+fi
+
+LOW_COUNT=$(echo $LOW | jq 'length')
+if [ "$LOW_COUNT" -gt 0 ]; then
+  echo "LOW STOCK ($LOW_COUNT):"
+  echo $LOW | jq -r '.[] | "  \(.name): \(.stockQuantity) \(.unit) left"'
+fi
+```
+
+### Monthly GST filing prep
+
+```bash
+#!/bin/bash
+# gst-filing-prep.sh — cron: 0 8 28 * *
+
+MONTH=$(date +%m)
+YEAR=$(date +%Y)
+CA_EMAIL="ca@yourca.com"
+OUTPUT_DIR="/var/gst-reports/${YEAR}-${MONTH}"
+mkdir -p "$OUTPUT_DIR"
+
+fintranzact gst r1 --month "$MONTH" --year "$YEAR" \
+  --csv --output "$OUTPUT_DIR/gstr1.csv"
+
+fintranzact gst r3b --month "$MONTH" --year "$YEAR" \
+  --csv --output "$OUTPUT_DIR/gstr3b.csv"
+
+SUMMARY=$(fintranzact gst r3b --month "$MONTH" --year "$YEAR")
+
+{
+  echo "GST data for ${YEAR}-${MONTH} attached."
+  echo ""
+  echo "$SUMMARY"
+  echo ""
+  echo "Please file before the 11th."
+} | mail -s "GST Data ${YEAR}-${MONTH}" \
+  -a "$OUTPUT_DIR/gstr1.csv" \
+  -a "$OUTPUT_DIR/gstr3b.csv" \
+  "$CA_EMAIL"
+```
+
+### Outstanding aging report (weekly)
+
+```bash
+#!/bin/bash
+# aging-report.sh — cron: 0 9 * * 1
+
+fintranzact report outstanding --json | jq -r '
+  "RECEIVABLES AGING — " + (now | strftime("%d %b %Y")) + "\n" +
+  "0–30 days:  ₹\(.aging."0_30")\n" +
+  "31–60 days: ₹\(.aging."31_60")\n" +
+  "61–90 days: ₹\(.aging."61_90")\n" +
+  "90+ days:   ₹\(.aging."90_plus")\n"
+' | mail -s "Weekly Aging Report" owner@yourbusiness.com
+```
+
+---
+
+## For AI Agent Developers
+
+### CLI vs. MCP: which to use
+
+| Scenario | Use CLI | Use MCP |
+|---|---|---|
+| Cron jobs and scheduled automation | Yes | No |
+| AI assistants in conversation (Claude Desktop, etc.) | No | Yes |
+| Shell pipeline data processing | Yes | No |
+| OpenClaw agents that take actions | No | Yes |
+| CI/CD pipelines and deployment scripts | Yes | No |
+| Natural-language business queries | No | Yes |
+| Bulk data export and reporting | Yes | No |
+
+### Exposing the CLI as an agent tool
+
+```typescript
+// tools/fintranzact-cli.ts
+export const fintranzactCLI = {
+  name: "fintranzact_cli",
+  description:
+    "Run a fintranzact CLI command and return the JSON output. " +
+    "Available subcommands: dashboard, " +
+    "invoice list/get/create/update/pdf/delete, " +
+    "party list/get/create/delete/ledger/ledger-report/stats/top-items/merge, " +
+    "item list/get/create/delete/stock/stock-history/stock-movements/low-stock-count/price-history/sales-stats/variants/merge/switch-base-unit/rename-unit, " +
+    "payment list/create/delete/unpaid-invoices/untracked/default-account/assign-account, " +
+    "expense list/create/delete, " +
+    "gst r1/r3b, shipment list/get/create/update, " +
+    "bank list/get/create/transfer/transactions, " +
+    "report daybook/outstanding/tax-summary/item-sales/stock, " +
+    "target list/create/my, import parties/items, " +
+    "store settings/orders/order-confirm/order-cancel/check-slug/items/items-toggle, " +
+    "tenant list/select/members/invite/remove/role, " +
+    "quotation list/get/create/status/delete, " +
+    "credit-note list/get/create/status/delete, " +
+    "debit-note list/get/create/status/delete, " +
+    "challan list/get/create/status/delete, " +
+    "proforma list/get/create/status/delete, " +
+    "sales-return list/get/create/status/delete, " +
+    "purchase-return list/get/create/status/delete, " +
+    "document convert, " +
+    "api-key list/create/revoke",
+  parameters: {
+    type: "object",
+    properties: {
+      command: {
+        type: "string",
+        description: "The fintranzact subcommand to run, e.g. 'invoice list --status overdue --json'",
+      },
+    },
+    required: ["command"],
+  },
+  execute: async ({ command }: { command: string }) => {
+    const { stdout, stderr } = await exec(`fintranzact ${command}`);
+    if (stderr) throw new Error(stderr);
+    return JSON.parse(stdout);
+  },
+};
+```
+
+---
+
+## Cron Job Reference
+
+```bash
+# /etc/cron.d/fintranzact
+FINTRANZACT_API_URL=https://fintranzact-web.vercel.app
+FINTRANZACT_API_KEY=fintranzact_key_xxxxxxxxxxxxxxxxxx
+FINTRANZACT_BUSINESS_ID=business-uuid-here
+
+# Daily summary at 8:00 AM
+0 8 * * * root fintranzact dashboard --period today --json | \
+  jq -r '"Revenue: ₹\(.totalSales)\nOutstanding: ₹\(.receivable)"' | \
+  mail -s "Daily Summary" owner@yourbusiness.com
+
+# Overdue invoice alert at 9:00 AM
+0 9 * * * root /opt/fintranzact-scripts/morning-brief.sh
+
+# Stock check twice daily
+0 9,17 * * * root /opt/fintranzact-scripts/low-stock-check.sh
+
+# Monthly GST export on the 28th at 8 AM
+0 8 28 * * root /opt/fintranzact-scripts/gst-filing-prep.sh
+
+# Weekly aging report every Monday
+0 9 * * 1 root /opt/fintranzact-scripts/aging-report.sh
+```
+
+---
+
+## Configuration File
+
+The CLI reads from `~/.config/fintranzact/config.json`, created automatically on first `fintranzact login`:
+
+```json
+{
+  "apiUrl": "https://fintranzact-web.vercel.app",
+  "token": "fintranzact_key_xxxxxxxxxxxxxxxxxx",
+  "tenantId": "tenant-uuid-here",
+  "businessId": "business-uuid-here",
+  "output": {
+    "format": "table",
+    "color": true
+  }
+}
+```
+
+Priority order (highest to lowest): command-line flags → environment variables → config file.
+
+---
+
+## Related Documentation
+
+- [AI & Automation overview](/help/ai)
+- [MCP Server](/help/ai/mcp-server) — For interactive AI agents and Claude Desktop
+- [Integrations](/help/ai/integrations) — WhatsApp, Slack, Google Sheets, and more
+- [API Reference](/developers)

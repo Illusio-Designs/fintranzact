@@ -1,7 +1,10 @@
+import { isHelpPath } from "./help-paths";
+
 /**
  * Which paths are public. Kept free of UI imports so low-level modules (the
  * tRPC client) can use it without pulling in the marketing components.
  */
+import { isDeveloperPath } from "./developer-paths";
 
 /** Paths served by the marketing layout instead of the app shell. */
 export const MARKETING_PATHS = [
@@ -10,11 +13,13 @@ export const MARKETING_PATHS = [
   "/about",
   "/contact",
   "/partners",
+  "/partners/apply",
   "/find-a-partner",
   "/privacy",
   "/terms",
   "/refund-policy",
   "/security",
+  "/security/report",
   "/widgets",
 ];
 
@@ -52,6 +57,20 @@ export function isSolutionPath(pathname: string) {
 }
 // ────────────────────────────────────────────────────────────────
 
+// ── Feature pages ───────────────────────────────────────────────
+/** /features (in MARKETING_PATHS) and any /features/<slug> (an unknown slug shows a not-found page). */
+export function isFeaturePath(pathname: string) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return path === "/features" || path.startsWith("/features/");
+}
+export { FEATURE_PAGE_PATHS, FEATURE_SLUGS } from "./feature-slugs";
+// ────────────────────────────────────────────────────────────────
+
+// ── Help centre ─────────────────────────────────────────────────
+/** The help centre: /help and every /help/<article> page (see lib/help-paths.ts). */
+export { HELP_PAGE_PATHS, isHelpPath } from "./help-paths";
+// ────────────────────────────────────────────────────────────────
+
 /** Sign-in and invite pages a signed-out visitor may open. */
 export const AUTH_PUBLIC_PATHS = [
   "/login",
@@ -64,7 +83,13 @@ export const AUTH_PUBLIC_PATHS = [
 
 export function isMarketingPath(pathname: string) {
   const path = pathname.replace(/\/+$/, "") || "/";
-  return MARKETING_PATHS.includes(path) || isSolutionPath(path);
+  return (
+    MARKETING_PATHS.includes(path) ||
+    isFeaturePath(path) ||
+    isSolutionPath(path) ||
+    isHelpPath(path) ||
+    isDeveloperPath(path)
+  );
 }
 
 export function isAuthPublicPath(pathname: string) {

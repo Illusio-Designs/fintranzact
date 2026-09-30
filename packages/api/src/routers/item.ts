@@ -8,7 +8,7 @@ import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
-import { ensureDefaultWarehouse, recordOpeningStock, updateStockBalance } from "../lib/inventory-service.js";
+import { documentStockDirection, ensureDefaultWarehouse, recordOpeningStock, updateStockBalance } from "../lib/inventory-service.js";
 import { applyStockAdjustment } from "./stock.js";
 import { groupSubtreeSql, resolveItemGroup } from "../lib/stock-groups.js";
 
@@ -31,7 +31,7 @@ async function insertVariants(
       itemId: input.itemId,
       attributeValues: v.attributeValues,
       sku: v.sku || null,
-      barcode: v.barcode || null,
+      barcode: v.barcode?.trim() || null,
       salePrice: v.salePrice || null,
       purchasePrice: v.purchasePrice || null,
       mrp: v.mrp || null,
@@ -726,12 +726,9 @@ export const itemRouter = router({
         .orderBy(desc(invoices.invoiceDate))
         .limit(50);
 
-      // Annotate direction: returns reverse the normal flow
-      // sale → out, purchase → in, but sales_return/purchase_return flip it
+      // Annotate direction the same way the document moves stock.
       return rows.map((r) => {
-        const isReturn = ["sales_return", "purchase_return"].includes(r.documentType);
-        const baseSaleOutflow = r.invoiceType === "sale" || r.documentType === "delivery_challan";
-        const isOutflow = isReturn ? !baseSaleOutflow : baseSaleOutflow;
+        const isOutflow = documentStockDirection({ documentType: r.documentType, type: r.invoiceType }) === -1;
         return {
           ...r,
           direction: isOutflow ? "out" as const : "in" as const,

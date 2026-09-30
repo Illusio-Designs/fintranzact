@@ -2,7 +2,7 @@ import { eq, and, sql, desc, gte, lte, inArray, count, getTableColumns } from "d
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { ensureDefaultWarehouse } from "../lib/inventory-service.js";
-import { backfillLegacyBusinessMembers } from "../lib/business-membership.js";
+import { backfillLegacyBusinessMembers, isBusinessMember } from "../lib/business-membership.js";
 import {
   businesses,
   businessMembers,
@@ -751,6 +751,15 @@ export const businessRouter = router({
   ensureWalkInParty: tenantProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
+      // tenantProcedure does not check the business; the id comes from the
+      // input, so the caller must be a member of it (as getById requires).
+      if (!(await isBusinessMember(ctx.db, ctx.tenantId, input.id, ctx.user.id))) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not have access to this business",
+        });
+      }
+
       const [existing] = await ctx.db
         .select({ id: parties.id })
         .from(parties)

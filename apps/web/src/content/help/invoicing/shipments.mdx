@@ -1,0 +1,172 @@
+---
+title: Shipments
+description: Track outgoing deliveries in Fintranzact — create a shipment from a sale invoice, record carrier and tracking number, move it through Pending, Shipped, In Transit and Delivered, and add the shipping cost to the invoice automatically.
+sidebar:
+  order: 6
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+import { ForMobile } from "@/components/help/mdx";
+
+A shipment records how and when goods left your premises: the delivery mode, the carrier, the tracking number, the shipping cost and the delivery status. Shipments are usually linked to a sale invoice, and a shipment's cost can be added to that invoice as a shipping charge.
+
+## Where to find shipments
+
+<ForDesktop>
+Open **Inventory → Shipments** in the sidebar. The page lists every shipment in the business, with **Export CSV** at the top right. The web page is for tracking and updating shipments. You create them from a sale invoice (see below).
+</ForDesktop>
+
+<ForMobile>
+Tap **More** in the bottom tab bar, then **Shipments** under **Stock & orders**. The screen lists shipments as cards showing carrier, tracking number, party, date, cost and status. Tap the floating **+** button to create a shipment.
+</ForMobile>
+
+Anyone who can view invoices can view shipments. Creating and updating a shipment needs permission to create or edit invoices (Owner, Admin, Seller Manager, Seller). Deleting a shipment needs permission to delete invoices.
+
+## Shipment statuses
+
+| Status | Meaning |
+|---|---|
+| **Pending** | Created, not yet dispatched. Every new shipment starts here. |
+| **Shipped** | Handed to the carrier or driver |
+| **In Transit** | On its way |
+| **Delivered** | Received by the customer. The delivery date is stamped automatically. |
+| **Returned** | Came back. This status exists in the data model and filters, but no button sets it in the app. |
+
+Use the status tabs (**All**, **Pending**, **Shipped**, **In Transit**, **Delivered**, **Returned**) to filter the list.
+
+## Creating a shipment
+
+<ForDesktop>
+Shipments are created from the invoice they belong to, and only for **sale** invoices.
+
+1. Go to **Vouchers → Invoices** and open a sale invoice.
+2. In the invoice detail panel, find the **Shipment** section and click **+ Create Shipment**.
+3. Fill in the inline form. Every field is optional:
+
+| Field | Notes |
+|---|---|
+| **Mode** | **Self/Driver**, **Courier**, **Transport** or **Post** |
+| **Carrier** | Free text, for example `delhivery` |
+| **Tracking number** | The AWB or consignment number |
+| **Shipping cost (₹)** | Added to the invoice as a charge (see below) |
+
+4. Click **Create Shipment**. It is created with status **Pending** and linked to the invoice and its party.
+
+The invoice panel shows one shipment per invoice. Once a shipment exists, the **Shipment** card shows its status, mode, carrier, tracking and cost instead of the create button.
+
+You can't add a shipment to an invoice that is **paid** or **adjusted**.
+</ForDesktop>
+
+<ForMobile>
+On mobile you create shipments from the **Shipments** screen, and they aren't linked to an invoice.
+
+1. Tap **+** on the **Shipments** screen. The **New Shipment** form opens.
+2. Fill in the details:
+
+| Field | Notes |
+|---|---|
+| **Party (Optional)** | Pick a customer from the list |
+| **Carrier** | Choose from Delhivery, Blue Dart, DTDC, Ecom Express, India Post, Shadowfax or XpressBees |
+| **Transport Mode** | **Road** (default), **Air**, **Rail** or **Sea** |
+| **Tracking Number** | AWB or consignment number |
+| **Tracking URL (Optional)** | Your own tracking link. Leave blank to use the automatic link. |
+| **Shipping Cost** | Defaults to 0 |
+| **Weight (kg)** | Optional |
+| **Shipment Date** | Defaults to today |
+| **Shipping Address (Optional)**, **City**, **Pincode** | Delivery address |
+| **Notes (Optional)** | Any instructions |
+
+3. Tap **Create Shipment**. You must select a carrier or enter a tracking number. The shipment starts as **Pending**.
+</ForMobile>
+
+## Automatic tracking links
+
+If the carrier is one of the carriers Fintranzact recognises and a tracking number is entered, Fintranzact builds the tracking link for you. The tracking number then becomes a clickable link that opens the carrier's tracking page.
+
+| Carrier value | Tracking site |
+|---|---|
+| `delhivery` | Delhivery |
+| `bluedart` | Blue Dart |
+| `dtdc` | DTDC |
+| `ecom_express` | Ecom Express |
+| `india_post` | India Post |
+| `shadowfax` | Shadowfax |
+| `xpressbees` | XpressBees |
+
+Matching ignores case and treats spaces and hyphens as underscores, so `Blue Dart` doesn't match `bluedart`, but `Ecom Express` does match `ecom_express`. On mobile, picking the carrier from the list always uses the right value. For any other carrier, enter the tracking link yourself (mobile) or keep just the tracking number.
+
+## Shipping cost and the invoice total
+
+When a shipment linked to an invoice has a cost above zero, Fintranzact adds a charge line labelled **Shipping** to that invoice and increases the invoice total by the same amount. The charge stays in sync with the shipment:
+
+- Changing the shipment cost updates the **Shipping** charge.
+- Setting the cost to 0 removes the charge.
+- Deleting the shipment removes the charge.
+
+None of these changes are allowed once the invoice is **paid**. You'll see "Cannot modify shipment on a paid invoice".
+
+:::note
+The shipping charge is added to the invoice total as an additional charge, and no GST is calculated on it. If freight is part of taxable value for your supply, add it as a line item with the right tax rate instead.
+:::
+
+## Updating status
+
+<ForDesktop>
+Click a row on the **Shipments** page to open the detail panel. The status buttons in the footer depend on the current status:
+
+- **Pending** → **Mark Shipped**
+- **Shipped** → **Mark In Transit** or **Mark Delivered**
+- **In Transit** → **Mark Delivered**
+
+**Mark Shipped** and **Mark In Transit** set the shipped date to today. **Mark Delivered** sets the delivered date to today. The same **Mark Shipped** and **Mark Delivered** buttons appear on the **Shipment** card inside the invoice detail panel, which also has an **Add tracking** link when no tracking number has been saved yet.
+</ForDesktop>
+
+<ForMobile>
+Tap a shipment to open its detail screen. The action buttons follow the same rules: **Mark as Shipped** from Pending, **Mark In Transit** or **Mark Delivered** from Shipped, and **Mark Delivered** from In Transit. Each change asks you to confirm. If the shipment has a tracking link, tap it to open the carrier's page.
+</ForMobile>
+
+## Editing and deleting
+
+<ForDesktop>
+In the detail panel, click **Edit** to change **Carrier**, **Mode**, **Tracking Number**, **Est. Delivery** and **Notes**, then click **Save**. The panel also shows the **Shipping Cost**, **Weight**, **Shipping Address** and the **Shipped**, **Est. Delivery** and **Delivered** dates. If the shipment is linked to an invoice, click the invoice number to jump to it.
+
+Click **Delete**, then confirm, to remove the shipment. Any shipping charge it added to the invoice is removed too.
+</ForDesktop>
+
+<ForMobile>
+The mobile detail screen is read-only apart from status changes and delete. Tap **Delete** at the bottom of the screen and confirm **Delete Shipment** to remove it. To edit carrier, tracking or dates, use the web or desktop app.
+</ForMobile>
+
+## Exporting
+
+<ForDesktop>
+Click **Export CSV** on the **Shipments** page. The file contains every shipment matching the selected status tab, with columns Date, Invoice #, Party, Mode, Carrier, Tracking #, Cost and Status.
+</ForDesktop>
+
+<ForMobile>
+CSV export is only available in the web and desktop app.
+</ForMobile>
+
+## Delivery methods in Settings
+
+**Settings → Shipping** lists the delivery methods used on invoices (**Self Pickup**, **Self / Driver**, **Bus / Parcel Service**, **Transport**, **Courier**, **India Post**). It also has a form for custom delivery methods (these cannot be saved in the current version) and previews a carrier API integration that is marked **Coming Soon**. See [Settings](/help/settings).
+
+## Frequently asked questions
+
+**Why don't I see a "New Shipment" button on the web Shipments page?**
+On web and desktop, shipments are created from a sale invoice's detail panel with **+ Create Shipment**. The **Shipments** page is for tracking, updating and exporting.
+
+**Can one invoice have more than one shipment?**
+The invoice detail panel shows and creates one shipment per invoice. Split deliveries aren't supported from the invoice panel.
+
+**Why can't I add a shipment to this invoice?**
+The invoice is paid or adjusted. Shipping charges can't be added to, changed on or removed from a paid invoice.
+
+**Does the shipping cost include GST?**
+No tax is calculated on it. It is added to the invoice total as a plain charge.
+
+**Why isn't my tracking number a link?**
+The carrier value didn't match one of the recognised carriers, or there's no tracking number. On mobile you can paste your own **Tracking URL**.
+
+**How do I mark a shipment as Returned?**
+There is no button for it in the app yet. The status can be set through the API or the [MCP server](/help/ai/mcp-server) (`shipment_update`).
