@@ -151,6 +151,12 @@ function AdminShell({ view, children }: { view: View; children: ReactNode }) {
     },
   });
   const current = NAV.find((n) => n.view === view) ?? NAV[0];
+  // New partner applications waiting for a decision, shown on the menu.
+  const { data: pendingPartners } = trpc.platform.partners.useQuery(
+    { status: "pending", limit: 1 },
+    { refetchInterval: 60_000 },
+  );
+  const pendingCount = pendingPartners?.counts.pending ?? 0;
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-1">
@@ -190,7 +196,15 @@ function AdminShell({ view, children }: { view: View; children: ReactNode }) {
               aria-current={item.view === view ? "page" : undefined}
             >
               <Icon icon={item.icon} size={18} />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.view === "partners" && pendingCount > 0 ? (
+                <span
+                  className="rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-[#0f1b3d]"
+                  aria-label={`${pendingCount} waiting for review`}
+                >
+                  {pendingCount}
+                </span>
+              ) : null}
             </Link>
           ))}
         </nav>

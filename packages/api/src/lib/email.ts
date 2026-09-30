@@ -34,6 +34,8 @@ export interface PartnerApprovedEmail {
   companyName: string;
   referralCode: string;
   signupUrl: string;
+  /** Where the partner signs in (with this email) to see their referrals and payouts. */
+  portalUrl: string;
 }
 
 function partnerApprovedText(d: PartnerApprovedEmail): string {
@@ -47,6 +49,8 @@ function partnerApprovedText(d: PartnerApprovedEmail): string {
     "",
     "Businesses that sign up with your code or link count as your referrals. Your badge and commission",
     "grow with the number of them on a paid plan.",
+    "",
+    `Sign in with this email address to see your referrals, badge and payouts: ${d.portalUrl}`,
     "",
     "Welcome aboard,",
     "The Fintranzact team",
@@ -77,7 +81,7 @@ function partnerApprovedHtml(d: PartnerApprovedEmail): string {
 <p style="margin:10px 0 0 0;font-size:12px;color:#6b7280;word-break:break-all;">${e(d.signupUrl)}</p>
 </td></tr>
 <tr><td style="padding:24px 40px 32px 40px;${font}">
-<p style="margin:0;font-size:14px;line-height:21px;color:#374151;">Questions about your referrals or payouts? Get in touch with the Fintranzact team.</p>
+<p style="margin:0;font-size:14px;line-height:21px;color:#374151;">See your referrals, badge and payouts any time: <a href="${e(d.portalUrl)}" style="color:#3B5EAA;">sign in to your partner portal</a> with this email address.</p>
 </td></tr>
 </table></td></tr></table></body></html>`;
 }

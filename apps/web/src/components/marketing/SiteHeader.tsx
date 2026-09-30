@@ -192,6 +192,7 @@ const MENUS: MegaMenu[] = [
           { label: "Contact us", icon: HeadphonesIcon, to: "/contact" },
           { label: "Partner with us", icon: UserGroupIcon, to: "/partners" },
           { label: "Find a partner", icon: UserGroupIcon, to: "/find-a-partner" },
+          { label: "Partner login", icon: UserGroupIcon, to: "/partner-portal" },
           { label: "Widget gallery", icon: DashboardSquare01Icon, to: "/widgets" },
           { label: "API docs", icon: ApiIcon, href: API_DOCS_URL },
           { label: "Email us", icon: Mail01Icon, href: `mailto:${CONTACT_EMAIL}` },

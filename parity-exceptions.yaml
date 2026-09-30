@@ -240,6 +240,8 @@ exceptions:
       - platform.updatePartner
       - partner.submitApplication
       - partner.directory
+      - partner.me
+      - partner.portal
       - platform.partner
       - platform.recordPayout
       - platform.updatePayout
@@ -489,6 +491,8 @@ exceptions:
       - platform.updatePartner
       - partner.submitApplication
       - partner.directory
+      - partner.me
+      - partner.portal
       - platform.partner
       - platform.recordPayout
       - platform.updatePayout
@@ -702,6 +706,8 @@ exceptions:
       - platform.updatePartner
       - partner.submitApplication
       - partner.directory
+      - partner.me
+      - partner.portal
       - platform.partner
       - platform.recordPayout
       - platform.updatePayout

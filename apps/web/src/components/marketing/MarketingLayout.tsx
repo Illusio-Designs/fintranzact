@@ -37,6 +37,7 @@ const FOOTER_COLUMNS: Array<{
       { label: "Contact", to: "/contact" },
       { label: "Partner with us", to: "/partners" },
       { label: "Find a partner", to: "/find-a-partner" },
+      { label: "Partner login", to: "/partner-portal" },
     ],
   },
   {

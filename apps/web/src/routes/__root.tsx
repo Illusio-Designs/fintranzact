@@ -44,6 +44,7 @@ import {
   ReturnRequestIcon,
   Settings01Icon,
   UserShield01Icon,
+  Award01Icon,
   ShippingTruck01Icon,
   ShoppingCart01Icon,
   TaxesIcon,
@@ -169,6 +170,13 @@ function canAccess(
 }
 
 const NAV_COLLAPSED_KEY = "fintranzact:nav-collapsed";
+/** Where to go once signed in, when a signed-out visitor opened a role's page. */
+const AFTER_LOGIN_KEY = "fintranzact:after-login";
+
+/** Pages that belong to a role rather than an organisation: the admin console and partner portal. */
+function isRoleHome(pathname: string): boolean {
+  return ["/platform", "/partner-portal"].some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 const NAV_SECTIONS_KEY = "fintranzact:nav-sections";
 
 // ── Sidebar nav structure ──────────────────────────────────────
@@ -710,6 +718,11 @@ function RootLayout() {
     enabled: !!session?.user,
   });
   const isPlatformAdmin = !!platformMe?.isPlatformAdmin;
+  // Partners (approved, or with an application in) get /partner-portal.
+  const { data: partnerMe, isLoading: partnerMeLoading } = trpc.partner.me.useQuery(undefined, {
+    enabled: !!session?.user,
+  });
+  const partnerStatus = partnerMe?.status ?? null;
   const {
     data: tenantList,
     isLoading: tenantListLoading,
@@ -1103,6 +1116,14 @@ function RootLayout() {
     if (!session?.user) {
       if (showsLandingPage) return;
       if (!publicPaths.some((p) => pathname.startsWith(p))) {
+        // Come back to the partner portal or admin console after signing in.
+        if (isRoleHome(pathname)) {
+          try {
+            sessionStorage.setItem(AFTER_LOGIN_KEY, pathname);
+          } catch {
+            // Private mode: the role-based landing below still applies.
+          }
+        }
         navigate({ to: "/login" });
       }
       return;
@@ -1116,19 +1137,57 @@ function RootLayout() {
       return;
     }
 
-    // Already signed in: the login and register pages have nothing to do.
-    if (pathname === "/login" || pathname === "/register") {
-      navigate({ to: isPlatformAdmin && !session.tenantId ? "/platform" : "/", replace: true });
+    // Opened the partner portal (or admin console) while signed out: go back
+    // there. The destination is kept until they arrive, so another redirect
+    // racing with this one (e.g. the profile page's) cannot lose it.
+    let afterLogin: string | null = null;
+    try {
+      afterLogin = sessionStorage.getItem(AFTER_LOGIN_KEY);
+      if (afterLogin && (pathname === afterLogin || !isRoleHome(afterLogin))) {
+        sessionStorage.removeItem(AFTER_LOGIN_KEY);
+        afterLogin = null;
+      }
+    } catch {
+      afterLogin = null;
+    }
+    if (afterLogin) {
+      navigate({ to: afterLogin, replace: true });
       return;
     }
 
-    // The platform admin page needs a signed-in user only — no organisation,
-    // plan or business.
-    if (pathname === "/platform" || pathname.startsWith("/platform/")) return;
+    // The partner portal and platform admin pages need a signed-in user only —
+    // no organisation, plan or business.
+    if (isRoleHome(pathname)) return;
+
+    // Profile just completed: move on (joining an invited organisation is
+    // handled on that page instead).
+    if (pathname === "/auth/complete-profile" && !sessionStorage.getItem("pendingInviteToken")) {
+      navigate({ to: "/", replace: true });
+      return;
+    }
+
+    // Everyone signs in the same way; where they land depends on their role.
+    // Wait until we know whether this user is a partner.
+    if (partnerMeLoading) return;
+
+    // Already signed in: the login and register pages have nothing to do.
+    if (pathname === "/login" || pathname === "/register") {
+      navigate({
+        to: isPlatformAdmin && !session.tenantId ? "/platform" : partnerStatus && !session.tenantId ? "/partner-portal" : "/",
+        replace: true,
+      });
+      return;
+    }
 
     // A platform admin who is not part of any organisation has nothing else to open.
     if (isPlatformAdmin && !session.tenantId && tenantList && tenantList.length === 0) {
       navigate({ to: "/platform", replace: true });
+      return;
+    }
+
+    // Likewise a partner with no organisation lands on their partner portal.
+    if (partnerStatus && !session.tenantId && tenantList && tenantList.length === 0) {
+      navigate({ to: "/partner-portal", replace: true });
       return;
     }
 
@@ -1188,6 +1247,12 @@ function RootLayout() {
       Array.isArray(businesses) &&
       businesses.length === 0
     ) {
+      // A partner who has not set up a business of their own lands on the
+      // partner portal; they can still open onboarding from there.
+      if (partnerStatus && pathname === "/") {
+        navigate({ to: "/partner-portal", replace: true });
+        return;
+      }
       if (
         pathname !== "/onboarding" &&
         !pathname.startsWith("/auth/plan-selection") &&
@@ -1213,6 +1278,10 @@ function RootLayout() {
     sessionUnknown,
     session,
     businesses,
+    // A refetch that returns the same (empty) list keeps the same array, so
+    // the loading flags are what re-run the "no business yet" redirects.
+    businessesLoading,
+    businessesFetching,
     navigate,
     pathname,
     currentBusinessId,
@@ -1221,6 +1290,8 @@ function RootLayout() {
     tenantListFetching,
     hasCompletedPlanSelection,
     isPlatformAdmin,
+    partnerStatus,
+    partnerMeLoading,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select single tenant
@@ -1283,8 +1354,9 @@ function RootLayout() {
     return <Outlet />;
   }
 
-  // The platform admin page has its own full-page layout and access check.
-  if (pathname === "/platform" || pathname.startsWith("/platform/")) return <Outlet />;
+  // The platform admin and partner portal pages have their own full-page
+  // layout and access check.
+  if (isRoleHome(pathname)) return <Outlet />;
 
   // Authenticated but no tenant selected
   if (!session.tenantId) {
@@ -1296,8 +1368,8 @@ function RootLayout() {
 
     if (!tenantList) return loadingSpinner;
 
-    // Platform admin without an organisation: the redirect to /platform is in flight.
-    if (tenantList.length === 0 && isPlatformAdmin) return loadingSpinner;
+    // Platform admin or partner without an organisation: the redirect is in flight.
+    if (tenantList.length === 0 && (isPlatformAdmin || partnerStatus || partnerMeLoading)) return loadingSpinner;
 
     if (tenantList.length === 0) {
       // If a pending invite token exists, show spinner — the redirect useEffect
@@ -1698,6 +1770,21 @@ function RootLayout() {
                   >
                     <Icon icon={UserShield01Icon} size={16} className="shrink-0" />
                     <span className={cn(navCollapsed && "md:hidden")}>Platform admin</span>
+                  </Link>
+                </Tooltip>
+              ) : null}
+              {partnerStatus ? (
+                <Tooltip label="Partner portal" disabled={!navCollapsed}>
+                  <Link
+                    to="/partner-portal"
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-[9px] py-2 text-[13.5px] text-[#c3cee6] transition-colors hover:bg-white/[.07] hover:text-white",
+                      navCollapsed ? "px-3 md:justify-center md:px-0" : "px-3",
+                    )}
+                  >
+                    <Icon icon={Award01Icon} size={16} className="shrink-0" />
+                    <span className={cn(navCollapsed && "md:hidden")}>Partner portal</span>
                   </Link>
                 </Tooltip>
               ) : null}

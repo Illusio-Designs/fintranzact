@@ -35,6 +35,7 @@ import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PhysicalStockRouteImport } from './routes/physical-stock'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PartnersRouteImport } from './routes/partners'
+import { Route as PartnerPortalRouteImport } from './routes/partner-portal'
 import { Route as PartiesRouteImport } from './routes/parties'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ManufacturingRouteImport } from './routes/manufacturing'
@@ -198,6 +199,11 @@ const PaymentsRoute = PaymentsRouteImport.update({
 const PartnersRoute = PartnersRouteImport.update({
   id: '/partners',
   path: '/partners',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnerPortalRoute = PartnerPortalRouteImport.update({
+  id: '/partner-portal',
+  path: '/partner-portal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PartiesRoute = PartiesRouteImport.update({
@@ -397,6 +403,7 @@ export interface FileRoutesByFullPath {
   '/manufacturing': typeof ManufacturingRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partner-portal': typeof PartnerPortalRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
@@ -459,6 +466,7 @@ export interface FileRoutesByTo {
   '/manufacturing': typeof ManufacturingRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partner-portal': typeof PartnerPortalRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
@@ -522,6 +530,7 @@ export interface FileRoutesById {
   '/manufacturing': typeof ManufacturingRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
+  '/partner-portal': typeof PartnerPortalRoute
   '/partners': typeof PartnersRoute
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
@@ -586,6 +595,7 @@ export interface FileRouteTypes {
     | '/manufacturing'
     | '/onboarding'
     | '/parties'
+    | '/partner-portal'
     | '/partners'
     | '/payments'
     | '/physical-stock'
@@ -648,6 +658,7 @@ export interface FileRouteTypes {
     | '/manufacturing'
     | '/onboarding'
     | '/parties'
+    | '/partner-portal'
     | '/partners'
     | '/payments'
     | '/physical-stock'
@@ -710,6 +721,7 @@ export interface FileRouteTypes {
     | '/manufacturing'
     | '/onboarding'
     | '/parties'
+    | '/partner-portal'
     | '/partners'
     | '/payments'
     | '/physical-stock'
@@ -773,6 +785,7 @@ export interface RootRouteChildren {
   ManufacturingRoute: typeof ManufacturingRoute
   OnboardingRoute: typeof OnboardingRoute
   PartiesRoute: typeof PartiesRoute
+  PartnerPortalRoute: typeof PartnerPortalRoute
   PartnersRoute: typeof PartnersRoute
   PaymentsRoute: typeof PaymentsRoute
   PhysicalStockRoute: typeof PhysicalStockRoute
@@ -992,6 +1005,13 @@ declare module '@tanstack/react-router' {
       path: '/partners'
       fullPath: '/partners'
       preLoaderRoute: typeof PartnersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partner-portal': {
+      id: '/partner-portal'
+      path: '/partner-portal'
+      fullPath: '/partner-portal'
+      preLoaderRoute: typeof PartnerPortalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/parties': {
@@ -1261,6 +1281,7 @@ const rootRouteChildren: RootRouteChildren = {
   ManufacturingRoute: ManufacturingRoute,
   OnboardingRoute: OnboardingRoute,
   PartiesRoute: PartiesRoute,
+  PartnerPortalRoute: PartnerPortalRoute,
   PartnersRoute: PartnersRoute,
   PaymentsRoute: PaymentsRoute,
   PhysicalStockRoute: PhysicalStockRoute,
