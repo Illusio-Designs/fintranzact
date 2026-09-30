@@ -31,7 +31,7 @@ async function insertVariants(
       itemId: input.itemId,
       attributeValues: v.attributeValues,
       sku: v.sku || null,
-      barcode: v.barcode || null,
+      barcode: v.barcode?.trim() || null,
       salePrice: v.salePrice || null,
       purchasePrice: v.purchasePrice || null,
       mrp: v.mrp || null,

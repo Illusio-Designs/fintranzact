@@ -21,8 +21,9 @@ import type { InvoicePDFData } from "./lib/invoice-pdf.js";
 import { generateLedgerPDF } from "./lib/ledger-pdf.js";
 import { generateLabelSheetPDF, LABEL_PRESETS, TYPE_PRESET } from "./lib/label-pdf.js";
 import { asBarcodeType } from "./lib/barcode-setup.js";
+import { verifyBusinessAccess } from "./lib/business-membership.js";
 import { recordShareView, resolveShareToken } from "./lib/share-links.js";
-import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, tenantMembers, magicLinkTokens, bankAccounts, storeOrders, payments, assertMigrationsPresent } from "@fintranzact/db";
+import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, magicLinkTokens, bankAccounts, storeOrders, payments, assertMigrationsPresent } from "@fintranzact/db";
 import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
@@ -400,30 +401,6 @@ async function generatePDFInWorker(data: any, format: "a5" | "a4" | "thermal"): 
   }
 }
 
-// ── Shared business access check for non-tRPC endpoints ─────────
-// Mirrors the hasBusinessAccess middleware in trpc.ts: verifies the business
-// exists in the tenant DB AND (for self-hosted shared-DB mode) that the
-// business creator is a member of the caller's tenant.
-async function verifyBusinessAccess(
-  db: Awaited<ReturnType<typeof getTenantDb>>,
-  businessId: string,
-  tenantId: string,
-): Promise<{ ok: true; business: { id: string; createdByUserId: string } } | { ok: false; error: string }> {
-  const [biz] = await db.select({ id: businesses.id, createdByUserId: businesses.createdByUserId })
-    .from(businesses).where(eq(businesses.id, businessId)).limit(1);
-  if (!biz) return { ok: false, error: "Business not found" };
-
-  // Self-hosted cross-tenant guard: verify the creator is a member of this tenant
-  const [creatorMembership] = await controlDb
-    .select({ userId: tenantMembers.userId })
-    .from(tenantMembers)
-    .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, biz.createdByUserId)))
-    .limit(1);
-  if (!creatorMembership) return { ok: false, error: "Business not found" };
-
-  return { ok: true, business: biz };
-}
-
 // ── PDF-specific rate limiting (per IP, 30/min) ──────────────
 const pdfRateMap = new Map<string, { count: number; reset: number }>();
 const PDF_RATE_LIMIT = 30; // per minute
@@ -620,7 +597,7 @@ app.get("/api/invoices/:id/pdf", async (c) => {
   const db = await getTenantDb(sessionRow.tenantId);
 
   // Verify the business exists and belongs to this tenant (cross-tenant guard)
-  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
+  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId, sessionRow.userId);
   if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
 
   const built = await buildInvoicePdfData(db, businessId, invoiceId, new URL(c.req.url).origin, tenant.plan);
@@ -819,7 +796,7 @@ async function serveBusinessImage(c: Context, kind: "logo" | "signature") {
   if (!tenant || tenant.status !== "active") return c.json({ error: "Organization suspended" }, 403);
 
   const db = await getTenantDb(sessionRow.tenantId);
-  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
+  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId, sessionRow.userId);
   if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
 
   const [row] = await db.select({
@@ -897,7 +874,7 @@ app.get("/api/parties/:id/ledger.pdf", async (c) => {
   const db = await getTenantDb(sessionRow.tenantId);
 
   // Verify the business exists and belongs to this tenant (cross-tenant guard)
-  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
+  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId, sessionRow.userId);
   if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
 
   // Validate party belongs to this business
@@ -1868,7 +1845,7 @@ app.post("/api/items/labels", async (c) => {
   if (!businessId) return c.json({ error: "No business selected" }, 400);
 
   const db = await getTenantDb(sessionRow.tenantId);
-  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
+  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId, sessionRow.userId);
   if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
 
   const parsed = labelRequestSchema.safeParse(await c.req.json().catch(() => null));

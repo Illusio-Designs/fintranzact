@@ -1249,7 +1249,9 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         itemType,
         name,
         sku: sku || undefined,
-        barcode: barcode || undefined,
+        // Always sent: "" is how the server clears a barcode (stored as NULL).
+        // Omitting it on blank would keep the old code on the item and its labels.
+        barcode: barcode.trim(),
         // Only when changed, so saving never touches a group set elsewhere.
         ...(stockGroupId !== (item?.stockGroupId ?? "") ? { stockGroupId: stockGroupId || null } : {}),
         hsn: hsn || undefined,

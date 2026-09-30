@@ -43,3 +43,66 @@ export async function backfillLegacyBusinessMembers(db: TenantDatabase, tenantId
     }))))
     .onConflictDoNothing();
 }
+
+/**
+ * True when `userId` is a member of `businessId`. On a miss the legacy
+ * backfill runs once and the lookup is retried, exactly as the
+ * hasBusinessAccess tRPC middleware does, so a business created before
+ * per-business membership still opens for its team.
+ *
+ * Shared by the non-tRPC endpoints (PDFs, labels) and the tenant-level
+ * procedures that take a business id in their input.
+ */
+export async function isBusinessMember(
+  db: TenantDatabase,
+  tenantId: string,
+  businessId: string,
+  userId: string,
+): Promise<boolean> {
+  const find = () => db
+    .select({ userId: businessMembers.userId })
+    .from(businessMembers)
+    .where(and(eq(businessMembers.businessId, businessId), eq(businessMembers.userId, userId)))
+    .limit(1);
+
+  let [membership] = await find();
+  if (!membership) {
+    await backfillLegacyBusinessMembers(db, tenantId);
+    [membership] = await find();
+  }
+  return !!membership;
+}
+
+/**
+ * Shared business access check for non-tRPC endpoints (invoice/ledger PDFs,
+ * label sheets, business images). Mirrors the hasBusinessAccess middleware in
+ * trpc.ts: the business exists in the tenant DB, (for self-hosted shared-DB
+ * mode) its creator is a member of the caller's tenant, AND the caller is a
+ * member of the business itself.
+ */
+export async function verifyBusinessAccess(
+  db: TenantDatabase,
+  businessId: string,
+  tenantId: string,
+  userId: string,
+): Promise<{ ok: true; business: { id: string; createdByUserId: string } } | { ok: false; error: string }> {
+  const [biz] = await db.select({ id: businesses.id, createdByUserId: businesses.createdByUserId })
+    .from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  if (!biz) return { ok: false, error: "Business not found" };
+
+  // Self-hosted cross-tenant guard: verify the creator is a member of this tenant
+  const [creatorMembership] = await controlDb
+    .select({ userId: tenantMembers.userId })
+    .from(tenantMembers)
+    .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, biz.createdByUserId)))
+    .limit(1);
+  if (!creatorMembership) return { ok: false, error: "Business not found" };
+
+  // Tenant membership alone is not enough: the caller must be assigned to
+  // this business, as hasBusinessAccess requires for tRPC.
+  if (!(await isBusinessMember(db, tenantId, businessId, userId))) {
+    return { ok: false, error: "You do not have access to this business" };
+  }
+
+  return { ok: true, business: biz };
+}

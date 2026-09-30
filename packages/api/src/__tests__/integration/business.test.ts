@@ -498,7 +498,32 @@ describe("POS mode — business.ensureWalkInParty", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("seller can call ensureWalkInParty (no admin gate) — needed for POS bootstrap by non-admin cashiers", async () => {
+  it("a tenant member who is not assigned to the business receives FORBIDDEN", async () => {
+    const caller = tenantLevelCaller(seller, tenant.id);
+    await expect(
+      caller.business.ensureWalkInParty({ id: bizId })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    // Nothing was created for them either.
+    const rows = await getTenantTestDb()
+      .select()
+      .from(parties)
+      .where(and(eq(parties.businessId, bizId), eq(parties.name, "Walk-in Customer")));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("a user from another tenant cannot seed or read the walk-in party", async () => {
+    const outsider = await createUser({ email: "walkin.outsider@other.in", name: "Outsider" });
+    const otherTenant = await createTenant({ name: "Other Org" });
+    await addMember(otherTenant.id, outsider.id, "owner");
+    const caller = tenantLevelCaller(outsider, otherTenant.id);
+    await expect(
+      caller.business.ensureWalkInParty({ id: bizId })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("seller can call ensureWalkInParty (no admin gate) once assigned — needed for POS bootstrap by non-admin cashiers", async () => {
+    await tenantLevelCaller(owner, tenant.id).business.addMember({ businessId: bizId, userId: seller.id });
     const caller = tenantLevelCaller(seller, tenant.id);
     const result = await caller.business.ensureWalkInParty({ id: bizId });
     expect(result.id).toBeTruthy();

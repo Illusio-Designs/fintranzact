@@ -8,10 +8,10 @@
  * one at the till: thirteen digits, a valid check digit, and no chance of
  * shadowing a supplier's barcode.
  *
- * The symbol is printed as Code 128 (see label-pdf.ts) rather than EAN-13
- * bars. A scanner decodes it to the same thirteen digits either way, which is
- * all the lookup needs, and Code 128 keeps one drawing path for both
- * generated and manufacturer-supplied codes.
+ * Only EAN-13 businesses mint these (Code 128 / QR businesses get SKU or
+ * "FT…" codes, see mintBarcode). label-pdf.ts draws them as real EAN-13 bars
+ * because the check digit is valid; any code that is not a valid EAN-13 falls
+ * back to Code 128, which a scanner decodes to the same value.
  */
 
 /** GS1 in-store / restricted-distribution prefix. */
