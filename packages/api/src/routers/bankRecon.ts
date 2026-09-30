@@ -686,14 +686,65 @@ export const bankReconRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Line is already matched or ignored" });
       }
 
+      if (!money.isPositive(line.debit)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Expenses can only be created from debit (withdrawal) lines" });
+      }
+
+      // The withdrawal happened on the statement's bank account.
+      const [importRecord] = await ctx.db
+        .select({ bankAccountId: bankStatementImports.bankAccountId })
+        .from(bankStatementImports)
+        .where(and(
+          eq(bankStatementImports.id, line.importId),
+          eq(bankStatementImports.businessId, ctx.businessId),
+        ))
+        .limit(1);
+
+      if (!importRecord) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Import not found" });
+      }
+
       const newExpense = await ctx.db.transaction(async (tx) => {
         const [exp] = await tx.insert(expenses).values({
           ...input.expense,
+          bankAccountId: importRecord.bankAccountId,
           businessId: ctx.businessId,
           expenseDate: input.expense.expenseDate ? new Date(input.expense.expenseDate) : line.transactionDate,
           createdByUserId: ctx.user.id,
           createdByName: ctx.user.name ?? undefined,
         }).returning();
+
+        // Record the withdrawal on the bank account (same as expense.create)
+        // so the bank ledger and balance reflect it, and link it to the line.
+        const [account] = await tx
+          .select({ id: bankAccounts.id, currentBalance: bankAccounts.currentBalance })
+          .from(bankAccounts)
+          .where(and(
+            eq(bankAccounts.id, importRecord.bankAccountId),
+            eq(bankAccounts.businessId, ctx.businessId),
+          ))
+          .for("update")
+          .limit(1);
+
+        if (!account) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Bank account not found" });
+        }
+
+        const [bankTxn] = await tx.insert(bankTransactions).values({
+          businessId: ctx.businessId,
+          bankAccountId: account.id,
+          type: "withdrawal",
+          amount: exp!.amount,
+          description: `Expense: ${exp!.category}${exp!.description ? ` — ${exp!.description}` : ""}`,
+          referenceType: "expense",
+          referenceId: exp!.id,
+          transactionDate: exp!.expenseDate,
+        }).returning({ id: bankTransactions.id });
+
+        await tx
+          .update(bankAccounts)
+          .set({ currentBalance: money.sub(account.currentBalance, exp!.amount), updatedAt: new Date() })
+          .where(eq(bankAccounts.id, account.id));
 
         await tx
           .update(bankStatementLines)
@@ -701,6 +752,7 @@ export const bankReconRouter = router({
             matchStatus: "created",
             matchConfidence: "1",
             matchedExpenseId: exp!.id,
+            matchedBankTransactionId: bankTxn!.id,
           })
           .where(eq(bankStatementLines.id, input.lineId));
 

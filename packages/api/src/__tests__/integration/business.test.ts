@@ -309,6 +309,34 @@ describe("business.update", () => {
     expect(updated!.address).toBe("55, New Road");
   });
 
+  it("persists custom shipping methods (Settings → Shipping) and clears them with an empty list", async () => {
+    const caller = businessLevelCaller(owner, tenant.id, bizId);
+    const methods = [
+      { id: "porter", label: "Porter", hasTracking: false },
+      { id: "dunzo", label: "Dunzo", hasTracking: true },
+    ];
+
+    const updated = await caller.business.update({
+      id: bizId,
+      data: { customShippingMethods: methods },
+    });
+    expect(updated!.customShippingMethods).toEqual(methods);
+
+    const db = getTenantTestDb();
+    const [row] = await db
+      .select({ customShippingMethods: businesses.customShippingMethods })
+      .from(businesses)
+      .where(eq(businesses.id, bizId));
+    expect(row!.customShippingMethods).toEqual(methods);
+
+    await caller.business.update({ id: bizId, data: { customShippingMethods: [] } });
+    const [cleared] = await db
+      .select({ customShippingMethods: businesses.customShippingMethods })
+      .from(businesses)
+      .where(eq(businesses.id, bizId));
+    expect(cleared!.customShippingMethods).toEqual([]);
+  });
+
   it("seller cannot update a business — FORBIDDEN due to insufficient tenant admin role", async () => {
     const caller = businessLevelCaller(seller, tenant.id, bizId);
     await expect(

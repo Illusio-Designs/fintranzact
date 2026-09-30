@@ -83,9 +83,11 @@ export function ShippingTab({ biz }: ShippingTabProps) {
 
   // ── Save ───────────────────────────────────────────────────────────────
   function handleSave() {
+    // Send an explicit empty list so removing every custom method persists.
     updateBiz.mutate({
-      customShippingMethods: customMethods.length > 0 ? customMethods : undefined,
-    } as any);
+      id: biz.id,
+      data: { customShippingMethods: customMethods },
+    });
   }
 
   const hasChanges =
