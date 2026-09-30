@@ -55,6 +55,7 @@ import { stockGroupRouter } from "./routers/stockGroup.js";
 import { manufacturingRouter } from "./routers/manufacturing.js";
 import { priceLevelRouter } from "./routers/priceLevel.js";
 import { pricingRouter } from "./routers/pricing.js";
+import { contactRouter } from "./routers/contact.js";
 
 export const appRouter = router({
   auth: authRouter,
@@ -111,6 +112,7 @@ export const appRouter = router({
   pricing: pricingRouter,
   barcode: barcodeRouter,
   share: shareRouter,
+  contact: contactRouter,
 });
 
 export type AppRouter = typeof appRouter;

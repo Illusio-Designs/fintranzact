@@ -148,7 +148,10 @@ function PricingPage() {
   const { plans } = usePlans();
   const compare = useMemo(() => buildComparison(plans), [plans]);
   return (
-    <MarketingLayout title="Pricing">
+    <MarketingLayout
+      title="Pricing"
+      description="Simple plans for GST billing and accounting, starting free. Compare Fintranzact plans, limits and features."
+    >
       <PageHero
         eyebrow="Pricing"
         title="Simple pricing. Start free."

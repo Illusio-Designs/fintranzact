@@ -1,8 +1,9 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { Logo } from "@/components/ui/Logo";
+import { absoluteUrl, resolveSiteUrl } from "@/lib/seo";
 
-import { CONTACT_EMAIL, DOCS_URL, SiteHeader } from "./SiteHeader";
+import { API_DOCS_URL, CONTACT_EMAIL, DOCS_URL, SiteHeader } from "./SiteHeader";
 
 /**
  * Shared chrome (header, footer, page title) for the public marketing pages.
@@ -10,7 +11,7 @@ import { CONTACT_EMAIL, DOCS_URL, SiteHeader } from "./SiteHeader";
  * so they stay fast and crawlable.
  */
 
-export { CONTACT_EMAIL, DOCS_URL, SECURITY_EMAIL } from "./SiteHeader";
+export { API_DOCS_URL, CONTACT_EMAIL, DOCS_URL, SECURITY_EMAIL } from "./SiteHeader";
 
 export { MARKETING_PATHS, isMarketingPath } from "@/lib/public-paths";
 
@@ -24,7 +25,9 @@ const FOOTER_COLUMNS: Array<{
       { label: "Features", to: "/features" },
       { label: "Pricing", to: "/pricing" },
       { label: "Solutions", to: "/solutions" },
+      { label: "Widget gallery", to: "/widgets" },
       { label: "Help & docs", href: DOCS_URL },
+      { label: "API docs", href: API_DOCS_URL },
     ],
   },
   {
@@ -42,27 +45,88 @@ const FOOTER_COLUMNS: Array<{
       { label: "Privacy policy", to: "/privacy" },
       { label: "Terms of service", to: "/terms" },
       { label: "Refund policy", to: "/refund-policy" },
+      { label: "Security", to: "/security" },
     ],
   },
 ];
 
 const DEFAULT_TITLE = "Fintranzact — Professional Billing for Indian Businesses";
+const DEFAULT_DESCRIPTION =
+  "GST billing, inventory and accounting for Indian businesses. Invoices, e-invoicing, e-way bills, stock and reports in one place.";
 
-export function usePageTitle(title?: string) {
+const SITE_URL = resolveSiteUrl(import.meta.env.VITE_SITE_URL as string | undefined);
+
+/** Set (or create) a <meta>/<link> attribute and return a function that puts the old value back. */
+function setHeadTag(selector: string, create: () => HTMLElement, attr: string, value: string): () => void {
+  let el = document.head.querySelector<HTMLElement>(selector);
+  const created = !el;
+  if (!el) {
+    el = create();
+    document.head.appendChild(el);
+  }
+  const previous = el.getAttribute(attr);
+  el.setAttribute(attr, value);
+  return () => {
+    if (created) el.remove();
+    else if (previous !== null) el.setAttribute(attr, previous);
+  };
+}
+
+function metaTag(key: "name" | "property", name: string) {
+  return () => {
+    const el = document.createElement("meta");
+    el.setAttribute(key, name);
+    return el;
+  };
+}
+
+/**
+ * Title, description, canonical URL and the matching Open Graph / Twitter
+ * tags for a marketing page. The canonical URL always uses the configured
+ * site URL (VITE_SITE_URL), so previews and search results point at one host.
+ */
+export function usePageMeta({ title, description }: { title?: string; description?: string }) {
+  const { pathname } = useLocation();
   useEffect(() => {
-    document.title = title ? `${title} — Fintranzact` : DEFAULT_TITLE;
+    const fullTitle = title ? `${title} — Fintranzact` : DEFAULT_TITLE;
+    const desc = description ?? DEFAULT_DESCRIPTION;
+    const url = absoluteUrl(SITE_URL, pathname);
+    const previousTitle = document.title;
+    document.title = fullTitle;
+    const restore = [
+      setHeadTag('meta[name="description"]', metaTag("name", "description"), "content", desc),
+      setHeadTag(
+        'link[rel="canonical"]',
+        () => {
+          const el = document.createElement("link");
+          el.setAttribute("rel", "canonical");
+          return el;
+        },
+        "href",
+        url,
+      ),
+      setHeadTag('meta[property="og:url"]', metaTag("property", "og:url"), "content", url),
+      setHeadTag('meta[property="og:title"]', metaTag("property", "og:title"), "content", fullTitle),
+      setHeadTag('meta[property="og:description"]', metaTag("property", "og:description"), "content", desc),
+      setHeadTag('meta[name="twitter:title"]', metaTag("name", "twitter:title"), "content", fullTitle),
+      setHeadTag('meta[name="twitter:description"]', metaTag("name", "twitter:description"), "content", desc),
+    ];
     return () => {
-      document.title = DEFAULT_TITLE;
+      document.title = previousTitle;
+      restore.reverse().forEach((undo) => undo());
     };
-  }, [title]);
+  }, [title, description, pathname]);
 }
 
 export function MarketingLayout({
   title,
+  description,
   announcement,
   children,
 }: {
   title?: string;
+  /** Meta description for search results and link previews. */
+  description?: string;
   /**
    * Follow the time of day in India (light by day, dark at night). Pages with
    * their own theme controls, like the widget gallery, turn this off.
@@ -71,7 +135,7 @@ export function MarketingLayout({
   announcement?: ReactNode;
   children: ReactNode;
 }) {
-  usePageTitle(title);
+  usePageMeta({ title, description });
   // Theme follows the time of day in India, locked once by the root route
   // for every surface at once — nothing to do per-layout.
   const { pathname, hash } = useLocation();
@@ -215,14 +279,21 @@ export function CtaBand({
 export function LegalPage({
   title,
   updated,
+  description,
   children,
 }: {
   title: string;
   updated: string;
+  description?: string;
   children: ReactNode;
 }) {
   return (
-    <MarketingLayout title={title}>
+    <MarketingLayout
+      title={title}
+      description={
+        description ?? `${title} for Fintranzact, the GST billing, inventory and accounting software for Indian businesses.`
+      }
+    >
       <PageHero eyebrow="Legal" title={title} subtitle={`Last updated: ${updated}`} />
       <article className="legal-prose mx-auto max-w-3xl px-4 py-12 text-sm leading-relaxed text-text-secondary md:px-6 md:text-base [&_a]:text-brand-600 dark:[&_a]:text-brand-300 [&_a]:underline [&_h2]:mb-3 [&_h2]:mt-10 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-text-primary [&_li]:mt-1.5 [&_p]:mt-3 [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:pl-5">
         {children}

@@ -14,12 +14,36 @@ export const MARKETING_PATHS = [
   "/privacy",
   "/terms",
   "/refund-policy",
+  "/security",
   "/widgets",
 ];
 
 // ── Solutions pages ─────────────────────────────────────────────
 /** The /solutions index; every /solutions/<slug> page under it is public too. */
 export const SOLUTION_PATHS = ["/solutions"];
+
+/**
+ * The slug of every solutions page, kept here (free of UI imports) so the
+ * build-time sitemap can list them. lib/solutions-content.ts must have a page
+ * for each; a test checks the two agree.
+ */
+export const SOLUTION_SLUGS = [
+  "retail",
+  "wholesale",
+  "manufacturing",
+  "services",
+  "pharmacy",
+  "restaurants",
+  "electronics",
+  "apparel",
+  "freelancers",
+  "growing-businesses",
+  "multi-branch",
+  "accountants",
+] as const;
+
+/** The solutions index and every solutions page, for the sitemap. */
+export const SOLUTION_PAGE_PATHS = [...SOLUTION_PATHS, ...SOLUTION_SLUGS.map((s) => `/solutions/${s}`)];
 
 /** /solutions and any /solutions/<slug> (an unknown slug shows a not-found page). */
 export function isSolutionPath(pathname: string) {

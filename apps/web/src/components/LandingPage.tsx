@@ -167,6 +167,7 @@ const FAQS = [
 export function LandingPage() {
   return (
     <MarketingLayout
+      description="GST billing, inventory and accounting for Indian businesses. Send GST invoices, generate e-invoices and e-way bills, track stock and file returns from web, desktop or mobile."
       announcement={
         <span className="inline-flex flex-wrap items-center justify-center gap-2.5">
           <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-bold tracking-wide text-white">NEW</span>

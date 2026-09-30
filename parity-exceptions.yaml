@@ -246,6 +246,11 @@ exceptions:
       - platform.deletePayout
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
+      # Public contact/partner forms and the emailed email-change confirmation
+      # link are pages of the public website (/contact, /partners,
+      # /auth/verify-email-change); the link opens in a browser, not the app.
+      - contact.submit
+      - auth.confirmEmailChange
 
       # --- Chart of Accounts ---
       # Accounting management is a desktop/CA workflow.
@@ -490,6 +495,11 @@ exceptions:
       - platform.deletePayout
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
+      # Public contact/partner forms and the emailed email-change confirmation
+      # link are pages of the public website (/contact, /partners,
+      # /auth/verify-email-change); the link opens in a browser, not the app.
+      - contact.submit
+      - auth.confirmEmailChange
 
       # --- Business ---
       # Plan limit check — CLI doesn't create businesses.
@@ -698,6 +708,11 @@ exceptions:
       - platform.deletePayout
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
+      # Public contact/partner forms and the emailed email-change confirmation
+      # link are pages of the public website (/contact, /partners,
+      # /auth/verify-email-change); the link opens in a browser, not the app.
+      - contact.submit
+      - auth.confirmEmailChange
 
       # --- Backup & Restore ---
       # Tenant-level backup/restore requires file I/O; not an MCP workflow.

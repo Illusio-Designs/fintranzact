@@ -38,6 +38,7 @@ import { manufacturingEndpoints } from "./manufacturing";
 import { priceLevelEndpoints } from "./priceLevel";
 import { pricingEndpoints } from "./pricing";
 import { barcodeEndpoints } from "./barcode";
+import { partnerEndpoints, contactEndpoints } from "./publicForms";
 import type { EndpointGroup, EndpointSection } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -62,7 +63,31 @@ export const allSections: EndpointSection[] = [
       shipmentEndpoints,
       recurringInvoiceEndpoints,
       storeEndpoints,
+      posEndpoints,
+      shareEndpoints,
     ],
+  },
+  {
+    id: "documents",
+    title: "Documents & Orders",
+    groups: [documentsEndpoints, ordersEndpoints],
+  },
+  {
+    id: "inventory",
+    title: "Inventory",
+    groups: [
+      warehouseEndpoints,
+      stockEndpoints,
+      stockGroupEndpoints,
+      inventoryReportsEndpoints,
+      manufacturingEndpoints,
+      barcodeEndpoints,
+    ],
+  },
+  {
+    id: "pricing",
+    title: "Pricing",
+    groups: [priceLevelEndpoints, pricingEndpoints],
   },
   {
     id: "banking",
@@ -95,6 +120,11 @@ export const allSections: EndpointSection[] = [
     id: "data",
     title: "Data",
     groups: [importEndpoints, backupEndpoints],
+  },
+  {
+    id: "public",
+    title: "Public Forms",
+    groups: [partnerEndpoints, contactEndpoints],
   },
 ];
 
@@ -133,6 +163,21 @@ export {
   apiKeyEndpoints,
   importEndpoints,
   backupEndpoints,
+  systemEndpoints,
+  documentsEndpoints,
+  ordersEndpoints,
+  posEndpoints,
+  shareEndpoints,
+  warehouseEndpoints,
+  stockEndpoints,
+  stockGroupEndpoints,
+  inventoryReportsEndpoints,
+  manufacturingEndpoints,
+  priceLevelEndpoints,
+  pricingEndpoints,
+  barcodeEndpoints,
+  partnerEndpoints,
+  contactEndpoints,
 };
 
 // Flat map of all endpoints by ID for quick lookup
