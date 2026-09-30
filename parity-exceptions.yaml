@@ -278,26 +278,16 @@ exceptions:
       - hsn.validate
       - hsn.validateForTurnover
 
-      # --- Inventory: warehouses, stock journal, barcodes (mobile) ---
-      # Warehouse stock, transfers, adjustments and scan-based physical
-      # counts are desk / counter workflows built for the web and desktop
+      # --- Inventory: scan-based physical stock and barcodes (mobile) ---
+      # Scan-based physical counts are desk / counter workflows built for the web and desktop
       # app (barcode scanner on a PC, label printing through the system
       # print window). Not yet exposed on mobile.
-      - stock.setup
-      - stock.warehouses
-      - stock.balances
-      - stock.transfer
-      - stock.transfers
-      - stock.adjust
-      - stock.adjustments
       - stock.countSheet
       - stock.countPreview
       - stock.countFinish
       - stock.countPost
       - stock.counts
       - stock.count
-      - warehouse.premiseList
-      - warehouse.warehouseCreate
       # Barcode setup (Settings → Barcodes), extra item codes and on-screen
       # barcode previews for label printing.
       - barcode.setup
@@ -308,9 +298,6 @@ exceptions:
       - barcode.addItemCode
       - barcode.removeItemCode
       - barcode.symbol
-      # Signature image upload/delete use the web file picker, like the logo.
-      - business.uploadSignature
-      - business.deleteSignature
 
   cli:
     not-applicable:
@@ -410,26 +397,16 @@ exceptions:
       - gstr2b.upload
       - gstr2b.ignoreRecord
 
-      # --- Inventory: warehouses, stock journal, barcodes (the CLI) ---
-      # Warehouse stock, transfers, adjustments and scan-based physical
-      # counts are desk / counter workflows built for the web and desktop
+      # --- Inventory: scan-based physical stock and barcodes (the CLI) ---
+      # Scan-based physical counts are desk / counter workflows built for the web and desktop
       # app (barcode scanner on a PC, label printing through the system
       # print window). Not yet exposed on the CLI.
-      - stock.setup
-      - stock.warehouses
-      - stock.balances
-      - stock.transfer
-      - stock.transfers
-      - stock.adjust
-      - stock.adjustments
       - stock.countSheet
       - stock.countPreview
       - stock.countFinish
       - stock.countPost
       - stock.counts
       - stock.count
-      - warehouse.premiseList
-      - warehouse.warehouseCreate
       # Barcode setup (Settings → Barcodes), extra item codes and on-screen
       # barcode previews for label printing.
       - barcode.setup
@@ -440,9 +417,6 @@ exceptions:
       - barcode.addItemCode
       - barcode.removeItemCode
       - barcode.symbol
-      # Signature image upload/delete use the web file picker, like the logo.
-      - business.uploadSignature
-      - business.deleteSignature
 
   mcp:
     not-applicable:
@@ -571,26 +545,16 @@ exceptions:
       - gstr2b.upload
       - gstr2b.ignoreRecord
 
-      # --- Inventory: warehouses, stock journal, barcodes (MCP) ---
-      # Warehouse stock, transfers, adjustments and scan-based physical
-      # counts are desk / counter workflows built for the web and desktop
+      # --- Inventory: scan-based physical stock and barcodes (MCP) ---
+      # Scan-based physical counts are desk / counter workflows built for the web and desktop
       # app (barcode scanner on a PC, label printing through the system
       # print window). Not yet exposed on MCP.
-      - stock.setup
-      - stock.warehouses
-      - stock.balances
-      - stock.transfer
-      - stock.transfers
-      - stock.adjust
-      - stock.adjustments
       - stock.countSheet
       - stock.countPreview
       - stock.countFinish
       - stock.countPost
       - stock.counts
       - stock.count
-      - warehouse.premiseList
-      - warehouse.warehouseCreate
       # Barcode setup (Settings → Barcodes), extra item codes and on-screen
       # barcode previews for label printing.
       - barcode.setup
@@ -601,6 +565,3 @@ exceptions:
       - barcode.addItemCode
       - barcode.removeItemCode
       - barcode.symbol
-      # Signature image upload/delete use the web file picker, like the logo.
-      - business.uploadSignature
-      - business.deleteSignature
