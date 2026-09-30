@@ -145,8 +145,10 @@ export async function resolvePrices(
 
   return lines.map((line): ResolvedPrice => {
     const item = itemById.get(line.itemId);
-    const variant = line.variantId ? variantById.get(line.variantId) : undefined;
-    const variantId = variant && variant.itemId === line.itemId ? variant.id : null;
+    // A variant of some other item is ignored entirely — its id and its price.
+    const found = line.variantId ? variantById.get(line.variantId) : undefined;
+    const variant = found && found.itemId === line.itemId ? found : undefined;
+    const variantId = variant ? variant.id : null;
     const qtyRaw = parseFloat(String(line.quantity ?? "1"));
     const qty = Number.isFinite(qtyRaw) ? qtyRaw : 1;
     const out = (p: Partial<ResolvedPrice>): ResolvedPrice => ({

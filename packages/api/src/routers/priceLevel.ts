@@ -7,7 +7,7 @@
 import { and, asc, eq, ilike, inArray, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { items, itemVariants, parties, priceLevels, priceListEntries } from "@fintranzact/db";
+import { items, itemVariants, priceLevels, priceListEntries } from "@fintranzact/db";
 import { money, priceSlabSchema, decimalStr } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -18,7 +18,12 @@ import { dayOf, resolvePrices } from "../lib/pricing.js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 
-const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+// A real calendar date: "2026-02-30" would otherwise reach Postgres and fail there.
+const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((s) => {
+    const d = new Date(`${s}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+  }, "Invalid date");
 
 const levelFields = {
   name: z.string().trim().min(1).max(100),
@@ -122,8 +127,10 @@ export const priceLevelRouter = router({
         description: priceLevels.description,
         isDefault: priceLevels.isDefault,
         sortOrder: priceLevels.sortOrder,
-        entryCount: sql<number>`(select count(*)::int from ${priceListEntries} where ${priceListEntries.priceLevelId} = ${priceLevels.id})`,
-        partyCount: sql<number>`(select count(*)::int from ${parties} where ${parties.priceLevelId} = ${priceLevels.id})`,
+        // Correlated subqueries: drizzle renders ${col} unqualified inside
+        // sql``, so "id" would bind to the inner table. Qualify by hand.
+        entryCount: sql<number>`(select count(*)::int from price_list_entries e where e.price_level_id = "price_levels"."id")`,
+        partyCount: sql<number>`(select count(*)::int from parties p where p.price_level_id = "price_levels"."id")`,
       })
       .from(priceLevels)
       .where(eq(priceLevels.businessId, ctx.businessId))
@@ -323,6 +330,17 @@ export const priceLevelRouter = router({
         .where(and(eq(items.businessId, ctx.businessId), inArray(items.id, itemIds)));
       if (okLevels.length !== levelIds.length || okItems.length !== itemIds.length) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Price level or item not found" });
+      }
+      // Each variant must be one of its cell's item (the items are already
+      // checked to be this business's).
+      const variantIds = [...new Set(input.cells.map((c) => c.variantId).filter((v): v is string => !!v))];
+      if (variantIds.length) {
+        const found = await ctx.db.select({ id: itemVariants.id, itemId: itemVariants.itemId }).from(itemVariants)
+          .where(inArray(itemVariants.id, variantIds));
+        const itemOf = new Map(found.map((v) => [v.id, v.itemId]));
+        if (input.cells.some((c) => c.variantId && itemOf.get(c.variantId) !== c.itemId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Variant not found on this item" });
+        }
       }
       await ctx.db.transaction(async (tx) => {
         for (const c of input.cells) await setBasePrice(tx, ctx.businessId, c);
