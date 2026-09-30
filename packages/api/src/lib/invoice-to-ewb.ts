@@ -52,6 +52,8 @@ export interface LineItemForEWB {
   /** Optional free-text line notes — not used by EWB payload. */
   description: string | null;
   quantity: string;
+  /** Free goods travel with the consignment, so they count in its quantity (not its value). */
+  freeQuantity?: string | null;
   unitPrice: string;
   taxPercent: string;
   taxAmount: string;
@@ -250,7 +252,7 @@ export function mapInvoiceToEWB(
       productName: li.itemName.slice(0, 100),
       productDesc: li.itemName.slice(0, 100),
       hsnCode: li.hsn ?? "",
-      quantity: qty,
+      quantity: qty + (parseFloat(li.freeQuantity ?? "0") || 0),
       qtyUnit: mapUnit(li.unit),
       cgstRate: rates.cgstRate,
       sgstRate: rates.sgstRate,

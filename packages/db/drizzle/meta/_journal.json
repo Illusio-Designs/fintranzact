@@ -239,6 +239,13 @@
       "when": 1790779605517,
       "tag": "0033_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790795644081,
+      "tag": "0034_free_qty_rejections",
+      "breakpoints": true
     }
   ]
 }

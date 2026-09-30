@@ -54,6 +54,11 @@ export interface InvoicePDFData {
     unitPrice: string;
     /** Printed MRP of the item (per the line's unit), shown under the name when set. */
     mrp?: string | null;
+    /** Free goods on top of the billed quantity ("10 + 1"), shown under the name when set. */
+    freeQuantity?: string | null;
+    /** Goods receipt notes: received but rejected, with the reason, shown under the name. */
+    rejectedQuantity?: string | null;
+    rejectionReason?: string | null;
     taxPercent: string;
     taxAmount: string;
     discountPercent: string;
@@ -1549,8 +1554,36 @@ export function withMrpNotes(data: InvoicePDFData): InvoicePDFData {
   };
 }
 
+function qtyLabel(q: string, unit?: string) {
+  const n = parseFloat(q).toLocaleString("en-IN");
+  return unit ? `${n} ${unit}` : n;
+}
+
+/**
+ * Fold free and rejected quantities into each line's sub-line. The quantity
+ * column stays the billed (on a GRN, accepted) quantity the amount is for.
+ */
+export function withQuantityNotes(data: InvoicePDFData): InvoicePDFData {
+  const has = (v?: string | null) => !!v && parseFloat(v) > 0;
+  if (!data.lineItems.some((li) => has(li.freeQuantity) || has(li.rejectedQuantity))) return data;
+  return {
+    ...data,
+    lineItems: data.lineItems.map((li) => {
+      const parts: string[] = [];
+      if (has(li.freeQuantity)) parts.push(`+ ${qtyLabel(li.freeQuantity!, li.unit)} free`);
+      if (has(li.rejectedQuantity)) {
+        const reason = li.rejectionReason?.trim();
+        parts.push(`Rejected ${qtyLabel(li.rejectedQuantity!, li.unit)}${reason ? ` (${reason})` : ""}`);
+      }
+      if (parts.length === 0) return li;
+      const note = li.description?.trim();
+      return { ...li, description: [note, ...parts].filter(Boolean).join(" · ") };
+    }),
+  };
+}
+
 export function generateInvoicePDF(input: InvoicePDFData, format: PDFFormat = "a5"): InstanceType<typeof PDFDocument> {
-  const data = withMrpNotes(input);
+  const data = withMrpNotes(withQuantityNotes(input));
   let docSize: string | number[];
   let docMargin: number;
 

@@ -390,6 +390,11 @@ export const invoiceItemRowSchema = z.object({
   selectedUnit: z.string().nullable(),
   conversionFactor: factor104Nullable,
   variantId: uuidNullable,
+  // Added with free quantities and GRN rejections; archives from before
+  // them have neither.
+  freeQuantity: money3.default("0"),
+  rejectedQuantity: money3.default("0"),
+  rejectionReason: z.string().nullable().default(null),
 });
 
 export const paymentRowSchema = z.object({

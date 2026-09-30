@@ -24,6 +24,7 @@ import { IRPClient, IRPError } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { ensureBarcodeForStock } from "../lib/barcode-setup.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
+import { assertLineExtras, lineExtras } from "../lib/line-extras.js";
 
 export const invoiceRouter = router({
   list: viewerProcedure
@@ -345,6 +346,8 @@ export const invoiceRouter = router({
         .set({ nextInvoiceNumber: biz.nextNum + 1 })
         .where(eq(businesses.id, ctx.businessId));
 
+      assertLineExtras("invoice", input.lineItems);
+
       // Calculate line item totals using fixed-point arithmetic
       const processedItems = input.lineItems.map((li, idx) => {
         const calc = calcLineItem({
@@ -367,6 +370,7 @@ export const invoiceRouter = router({
           selectedUnit: li.selectedUnit || null,
           conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
           variantId: li.variantId || null,
+          ...lineExtras(li),
         };
       });
 
@@ -589,6 +593,7 @@ export const invoiceRouter = router({
               itemName: invoiceItems.itemName,
               description: invoiceItems.description,
               quantity: invoiceItems.quantity,
+              freeQuantity: invoiceItems.freeQuantity,
               unitPrice: invoiceItems.unitPrice,
               taxPercent: invoiceItems.taxPercent,
               taxAmount: invoiceItems.taxAmount,
@@ -627,6 +632,7 @@ export const invoiceRouter = router({
               itemName: li.itemName,
               description: li.description,
               quantity: li.quantity,
+              freeQuantity: li.freeQuantity,
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent,
               taxAmount: li.taxAmount,
@@ -888,6 +894,8 @@ export const invoiceRouter = router({
         // 4. Handle line items — delete old, insert new, recalculate totals
         if (input.lineItems) {
 
+          assertLineExtras(existing.documentType, input.lineItems);
+
           // Step 3: Delete existing line items
           await tx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, input.id));
 
@@ -914,6 +922,7 @@ export const invoiceRouter = router({
               selectedUnit: li.selectedUnit || null,
               conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
               variantId: li.variantId || null,
+              ...lineExtras(li),
             };
           });
 

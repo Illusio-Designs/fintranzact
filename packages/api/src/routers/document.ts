@@ -5,7 +5,7 @@ import { calcInvoiceTotals, convertDocumentSchema, createInvoiceSchema, money, t
 import { router, memberProcedure, createCallerFactory } from "../trpc.js";
 import { createDocumentRouter } from "../lib/document-router-factory.js";
 import { logAudit } from "../lib/audit.js";
-import { FULFILLED_BY, isPendingTracked, loadPendingLines } from "../lib/order-fulfilment.js";
+import { FULFILLED_BY, isPendingTracked, loadPendingLines, loadRejectedLines } from "../lib/order-fulfilment.js";
 import { requireCan } from "../lib/permissions.js";
 
 // ── Per-document-type routers ───────────────────────────────────
@@ -122,6 +122,10 @@ export const documentRouter = router({
    * Orders, challans and GRNs converted into what fulfils them carry over only
    * what is still pending on each line — or the quantities asked for in
    * `lines`, which may not exceed it. Anything else copies every line.
+   * Billed and free quantities travel separately; a purchase order received
+   * on a GRN can record rejected goods per line, which stay pending on the
+   * order. With `fromRejected`, a GRN's rejected goods become a purchase
+   * return or debit note that moves no stock.
    */
   convert: memberProcedure
     .input(convertDocumentSchema)
@@ -154,22 +158,70 @@ export const documentRouter = router({
         .orderBy(invoiceItems.sortOrder);
 
       const targetType = input.targetDocumentType;
-      const fulfils = isPendingTracked(sourceDoc.documentType)
+      const fromRejected = !!input.fromRejected;
+      const fulfils = !fromRejected
+        && isPendingTracked(sourceDoc.documentType)
         && FULFILLED_BY[sourceDoc.documentType].includes(targetType);
 
-      if (ORDER_SOURCES.has(sourceDoc.documentType) && !fulfils) {
+      if (fromRejected && (sourceDoc.documentType !== "goods_receipt_note" || !["purchase_return", "debit_note"].includes(targetType))) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Rejected goods go back from a goods receipt note on a purchase return or debit note",
+        });
+      }
+      if (ORDER_SOURCES.has(sourceDoc.documentType) && !fulfils && !fromRejected) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: `A ${sourceDoc.documentType.replace(/_/g, " ")} can't be converted into a ${targetType.replace(/_/g, " ")}`,
         });
       }
-      if (input.lines && !fulfils) {
+      if (input.lines && !fulfils && !fromRejected) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Quantities can only be picked when converting an order, challan or GRN" });
       }
+      const receiving = sourceDoc.documentType === "purchase_order" && targetType === "goods_receipt_note";
+      if (!receiving && input.lines?.some((l) => parseFloat(l.rejectedQuantity ?? "0") > 0)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Rejected quantities are recorded when receiving a purchase order on a GRN" });
+      }
 
-      // 2. Lines to carry over, with the quantity for each.
-      let lines = sourceLineItems.map((li) => ({ li, quantity: li.quantity }));
+      // 2. Lines to carry over, with the billed and free quantity for each
+      // (and, on a GRN made from a purchase order, what was rejected).
+      type CarriedLine = {
+        li: (typeof sourceLineItems)[number];
+        quantity: string;
+        freeQuantity: string;
+        rejectedQuantity?: string;
+        rejectionReason?: string;
+      };
+      const q3 = (n: number) => String(Math.round(n * 1000) / 1000);
+      let lines: CarriedLine[] = sourceLineItems.map((li) => ({ li, quantity: li.quantity, freeQuantity: li.freeQuantity ?? "0" }));
       let wholeDocument = true;
+      if (fromRejected) {
+        if (sourceDoc.deletedAt || sourceDoc.status === "cancelled") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A cancelled document can't be converted" });
+        }
+        const open = new Map((await loadRejectedLines(ctx.db, ctx.businessId, sourceDoc.id)).map((l) => [l.lineId, l]));
+        const requested = input.lines ? new Map(input.lines.map((l) => [l.sourceLineId, l])) : null;
+        if (requested) {
+          for (const id of requested.keys()) {
+            if (!open.has(id)) throw new TRPCError({ code: "BAD_REQUEST", message: "A picked line has no rejected goods" });
+          }
+        }
+        lines = [];
+        for (const li of sourceLineItems) {
+          const r = open.get(li.id);
+          if (!r) continue;
+          const qty = requested ? parseFloat(requested.get(li.id)?.quantity ?? "0") : r.open;
+          if (!(qty > 0)) continue;
+          if (qty > r.open + 0.0005) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Only ${r.open} of ${li.itemName} is rejected and not yet returned` });
+          }
+          lines.push({ li, quantity: q3(qty), freeQuantity: "0" });
+        }
+        if (lines.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "No rejected goods are left to return on this GRN" });
+        }
+        wholeDocument = false;
+      }
       if (fulfils) {
         if (sourceDoc.deletedAt || sourceDoc.status === "cancelled") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "A cancelled document can't be converted" });
@@ -180,7 +232,7 @@ export const documentRouter = router({
         const pending = new Map(
           ((await loadPendingLines(ctx.db, ctx.businessId, [sourceDoc.id])).get(sourceDoc.id) ?? []).map((l) => [l.lineId, l]),
         );
-        const requested = input.lines ? new Map(input.lines.map((l) => [l.sourceLineId, l.quantity])) : null;
+        const requested = input.lines ? new Map(input.lines.map((l) => [l.sourceLineId, l])) : null;
         if (requested) {
           for (const id of requested.keys()) {
             if (!pending.has(id)) throw new TRPCError({ code: "BAD_REQUEST", message: "A picked line is not on this document" });
@@ -190,16 +242,41 @@ export const documentRouter = router({
         for (const li of sourceLineItems) {
           const p = pending.get(li.id);
           if (!p) continue;
-          const qty = requested ? parseFloat(requested.get(li.id) ?? "0") : p.pending;
-          if (!(qty > 0)) continue;
+          const req = requested ? requested.get(li.id) : undefined;
+          if (requested && !req) continue;
+          const qty = req ? parseFloat(req.quantity) : p.pending;
+          // Free goods go along with the whole pending billed quantity unless
+          // asked for explicitly.
+          const free = req?.freeQuantity !== undefined
+            ? parseFloat(req.freeQuantity)
+            : qty >= p.pending - 0.0005 ? p.freePending : 0;
+          const rejected = parseFloat(req?.rejectedQuantity ?? "0");
+          if (!(qty > 0) && !(free > 0) && !(rejected > 0)) continue;
           if (qty > p.pending + 0.0005) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: `Only ${p.pending} of ${li.itemName} is pending`,
             });
           }
-          lines.push({ li, quantity: String(Math.round(qty * 1000) / 1000) });
-          if (Math.abs(qty - p.ordered) > 0.0005) wholeDocument = false;
+          if (free > p.freePending + 0.0005) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Only ${p.freePending} of ${li.itemName} is pending free`,
+            });
+          }
+          if (qty + rejected > p.pending + 0.0005) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Accepted and rejected ${li.itemName} come to more than the ${p.pending} pending`,
+            });
+          }
+          lines.push({
+            li,
+            quantity: q3(qty),
+            freeQuantity: q3(free),
+            ...(rejected > 0 ? { rejectedQuantity: q3(rejected), rejectionReason: req?.rejectionReason } : {}),
+          });
+          if (Math.abs(qty - p.ordered) > 0.0005 || Math.abs(free - p.freeOrdered) > 0.0005) wholeDocument = false;
         }
         if (lines.length === 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Nothing is pending on this document" });
@@ -210,19 +287,24 @@ export const documentRouter = router({
       // When converting a delivery_challan or GRN to an invoice, skip the stock
       // adjustment: the challan/GRN already moved the goods — we must not move
       // them again.
-      const skipStockAdjustment =
+      // A purchase return of goods rejected on receipt moves nothing either:
+      // they never came into stock.
+      const skipStockAdjustment = fromRejected || (
         (sourceDoc.documentType === "delivery_challan" || sourceDoc.documentType === "goods_receipt_note") &&
-        targetType === "invoice";
+        targetType === "invoice");
 
       // An order's date and delivery date are its own; what's made from it is
       // dated today.
       const fromOrder = ORDER_SOURCES.has(sourceDoc.documentType);
+      const notes = fromRejected
+        ? [sourceDoc.notes, `Goods rejected on ${sourceDoc.invoiceNumber}`].filter(Boolean).join("\n")
+        : sourceDoc.notes;
 
       // The document-level discount goes along with the lines: all of it for
       // the whole document, else the share of the lines' value taken.
       const sourceDiscount = sourceDoc.discountAmount ?? "0";
       let invoiceDiscount = wholeDocument ? sourceDiscount : "0";
-      if (!wholeDocument && money.isPositive(sourceDiscount) && money.isPositive(sourceDoc.subtotal)) {
+      if (!wholeDocument && !fromRejected && money.isPositive(sourceDiscount) && money.isPositive(sourceDoc.subtotal)) {
         const { subtotal } = calcInvoiceTotals({
           lineItems: lines.map(({ li, quantity }) => ({
             quantity,
@@ -245,7 +327,7 @@ export const documentRouter = router({
         documentType: targetType,
         invoiceDate: fromOrder ? new Date().toISOString() : sourceDoc.invoiceDate.toISOString(),
         dueDate: !fromOrder && sourceDoc.dueDate ? sourceDoc.dueDate.toISOString() : undefined,
-        notes: sourceDoc.notes ?? undefined,
+        notes: notes ?? undefined,
         termsAndConditions: sourceDoc.termsAndConditions ?? undefined,
         // Part of a document doesn't take its charges and round-off along.
         additionalCharges: wholeDocument ? sourceDoc.additionalCharges : "0",
@@ -256,12 +338,15 @@ export const documentRouter = router({
         referenceDocumentId: sourceDoc.id,
         warehouseId: input.warehouseId ?? undefined,
         skipStockAdjustment,
-        lineItems: lines.map(({ li, quantity }) => ({
+        lineItems: lines.map(({ li, quantity, freeQuantity, rejectedQuantity, rejectionReason }) => ({
           itemId: li.itemId ?? undefined,
           itemName: li.itemName,
           // Carry forward optional notes verbatim. Null stays null.
-          description: li.description ?? null,
+          description: fromRejected ? (li.rejectionReason ? `Rejected: ${li.rejectionReason}` : null) : li.description ?? null,
           quantity,
+          freeQuantity: freeQuantity !== "0" ? freeQuantity : undefined,
+          rejectedQuantity,
+          rejectionReason,
           unitPrice: li.unitPrice,
           taxPercent: li.taxPercent,
           discountPercent: li.discountPercent,

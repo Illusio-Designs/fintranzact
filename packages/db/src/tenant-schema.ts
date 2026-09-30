@@ -759,6 +759,15 @@ export const invoiceItems = pgTable("invoice_items", {
   selectedUnit: text("selected_unit"), // which unit was used (null = base unit)
   conversionFactor: numeric("conversion_factor", { precision: 10, scale: 4 }).default("1"), // how many base units per selected unit
   variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "set null" }),
+  // Free goods on the line ("10 + 1"), in the line's unit. They move stock
+  // with the billed quantity but carry no price, so they add nothing to the
+  // taxable value or the totals.
+  freeQuantity: numeric("free_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
+  // Goods receipt notes only: received but rejected at inspection, in the
+  // line's unit. `quantity` is what was accepted; rejected goods never enter
+  // stock and stay pending on the purchase order.
+  rejectedQuantity: numeric("rejected_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
+  rejectionReason: text("rejection_reason"),
 }, (t) => [
   index("invoice_items_invoice_idx").on(t.invoiceId),
   index("invoice_items_item_idx").on(t.itemId),

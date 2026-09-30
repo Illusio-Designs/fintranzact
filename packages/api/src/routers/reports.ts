@@ -511,6 +511,7 @@ export const reportsRouter = router({
             taxPercent: invoiceItems.taxPercent,
             taxableAmount: sql<string>`SUM(${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric)::text`,
             taxAmount: sql<string>`SUM(${invoiceItems.taxAmount}::numeric)::text`,
+            freeQuantity: sql<string>`SUM(${invoiceItems.freeQuantity}::numeric)::text`,
           })
           .from(invoiceItems)
           .innerJoin(invoices, eq(invoices.id, invoiceItems.invoiceId))
@@ -527,10 +528,13 @@ export const reportsRouter = router({
       ]);
 
       const taxByInvoice = new Map<string, Array<{ taxPercent: string; taxableAmount: string; taxAmount: string }>>();
+      // Free goods ("10 + 1") on each bill, summed over its lines in their own units.
+      const freeByInvoice = new Map<string, number>();
       for (const row of taxRows) {
         const existing = taxByInvoice.get(row.invoiceId) ?? [];
         existing.push({ taxPercent: row.taxPercent, taxableAmount: row.taxableAmount, taxAmount: row.taxAmount });
         taxByInvoice.set(row.invoiceId, existing);
+        freeByInvoice.set(row.invoiceId, (freeByInvoice.get(row.invoiceId) ?? 0) + (parseFloat(row.freeQuantity) || 0));
       }
 
       const totalSubtotal = money.sum(rows.map((r) => r.subtotal));
@@ -541,8 +545,12 @@ export const reportsRouter = router({
         rows: rows.map((r) => ({
           ...r,
           taxBreakdown: taxByInvoice.get(r.id) ?? [],
+          freeQuantity: Math.round((freeByInvoice.get(r.id) ?? 0) * 1000) / 1000,
         })),
-        summary: { totalSubtotal, totalTax, totalAmount, count: rows.length },
+        summary: {
+          totalSubtotal, totalTax, totalAmount, count: rows.length,
+          totalFreeQuantity: Math.round(rows.reduce((s, r) => s + (freeByInvoice.get(r.id) ?? 0), 0) * 1000) / 1000,
+        },
       };
     }),
 
@@ -589,6 +597,7 @@ export const reportsRouter = router({
             taxPercent: invoiceItems.taxPercent,
             taxableAmount: sql<string>`SUM(${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric)::text`,
             taxAmount: sql<string>`SUM(${invoiceItems.taxAmount}::numeric)::text`,
+            freeQuantity: sql<string>`SUM(${invoiceItems.freeQuantity}::numeric)::text`,
           })
           .from(invoiceItems)
           .innerJoin(invoices, eq(invoices.id, invoiceItems.invoiceId))
@@ -605,10 +614,13 @@ export const reportsRouter = router({
       ]);
 
       const taxByInvoice = new Map<string, Array<{ taxPercent: string; taxableAmount: string; taxAmount: string }>>();
+      // Free goods ("10 + 1") on each bill, summed over its lines in their own units.
+      const freeByInvoice = new Map<string, number>();
       for (const row of taxRows) {
         const existing = taxByInvoice.get(row.invoiceId) ?? [];
         existing.push({ taxPercent: row.taxPercent, taxableAmount: row.taxableAmount, taxAmount: row.taxAmount });
         taxByInvoice.set(row.invoiceId, existing);
+        freeByInvoice.set(row.invoiceId, (freeByInvoice.get(row.invoiceId) ?? 0) + (parseFloat(row.freeQuantity) || 0));
       }
 
       const totalSubtotal = money.sum(rows.map((r) => r.subtotal));
@@ -619,8 +631,12 @@ export const reportsRouter = router({
         rows: rows.map((r) => ({
           ...r,
           taxBreakdown: taxByInvoice.get(r.id) ?? [],
+          freeQuantity: Math.round((freeByInvoice.get(r.id) ?? 0) * 1000) / 1000,
         })),
-        summary: { totalSubtotal, totalTax, totalAmount, count: rows.length },
+        summary: {
+          totalSubtotal, totalTax, totalAmount, count: rows.length,
+          totalFreeQuantity: Math.round(rows.reduce((s, r) => s + (freeByInvoice.get(r.id) ?? 0), 0) * 1000) / 1000,
+        },
       };
     }),
 
@@ -949,7 +965,7 @@ export const reportsRouter = router({
           : input.sortBy === "invoices"
             ? sql`COUNT(DISTINCT ${invoices.id}) DESC`
             : input.sortBy === "margin"
-              ? sql`(SUM(${invoiceItems.totalAmount}::numeric) - SUM(${invoiceItems.quantity}::numeric * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0))) / NULLIF(SUM(${invoiceItems.totalAmount}::numeric), 0) DESC NULLS LAST`
+              ? sql`(SUM(${invoiceItems.totalAmount}::numeric) - SUM((${invoiceItems.quantity}::numeric + ${invoiceItems.freeQuantity}::numeric) * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0))) / NULLIF(SUM(${invoiceItems.totalAmount}::numeric), 0) DESC NULLS LAST`
               : sql`SUM(${invoiceItems.totalAmount}::numeric) DESC`;
 
       async function queryPeriod(periodConditions: typeof conditions) {
@@ -960,14 +976,16 @@ export const reportsRouter = router({
             category: items.category,
             unit: items.unit,
             soldQty: sql<string>`SUM(${invoiceItems.quantity}::numeric * COALESCE(${invoiceItems.conversionFactor}::numeric, 1))::text`,
+            // Given free on top of what was sold, in base units.
+            freeQty: sql<string>`SUM(${invoiceItems.freeQuantity}::numeric * COALESCE(${invoiceItems.conversionFactor}::numeric, 1))::text`,
             totalRevenue: sql<string>`SUM(${invoiceItems.totalAmount}::numeric)::text`,
             avgUnitPrice: sql<string>`ROUND(SUM(${invoiceItems.totalAmount}::numeric) / NULLIF(SUM(${invoiceItems.quantity}::numeric * COALESCE(${invoiceItems.conversionFactor}::numeric, 1)), 0), 2)::text`,
             invoiceCount: sql<number>`COUNT(DISTINCT ${invoices.id})::int`,
             uniqueCustomers: sql<number>`COUNT(DISTINCT ${invoices.partyId})::int`,
-            estimatedCost: sql<string>`SUM(${invoiceItems.quantity}::numeric * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0))::text`,
+            estimatedCost: sql<string>`SUM((${invoiceItems.quantity}::numeric + ${invoiceItems.freeQuantity}::numeric) * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0))::text`,
             grossMarginPct: sql<string>`
               ROUND(
-                (SUM(${invoiceItems.totalAmount}::numeric) - SUM(${invoiceItems.quantity}::numeric * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0)))
+                (SUM(${invoiceItems.totalAmount}::numeric) - SUM((${invoiceItems.quantity}::numeric + ${invoiceItems.freeQuantity}::numeric) * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0)))
                 / NULLIF(SUM(${invoiceItems.totalAmount}::numeric), 0) * 100,
                 1
               )::text`,

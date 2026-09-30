@@ -456,7 +456,21 @@ export const invoiceChargeSchema = z.object({
   shipmentId: z.string().uuid().optional(),
 });
 
-export const invoiceLineItemSchema = z.object({
+const lineQuantityStr = z.string().regex(/^\d+(\.\d{1,3})?$/);
+
+/**
+ * Document types whose lines can carry free goods ("10 + 1"). Credit and
+ * debit notes are money only.
+ */
+export const freeQuantityDocumentTypes = [
+  "invoice", "quotation", "proforma", "delivery_challan", "sales_return", "purchase_return",
+  "purchase_order", "sales_order", "goods_receipt_note",
+] as const;
+
+/** Reasons offered for goods rejected on receipt; any other text is allowed too. */
+export const rejectionReasons = ["Damaged", "Short expiry", "Wrong item", "Quality not as ordered", "Excess supply"] as const;
+
+const invoiceLineItemBaseSchema = z.object({
   itemId: z.string().uuid().optional(),
   // Snapshot of the item name at billing time. Required on every line — this
   // is the primary display text on invoices and must be frozen at create
@@ -466,13 +480,31 @@ export const invoiceLineItemSchema = z.object({
   // Nullable because the DB column is nullable and the client may pass null
   // explicitly to clear notes. Empty string is coerced to null downstream.
   description: z.string().max(500).optional().nullable(),
-  quantity: z.string().regex(/^\d+(\.\d{1,3})?$/).refine((v) => parseFloat(v) > 0, { message: "Quantity must be greater than 0" }),
+  /**
+   * Billed quantity: what the price, discount and tax apply to. On a goods
+   * receipt note, the quantity accepted. May be 0 only when the line has free
+   * or rejected goods.
+   */
+  quantity: lineQuantityStr,
   unitPrice: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/),
   taxPercent: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0").refine((v) => parseFloat(v) <= 56, { message: "Tax percent cannot exceed 56%" }),
   discountPercent: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0").refine((v) => parseFloat(v) <= 100, { message: "Discount cannot exceed 100%" }),
   selectedUnit: z.string().nullish(),
   conversionFactor: z.string().nullish(), // stored as string like all numerics
   variantId: z.string().uuid().nullish(),
+  /** Free goods on top of the billed quantity ("10 + 1"), in the line's unit. Moves stock, adds no value. */
+  freeQuantity: lineQuantityStr.nullish(),
+  /** Goods receipt notes only: received but rejected, in the line's unit. Never enters stock. */
+  rejectedQuantity: lineQuantityStr.nullish(),
+  rejectionReason: z.string().max(200).nullish(),
+});
+
+export const invoiceLineItemSchema = invoiceLineItemBaseSchema.superRefine((li, ctx) => {
+  const billed = parseFloat(li.quantity);
+  const other = parseFloat(li.freeQuantity || "0") + parseFloat(li.rejectedQuantity || "0");
+  if (!(billed > 0) && !(other > 0)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["quantity"], message: "Quantity must be greater than 0" });
+  }
 });
 
 export const createInvoiceSchema = z.object({
@@ -640,8 +672,25 @@ export const convertDocumentSchema = z.object({
    */
   lines: z.array(z.object({
     sourceLineId: z.string().uuid(),
+    /** Billed quantity; on a GRN made from a purchase order, the quantity accepted. */
     quantity: z.string().regex(/^\d+(\.\d{1,3})?$/),
+    /**
+     * Free quantity to take, up to what is pending free. Omitted, all of the
+     * pending free quantity goes along when the whole pending billed quantity
+     * is taken, and none otherwise.
+     */
+    freeQuantity: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
+    /** Purchase order → GRN only: received but rejected. Stays pending on the order. */
+    rejectedQuantity: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
+    rejectionReason: z.string().max(200).optional(),
   })).optional(),
+  /**
+   * Goods receipt note → purchase return or debit note: take the goods
+   * rejected on receipt that have not been returned yet (or the quantities in
+   * `lines`, up to that). The return moves no stock, since rejected goods
+   * never came in.
+   */
+  fromRejected: z.boolean().optional(),
   /** Warehouse for the new document when it moves stock. Default warehouse when omitted. */
   warehouseId: z.string().uuid().nullish(),
 });

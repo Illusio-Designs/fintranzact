@@ -23,6 +23,7 @@ import { requireCan } from "./permissions.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
 import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
+import { assertLineExtras, lineExtras } from "./line-extras.js";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 
@@ -353,6 +354,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             docNumber = `${prefix}-${String(nextNum).padStart(5, "0")}`;
           }
 
+          assertLineExtras(docType, input.lineItems);
+
           // Calculate line item totals using fixed-point arithmetic
           const processedItems = input.lineItems.map((li, idx) => {
             const calc = calcLineItem({
@@ -375,6 +378,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               selectedUnit: li.selectedUnit || null,
               conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
               variantId: li.variantId || null,
+              ...lineExtras(li),
             };
           });
 
@@ -396,12 +400,23 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             : (input.additionalCharges || "0");
           const roundOff = input.roundOff || "0";
 
+          // A return or note made from a goods receipt note sends back goods
+          // rejected on receipt: the GRN is not a bill, so there is no bill
+          // total to hold it to or to mark adjusted.
+          let adjustsBill = !!input.referenceDocumentId
+            && ["credit_note", "sales_return", "purchase_return"].includes(docType);
+          if (adjustsBill) {
+            const [ref] = await tx
+              .select({ documentType: invoices.documentType })
+              .from(invoices)
+              .where(and(eq(invoices.id, input.referenceDocumentId!), eq(invoices.businessId, ctx.businessId)))
+              .limit(1);
+            if (ref?.documentType === "goods_receipt_note") adjustsBill = false;
+          }
+
           // Server-side guard: CN/SR/PR total must not exceed the referenced invoice's total.
           // This prevents over-crediting or over-returning against a single invoice.
-          if (
-            input.referenceDocumentId &&
-            ["credit_note", "sales_return", "purchase_return"].includes(docType)
-          ) {
+          if (adjustsBill && input.referenceDocumentId) {
             const [refInvoice] = await tx
               .select({ totalAmount: invoices.totalAmount })
               .from(invoices)
@@ -491,10 +506,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           });
 
           // Auto-update referenced invoice status to "adjusted" when fully covered
-          if (
-            input.referenceDocumentId &&
-            ["credit_note", "sales_return", "purchase_return"].includes(docType)
-          ) {
+          if (adjustsBill && input.referenceDocumentId) {
             const [{ totalAdj }] = await tx
               .select({
                 totalAdj: sql<string>`COALESCE(SUM(${invoices.totalAmount}::numeric), 0)`,

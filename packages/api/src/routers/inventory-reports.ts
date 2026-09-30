@@ -150,7 +150,16 @@ export const inventoryReportsRouter = router({
         SELECT m.id, m.movement_date AS date, m.movement_type, m.reference_type, m.reference_id,
                m.quantity::text AS quantity, w.name AS warehouse,
                d.invoice_number AS document_number, d.document_type::text AS document_type,
-               p.name AS party, a.reason, mj.journal_number
+               p.name AS party, a.reason, mj.journal_number,
+               -- Free goods ("10 + 1") within a document's posting, in base units.
+               CASE WHEN m.reference_type IN ('INVOICE', 'DOCUMENT') THEN (
+                 SELECT SUM(COALESCE(li.free_quantity, 0)::numeric
+                   * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END)
+                 FROM invoice_items li
+                 WHERE li.invoice_id = m.reference_id
+                   AND COALESCE(li.item_id, (SELECT iv.item_id FROM item_variants iv WHERE iv.id = li.variant_id)) = m.item_id
+                   AND li.variant_id IS NOT DISTINCT FROM m.variant_id
+               ) END::text AS free
         FROM stock_movements m
         JOIN warehouses w ON w.id = m.warehouse_id
         LEFT JOIN invoices d ON d.id = m.reference_id
@@ -169,7 +178,7 @@ export const inventoryReportsRouter = router({
       `)) as Array<{
         id: string; date: string; movement_type: string; reference_type: string; reference_id: string | null;
         quantity: string; warehouse: string; document_number: string | null; document_type: string | null;
-        party: string | null; reason: string | null; journal_number: string | null;
+        party: string | null; reason: string | null; journal_number: string | null; free: string | null;
       }>;
 
       let balance = parseFloat(opening?.qty ?? "0");
@@ -188,6 +197,8 @@ export const inventoryReportsRouter = router({
           documentId: r.document_number ? r.reference_id : null,
           inward: q > 0 ? round3(q) : 0,
           outward: q < 0 ? round3(-q) : 0,
+          /** Of the quantity moved, how much was free goods. */
+          free: Math.min(round3(parseFloat(r.free ?? "0") || 0), round3(Math.abs(q))),
           balance,
         };
       });

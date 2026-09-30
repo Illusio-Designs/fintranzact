@@ -68,6 +68,8 @@ export interface IRPLineItem {
   /** Optional free-text line notes (from invoice_items.description). */
   description: string | null;
   quantity: string;
+  /** Free goods on the line ("10 + 1"): reported as FreeQty, no value. */
+  freeQuantity?: string | null;
   unitPrice: string;
   taxPercent: string;
   taxAmount: string;
@@ -209,6 +211,7 @@ export function mapInvoiceToIRP(
       IsServc: isService,
       HsnCd: li.itemHsn ?? "9999",
       Qty: qty,
+      FreeQty: n(li.freeQuantity ?? "0"),
       Unit: toUQC(li.selectedUnit),
       UnitPrice: unitPrice,
       TotAmt: grossAmt,

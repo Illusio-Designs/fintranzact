@@ -357,13 +357,14 @@ export async function syncDocumentStock(
     : null;
 
   // Desired holding per (item, variant) at one warehouse, minus the net already
-  // recorded per (warehouse, item, variant). Each line rounds to the 3 decimals
+  // recorded per (warehouse, item, variant). Free goods move with the billed
+  // quantity; goods rejected on a GRN never come in. Each line rounds to the 3 decimals
   // stock quantities are stored with, the same as when it was posted.
   const diffs = (await tx.execute(sql`
     WITH desired AS (
       SELECT COALESCE(li.item_id, v.item_id) AS item_id,
              li.variant_id,
-             SUM(ROUND(li.quantity::numeric
+             SUM(ROUND((li.quantity::numeric + COALESCE(li.free_quantity, 0)::numeric)
                * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END, 3))
                * ${direction} AS qty
       FROM invoice_items li
@@ -501,7 +502,7 @@ export async function postNewDocumentsStock(
              CASE WHEN i.document_type = 'invoice'
                   THEN CASE WHEN i.type = 'sale' THEN 'SALE' ELSE 'PURCHASE' END
                   ELSE upper(i.document_type::text) END,
-             SUM(ROUND(li.quantity::numeric
+             SUM(ROUND((li.quantity::numeric + COALESCE(li.free_quantity, 0)::numeric)
                * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END, 3))
                * ${direction},
              i.invoice_date,

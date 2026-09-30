@@ -169,6 +169,13 @@
       "when": 1790774558848,
       "tag": "0023_price_levels",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790795646662,
+      "tag": "0024_free_qty_rejections",
+      "breakpoints": true
     }
   ]
 }

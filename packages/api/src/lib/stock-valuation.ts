@@ -10,7 +10,8 @@
  *   so stock with no movement history (entered before warehouses existed)
  *   still counts.
  * - Purchase cost = the line's taxable value (after discount, before GST — the
- *   GST is input credit, not cost) per base unit.
+ *   GST is input credit, not cost) per base unit. Free goods on the bill
+ *   ("10 + 1") count in the quantity at no cost, so they lower the rate.
  * - Manufactured stock counts as an inward at its production cost (components
  *   consumed at their valuation rate plus additional costs, from the
  *   manufacturing journal), alongside purchases. A cancelled run stops counting
@@ -110,7 +111,8 @@ export async function valueStock(
     // Newest first, for FIFO.
     db.execute(sql`
       SELECT COALESCE(li.item_id, v.item_id) AS "itemId", li.variant_id AS "variantId",
-             (li.quantity::numeric
+             -- Free goods came in at no cost, so they lower the rate.
+             ((li.quantity::numeric + COALESCE(li.free_quantity, 0)::numeric)
                * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END)::text AS qty,
              (li.total_amount::numeric - li.tax_amount::numeric)::text AS value,
              i.invoice_date AS date
