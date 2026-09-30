@@ -12,7 +12,7 @@ import {
     businessMembers,
 } from "@fintranzact/db";
 
-import { router, authorizedProcedure } from "../trpc.js";
+import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { recordStockMovement } from "../lib/inventory-service.js";
 import { requireCan } from "../lib/permissions.js";
 
@@ -21,7 +21,7 @@ export const warehouseRouter = router({
     // PREMISES
     // ============================================================
 
-    premiseList: authorizedProcedure.query(async ({ ctx }) => {
+    premiseList: viewerProcedure.query(async ({ ctx }) => {
         requireCan(ctx.ability, "read", "Item");
         if (!ctx.businessId) {
             throw new TRPCError({
@@ -39,7 +39,7 @@ export const warehouseRouter = router({
             .orderBy(asc(premises.name));
     }),
 
-    premiseGet: authorizedProcedure
+    premiseGet: viewerProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -77,7 +77,7 @@ export const warehouseRouter = router({
             return premise;
         }),
 
-    premiseCreate: authorizedProcedure
+    premiseCreate: memberProcedure
         .input(
             z.object({
                 name: z.string().min(1).max(255),
@@ -133,7 +133,7 @@ export const warehouseRouter = router({
             return premise;
         }),
 
-    premiseUpdate: authorizedProcedure
+    premiseUpdate: memberProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -213,7 +213,7 @@ export const warehouseRouter = router({
             return updated;
         }),
 
-    premiseDelete: authorizedProcedure
+    premiseDelete: memberProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -257,7 +257,7 @@ export const warehouseRouter = router({
     // WAREHOUSES
     // ============================================================
 
-    warehouseList: authorizedProcedure
+    warehouseList: viewerProcedure
         .input(
             z
                 .object({
@@ -293,7 +293,7 @@ export const warehouseRouter = router({
                 .orderBy(asc(warehouses.name));
         }),
 
-    warehouseGet: authorizedProcedure
+    warehouseGet: viewerProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -331,7 +331,7 @@ export const warehouseRouter = router({
             return warehouse;
         }),
 
-    warehouseCreate: authorizedProcedure
+    warehouseCreate: memberProcedure
         .input(
             z.object({
                 premiseId: z.string().uuid(),
@@ -405,7 +405,7 @@ export const warehouseRouter = router({
             return warehouse;
         }),
 
-    warehouseUpdate: authorizedProcedure
+    warehouseUpdate: memberProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -505,7 +505,7 @@ export const warehouseRouter = router({
             return updated;
         }),
 
-    warehouseDelete: authorizedProcedure
+    warehouseDelete: memberProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -549,7 +549,7 @@ export const warehouseRouter = router({
     // WAREHOUSE LOCATIONS
     // ============================================================
 
-    locationList: authorizedProcedure
+    locationList: viewerProcedure
         .input(
             z.object({
                 warehouseId: z.string().uuid(),
@@ -596,7 +596,7 @@ export const warehouseRouter = router({
                 .orderBy(asc(warehouseLocations.name));
         }),
 
-    locationCreate: authorizedProcedure
+    locationCreate: memberProcedure
         .input(
             z.object({
                 warehouseId: z.string().uuid(),
@@ -707,7 +707,7 @@ export const warehouseRouter = router({
             return location;
         }),
 
-    locationUpdate: authorizedProcedure
+    locationUpdate: memberProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -838,7 +838,7 @@ export const warehouseRouter = router({
             return updated;
         }),
 
-    locationDelete: authorizedProcedure
+    locationDelete: memberProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -900,7 +900,7 @@ export const warehouseRouter = router({
             };
         }),
 
-    warehousePermissionCreate: authorizedProcedure
+    warehousePermissionCreate: memberProcedure
         .input(
             z.object({
                 warehouseId: z.string().uuid(),
@@ -1002,7 +1002,7 @@ export const warehouseRouter = router({
             return permission;
         }),
 
-    stockTransfer: authorizedProcedure
+    stockTransfer: memberProcedure
         .input(
             z.object({
                 sourceWarehouseId: z.string().uuid(),
@@ -1171,7 +1171,7 @@ export const warehouseRouter = router({
     // INVENTORY SETTINGS
     // ============================================================
 
-    inventorySettingsGet: authorizedProcedure.query(async ({ ctx }) => {
+    inventorySettingsGet: viewerProcedure.query(async ({ ctx }) => {
         requireCan(ctx.ability, "read", "Item");
         if (!ctx.businessId) {
             throw new TRPCError({
@@ -1191,7 +1191,7 @@ export const warehouseRouter = router({
         return settings ?? null;
     }),
 
-    inventorySettingsUpdate: authorizedProcedure
+    inventorySettingsUpdate: memberProcedure
         .input(
             z.object({
                 salesWarehouseId: z.string().uuid().nullable().optional(),
