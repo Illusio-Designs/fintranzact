@@ -9,6 +9,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import type { ItemType, ItemMode } from "@fintranzact/shared";
+import { MrpField } from "@/components/pricing/MrpField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LabelPrintPanel, type LabelCandidate, type LabelMode } from "@/components/items/LabelPrintPanel";
 import { ItemBarcodeField, ItemExtraCodes } from "@/components/items/ItemBarcodeFields";
@@ -542,6 +543,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [hsn, setHsn] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
+  const [mrp, setMrp] = useState("");
   const [taxPercent, setTaxPercent] = useState("0");
   const [taxInclusive, setTaxInclusive] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("0");
@@ -651,6 +653,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
     setHsn("");
     setSalePrice("");
     setPurchasePrice("");
+    setMrp("");
     setTaxPercent("0");
     setTaxInclusive(false);
     setStockQuantity("0");
@@ -690,6 +693,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
       hsn: hsn || undefined,
       salePrice: salePrice || undefined,
       purchasePrice: purchasePrice || undefined,
+      mrp: mrp || undefined,
       taxPercent,
       taxInclusive,
       stockQuantity: effectiveMode === "variants" ? "0" : stockQuantity,
@@ -844,6 +848,12 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
               placeholder="0.00"
             />
           </Disclosure>
+
+          {itemType === "product" && (
+            <Disclosure label="MRP" count={countFilled(mrp)}>
+              <MrpField value={mrp} onChange={setMrp} salePrice={salePrice} />
+            </Disclosure>
+          )}
 
           {itemType === "product" && derivedMode !== "variants" && (
             <Disclosure
@@ -1095,6 +1105,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
   const [hsn, setHsn] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
+  const [mrp, setMrp] = useState("");
   const [taxPercent, setTaxPercent] = useState("0");
   const [taxInclusive, setTaxInclusive] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("0");
@@ -1123,6 +1134,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
     setHsn(item.hsn ?? "");
     setSalePrice(item.salePrice ?? "");
     setPurchasePrice(item.purchasePrice ?? "");
+    setMrp(item.mrp ?? "");
     setTaxPercent(item.taxPercent ?? "0");
     setTaxInclusive(item.taxInclusive ?? false);
     setStockQuantity(item.stockQuantity ?? "0");
@@ -1243,6 +1255,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         hsn: hsn || undefined,
         salePrice: salePrice || undefined,
         purchasePrice: purchasePrice || undefined,
+        mrp: mrp || null,
         taxPercent,
         taxInclusive,
         lowStockAlert: lowStockAlert || undefined,
@@ -1412,6 +1425,12 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
               placeholder="0.00"
             />
           </Disclosure>
+
+          {itemType === "product" && (
+            <Disclosure label="MRP" count={countFilled(mrp)}>
+              <MrpField value={mrp} onChange={setMrp} salePrice={salePrice} />
+            </Disclosure>
+          )}
 
           {itemType === "product" && itemMode !== "variants" && (
             <Disclosure
@@ -2146,6 +2165,7 @@ function ItemDetailPanel({
                   {[
                     ["Sale Price", item.salePrice ? `${formatCurrency(item.salePrice)}${item.taxInclusive ? " (incl. tax)" : ""}` : "—"],
                     ["Purchase Price", item.purchasePrice ? formatCurrency(item.purchasePrice) : "—"],
+                    ...(item.mrp ? [["MRP", formatCurrency(item.mrp)]] : []),
                     ...(item.itemMode !== "variants"
                       ? [["Current Stock", `${parseFloat(item.stockQuantity).toLocaleString()} ${item.unit}${isLow ? " ⚠ Low" : ""}`]]
                       : [["Variants", `${item.variants?.length ?? 0} variants`]]

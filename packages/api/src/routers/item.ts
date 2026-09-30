@@ -34,6 +34,7 @@ async function insertVariants(
       barcode: v.barcode || null,
       salePrice: v.salePrice || null,
       purchasePrice: v.purchasePrice || null,
+      mrp: v.mrp || null,
       stockQuantity: "0",
       lowStockAlert: v.lowStockAlert || null,
     }).returning();
@@ -913,6 +914,7 @@ export const itemRouter = router({
       }
       if (input.data.salePrice !== undefined) updates.salePrice = input.data.salePrice || null;
       if (input.data.purchasePrice !== undefined) updates.purchasePrice = input.data.purchasePrice || null;
+      if (input.data.mrp !== undefined) updates.mrp = input.data.mrp || null;
       if (input.data.lowStockAlert !== undefined) updates.lowStockAlert = input.data.lowStockAlert || null;
 
       const variant = await ctx.db.transaction(async (tx) => {

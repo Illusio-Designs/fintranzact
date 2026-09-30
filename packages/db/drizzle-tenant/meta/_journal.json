@@ -162,6 +162,13 @@
       "when": 1790773520965,
       "tag": "0022_bom_manufacturing",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790774558848,
+      "tag": "0023_price_levels",
+      "breakpoints": true
     }
   ]
 }

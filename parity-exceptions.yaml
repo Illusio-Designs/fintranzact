@@ -74,6 +74,18 @@ exceptions:
       - warehouse.warehouseUpdate
       - warehouse.premiseList
       - warehouse.warehouseCreate
+      # Price levels (price lists, quantity slabs) and sale-line pricing are web screens for now.
+      - priceLevel.bulkUpdate
+      - priceLevel.create
+      - priceLevel.delete
+      - priceLevel.grid
+      - priceLevel.itemEntries
+      - priceLevel.list
+      - priceLevel.priceList
+      - priceLevel.setGridPrices
+      - priceLevel.setItemPrices
+      - priceLevel.update
+      - pricing.resolve
 
       # --- Multi-Tenancy ---
       # Mobile derives current tenant info from auth.me; the standalone
@@ -410,6 +422,18 @@ exceptions:
       - warehouse.warehouseUpdate
       - warehouse.premiseList
       - warehouse.warehouseCreate
+      # Price levels (price lists, quantity slabs) and sale-line pricing are web screens for now.
+      - priceLevel.bulkUpdate
+      - priceLevel.create
+      - priceLevel.delete
+      - priceLevel.grid
+      - priceLevel.itemEntries
+      - priceLevel.list
+      - priceLevel.priceList
+      - priceLevel.setGridPrices
+      - priceLevel.setItemPrices
+      - priceLevel.update
+      - pricing.resolve
 
       # --- Auth ---
       # Browser-only flows requiring email verification links / callbacks.
@@ -580,6 +604,18 @@ exceptions:
       - warehouse.warehouseUpdate
       - warehouse.premiseList
       - warehouse.warehouseCreate
+      # Price levels (price lists, quantity slabs) and sale-line pricing are web screens for now.
+      - priceLevel.bulkUpdate
+      - priceLevel.create
+      - priceLevel.delete
+      - priceLevel.grid
+      - priceLevel.itemEntries
+      - priceLevel.list
+      - priceLevel.priceList
+      - priceLevel.setGridPrices
+      - priceLevel.setItemPrices
+      - priceLevel.update
+      - pricing.resolve
 
       # --- Auth ---
       # MCP runs as a pre-authenticated server-side agent. It does not

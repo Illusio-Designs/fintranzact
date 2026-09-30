@@ -14,6 +14,7 @@ import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
 import { Delete02Icon, Cancel01Icon, DeliveryTruck01Icon } from "@hugeicons/core-free-icons";
 import { WarehouseSelect, formatQty, useWarehouses } from "@/components/inventory/shared";
+import { useLevelPricing } from "@/components/pricing/useLevelPricing";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -182,6 +183,15 @@ export function DocumentCreator({
   // Warehouse the goods leave from or arrive into. Starts at the business
   // default for this kind of document; only shown when there's a choice.
   const [warehouseId, setWarehouseId] = useState("");
+
+  // Sale prices from the party's price level (slabs, dates); typed prices are kept.
+  const pricing = useLevelPricing({
+    enabled: invoiceType === "sale" && documentType !== "credit_note" && documentType !== "sales_return",
+    partyId,
+    date: invoiceDate,
+    lines: items,
+    setLines: setItems,
+  });
 
   // Confirm dialog when closing with unsaved data
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
@@ -853,6 +863,11 @@ export function DocumentCreator({
             </div>
           )}
         </div>
+        {pricing.priceLevelName && (
+          <p className="-mt-3 text-xs text-text-tertiary">
+            Prices from the <span className="font-medium text-text-secondary">{pricing.priceLevelName}</span> price level
+          </p>
+        )}
 
         {showWarehouse && (
           <div className="max-w-xs">
@@ -977,6 +992,9 @@ export function DocumentCreator({
                         className="input py-1.5 text-sm tabular-nums"
                         placeholder="0.00"
                       />
+                      {pricing.mrpWarningFor(li) && (
+                        <p className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400" role="alert">{pricing.mrpWarningFor(li)}</p>
+                      )}
                     </div>
                     <div>
                       <label

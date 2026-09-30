@@ -280,6 +280,8 @@ const partyFields = {
   udyamNumber: z.string().regex(UDYAM_REGEX, "Invalid Udyam number (e.g. UDYAM-MH-26-0012345)").optional().or(z.literal("")),
   msmeCategory: z.enum(msmeCategories).optional(),
   tdsSection: z.enum(tdsSectionCodes).optional(),
+  // Price level sales to this party use; null = the business default.
+  priceLevelId: z.string().uuid().nullable().optional(),
 };
 
 // A PAN or state that contradicts the GSTIN is only a warning
@@ -322,6 +324,8 @@ export const itemVariantSchema = z.object({
 
   salePrice: decimalStr.optional(),
   purchasePrice: decimalStr.optional(),
+  // Printed MRP; "" clears it.
+  mrp: decimalStr.optional().or(z.literal("")),
   stockQuantity: decimalStr3.default("0"),
   lowStockAlert: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
 });
@@ -344,6 +348,9 @@ const createItemBaseSchema = z.object({
   itemMode: z.enum(itemModes).default("simple"),
   salePrice: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
   purchasePrice: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
+  // Printed MRP (maximum retail price); null clears it. A sale price above it
+  // is only a warning (see mrpWarning).
+  mrp: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).nullable().optional(),
   taxPercent: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0"),
   stockQuantity: z.string().regex(/^-?\d+(\.\d{1,3})?$/).default("0"),
   lowStockAlert: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
@@ -367,6 +374,27 @@ export const createItemSchema = createItemBaseSchema.refine((d) => {
 }, { message: "An item cannot have both unit variants and product variants" });
 
 export const updateItemSchema = createItemBaseSchema.partial();
+
+/**
+ * Warning text when a selling price is above the printed MRP (selling above
+ * MRP is not allowed under the Legal Metrology rules), else null.
+ */
+export function mrpWarning(price: string | number | null | undefined, mrp: string | number | null | undefined): string | null {
+  const p = parseFloat(String(price ?? ""));
+  const m = parseFloat(String(mrp ?? ""));
+  if (!Number.isFinite(p) || !Number.isFinite(m) || m <= 0) return null;
+  return p > m + 0.0001 ? `Price ${p.toFixed(2)} is above the MRP ${m.toFixed(2)}` : null;
+}
+
+// ── Price levels ───────────────────────────────────────────────
+
+export const priceSlabSchema = z.object({
+  minQuantity: z.string().regex(/^\d{1,12}(\.\d{1,3})?$/).default("0"),
+  price: decimalStr.nullable().optional(),
+  discountPercent: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/).refine((v) => parseFloat(v) <= 100, "Discount can't exceed 100%").nullable().optional(),
+}).refine((s) => !!s.price || !!s.discountPercent, { message: "Give a price or a discount" });
+
+export type PriceSlab = z.infer<typeof priceSlabSchema>;
 
 // ── Invoice ────────────────────────────────────────────────────
 

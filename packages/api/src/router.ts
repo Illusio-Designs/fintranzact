@@ -51,6 +51,8 @@ import { stockRouter } from "./routers/stock.js";
 import { inventoryReportsRouter } from "./routers/inventory-reports.js";
 import { stockGroupRouter } from "./routers/stockGroup.js";
 import { manufacturingRouter } from "./routers/manufacturing.js";
+import { priceLevelRouter } from "./routers/priceLevel.js";
+import { pricingRouter } from "./routers/pricing.js";
 
 export const appRouter = router({
   auth: authRouter,
@@ -101,6 +103,8 @@ export const appRouter = router({
   inventoryReports: inventoryReportsRouter,
   stockGroup: stockGroupRouter,
   manufacturing: manufacturingRouter,
+  priceLevel: priceLevelRouter,
+  pricing: pricingRouter,
   barcode: barcodeRouter,
   share: shareRouter,
 });

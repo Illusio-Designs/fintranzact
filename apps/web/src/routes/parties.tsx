@@ -30,6 +30,7 @@ import {
   type MsmeCategory,
   type GstinStatus,
 } from "@fintranzact/shared";
+import { PartyPriceLevel, PriceLevelSelect } from "@/components/pricing/PriceLevelSelect";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { InputField, TextareaField } from "@/components/ui/FormField";
@@ -465,6 +466,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                       TDS: {tdsSections.find((t) => t.code === party.tdsSection)?.label ?? party.tdsSection} @ {tdsRateFor(party)}%
                     </p>
                   )}
+                  {party.type === "customer" && <PartyPriceLevel partyId={party.id} priceLevelId={party.priceLevelId ?? null} />}
                 </div>
               </div>
 
@@ -1227,6 +1229,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [udyamNumber, setUdyamNumber] = useState("");
   const [msmeCategory, setMsmeCategory] = useState<MsmeCategory | "">("");
   const [tdsSection, setTdsSection] = useState("");
+  const [priceLevelId, setPriceLevelId] = useState("");
   const [extraShipping, setExtraShipping] = useState<ShippingAddressDraft[]>([]);
 
   const utils = trpc.useUtils();
@@ -1323,6 +1326,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
     setUdyamNumber("");
     setMsmeCategory("");
     setTdsSection("");
+    setPriceLevelId("");
     setExtraShipping([]);
   }
 
@@ -1381,6 +1385,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
       udyamNumber: isMsme ? udyamNumber || undefined : undefined,
       msmeCategory: isMsme ? msmeCategory || undefined : undefined,
       tdsSection: tdsSection || undefined,
+      priceLevelId: partyType === "customer" && priceLevelId ? priceLevelId : undefined,
     });
   }
 
@@ -1708,6 +1713,11 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
                 placeholder="0.00"
               />
             </div>
+            {partyType === "customer" && (
+              <div className="mt-4 max-w-[50%]">
+                <PriceLevelSelect value={priceLevelId} onChange={setPriceLevelId} />
+              </div>
+            )}
           </Disclosure>
 
           <Disclosure

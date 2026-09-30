@@ -28,6 +28,7 @@ import { Route as PurchaseOrdersRouteImport } from './routes/purchase-orders'
 import { Route as ProformaInvoicesRouteImport } from './routes/proforma-invoices'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as PriceLevelsRouteImport } from './routes/price-levels'
 import { Route as PosRouteImport } from './routes/pos'
 import { Route as PhysicalStockRouteImport } from './routes/physical-stock'
 import { Route as PaymentsRouteImport } from './routes/payments'
@@ -156,6 +157,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PriceLevelsRoute = PriceLevelsRouteImport.update({
+  id: '/price-levels',
+  path: '/price-levels',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PosRoute = PosRouteImport.update({
@@ -358,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/pos': typeof PosRoute
+  '/price-levels': typeof PriceLevelsRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/proforma-invoices': typeof ProformaInvoicesRoute
@@ -413,6 +420,7 @@ export interface FileRoutesByTo {
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/pos': typeof PosRoute
+  '/price-levels': typeof PriceLevelsRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/proforma-invoices': typeof ProformaInvoicesRoute
@@ -469,6 +477,7 @@ export interface FileRoutesById {
   '/payments': typeof PaymentsRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/pos': typeof PosRoute
+  '/price-levels': typeof PriceLevelsRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/proforma-invoices': typeof ProformaInvoicesRoute
@@ -526,6 +535,7 @@ export interface FileRouteTypes {
     | '/payments'
     | '/physical-stock'
     | '/pos'
+    | '/price-levels'
     | '/pricing'
     | '/privacy'
     | '/proforma-invoices'
@@ -581,6 +591,7 @@ export interface FileRouteTypes {
     | '/payments'
     | '/physical-stock'
     | '/pos'
+    | '/price-levels'
     | '/pricing'
     | '/privacy'
     | '/proforma-invoices'
@@ -636,6 +647,7 @@ export interface FileRouteTypes {
     | '/payments'
     | '/physical-stock'
     | '/pos'
+    | '/price-levels'
     | '/pricing'
     | '/privacy'
     | '/proforma-invoices'
@@ -692,6 +704,7 @@ export interface RootRouteChildren {
   PaymentsRoute: typeof PaymentsRoute
   PhysicalStockRoute: typeof PhysicalStockRoute
   PosRoute: typeof PosRoute
+  PriceLevelsRoute: typeof PriceLevelsRoute
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
   ProformaInvoicesRoute: typeof ProformaInvoicesRoute
@@ -852,6 +865,13 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/price-levels': {
+      id: '/price-levels'
+      path: '/price-levels'
+      fullPath: '/price-levels'
+      preLoaderRoute: typeof PriceLevelsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pos': {
@@ -1124,6 +1144,7 @@ const rootRouteChildren: RootRouteChildren = {
   PaymentsRoute: PaymentsRoute,
   PhysicalStockRoute: PhysicalStockRoute,
   PosRoute: PosRoute,
+  PriceLevelsRoute: PriceLevelsRoute,
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
   ProformaInvoicesRoute: ProformaInvoicesRoute,
