@@ -1,5 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CONTACT_EMAIL, LegalPage } from "@/components/marketing/MarketingLayout";
+import { CONTACT_EMAIL, EmailText, LegalPage, RegisteredOffice } from "@/components/marketing/MarketingLayout";
+import {
+  LEGAL_EMAIL,
+  LEGAL_ENTITY_NAME,
+  LEGAL_LAST_UPDATED,
+  LEGAL_PHONE,
+  LEGAL_PHONE_HREF,
+  PAYMENT_PROCESSOR,
+  REFUND_CREDIT_TIME,
+} from "@/lib/legal";
 
 export const Route = createFileRoute("/refund-policy")({
   component: RefundPolicyPage,
@@ -7,10 +16,16 @@ export const Route = createFileRoute("/refund-policy")({
 
 function RefundPolicyPage() {
   return (
-    <LegalPage title="Refund & cancellation policy" updated="29 September 2026">
+    <LegalPage
+      title="Refund & cancellation policy"
+      updated={LEGAL_LAST_UPDATED}
+      description="How to cancel a paid Fintranzact plan, when Finvera Solutions LLP gives refunds, and how refunds go back through Razorpay to your original payment method."
+    >
       <p>
-        Fintranzact's Forever Free plan costs nothing, so no payment or refund
-        applies to it. This policy covers paid plans.
+        Fintranzact is operated by {LEGAL_ENTITY_NAME} ("we", "us"), which
+        sells Fintranzact's paid plans and handles cancellations and refunds
+        under this policy. The Forever Free plan costs nothing, so no payment
+        or refund applies to it. This policy covers paid plans.
       </p>
 
       <h2>Cancellation</h2>
@@ -29,16 +44,27 @@ function RefundPolicyPage() {
 
       <h2>How refunds are paid</h2>
       <p>
-        Approved refunds go back to the original payment method, normally
-        within 5–7 business days of approval, depending on your bank.
+        Payments for paid plans are processed by {PAYMENT_PROCESSOR.name}
+        {" "}({PAYMENT_PROCESSOR.legalName}), and Fintranzact does not store
+        your full card, UPI or bank details. An approved refund is sent back
+        through {PAYMENT_PROCESSOR.name} to the card, UPI account or bank
+        account you paid with. It normally reaches you within
+        {" "}{REFUND_CREDIT_TIME} of approval; the exact time depends on your
+        bank or card issuer.
       </p>
 
       <h2>Contact</h2>
       <p>
         To cancel or request a refund, email{" "}
         <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> with your
-        organization name and payment details.
+        organization name and the date and amount of the payment. Please
+        never send card numbers or UPI PINs by email. You can also reach
+        {" "}{LEGAL_ENTITY_NAME} at{" "}
+        <a href={`mailto:${LEGAL_EMAIL}`}><EmailText email={LEGAL_EMAIL} /></a>
+        {" "}or <a href={LEGAL_PHONE_HREF}>{LEGAL_PHONE}</a>, or write to our
+        registered office:
       </p>
+      <RegisteredOffice />
     </LegalPage>
   );
 }

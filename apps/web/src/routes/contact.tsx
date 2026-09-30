@@ -1,15 +1,33 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import {
   CONTACT_EMAIL,
   CtaBand,
   DOCS_URL,
+  EmailText,
   MarketingLayout,
   PageHero,
   SECURITY_EMAIL,
 } from "@/components/marketing/MarketingLayout";
-import { ArrowRight01Icon, BookOpen01Icon, Mail01Icon, SecurityCheckIcon, SentIcon } from "@hugeicons/core-free-icons";
+import {
+  ArrowRight01Icon,
+  BookOpen01Icon,
+  Call02Icon,
+  Location01Icon,
+  Mail01Icon,
+  SecurityCheckIcon,
+  SentIcon,
+} from "@hugeicons/core-free-icons";
 import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
+import {
+  GRIEVANCE_ACKNOWLEDGE_WITHIN,
+  GRIEVANCE_OFFICER,
+  LEGAL_EMAIL,
+  LEGAL_ENTITY_NAME,
+  LEGAL_PHONE,
+  LEGAL_PHONE_HREF,
+  REGISTERED_ADDRESS_LINES,
+} from "@/lib/legal";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import {
   EnquiryError,
@@ -70,7 +88,7 @@ function ContactPage() {
   return (
     <MarketingLayout
       title="Contact"
-      description="Contact Fintranzact about plans, pricing, onboarding or support. Send us a message and we usually reply within one business day."
+      description="Contact Fintranzact about plans, pricing, onboarding or support. Message, email or call us, or write to Finvera Solutions LLP in Rajkot, Gujarat."
     >
       <PageHero
         eyebrow="Contact"
@@ -100,6 +118,54 @@ function ContactPage() {
                 </div>
               </div>
             ))}
+
+            <div className="flex gap-4 rounded-2xl border border-border-light bg-surface-0 p-6">
+              <IconCircle icon={Location01Icon} size="lg" />
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-text-primary">Registered office</h2>
+                <p className="mt-1 text-sm leading-relaxed text-text-tertiary">
+                  Fintranzact is operated by {LEGAL_ENTITY_NAME}.
+                </p>
+                <address className="mt-2 text-sm not-italic leading-relaxed text-text-secondary">
+                  {REGISTERED_ADDRESS_LINES.map((line) => (
+                    <span key={line} className="block">
+                      {line}
+                    </span>
+                  ))}
+                </address>
+                <ul className="mt-3 space-y-2 text-sm font-semibold">
+                  <li>
+                    <a
+                      href={LEGAL_PHONE_HREF}
+                      className="inline-flex items-center gap-2 text-brand-600 hover:underline dark:text-brand-300"
+                    >
+                      <Icon icon={Call02Icon} size={16} />
+                      {LEGAL_PHONE}
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href={`mailto:${LEGAL_EMAIL}`}
+                      className="inline-flex max-w-full items-center gap-2 text-brand-600 hover:underline dark:text-brand-300"
+                    >
+                      <Icon icon={Mail01Icon} size={16} />
+                      <span className="min-w-0">
+                        <EmailText email={LEGAL_EMAIL} />
+                      </span>
+                    </a>
+                  </li>
+                </ul>
+                <p className="mt-3 text-sm leading-relaxed text-text-tertiary">
+                  For complaints, write to our Grievance Officer, {GRIEVANCE_OFFICER.name}, at the same email or
+                  phone. We acknowledge every complaint within {GRIEVANCE_ACKNOWLEDGE_WITHIN}. Read how we handle
+                  them in our{" "}
+                  <Link to="/privacy" className="font-semibold text-brand-600 hover:underline dark:text-brand-300">
+                    privacy policy
+                  </Link>
+                  .
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="relative rounded-[22px] border border-border-light bg-surface-0 p-7 shadow-[0_24px_60px_-34px_rgba(15,27,61,.35)] md:p-9 lg:col-span-3">
