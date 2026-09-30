@@ -7,7 +7,7 @@ import { escapeLike } from "../lib/escape-like.js";
 import { isPlatformAdmin } from "../lib/platform-admin.js";
 
 /**
- * Platform admin: a read-only view of every organisation on this server.
+ * Platform admin: every organisation on this server, and the plan each is on.
  * Who is an admin is set by environment variables (see lib/platform-admin.ts).
  * Nothing here shows or changes a business's books (invoices, payments…).
  */
@@ -19,6 +19,8 @@ const platformAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 });
 
 const OWNER_ROLES = ["owner", "superadmin"] as const;
+
+export const PLAN_IDS = ["forever_free", "free", "pro", "business", "enterprise"] as const;
 
 export const platformRouter = router({
   /** Whether the signed-in user is a platform admin (shows or hides the admin link). */
@@ -160,5 +162,18 @@ export const platformRouter = router({
         members: members.map((m) => ({ ...m, joinedAt: m.joinedAt.toISOString() })),
         businesses: businessRows.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() })),
       };
+    }),
+
+  /** Put an organisation on a plan. Paid plans are set up here, not by owners. */
+  setPlan: platformAdminProcedure
+    .input(z.object({ tenantId: z.string().uuid(), plan: z.enum(PLAN_IDS) }))
+    .mutation(async ({ input }) => {
+      const [row] = await controlDb
+        .update(tenants)
+        .set({ plan: input.plan, updatedAt: new Date() })
+        .where(eq(tenants.id, input.tenantId))
+        .returning({ id: tenants.id, plan: tenants.plan });
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation not found" });
+      return row;
     }),
 });

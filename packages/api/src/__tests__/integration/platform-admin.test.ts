@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
-import { users } from "@fintranzact/db";
+import { users, tenants } from "@fintranzact/db";
 import { getControlDb, getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createUser, createTenant, addMember, createBusiness, type TestUser, type TestTenant, type TestBusiness } from "../helpers/fixtures.js";
 import { createTestCaller, createUnauthenticatedCaller } from "../helpers/create-test-caller.js";
@@ -118,6 +118,40 @@ describe("what a platform admin sees", () => {
     expect(overview.tenants).toBeGreaterThanOrEqual(1);
     expect(overview.users).toBeGreaterThanOrEqual(2);
     expect(overview.tenantsLast30Days).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("plan setup", () => {
+  const planOf = async () =>
+    (await getControlDb().select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenant.id)))[0]?.plan;
+
+  it("lets the platform admin put an organisation on a paid plan", async () => {
+    expect(await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "business" }))
+      .toEqual({ id: tenant.id, plan: "business" });
+    expect(await planOf()).toBe("business");
+  });
+
+  it("refuses plan changes from anyone else", async () => {
+    await expect(callerFor(owner).platform.setPlan({ tenantId: tenant.id, plan: "enterprise" }))
+      .rejects.toThrow(/Platform admin access only/);
+  });
+
+  it("does not let an owner upgrade themselves to a paid plan", async () => {
+    await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "free" });
+    await expect(callerFor(owner).tenant.updatePlan({ plan: "pro" })).rejects.toThrow(/set up by the Fintranzact team/);
+    expect(await planOf()).toBe("free");
+  });
+
+  it("still lets an owner choose a free plan, or keep the paid plan they were given", async () => {
+    await callerFor(owner).tenant.updatePlan({ plan: "forever_free" });
+    expect(await planOf()).toBe("forever_free");
+    await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "pro" });
+    await expect(callerFor(owner).tenant.updatePlan({ plan: "pro" })).resolves.toEqual({ plan: "pro" });
+  });
+
+  it("reports an unknown organisation", async () => {
+    await expect(callerFor(admin).platform.setPlan({ tenantId: "00000000-0000-4000-8000-000000000000", plan: "pro" }))
+      .rejects.toThrow(/Organisation not found/);
   });
 });
 

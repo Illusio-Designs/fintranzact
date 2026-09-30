@@ -174,6 +174,7 @@ exceptions:
       - platform.overview
       - platform.tenants
       - platform.tenant
+      - platform.setPlan
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
 
@@ -348,6 +349,7 @@ exceptions:
       - platform.overview
       - platform.tenants
       - platform.tenant
+      - platform.setPlan
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
 
@@ -486,6 +488,7 @@ exceptions:
       - platform.overview
       - platform.tenants
       - platform.tenant
+      - platform.setPlan
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
 
