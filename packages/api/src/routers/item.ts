@@ -7,6 +7,8 @@ import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { ensureDefaultWarehouse } from "../lib/inventory-service.js";
+import { applyStockAdjustment } from "./stock.js";
 
 export const itemRouter = router({
   list: viewerProcedure
@@ -1085,72 +1087,20 @@ export const itemRouter = router({
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Item");
 
+      // Goes through the warehouse-aware path so the item total, the default
+      // adjustment warehouse's balance and the adjustment log stay in step.
       return ctx.db.transaction(async (tx) => {
-        // Resolve current stock
-        let previousStock: string;
-
-        if (input.variantId) {
-          // Active read — can't adjust stock on a deleted variant.
-          const [variant] = await tx.select({ stockQuantity: itemVariants.stockQuantity })
-            .from(itemVariants)
-            .innerJoin(items, eq(items.id, itemVariants.itemId))
-            .where(and(
-              eq(itemVariants.id, input.variantId),
-              eq(items.businessId, ctx.businessId),
-              isNull(items.deletedAt),
-              isNull(itemVariants.deletedAt),
-            ))
-            .for("update")
-            .limit(1);
-          if (!variant) throw new TRPCError({ code: "NOT_FOUND", message: "Variant not found" });
-          previousStock = variant.stockQuantity;
-        } else {
-          // Active read — can't adjust stock on a deleted item.
-          const [item] = await tx.select({ stockQuantity: items.stockQuantity })
-            .from(items)
-            .where(and(
-              eq(items.id, input.itemId),
-              eq(items.businessId, ctx.businessId),
-              isNull(items.deletedAt),
-            ))
-            .for("update")
-            .limit(1);
-          if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item not found" });
-          previousStock = item.stockQuantity;
-        }
-
-        const adj = parseFloat(input.quantity);
-        const prev = parseFloat(previousStock);
-        const newStock = (prev + adj).toFixed(3);
-
-        // Apply stock change
-        if (input.variantId) {
-          await tx.update(itemVariants).set({
-            stockQuantity: newStock,
-            updatedAt: new Date(),
-          }).where(eq(itemVariants.id, input.variantId));
-        } else {
-          await tx.update(items).set({
-            stockQuantity: newStock,
-            updatedAt: new Date(),
-          }).where(eq(items.id, input.itemId));
-        }
-
-        // Record the adjustment
-        const [adjustment] = await tx.insert(stockAdjustments).values({
+        const settings = await ensureDefaultWarehouse(tx, ctx.businessId);
+        return applyStockAdjustment(tx, {
           businessId: ctx.businessId,
+          warehouseId: (settings.stockAdjustmentWarehouseId ?? settings.salesWarehouseId) as string,
           itemId: input.itemId,
-          variantId: input.variantId || null,
-          quantity: input.quantity,
-          previousStock,
-          newStock,
+          variantId: input.variantId,
+          quantity: parseFloat(input.quantity),
           reason: input.reason || null,
-          adjustmentDate: input.adjustmentDate ? new Date(input.adjustmentDate) : new Date(),
-          createdByUserId: ctx.user!.id,
-          createdByName: ctx.user!.name,
-        }).returning();
-
-        return adjustment;
+          date: input.adjustmentDate ? new Date(input.adjustmentDate) : new Date(),
+          user: { id: ctx.user!.id, name: ctx.user!.name },
+        });
       });
     }),
 

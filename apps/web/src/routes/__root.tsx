@@ -55,6 +55,10 @@ import {
   Analytics01Icon,
   Coins01Icon,
   CheckListIcon,
+  Building03Icon,
+  ArrowDataTransferHorizontalIcon,
+  SlidersHorizontalIcon,
+  TaskDone01Icon,
 } from "@hugeicons/core-free-icons";
 import { getRegisteredHotkeys } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
@@ -209,8 +213,36 @@ const navSections = [
     items: [
       {
         to: "/items",
-        label: "Items",
+        label: "Stock Items",
         icon: PackageIcon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/warehouses",
+        label: "Warehouses",
+        icon: Building03Icon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/stock-transfers",
+        label: "Stock Transfers",
+        icon: ArrowDataTransferHorizontalIcon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/stock-adjustments",
+        label: "Stock Adjustments",
+        icon: SlidersHorizontalIcon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/physical-stock",
+        label: "Physical Stock",
+        icon: TaskDone01Icon,
         resource: "Item",
         action: "read",
       },
