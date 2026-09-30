@@ -197,6 +197,8 @@ export const documentRouter = router({
         freeQuantity: string;
         rejectedQuantity?: string;
         rejectionReason?: string;
+        /** Batch the goods arrive in, typed in while converting. */
+        batch?: { batchNumber: string; expiryDate?: string; mfgDate?: string };
       };
       const q3 = (n: number) => String(Math.round(n * 1000) / 1000);
       let lines: CarriedLine[] = sourceLineItems.map((li) => ({ li, quantity: li.quantity, freeQuantity: li.freeQuantity ?? "0" }));
@@ -281,6 +283,7 @@ export const documentRouter = router({
             quantity: q3(qty),
             freeQuantity: q3(free),
             ...(rejected > 0 ? { rejectedQuantity: q3(rejected), rejectionReason: req?.rejectionReason } : {}),
+            ...(req?.batchNumber ? { batch: { batchNumber: req.batchNumber, expiryDate: req.expiryDate, mfgDate: req.mfgDate } } : {}),
           });
           if (Math.abs(qty - p.ordered) > 0.0005 || Math.abs(free - p.freeOrdered) > 0.0005) wholeDocument = false;
         }
@@ -350,7 +353,7 @@ export const documentRouter = router({
         warehouseId: input.warehouseId ?? undefined,
         deliveryMethod: deliveryMethod ?? undefined,
         skipStockAdjustment,
-        lineItems: lines.map(({ li, quantity, freeQuantity, rejectedQuantity, rejectionReason }) => ({
+        lineItems: lines.map(({ li, quantity, freeQuantity, rejectedQuantity, rejectionReason, batch }) => ({
           itemId: li.itemId ?? undefined,
           itemName: li.itemName,
           // Carry forward optional notes verbatim. Null stays null.
@@ -369,8 +372,11 @@ export const documentRouter = router({
           // challan prints the challan's batches, a return goes back into
           // the batch it came from. Returning an expired batch to the
           // supplier is the usual case, so a purchase return allows it.
-          batchId: li.batchId,
-          ...(li.batchId && targetType === "purchase_return" ? { allowExpired: true } : {}),
+          // A batch typed in while receiving wins over the source line's.
+          ...(batch
+            ? { batchNumber: batch.batchNumber, expiryDate: batch.expiryDate, mfgDate: batch.mfgDate }
+            : { batchId: li.batchId }),
+          ...(!batch && li.batchId && targetType === "purchase_return" ? { allowExpired: true } : {}),
         })),
       });
 

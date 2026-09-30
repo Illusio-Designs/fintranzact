@@ -733,6 +733,14 @@ export const convertDocumentSchema = z.object({
     /** Purchase order → GRN only: received but rejected. Stays pending on the order. */
     rejectedQuantity: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
     rejectionReason: z.string().max(200).optional(),
+    /**
+     * Items that track batches, when the new document brings goods in (a GRN
+     * or purchase invoice from a purchase order): the batch they arrive in,
+     * matched by number or created with these dates.
+     */
+    batchNumber: z.string().trim().max(60).optional(),
+    expiryDate: dateOnlyStr.optional(),
+    mfgDate: dateOnlyStr.optional(),
   })).optional(),
   /**
    * Goods receipt note → purchase return or debit note: take the goods

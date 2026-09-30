@@ -6,7 +6,7 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { invoices } from "@fintranzact/db";
+import { invoices, items } from "@fintranzact/db";
 import { pendingOrdersInputSchema, type PendingTrackedDocumentType } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -75,9 +75,17 @@ export const ordersRouter = router({
           ))
           .orderBy(invoices.invoiceDate, invoices.createdAt),
       ]);
+      // Items that track batches ask for the batch when their goods come in.
+      const lineItemIds = [...new Set(lines.map((l) => l.itemId).filter((v): v is string => !!v))];
+      const tracked = lineItemIds.length === 0 ? [] : await ctx.db
+        .select({ id: items.id, trackExpiry: items.trackExpiry })
+        .from(items)
+        .where(and(eq(items.businessId, ctx.businessId), inArray(items.id, lineItemIds), eq(items.trackBatches, true)));
       return {
         id: doc.id,
         documentType: doc.documentType,
+        /** Items on the lines that track batches, and whether they track expiry. */
+        batchItems: Object.fromEntries(tracked.map((t) => [t.id, { trackExpiry: t.trackExpiry }])) as Record<string, { trackExpiry: boolean }>,
         status: fulfilmentStatus(doc, lines),
         closedAt: doc.closedAt,
         convertsTo: FULFILLED_BY[doc.documentType],

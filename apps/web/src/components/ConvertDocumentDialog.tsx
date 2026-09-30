@@ -4,7 +4,7 @@
  * — billed and free quantities apart. Receiving a purchase order on a GRN
  * also records what was rejected, and why.
  */
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn, getDocumentTypeLabel } from "@/lib/utils";
 import { Modal } from "@/components/ui/Modal";
@@ -13,6 +13,7 @@ import { toast } from "@/hooks/useToast";
 import { WarehouseSelect, formatQty, useWarehouses } from "@/components/inventory/shared";
 import type { DocumentType } from "@/components/DocumentCreator";
 import { rejectionReasons } from "@fintranzact/shared";
+import { DateInput } from "@/components/ui/DateInput";
 
 export interface ConvertTarget {
   type: DocumentType;
@@ -41,6 +42,9 @@ export function ConvertDocumentDialog({
   const [free, setFree] = useState<Record<string, string>>({});
   const [rejected, setRejected] = useState<Record<string, string>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
+  // Items that track batches: the batch the goods arrive in.
+  const [batchNo, setBatchNo] = useState<Record<string, string>>({});
+  const [expiry, setExpiry] = useState<Record<string, string>>({});
   const [warehouseId, setWarehouseId] = useState("");
   const { data: warehouseList } = useWarehouses();
   const showWarehouse = !!data && movesStock(data.documentType, target)
@@ -55,6 +59,9 @@ export function ConvertDocumentDialog({
 
   const receiving = data?.documentType === "purchase_order" && target === "goods_receipt_note";
   const hasFree = !!data?.lines.some((l) => l.freeOrdered > 0);
+  // Goods coming in from a purchase order name their batch.
+  const inward = data?.documentType === "purchase_order" && (target === "goods_receipt_note" || target === "invoice");
+  const batchInfo = (l: { itemId: string | null }) => (inward && l.itemId ? data?.batchItems?.[l.itemId] ?? null : null);
 
   const convert = trpc.document.convert.useMutation({
     onSuccess: (res) => {
@@ -83,6 +90,11 @@ export function ConvertDocumentDialog({
     if (f > l.freePending + 0.0005) return "A free quantity is more than what is pending free.";
     if (n + r > l.pending + 0.0005) return "Accepted and rejected come to more than what is pending.";
     if (r > 0 && !(reason[l.lineId] ?? "").trim()) return "Give a reason for each rejection.";
+    const b = batchInfo(l);
+    if (b && n + f > 0) {
+      if (!(batchNo[l.lineId] ?? "").trim()) return `Enter a batch number for ${l.itemName}.`;
+      if (b.trackExpiry && !expiry[l.lineId]) return `Enter the expiry of ${l.itemName}'s batch.`;
+    }
     return null;
   };
   const firstError = lines.map(lineError).find(Boolean) ?? null;
@@ -98,6 +110,9 @@ export function ConvertDocumentDialog({
         freeQuantity: String(num(free, l.lineId) || 0),
         ...(rejectedOf(l.lineId) > 0
           ? { rejectedQuantity: String(rejectedOf(l.lineId)), rejectionReason: (reason[l.lineId] ?? "").trim() }
+          : {}),
+        ...(batchInfo(l) && (batchNo[l.lineId] ?? "").trim()
+          ? { batchNumber: batchNo[l.lineId]!.trim(), expiryDate: expiry[l.lineId] || undefined }
           : {}),
       })),
       warehouseId: showWarehouse && warehouseId ? warehouseId : undefined,
@@ -155,8 +170,10 @@ export function ConvertDocumentDialog({
                   const value = qty[l.lineId] ?? "0";
                   const bad = !!lineError(l);
                   const rejectedValue = rejected[l.lineId] ?? "";
+                  const b = batchInfo(l);
                   return (
-                    <tr key={l.lineId}>
+                    <Fragment key={l.lineId}>
+                    <tr>
                       <td className="px-3 py-2 font-medium text-text-primary">
                         {l.itemName}
                         {l.rejected > 0 && (
@@ -231,6 +248,31 @@ export function ConvertDocumentDialog({
                         </>
                       )}
                     </tr>
+                    {b && (
+                      <tr className="bg-surface-1/40">
+                        <td colSpan={5 + (hasFree ? 1 : 0) + (receiving ? 2 : 0)} className="px-3 py-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] text-text-tertiary">Batch</span>
+                            <input
+                              value={batchNo[l.lineId] ?? ""}
+                              maxLength={60}
+                              onChange={(e) => setBatchNo((q) => ({ ...q, [l.lineId]: e.target.value }))}
+                              className="input h-8 w-36"
+                              placeholder="Batch no."
+                              aria-label={`Batch number of ${l.itemName}`}
+                            />
+                            <span className="text-[11px] text-text-tertiary">Expiry{b.trackExpiry ? " *" : ""}</span>
+                            <DateInput
+                              value={expiry[l.lineId] ?? ""}
+                              onChange={(e) => setExpiry((q) => ({ ...q, [l.lineId]: e.target.value }))}
+                              className="input h-8 w-40"
+                              aria-label={`Expiry of ${l.itemName}'s batch`}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>

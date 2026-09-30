@@ -38,6 +38,8 @@ On a **purchase invoice**, **goods receipt note**, **purchase (inward) delivery 
 - An expiry that contradicts the one already saved for that batch is refused ("Batch B2407 of … already exists with expiry …"). Correct the batch first if the saved date was wrong.
 - A batch that is already past its expiry can still be received — you did receive it — and it shows up in the **Expired Stock** report.
 
+**Free goods and rejections.** Free goods on a line ("10 + 1") come into the same batch as the billed quantity. On a goods receipt note only the accepted and free quantity enters the batch; goods rejected at inspection never do, and a line rejected in full needs no batch. When you receive a purchase order through **Convert**, each batch-tracked line asks for its batch number and expiry. A purchase return of rejected goods moves no stock, so it doesn't touch any batch.
+
 A sales return made from an invoice starts with the same batches as the invoice, so returned goods go back into the batch they came from. A purchase return made from a purchase bill likewise takes the goods out of the batches they came in as — expired ones included.
 
 Stock adjustments that **add** stock and opening stock also record a batch (see below).
@@ -49,7 +51,7 @@ On a **sale invoice**, **POS bill**, **sales delivery challan** or **purchase re
 - **Earliest expiry first** (the default). Fintranzact takes the stock from the batch that expires first, then the next, skipping expired batches. If one batch doesn't hold enough, the line is split into one line per batch at the same price when you save — for example 7 strips become 5 from batch B2 and 2 from batch A1. The picker previews the split before you save.
 - **A specific batch.** Each batch is listed with its expiry and how much is left in the chosen warehouse.
 
-Point-of-sale bills and online store orders always use earliest expiry first.
+Point-of-sale bills and online store orders always use earliest expiry first. Free goods on a line go out with the billed quantity: when a line is split across batches, the billed quantity fills the earliest batches first and the free goods follow, so the priced total doesn't change.
 
 ### Expired batches
 

@@ -440,6 +440,88 @@ describe("converting documents keeps the batch", () => {
   });
 });
 
+describe("batches with free goods and GRN rejections", () => {
+  it("a GRN brings only accepted + free goods into the batch; rejected goods never enter it", async () => {
+    const item = await trackedItem("Cetirizine");
+    const grn = await caller().goodsReceiptNote.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: now(),
+      lineItems: [line(item.id, "10", {
+        freeQuantity: "2", rejectedQuantity: "3", rejectionReason: "Damaged",
+        batchNumber: "CZ1", expiryDate: day(90),
+      })],
+    } as never);
+    expect(await batchStock(item.id)).toEqual({ CZ1: 12 });
+
+    // A GRN line rejected in full brings nothing in and needs no batch.
+    await caller().goodsReceiptNote.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: now(),
+      lineItems: [line(item.id, "0", { rejectedQuantity: "4", rejectionReason: "Wrong item" })],
+    } as never);
+    expect(await batchStock(item.id)).toEqual({ CZ1: 12 });
+
+    // Returning the rejected goods moves no stock and touches no batch.
+    const pr = await caller().document.convert({ sourceDocumentId: grn.id, targetDocumentType: "purchase_return", fromRejected: true });
+    expect(pr.documentType).toBe("purchase_return");
+    expect(await batchStock(item.id)).toEqual({ CZ1: 12 });
+    await expectTotalsAgree(item.id);
+  });
+
+  it("free goods on a sale come out of batches FEFO and a split keeps billed + free", async () => {
+    const item = await trackedItem("Loratadine");
+    await purchase([line(item.id, "4", { batchNumber: "L1", expiryDate: day(10) })]);
+    await purchase([line(item.id, "20", { batchNumber: "L2", expiryDate: day(100) })]);
+    // 5 billed + 1 free = 6 out: 4 from L1 (all billed), then 1 billed + 1 free from L2.
+    const inv = await sale([line(item.id, "5", { freeQuantity: "1" })]);
+    const rows = (await getTenantTestDb().execute(sql`
+      SELECT b.batch_number, li.quantity::text AS q, li.free_quantity::text AS f
+      FROM invoice_items li JOIN item_batches b ON b.id = li.batch_id
+      WHERE li.invoice_id = ${inv.id} ORDER BY li.sort_order
+    `)) as unknown as Array<{ batch_number: string; q: string; f: string }>;
+    expect(rows.map((r) => [r.batch_number, Number(r.q), Number(r.f)])).toEqual([["L1", 4, 0], ["L2", 1, 1]]);
+    // Only the billed 5 are priced.
+    expect(Number(inv.totalAmount)).toBe(500);
+    expect(await batchStock(item.id)).toEqual({ L2: 18 });
+
+    // A picked batch counts free goods towards what it must hold.
+    const { data } = await caller().batch.list({ itemId: item.id });
+    await expect(sale([line(item.id, "18", { freeQuantity: "1", batchId: data[0]!.id })])).rejects.toThrow(/Not enough stock in batch/);
+
+    await caller().invoice.updateStatus({ id: inv.id, status: "cancelled" });
+    expect(await batchStock(item.id)).toEqual({ L1: 4, L2: 20 });
+    await expectTotalsAgree(item.id);
+  });
+
+  it("receiving a purchase order records the batch for accepted and free goods", async () => {
+    const item = await trackedItem("Ibuprofen");
+    const po = await caller().purchaseOrder.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: now(),
+      lineItems: [line(item.id, "20", { freeQuantity: "2" })],
+    } as never);
+    const f = await caller().orders.fulfilment({ id: po.id });
+    expect(f.batchItems[item.id]).toEqual({ trackExpiry: true });
+    await expect(caller().document.convert({
+      sourceDocumentId: po.id,
+      targetDocumentType: "goods_receipt_note",
+      lines: [{ sourceLineId: f.lines[0]!.lineId, quantity: "15", freeQuantity: "2", rejectedQuantity: "5", rejectionReason: "Damaged" }],
+    })).rejects.toThrow(/Enter a batch number/);
+    await caller().document.convert({
+      sourceDocumentId: po.id,
+      targetDocumentType: "goods_receipt_note",
+      lines: [{
+        sourceLineId: f.lines[0]!.lineId, quantity: "15", freeQuantity: "2", rejectedQuantity: "5", rejectionReason: "Damaged",
+        batchNumber: "IB7", expiryDate: day(365),
+      }],
+    });
+    expect(await batchStock(item.id)).toEqual({ IB7: 17 });
+  });
+});
+
 describe("batch master", () => {
   it("creates, corrects and deletes an unused batch; refuses to delete a used one", async () => {
     const item = await trackedItem("Vitamin C", { expiry: false });
