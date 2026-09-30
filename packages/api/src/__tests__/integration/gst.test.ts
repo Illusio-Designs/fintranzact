@@ -773,8 +773,10 @@ describe("Composition scheme enforcement", () => {
       businessId: compositionBusiness.id,
     });
 
-    // Q3 of 2025 (July–September, calendar year): quarter=3
-    const cmp08 = await caller.gst.cmp08({ year: 2025, quarter: 3 });
+    // FY 2025-26 Q2 (July–September): quarter=2
+    const cmp08 = await caller.gst.cmp08({ year: 2025, quarter: 2 });
+    expect(cmp08.quarterStart).toBe("2025-06-30T18:30:00.000Z");
+    expect(cmp08.quarterEnd).toBe("2025-09-30T18:29:59.999Z");
 
     expect(parseFloat(cmp08.taxableValue)).toBeGreaterThan(0);
     expect(parseFloat(cmp08.taxPayable)).toBeGreaterThan(0);
@@ -801,7 +803,7 @@ describe("Composition scheme enforcement", () => {
       stateCode: "27",
       openingBalance: "0.00",
     });
-    const date = new Date(2025, 10, 12, 12, 0, 0); // 12 Nov 2025 — calendar Q4
+    const date = new Date(2025, 10, 12, 12, 0, 0); // 12 Nov 2025 — FY 2025-26 Q3
     const doc = (unitPrice: string, overrides: Parameters<typeof createInvoiceWithItems>[4]) =>
       createInvoiceWithItems(
         tenantDb, compositionBusiness.id, party.id,
@@ -828,7 +830,7 @@ describe("Composition scheme enforcement", () => {
       tenantId: world.tenant1.id,
       businessId: compositionBusiness.id,
     });
-    const cmp08 = await caller.gst.cmp08({ year: 2025, quarter: 4 });
+    const cmp08 = await caller.gst.cmp08({ year: 2025, quarter: 3 });
 
     expect(cmp08.taxableValue).toBe("10000.00");
     expect(cmp08.taxPayable).toBe("100.00");
@@ -849,9 +851,9 @@ describe("Composition scheme enforcement", () => {
         [{ description: "Groceries", quantity: "1", unitPrice, taxPercent: "0" }],
         { type: "sale", documentType: "invoice", status: "sent", invoiceDate },
       );
-    await sale("1000.00", new Date("2026-01-01T00:00:00+05:30")); // first moment of Q1
-    await sale("300.00", new Date("2026-03-31T23:30:00+05:30"));  // last day of Q1
-    await sale("7000.00", new Date("2026-04-01T01:00:00+05:30")); // Q2, though still 31 Mar in UTC
+    await sale("1000.00", new Date("2026-01-01T00:00:00+05:30")); // first moment of FY 2025-26 Q4
+    await sale("300.00", new Date("2026-03-31T23:30:00+05:30"));  // last day of FY 2025-26 Q4
+    await sale("7000.00", new Date("2026-04-01T01:00:00+05:30")); // FY 2026-27 Q1, though still 31 Mar in UTC
 
     const caller = createTestCaller({
       userId: world.ramesh.id,
@@ -860,10 +862,11 @@ describe("Composition scheme enforcement", () => {
       tenantId: world.tenant1.id,
       businessId: compositionBusiness.id,
     });
-    expect((await caller.gst.cmp08({ year: 2026, quarter: 1 })).taxableValue).toBe("1300.00");
-    expect((await caller.gst.cmp08({ year: 2026, quarter: 2 })).taxableValue).toBe("7000.00");
-    // Q4 2025 still holds only its own invoices
-    expect((await caller.gst.cmp08({ year: 2025, quarter: 4 })).taxableValue).toBe("10000.00");
+    // Financial-year quarters: Q4 of FY 2025-26 is Jan–Mar 2026, Q1 of FY 2026-27 is Apr–Jun 2026
+    expect((await caller.gst.cmp08({ year: 2025, quarter: 4 })).taxableValue).toBe("1300.00");
+    expect((await caller.gst.cmp08({ year: 2026, quarter: 1 })).taxableValue).toBe("7000.00");
+    // Q3 of FY 2025-26 (Oct–Dec 2025) still holds only its own invoices
+    expect((await caller.gst.cmp08({ year: 2025, quarter: 3 })).taxableValue).toBe("10000.00");
   });
 });
 

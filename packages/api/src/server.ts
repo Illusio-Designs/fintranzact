@@ -549,6 +549,7 @@ async function buildInvoicePdfData(
     subtotal: invoice.subtotal,
     taxAmount: invoice.taxAmount,
     discountAmount: invoice.discountAmount,
+    additionalCharges: invoice.additionalCharges,
     totalAmount: invoice.totalAmount,
     amountPaid: invoice.amountPaid,
     notes: invoice.notes || undefined,

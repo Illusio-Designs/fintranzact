@@ -1,7 +1,7 @@
 import { eq, and, sql, desc, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { invoices, invoiceItems, items, payments, expenses, parties, businesses } from "@fintranzact/db";
-import { money } from "@fintranzact/shared";
+import { financialYearOf, istDateParts, istPeriodRange, istStartOfDay, money } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
@@ -24,12 +24,12 @@ export const dashboardRouter = router({
       .where(eq(businesses.id, ctx.businessId))
       .limit(1);
 
-    const fyStartMonth = (biz?.financialYearStart ?? 4) - 1; // convert to 0-indexed
+    const fyStartMonth = biz?.financialYearStart ?? 4; // 1-indexed
 
-    const now = new Date();
-    // If current month is before FY start month, the FY started last year
-    const fyYear = now.getMonth() < fyStartMonth ? now.getFullYear() - 1 : now.getFullYear();
-    const fyStart = new Date(fyYear, fyStartMonth, 1);
+    // The FY is read on the Indian calendar: it starts at 00:00 IST on the
+    // 1st of its first month, whatever the server's time zone.
+    const fyYear = financialYearOf(new Date(), fyStartMonth);
+    const fyStart = istStartOfDay(fyYear, fyStartMonth, 1);
 
     // When no input is provided (All Time), skip date filtering entirely.
     // When dates are provided, scope to that range. When only fromDate is
@@ -857,11 +857,9 @@ export const dashboardRouter = router({
     .query(async ({ ctx }) => {
       requireCan(ctx.ability, "read", "Report");
 
-      const now = new Date();
-      const currMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const currMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-      const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      const today = istDateParts(new Date());
+      const { from: currMonthStart, to: currMonthEnd } = istPeriodRange(today.year, today.month);
+      const { from: prevMonthStart, to: prevMonthEnd } = istPeriodRange(today.year, today.month - 1);
 
       const [
         [currSales],

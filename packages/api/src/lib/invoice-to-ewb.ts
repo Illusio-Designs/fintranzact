@@ -14,9 +14,9 @@
  *   - Monetary values: string → number (NIC API expects numeric JSON values)
  */
 
+import { chargeSupplyOf, formatIstDate, isIntraStateSupply, money, splitIntraStateTax } from "@fintranzact/shared";
 import type { GenerateEWBPayload, EWBItemPayload } from "./ewb-client.js";
 import { transportModeCode } from "./ewb-client.js";
-import { formatIstDate } from "./ist-date.js";
 
 // ── Input types ───────────────────────────────────────────────────────────────
 
@@ -27,6 +27,10 @@ export interface InvoiceForEWB {
   type: "sale" | "purchase";
   documentType: string;
   subtotal: string;
+  /** Document-level discount (reduces the taxable value). */
+  discountAmount?: string | null;
+  /** Charges billed with the supply (part of its value, taxed at the main rate). */
+  additionalCharges?: string | null;
   taxAmount: string;
   totalAmount: string;
   isReverseCharge: boolean;
@@ -95,18 +99,9 @@ function formatNICDate(date: Date): string {
 }
 
 /**
- * Determine if a transaction is inter-state based on state codes.
- * If either side is missing, we conservatively return false (use CGST/SGST).
- */
-function isInterState(fromStateCode: string | null, toStateCode: string | null): boolean {
-  if (!fromStateCode || !toStateCode) return false;
-  return fromStateCode !== toStateCode;
-}
-
-/**
  * Split tax amount into CGST/SGST/IGST based on supply type.
- * For intra-state: CGST = SGST = taxAmount / 2, IGST = 0
- * For inter-state: IGST = taxAmount, CGST = SGST = 0
+ * Intra-state: CGST is half rounded to the paisa, SGST the rest (they add up
+ * to the tax exactly). Inter-state: all IGST.
  */
 function splitTax(
   taxAmount: number,
@@ -115,8 +110,7 @@ function splitTax(
   if (interState) {
     return { cgst: 0, sgst: 0, igst: taxAmount };
   }
-  const half = Math.round((taxAmount / 2) * 100) / 100;
-  return { cgst: half, sgst: half, igst: 0 };
+  return { ...splitIntraStateTax(taxAmount), igst: 0 };
 }
 
 /**
@@ -226,10 +220,11 @@ export function mapInvoiceToEWB(
     ? parseStateCode(invoice.partyStateCode)
     : parseStateCode(invoice.businessStateCode);
 
-  // Inter-state detection
-  const interState = isInterState(
-    isSale ? invoice.businessStateCode : invoice.partyStateCode,
-    isSale ? invoice.partyStateCode    : invoice.businessStateCode,
+  // Inter-state detection — the shared place-of-supply rule: state codes (a
+  // GSTIN's prefix counts); a party whose state is unknown is intra-state.
+  const interState = !isIntraStateSupply(
+    { stateCode: invoice.businessStateCode, gstin: invoice.businessGstin },
+    { stateCode: invoice.partyStateCode, gstin: invoice.partyGstin },
   );
 
   // Aggregate tax values
@@ -237,9 +232,10 @@ export function mapInvoiceToEWB(
   const itemList: EWBItemPayload[] = lineItems.map((li) => {
     const taxPct   = parseFloat(li.taxPercent) || 0;
     const qty      = parseFloat(li.quantity) || 0;
-    const price    = parseFloat(li.unitPrice) || 0;
     const taxAmt   = parseFloat(li.taxAmount) || 0;
-    const taxable  = qty * price; // pre-tax amount per line
+    // Taxable value is the saved line total less its tax: after the line
+    // discount and the line's share of the document discount.
+    const taxable  = (parseFloat(li.totalAmount) || 0) - taxAmt;
 
     totalTax += taxAmt;
 
@@ -262,9 +258,34 @@ export function mapInvoiceToEWB(
     };
   });
 
+  // Charges billed with the goods are part of their value: one more item at
+  // the principal line's rate and HSN (0% when untaxed).
+  const charge = chargeSupplyOf(invoice, lineItems);
+  const chargeValue = parseFloat(charge.taxableValue) || 0;
+  if (chargeValue > 0 && lineItems.length > 0) {
+    const principal = lineItems.reduce((a, b) => ((parseFloat(b.taxPercent) || 0) > (parseFloat(a.taxPercent) || 0) ? b : a));
+    const rates = splitTaxRate(parseFloat(charge.rate) || 0, interState);
+    totalTax += parseFloat(charge.taxAmount) || 0;
+    itemList.push({
+      productName: "Additional charges",
+      productDesc: "Additional charges",
+      hsnCode: principal.hsn ?? "",
+      quantity: 0,
+      qtyUnit: "OTH",
+      cgstRate: rates.cgstRate,
+      sgstRate: rates.sgstRate,
+      igstRate: rates.igstRate,
+      cessRate: 0,
+      taxableAmount: Math.round(chargeValue * 100) / 100,
+    });
+  }
+
   const totalTaxRounded = Math.round(totalTax * 100) / 100;
   const taxSplit = splitTax(totalTaxRounded, interState);
-  const totalValue = parseFloat(invoice.subtotal) || 0;
+  // Taxable value of the consignment: lines less the document discount, plus charges
+  const totalValue = money.toNumber(
+    money.add(money.sub(invoice.subtotal, invoice.discountAmount || "0"), invoice.additionalCharges || "0"),
+  );
 
   return {
     supplyType:     isSale ? "O" : "I",

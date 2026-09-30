@@ -84,7 +84,8 @@ export async function runInvoicesImport(
       invoiceNumber: inv.invoiceNumber,
       invoiceDate: inv.invoiceDate,
       dueDate: inv.dueDate ?? null,
-      status: (money.toNumber(inv.totalAmount) === 0 ? "paid" : "sent") as "paid" | "sent",
+      // A cancelled invoice stays cancelled: it holds no stock and is owed nothing.
+      status: (inv.status === "cancelled" ? "cancelled" : money.toNumber(inv.totalAmount) === 0 ? "paid" : "sent") as "paid" | "sent" | "cancelled",
       subtotal: inv.subtotal,
       taxAmount: inv.taxAmount,
       discountAmount: inv.discountAmount,
@@ -166,7 +167,7 @@ export async function runInvoicesImport(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let autoPaymentRow: any | null = null;
-    if (opts.autoCreatePayments && money.isPositive(inv.amountPaid)) {
+    if (opts.autoCreatePayments && inv.status !== "cancelled" && money.isPositive(inv.amountPaid)) {
       const mode = inv.paymentMode || opts.defaultPaymentMode;
       autoPaymentRow = {
         businessId,

@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { chargeSupplyOf, isIntraStateSupply, money, splitIntraStateTax } from "@fintranzact/shared";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONT_REGULAR = resolve(__dirname, "../../fonts/NotoSans-Regular.ttf");
@@ -73,6 +74,8 @@ export interface InvoicePDFData {
   subtotal: string;
   taxAmount: string;
   discountAmount: string;
+  /** Charges billed with the supply (freight, packing…) — taxed at the main rate. */
+  additionalCharges?: string;
   totalAmount: string;
   amountPaid: string;
 
@@ -175,17 +178,15 @@ function isGstRegistered(data: InvoicePDFData): boolean {
   return data.gstRegistrationType === "regular" || data.gstRegistrationType === "composition";
 }
 
-function isSameState(data: InvoicePDFData): boolean {
-  if (data.businessStateCode && data.partyStateCode) {
-    return data.businessStateCode === data.partyStateCode;
-  }
-  if (data.businessState && data.partyState) {
-    return data.businessState.toLowerCase() === data.partyState.toLowerCase();
-  }
-  return false;
+/** The shared place-of-supply rule: a buyer whose state is unknown is intra-state. */
+export function isSameState(data: InvoicePDFData): boolean {
+  return isIntraStateSupply(
+    { stateCode: data.businessStateCode, state: data.businessState, gstin: data.businessGstin },
+    { stateCode: data.partyStateCode, state: data.partyState, gstin: data.partyGstin },
+  );
 }
 
-interface GstBreakdown {
+export interface GstBreakdown {
   rate: string;
   taxable: number;
   cgst: number;
@@ -193,29 +194,35 @@ interface GstBreakdown {
   igst: number;
 }
 
-function buildGstBreakdown(data: InvoicePDFData): GstBreakdown[] {
+/**
+ * Rate-wise tax summary. Charges are part of the value of supply and appear
+ * under the rate they were taxed at. Intra-state: CGST is half the rate's tax
+ * rounded to the paisa, SGST the rest.
+ */
+export function buildGstBreakdown(data: InvoicePDFData): GstBreakdown[] {
   const sameState = isSameState(data);
-  const map = new Map<string, GstBreakdown>();
+  const byRate = new Map<number, { rate: string; taxable: number; tax: number }>();
+  const add = (rate: string, taxable: number, tax: number) => {
+    const key = parseFloat(rate) || 0;
+    const entry = byRate.get(key) ?? { rate, taxable: 0, tax: 0 };
+    entry.taxable += taxable;
+    entry.tax += tax;
+    byRate.set(key, entry);
+  };
 
   for (const item of data.lineItems) {
-    const rate = item.taxPercent;
-    const taxable = parseFloat(item.totalAmount) - parseFloat(item.taxAmount);
-    const taxAmt = parseFloat(item.taxAmount);
-
-    if (!map.has(rate)) {
-      map.set(rate, { rate, taxable: 0, cgst: 0, sgst: 0, igst: 0 });
-    }
-    const entry = map.get(rate)!;
-    entry.taxable += taxable;
-    if (sameState) {
-      entry.cgst += taxAmt / 2;
-      entry.sgst += taxAmt / 2;
-    } else {
-      entry.igst += taxAmt;
-    }
+    add(item.taxPercent, parseFloat(item.totalAmount) - parseFloat(item.taxAmount), parseFloat(item.taxAmount));
+  }
+  const charge = chargeSupplyOf(data, data.lineItems);
+  if (!money.isZero(charge.taxableValue)) {
+    add(charge.rate, parseFloat(charge.taxableValue), parseFloat(charge.taxAmount));
   }
 
-  return Array.from(map.values());
+  return Array.from(byRate.values()).map(({ rate, taxable, tax }) => {
+    const rounded = Math.round(tax * 100) / 100;
+    if (!sameState) return { rate, taxable, cgst: 0, sgst: 0, igst: rounded };
+    return { rate, taxable, ...splitIntraStateTax(rounded), igst: 0 };
+  });
 }
 
 // ── Drawing primitives ────────────────────────────────────────
@@ -664,19 +671,24 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
     y += bold ? 16 : 13;
   }
 
-  // Subtotal = taxable value
-  const taxableTotal = parseFloat(data.subtotal) - parseFloat(data.discountAmount);
-  totalRow("Taxable Value", taxableTotal.toFixed(2));
-
+  // Taxable value = subtotal − discount (given on the invoice, so it
+  // reduces the value) + charges (part of the value of supply)
+  const charges = parseFloat(data.additionalCharges || "0");
+  totalRow("Subtotal", data.subtotal);
   if (parseFloat(data.discountAmount) > 0) {
-    totalRow("Discount", data.discountAmount);
+    totalRow("Discount", `-${data.discountAmount}`);
   }
+  if (charges > 0) {
+    totalRow("Charges", data.additionalCharges || "0");
+  }
+  const taxableTotal = parseFloat(data.subtotal) - parseFloat(data.discountAmount) + charges;
+  totalRow("Taxable Value", taxableTotal.toFixed(2));
 
   if (gstMode && parseFloat(data.taxAmount) > 0) {
     if (sameState) {
-      const halfTax = (parseFloat(data.taxAmount) / 2).toFixed(2);
-      totalRow("CGST", halfTax);
-      totalRow("SGST", halfTax);
+      const { cgst, sgst } = splitIntraStateTax(data.taxAmount);
+      totalRow("CGST", cgst.toFixed(2));
+      totalRow("SGST", sgst.toFixed(2));
     } else {
       totalRow("IGST", data.taxAmount);
     }
@@ -1107,6 +1119,7 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
 
   totRow("Subtotal", data.subtotal);
   if (parseFloat(data.discountAmount) > 0) totRow("Discount", `-${data.discountAmount}`);
+  if (parseFloat(data.additionalCharges || "0") > 0) totRow("Charges", data.additionalCharges || "0");
   if (parseFloat(data.taxAmount) > 0) totRow("Tax", data.taxAmount);
 
   hLine(doc, totLabelX, totY, totLabelW + totValW + 8, cBorder);
@@ -1418,6 +1431,12 @@ function generateThermalReceipt(doc: InstanceType<typeof PDFDocument>, data: Inv
   }
 
   totalLine("Subtotal", data.subtotal);
+  if (parseFloat(data.discountAmount) > 0) {
+    totalLine("Discount", `-${data.discountAmount}`);
+  }
+  if (parseFloat(data.additionalCharges || "0") > 0) {
+    totalLine("Charges", data.additionalCharges || "0");
+  }
 
   if (gstMode && parseFloat(data.taxAmount) > 0) {
     // Show CGST/SGST or IGST breakdown for GST-registered businesses
@@ -1436,10 +1455,6 @@ function generateThermalReceipt(doc: InstanceType<typeof PDFDocument>, data: Inv
     }
   } else {
     totalLine("Tax", data.taxAmount);
-  }
-
-  if (parseFloat(data.discountAmount) > 0) {
-    totalLine("Discount", `-${data.discountAmount}`);
   }
 
   separator();
@@ -1626,6 +1641,7 @@ export function generateInvoicePDF(input: InvoicePDFData, format: PDFFormat = "a
       (gstMode && data.businessGstin ? 10 : 0) +
       taxBreakdownLines * 9 +
       (parseFloat(data.discountAmount) > 0 ? 9 : 0) +
+      (parseFloat(data.additionalCharges || "0") > 0 ? 9 : 0) +
       (parseFloat(data.amountPaid) > 0 ? 18 : 0) +
       (data.notes ? 20 : 0) +
       // Logo slot: fixed 40pt box + 4pt bottom gap, only when a logo is set

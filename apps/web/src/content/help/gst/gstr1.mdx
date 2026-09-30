@@ -42,13 +42,13 @@ This section lists every sale invoice to a party that has a **GSTIN** in Fintran
 | Invoice Number | Your invoice number |
 | Invoice Date | Date of the invoice |
 | Invoice Type | "Regular" for standard invoices |
-| Taxable Value | Invoice subtotal (before tax) |
+| Taxable Value | Value of supply: line amounts less the invoice-level discount, plus additional charges (before tax) |
 | CGST | Central GST amount |
 | SGST | State GST amount |
 | IGST | Integrated GST amount |
 | Total Invoice Value | Full invoice amount including tax |
 
-One row per invoice. Intra-state invoices have CGST and SGST values; inter-state invoices have an IGST value.
+One row per invoice. Intra-state invoices have CGST and SGST values; inter-state invoices have an IGST value. Additional charges are reported under the rate they were taxed at (the invoice's highest rate) and in the HSN summary under the HSN of that line. A party with no state code uses the first two digits of its GSTIN; one with neither (a walk-in customer) is intra-state.
 
 ### B2CL — B2C Large
 

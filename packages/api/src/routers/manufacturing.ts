@@ -472,7 +472,9 @@ export const manufacturingRouter = router({
           variantId: input.variantId ?? null,
           name: input.name,
           outputQuantity: input.outputQuantity,
-          isDefault: input.isDefault || (!hasDefault && input.isActive),
+          // Only an active BOM can be the default (same rule as bomUpdate);
+          // otherwise makeOnlyDefault would strip the flag from the live one.
+          isDefault: (input.isDefault || !hasDefault) && input.isActive,
           isActive: input.isActive,
           notes: input.notes?.trim() || null,
         }).returning({ id: boms.id, isDefault: boms.isDefault });

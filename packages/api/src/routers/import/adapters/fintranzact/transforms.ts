@@ -21,7 +21,9 @@ function str(v: unknown, fallback = ""): string {
 }
 
 function moneyStr(v: unknown): string {
-  const s = str(v, "0");
+  // Exports write amounts like "1,250.50" or "₹ 1,250.50"; parseFloat would
+  // stop at the comma and read 1.
+  const s = str(v, "0").replace(/[,\s₹]/g, "");
   if (s === "") return "0";
   if (/^-?\d+(\.\d{1,2})?$/.test(s)) return s;
   const n = parseFloat(s);

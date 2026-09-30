@@ -1,4 +1,5 @@
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
+import { withAllocatedLines } from "./document-totals.js";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -8,6 +9,7 @@ import {
   itemVariants,
   businesses,
   parties,
+  shipments,
 } from "@fintranzact/db";
 import {
   createInvoiceSchema,
@@ -22,6 +24,7 @@ import { documentStockDirection, resolveDocumentWarehouseId, resolveInvoiceWareh
 import { resolveLineBatches } from "./batches.js";
 import { lineBatchDetails } from "./batch-display.js";
 import { requireCan } from "./permissions.js";
+import { assertInBusiness } from "./business-scope.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
 import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
@@ -306,6 +309,11 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             }
           }
 
+          // Stored references must be this business's records, for every
+          // document type (the credit-note check below also caps amounts).
+          await assertInBusiness(tx, invoices, input.referenceDocumentId, ctx.businessId, "Referenced document");
+          await assertInBusiness(tx, shipments, (input.charges ?? []).map((c) => c.shipmentId), ctx.businessId, "Shipment");
+
           // Security: validate variantIds belong to items in this business.
           const variantIds = input.lineItems
             .map((li) => li.variantId)
@@ -412,6 +420,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           });
 
           const charges = input.charges ?? [];
+          // A flat additionalCharges (no itemised charges) is part of the total too —
+          // it used to be stored but left out of totalAmount.
+          const flatCharges = charges.length > 0 ? charges : [{ amount: input.additionalCharges || "0" }];
           const totals = calcInvoiceTotals({
             lineItems: lineItems.map((li) => ({
               quantity: li.quantity,
@@ -419,14 +430,12 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               taxPercent: li.taxPercent || "0",
               discountPercent: li.discountPercent || "0",
             })),
-            charges: charges.length > 0 ? charges : undefined,
+            charges: flatCharges,
             invoiceDiscount: input.invoiceDiscount || "0",
             invoiceDiscountType: input.invoiceDiscountType || "amount",
             roundOff: input.roundOff || "0",
           });
-          const additionalCharges = charges.length > 0
-            ? totals.chargesTotal
-            : (input.additionalCharges || "0");
+          const additionalCharges = totals.chargesTotal;
           const roundOff = input.roundOff || "0";
 
           // A return or note made from a goods receipt note sends back goods
@@ -529,7 +538,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           if (processedItems.length > 0) {
             await tx
               .insert(invoiceItems)
-              .values(processedItems.map((li) => ({ ...li, invoiceId: result.id })));
+              .values(withAllocatedLines(processedItems, totals.lines).map((li) => ({ ...li, invoiceId: result.id })));
           }
 
           // Stock effect, recorded per warehouse.
@@ -569,7 +578,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
       )
       .mutation(async ({ input, ctx }) => {
         requireCan(ctx.ability, "update", "Invoice");
-        const doc = await ctx.db.transaction(async (tx) => {
+        const { doc, fromStatus } = await ctx.db.transaction(async (tx) => {
           const [before] = await tx
             .select({ status: invoices.status })
             .from(invoices)
@@ -590,7 +599,10 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               and(
                 eq(invoices.id, input.id),
                 eq(invoices.businessId, ctx.businessId),
-                eq(invoices.documentType, docType as DocumentType)
+                eq(invoices.documentType, docType as DocumentType),
+                // A deleted document stays deleted: reinstating it here
+                // would put its stock back while it's still hidden.
+                isNull(invoices.deletedAt),
               )
             )
             .returning();
@@ -615,7 +627,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           if (wasCancelled !== isCancelled) {
             await recomputeReferencedInvoice(tx, ctx.businessId, updated);
           }
-          return updated;
+          return { doc: updated, fromStatus: before?.status ?? null };
         });
 
         logAudit(ctx.db, {
@@ -624,7 +636,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           action: `${config.documentType}.updateStatus`,
           entityType: config.documentType,
           entityId: input.id,
-          metadata: { invoiceNumber: doc.invoiceNumber, fromStatus: input.status },
+          metadata: { invoiceNumber: doc.invoiceNumber, fromStatus, toStatus: input.status },
           ipAddress: ctx.ipAddress,
         });
 

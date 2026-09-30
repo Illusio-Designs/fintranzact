@@ -385,16 +385,16 @@ with open(data["filename"], "w") as f:
       auth: "business",
       requiredRole: "viewer",
       input: [
-        { name: "year", type: "number", required: true, description: "Calendar year (2020–2099)" },
-        { name: "quarter", type: "number", required: true, description: "Quarter number (1–4). Q1 = Jan-Mar, Q2 = Apr-Jun, Q3 = Jul-Sep, Q4 = Oct-Dec." },
+        { name: "year", type: "number", required: true, description: "Start year of the financial year (2020–2099): 2025 for FY 2025-26" },
+        { name: "quarter", type: "number", required: true, description: "Financial-year quarter (1–4). Q1 = Apr-Jun, Q2 = Jul-Sep, Q3 = Oct-Dec, Q4 = Jan-Mar of the next calendar year." },
       ],
       output: {
         description: "Total taxable value, tax payable at composition rate, and quarter date range.",
         example: {
           taxableValue: "450000.00",
           taxPayable: "4500.00",
-          quarterStart: "2026-01-01T00:00:00.000Z",
-          quarterEnd: "2026-03-31T23:59:59.000Z",
+          quarterStart: "2026-03-31T18:30:00.000Z",
+          quarterEnd: "2026-06-30T18:29:59.999Z",
         },
       },
       codeExamples: {
@@ -403,7 +403,7 @@ with open(data["filename"], "w") as f:
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const cmp = await trpc.gst.cmp08.query({
   year: 2026,
-  quarter: 1, // Q1 = Jan-Mar
+  quarter: 1, // Q1 = Apr-Jun (FY 2026-27)
 });
 console.log("Taxable value:", cmp.taxableValue);
 console.log("Tax payable (1%):", cmp.taxPayable);`,

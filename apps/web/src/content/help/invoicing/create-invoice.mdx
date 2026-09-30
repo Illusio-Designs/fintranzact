@@ -146,8 +146,8 @@ Horizontal scrollable pills appear below the item name, showing each available u
 <ForDesktop>
 Below the line items section:
 
-- **Invoice-level discount** — enter a flat amount in INR or a percentage of the subtotal.
-- **Additional charges** — click **+ Add charge** and enter a label and amount (e.g. "Delivery - ₹200").
+- **Invoice-level discount** — enter a flat amount in INR or a percentage of the subtotal. A discount given on the invoice reduces the taxable value (CGST Act s.15(3)(a)): it is shared across the lines in proportion to their value and GST is worked out on what is left.
+- **Additional charges** — click **+ Add charge** and enter a label and amount (e.g. "Delivery - ₹200"). Charges billed with the goods are part of the value of supply (s.15(2)(c)) and are taxed at the rate of the main supply — the highest GST rate on the invoice. On an invoice with only nil-rated or exempt (0%) items they stay untaxed.
 - **Round-off** — enter a positive (round up) or negative (round down) value to round the total.
 </ForDesktop>
 
@@ -233,11 +233,18 @@ For the invoice:
 
 ```
 subtotal          = sum of all line item taxableAmounts
-taxTotal          = sum of all line item taxAmounts
 invoiceDiscount   = flat amount or (subtotal × discountPercent / 100)
+lineShare         = invoiceDiscount shared across lines in proportion to their taxableAmount
+                    (to the paisa; the leftover paise go to the largest remainders)
+lineTax           = (taxableAmount − lineShare) × (taxPercent / 100)      (saved on each line)
 chargesTotal      = sum of all additional charge amounts
-total             = subtotal + taxTotal - invoiceDiscount + chargesTotal + roundOff
+chargeTax         = chargesTotal × (highest line taxPercent / 100)          (0 if every line is 0%)
+taxTotal          = sum of lineTax + chargeTax
+taxableValue      = subtotal − invoiceDiscount + chargesTotal
+total             = taxableValue + taxTotal + roundOff
 ```
+
+Intra-state tax is split into CGST and SGST as: CGST = half the tax rounded to the paisa, SGST = the rest, so the two always add up to the tax. A customer with no state and no GSTIN on record (a walk-in customer) is treated as being in your own state — intra-state.
 
 ## Frequently asked questions
 

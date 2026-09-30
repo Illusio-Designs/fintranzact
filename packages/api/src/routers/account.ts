@@ -20,6 +20,15 @@ export const accountRouter = router({
     .input(createAccountSchema)
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "Account");
+      if (input.parentId) {
+        // The parent must be one of this business's accounts.
+        const [parent] = await ctx.db
+          .select({ id: chartOfAccounts.id })
+          .from(chartOfAccounts)
+          .where(and(eq(chartOfAccounts.id, input.parentId), eq(chartOfAccounts.businessId, ctx.businessId)))
+          .limit(1);
+        if (!parent) throw new TRPCError({ code: "NOT_FOUND", message: "Parent account not found" });
+      }
       const [account] = await ctx.db
         .insert(chartOfAccounts)
         .values({

@@ -42,6 +42,8 @@ import { encryptEInvoiceConfig, decryptEInvoiceConfig } from "../lib/field-encry
 
 // ── Shared helper ─────────────────────────────────────────────────────────────
 
+const E_INVOICE_DOCUMENT_TYPES: string[] = ["invoice", "credit_note", "debit_note", "sales_return"];
+
 /**
  * Shared logic for generating an IRN. Used by both `generate` and `retryFailed`.
  * Fetches all needed data, maps to IRP JSON, submits, and updates the invoice.
@@ -73,6 +75,14 @@ async function generateIRNForInvoice(
     .limit(1);
 
   if (!invoice) throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" });
+  // IRNs are for outward tax documents only: not purchases, and not
+  // quotations, proformas, challans, orders or goods receipts.
+  if (invoice.type !== "sale" || !E_INVOICE_DOCUMENT_TYPES.includes(invoice.documentType)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "E-invoices can only be generated for sales invoices, credit notes, debit notes and sales returns",
+    });
+  }
 
   const [party] = await db.select().from(parties).where(eq(parties.id, invoice.partyId)).limit(1);
   // B2B needs the buyer's GSTIN; an export to an overseas buyer has none
@@ -110,59 +120,65 @@ async function generateIRNForInvoice(
     .where(eq(invoiceItems.invoiceId, invoiceId))
     .orderBy(invoiceItems.sortOrder);
 
-  const irpJson = mapInvoiceToIRP(
-    {
-      invoiceNumber: invoice.invoiceNumber,
-      invoiceDate: invoice.invoiceDate,
-      type: invoice.type,
-      documentType: invoice.documentType,
-      subtotal: invoice.subtotal,
-      taxAmount: invoice.taxAmount,
-      discountAmount: invoice.discountAmount,
-      additionalCharges: invoice.additionalCharges,
-      roundOff: invoice.roundOff,
-      totalAmount: invoice.totalAmount,
-      isReverseCharge: invoice.isReverseCharge ?? false,
-    },
-    lineItemRows.map((li) => ({
-      itemName: li.itemName,
-      description: li.description,
-      quantity: li.quantity,
-      freeQuantity: li.freeQuantity,
-      unitPrice: li.unitPrice,
-      taxPercent: li.taxPercent,
-      taxAmount: li.taxAmount,
-      discountPercent: li.discountPercent,
-      totalAmount: li.totalAmount,
-      selectedUnit: li.selectedUnit,
-      itemType: li.itemType,
-      itemHsn: li.itemHsn,
-    })),
-    {
-      gstin: party.gstin,
-      name: party.name,
-      billingAddress: party.billingAddress,
-      city: party.city,
-      state: party.state,
-      stateCode: party.stateCode,
-      pincode: party.pincode,
-      phone: party.phone,
-      email: party.email,
-      gstRegistrationType: party.gstRegistrationType,
-    },
-    {
-      gstin: business.gstin,
-      legalName: business.legalName,
-      name: business.name,
-      address: business.address,
-      city: business.city,
-      state: business.state,
-      stateCode: business.stateCode,
-      pincode: business.pincode,
-      phone: business.phone,
-      email: business.email,
-    },
-  );
+  let irpJson: ReturnType<typeof mapInvoiceToIRP>;
+  try {
+    irpJson = mapInvoiceToIRP(
+      {
+        invoiceNumber: invoice.invoiceNumber,
+        invoiceDate: invoice.invoiceDate,
+        type: invoice.type,
+        documentType: invoice.documentType,
+        subtotal: invoice.subtotal,
+        taxAmount: invoice.taxAmount,
+        discountAmount: invoice.discountAmount,
+        additionalCharges: invoice.additionalCharges,
+        roundOff: invoice.roundOff,
+        totalAmount: invoice.totalAmount,
+        isReverseCharge: invoice.isReverseCharge ?? false,
+      },
+      lineItemRows.map((li) => ({
+        itemName: li.itemName,
+        description: li.description,
+        quantity: li.quantity,
+        freeQuantity: li.freeQuantity,
+        unitPrice: li.unitPrice,
+        taxPercent: li.taxPercent,
+        taxAmount: li.taxAmount,
+        discountPercent: li.discountPercent,
+        totalAmount: li.totalAmount,
+        selectedUnit: li.selectedUnit,
+        itemType: li.itemType,
+        itemHsn: li.itemHsn,
+      })),
+      {
+        gstin: party.gstin,
+        name: party.name,
+        billingAddress: party.billingAddress,
+        city: party.city,
+        state: party.state,
+        stateCode: party.stateCode,
+        pincode: party.pincode,
+        phone: party.phone,
+        email: party.email,
+        gstRegistrationType: party.gstRegistrationType,
+      },
+      {
+        gstin: business.gstin,
+        legalName: business.legalName,
+        name: business.name,
+        address: business.address,
+        city: business.city,
+        state: business.state,
+        stateCode: business.stateCode,
+        pincode: business.pincode,
+        phone: business.phone,
+        email: business.email,
+      },
+    );
+  } catch (err) {
+    // The mapper refuses missing GSTINs and the like: bad data, not a crash.
+    throw new TRPCError({ code: "BAD_REQUEST", message: err instanceof Error ? err.message : "Invoice can't be e-invoiced" });
+  }
 
   // Mark as pending before calling IRP
   await db

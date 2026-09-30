@@ -1,4 +1,5 @@
-import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, asc, desc, inArray, isNull } from "drizzle-orm";
+import { saveAllocatedLines, withAllocatedLines } from "../lib/document-totals.js";
 import { z } from "zod";
 import { documentStockDirection, getDocumentWarehouseId, getDefaultWarehouse, resolveDocumentWarehouseId, resolveInvoiceWarehouse, syncDocumentStock } from "../lib/inventory-service.js";
 import { resolveLineBatches } from "../lib/batches.js";
@@ -14,14 +15,14 @@ import {
   itcLedgerEntries,
   eInvoiceConfigs,
 } from "@fintranzact/db";
-import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, deliveryMethodSchema, calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
+import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, deliveryMethodSchema, calcLineItem, calcInvoiceTotals, isIntraStateSupply, istReturnPeriod, money, splitIntraStateTax } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
+import { assertInBusiness } from "../lib/business-scope.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
-import { istReturnPeriod } from "../lib/ist-date.js";
 import { IRPClient, IRPError } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { ensureBarcodeForStock } from "../lib/barcode-setup.js";
@@ -240,13 +241,16 @@ export const invoiceRouter = router({
       // Security: validate that the partyId belongs to the current business before
       // creating the invoice. Without this check an attacker could associate an
       // invoice with a party from a different business within the same tenant.
-      const [partyCheck] = await tx.select({ id: parties.id, stateCode: parties.stateCode })
+      const [partyCheck] = await tx.select({ id: parties.id, stateCode: parties.stateCode, state: parties.state, gstin: parties.gstin })
         .from(parties)
         .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
         .limit(1);
       if (!partyCheck) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Party not found in this business" });
       }
+      // Stored references must be this business's documents.
+      await assertInBusiness(tx, invoices, input.referenceDocumentId, ctx.businessId, "Referenced document");
+      await assertInBusiness(tx, shipments, (input.charges ?? []).map((c) => c.shipmentId), ctx.businessId, "Shipment");
 
       // Composition scheme: block inter-state sale invoices.
       // Composition dealers may only make intra-state outward supplies (GST rule).
@@ -254,10 +258,12 @@ export const invoiceRouter = router({
         const [biz] = await tx.select({
           gstRegistrationType: businesses.gstRegistrationType,
           stateCode: businesses.stateCode,
+          state: businesses.state,
+          gstin: businesses.gstin,
         }).from(businesses).where(eq(businesses.id, ctx.businessId)).limit(1);
 
         if (biz?.gstRegistrationType === "composition") {
-          if (partyCheck.stateCode && biz.stateCode && partyCheck.stateCode !== biz.stateCode) {
+          if (!isIntraStateSupply(biz, partyCheck)) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: "Composition scheme businesses cannot make inter-state outward supplies",
@@ -406,6 +412,9 @@ export const invoiceRouter = router({
       });
 
       const charges = input.charges ?? [];
+      // A flat additionalCharges (no itemised charges) is part of the total too —
+      // it used to be stored but left out of totalAmount.
+      const flatCharges = charges.length > 0 ? charges : [{ amount: input.additionalCharges || "0" }];
       const totals = calcInvoiceTotals({
         lineItems: lineItems.map((li) => ({
           quantity: li.quantity,
@@ -413,14 +422,12 @@ export const invoiceRouter = router({
           taxPercent: li.taxPercent || "0",
           discountPercent: li.discountPercent || "0",
         })),
-        charges: charges.length > 0 ? charges : undefined,
+        charges: flatCharges,
         invoiceDiscount: input.invoiceDiscount || "0",
         invoiceDiscountType: input.invoiceDiscountType || "amount",
         roundOff: input.roundOff || "0",
       });
-      const additionalCharges = charges.length > 0
-        ? totals.chargesTotal
-        : (input.additionalCharges || "0");
+      const additionalCharges = totals.chargesTotal;
       const roundOff = input.roundOff || "0";
 
       // A built-in delivery method, or one of the business's own.
@@ -455,7 +462,7 @@ export const invoiceRouter = router({
 
       if (processedItems.length > 0) {
         await tx.insert(invoiceItems).values(
-          processedItems.map((li) => ({ ...li, invoiceId: invoice.id }))
+          withAllocatedLines(processedItems, totals.lines).map((li) => ({ ...li, invoiceId: invoice.id }))
         );
       }
 
@@ -519,6 +526,8 @@ export const invoiceRouter = router({
         const [bizForItc] = await tx.select({
           gstRegistrationType: businesses.gstRegistrationType,
           stateCode: businesses.stateCode,
+          state: businesses.state,
+          gstin: businesses.gstin,
         }).from(businesses).where(eq(businesses.id, ctx.businessId)).limit(1);
 
         if (bizForItc?.gstRegistrationType !== "composition") {
@@ -526,21 +535,20 @@ export const invoiceRouter = router({
           // The return month the invoice falls in, by the calendar in India
           const returnPeriod = istReturnPeriod(invoiceDate);
 
-          const sameState = !!(bizForItc?.stateCode && partyCheck.stateCode && bizForItc.stateCode === partyCheck.stateCode);
+          // Shared place-of-supply rule (unknown supplier state → intra-state)
+          const sameState = isIntraStateSupply(bizForItc ?? {}, partyCheck);
 
-          // Use integer paise arithmetic to avoid floating-point rounding errors
-          const taxPaise = Math.round(parseFloat(totals.taxTotal) * 100);
+          // CGST = half rounded to the paisa, SGST = the rest (shared rule)
           let cgst = "0";
           let sgst = "0";
           let igst = "0";
 
           if (sameState) {
-            const halfPaise = Math.floor(taxPaise / 2);
-            const remainderPaise = taxPaise - halfPaise;
-            cgst = (halfPaise / 100).toFixed(2);
-            sgst = (remainderPaise / 100).toFixed(2);
+            const split = splitIntraStateTax(totals.taxTotal);
+            cgst = split.cgst.toFixed(2);
+            sgst = split.sgst.toFixed(2);
           } else {
-            igst = (taxPaise / 100).toFixed(2);
+            igst = money.add(totals.taxTotal, 0);
           }
 
           await tx.insert(itcLedgerEntries).values({
@@ -745,6 +753,7 @@ export const invoiceRouter = router({
           eq(invoices.partyId, input.partyId),
           eq(invoices.type, "sale"),
           eq(invoices.documentType, "invoice"),
+          isNull(invoices.deletedAt),
         ))
         .orderBy(desc(invoices.invoiceDate))
         .limit(1);
@@ -1023,14 +1032,20 @@ export const invoiceRouter = router({
               discountPercent: invoiceItems.discountPercent,
             })
             .from(invoiceItems)
-            .where(eq(invoiceItems.invoiceId, input.id));
+            .where(eq(invoiceItems.invoiceId, input.id))
+            .orderBy(asc(invoiceItems.sortOrder), asc(invoiceItems.id));
 
           // Use merged charges (updates.charges) if charges were modified; otherwise
           // fall back to existing charges. This ensures shipment-linked charge entries
           // are included in the total even when the user didn't touch charges.
-          const chargesForTotals = updates.charges !== undefined
+          const itemisedCharges = updates.charges !== undefined
             ? (updates.charges as Array<{ amount: string }> | null) ?? []
             : (existing.charges as Array<{ amount: string }> | null) ?? [];
+          // An invoice with a flat additionalCharges and no itemised charges
+          // keeps counting it, as it did when it was created.
+          const chargesForTotals = itemisedCharges.length > 0 || updates.charges !== undefined
+            ? itemisedCharges
+            : [{ amount: existing.additionalCharges ?? "0" }];
           const roundOffStr = input.roundOff !== undefined ? input.roundOff : existing.roundOff;
           // A stored discount is always an amount; a new one may be a percent.
           const totals = calcInvoiceTotals({
@@ -1050,6 +1065,8 @@ export const invoiceRouter = router({
           updates.taxAmount = totals.taxTotal;
           updates.discountAmount = totals.invoiceDiscountAmount;
           updates.totalAmount = totals.total;
+          // The document discount is shared over the lines, so their tax moves with it.
+          await saveAllocatedLines(tx, input.id, totals.lines);
         }
 
         // 5. Apply update

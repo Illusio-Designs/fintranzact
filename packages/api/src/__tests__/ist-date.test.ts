@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { formatIstDate, istPeriodRange, istReturnPeriod } from "../lib/ist-date.js";
+import { formatIstDate, istPeriodRange, istReturnPeriod } from "@fintranzact/shared";
 
 describe("istPeriodRange", () => {
   it("cuts a month at midnight IST on both edges", () => {

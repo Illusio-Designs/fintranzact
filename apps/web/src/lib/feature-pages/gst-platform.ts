@@ -120,7 +120,7 @@ export const GST_PLATFORM_PAGES: FeaturePage[] = [
         heading: "What each GSTR-1 section contains",
         points: [
           "B2B: one row per sale invoice to a party with a GSTIN, with taxable value and CGST, SGST or IGST.",
-          "B2C Large: inter-state invoices to unregistered buyers above ₹2.5 lakh, grouped by state.",
+          "B2C Large: inter-state invoices to unregistered buyers above ₹1 lakh (₹2.5 lakh before August 2024), grouped by state.",
           "B2C Small: all other sales to unregistered buyers, grouped by tax rate.",
           "HSN summary: quantity, taxable value and tax for each HSN or SAC code.",
           "Credit notes and debit notes issued in the month, linked to the original invoice where you set one.",

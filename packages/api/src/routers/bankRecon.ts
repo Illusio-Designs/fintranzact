@@ -24,6 +24,7 @@ import {
   payments,
   expenses,
   bankTransactions,
+  parties,
 } from "@fintranzact/db";
 import {
   bankReconColumnMappingSchema,
@@ -72,6 +73,44 @@ function toColumnMapping(raw: z.infer<typeof bankReconColumnMappingSchema>): Col
     skipRows: raw.skipRows,
     amountSignConvention: raw.amountSignConvention,
   };
+}
+
+/** Throw NOT_FOUND unless the bank account / party is this business's. */
+async function assertRuleRefs(
+  db: TenantDatabase,
+  businessId: string,
+  refs: { bankAccountId?: string | null; partyId?: string | null },
+) {
+  if (refs.bankAccountId) {
+    const [account] = await db.select({ id: bankAccounts.id }).from(bankAccounts)
+      .where(and(eq(bankAccounts.id, refs.bankAccountId), eq(bankAccounts.businessId, businessId))).limit(1);
+    if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Bank account not found" });
+  }
+  if (refs.partyId) {
+    const [party] = await db.select({ id: parties.id }).from(parties)
+      .where(and(eq(parties.id, refs.partyId), eq(parties.businessId, businessId))).limit(1);
+    if (!party) throw new TRPCError({ code: "NOT_FOUND", message: "Party not found" });
+  }
+}
+
+/** Throw NOT_FOUND unless the payment / expense / bank transaction is a live one of this business. */
+async function assertMatchTarget(
+  db: TenantDatabase,
+  businessId: string,
+  t: { paymentId?: string; expenseId?: string; bankTransactionId?: string },
+) {
+  let found: unknown[] = [];
+  if (t.paymentId) {
+    found = await db.select({ id: payments.id }).from(payments)
+      .where(and(eq(payments.id, t.paymentId), eq(payments.businessId, businessId), isNull(payments.deletedAt))).limit(1);
+  } else if (t.expenseId) {
+    found = await db.select({ id: expenses.id }).from(expenses)
+      .where(and(eq(expenses.id, t.expenseId), eq(expenses.businessId, businessId), isNull(expenses.deletedAt))).limit(1);
+  } else if (t.bankTransactionId) {
+    found = await db.select({ id: bankTransactions.id }).from(bankTransactions)
+      .where(and(eq(bankTransactions.id, t.bankTransactionId), eq(bankTransactions.businessId, businessId))).limit(1);
+  }
+  if (found.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Record to match not found" });
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
@@ -600,6 +639,7 @@ export const bankReconRouter = router({
       if (!line) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Statement line not found" });
       }
+      await assertMatchTarget(ctx.db, ctx.businessId, input);
 
       await ctx.db
         .update(bankStatementLines)
@@ -838,12 +878,12 @@ export const bankReconRouter = router({
       }
 
       // Get the latest import for this account (or the specific one requested)
-      const importCond = input.importId
-        ? [eq(bankStatementImports.id, input.importId)]
-        : [
-            eq(bankStatementImports.bankAccountId, input.bankAccountId),
-            eq(bankStatementImports.businessId, ctx.businessId),
-          ];
+      // Always this business's imports of this account; importId narrows it.
+      const importCond = [
+        eq(bankStatementImports.bankAccountId, input.bankAccountId),
+        eq(bankStatementImports.businessId, ctx.businessId),
+        ...(input.importId ? [eq(bankStatementImports.id, input.importId)] : []),
+      ];
 
       const [latestImport] = await ctx.db
         .select()
@@ -1174,21 +1214,7 @@ export const bankReconRouter = router({
     .input(bankCategorizationRuleSchema)
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankReconciliation");
-
-      if (input.bankAccountId) {
-        const [account] = await ctx.db
-          .select({ id: bankAccounts.id })
-          .from(bankAccounts)
-          .where(and(
-            eq(bankAccounts.id, input.bankAccountId),
-            eq(bankAccounts.businessId, ctx.businessId),
-          ))
-          .limit(1);
-
-        if (!account) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Bank account not found" });
-        }
-      }
+      await assertRuleRefs(ctx.db, ctx.businessId, input);
 
       const [rule] = await ctx.db
         .insert(bankCategorizationRules)
@@ -1223,6 +1249,7 @@ export const bankReconRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Rule not found" });
       }
+      await assertRuleRefs(ctx.db, ctx.businessId, input.data);
 
       const [updated] = await ctx.db
         .update(bankCategorizationRules)

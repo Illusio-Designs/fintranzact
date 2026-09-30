@@ -15,10 +15,10 @@ import {
   markItcEligibleSchema,
   recordItcUtilizationSchema,
   money,
+  istReturnPeriod,
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
-import { istReturnPeriod } from "../lib/ist-date.js";
 
 // ── Helpers ──────────────────────────────────────────────────
 

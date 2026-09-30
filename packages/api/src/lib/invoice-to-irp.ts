@@ -11,9 +11,10 @@
  * We parse only at the boundary here — never accumulate JS floats.
  */
 
-import { gstUqcForUnit } from "@fintranzact/shared";
+import {
+  calcLineItem, chargeSupplyOf, formatIstDate, gstStateCode, gstUqcForUnit, placeOfSupplyCode, splitIntraStateTax,
+} from "@fintranzact/shared";
 import type { IRPInvoiceJson } from "./irp-client.js";
-import { formatIstDate } from "./ist-date.js";
 
 // ── Types (subset of what we need from DB rows) ────────────────────────────────
 
@@ -154,13 +155,13 @@ export function mapInvoiceToIRP(
     throw new Error("Party GSTIN is required for e-invoicing (B2B only)");
   }
 
-  const sellerStateCode = business.stateCode ?? "00";
-  // Place of supply: the buyer's state. Fall back to the GSTIN's 2-digit
-  // state prefix, then to the seller's state (a blank state code counts as
-  // missing). Exports use "96" (Other Country).
+  const sellerStateCode = gstStateCode(business) ?? "00";
+  // Place of supply: the buyer's state code, else its GSTIN's prefix, else —
+  // state unknown — the seller's own (the shared place-of-supply rule).
+  // Exports use "96" (Other Country).
   const buyerStateCode = isExport
     ? "96"
-    : party.stateCode || party.gstin?.slice(0, 2) || sellerStateCode;
+    : placeOfSupplyCode(business, party) ?? sellerStateCode;
   // Supplies to SEZ units and exports are zero-rated inter-state supplies
   // (IGST Act s.16) — IGST applies even when the SEZ is in the seller's state.
   const isInterState = isExport || isSez || sellerStateCode !== buyerStateCode;
@@ -175,31 +176,31 @@ export function mapInvoiceToIRP(
       ? chargesTax ? "SEZWP" : "SEZWOP"
       : "B2B";
 
-  // Map line items
+  const heads = (tax: number) =>
+    isInterState ? { IgstAmt: tax, CgstAmt: 0, SgstAmt: 0 } : (() => {
+      const { cgst, sgst } = splitIntraStateTax(tax);
+      return { IgstAmt: 0, CgstAmt: cgst, SgstAmt: sgst };
+    })();
+
+  // Map line items. Each line's saved tax and total already carry its share
+  // of the document discount, so AssAmt is the saved taxable value and the
+  // item Discount is the line discount plus that share (TotAmt − AssAmt).
   const itemList = lineItems.map((li, idx) => {
     const qty = n(li.quantity);
     const unitPrice = n(li.unitPrice);
     const taxPct = n(li.taxPercent);
-    const discPct = n(li.discountPercent);
 
-    const grossAmt = round2(qty * unitPrice);
-    const discAmt = round2(grossAmt * discPct / 100);
-    const assAmt = round2(grossAmt - discAmt);
-    const totalTax = round2(assAmt * taxPct / 100);
-
-    let cgstAmt = 0;
-    let sgstAmt = 0;
-    let igstAmt = 0;
-
-    if (isInterState) {
-      igstAmt = totalTax;
-    } else {
-      cgstAmt = round2(totalTax / 2);
-      sgstAmt = round2(totalTax - cgstAmt); // handle odd paise
-    }
-
-    const totItemVal = round2(assAmt + totalTax);
-    const isService = li.itemType === "service" ? "Y" : "N";
+    // Gross in the invoice's own paise maths (float qty × price rounded
+    // differently: 1.5 × 10.03 → 15.04, the invoice has 15.05).
+    const grossAmt = n(calcLineItem({
+      quantity: li.quantity,
+      unitPrice: li.unitPrice,
+      taxPercent: li.taxPercent || "0",
+      discountPercent: li.discountPercent || "0",
+    }).subtotal);
+    const totalTax = n(li.taxAmount);
+    const assAmt = round2(n(li.totalAmount) - totalTax);
+    const discAmt = round2(grossAmt - assAmt);
 
     return {
       SlNo: String(idx + 1),
@@ -208,7 +209,7 @@ export function mapInvoiceToIRP(
       // here, as IRP's PrdDesc is meant to identify the product, not capture
       // per-line comments.
       PrdDesc: li.itemName.slice(0, 300),
-      IsServc: isService,
+      IsServc: li.itemType === "service" ? "Y" : "N",
       HsnCd: li.itemHsn ?? "9999",
       Qty: qty,
       FreeQty: n(li.freeQuantity ?? "0"),
@@ -218,20 +219,50 @@ export function mapInvoiceToIRP(
       Discount: discAmt,
       AssAmt: assAmt,
       GstRt: taxPct,
-      IgstAmt: igstAmt,
-      CgstAmt: cgstAmt,
-      SgstAmt: sgstAmt,
-      TotItemVal: totItemVal,
+      ...heads(totalTax),
+      TotItemVal: round2(assAmt + totalTax),
     };
   });
+
+  // Charges billed with the supply (freight, packing…) are part of its value
+  // and taxed at the principal supply's rate. NIC wants taxable charges as an
+  // item (in AssAmt), not in OthChrg, so they go in as a line under the
+  // principal line's HSN; untaxed charges (a nil/exempt-only invoice, or one
+  // saved before charges were taxed) stay in OthChrg.
+  const charge = chargeSupplyOf(invoice, lineItems);
+  const chargeValue = n(charge.taxableValue);
+  const chargeTaxAmt = n(charge.taxAmount);
+  let othChrg = chargeValue;
+  if (chargeValue > 0 && chargeTaxAmt !== 0 && lineItems.length > 0) {
+    const principal = lineItems.reduce((a, b) => (n(b.taxPercent) > n(a.taxPercent) ? b : a));
+    itemList.push({
+      SlNo: String(itemList.length + 1),
+      PrdDesc: "Additional charges",
+      IsServc: principal.itemType === "service" ? "Y" : "N",
+      HsnCd: principal.itemHsn ?? "9999",
+      Qty: 1,
+      FreeQty: 0,
+      Unit: "OTH",
+      UnitPrice: chargeValue,
+      TotAmt: chargeValue,
+      Discount: 0,
+      AssAmt: chargeValue,
+      GstRt: n(charge.rate),
+      ...heads(chargeTaxAmt),
+      TotItemVal: round2(chargeValue + chargeTaxAmt),
+    });
+    othChrg = 0;
+  }
 
   // Aggregate ValDtls from itemList (sum of individual items)
   const assVal = round2(itemList.reduce((sum, item) => sum + item.AssAmt, 0));
   const cgstVal = round2(itemList.reduce((sum, item) => sum + item.CgstAmt, 0));
   const sgstVal = round2(itemList.reduce((sum, item) => sum + item.SgstAmt, 0));
   const igstVal = round2(itemList.reduce((sum, item) => sum + item.IgstAmt, 0));
-  const discountTotal = round2(itemList.reduce((sum, item) => sum + item.Discount, 0));
-  const othChrg = n(invoice.additionalCharges);
+  // The document discount is already out of each item's AssAmt (it reduces
+  // the taxable value), so ValDtls.Discount stays 0 — counting it here too
+  // would take it off twice.
+  const invoiceDiscount = 0;
   const rndOffAmt = n(invoice.roundOff);
   const totInvVal = n(invoice.totalAmount);
 
@@ -281,7 +312,7 @@ export function mapInvoiceToIRP(
       CgstVal: cgstVal,
       SgstVal: sgstVal,
       IgstVal: igstVal,
-      Discount: discountTotal,
+      Discount: invoiceDiscount,
       OthChrg: othChrg > 0 ? othChrg : undefined,
       RndOffAmt: rndOffAmt !== 0 ? rndOffAmt : undefined,
       TotInvVal: totInvVal,

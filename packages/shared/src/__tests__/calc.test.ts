@@ -208,38 +208,46 @@ describe("calcInvoiceTotals — aggregates line items with invoice-level discoun
   });
 
   it("applies an invoice-level discount as a fixed amount (type='amount')", () => {
-    // Sharma Traders gets a ₹50 loyalty discount on the whole invoice.
-    // subtotal=700, invoiceDiscount=50, tax=10, total = 700 - 50 + 10 = 660
+    // Sharma Traders gets a ₹50 loyalty discount on the whole invoice. Given
+    // on the invoice, it reduces the taxable value (CGST Act s.15(3)(a)):
+    // shared 500:200 → 35.71 + 14.29, so the 5% line is taxed on 185.71 = 9.29.
+    // total = 700 - 50 + 9.29 = 659.29
     const result = calcInvoiceTotals({
       ...sharmaInvoiceInput(),
       invoiceDiscount: "50",
       invoiceDiscountType: "amount",
     });
-    expect(result.invoiceDiscountAmount).toBe("50");
-    expect(result.total).toBe("660.00");
+    expect(result.invoiceDiscountAmount).toBe("50.00");
+    expect(result.lines.map((l) => l.discountShare)).toEqual(["35.71", "14.29"]);
+    expect(result.taxTotal).toBe("9.29");
+    expect(result.total).toBe("659.29");
   });
 
   it("applies an invoice-level discount as a percentage (type='percent')", () => {
-    // 10% discount on the post-line-discount subtotal of ₹700 = ₹70 discount.
-    // tax=10, total = 700 - 70 + 10 = 640
+    // 10% discount on the post-line-discount subtotal of ₹700 = ₹70 discount,
+    // shared 50 + 20; the 5% line is taxed on 180 = 9.00. total = 630 + 9 = 639
     const result = calcInvoiceTotals({
       ...sharmaInvoiceInput(),
       invoiceDiscount: "10",
       invoiceDiscountType: "percent",
     });
     expect(result.invoiceDiscountAmount).toBe("70.00");
-    expect(result.total).toBe("640.00");
+    expect(result.taxTotal).toBe("9.00");
+    expect(result.total).toBe("639.00");
   });
 
   it("adds additional charges (e.g. delivery charges, packing fees)", () => {
-    // ₹50 delivery fee added on top of the invoice total.
-    // subtotal=700, tax=10, charges=50, total=760
+    // ₹50 delivery fee: part of the value of supply (s.15(2)(c)), taxed at the
+    // highest line rate (5%) = 2.50. total = 700 + 50 + 10 + 2.50 = 762.50
     const result = calcInvoiceTotals({
       ...sharmaInvoiceInput(),
       charges: [{ amount: "50.00" }],
     });
     expect(result.chargesTotal).toBe("50.00");
-    expect(result.total).toBe("760.00");
+    expect(result.chargeTaxRate).toBe("5.00");
+    expect(result.chargeTax).toBe("2.50");
+    expect(result.taxableValue).toBe("750.00");
+    expect(result.total).toBe("762.50");
   });
 
   it("applies multiple named charges and sums them into chargesTotal", () => {
@@ -286,7 +294,7 @@ describe("calcInvoiceTotals — aggregates line items with invoice-level discoun
       invoiceDiscount: "100",
       // invoiceDiscountType intentionally omitted
     });
-    expect(result.invoiceDiscountAmount).toBe("100");
+    expect(result.invoiceDiscountAmount).toBe("100.00");
     expect(result.total).toBe("900.00");
   });
 
@@ -311,11 +319,10 @@ describe("calcInvoiceTotals — aggregates line items with invoice-level discoun
     //   subtotal=500, disc=0, afterDisc=500, tax=60, total=560
     // Invoice-level: ₹200 flat discount, ₹100 delivery charge, +₹0.80 roundoff
     // Combined subtotal (afterDisc) = 28500 + 500 = 29000
-    // taxTotal = 3420 + 60 = 3480
-    // invoiceDiscount = 200
-    // chargesTotal = 100
-    // roundOff = 0.80
-    // total = 29000 + 3480 - 200 + 100 + 0.80 = 32380.80
+    // Discount shared pro rata: 196.55 + 3.45 → taxable 28303.45 + 496.55
+    //   line tax 3396.41 + 59.59 = 3456.00
+    // Charges ₹100 at 12% = 12.00 → taxTotal = 3468.00
+    // total = 29000 - 200 + 100 + 3468 + 0.80 = 32368.80
     const result = calcInvoiceTotals({
       lineItems: [
         { quantity: "2", unitPrice: "15000.00", taxPercent: "12", discountPercent: "5" },
@@ -327,9 +334,10 @@ describe("calcInvoiceTotals — aggregates line items with invoice-level discoun
       roundOff: "0.80",
     });
     expect(result.subtotal).toBe("29000.00");
-    expect(result.taxTotal).toBe("3480.00");
-    expect(result.invoiceDiscountAmount).toBe("200");
+    expect(result.lines.map((l) => l.taxableValue)).toEqual(["28303.45", "496.55"]);
+    expect(result.taxTotal).toBe("3468.00");
+    expect(result.invoiceDiscountAmount).toBe("200.00");
     expect(result.chargesTotal).toBe("100.00");
-    expect(result.total).toBe("32380.80");
+    expect(result.total).toBe("32368.80");
   });
 });

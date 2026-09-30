@@ -6,6 +6,7 @@ import { createPaymentSchema, updatePaymentSchema, paginationSchema, money } fro
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { applyInvoicePayment } from "../lib/invoice-status.js";
 import { requireCan } from "../lib/permissions.js";
+import { assertInBusiness } from "../lib/business-scope.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
@@ -199,6 +200,16 @@ export const paymentRouter = router({
       if (!partyCheck) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Party not found in this business" });
       }
+      // The account and the allocated invoices are stored on the payment and
+      // its allocation rows, so they must be this business's too.
+      await assertInBusiness(tx, bankAccounts, input.bankAccountId, ctx.businessId, "Bank account");
+      await assertInBusiness(
+        tx,
+        invoices,
+        [input.invoiceId, ...(input.allocations ?? []).map((a) => a.invoiceId)],
+        ctx.businessId,
+        "Invoice",
+      );
 
       // Atomically generate payment number
       const [biz] = await tx.select({
@@ -506,6 +517,14 @@ export const paymentRouter = router({
       const newAmount = input.amount ?? existing.amount;
       const newMode = input.mode ?? existing.mode;
       const newBankAccountId = input.bankAccountId === null ? null : (input.bankAccountId ?? existing.bankAccountId);
+      await assertInBusiness(tx, bankAccounts, input.bankAccountId, ctx.businessId, "Bank account");
+      await assertInBusiness(
+        tx,
+        invoices,
+        (input.allocations ?? []).map((a) => a.invoiceId),
+        ctx.businessId,
+        "Invoice",
+      );
       const newDate = input.paymentDate ? new Date(input.paymentDate) : existing.paymentDate;
 
       const primaryInvoiceId = input.allocations?.length
@@ -754,6 +773,7 @@ export const paymentRouter = router({
       const conditions = [
         eq(payments.businessId, ctx.businessId),
         sql`${payments.bankAccountId} IS NULL`,
+        isNull(payments.deletedAt),
       ];
       if (input.search) {
         conditions.push(
@@ -823,6 +843,7 @@ export const paymentRouter = router({
           const matchConditions = [
             eq(payments.businessId, ctx.businessId),
             sql`${payments.bankAccountId} IS NULL`,
+            isNull(payments.deletedAt),
           ];
           if (input.search) {
             matchConditions.push(
@@ -841,6 +862,8 @@ export const paymentRouter = router({
 
         if (paymentIds.length === 0) return { assigned: 0 };
 
+        // Only the payments actually assigned are counted and audited.
+        const assignedIds: string[] = [];
         for (const paymentId of paymentIds) {
           // Get the payment (only if untracked and owned by this business)
           const [pmt] = await tx.select({
@@ -854,10 +877,12 @@ export const paymentRouter = router({
               eq(payments.id, paymentId),
               eq(payments.businessId, ctx.businessId),
               sql`${payments.bankAccountId} IS NULL`,
+              isNull(payments.deletedAt),
             ))
             .limit(1);
 
-          if (!pmt) continue; // already assigned or not found
+          if (!pmt) continue; // already assigned, deleted or not found
+          assignedIds.push(pmt.id);
 
           // Update payment with bank account
           await tx.update(payments)
@@ -903,7 +928,7 @@ export const paymentRouter = router({
           })
           .where(eq(bankAccounts.id, input.bankAccountId));
 
-        return { assigned: paymentIds.length, paymentIds };
+        return { assigned: assignedIds.length, paymentIds: assignedIds };
       });
 
       if (result.assigned > 0 && result.paymentIds?.length) {

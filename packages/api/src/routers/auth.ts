@@ -829,6 +829,13 @@ export const authRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired link" });
       }
 
+      // The address may have been taken since the request was made.
+      const [taken] = await controlDb.select({ id: users.id })
+        .from(users).where(eq(users.email, tokenRow.email)).limit(1);
+      if (taken && taken.id !== tokenRow.userId) {
+        throw new TRPCError({ code: "CONFLICT", message: "Email already in use" });
+      }
+
       // Update the user's email using the userId stored in the token — never from client input
       await controlDb.update(users)
         .set({ email: tokenRow.email, emailVerified: true, updatedAt: new Date() })

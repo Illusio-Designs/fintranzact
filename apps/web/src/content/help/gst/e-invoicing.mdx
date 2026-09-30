@@ -96,10 +96,10 @@ Automatic submission only happens when an invoice is created. Invoices saved bef
 | Seller | Business GSTIN, legal name (or business name), address, city, pincode, state code, phone, email |
 | Buyer | Party GSTIN, name, billing address, city, pincode, state code (also used as place of supply), phone, email |
 | Document | Invoice number and date. Credit notes and sales returns go as `CRN`, debit notes and purchase returns as `DBN`, everything else as `INV`. |
-| Items | Item name, HSN (or `9999`), goods/service flag, quantity, unit converted to a GST unit code (`OTH` if unknown), unit price, discount, GST rate, tax split |
-| Totals | Taxable value, CGST/SGST/IGST, other charges, round-off, invoice total. Reverse charge is flagged if set on the invoice. |
+| Items | Item name, HSN (or `9999`), goods/service flag, quantity, unit converted to a GST unit code (`OTH` if unknown), unit price, discount (the line discount plus the line's share of the invoice-level discount), GST rate, tax split. Taxed additional charges go in as one more item, "Additional charges", under the HSN of the highest-rated line. |
+| Totals | Taxable value, CGST/SGST/IGST, other charges (only untaxed charges, e.g. on an all-exempt invoice), round-off, invoice total. The invoice-level discount is already inside the items, so the invoice-level Discount is 0. Reverse charge is flagged if set on the invoice. |
 
-Tax goes as CGST + SGST when your state code matches the party's, and as IGST otherwise. If the party has no state code, the first two digits of its GSTIN are used.
+Tax goes as CGST + SGST when your state code matches the party's, and as IGST otherwise. If the party has no state code, the first two digits of its GSTIN are used. CGST is half the tax rounded to the paisa and SGST the rest.
 
 The supply type comes from the party's GST registration type:
 

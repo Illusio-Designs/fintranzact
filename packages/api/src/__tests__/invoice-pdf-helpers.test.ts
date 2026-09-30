@@ -26,6 +26,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { buildGstBreakdown as realBuildGstBreakdown, isSameState as realIsSameState } from "../lib/invoice-pdf.js";
 
 // =============================================================================
 // Types — mirrors the relevant slice of InvoicePDFData (invoice-pdf.ts:11-81)
@@ -133,39 +134,14 @@ function isGstRegistered(data: InvoicePDFData): boolean {
   return data.gstRegistrationType === "regular" || data.gstRegistrationType === "composition";
 }
 
+// isSameState and buildGstBreakdown are the real ones (exported for tests):
+// place of supply and the CGST/SGST split follow the shared GST rules.
 function isSameState(data: InvoicePDFData): boolean {
-  if (data.businessStateCode && data.partyStateCode) {
-    return data.businessStateCode === data.partyStateCode;
-  }
-  if (data.businessState && data.partyState) {
-    return data.businessState.toLowerCase() === data.partyState.toLowerCase();
-  }
-  return false;
+  return realIsSameState(data as never);
 }
 
 function buildGstBreakdown(data: InvoicePDFData): GstBreakdown[] {
-  const sameState = isSameState(data);
-  const map = new Map<string, GstBreakdown>();
-
-  for (const item of data.lineItems) {
-    const rate = item.taxPercent;
-    const taxable = parseFloat(item.totalAmount) - parseFloat(item.taxAmount);
-    const taxAmt = parseFloat(item.taxAmount);
-
-    if (!map.has(rate)) {
-      map.set(rate, { rate, taxable: 0, cgst: 0, sgst: 0, igst: 0 });
-    }
-    const entry = map.get(rate)!;
-    entry.taxable += taxable;
-    if (sameState) {
-      entry.cgst += taxAmt / 2;
-      entry.sgst += taxAmt / 2;
-    } else {
-      entry.igst += taxAmt;
-    }
-  }
-
-  return Array.from(map.values());
+  return realBuildGstBreakdown(data as never);
 }
 
 // =============================================================================
@@ -495,8 +471,8 @@ describe("isSameState — intra-state vs inter-state determination for CGST/SGST
    * Primary lookup: businessStateCode vs partyStateCode (2-digit codes per
    * GST portal, e.g. "27" for Maharashtra, "07" for Delhi).
    * Fallback: businessState vs partyState text comparison (case-insensitive).
-   * If neither is available: returns false (defaults to IGST — the safer
-   * option since IGST can always be claimed; a wrongly split CGST+SGST cannot).
+   * If neither is available: returns true — the place of supply is the
+   * seller's own state (shared rule, same as the ledger and GST returns).
    */
 
   it("returns true when state codes match (intra-state transaction)", () => {
@@ -543,12 +519,13 @@ describe("isSameState — intra-state vs inter-state determination for CGST/SGST
     }))).toBe(true);
   });
 
-  it("returns false when no state information is provided at all", () => {
+  it("returns true when the buyer's state is not known (walk-in: place of supply is our own state)", () => {
     /**
-     * Missing state data defaults to IGST to avoid generating an invalid
-     * CGST+SGST split. An auditor can always verify IGST transactions.
+     * The shared place-of-supply rule: with no buyer state or GSTIN the
+     * supply is intra-state, as in the ledger, GST returns and e-invoice
+     * (regression: the PDF alone showed IGST).
      */
-    expect(isSameState(baseData())).toBe(false);
+    expect(isSameState(baseData())).toBe(true);
   });
 });
 
@@ -788,5 +765,25 @@ describe("UPI payment URL format", () => {
     });
     expect(url).toContain("am=12450.75");
     expect(url).toContain("tn=Outstanding%20-%20Gupta%20Enterprises");
+  });
+});
+
+describe("buildGstBreakdown — charges and the odd-paisa split (real function)", () => {
+  it("puts charges under the rate they were taxed at, and splits CGST/SGST exactly", () => {
+    const rows = realBuildGstBreakdown({
+      businessStateCode: "27",
+      partyStateCode: "27",
+      // Lines as saved: after their share of a ₹150 document discount
+      lineItems: [
+        { taxPercent: "18", taxAmount: "162.00", totalAmount: "1062.00" },
+        { taxPercent: "5", taxAmount: "22.51", totalAmount: "472.51" },
+      ],
+      additionalCharges: "100.00",
+      taxAmount: "202.51", // 162 + 22.51 + 18 on the charges
+    } as never);
+    expect(rows).toEqual([
+      { rate: "18", taxable: 1000, cgst: 90, sgst: 90, igst: 0 },
+      { rate: "5", taxable: 450, cgst: 11.26, sgst: 11.25, igst: 0 },
+    ]);
   });
 });

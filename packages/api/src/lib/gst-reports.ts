@@ -1,14 +1,54 @@
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { invoices, invoiceItems, parties, businesses, items as itemsTable } from "@fintranzact/db";
 import type { TenantDatabase } from "@fintranzact/db";
-import { gstUqcForUnit } from "@fintranzact/shared";
+import {
+  b2clThresholdFor, chargeSupplyOf, formatIstDate, gstr1Section, gstUqcForUnit, isIntraStateSupply,
+  istPeriodRange, money, splitIntraStateTax,
+} from "@fintranzact/shared";
 import { buildBusinessDateFilter } from "./business-date.js";
-import { formatIstDate, istPeriodRange } from "./ist-date.js";
 
-// Split a tax amount exactly in half using paise-level integer arithmetic
-// to avoid floating-point rounding errors on odd amounts (e.g. ₹1.01).
-function splitTax(amount: number): number {
-  return Math.round(amount * 100 / 2) / 100;
+/**
+ * CGST/SGST/IGST heads of a tax amount. Intra-state: CGST is half rounded to
+ * the paisa, SGST the rest, so they add up to the tax exactly.
+ */
+function taxHeads(tax: number, sameState: boolean): { cgst: number; sgst: number; igst: number } {
+  if (!sameState) return { cgst: 0, sgst: 0, igst: Math.round(tax * 100) / 100 };
+  return { ...splitIntraStateTax(tax), igst: 0 };
+}
+
+/**
+ * Value of supply of a saved document: its lines after line discounts, less
+ * the document discount, plus the charges billed with it.
+ */
+function documentTaxable(doc: { subtotal: string; discountAmount: string | null; additionalCharges: string | null }): number {
+  return money.toNumber(money.add(money.sub(doc.subtotal, doc.discountAmount || "0"), doc.additionalCharges || "0"));
+}
+
+type SavedLine = { itemId: string | null; taxPercent: string; taxAmount: string; totalAmount: string };
+
+/**
+ * A document's lines plus one line for its charges: taxed at the principal
+ * supply's rate, it reports under that rate and (for the HSN summary) the
+ * HSN of the highest-rated line.
+ */
+function withChargeLine<T extends SavedLine>(
+  doc: { additionalCharges: string | null; taxAmount: string },
+  lines: T[],
+): T[] {
+  const charge = chargeSupplyOf(doc, lines);
+  if (money.isZero(charge.taxableValue) || lines.length === 0) return lines;
+  const principal = lines.reduce((a, b) => (parseFloat(b.taxPercent) > parseFloat(a.taxPercent) ? b : a));
+  return [
+    ...lines,
+    {
+      ...principal,
+      itemName: "Additional charges",
+      quantity: "0",
+      taxPercent: charge.rate,
+      taxAmount: charge.taxAmount,
+      totalAmount: money.add(charge.taxableValue, charge.taxAmount),
+    },
+  ];
 }
 
 // ── Types ──────────────────────────────────────────────────────
@@ -49,9 +89,7 @@ function groupLinesByRate(
     .map(([rate, { taxable, tax }]) => ({
       rate,
       taxableValue: round2(taxable),
-      cgst: sameState ? splitTax(tax) : 0,
-      sgst: sameState ? splitTax(tax) : 0,
-      igst: sameState ? 0 : round2(tax),
+      ...taxHeads(tax, sameState),
     }));
 }
 
@@ -63,18 +101,11 @@ export type GstNoteSection = "cdnr" | "cdnur" | "b2cs";
  * rather than netted in B2CS. Notification 12/2024-Central Tax lowered it
  * from ₹2,50,000 to ₹1,00,000 for invoices dated on or after 1 Aug 2024.
  */
-export const B2CL_INVOICE_THRESHOLD = 100000;
-/** The B2CL limit for invoices dated before 1 Aug 2024. */
-export const B2CL_INVOICE_THRESHOLD_BEFORE_AUG_2024 = 250000;
-/** 1 Aug 2024, 00:00 IST — the day the lower B2CL limit applies from. */
-const B2CL_THRESHOLD_CHANGE = istPeriodRange(2024, 8).from;
-
-/** The B2CL invoice-value limit for an invoice dated `invoiceDate`. */
-export function b2clThresholdFor(invoiceDate: Date): number {
-  return invoiceDate.getTime() >= B2CL_THRESHOLD_CHANGE.getTime()
-    ? B2CL_INVOICE_THRESHOLD
-    : B2CL_INVOICE_THRESHOLD_BEFORE_AUG_2024;
-}
+export {
+  B2CL_INVOICE_THRESHOLD,
+  B2CL_INVOICE_THRESHOLD_BEFORE_AUG_2024,
+  b2clThresholdFor,
+} from "@fintranzact/shared";
 
 export interface GSTR1Report {
   period: string; // e.g. "Apr 2025"
@@ -111,7 +142,7 @@ export interface GSTR1Report {
       rateItems: GstRateLine[];
     }>;
   }>;
-  // B2C Small - to unregistered (≤ ₹2.5L or intra-state), per rate and place of supply
+  // B2C Small - to unregistered (up to the B2CL limit, or intra-state), per rate and place of supply
   b2cSmall: Array<{
     taxRate: number;
     taxableValue: number;
@@ -255,6 +286,8 @@ export async function generateGSTR1(
     invoiceDate: invoices.invoiceDate,
     totalAmount: invoices.totalAmount,
     subtotal: invoices.subtotal,
+    discountAmount: invoices.discountAmount,
+    additionalCharges: invoices.additionalCharges,
     taxAmount: invoices.taxAmount,
     partyName: parties.name,
     partyGstin: parties.gstin,
@@ -284,6 +317,11 @@ export async function generateGSTR1(
     existing.push(li);
     lineItemsByInvoice.set(li.invoiceId, existing);
   }
+  // Charges are part of the value of supply and report under the main rate
+  for (const inv of saleInvoices) {
+    const lines = lineItemsByInvoice.get(inv.id);
+    if (lines) lineItemsByInvoice.set(inv.id, withChargeLine(inv, lines));
+  }
 
   // Pre-fetch HSN codes for all items referenced in these line items.
   //
@@ -303,15 +341,13 @@ export async function generateGSTR1(
   const itemHsnLookup = new Map(itemHsnData.map((i) => [i.id, i.hsn || "0000"]));
   const itemUnitLookup = new Map(itemHsnData.map((i) => [i.id, i.unit]));
 
-  // Fix 3: State comparison using stateCode (preferred) with text fallback
-  const isSameState = (partyState: string | null, partyStateCode: string | null) => {
-    // Prefer state code comparison (2-digit GST codes — more reliable)
-    if (biz?.stateCode && partyStateCode) {
-      return biz.stateCode === partyStateCode;
-    }
-    // Fallback to text comparison
-    return biz?.state && partyState && biz.state.toLowerCase() === partyState.toLowerCase();
-  };
+  // Place of supply: state codes decide (a GSTIN's prefix counts as the
+  // code), then state names; a party with no state on record is intra-state.
+  const isSameState = (partyState: string | null, partyStateCode: string | null, partyGstin: string | null) =>
+    isIntraStateSupply(
+      { stateCode: biz?.stateCode, state: biz?.state, gstin: biz?.gstin },
+      { stateCode: partyStateCode, state: partyState, gstin: partyGstin },
+    );
 
   const b2b: GSTR1Report["b2b"] = [];
   const b2cLargeMap = new Map<string, GSTR1Report["b2cLarge"][0]>();
@@ -334,12 +370,10 @@ export async function generateGSTR1(
     const key = `${rate}|${supplyType}|${pos ?? ""}`;
     const existing = b2cSmallMap.get(key) || { taxRate: rate, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, supplyType, pos };
     existing.taxableValue += sign * taxable;
-    if (sameState) {
-      existing.cgst += sign * splitTax(tax);
-      existing.sgst += sign * splitTax(tax);
-    } else {
-      existing.igst += sign * tax;
-    }
+    const heads = taxHeads(tax, sameState);
+    existing.cgst += sign * heads.cgst;
+    existing.sgst += sign * heads.sgst;
+    existing.igst += sign * heads.igst;
     b2cSmallMap.set(key, existing);
   };
 
@@ -351,14 +385,18 @@ export async function generateGSTR1(
 
   for (const inv of saleInvoices) {
     const lineItems = lineItemsByInvoice.get(inv.id) || [];
-    const sameState = isSameState(inv.partyState, inv.partyStateCode);
-    const taxable = parseFloat(inv.subtotal);
+    const sameState = isSameState(inv.partyState, inv.partyStateCode, inv.partyGstin);
+    const section = gstr1Section({
+      partyGstin: inv.partyGstin,
+      intraState: sameState,
+      invoiceValue: parseFloat(inv.totalAmount),
+      invoiceDate: inv.invoiceDate,
+    });
+    const taxable = documentTaxable(inv);
     const tax = parseFloat(inv.taxAmount);
     const total = parseFloat(inv.totalAmount);
 
-    const cgst = sameState ? splitTax(tax) : 0;
-    const sgst = sameState ? splitTax(tax) : 0;
-    const igst = sameState ? 0 : tax;
+    const { cgst, sgst, igst } = taxHeads(tax, sameState);
 
     totalTaxableValue += taxable;
     totalCgst += cgst;
@@ -367,9 +405,9 @@ export async function generateGSTR1(
     totalInvoiceValue += total;
 
     // B2B: party has GSTIN
-    if (inv.partyGstin) {
+    if (section === "b2b") {
       b2b.push({
-        partyGstin: inv.partyGstin,
+        partyGstin: inv.partyGstin ?? "",
         partyName: inv.partyName,
         invoiceNumber: inv.invoiceNumber,
         invoiceDate: inv.invoiceDate.toISOString(),
@@ -377,10 +415,11 @@ export async function generateGSTR1(
         taxableValue: taxable,
         cgst, sgst, igst,
         totalInvoiceValue: total,
-        rateItems: groupLinesByRate(lineItems, !!sameState),
+        rateItems: groupLinesByRate(lineItems, sameState),
       });
-    } else if (!sameState && total > b2clThresholdFor(inv.invoiceDate)) {
-      // B2C Large: inter-state above the B2CL limit
+    } else if (section === "b2cLarge") {
+      // B2C Large: unregistered, inter-state, above the B2CL limit
+      // (₹1L from Aug 2024, ₹2.5L before)
       const state = inv.partyState || "Unknown";
       const existing = b2cLargeMap.get(state) || { state, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, invoices: [] };
       existing.taxableValue += taxable;
@@ -434,12 +473,10 @@ export async function generateGSTR1(
       if (!isService) existing.quantity += parseFloat(li.quantity) * factor;
       existing.taxableValue += itemTaxable;
       existing.totalValue += parseFloat(li.totalAmount);
-      if (sameState) {
-        existing.cgst += splitTax(itemTax);
-        existing.sgst += splitTax(itemTax);
-      } else {
-        existing.igst += itemTax;
-      }
+      const heads = taxHeads(itemTax, sameState);
+      existing.cgst += heads.cgst;
+      existing.sgst += heads.sgst;
+      existing.igst += heads.igst;
       hsnSummaryMap.set(hsnKey, existing);
     }
   }
@@ -453,6 +490,8 @@ export async function generateGSTR1(
     invoiceDate: invoices.invoiceDate,
     totalAmount: invoices.totalAmount,
     subtotal: invoices.subtotal,
+    discountAmount: invoices.discountAmount,
+    additionalCharges: invoices.additionalCharges,
     taxAmount: invoices.taxAmount,
     referenceDocumentId: invoices.referenceDocumentId,
     partyName: parties.name,
@@ -478,6 +517,8 @@ export async function generateGSTR1(
     invoiceDate: invoices.invoiceDate,
     totalAmount: invoices.totalAmount,
     subtotal: invoices.subtotal,
+    discountAmount: invoices.discountAmount,
+    additionalCharges: invoices.additionalCharges,
     taxAmount: invoices.taxAmount,
     referenceDocumentId: invoices.referenceDocumentId,
     partyName: parties.name,
@@ -526,16 +567,15 @@ export async function generateGSTR1(
     existing.push(li);
     noteLinesByNote.set(li.invoiceId, existing);
   }
+  for (const n of [...rawCreditNotes, ...rawDebitNotes]) {
+    const lines = noteLinesByNote.get(n.id);
+    if (lines) noteLinesByNote.set(n.id, withChargeLine(n, lines));
+  }
   const noteRateItems = (n: typeof rawCreditNotes[0]) =>
-    groupLinesByRate(noteLinesByNote.get(n.id) || [], !!isSameState(n.partyState, n.partyStateCode));
+    groupLinesByRate(noteLinesByNote.get(n.id) || [], isSameState(n.partyState, n.partyStateCode, n.partyGstin));
   const noteTaxSplit = (n: typeof rawCreditNotes[0]) => {
-    const sameState = isSameState(n.partyState, n.partyStateCode);
-    const tax = parseFloat(n.taxAmount);
-    return {
-      cgst: sameState ? splitTax(tax) : 0,
-      sgst: sameState ? splitTax(tax) : 0,
-      igst: sameState ? 0 : tax,
-    };
+    const sameState = isSameState(n.partyState, n.partyStateCode, n.partyGstin);
+    return taxHeads(parseFloat(n.taxAmount), sameState);
   };
 
   /**
@@ -547,7 +587,7 @@ export async function generateGSTR1(
    */
   const noteSection = (n: typeof rawCreditNotes[0]): GstNoteSection => {
     if (n.partyGstin) return "cdnr";
-    if (isSameState(n.partyState, n.partyStateCode)) return "b2cs";
+    if (isSameState(n.partyState, n.partyStateCode, n.partyGstin)) return "b2cs";
     // The original invoice decides (its value, and its date for the limit)
     const original = n.referenceDocumentId ? refInvoiceById.get(n.referenceDocumentId) : undefined;
     const supplyValue = original ? parseFloat(original.totalAmount) : parseFloat(n.totalAmount);
@@ -556,7 +596,7 @@ export async function generateGSTR1(
   };
 
   const toNote = (n: typeof rawCreditNotes[0], sign: 1 | -1): GSTR1Report["creditNotes"][0] => {
-    const sameState = !!isSameState(n.partyState, n.partyStateCode);
+    const sameState = isSameState(n.partyState, n.partyStateCode, n.partyGstin);
     const section = noteSection(n);
     const pos = n.partyGstin
       ? n.partyGstin.substring(0, 2)
@@ -570,7 +610,7 @@ export async function generateGSTR1(
           addToB2cs(parseFloat(li.taxPercent), parseFloat(li.totalAmount) - tax, tax, sameState, pos, sign);
         }
       } else {
-        const taxable = parseFloat(n.subtotal);
+        const taxable = documentTaxable(n);
         const tax = parseFloat(n.taxAmount);
         addToB2cs(deriveRate(taxable, tax), taxable, tax, sameState, pos, sign);
       }
@@ -582,7 +622,7 @@ export async function generateGSTR1(
       partyName: n.partyName,
       partyGstin: n.partyGstin || "",
       totalAmount: n.totalAmount,
-      taxableAmount: n.subtotal,
+      taxableAmount: money.add(documentTaxable(n), 0),
       taxAmount: n.taxAmount,
       ...noteTaxSplit(n),
       rateItems: noteRateItems(n),
@@ -652,8 +692,11 @@ export async function generateGSTR3B(
     documentType: invoices.documentType,
     taxAmount: invoices.taxAmount,
     subtotal: invoices.subtotal,
+    discountAmount: invoices.discountAmount,
+    additionalCharges: invoices.additionalCharges,
     partyState: parties.state,
     partyStateCode: parties.stateCode,
+    partyGstin: parties.gstin,
     isReverseCharge: invoices.isReverseCharge,
   }).from(invoices)
     .innerJoin(parties, eq(parties.id, invoices.partyId))
@@ -680,34 +723,24 @@ export async function generateGSTR3B(
     // reverse-charge liability) by their tax
     const sign = (ITC_REVERSING_DOCUMENTS as readonly string[]).includes(inv.documentType) ? -1 : 1;
     const tax = sign * parseFloat(inv.taxAmount);
-    // Prefer state code comparison; fall back to text
-    const sameState = (biz?.stateCode && inv.partyStateCode)
-      ? biz.stateCode === inv.partyStateCode
-      : (biz?.state && inv.partyState &&
-          biz.state.toLowerCase() === inv.partyState.toLowerCase());
+    // Same rule as the outward side: codes (a GSTIN's prefix counts), then
+    // names; a supplier with no state on record is intra-state.
+    const sameState = isIntraStateSupply(
+      { stateCode: biz?.stateCode, state: biz?.state, gstin: biz?.gstin },
+      { stateCode: inv.partyStateCode, state: inv.partyState, gstin: inv.partyGstin },
+    );
+    const heads = taxHeads(tax, sameState);
 
     if (inv.isReverseCharge) {
       // RCM purchases: tracked in 3.1(d) AND generate ITC for the buyer
-      rcmTaxableValue += sign * parseFloat(inv.subtotal);
-      if (sameState) {
-        const half = splitTax(tax);
-        rcmCgst += half;
-        rcmSgst += half;
-        itcCgst += half;
-        itcSgst += half;
-      } else {
-        rcmIgst += tax;
-        itcIgst += tax;
-      }
-    } else {
-      // Normal purchase ITC
-      if (sameState) {
-        itcCgst += splitTax(tax);
-        itcSgst += splitTax(tax);
-      } else {
-        itcIgst += tax;
-      }
+      rcmTaxableValue += sign * documentTaxable(inv);
+      rcmCgst += heads.cgst;
+      rcmSgst += heads.sgst;
+      rcmIgst += heads.igst;
     }
+    itcCgst += heads.cgst;
+    itcSgst += heads.sgst;
+    itcIgst += heads.igst;
   }
 
   // Table 3.1(a) is net of the credit and debit notes issued in the period
@@ -723,6 +756,18 @@ export async function generateGSTR3B(
     outCgst += sign * (note.cgst ?? 0);
     outSgst += sign * (note.sgst ?? 0);
   }
+
+  // Table 3.1(c): nil-rated and exempt supplies (the 0% lines) are not
+  // "outward taxable supplies" and were being counted in 3.1(a).
+  const zeroRated = (rows?: GstRateLine[]) =>
+    (rows ?? []).reduce((s, r) => (r.rate === 0 ? s + r.taxableValue : s), 0);
+  let exemptTaxable = 0;
+  for (const b of gstr1.b2b) exemptTaxable += zeroRated(b.rateItems);
+  for (const s of gstr1.b2cLarge) for (const i of s.invoices ?? []) exemptTaxable += zeroRated(i.rateItems);
+  for (const s of gstr1.b2cSmall) if (s.taxRate === 0) exemptTaxable += s.taxableValue;
+  for (const { note, sign } of notes) exemptTaxable += sign * zeroRated(note.rateItems);
+  exemptTaxable = round2(exemptTaxable);
+  outTaxable = round2(outTaxable - exemptTaxable);
 
   // Net tax payable = output tax - ITC
   // A negative value indicates ITC credit remaining (e.g. when purchase tax
@@ -744,7 +789,7 @@ export async function generateGSTR3B(
         sgst: outSgst,
       },
       zeroRated: { taxableValue: 0, igst: 0, cgst: 0, sgst: 0 },
-      exempt: { taxableValue: 0, igst: 0, cgst: 0, sgst: 0 },
+      exempt: { taxableValue: exemptTaxable, igst: 0, cgst: 0, sgst: 0 },
     },
     rcmSupplies: {
       taxableValue: rcmTaxableValue.toFixed(2),
@@ -968,9 +1013,7 @@ export function gstr1ToPortalJson(
       itms: toPortalItms(note.rateItems, {
         rate: deriveRate(noteTaxable, noteTax),
         taxableValue: noteTaxable,
-        igst: noteIntra ? 0 : noteTax,
-        cgst: noteIntra ? splitTax(noteTax) : 0,
-        sgst: noteIntra ? splitTax(noteTax) : 0,
+        ...taxHeads(noteTax, noteIntra),
       }),
     });
     cdnrMap.set(ctin, existing);
