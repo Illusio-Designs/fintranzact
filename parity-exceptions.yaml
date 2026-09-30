@@ -30,6 +30,9 @@ exceptions:
       # Mobile displays the logo via /api/businesses/:id/logo but doesn't edit.
       - business.uploadLogo
       - business.deleteLogo
+      # Invoice signature upload/delete is web-only, like the logo.
+      - business.uploadSignature
+      - business.deleteSignature
       # Point-of-Sale mode is a web/desktop-only fullscreen register.
       # Mobile doesn't have a POS terminal surface.
       - business.setPosEnabled
@@ -289,6 +292,9 @@ exceptions:
       # Logo upload/delete are browser-only (canvas resize + file picker).
       - business.uploadLogo
       - business.deleteLogo
+      # Invoice signature upload/delete is web-only, like the logo.
+      - business.uploadSignature
+      - business.deleteSignature
       # Point-of-Sale is a browser-only UI feature — no CLI command surface.
       - business.setPosEnabled
       - business.ensureWalkInParty
@@ -380,6 +386,9 @@ exceptions:
       # Logo is a browser UI concern; MCP agents don't manage brand assets.
       - business.uploadLogo
       - business.deleteLogo
+      # Invoice signature upload/delete is web-only, like the logo.
+      - business.uploadSignature
+      - business.deleteSignature
       # POS mode is a web/desktop-only cashier surface; not an MCP workflow.
       - business.setPosEnabled
       - business.ensureWalkInParty
