@@ -25,6 +25,19 @@ import { recurringInvoiceEndpoints } from "./recurringInvoice";
 import { apiKeyEndpoints } from "./apiKey";
 import { importEndpoints } from "./import";
 import { backupEndpoints } from "./backup";
+import { documentsEndpoints } from "./documents";
+import { ordersEndpoints } from "./orders";
+import { posEndpoints } from "./pos";
+import { shareEndpoints } from "./share";
+import { systemEndpoints } from "./system";
+import { warehouseEndpoints } from "./warehouse";
+import { stockEndpoints } from "./stock";
+import { stockGroupEndpoints } from "./stockGroup";
+import { inventoryReportsEndpoints } from "./inventoryReports";
+import { manufacturingEndpoints } from "./manufacturing";
+import { priceLevelEndpoints } from "./priceLevel";
+import { pricingEndpoints } from "./pricing";
+import { barcodeEndpoints } from "./barcode";
 import type { EndpointGroup, EndpointSection } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -35,7 +48,7 @@ export const allSections: EndpointSection[] = [
   {
     id: "foundation",
     title: "Foundation",
-    groups: [authEndpoints, tenantEndpoints, businessEndpoints, apiKeyEndpoints],
+    groups: [authEndpoints, tenantEndpoints, businessEndpoints, apiKeyEndpoints, systemEndpoints],
   },
   {
     id: "commerce",

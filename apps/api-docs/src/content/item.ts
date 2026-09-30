@@ -11,7 +11,7 @@ export const itemEndpoints: EndpointGroup = {
       method: "query",
       path: "item.list",
       title: "List Items",
-      description: "Paginated catalog with optional low-stock filter. Variant items include an aggregated `variantCount` and `variantTotalStock`.",
+      description: "Paginated catalog of active (not soft-deleted) items, newest-updated first, with optional search, low-stock, type/mode, category and stock-group filters. Each row is the full item record (including `barcode`, `mrp`, `stockGroupId`); variant items also include an aggregated `variantCount` and `variantTotalStock`.",
       auth: "business",
       requiredRole: "viewer",
       input: [
@@ -19,7 +19,8 @@ export const itemEndpoints: EndpointGroup = {
         { name: "lowStock", type: "boolean", required: false, description: "If true, return only items at or below their `lowStockAlert` threshold" },
         { name: "itemType", type: "enum", required: false, description: "Filter by item type", enumValues: ["product", "service"] },
         { name: "itemMode", type: "enum", required: false, description: "Filter by item mode", enumValues: ["simple", "alt_units", "variants"] },
-        { name: "category", type: "string", required: false, description: "Filter by category label" },
+        { name: "category", type: "string", required: false, description: "Filter by category label (exact match)" },
+        { name: "stockGroupId", type: "string (UUID) | \"none\"", required: false, description: "Items in this stock group or any group nested under it; `\"none\"` returns items with no group" },
         { name: "page", type: "number", required: false, description: "Page number (1-indexed)", default: "1" },
         { name: "limit", type: "number", required: false, description: "Items per page (1–100)", default: "20" },
       ],
@@ -40,7 +41,10 @@ export const itemEndpoints: EndpointGroup = {
               lowStockAlert: "50",
               hsn: "84159000",
               sku: "WGT-A-001",
-              category: "electronics",
+              barcode: "8901234567895",
+              mrp: "1499.00",
+              stockGroupId: "group-uuid-electronics",
+              category: "Electronics",
               taxInclusive: false,
               variantCount: null,
               variantTotalStock: null,
@@ -72,6 +76,7 @@ resp = httpx.get(
       gotchas: [
         "Variant items show aggregate stock in `variantTotalStock`. Individual variant stock is returned by `item.getById`.",
         "Stock quantities are strings (`\"245.000\"`) — three decimal places for precision with weights and partial units.",
+        "`search` matches the item name only (case-insensitive substring), not SKU or barcode — use `item.lookupByCode` for scanned codes.",
       ],
     },
     {
@@ -79,7 +84,7 @@ resp = httpx.get(
       method: "query",
       path: "item.getById",
       title: "Get Item",
-      description: "Fetch a single item with all variants (for `variants` mode items). Returns `null` if not found in the active business.",
+      description: "Fetch a single active item (all columns, including `barcode`, `mrp`, `stockGroupId` and `category`) with its non-deleted variants (for `variants` mode items). Returns `null` if not found in the active business or soft-deleted.",
       auth: "business",
       requiredRole: "viewer",
       input: [
@@ -94,10 +99,15 @@ resp = httpx.get(
           itemMode: "variants",
           unit: "pcs",
           taxPercent: "5.00",
+          hsn: "6109",
+          mrp: null,
+          barcode: null,
+          stockGroupId: "group-uuid-apparel",
+          category: "Apparel",
           variantAttributes: ["size", "color"],
           variants: [
-            { id: "v-uuid-1", attributeValues: { size: "M", color: "Blue" }, sku: "TS-M-BLU", salePrice: "599.00", stockQuantity: "45.000" },
-            { id: "v-uuid-2", attributeValues: { size: "L", color: "Blue" }, sku: "TS-L-BLU", salePrice: "599.00", stockQuantity: "32.000" },
+            { id: "v-uuid-1", attributeValues: { size: "M", color: "Blue" }, sku: "TS-M-BLU", barcode: "TSMBLU0001", salePrice: "599.00", mrp: "699.00", stockQuantity: "45.000" },
+            { id: "v-uuid-2", attributeValues: { size: "L", color: "Blue" }, sku: "TS-L-BLU", barcode: "TSLBLU0001", salePrice: "599.00", mrp: "699.00", stockQuantity: "32.000" },
           ],
         },
       },
@@ -135,21 +145,24 @@ resp = httpx.get(
         { name: "itemMode", type: "enum", required: false, description: "Pricing/stock mode", default: "simple", enumValues: ["simple", "alt_units", "variants"] },
         { name: "unit", type: "enum", required: false, description: "Base unit of measurement", default: "pcs", enumValues: ["pcs", "kg", "g", "l", "ml", "m", "cm", "ft", "in", "box", "dozen", "pair", "set", "pkt", "bun", "pouch", "jar", "btl", "bag", "ton", "pack", "pet", "person", "other"] },
         { name: "salePrice", type: "string (decimal)", required: false, description: "Default sale price (used on invoices)" },
-        { name: "purchasePrice", type: "string (decimal)", required: false, description: "Default purchase price" },
+        { name: "purchasePrice", type: "string (decimal)", required: false, description: "Default purchase price (also the valuation rate for opening stock)" },
+        { name: "mrp", type: "string (decimal) | null", required: false, description: "Printed maximum retail price. Selling above it is only a client-side warning, not rejected." },
         { name: "taxPercent", type: "string (decimal)", required: false, description: "Default GST rate applied to line items", default: "0" },
         { name: "taxInclusive", type: "boolean", required: false, description: "Whether `salePrice` already includes tax", default: "false" },
         { name: "stockQuantity", type: "string (decimal)", required: false, description: "Opening stock quantity (3 decimal places)", default: "0" },
         { name: "lowStockAlert", type: "string (decimal)", required: false, description: "Alert threshold — triggers low-stock filter when stock ≤ this value" },
         { name: "hsn", type: "string", required: false, description: "HSN/SAC code for GST filing (max 20 chars)" },
-        { name: "sku", type: "string", required: false, description: "Internal SKU/barcode (max 50 chars)" },
+        { name: "sku", type: "string", required: false, description: "Internal SKU (max 50 chars). Also matched by `item.lookupByCode` as a fallback." },
+        { name: "barcode", type: "string", required: false, description: "Scannable code (max 64 printable ASCII chars; empty string = none). Must be unique across items, variants and extra codes in the business." },
         { name: "description", type: "string", required: false, description: "Item description (max 1000 chars)" },
-        { name: "category", type: "string", required: false, description: "Category label (max 100 chars)" },
+        { name: "category", type: "string", required: false, description: "Category name (max 100 chars). Mapped to a stock group of that name, which is created if it does not exist." },
+        { name: "stockGroupId", type: "string (UUID) | null", required: false, description: "Stock group. Takes precedence over `category`, which is then set to the group's name; `null` leaves the item ungrouped." },
         { name: "variantAttributes", type: "array of strings", required: false, description: "Attribute names for `variants` mode, e.g. `[\"size\", \"color\"]` (max 5)" },
-        { name: "variants", type: "array", required: false, description: "Initial variants for `variants` mode. Each: `{attributeValues, sku?, salePrice?, purchasePrice?, stockQuantity?}`" },
+        { name: "variants", type: "array", required: false, description: "Initial variants for `variants` mode. Each: `{attributeValues, sku?, barcode?, salePrice?, purchasePrice?, mrp?, stockQuantity?, lowStockAlert?}`" },
         { name: "unitVariants", type: "array", required: false, description: "Alt units for `alt_units` mode. Each: `{unit, conversionFactor, salePrice, purchasePrice?}`" },
       ],
       output: {
-        description: "Created item object.",
+        description: "Created item object plus a `variants` array (empty unless `itemMode` is `variants`).",
         example: {
           id: "item-uuid",
           businessId: "biz-uuid",
@@ -158,9 +171,14 @@ resp = httpx.get(
           itemMode: "simple",
           unit: "pcs",
           salePrice: "1334.75",
+          mrp: "1499.00",
           taxPercent: "18.00",
           stockQuantity: "100.000",
           hsn: "84159000",
+          barcode: "8901234567895",
+          stockGroupId: "group-uuid-electronics",
+          category: "Electronics",
+          variants: [],
           createdAt: "2024-03-16T10:30:00.000Z",
         },
       },
@@ -224,7 +242,11 @@ resp = httpx.post(
         "An item cannot have both `unitVariants` (`alt_units` mode) and `variantAttributes`/`variants` (`variants` mode) — these are mutually exclusive.",
         "Service items (`itemType: \"service\"`) still accept `stockQuantity` but it is not tracked by invoices.",
         "Variant stock lives on the variant row, not the parent item. The parent item's `stockQuantity` is unused for `variants` mode items.",
+        "Opening `stockQuantity` is recorded as an opening-stock movement in the default warehouse rather than written directly.",
+        "BAD_REQUEST \"The same barcode is used twice on this item\" when the item and its variants repeat a barcode; a barcode already used elsewhere in the business is also rejected.",
+        "Requires `Item:create` permission. An audit log entry (`item.create`) is written.",
       ],
+      relatedEndpoints: ["item-lookup-by-code", "item-update"],
     },
     {
       id: "item-switch-base-unit",
@@ -282,7 +304,7 @@ resp = httpx.post(
       method: "mutation",
       path: "item.update",
       title: "Update Item",
-      description: "Partially update an existing item. Only provided fields are changed. Requires `member` role or above.",
+      description: "Partially update an existing (non-deleted) item. `data` accepts any `item.create` field (all optional; create defaults are not re-applied). Only provided fields are changed. Requires `member` role or above.",
       auth: "business",
       requiredRole: "member",
       input: [
@@ -294,7 +316,12 @@ resp = httpx.post(
         { name: "data.hsn", type: "string", required: false, description: "Updated HSN code" },
         { name: "data.sku", type: "string", required: false, description: "Updated SKU" },
         { name: "data.lowStockAlert", type: "string (decimal)", required: false, description: "Updated low stock threshold" },
-        { name: "data.category", type: "string", required: false, description: "Updated category" },
+        { name: "data.category", type: "string", required: false, description: "Updated category; moves the item to the stock group of that name (created if missing). Empty string clears both." },
+        { name: "data.stockGroupId", type: "string (UUID) | null", required: false, description: "Move to this stock group (category follows the group name); `null` ungroups the item. Wins over `data.category`." },
+        { name: "data.mrp", type: "string (decimal) | null", required: false, description: "Printed MRP; `null` clears it" },
+        { name: "data.barcode", type: "string", required: false, description: "Scannable code (max 64 printable chars); empty string removes it. Must be free in the business." },
+        { name: "data.stockQuantity", type: "string (decimal)", required: false, description: "Target stock total. The difference is posted as a stock adjustment movement, not written directly." },
+        { name: "data.*", type: "various", required: false, description: "Any other create field (`unit`, `itemType`, `itemMode`, `taxInclusive`, `description`, `unitVariants`, `variantAttributes`, …)." },
       ],
       output: {
         description: "Updated item object.",
@@ -318,6 +345,12 @@ resp = httpx.post(
     json={"json": {"id": "item-uuid", "data": {"salePrice": "1499.00"}}},
 )`,
       },
+      gotchas: [
+        "Requires `Item:update` permission. NOT_FOUND \"Item not found\" for unknown or soft-deleted items.",
+        "Changing `stockQuantity` here creates an adjustment movement for the difference; prefer `item.adjustStock` when you want a reason recorded.",
+        "Variant rows are not touched — use `item.updateVariant` for variant prices, barcodes and MRP.",
+        "An audit log entry (`item.update`) is written.",
+      ],
       relatedEndpoints: ["item-get-by-id"],
     },
     {
@@ -971,6 +1004,74 @@ if (count > 0) console.warn("Low stock alerts:", count);`,
         "Counts both simple items (where `items.stockQuantity <= items.lowStockAlert`) and variant items (where `itemVariants.stockQuantity <= itemVariants.lowStockAlert`).",
         "Items without a `lowStockAlert` threshold set are never counted.",
       ],
+    },
+    {
+      id: "item-lookup-by-code",
+      method: "query",
+      path: "item.lookupByCode",
+      title: "Look Up Item by Scanned Code",
+      description: "Resolve a scanned or typed code to an item (and variant, when a variant barcode matched). Used by the POS and invoice forms when a barcode scanner fires. Lookup order: item barcodes and variant barcodes first, then extra item codes (box/carton codes — only when the business's barcode mode is `multi`), then the item SKU as a fallback for labels printed before barcodes existed. Soft-deleted items and variants never match.",
+      auth: "business",
+      requiredRole: "viewer",
+      input: [
+        { name: "code", type: "string", required: true, description: "Scanned code (1–64 chars). Leading/trailing whitespace is trimmed." },
+      ],
+      output: {
+        description: "`null` when nothing matches. Otherwise the full item row, the matched variant row (or null), `packQty` — how many base units one scan stands for (greater than 1 for box/carton codes) — and `matchedOn` (`barcode` for item, variant or extra codes; `sku` for a SKU fallback).",
+        example: {
+          item: {
+            id: "item-uuid",
+            name: "Tata Salt 1kg",
+            itemType: "product",
+            itemMode: "simple",
+            unit: "pcs",
+            sku: "TS-1KG",
+            barcode: "8904063200016",
+            salePrice: "28.00",
+            mrp: "28.00",
+            purchasePrice: "23.50",
+            taxPercent: "0.00",
+            stockQuantity: "480.000",
+            stockGroupId: "group-uuid-grocery",
+            category: "Grocery",
+          },
+          variant: null,
+          packQty: 24,
+          matchedOn: "barcode",
+        },
+      },
+      codeExamples: {
+        curl: `curl "${API_BASE_URL}/api/trpc/item.lookupByCode?input=%7B%22json%22%3A%7B%22code%22%3A%228904063200016%22%7D%7D" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "x-business-id: YOUR_BUSINESS_ID"`,
+        javascript: `const hit = await trpc.item.lookupByCode.query({ code: scannedValue });
+if (!hit) {
+  toast("No item for this code");
+} else {
+  addLine({
+    itemId: hit.item.id,
+    variantId: hit.variant?.id ?? null,
+    itemName: hit.item.name,
+    quantity: String(hit.packQty), // a carton code adds a full carton
+    unitPrice: hit.variant?.salePrice ?? hit.item.salePrice,
+  });
+}`,
+        python: `import httpx, json, urllib.parse
+
+params = urllib.parse.quote(json.dumps({"json": {"code": "8904063200016"}}))
+resp = httpx.get(
+    f"${API_BASE_URL}/api/trpc/item.lookupByCode?input={params}",
+    headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
+)
+hit = resp.json()["result"]["data"]["json"]  # None when not found`,
+      },
+      gotchas: [
+        "Requires `Item:read` permission.",
+        "Returns `null` (not NOT_FOUND) for unknown codes and for whitespace-only input.",
+        "Extra codes registered with `barcode.addItemCode` are only honoured when the business's barcode mode is `multi`; in `single` mode only the item/variant barcode and the SKU match.",
+        "`packQty` is a number; multiply it into the line quantity rather than treating the scan as one piece.",
+      ],
+      relatedEndpoints: ["item-get-by-id", "item-create"],
     },
   ],
 };

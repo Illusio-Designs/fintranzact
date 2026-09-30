@@ -15,6 +15,7 @@ export const partyEndpoints: EndpointGroup = {
       auth: "business",
       requiredRole: "viewer",
       input: [
+        { name: "type", type: "enum", required: false, description: "Restrict to customers or suppliers", enumValues: ["customer", "supplier"] },
         { name: "filter", type: "enum", required: false, description: "Filter parties by type or balance status", enumValues: ["all", "customer", "supplier", "outstanding", "overdue"] },
         { name: "search", type: "string", required: false, description: "Search by party name (case-insensitive)" },
         { name: "category", type: "string", required: false, description: "Filter by category label" },
@@ -76,7 +77,7 @@ resp = httpx.get(
       method: "query",
       path: "party.getById",
       title: "Get Party",
-      description: "Fetch a party by ID with their calculated ledger balance. The balance is computed as: `openingBalance + totalInvoiced - totalPaid - totalAdjusted`, where `totalAdjusted` is the sum of amounts offset by linked credit notes and sales returns.",
+      description: "Fetch a party by ID (every stored column, including compliance fields and `priceLevelId`) with their calculated ledger balance. The balance is `openingBalance` plus the unpaid amount (`totalAmount - amountPaid`) of every non-cancelled, non-deleted document, where credit notes, sales returns and purchase returns count negative; orders (purchase/sales orders, GRNs) are excluded.",
       auth: "business",
       requiredRole: "viewer",
       input: [
@@ -98,6 +99,9 @@ resp = httpx.get(
           pincode: "400069",
           creditPeriodDays: 30,
           creditLimit: "100000.00",
+          priceLevelId: "price-level-uuid-wholesale",
+          isMsme: false,
+          gstinStatus: "active",
           balance: "20750.00",
         },
       },
@@ -118,13 +122,17 @@ resp = httpx.get(
     headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
 )`,
       },
+      gotchas: [
+        "Requires `Party:read` permission. Returns `null` when the party is not in the active business.",
+        "`priceLevelId` is null when sales to the party use the business's default price level.",
+      ],
     },
     {
       id: "party-create",
       method: "mutation",
       path: "party.create",
       title: "Create Party",
-      description: "Create a new customer or supplier. GSTIN is validated with the official 15-character format regex. Opening balance represents the amount already owed before using Fintranzact.",
+      description: "Create a new customer or supplier. GSTIN is validated with the official 15-character format regex; when `pan` or `stateCode` is left blank they are filled from the GSTIN. Opening balance represents the amount already owed before using Fintranzact. Optionally assign a price level so sales to this party pick up its prices.",
       auth: "business",
       requiredRole: "member",
       input: [
@@ -148,6 +156,19 @@ resp = httpx.get(
         { name: "bankAccountNumber", type: "string", required: false, description: "Bank account number for payments (max 34 chars)" },
         { name: "bankIfsc", type: "string", required: false, description: "Bank IFSC code (max 11 chars)" },
         { name: "bankName", type: "string", required: false, description: "Bank name (max 200 chars)" },
+        { name: "additionalShippingAddresses", type: "array", required: false, description: "Up to 20 extra delivery locations: `{label?, address, city?, state?, stateCode?, pincode?}`" },
+        { name: "contactPersonDob", type: "string (ISO datetime)", required: false, description: "Contact person's date of birth" },
+        { name: "legalName", type: "string", required: false, description: "Legal name as registered for GST (max 200 chars)" },
+        { name: "tradeName", type: "string", required: false, description: "Trade name (max 200 chars)" },
+        { name: "gstRegistrationType", type: "enum", required: false, description: "Party's GST registration type", enumValues: ["regular", "composition", "unregistered", "sez", "overseas", "uin"] },
+        { name: "constitution", type: "enum", required: false, description: "Constitution of the party", enumValues: ["proprietorship", "partnership", "llp", "private_company", "public_company", "huf", "trust", "society", "government", "other"] },
+        { name: "gstinStatus", type: "enum", required: false, description: "GSTIN status from the portal (e.g. from `party.lookupGstin`)", enumValues: ["active", "cancelled", "suspended", "inactive"] },
+        { name: "gstinVerifiedAt", type: "string (ISO datetime)", required: false, description: "When the GSTIN was last verified (`verifiedAt` from `party.lookupGstin`)" },
+        { name: "isMsme", type: "boolean", required: false, description: "Supplier is a registered MSME (drives `reports.msmePayables`)" },
+        { name: "udyamNumber", type: "string", required: false, description: "Udyam registration number, e.g. `UDYAM-MH-26-0012345` (or empty string)" },
+        { name: "msmeCategory", type: "enum", required: false, description: "MSME category", enumValues: ["micro", "small", "medium"] },
+        { name: "tdsSection", type: "string (enum)", required: false, description: "Default TDS section code for payments to this party (one of the codes in `tdsSections` from `@fintranzact/shared`)" },
+        { name: "priceLevelId", type: "string (UUID) | null", required: false, description: "Price level used for sales to this party; null/omitted = the business default. Must belong to this business." },
       ],
       output: {
         description: "Created party object.",
@@ -159,6 +180,9 @@ resp = httpx.get(
           phone: "9876543210",
           gstin: "27AADCB2230M1ZP",
           openingBalance: "0.00",
+          pan: "AADCB2230M",
+          stateCode: "27",
+          priceLevelId: null,
           createdAt: "2024-03-16T10:30:00.000Z",
         },
       },
@@ -206,14 +230,18 @@ resp = httpx.post(
         "GSTIN is validated against the regex `^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$`. Pass an empty string `\"\"` to clear it.",
         "`openingBalance` represents money already owed before starting to use Fintranzact. Use a negative value if the party has a credit balance.",
         "An audit log entry is created for party creation.",
+        "BAD_REQUEST \"Price level not found\" when `priceLevelId` is not a price level of this business.",
+        "A PAN or state code that contradicts the GSTIN is accepted (the UI only warns).",
+        "Requires `Party:create` permission.",
       ],
+      relatedEndpoints: ["party-lookup-gstin", "party-update"],
     },
     {
       id: "party-update",
       method: "mutation",
       path: "party.update",
       title: "Update Party",
-      description: "Partially update an existing party. Only provided fields are changed. Requires `member` role or above.",
+      description: "Partially update an existing party. `data` accepts every `party.create` field except `type` (all optional). Only provided fields are changed. Requires `member` role or above.",
       auth: "business",
       requiredRole: "member",
       input: [
@@ -227,6 +255,8 @@ resp = httpx.post(
         { name: "data.state", type: "string", required: false, description: "Updated state" },
         { name: "data.creditPeriodDays", type: "number", required: false, description: "Updated credit period in days" },
         { name: "data.creditLimit", type: "string (decimal)", required: false, description: "Updated credit limit" },
+        { name: "data.priceLevelId", type: "string (UUID) | null", required: false, description: "Assign a price level; `null` reverts to the business default" },
+        { name: "data.*", type: "various", required: false, description: "Any other create field (addresses, bank details, GST/MSME/TDS compliance fields, `openingBalance`, …). `type` cannot be changed." },
       ],
       output: {
         description: "Updated party object.",
@@ -259,7 +289,13 @@ resp = httpx.post(
     json={"json": {"id": "party-uuid", "data": {"name": "Acme Corp Pvt Ltd"}}},
 )`,
       },
-      relatedEndpoints: ["party-get-by-id"],
+      gotchas: [
+        "Requires `Party:update` permission. BAD_REQUEST \"Price level not found\" for a price level of another business.",
+        "A new `gstin` fills `pan` and `stateCode` only where the party has none yet, and clears `gstinStatus` / `gstinVerifiedAt` when the GSTIN actually changed (unless you send a new `gstinStatus`).",
+        "An unknown party ID currently fails with an internal error rather than NOT_FOUND.",
+        "An audit log entry (`party.update`) is written.",
+      ],
+      relatedEndpoints: ["party-get-by-id", "party-lookup-gstin"],
     },
     {
       id: "party-delete",
@@ -603,6 +639,70 @@ resp = httpx.get(
         "Entries are sorted by date ascending, then by document number.",
       ],
       relatedEndpoints: ["party-ledger-report"],
+    },
+    {
+      id: "party-lookup-gstin",
+      method: "mutation",
+      path: "party.lookupGstin",
+      title: "Look Up GSTIN",
+      description: "Fetch a taxpayer's registered details (legal and trade name, address, state, registration type and status) for a GSTIN from the GST system, using the business's e-invoice (IRP) credentials, so the party form can be pre-filled. When e-invoicing is not configured or is disabled, it returns `available: false` with only the values that can be derived from the GSTIN itself (PAN, state code, constitution). Nothing is saved — pass the returned fields (and `verifiedAt` as `gstinVerifiedAt`) to `party.create` / `party.update`.",
+      auth: "business",
+      requiredRole: "member",
+      input: [
+        { name: "gstin", type: "string", required: true, description: "15-character GSTIN. Trimmed and upper-cased before validation against the GSTIN format." },
+      ],
+      output: {
+        description: "Either `{ available: true, details, verifiedAt }` or `{ available: false, reason, derived }`. In `details`, `gstRegistrationType` is one of `regular`, `composition`, `sez`, `uin`, `overseas` (or null), `gstinStatus` one of `active`, `cancelled`, `suspended`, `inactive` (or null), `blocked` is true when the GSTIN is blocked for e-invoicing, and `registeredOn` / `cancelledOn` are passed through from the portal. `constitution` is derived from the PAN's 4th character.",
+        example: {
+          available: true,
+          details: {
+            gstin: "27AAPFU0939F1ZV",
+            legalName: "UNIQUE TRADERS",
+            tradeName: "Unique Traders",
+            billingAddress: "Shop 12, Laxmi Market, Station Road, Dadar",
+            city: "Dadar",
+            stateCode: "27",
+            pincode: "400014",
+            pan: "AAPFU0939F",
+            constitution: "partnership",
+            gstRegistrationType: "regular",
+            gstinStatus: "active",
+            blocked: false,
+            registeredOn: "2017-07-01",
+            cancelledOn: null,
+          },
+          verifiedAt: "2026-09-30T06:12:45.000Z",
+        },
+      },
+      codeExamples: {
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/party.lookupGstin \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "x-business-id: YOUR_BUSINESS_ID" \\
+  -d '{"json":{"gstin":"27AAPFU0939F1ZV"}}'`,
+        javascript: `const res = await trpc.party.lookupGstin.mutate({ gstin: "27aapfu0939f1zv" });
+if (res.available) {
+  form.set({ ...res.details, name: res.details.tradeName ?? res.details.legalName, gstinVerifiedAt: res.verifiedAt });
+} else {
+  console.info(res.reason);
+  form.set({ pan: res.derived.pan, stateCode: res.derived.stateCode });
+}`,
+        python: `import httpx
+
+resp = httpx.post(
+    "${API_BASE_URL}/api/trpc/party.lookupGstin",
+    headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
+    json={"json": {"gstin": "27AAPFU0939F1ZV"}},
+)
+result = resp.json()["result"]["data"]["json"]`,
+      },
+      gotchas: [
+        "Requires `Party:create` permission. It is a mutation (POST) even though it only reads, because it calls the external IRP API.",
+        "Needs an enabled e-invoice configuration with IRP credentials (`business.update` with `eInvoiceEnabled` and the e-invoice username/password). Without it you get `available: false` and a human-readable `reason`, not an error.",
+        "IRP failures surface as BAD_REQUEST \"GSTIN lookup failed: …\" (e.g. invalid or unregistered GSTIN) or INTERNAL_SERVER_ERROR for retryable portal/network errors.",
+        "Invalid GSTIN format fails input validation before any portal call.",
+      ],
+      relatedEndpoints: ["party-create", "party-update"],
     },
   ],
 };
