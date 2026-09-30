@@ -62,9 +62,11 @@ import { Route as AutomatedInvoicesRouteImport } from './routes/automated-invoic
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SolutionsIndexRouteImport } from './routes/solutions/index'
+import { Route as HelpIndexRouteImport } from './routes/help/index'
 import { Route as SolutionsSlugRouteImport } from './routes/solutions/$slug'
 import { Route as InviteTokenRouteImport } from './routes/invite/$token'
 import { Route as ITokenRouteImport } from './routes/i/$token'
+import { Route as HelpSplatRouteImport } from './routes/help/$'
 import { Route as BusinessCreateRouteImport } from './routes/business/create'
 import { Route as AuthVerifyEmailChangeRouteImport } from './routes/auth/verify-email-change'
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
@@ -336,6 +338,11 @@ const SolutionsIndexRoute = SolutionsIndexRouteImport.update({
   path: '/solutions/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HelpIndexRoute = HelpIndexRouteImport.update({
+  id: '/help/',
+  path: '/help/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SolutionsSlugRoute = SolutionsSlugRouteImport.update({
   id: '/solutions/$slug',
   path: '/solutions/$slug',
@@ -349,6 +356,11 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
 const ITokenRoute = ITokenRouteImport.update({
   id: '/i/$token',
   path: '/i/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpSplatRoute = HelpSplatRouteImport.update({
+  id: '/help/$',
+  path: '/help/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BusinessCreateRoute = BusinessCreateRouteImport.update({
@@ -435,9 +447,11 @@ export interface FileRoutesByFullPath {
   '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
+  '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
+  '/help/': typeof HelpIndexRoute
   '/solutions/': typeof SolutionsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -498,9 +512,11 @@ export interface FileRoutesByTo {
   '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
+  '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
+  '/help': typeof HelpIndexRoute
   '/solutions': typeof SolutionsIndexRoute
 }
 export interface FileRoutesById {
@@ -562,9 +578,11 @@ export interface FileRoutesById {
   '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
+  '/help/$': typeof HelpSplatRoute
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
+  '/help/': typeof HelpIndexRoute
   '/solutions/': typeof SolutionsIndexRoute
 }
 export interface FileRouteTypes {
@@ -627,9 +645,11 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
+    | '/help/$'
     | '/i/$token'
     | '/invite/$token'
     | '/solutions/$slug'
+    | '/help/'
     | '/solutions/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -690,9 +710,11 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
+    | '/help/$'
     | '/i/$token'
     | '/invite/$token'
     | '/solutions/$slug'
+    | '/help'
     | '/solutions'
   id:
     | '__root__'
@@ -753,9 +775,11 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
+    | '/help/$'
     | '/i/$token'
     | '/invite/$token'
     | '/solutions/$slug'
+    | '/help/'
     | '/solutions/'
   fileRoutesById: FileRoutesById
 }
@@ -817,9 +841,11 @@ export interface RootRouteChildren {
   AuthVerifyRoute: typeof AuthVerifyRoute
   AuthVerifyEmailChangeRoute: typeof AuthVerifyEmailChangeRoute
   BusinessCreateRoute: typeof BusinessCreateRoute
+  HelpSplatRoute: typeof HelpSplatRoute
   ITokenRoute: typeof ITokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
   SolutionsSlugRoute: typeof SolutionsSlugRoute
+  HelpIndexRoute: typeof HelpIndexRoute
   SolutionsIndexRoute: typeof SolutionsIndexRoute
 }
 
@@ -1196,6 +1222,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SolutionsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/help/': {
+      id: '/help/'
+      path: '/help'
+      fullPath: '/help/'
+      preLoaderRoute: typeof HelpIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/solutions/$slug': {
       id: '/solutions/$slug'
       path: '/solutions/$slug'
@@ -1215,6 +1248,13 @@ declare module '@tanstack/react-router' {
       path: '/i/$token'
       fullPath: '/i/$token'
       preLoaderRoute: typeof ITokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help/$': {
+      id: '/help/$'
+      path: '/help/$'
+      fullPath: '/help/$'
+      preLoaderRoute: typeof HelpSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/business/create': {
@@ -1313,9 +1353,11 @@ const rootRouteChildren: RootRouteChildren = {
   AuthVerifyRoute: AuthVerifyRoute,
   AuthVerifyEmailChangeRoute: AuthVerifyEmailChangeRoute,
   BusinessCreateRoute: BusinessCreateRoute,
+  HelpSplatRoute: HelpSplatRoute,
   ITokenRoute: ITokenRoute,
   InviteTokenRoute: InviteTokenRoute,
   SolutionsSlugRoute: SolutionsSlugRoute,
+  HelpIndexRoute: HelpIndexRoute,
   SolutionsIndexRoute: SolutionsIndexRoute,
 }
 export const routeTree = rootRouteImport

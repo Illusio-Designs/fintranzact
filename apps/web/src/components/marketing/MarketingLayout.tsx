@@ -26,7 +26,7 @@ const FOOTER_COLUMNS: Array<{
       { label: "Pricing", to: "/pricing" },
       { label: "Solutions", to: "/solutions" },
       { label: "Widget gallery", to: "/widgets" },
-      { label: "Help & docs", href: DOCS_URL },
+      { label: "Help & docs", to: DOCS_URL },
       { label: "API docs", href: API_DOCS_URL },
     ],
   },

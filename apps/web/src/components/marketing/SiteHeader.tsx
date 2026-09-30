@@ -62,7 +62,8 @@ import { cn } from "@/lib/utils";
 
 export const CONTACT_EMAIL = "support@fintranzact.com";
 export const SECURITY_EMAIL = "security@fintranzact.com";
-export const DOCS_URL = "https://docs.fintranzact.com";
+/** The help centre, part of this site (it replaced docs.fintranzact.com). */
+export const DOCS_URL = "/help";
 export const API_DOCS_URL = "https://api-docs.fintranzact.com";
 
 type MenuLink = {

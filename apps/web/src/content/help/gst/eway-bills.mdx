@@ -1,0 +1,187 @@
+---
+title: E-Way Bills
+description: Generate e-way bills from invoices through the NIC E-Way Bill API, update the vehicle (Part-B), cancel within 24 hours and track validity and expiring bills in Fintranzact.
+sidebar:
+  order: 4
+---
+
+import { ForCA } from "@/components/help/mdx";
+import { ForBusiness } from "@/components/help/mdx";
+
+An **e-way bill (EWB)** is needed to move goods worth more than ₹50,000. Fintranzact generates EWBs from your existing invoices through the NIC E-Way Bill API, keeps a record of each one, and flags the ones that are close to expiry.
+
+:::note[Web and desktop only]
+E-way bills are available in the web app and the desktop app. The mobile app doesn't have them.
+:::
+
+## Where to find it
+
+In the sidebar, under **Reports**, click **E-Way Bills**. The menu item appears only for GST-registered businesses.
+
+| Role | What they can do |
+|---|---|
+| Superadmin, Admin | Generate, update vehicle, cancel, view |
+| Accountant | View only. The action buttons are visible, but the server refuses the action. |
+| Seller, Seller Manager | No access. The menu item is hidden. |
+
+## Setting up the connection
+
+1. Go to **Settings → Business** and click **Edit**.
+2. In the **Statutory & compliance details** step, under **Compliance features**, turn on **Enable E-Way Bill**.
+3. Enter the **Portal ID** and **Portal Password** of the API user you created on the NIC E-Way Bill portal for your GSTIN.
+4. Save the business.
+
+The credentials are stored encrypted. The GSP client key comes from the Fintranzact server. If no credentials can be found at all, every action fails with *"E-Way Bill API credentials are not configured. Add your E-Way Bill portal ID and password in business settings, or contact your administrator."*
+
+The same step also has an **E-Way Bill Threshold (₹)** field (*"Leave blank to use the statutory ₹50,000"*).
+
+:::caution[Current behaviour to be aware of]
+- **The threshold setting isn't applied yet.** Generation always requires the invoice total to be at least **₹50,000**, whatever you enter in **E-Way Bill Threshold (₹)**.
+- **There's no sandbox/production switch for e-way bills in the app.** A connection saved from business settings is created in NIC's **sandbox** (test) mode. Before you rely on the EWB numbers for real consignments, check with whoever runs your Fintranzact server that the connection points to production.
+:::
+
+## Generating an e-way bill
+
+1. On the **E-Way Bills** page, click **+ Generate EWB**.
+2. Fill in the **Generate E-Way Bill** panel:
+
+| Field | Required | Notes |
+|---|---|---|
+| **Invoice ID** | Yes | The invoice's internal ID (a UUID), **not** the invoice number. The web app accepts invoice links of the form `/invoices?id=…`; the value after `id=` is the UUID. |
+| **Vehicle Number** | Yes | Converted to capitals, for example `MH12AB1234` |
+| **Distance (km)** | Yes | 1 to 4000 km. Used to work out validity. |
+| **Transport Mode** | Yes | Road (default), Rail, Air or Ship |
+| **Vehicle Type** | Yes | Regular (default) or Over Dimensional Cargo |
+| **Transporter ID (optional)** | No | The transporter's GSTIN or transporter ID |
+| **Transporter Name (optional)** | No | |
+| **From Pincode (optional)** | No | 6 digits. If blank, your business pincode is used for a sale, or the supplier's pincode for a purchase. |
+| **To Pincode (optional)** | No | 6 digits. If blank, the party's pincode is used for a sale, or your business pincode for a purchase. |
+
+3. Click **Generate EWB**.
+
+Before calling NIC, Fintranzact checks that:
+
+- the invoice exists and isn't **cancelled**
+- it has at least one line item, and at least one line is **goods**. Service-only invoices are refused with *"E-Way Bill can only be generated for invoices containing goods (not service-only)"*. A line with no linked item counts as goods.
+- the invoice total (including GST) is at least **₹50,000**
+- the invoice doesn't already have a **Generated** or **Active** EWB
+
+Both **sale** invoices (outward supply) and **purchase** invoices (inward supply) are accepted. A party without a GSTIN is sent as `URP` (unregistered person). Each line is sent with the item's HSN code, so fill in HSN codes on your items. A line whose item has no HSN is sent with an empty HSN.
+
+### How validity is calculated
+
+**Valid Upto** is calculated from the time of generation:
+
+| Vehicle type | Validity |
+|---|---|
+| Regular | 1 day for every 100 km (or part of it) |
+| Over Dimensional Cargo | 1 day for every 20 km (or part of it) |
+
+For example, 250 km on a regular vehicle gives 3 days.
+
+## The E-Way Bills page
+
+### Summary cards
+
+Four cards sit across the top. Clicking one filters the list.
+
+| Card | Shows |
+|---|---|
+| **Generated** | EWBs with status Generated |
+| **Active** | EWBs with status Active |
+| **Expiring Soon** | Generated or Active EWBs whose validity ends within the next 24 hours. Clicking it opens the **Expiring Soon** tab. |
+| **Expired** | EWBs with status Expired |
+
+### All E-Way Bills tab
+
+You can filter by status: **All Statuses**, **Generated**, **Active**, **Cancelled** or **Expired**. The table has these columns: **EWB Number**, **Invoice**, **Party**, **Mode**, **Vehicle**, **Generated**, **Valid Upto**, **Status**. It shows 20 bills per page, newest first.
+
+**Valid Upto** is colour-coded:
+
+- green: more than 24 hours left
+- amber, with *(Nh left)*: less than 24 hours left
+- red: the validity has passed
+
+Hover over a row to see its actions:
+
+| Action | Shown when |
+|---|---|
+| **View** | Always, when the EWB is linked to an invoice. Opens **E-Way Bill Details**. |
+| **Update** | Status is Generated or Active |
+| **Cancel** | The EWB isn't cancelled or expired and was generated less than 24 hours ago |
+
+**E-Way Bill Details** shows the EWB number, status, generated date, valid-upto date, transport mode, vehicle number, distance, from and to state, the cancellation reason (if any), and a **Vehicle Update History** list.
+
+### Expiring Soon tab
+
+This tab lists Generated and Active EWBs that expire within 24 hours, soonest first. The **Time Left** badge turns red when less than 8 hours remain. Each row has an **Update Vehicle** button.
+
+## E-way bill statuses
+
+| Status | When it's set |
+|---|---|
+| **Generated** | Straight after a successful generation |
+| **Active** | After the validity has been extended (see below) |
+| **Cancelled** | After a successful cancellation |
+| **Expired** | Reserved for bills past their validity |
+
+:::note
+Fintranzact doesn't currently switch a bill to **Expired** automatically when **Valid Upto** passes. Use the red **Valid Upto** date to spot bills that have run out.
+:::
+
+## Updating the vehicle (Part-B)
+
+Use this when goods are moved to another vehicle because of a breakdown, transshipment or a change of route.
+
+1. Click **Update** on a row, or **Update Vehicle** on the Expiring Soon tab.
+2. In **Update Vehicle (Part-B)**, enter the **New Vehicle Number**.
+3. Optionally enter **From Place (optional)**, the city where the vehicle changed.
+4. Choose a **Reason**: *Breakdown*, *Transshipment*, *First Time* or *Others*.
+5. Click **Update Vehicle**.
+
+The update is sent to NIC with your business's state as the "from" state. The new vehicle number is saved on the bill and added to its **Vehicle Update History**. If NIC returns a new validity date, **Valid Upto** is updated too. You can't update the vehicle on a Cancelled or Expired bill.
+
+## Cancelling an e-way bill
+
+1. Click **Cancel** on the row. It only appears within 24 hours of generation.
+2. Choose a **Cancellation Reason**: *Data Entry Mistake*, *Order Cancelled* or *Others*.
+3. Click **Cancel EWB**.
+
+After 24 hours the server refuses with *"E-Way Bill cannot be cancelled after 24 hours of generation"*. Once a bill is cancelled you can generate a new EWB for the same invoice.
+
+## Extending validity
+
+The API has a validity-extension call (`ewayBill.extend`). It's allowed only from 8 hours before to 8 hours after expiry, and it needs the vehicle number, current place, pincode and remaining distance. A successful extension sets the status to **Active**. The web page doesn't have a button for it yet.
+
+<ForBusiness>
+**A simple routine for dispatch:** raise the invoice first, then generate the EWB before the truck leaves. Keep the **Expiring Soon** tab open on busy days. If a consignment won't reach in time or the truck breaks down, use **Update Vehicle** straight away instead of waiting until the bill has expired.
+</ForBusiness>
+
+<ForCA>
+:::tip[Points to check for clients]
+- The ₹50,000 check uses the **invoice total including GST**, and it can't be lowered or raised from settings yet.
+- Service-only invoices are blocked. A mixed goods and services invoice is allowed, and all of its lines are sent.
+- Confirm the client's EWB connection isn't still in sandbox mode. The app has no toggle for it.
+- Cancelling an EWB doesn't cancel the invoice. If the supply itself was called off, cancel the invoice too so that it drops out of GSTR-1.
+:::
+</ForCA>
+
+## Frequently asked questions
+
+**Where do I get the Invoice ID the form asks for?**
+It's the invoice's internal UUID, not the number printed on the invoice. Invoice links in the web app look like `/invoices?id=…`; copy the part after `id=`.
+
+**Why am I told the invoice is below the ₹50,000 threshold when my setting says ₹25,000?**
+The **E-Way Bill Threshold (₹)** field in business settings isn't used during generation yet. Fintranzact always applies ₹50,000 to the invoice total.
+
+**Can I generate an EWB for a purchase invoice?**
+Yes. The same rules apply, and the bill is sent as an inward supply with the supplier's details as the "from" side.
+
+**The bill has passed its Valid Upto date but still shows Generated. Is that right?**
+Yes. Statuses don't change to Expired automatically. The red **Valid Upto** date tells you the bill has run out.
+
+**How do I extend an e-way bill?**
+The web page doesn't have an extend button yet. You can extend through the NIC e-way bill portal, or through the `ewayBill.extend` API within 8 hours either side of expiry.
+
+**Can an accountant generate or cancel EWBs?**
+No. Accountants can view e-way bills, but generating, updating and cancelling need an Admin or Superadmin.

@@ -1,0 +1,183 @@
+---
+title: E-Invoicing (IRN)
+description: Connect Fintranzact to the NIC Invoice Registration Portal (IRP), generate IRNs and signed QR codes for B2B sale invoices, retry failures and cancel IRNs within 24 hours.
+sidebar:
+  order: 3
+---
+
+import { ForCA } from "@/components/help/mdx";
+import { ForBusiness } from "@/components/help/mdx";
+
+E-invoicing registers your B2B sale invoices with the government's **Invoice Registration Portal (IRP)**, run by NIC. For every accepted invoice the IRP returns an **IRN** (Invoice Reference Number), an acknowledgement number and date, and a digitally signed QR code. Fintranzact submits eligible invoices for you, stores what the IRP sends back, and gives you one screen to watch statuses, retry failures and cancel IRNs.
+
+:::note[Web and desktop only]
+E-invoicing is available in the web app and the desktop app. The mobile app doesn't have it.
+:::
+
+## Where to find it
+
+In the sidebar, under **Reports**, click **e-Invoicing**. The page has two tabs: **Dashboard** and **Settings**.
+
+The menu item only appears when the business is GST-registered, meaning its GST registration type is not *Unregistered* or it has a GSTIN.
+
+| Role | What they can do |
+|---|---|
+| Superadmin, Admin | Everything: configure credentials, generate, retry, cancel |
+| Accountant | View the **Dashboard** only. The **Settings** tab and the Generate, Retry and Cancel actions need an admin. |
+| Seller, Seller Manager | No access. The menu item is hidden. |
+
+## Before you start
+
+The IRP rejects an invoice when it's missing required data, so check these first:
+
+- **Your business**: the GSTIN, legal name, address, city, pincode and 2-digit state code are filled in under **Settings → Business**.
+- **The customer**: the party has a **GSTIN**. E-invoicing is B2B only, so invoices to parties without a GSTIN are never submitted. Also fill in the party's state code, pincode and billing address.
+- **Items**: every item has an HSN/SAC code. A line whose item has no HSN is sent with HSN `9999`, which the IRP may reject.
+- **IRP API user**: create an API user for your GSTIN on the e-invoice portal. Fintranzact signs in with that user.
+
+## Setting up the connection
+
+You can save your IRP login in either of two places. Both write to the same connection record.
+
+### Option 1: Business settings
+
+1. Go to **Settings → Business** and click **Edit**.
+2. In the **Statutory & compliance details** step, set **GST Registration** to **Regular**. The e-invoice switch is disabled for any other registration type.
+3. Under **Compliance features**, turn on **Enable e-Invoice**.
+4. Enter the **Portal ID** and **Portal Password** of your IRP API user and save the business.
+
+The note under the fields reads: *"Stored encrypted; the GSP client key is configured on the server."* In other words, you only supply your own API login here. The GSP client ID and secret come from the Fintranzact server.
+
+### Option 2: E-Invoicing → Settings tab
+
+This tab gives you every connection setting.
+
+| Field | What to enter |
+|---|---|
+| **GSTIN** | The GSTIN your IRP API user belongs to (15 characters) |
+| **Threshold (crore)** | Your annual turnover threshold for mandatory e-invoicing. Defaults to 5. This value is stored for reference only. Fintranzact doesn't check your turnover against it. |
+| **Client ID** | Optional. Leave it blank to use the GSP client ID configured on the server. |
+| **Client Secret** | Optional. Leave it blank to use the server's GSP secret. |
+| **Username** | Your IRP API username |
+| **Password** | Your IRP API password |
+| **Use Sandbox (Testing)** | On: connects to the NIC **sandbox** (test) environment. Off: connects to the live IRP. |
+| **Enable E-Invoicing** | On: new eligible B2B invoices are submitted to the IRP automatically. |
+
+Click **Save Settings**, then **Test Connection**. The test tries to sign in to the IRP and shows either *"Successfully connected to IRP"* or the error the IRP returned.
+
+:::caution[Sandbox is on by default]
+A new connection starts in sandbox mode, including one created from business settings. IRNs generated in the sandbox are test IRNs. When you're ready to issue real e-invoices, turn off **Use Sandbox (Testing)** and click **Save Settings**.
+:::
+
+:::note[Saving the Settings tab]
+The **Password** and **Client Secret** boxes are always empty when the tab opens. The saved values are never shown. You must type the **Password** again every time you click **Save Settings**. If you leave **Client Secret** blank when you save, any stored secret is cleared and the server's GSP secret is used from then on.
+:::
+
+If neither your settings nor the server has a GSP client ID and secret, generation fails with *"IRP GSP credentials are not configured on this server. Contact your administrator."*
+
+## How IRNs are generated
+
+With **Enable E-Invoicing** on, Fintranzact submits an invoice to the IRP in the background as soon as you save it, when **all** of these are true:
+
+- It's a **sale** document. Quotations, delivery challans and proforma invoices are skipped.
+- Its total tax is more than ₹0.
+- The party has a **GSTIN**.
+
+The invoice saves normally even if the IRP call fails. A few seconds later the invoice appears on the **Dashboard** as **Pending** and then changes to **Generated** or **Failed**. On success, Fintranzact stores the IRN, the acknowledgement number and date, the signed QR code and the signed invoice returned by the IRP.
+
+:::caution[Invoices created before you enabled e-invoicing]
+Automatic submission only happens when an invoice is created. Invoices saved before you turned on **Enable E-Invoicing** aren't submitted and don't appear on the Dashboard. The web app has no button to submit them afterwards. To register them you'd have to call the `eInvoice.generate` API, or use the `einvoice_generate` tool of the [MCP server](/help/ai/mcp-server).
+:::
+
+### What is sent to the IRP
+
+| IRP section | Taken from |
+|---|---|
+| Seller | Business GSTIN, legal name (or business name), address, city, pincode, state code, phone, email |
+| Buyer | Party GSTIN, name, billing address, city, pincode, state code (also used as place of supply), phone, email |
+| Document | Invoice number and date. Credit notes and sales returns go as `CRN`, debit notes and purchase returns as `DBN`, everything else as `INV`. |
+| Items | Item name, HSN (or `9999`), goods/service flag, quantity, unit converted to a GST unit code (`OTH` if unknown), unit price, discount, GST rate, tax split |
+| Totals | Taxable value, CGST/SGST/IGST, other charges, round-off, invoice total. Reverse charge is flagged if set on the invoice. |
+
+Tax goes as CGST + SGST when your state code matches the party's, and as IGST otherwise.
+
+## The Dashboard
+
+The Dashboard lists every invoice that has been sent to the IRP at least once.
+
+- **Summary cards**: counts of **Generated**, **Pending**, **Failed** and **Cancelled** invoices.
+- **Status tabs**: **All**, **Generated**, **Pending**, **Failed**, **Cancelled**, each showing its count.
+- **Search**: the page search box (*"Search invoice # or party…"*) filters by invoice number or party name.
+- **Table columns**: **Invoice #**, **Date**, **Party**, **Amount**, **IRN**, **Ack Date**, **Status**. When the IRP returned an error, a red warning icon appears next to the status. Hover over it to read the error.
+
+The list shows 25 invoices per page, newest invoice date first.
+
+### Row actions
+
+Hover over a row to see its actions:
+
+| Action | Shown when | What it does |
+|---|---|---|
+| **Retry** | Status is Failed or Pending | Submits the invoice to the IRP again, using the invoice's current data |
+| **Cancel** | Status is Generated | Opens the **Cancel IRN** dialog |
+
+### Retry All Failed
+
+When any invoice is Failed or Pending, a **Retry All Failed** button appears above the status tabs. It resubmits up to 50 of them in one go and then shows a summary such as *"Retry complete: 12 succeeded, 1 failed"*. Click it again to work through the rest.
+
+## E-invoice statuses
+
+| Status | Meaning | What to do |
+|---|---|---|
+| **Pending** | The invoice is being submitted, or the IRP returned a server error (5xx), which usually means a temporary outage. | Wait, then **Retry**. |
+| **Generated** | The IRP accepted the invoice and issued an IRN. | Nothing. |
+| **Failed** | The IRP rejected the invoice, for example because of a bad GSTIN, missing pincode, invalid HSN or wrong credentials. | Read the error on the warning icon, fix the invoice, party, item or settings, then **Retry**. |
+| **Cancelled** | The IRN was cancelled on the IRP. | You can't generate a new IRN for this invoice. |
+
+## Cancelling an IRN
+
+1. On the Dashboard, hover over a **Generated** invoice and click **Cancel**.
+2. In the **Cancel IRN** dialog, choose a **Cancel Reason**: *Duplicate*, *Data entry mistake*, *Order cancelled* or *Others*.
+3. Optionally add **Remarks (optional)**, up to 100 characters.
+4. Click **Cancel IRN**.
+
+The IRP allows cancellation only **within 24 hours** of the acknowledgement date, and Fintranzact enforces the same limit. After 24 hours you get *"IRN can only be cancelled within 24 hours of generation. Please contact GST authorities for late cancellation."*
+
+Cancelling the IRN only changes the e-invoice status. The invoice itself stays active in Fintranzact. Cancel it separately if the sale didn't happen (see [Invoice Statuses](/help/invoicing/invoice-statuses)).
+
+:::note
+The invoice PDF doesn't currently print the IRN or the signed QR code. They're stored against the invoice and returned by the API.
+:::
+
+<ForBusiness>
+**What you need to do day to day:** usually nothing. Once e-invoicing is switched on, every B2B sale invoice is registered automatically. Open **e-Invoicing** once a day and check the **Failed** tab. Almost every failure comes from missing master data: a customer without a pincode or state code, or an item without an HSN code. Fix the record and click **Retry**.
+</ForBusiness>
+
+<ForCA>
+:::tip[Checks before signing off a client's e-invoicing]
+- Confirm **Use Sandbox (Testing)** is off. Sandbox IRNs aren't valid on the live GST system.
+- Make sure the Dashboard's **Pending** and **Failed** tabs are empty before GSTR-1 is filed. E-invoiced B2B invoices are auto-populated into GSTR-1 on the portal, so an invoice stuck here means the client's GSTR-1 and the IRP will disagree.
+- Cancelled IRNs aren't reversed automatically in the books. Check that the invoice itself was also cancelled in Fintranzact, or it will still appear in the GSTR-1 report.
+- The **Threshold (crore)** field is informational. Decide applicability from the client's aggregate turnover yourself.
+:::
+</ForCA>
+
+## Frequently asked questions
+
+**I switched on e-invoicing but my invoice didn't get an IRN. Why?**
+Check that the party has a GSTIN, that the invoice has more than ₹0 tax, and that it's a sale invoice (not a quotation, delivery challan or proforma). Also make sure **Enable E-Invoicing** is on in the **Settings** tab, because business settings can save credentials with it switched off. Invoices created before you enabled it aren't submitted retroactively.
+
+**The invoice shows Failed. Where do I see why?**
+Hover over the red warning icon next to the **Failed** badge on the Dashboard. The tooltip shows the error message the IRP returned.
+
+**Does Retry use the old data or the corrected invoice?**
+The corrected invoice. Retry rebuilds the whole IRP request from the current invoice, party, item and business records.
+
+**Can I generate a new IRN after cancelling one?**
+Not for the same invoice. Once an IRN is cancelled, Fintranzact refuses to regenerate it (*"Cannot regenerate IRN for a cancelled e-invoice"*). Create a new invoice with a new number instead.
+
+**Why does Test Connection fail even though my username and password are correct?**
+The most common causes are: sandbox mode is on while you're using production credentials (or the other way round), the **GSTIN** doesn't match the API user, or the server has no GSP client credentials and you left **Client ID** and **Client Secret** blank. The message shown is the error the IRP returned.
+
+**Can an accountant generate IRNs?**
+No. Accountants can view the Dashboard, but generating, retrying, cancelling and changing settings need an Admin or Superadmin.

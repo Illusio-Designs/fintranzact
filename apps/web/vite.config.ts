@@ -5,6 +5,7 @@ import path from "path";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
 import { DEFAULT_SITE_URL, buildSitemap, resolveSiteUrl } from "./src/lib/seo";
+import { helpPlugins } from "./vite-help";
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8"));
 
@@ -64,7 +65,8 @@ function cspPlugin(apiOrigin: string | null): Plugin {
 /**
  * Search-engine files, built from the same list of public pages the app uses
  * (src/lib/public-paths.ts) so they cannot drift:
- *   - sitemap.xml is generated for "/" plus MARKETING_PATHS (served live in dev);
+ *   - sitemap.xml is generated for "/" plus every indexable list in seo.ts
+ *     (marketing, solutions and every /help article; served live in dev);
  *   - index.html, public/robots.txt and public/.well-known/security.txt carry
  *     the production URL, swapped for VITE_SITE_URL when that is set.
  */
@@ -126,6 +128,8 @@ export default defineConfig(({ mode }) => {
   plugins: [
     cspPlugin(apiOrigin),
     seoPlugin(siteUrl),
+    // Help centre articles (src/content/help/**.mdx, served at /help).
+    ...helpPlugins(),
     TanStackRouterVite(),
     react(),
   ],

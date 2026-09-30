@@ -1,0 +1,117 @@
+---
+title: Stock Valuation
+description: How Fintranzact values your closing stock — average cost or FIFO, which purchase rates are used, and how closing stock flows into the Profit & Loss and the Balance Sheet.
+sidebar:
+  order: 7
+---
+
+import { ForCA } from "@/components/help/mdx";
+import { ForBusiness } from "@/components/help/mdx";
+
+Your stock is worth money. **Stock valuation** is how Fintranzact puts a rupee value on the goods you're holding, so that your Profit & Loss shows real profit (not just sales minus purchases) and your Balance Sheet shows the stock you own.
+
+You don't post anything for this. Fintranzact works it out from your purchase bills whenever you open a report.
+
+## Choosing a method
+
+Go to **Inventory → Warehouses** and find **Stock valuation** in the settings card. Only owners and admins can change it.
+
+| Method | What it means |
+|---|---|
+| **Average cost** (default) | Stock is valued at the average cost of its purchases. |
+| **FIFO** | First in, first out: goods are assumed to be sold in the order they were bought, so what's left is valued at the most recent purchase prices. |
+
+You can switch at any time. Because nothing is posted to your ledger, switching re-values **every** report, including past periods. Reports show which method they use, for example "Closing value at average cost".
+
+<ForBusiness>
+Not sure? Keep **Average cost**. It smooths out price changes and is what most small traders use. **FIFO** gives a closing value closer to today's prices when your purchase prices keep rising.
+</ForBusiness>
+
+## Which costs are used
+
+**Purchase invoices.** The cost of each purchase is the line's **taxable value**: the amount after the line discount, **without GST**. GST you can claim as input credit isn't part of stock cost. A purchase invoice made from a GRN counts as usual.
+
+These are **not** part of the cost:
+
+- a discount given on the whole invoice (rather than on the line),
+- additional charges on the bill, such as freight or packing,
+- GRNs that haven't been billed yet,
+- purchase returns, sales returns and debit notes.
+
+Cancelled and deleted invoices are ignored.
+
+**Manufactured goods.** Finished goods from a [manufacturing journal](/help/inventory/manufacturing) come in at the journal's total cost: the components used plus any additional costs such as labour. By-products and scrap come in at zero cost.
+
+**Opening stock.** Stock you entered when creating an item (and any [unplaced stock](/help/inventory/warehouses) from before warehouses) is valued at the item's **Purchase Price**.
+
+**No purchases at all?** Then the item is valued at its **Purchase Price** from the item form. For a variant, the variant's purchase price is used, or the item's if the variant doesn't have one.
+
+## How each method calculates
+
+**Average cost:**
+
+> Rate = (value of all purchase bills up to the date + opening quantity × purchase price) ÷ (quantity on those bills + opening quantity)
+
+The stock on hand is then valued at that rate.
+
+**FIFO:** the stock on hand is assumed to be what you bought (or made) most recently. Fintranzact works back through your latest purchases until it has covered the quantity on hand. Anything older than your recorded purchases is valued at the item's purchase price.
+
+**Example.** You bought 100 pcs at ₹10, then 100 pcs at ₹14, and you have 120 pcs left.
+
+| Method | Closing value |
+|---|---|
+| Average cost | 120 × ₹12 = ₹1,440 |
+| FIFO | 100 × ₹14 + 20 × ₹10 = ₹1,600 |
+
+**A few rules apply to both methods:**
+
+- Stock below zero is valued at **₹0**.
+- Only products are valued, never services. For items with variants, each variant is valued on its own.
+- Stock on a past date is worked out by taking today's stock and undoing every movement dated after that date.
+
+## Closing stock in your reports
+
+### Profit & Loss
+
+The P&L includes a line **Changes in inventories of stock-in-trade**:
+
+> Change in inventories = opening stock (valued just before the period starts) − closing stock (valued at the end of the period)
+
+Purchases are already in the P&L as an expense when you book them. This line corrects for stock you bought but haven't sold (closing stock goes up, cost goes down) or stock from earlier that you sold this period (cost goes up). The line is left out when it's zero.
+
+Put simply:
+
+> Cost of goods sold = opening stock + purchases − closing stock
+
+Gross profit is your net sales minus purchases, purchase returns, direct expenses and this change in inventories. The comparative P&L works the same way for each period. The dashboard's profit figures use the same cost-of-goods-sold formula.
+
+### Balance Sheet
+
+On the Balance Sheet, closing stock on the as-of date is shown under account **1200 Inventory**. If that account has no entries of its own, a line **Inventory (closing stock)** appears. The same amount is added to **Net Income (Current Period)** so the Balance Sheet balances. The comparative Balance Sheet shows it for both dates.
+
+<ForCA>
+Closing stock is computed, not journalised, so there's no closing-stock voucher to pass at year end, and changing the valuation method restates prior periods. Two points to review on client files:
+
+- Opening stock entered on items has no ledger entry. On the Balance Sheet its value lands in current-period net income rather than capital, so you may want a journal for opening stock at the start of the first year.
+- Freight and other bill-level charges are not loaded into stock cost. If landed cost matters, include such costs in the line rates.
+:::tip
+The [Stock Summary](/help/inventory/reports), [Movement Summary](/help/inventory/reports), [Godown Summary](/help/inventory/reports) and [Stock Group Summary](/help/inventory/reports) reports all use the same valuation, so their totals tie back to the P&L and Balance Sheet figures for the same date.
+:::
+</ForCA>
+
+## Frequently asked questions
+
+**Is GST included in my stock value?**
+No. Stock is valued at the taxable value on purchase bills, without GST.
+
+**I changed from Average cost to FIFO. Why did last year's profit change?**
+Valuation isn't posted to your books; it's calculated whenever you open a report. Changing the method re-values every period, including the past. Pick a method and keep it, especially once your accounts for a year are finalised.
+
+**Why is an item valued at its purchase price even though I've bought it many times?**
+Only purchase **invoices** count. If the goods came in on GRNs that haven't been billed yet, or through adjustments, the item's purchase price is used until a bill is recorded.
+
+**Why does an item show ₹0 value?**
+Its stock is zero or below zero. Negative stock is valued at ₹0.
+
+**Do stock adjustments carry a cost?**
+No. Adjustments change the quantity only. The remaining stock is valued by the chosen method.

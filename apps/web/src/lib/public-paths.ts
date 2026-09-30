@@ -1,3 +1,5 @@
+import { isHelpPath } from "./help-paths";
+
 /**
  * Which paths are public. Kept free of UI imports so low-level modules (the
  * tRPC client) can use it without pulling in the marketing components.
@@ -52,6 +54,11 @@ export function isSolutionPath(pathname: string) {
 }
 // ────────────────────────────────────────────────────────────────
 
+// ── Help centre ─────────────────────────────────────────────────
+/** The help centre: /help and every /help/<article> page (see lib/help-paths.ts). */
+export { HELP_PAGE_PATHS, isHelpPath } from "./help-paths";
+// ────────────────────────────────────────────────────────────────
+
 /** Sign-in and invite pages a signed-out visitor may open. */
 export const AUTH_PUBLIC_PATHS = [
   "/login",
@@ -64,7 +71,7 @@ export const AUTH_PUBLIC_PATHS = [
 
 export function isMarketingPath(pathname: string) {
   const path = pathname.replace(/\/+$/, "") || "/";
-  return MARKETING_PATHS.includes(path) || isSolutionPath(path);
+  return MARKETING_PATHS.includes(path) || isSolutionPath(path) || isHelpPath(path);
 }
 
 export function isAuthPublicPath(pathname: string) {

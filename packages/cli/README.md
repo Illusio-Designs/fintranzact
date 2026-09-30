@@ -188,7 +188,7 @@ fintranzact whoami
 | `export --tenant <slug> -o <file>` | Download full tenant backup as `.tar.gz` |
 | `restore --tenant <slug> -i <file>` | Restore backup into an empty tenant |
 
-These are tenant-level commands -- they don't require a business to be selected. Only tenant owners can use them. See [full docs](https://docs.fintranzact.com/ai/cli/#fintranzact-export) for details.
+These are tenant-level commands -- they don't require a business to be selected. Only tenant owners can use them. See the [CLI guide](https://fintranzact-web.vercel.app/help/ai/cli) for details.
 
 ---
 
@@ -337,4 +337,4 @@ The CLI stores credentials in the OS config directory (`~/.config/fintranzact-cl
 
 ## Full Documentation
 
-[docs.fintranzact.com/ai/cli/](https://docs.fintranzact.com/ai/cli/) -- Setup guide, full command reference with all flags, scripting recipes, and CI/CD integration examples.
+[Help centre: CLI](https://fintranzact-web.vercel.app/help/ai/cli) -- Setup guide, full command reference with all flags, scripting recipes, and CI/CD integration examples.

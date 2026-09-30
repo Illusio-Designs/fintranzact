@@ -2,7 +2,7 @@
  * Site URL and sitemap helpers. Pure and free of UI or `import.meta.env`
  * imports so vite.config.ts can use them at build time as well as the app.
  */
-import { MARKETING_PATHS, SOLUTION_PAGE_PATHS } from "./public-paths";
+import { HELP_PAGE_PATHS, MARKETING_PATHS, SOLUTION_PAGE_PATHS } from "./public-paths";
 
 /**
  * The production web origin, used when VITE_SITE_URL is not set. It is the
@@ -28,7 +28,11 @@ export function resolveSiteUrl(value: string | undefined | null): string {
  * public pages (e.g. SOLUTION_PATHS), append its list here: the sitemap and
  * the robots.txt test both follow.
  */
-export const INDEXABLE_PATH_LISTS: ReadonlyArray<readonly string[]> = [MARKETING_PATHS, SOLUTION_PAGE_PATHS];
+export const INDEXABLE_PATH_LISTS: ReadonlyArray<readonly string[]> = [
+  MARKETING_PATHS,
+  SOLUTION_PAGE_PATHS,
+  HELP_PAGE_PATHS,
+];
 
 /** Every public page a search engine should index: the home page plus every list above, de-duplicated. */
 export function sitemapPaths(): string[] {

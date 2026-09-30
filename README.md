@@ -440,7 +440,7 @@ fintranzact login --api-url https://your-fintranzact-instance.com
 fintranzact whoami --json  # Copy token, tenantId, businessId
 ```
 
-Then add to `claude_desktop_config.json` -- see the [MCP Server guide](https://docs.fintranzact.com/ai/mcp-server/).
+Then add to `claude_desktop_config.json` -- see the [MCP Server guide](https://fintranzact-web.vercel.app/help/ai/mcp-server).
 
 ---
 
@@ -453,7 +453,6 @@ fintranzact/
 │   ├── mobile/       # Expo SDK 55 iOS + Android app
 │   ├── store/        # Public customer-facing online storefront
 │   ├── desktop/      # Tauri v2 desktop (macOS, Windows, Linux)
-│   ├── docs/         # Starlight (Astro) documentation site
 │   └── api-docs/     # API reference site
 ├── packages/
 │   ├── api/          # Hono + tRPC server (20+ routers, 200+ procedures)
@@ -561,7 +560,7 @@ cd apps/desktop && cargo tauri build
 pnpm --filter @fintranzact/mobile build:apk
 ```
 
-Full production guide: [docs.fintranzact.com/self-hosting](https://docs.fintranzact.com/getting-started/self-hosting)
+Full production guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ---
 
@@ -609,9 +608,9 @@ See [docs/architecture/gst-accounting-roadmap.md](docs/architecture/gst-accounti
 
 | Resource | URL |
 |---|---|
-| User documentation | [docs.fintranzact.com](https://docs.fintranzact.com) |
+| User documentation | [Help centre](https://fintranzact-web.vercel.app/help) (source: `apps/web/src/content/help`) |
 | API reference | [api.fintranzact.com](${import.meta.env.VITE_API_URL ?? 'https://fintranzact-production.up.railway.app'}) |
-| Self-hosting guide | [docs.fintranzact.com/getting-started/self-hosting](https://docs.fintranzact.com/getting-started/self-hosting) |
+| Self-hosting guide | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
 | Contributing guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Security policy | [SECURITY.md](SECURITY.md) |
 

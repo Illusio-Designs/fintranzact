@@ -1,0 +1,104 @@
+---
+title: Bill of Materials & Manufacturing
+description: Define what goes into each item you make with a bill of materials, then record production with manufacturing journals — components out, finished goods in, costed automatically.
+sidebar:
+  order: 10
+---
+
+import { ForCA } from "@/components/help/mdx";
+
+If you make or assemble products (sweets from sugar and ghee, gift hampers from individual items, furniture from wood and hardware), Fintranzact can take the raw materials out of stock and put the finished goods in, with the finished goods costed from what went into them.
+
+There are two parts:
+
+- A **Bill of Materials (BOM)**: the recipe. What goes into an item and how much of each.
+- A **Manufacturing journal**: a production entry. "Today we made 50 of these."
+
+Both are in the sidebar under **Inventory**.
+
+## Bill of Materials
+
+Open **Inventory → Bill of Materials** and click **+ New BOM**.
+
+| Field | Notes |
+|---|---|
+| **Item made** | The finished item. For an item with variants, pick the variant. |
+| **BOM name** | Filled in from the item name; change it if you have several recipes. |
+| **Output quantity** | How much one batch of this recipe makes, for example 10 kg. Component quantities are for this output. |
+| **Default BOM for this item** | The recipe used when you don't pick one |
+| **Active** | Untick to stop using a recipe without deleting it |
+| **Components** | Each raw material, its **Quantity** for the output quantity, and an optional **Wastage %** |
+| **By-products and scrap** | Optional. Goods given off while making, added to stock at no cost. |
+| **Notes** | Anything else about the recipe |
+
+Click **Save BOM**.
+
+**Wastage %** adds that percentage on top when manufacturing. A component needing 10 kg with 5% wastage is taken out as 10.5 kg.
+
+**Rules:**
+
+- At least one component, up to 200. Up to 50 by-products.
+- An item can't be a component of itself, directly or through another BOM ("… is already used to make …, so it can't be made from it").
+- The same item can't be listed twice, or be both a component and a by-product. The finished item can't be a by-product.
+- Services can't be components or by-products.
+- Items with variants need a specific variant.
+
+**Several BOMs per item.** You can have more than one recipe for the same item, for example a regular and a premium version. One is the default. The first active BOM you create for an item becomes its default automatically.
+
+The BOM list shows **Item made**, **BOM**, **Makes**, **Components** and **Status** (**Default**, **Inactive**). Click a row to edit it. Deleting a BOM doesn't affect manufacturing journals already made from it.
+
+## Recording production
+
+Open **Inventory → Manufacturing** and click **+ Manufacture**.
+
+1. Choose the **Item to make**.
+2. Choose the **Bill of materials**, or **No BOM — enter components** to type the components yourself.
+3. Enter the **Quantity to make** and the **Date**.
+4. Choose **Take components from** and **Put finished goods in**. Both are warehouses and can be the same one.
+5. Check **Components used**. They're filled in from the BOM for the quantity you're making, including wastage. Change them to what was actually used. Each line shows how much is in the warehouse, the BOM's standard quantity and the rate.
+6. Check any **By-products** (only shown when you use a BOM).
+7. Add **Additional costs** such as labour, power or job work: a label and an amount for each, up to 20.
+8. Review the cost box: **Components** + **Additional costs** = **Cost of goods made**, with the cost per unit.
+9. Click **Post journal**.
+
+Journals are numbered **MJ-1**, **MJ-2**, and so on.
+
+**What posting does, all at once:**
+
+- Components go **out** of the "take from" warehouse.
+- The finished item comes **in** to the "put in" warehouse at a unit cost of (component cost + additional costs) ÷ quantity made.
+- By-products come **in** to the "put in" warehouse at zero cost.
+
+Components are costed at their current [stock valuation](/help/inventory/stock-valuation) rate.
+
+If a component is short at the warehouse, an amber note says so. Whether you can still post depends on the **Selling more than you have** setting: under **Block**, posting is refused with a list of what's short. See [How Stock Moves](/help/inventory/how-stock-moves).
+
+The Manufacturing list shows **No.**, **Date**, **Item made**, **Quantity**, **Components from → To**, **Cost** (with the per-unit cost) and **Status** (**Posted** or **Cancelled**).
+
+## Cancelling a journal
+
+Journals can't be edited or deleted. To undo one, open it and click **Cancel journal**. Components go back to stock and the goods made are taken out again. Cancelled journals keep their number.
+
+Under **Block**, a journal can't be cancelled once the goods made have been sold or used ("Can't cancel — the goods made have already moved on").
+
+## Who can manufacture
+
+Owners, admins and seller managers can create BOMs and post journals. Seller managers also need the **Adjust & count** permission on the warehouses involved (see [Warehouses](/help/inventory/warehouses)).
+
+<ForCA>
+Manufacturing journals only move quantities; no ledger entry is posted. Finished goods enter [stock valuation](/help/inventory/stock-valuation) at the journal's total cost, alongside purchases, so closing stock includes the labour and overheads entered as additional costs. Those costs aren't posted as expenses by the journal. Record the actual wage and power bills as expenses as usual.
+</ForCA>
+
+## Frequently asked questions
+
+**Can I make something without setting up a BOM?**
+Yes. Choose **No BOM — enter components** and add the components by hand. By-products can only be added when using a BOM.
+
+**The BOM says 10 kg of sugar but we used 11 kg. What do I do?**
+Change the quantity in **Components used** before posting. The BOM is only the starting point; the journal records what was actually used.
+
+**How is the finished item's cost worked out?**
+(Components at their current valuation rate + additional costs) ÷ quantity made.
+
+**Can I pick a different default warehouse for manufacturing?**
+The warehouses are preselected from your business's production default. Change them on each journal as needed.
