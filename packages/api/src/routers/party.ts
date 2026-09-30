@@ -16,6 +16,7 @@ import {
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
+import { assertPriceLevel } from "../lib/pricing.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
@@ -267,6 +268,7 @@ export const partyRouter = router({
 
   create: memberProcedure.input(createPartySchema).mutation(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "Party");
+    await assertPriceLevel(ctx.db, ctx.businessId, input.priceLevelId);
     const [party] = await ctx.db.insert(parties).values({
       ...input,
       // A GSTIN embeds the PAN and the state, so fill them in when left blank.
@@ -295,6 +297,7 @@ export const partyRouter = router({
     .input(z.object({ id: z.string().uuid(), data: updatePartySchema }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Party");
+      await assertPriceLevel(ctx.db, ctx.businessId, input.data.priceLevelId);
       const { contactPersonDob, gstinVerifiedAt, ...rest } = input.data;
 
       // A new GSTIN fills PAN / state only where the party has none yet, and

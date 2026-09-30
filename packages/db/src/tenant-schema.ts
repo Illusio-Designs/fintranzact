@@ -350,6 +350,9 @@ export const parties = pgTable("parties", {
   msmeCategory: text("msme_category"), // micro | small | medium
   // TDS applicable on payments to this party (see @fintranzact/shared tds.ts).
   tdsSection: text("tds_section"),
+  // Price level (Retail, Wholesale, Dealer...) sales to this party are priced at.
+  // Null = the business's default level, if it has one.
+  priceLevelId: uuid("price_level_id").references(() => priceLevels.id, { onDelete: "set null" }),
   source: text("source"), // null = manual, "mybillbook", "tally", etc.
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -484,6 +487,8 @@ export const items = pgTable("items", {
   variantAttributes: jsonb("variant_attributes").$type<string[]>(), // dimension names e.g. ["Size", "Color"]
   salePrice: numeric("sale_price", { precision: 15, scale: 2 }),
   purchasePrice: numeric("purchase_price", { precision: 15, scale: 2 }),
+  // Maximum retail price printed on the pack. Selling above it is flagged.
+  mrp: numeric("mrp", { precision: 15, scale: 2 }),
   taxPercent: numeric("tax_percent", { precision: 5, scale: 2 }).default("0").notNull(),
   stockQuantity: numeric("stock_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
   lowStockAlert: numeric("low_stock_alert", { precision: 15, scale: 3 }),
@@ -537,6 +542,7 @@ export const itemVariants = pgTable("item_variants", {
   barcode: text("barcode"),
   salePrice: numeric("sale_price", { precision: 15, scale: 2 }),
   purchasePrice: numeric("purchase_price", { precision: 15, scale: 2 }),
+  mrp: numeric("mrp", { precision: 15, scale: 2 }),
   stockQuantity: numeric("stock_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
   lowStockAlert: numeric("low_stock_alert", { precision: 15, scale: 3 }),
   storeEnabled: boolean("store_enabled").default(false).notNull(),
@@ -580,6 +586,54 @@ export const itemBarcodes = pgTable("item_barcodes", {
 }, (t) => [
   uniqueIndex("item_barcodes_code_idx").on(t.businessId, t.code),
   index("item_barcodes_item_idx").on(t.itemId),
+]);
+
+// ── Price levels / price lists ─────────────────────────────────
+// Named selling-price levels (Tally "Price Levels"): Retail, Wholesale,
+// Dealer... A party is priced at its level, or at the business's default
+// level; an item with no entry on that level sells at its own sale price.
+
+export const priceLevels = pgTable("price_levels", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  isDefault: boolean("is_default").default(false).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("price_levels_name_idx").on(t.businessId, t.name),
+  // At most one default level per business.
+  uniqueIndex("price_levels_default_idx").on(t.businessId).where(sql`is_default`),
+]);
+
+// One price on one level for an item (optionally one variant, or one
+// alternate unit), from a quantity (slab) and from a date. The entries of a
+// level/item/variant/unit that share an effective date form one price list
+// revision; the latest revision on or before the document date applies.
+// An entry sets a rate, a discount off the item's sale price, or both.
+export const priceListEntries = pgTable("price_list_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  priceLevelId: uuid("price_level_id").notNull().references(() => priceLevels.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  // Null = every variant of the item.
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  // Null = the item's base unit; otherwise one of its alternate units.
+  unit: text("unit"),
+  // Slab: applies from this quantity up (in the entry's unit).
+  minQuantity: numeric("min_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
+  price: numeric("price", { precision: 15, scale: 2 }),
+  discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }),
+  // Null = always.
+  effectiveFrom: date("effective_from"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("price_list_entries_level_item_idx").on(t.priceLevelId, t.itemId),
+  index("price_list_entries_item_idx").on(t.itemId),
+  index("price_list_entries_business_idx").on(t.businessId),
 ]);
 
 // ── Invoices ───────────────────────────────────────────────────
