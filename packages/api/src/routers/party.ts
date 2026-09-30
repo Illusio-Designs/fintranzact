@@ -1,13 +1,69 @@
 import { eq, and, ilike, or, sql, desc, asc, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { parties, invoices, payments, expenses, items, invoiceItems } from "@fintranzact/db";
-import { createPartySchema, updatePartySchema, paginationSchema, money, panFromGstin } from "@fintranzact/shared";
+import { parties, invoices, payments, expenses, items, invoiceItems, eInvoiceConfigs } from "@fintranzact/db";
+import {
+  createPartySchema,
+  updatePartySchema,
+  paginationSchema,
+  money,
+  panFromGstin,
+  stateCodeFromGstin,
+  constitutionFromPan,
+  GSTIN_REGEX,
+  type PartyGstType,
+  type GstinStatus,
+} from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
+import { IRPClient, IRPError, type IRPGstinDetails } from "../lib/irp-client.js";
+import { resolveIRPConfig } from "../lib/irp-config.js";
+
+const IRP_TAXPAYER_TYPES: Record<string, PartyGstType> = {
+  REG: "regular",
+  COM: "composition",
+  SEZ: "sez",
+  UIN: "uin",
+  NRT: "overseas",
+};
+const IRP_STATUSES: Record<string, GstinStatus> = {
+  ACT: "active",
+  PRO: "active",
+  CNL: "cancelled",
+  SUS: "suspended",
+  INA: "inactive",
+};
+
+/** Turn the IRP's taxpayer record into party form fields. */
+function partyFieldsFromIrp(d: IRPGstinDetails, gstin: string) {
+  const address = [d.AddrBnm, d.AddrBno, d.AddrFlno, d.AddrSt, d.AddrLoc]
+    .map((p) => p?.toString().trim())
+    .filter(Boolean)
+    .join(", ");
+  const pan = panFromGstin(gstin);
+  const stateCode = d.StateCode != null && d.StateCode !== ""
+    ? String(d.StateCode).padStart(2, "0")
+    : stateCodeFromGstin(gstin);
+  return {
+    gstin,
+    legalName: d.LegalName?.trim() || null,
+    tradeName: d.TradeName?.trim() || null,
+    billingAddress: address || null,
+    city: d.AddrLoc?.trim() || null,
+    stateCode,
+    pincode: d.AddrPncd != null && d.AddrPncd !== "" ? String(d.AddrPncd) : null,
+    pan,
+    constitution: constitutionFromPan(pan),
+    gstRegistrationType: (d.TxpType && IRP_TAXPAYER_TYPES[d.TxpType.toUpperCase()]) || null,
+    gstinStatus: (d.Status && IRP_STATUSES[d.Status.toUpperCase()]) || null,
+    blocked: d.BlkStatus?.toUpperCase() === "B",
+    registeredOn: d.DtReg ?? null,
+    cancelledOn: d.DtDReg ?? null,
+  };
+}
 
 
 export const partyRouter = router({
@@ -166,15 +222,60 @@ export const partyRouter = router({
       };
     }),
 
+  /**
+   * Fetch a taxpayer's registered details (legal/trade name, address, state,
+   * type, status) for a GSTIN, via the business's e-invoice (IRP) credentials.
+   * Returns { available: false } when e-invoicing isn't set up.
+   */
+  lookupGstin: memberProcedure
+    .input(z.object({ gstin: z.string().trim().toUpperCase().regex(GSTIN_REGEX, "Invalid GSTIN") }))
+    .mutation(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "create", "Party");
+      const [rawConfig] = await ctx.db
+        .select()
+        .from(eInvoiceConfigs)
+        .where(eq(eInvoiceConfigs.businessId, ctx.businessId))
+        .limit(1);
+
+      if (!rawConfig || !rawConfig.isEnabled) {
+        return {
+          available: false as const,
+          reason: "GSTIN lookup uses your e-invoice (IRP) login. Set up e-invoicing in Settings → Compliance to fetch details automatically.",
+          derived: {
+            gstin: input.gstin,
+            pan: panFromGstin(input.gstin),
+            stateCode: stateCodeFromGstin(input.gstin),
+            constitution: constitutionFromPan(panFromGstin(input.gstin)),
+          },
+        };
+      }
+
+      try {
+        const client = new IRPClient(resolveIRPConfig(rawConfig), ctx.db);
+        const details = await client.getGstinDetails(input.gstin);
+        return { available: true as const, details: partyFieldsFromIrp(details, input.gstin), verifiedAt: new Date().toISOString() };
+      } catch (err) {
+        if (err instanceof IRPError) {
+          throw new TRPCError({
+            code: err.isRetryable ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST",
+            message: `GSTIN lookup failed: ${err.message}`,
+          });
+        }
+        throw err;
+      }
+    }),
+
   create: memberProcedure.input(createPartySchema).mutation(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "Party");
     const [party] = await ctx.db.insert(parties).values({
       ...input,
-      // A GSTIN embeds the PAN, so fill it in when the caller left it blank.
+      // A GSTIN embeds the PAN and the state, so fill them in when left blank.
       pan: input.pan || panFromGstin(input.gstin) || input.pan,
+      stateCode: input.stateCode || stateCodeFromGstin(input.gstin) || input.stateCode,
       businessId: ctx.businessId,
       // Handle optional date fields
       contactPersonDob: input.contactPersonDob ? new Date(input.contactPersonDob) : null,
+      gstinVerifiedAt: input.gstinVerifiedAt ? new Date(input.gstinVerifiedAt) : null,
     }).returning();
 
     logAudit(ctx.db, {
@@ -194,13 +295,23 @@ export const partyRouter = router({
     .input(z.object({ id: z.string().uuid(), data: updatePartySchema }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Party");
-      const { contactPersonDob, ...rest } = input.data;
-      // A new GSTIN without a PAN fills the PAN only if the party has none yet.
+      const { contactPersonDob, gstinVerifiedAt, ...rest } = input.data;
+
+      // A new GSTIN fills PAN / state only where the party has none yet, and
+      // forgets the verification result of the old GSTIN.
       const derivedPan = rest.pan === undefined ? panFromGstin(rest.gstin) : null;
+      const derivedState = rest.stateCode === undefined ? stateCodeFromGstin(rest.gstin) : null;
+      const gstinChanged = rest.gstin !== undefined && rest.gstinStatus === undefined;
       const [party] = await ctx.db.update(parties)
         .set({
           ...rest,
           ...(derivedPan ? { pan: sql`coalesce(nullif(${parties.pan}, ''), ${derivedPan})` } : {}),
+          ...(derivedState ? { stateCode: sql`coalesce(nullif(${parties.stateCode}, ''), ${derivedState})` } : {}),
+          ...(gstinChanged ? {
+            gstinStatus: sql`case when ${parties.gstin} is distinct from ${rest.gstin || null} then null else ${parties.gstinStatus} end`,
+            gstinVerifiedAt: sql`case when ${parties.gstin} is distinct from ${rest.gstin || null} then null else ${parties.gstinVerifiedAt} end`,
+          } : {}),
+          ...(gstinVerifiedAt ? { gstinVerifiedAt: new Date(gstinVerifiedAt) } : {}),
           ...(contactPersonDob ? { contactPersonDob: new Date(contactPersonDob) } : {}),
           updatedAt: new Date(),
         })

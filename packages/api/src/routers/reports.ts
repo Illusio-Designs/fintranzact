@@ -28,6 +28,7 @@ import {
   partyStatementInputSchema,
   paymentSummaryInputSchema,
   money,
+  MSME_PAYMENT_DAYS,
 } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -342,6 +343,67 @@ export const reportsRouter = router({
     }),
 
   // ── 3. Sales Register ──────────────────────────────────────────
+  /**
+   * Unpaid bills from micro/small (Udyam-registered) suppliers with the date
+   * they must be paid by under s.43B(h): the agreed credit period capped at
+   * 45 days, or 15 days when no credit period is agreed. Paying later means
+   * the expense can't be deducted until the year it is actually paid.
+   */
+  msmePayables: viewerProcedure
+    .input(z.object({ asOfDate: z.string().datetime().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Report");
+      const asOf = input?.asOfDate ? new Date(input.asOfDate) : new Date();
+      const limitDays = sql<number>`CASE WHEN ${parties.creditPeriodDays} IS NULL THEN 15 ELSE LEAST(${parties.creditPeriodDays}, ${MSME_PAYMENT_DAYS}) END`;
+
+      const rows = await ctx.db
+        .select({
+          partyId: parties.id,
+          partyName: parties.name,
+          udyamNumber: parties.udyamNumber,
+          msmeCategory: parties.msmeCategory,
+          invoiceId: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+          invoiceDate: invoices.invoiceDate,
+          totalAmount: invoices.totalAmount,
+          amountPaid: invoices.amountPaid,
+          outstanding: sql<string>`(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)::text`,
+          limitDays: sql<number>`(${limitDays})::int`,
+          payBy: sql<string>`(${invoices.invoiceDate} + make_interval(days => ${limitDays}))::text`,
+          daysLeft: sql<number>`(${limitDays} - FLOOR(EXTRACT(EPOCH FROM ${asOf.toISOString()}::timestamptz - ${invoices.invoiceDate}) / 86400))::int`,
+        })
+        .from(invoices)
+        .innerJoin(parties, eq(parties.id, invoices.partyId))
+        .where(
+          and(
+            eq(invoices.businessId, ctx.businessId),
+            eq(invoices.type, "purchase"),
+            eq(invoices.documentType, "invoice"),
+            eq(parties.isMsme, true),
+            sql`COALESCE(${parties.msmeCategory}, '') <> 'medium'`,
+            sql`${invoices.status} NOT IN ('paid', 'cancelled', 'draft')`,
+            sql`${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric > 0`,
+            isNull(invoices.deletedAt),
+          ),
+        )
+        .orderBy(sql`(${invoices.invoiceDate} + make_interval(days => ${limitDays})) ASC`);
+
+      let totalOutstanding = "0";
+      let overdueOutstanding = "0";
+      for (const r of rows) {
+        totalOutstanding = money.add(totalOutstanding, r.outstanding);
+        if (r.daysLeft < 0) overdueOutstanding = money.add(overdueOutstanding, r.outstanding);
+      }
+
+      return {
+        asOfDate: asOf.toISOString(),
+        totalOutstanding,
+        overdueOutstanding,
+        overdueCount: rows.filter((r) => r.daysLeft < 0).length,
+        bills: rows,
+      };
+    }),
+
   salesRegister: viewerProcedure
     .input(registerInputSchema)
     .query(async ({ input, ctx }) => {
