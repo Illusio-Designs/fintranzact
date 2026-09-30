@@ -90,7 +90,7 @@ jobs:
       - name: Build web app
         run: pnpm --filter @fintranzact/web build
         env:
-          API_URL: ${{ secrets.API_URL }}
+          API_URL: ${{ secrets.API_URL || 'https://api.fintranzact.com' }}
           VITE_TURNSTILE_SITE_KEY: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
 
       - name: Install Tauri CLI
@@ -106,7 +106,7 @@ jobs:
         run: cargo tauri build --config src-tauri/tauri.conf.prod.json ${{ matrix.build_args }}
         working-directory: apps/desktop
         env:
-          API_URL: ${{ secrets.API_URL }}
+          API_URL: ${{ secrets.API_URL || 'https://api.fintranzact.com' }}
           VITE_TURNSTILE_SITE_KEY: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
           # Disable code signing for CI builds — sign in release workflow
           TAURI_SIGNING_PRIVATE_KEY: ""
