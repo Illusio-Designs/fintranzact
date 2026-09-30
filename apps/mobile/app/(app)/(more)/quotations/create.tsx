@@ -384,10 +384,10 @@ export default function QuotationCreateScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>New Quotation</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -503,10 +503,10 @@ export default function QuotationCreateScreen() {
             disabled={createMutation.isPending || !selectedParty || !lineItems.some((li) => li.itemName.trim() && li.unitPrice)}
           >
             {createMutation.isPending ? (
-              <ActivityIndicator color={colors.textPrimary} size="small" />
+              <ActivityIndicator color={colors.onBrand} size="small" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle-outline" size={20} color={colors.textPrimary} />
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.onBrand} />
                 <Text style={styles.createBtnText}>Create Quotation</Text>
               </>
             )}
@@ -539,9 +539,9 @@ const useStyles = makeStyles((colors) => ({
     gap: 10,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -706,7 +706,7 @@ const useStyles = makeStyles((colors) => ({
     elevation: 6,
   },
   createBtnDisabled: { opacity: 0.7 },
-  createBtnText: { fontSize: 16, fontWeight: "700", color: colors.textPrimary },
+  createBtnText: { fontSize: 16, fontWeight: "700", color: colors.onBrand },
 }));
 
 const useModalStyles = makeStyles((colors) => ({

@@ -14,9 +14,9 @@ import { formatCurrency, formatDate } from "../../../src/lib/utils";
 import { accumulatePages } from "../../../src/lib/accumulate-pages";
 import { makeStyles } from "../../../src/lib/makeStyles";
 import { useColors } from "../../../src/contexts/ThemeContext";
+import { Ionicons } from "@expo/vector-icons";
 import {
   StatusBadge,
-  FAB,
   SearchBar,
   PressableRow,
   EmptyState,
@@ -137,7 +137,7 @@ export default function InvoicesScreen() {
         <SearchBar
           value={search}
           onChangeText={handleSearchChange}
-          placeholder="Search by invoice # or party..."
+          placeholder="Search party or invoice number"
         />
       </View>
 
@@ -184,14 +184,15 @@ export default function InvoicesScreen() {
       onPress={() => router.push(`/(invoices)/${item.id}` as never)}
     >
       <View style={styles.invoiceLeft}>
-        <Text style={styles.invoiceNumber}>{item.invoiceNumber}</Text>
         <Text style={styles.partyName} numberOfLines={1}>
           {item.partyName}
         </Text>
-        <Text style={styles.invoiceDate}>{formatDate(item.invoiceDate)}</Text>
+        <Text style={styles.invoiceDate} numberOfLines={1}>
+          {item.invoiceNumber} · {formatDate(item.invoiceDate)}
+        </Text>
       </View>
       <View style={styles.invoiceRight}>
-        <Text style={styles.invoiceAmount}>{formatCurrency(item.totalAmount)}</Text>
+        <Text style={styles.invoiceAmount} numberOfLines={1}>{formatCurrency(item.totalAmount)}</Text>
         <StatusBadge status={item.status} />
       </View>
     </PressableRow>
@@ -221,6 +222,15 @@ export default function InvoicesScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.headerBar}>
         <Text style={styles.screenTitle}>Invoices</Text>
+        <TouchableOpacity
+          style={styles.newBtn}
+          onPress={() => router.push("/(invoices)/create" as never)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
+          <Ionicons name="add" size={18} color={colors.onBrand} />
+          <Text style={styles.newBtnText}>New invoice</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -237,148 +247,59 @@ export default function InvoicesScreen() {
         keyboardDismissMode="on-drag"
       />
 
-      <FAB onPress={() => router.push("/(invoices)/create" as never)} />
     </SafeAreaView>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
   headerBar: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12,
   },
-  screenTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: colors.textPrimary,
+  screenTitle: { fontSize: 28, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.6 },
+  newBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6, height: 44, paddingLeft: 12, paddingRight: 16,
+    borderRadius: 14, backgroundColor: colors.brand,
+    shadowColor: "#0f1b3d", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 4,
   },
-  flatListContent: {
-    paddingBottom: 100,
-  },
-  listHeader: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
+  newBtnText: { color: colors.onBrand, fontSize: 14, fontWeight: "700" },
+  flatListContent: { paddingBottom: 24 },
+  listHeader: { paddingHorizontal: 20, paddingBottom: 4 },
   typeToggle: {
-    flexDirection: "row",
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 4,
-    marginBottom: 12,
+    flexDirection: "row", backgroundColor: colors.surfaceHover, borderRadius: 14, padding: 4, marginBottom: 12,
   },
-  typeBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 9,
-    alignItems: "center",
-  },
+  typeBtn: { flex: 1, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   typeBtnActive: {
-    backgroundColor: colors.brand,
+    backgroundColor: colors.surface,
+    shadowColor: "#0f1b3d", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 2,
   },
-  typeBtnText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.textMuted,
-  },
-  typeBtnTextActive: {
-    color: colors.textPrimary,
-  },
-  searchWrap: {
-    marginBottom: 12,
-  },
-  statusFilterList: {
-    gap: 8,
-    paddingBottom: 12,
-  },
+  typeBtnText: { fontSize: 14, fontWeight: "700", color: colors.textMuted },
+  typeBtnTextActive: { color: colors.textPrimary },
+  searchWrap: { marginBottom: 12 },
+  statusFilterList: { gap: 8, paddingBottom: 12 },
   statusFilterBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    height: 34, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center",
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
-  statusFilterBtnActive: {
-    backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
-  statusFilterText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.textMuted,
-  },
-  statusFilterTextActive: {
-    color: colors.textPrimary,
-  },
-  countText: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginBottom: 8,
-  },
+  statusFilterBtnActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
+  statusFilterText: { fontSize: 13, fontWeight: "600", color: colors.textMuted },
+  statusFilterTextActive: { color: colors.bg },
+  countText: { fontSize: 12, fontWeight: "700", letterSpacing: 0.5, color: colors.textMuted, marginBottom: 8, textTransform: "uppercase" },
   invoiceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.surface,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
+    backgroundColor: colors.surface, marginHorizontal: 20, marginBottom: 8, borderRadius: 18,
+    borderWidth: 1, borderColor: colors.border, paddingVertical: 14, paddingHorizontal: 16,
   },
-  invoiceLeft: {
-    flex: 1,
-    paddingRight: 12,
-    gap: 3,
-  },
-  invoiceNumber: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.textPrimary,
-  },
-  partyName: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  invoiceDate: {
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  invoiceRight: {
-    alignItems: "flex-end",
-    gap: 6,
-  },
-  invoiceAmount: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.textPrimary,
-  },
+  invoiceLeft: { flex: 1, gap: 3 },
+  partyName: { fontSize: 15, fontWeight: "600", color: colors.textPrimary },
+  invoiceDate: { fontSize: 13, color: colors.textMuted },
+  invoiceRight: { alignItems: "flex-end", gap: 5 },
+  invoiceAmount: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
   loadMoreBtn: {
-    marginHorizontal: 16,
-    marginTop: 4,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
+    marginHorizontal: 20, marginTop: 4, height: 48, backgroundColor: colors.surface, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center",
   },
-  loadMoreText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.brand,
-  },
-  loadingFooter: {
-    paddingVertical: 20,
-    alignItems: "center",
-  },
+  loadMoreText: { fontSize: 14, fontWeight: "700", color: colors.brand },
+  loadingFooter: { paddingVertical: 20, alignItems: "center" },
 }));

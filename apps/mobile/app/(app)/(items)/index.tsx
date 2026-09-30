@@ -15,7 +15,7 @@ import { useBusinessStore } from "../../../src/stores/business";
 import { formatCurrency } from "../../../src/lib/utils";
 import { makeStyles } from "../../../src/lib/makeStyles";
 import { useColors } from "../../../src/contexts/ThemeContext";
-import { FAB, SearchBar, PressableRow, EmptyState } from "../../../src/components/ui";
+import { SearchBar, PressableRow, EmptyState } from "../../../src/components/ui";
 
 type ItemTypeFilter = "product" | "service" | null;
 
@@ -133,7 +133,7 @@ export default function ItemsScreen() {
               )}
             </View>
             {item.sku ? (
-              <Text style={styles.itemSku}>{item.sku}</Text>
+              <Text style={styles.itemSku} numberOfLines={1}>{item.sku}</Text>
             ) : null}
             {item.itemType === "product" && !isVariant && (
               <Text
@@ -162,7 +162,7 @@ export default function ItemsScreen() {
           </View>
         </View>
         <View style={styles.itemRight}>
-          <Text style={styles.salePrice}>
+          <Text style={styles.salePrice} numberOfLines={1}>
             {item.salePrice ? formatCurrency(item.salePrice) : "—"}
           </Text>
           <Text style={styles.priceLabel}>Sale price</Text>
@@ -194,8 +194,18 @@ export default function ItemsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.screenTitle}>Items</Text>
+        <Text style={styles.screenTitle}>Stock items</Text>
         <Text style={styles.countBadge}>{total}</Text>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() => router.push("/(app)/(items)/create" as never)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Add item"
+        >
+          <Ionicons name="add" size={22} color={colors.onBrand} />
+        </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
@@ -203,7 +213,7 @@ export default function ItemsScreen() {
         <SearchBar
           value={search}
           onChangeText={handleSearch}
-          placeholder="Search items..."
+          placeholder="Search name, SKU or HSN"
         />
       </View>
 
@@ -241,7 +251,7 @@ export default function ItemsScreen() {
           <Ionicons
             name="cube-outline"
             size={13}
-            color={itemType === "product" ? colors.textPrimary : colors.textMuted}
+            color={itemType === "product" ? colors.bg : colors.textMuted}
           />
           <Text
             style={[
@@ -265,7 +275,7 @@ export default function ItemsScreen() {
           <Ionicons
             name="briefcase-outline"
             size={13}
-            color={itemType === "service" ? colors.textPrimary : colors.textMuted}
+            color={itemType === "service" ? colors.bg : colors.textMuted}
           />
           <Text
             style={[
@@ -319,7 +329,7 @@ export default function ItemsScreen() {
           ListFooterComponent={renderFooter}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
-          contentContainerStyle={[allItems.length === 0 ? styles.listEmpty : undefined, { paddingBottom: 100 }]}
+          contentContainerStyle={[allItems.length === 0 ? styles.listEmpty : undefined, { paddingBottom: 24 }]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -333,7 +343,6 @@ export default function ItemsScreen() {
         />
       )}
 
-      <FAB onPress={() => router.push("/(app)/(items)/create" as never)} />
     </SafeAreaView>
   );
 }
@@ -343,28 +352,12 @@ const useStyles = makeStyles((colors) => ({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    gap: 10,
-  },
-  screenTitle: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: colors.textPrimary,
-  },
-  countBadge: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.brand,
-    backgroundColor: colors.brandLight,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    overflow: "hidden",
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, gap: 10 },
+  screenTitle: { fontSize: 28, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.6 },
+  countBadge: { fontSize: 13, fontWeight: "700", color: colors.brand, backgroundColor: colors.brandLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: "hidden" },
+  addBtn: {
+    width: 44, height: 44, borderRadius: 14, backgroundColor: colors.brand, alignItems: "center", justifyContent: "center",
+    shadowColor: "#0f1b3d", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 4,
   },
   searchContainer: {
     marginHorizontal: 20,
@@ -377,21 +370,8 @@ const useStyles = makeStyles((colors) => ({
     marginBottom: 12,
     gap: 8,
   },
-  filterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  filterChipActive: {
-    backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+  filterChip: { flexDirection: "row", alignItems: "center", gap: 5, height: 34, paddingHorizontal: 12, borderRadius: 999, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  filterChipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
   filterChipOutline: {
     flexDirection: "row",
     alignItems: "center",
@@ -412,9 +392,7 @@ const useStyles = makeStyles((colors) => ({
     fontWeight: "600",
     color: colors.textMuted,
   },
-  filterChipTextActive: {
-    color: colors.textPrimary,
-  },
+  filterChipTextActive: { color: colors.bg },
   filterChipTextWarning: {
     color: colors.warning,
   },
@@ -429,14 +407,7 @@ const useStyles = makeStyles((colors) => ({
   listEmpty: {
     flex: 1,
   },
-  listItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: colors.bg,
-  },
+  listItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginHorizontal: 20, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: colors.border },
   itemLeft: {
     flexDirection: "row",
     alignItems: "center",
@@ -521,11 +492,7 @@ const useStyles = makeStyles((colors) => ({
     fontSize: 11,
     color: colors.textMuted,
   },
-  separator: {
-    height: 1,
-    backgroundColor: colors.surface,
-    marginLeft: 76,
-  },
+  separator: { height: 8 },
   footer: {
     paddingVertical: 20,
     alignItems: "center",

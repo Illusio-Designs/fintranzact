@@ -329,7 +329,7 @@ export default function ItemDetailScreen() {
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.topNavActions}>
           <TouchableOpacity
@@ -506,7 +506,7 @@ export default function ItemDetailScreen() {
                 onPress={() => setAdjustModalVisible(true)}
                 activeOpacity={0.8}
               >
-                <Ionicons name="swap-vertical-outline" size={18} color={colors.textPrimary} />
+                <Ionicons name="swap-vertical-outline" size={18} color={colors.onBrand} />
                 <Text style={styles.adjustButtonText}>Adjust</Text>
               </TouchableOpacity>
             </View>
@@ -1076,7 +1076,7 @@ export default function ItemDetailScreen() {
               activeOpacity={0.8}
             >
               {adjustStock.isPending ? (
-                <ActivityIndicator color={colors.textPrimary} size="small" />
+                <ActivityIndicator color={colors.onBrand} size="small" />
               ) : (
                 <Text style={styles.modalConfirmText}>Confirm Adjustment</Text>
               )}
@@ -1316,7 +1316,7 @@ const useStyles = makeStyles((colors) => ({
   adjustButtonText: {
     fontSize: 14,
     fontWeight: "700",
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   variantRow: {
     flexDirection: "row",
@@ -1397,7 +1397,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
   },
   tabTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   tabContent: {
     paddingTop: 12,
@@ -1686,7 +1686,7 @@ const useStyles = makeStyles((colors) => ({
   modalConfirmText: {
     fontSize: 16,
     fontWeight: "700",
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   // Action menu button
   actionMenuButton: {

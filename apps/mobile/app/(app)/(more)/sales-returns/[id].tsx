@@ -101,7 +101,7 @@ export default function SalesReturnDetailScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
         <View style={styles.scrollContent}>
@@ -120,7 +120,7 @@ export default function SalesReturnDetailScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
         <QueryError message="Sales return not found" onRetry={() => refetch()} />
@@ -144,7 +144,7 @@ export default function SalesReturnDetailScreen() {
       {/* Top bar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.topBarCenter}>
           <Text style={styles.topBarTitle}>{doc.invoiceNumber}</Text>
@@ -350,9 +350,9 @@ const useStyles = makeStyles((colors) => ({
     gap: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

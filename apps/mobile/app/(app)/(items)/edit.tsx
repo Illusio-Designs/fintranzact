@@ -161,7 +161,7 @@ export default function EditItemScreen() {
             activeOpacity={0.8}
           >
             {updateItem.isPending ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
+              <ActivityIndicator size="small" color={colors.onBrand} />
             ) : (
               <Text style={styles.saveButtonText}>Save</Text>
             )}
@@ -526,7 +526,7 @@ const useStyles = makeStyles((colors) => ({
   saveButtonText: {
     fontSize: 15,
     fontWeight: "700",
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   scrollView: {
     flex: 1,
@@ -569,7 +569,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
   },
   typeOptionTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   card: {
     backgroundColor: colors.surface,
@@ -640,7 +640,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
   },
   taxChipTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   taxCustomInput: {
     flex: 1,

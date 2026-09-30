@@ -235,7 +235,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textSecondary,
   },
   avatarTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   bizName: {
     flex: 1,

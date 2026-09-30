@@ -76,10 +76,10 @@ export default function StoreOrderDetailScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Order Not Found</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
         <View style={styles.centered}>
           <Text style={styles.notFoundText}>This order could not be found.</Text>
@@ -96,7 +96,7 @@ export default function StoreOrderDetailScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{data.orderNumber}</Text>
         <StatusBadge status={data.status} />
@@ -221,10 +221,10 @@ export default function StoreOrderDetailScreen() {
               activeOpacity={0.8}
             >
               {confirmMutation.isPending ? (
-                <ActivityIndicator size="small" color={colors.textPrimary} />
+                <ActivityIndicator size="small" color={colors.onBrand} />
               ) : (
                 <>
-                  <Ionicons name="checkmark-circle-outline" size={18} color={colors.textPrimary} />
+                  <Ionicons name="checkmark-circle-outline" size={18} color={colors.onBrand} />
                   <Text style={styles.actionBtnPrimaryText}>Confirm Order</Text>
                 </>
               )}
@@ -244,10 +244,10 @@ export default function StoreOrderDetailScreen() {
               activeOpacity={0.8}
             >
               {updateStatusMutation.isPending ? (
-                <ActivityIndicator size="small" color={colors.textPrimary} />
+                <ActivityIndicator size="small" color={colors.onBrand} />
               ) : (
                 <>
-                  <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.textPrimary} />
+                  <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.onBrand} />
                   <Text style={styles.actionBtnPrimaryText}>{nextAction.label}</Text>
                 </>
               )}
@@ -339,9 +339,9 @@ const useStyles = makeStyles((colors) => ({
     gap: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -448,7 +448,7 @@ const useStyles = makeStyles((colors) => ({
     shadowRadius: 6,
     elevation: 4,
   },
-  actionBtnPrimaryText: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
+  actionBtnPrimaryText: { fontSize: 14, fontWeight: "700", color: colors.onBrand },
   actionBtnDanger: {
     backgroundColor: colors.dangerBg,
     borderWidth: 1,
