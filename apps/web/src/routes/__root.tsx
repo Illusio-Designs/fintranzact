@@ -58,6 +58,8 @@ import {
   Coins01Icon,
   CheckListIcon,
   Building03Icon,
+  HierarchySquare01Icon,
+  Factory01Icon,
   ArrowDataTransferHorizontalIcon,
   SlidersHorizontalIcon,
   TaskDone01Icon,
@@ -249,6 +251,20 @@ const navSections = [
         action: "read",
         // Counting is by barcode scan, so it goes away with barcodes.
         barcodeOnly: true,
+      },
+      {
+        to: "/bill-of-materials",
+        label: "Bill of Materials",
+        icon: HierarchySquare01Icon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/manufacturing",
+        label: "Manufacturing",
+        icon: Factory01Icon,
+        resource: "Item",
+        action: "read",
       },
       {
         to: "/shipments",

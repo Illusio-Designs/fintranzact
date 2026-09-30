@@ -31,6 +31,7 @@ import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PartnersRouteImport } from './routes/partners'
 import { Route as PartiesRouteImport } from './routes/parties'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as ManufacturingRouteImport } from './routes/manufacturing'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as JournalEntriesRouteImport } from './routes/journal-entries'
 import { Route as ItemsRouteImport } from './routes/items'
@@ -46,6 +47,7 @@ import { Route as DeliveryChallansRouteImport } from './routes/delivery-challans
 import { Route as CreditNotesRouteImport } from './routes/credit-notes'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CashAndBankRouteImport } from './routes/cash-and-bank'
+import { Route as BillOfMaterialsRouteImport } from './routes/bill-of-materials'
 import { Route as BankReconciliationRouteImport } from './routes/bank-reconciliation'
 import { Route as AutomatedInvoicesRouteImport } from './routes/automated-invoices'
 import { Route as AboutRouteImport } from './routes/about'
@@ -167,6 +169,11 @@ const OnboardingRoute = OnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ManufacturingRoute = ManufacturingRouteImport.update({
+  id: '/manufacturing',
+  path: '/manufacturing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -242,6 +249,11 @@ const CashAndBankRoute = CashAndBankRouteImport.update({
   path: '/cash-and-bank',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BillOfMaterialsRoute = BillOfMaterialsRouteImport.update({
+  id: '/bill-of-materials',
+  path: '/bill-of-materials',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BankReconciliationRoute = BankReconciliationRouteImport.update({
   id: '/bank-reconciliation',
   path: '/bank-reconciliation',
@@ -298,6 +310,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/automated-invoices': typeof AutomatedInvoicesRoute
   '/bank-reconciliation': typeof BankReconciliationRoute
+  '/bill-of-materials': typeof BillOfMaterialsRoute
   '/cash-and-bank': typeof CashAndBankRoute
   '/contact': typeof ContactRoute
   '/credit-notes': typeof CreditNotesRoute
@@ -313,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/items': typeof ItemsRoute
   '/journal-entries': typeof JournalEntriesRoute
   '/login': typeof LoginRoute
+  '/manufacturing': typeof ManufacturingRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/partners': typeof PartnersRoute
@@ -347,6 +361,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/automated-invoices': typeof AutomatedInvoicesRoute
   '/bank-reconciliation': typeof BankReconciliationRoute
+  '/bill-of-materials': typeof BillOfMaterialsRoute
   '/cash-and-bank': typeof CashAndBankRoute
   '/contact': typeof ContactRoute
   '/credit-notes': typeof CreditNotesRoute
@@ -362,6 +377,7 @@ export interface FileRoutesByTo {
   '/items': typeof ItemsRoute
   '/journal-entries': typeof JournalEntriesRoute
   '/login': typeof LoginRoute
+  '/manufacturing': typeof ManufacturingRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/partners': typeof PartnersRoute
@@ -397,6 +413,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/automated-invoices': typeof AutomatedInvoicesRoute
   '/bank-reconciliation': typeof BankReconciliationRoute
+  '/bill-of-materials': typeof BillOfMaterialsRoute
   '/cash-and-bank': typeof CashAndBankRoute
   '/contact': typeof ContactRoute
   '/credit-notes': typeof CreditNotesRoute
@@ -412,6 +429,7 @@ export interface FileRoutesById {
   '/items': typeof ItemsRoute
   '/journal-entries': typeof JournalEntriesRoute
   '/login': typeof LoginRoute
+  '/manufacturing': typeof ManufacturingRoute
   '/onboarding': typeof OnboardingRoute
   '/parties': typeof PartiesRoute
   '/partners': typeof PartnersRoute
@@ -448,6 +466,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/automated-invoices'
     | '/bank-reconciliation'
+    | '/bill-of-materials'
     | '/cash-and-bank'
     | '/contact'
     | '/credit-notes'
@@ -463,6 +482,7 @@ export interface FileRouteTypes {
     | '/items'
     | '/journal-entries'
     | '/login'
+    | '/manufacturing'
     | '/onboarding'
     | '/parties'
     | '/partners'
@@ -497,6 +517,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/automated-invoices'
     | '/bank-reconciliation'
+    | '/bill-of-materials'
     | '/cash-and-bank'
     | '/contact'
     | '/credit-notes'
@@ -512,6 +533,7 @@ export interface FileRouteTypes {
     | '/items'
     | '/journal-entries'
     | '/login'
+    | '/manufacturing'
     | '/onboarding'
     | '/parties'
     | '/partners'
@@ -546,6 +568,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/automated-invoices'
     | '/bank-reconciliation'
+    | '/bill-of-materials'
     | '/cash-and-bank'
     | '/contact'
     | '/credit-notes'
@@ -561,6 +584,7 @@ export interface FileRouteTypes {
     | '/items'
     | '/journal-entries'
     | '/login'
+    | '/manufacturing'
     | '/onboarding'
     | '/parties'
     | '/partners'
@@ -596,6 +620,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AutomatedInvoicesRoute: typeof AutomatedInvoicesRoute
   BankReconciliationRoute: typeof BankReconciliationRoute
+  BillOfMaterialsRoute: typeof BillOfMaterialsRoute
   CashAndBankRoute: typeof CashAndBankRoute
   ContactRoute: typeof ContactRoute
   CreditNotesRoute: typeof CreditNotesRoute
@@ -611,6 +636,7 @@ export interface RootRouteChildren {
   ItemsRoute: typeof ItemsRoute
   JournalEntriesRoute: typeof JournalEntriesRoute
   LoginRoute: typeof LoginRoute
+  ManufacturingRoute: typeof ManufacturingRoute
   OnboardingRoute: typeof OnboardingRoute
   PartiesRoute: typeof PartiesRoute
   PartnersRoute: typeof PartnersRoute
@@ -797,6 +823,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/manufacturing': {
+      id: '/manufacturing'
+      path: '/manufacturing'
+      fullPath: '/manufacturing'
+      preLoaderRoute: typeof ManufacturingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -902,6 +935,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CashAndBankRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/bill-of-materials': {
+      id: '/bill-of-materials'
+      path: '/bill-of-materials'
+      fullPath: '/bill-of-materials'
+      preLoaderRoute: typeof BillOfMaterialsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/bank-reconciliation': {
       id: '/bank-reconciliation'
       path: '/bank-reconciliation'
@@ -980,6 +1020,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AutomatedInvoicesRoute: AutomatedInvoicesRoute,
   BankReconciliationRoute: BankReconciliationRoute,
+  BillOfMaterialsRoute: BillOfMaterialsRoute,
   CashAndBankRoute: CashAndBankRoute,
   ContactRoute: ContactRoute,
   CreditNotesRoute: CreditNotesRoute,
@@ -995,6 +1036,7 @@ const rootRouteChildren: RootRouteChildren = {
   ItemsRoute: ItemsRoute,
   JournalEntriesRoute: JournalEntriesRoute,
   LoginRoute: LoginRoute,
+  ManufacturingRoute: ManufacturingRoute,
   OnboardingRoute: OnboardingRoute,
   PartiesRoute: PartiesRoute,
   PartnersRoute: PartnersRoute,
