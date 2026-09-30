@@ -24,6 +24,7 @@ type ReportId =
   | "sales-register"
   | "purchase-register"
   | "outstanding"
+  | "msme-payables"
   | "party-statement"
   | "stock-summary"
   | "item-wise-sales"
@@ -52,6 +53,7 @@ const REPORT_GROUPS: Array<{ label: string; reports: ReportDef[] }> = [
     label: "Receivables & Payables",
     reports: [
       { id: "outstanding", label: "Outstanding Report", description: "Unpaid balances by party", tabular: true },
+      { id: "msme-payables", label: "MSME Payables", description: "Unpaid MSME supplier bills and their 45-day pay-by dates", tabular: true },
       { id: "party-statement", label: "Party Statement", description: "Full ledger for a selected party", tabular: true },
     ],
   },
@@ -583,6 +585,92 @@ function OutstandingReport({
             <AgingTable label="Payables (Suppliers)" bucket={data.payables} />
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+// ── MSME payables (Section 43B(h)) ─────────────────────────────
+
+function MsmePayablesReport() {
+  const { data, isLoading, error } = trpc.reports.msmePayables.useQuery();
+
+  function handleExport() {
+    if (!data) return;
+    const headers = ["Supplier", "Udyam", "Category", "Bill", "Bill date", "Outstanding", "Pay by", "Days left"];
+    const rows = data.bills.map((b) => [
+      b.partyName,
+      b.udyamNumber ?? "",
+      b.msmeCategory ?? "",
+      b.invoiceNumber,
+      formatDate(b.invoiceDate),
+      b.outstanding,
+      formatDate(b.payBy),
+      b.daysLeft,
+    ]);
+    downloadCSV("msme-payables", headers, rows);
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Spinner size="md" className="text-brand-600" />
+      </div>
+    );
+  }
+  if (error || !data) {
+    return <EmptyState title="Could not load MSME payables" description={error?.message ?? "Please try again."} />;
+  }
+
+  return (
+    <div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+        <SummaryCard label="Owed to MSME suppliers" value={formatCurrency(data.totalOutstanding)} accent="red" />
+        <SummaryCard label="Past pay-by date" value={formatCurrency(data.overdueOutstanding)} accent="red" />
+        <SummaryCard label="Overdue bills" value={String(data.overdueCount)} accent="red" />
+      </div>
+      <p className="text-xs text-text-tertiary mb-4">
+        Micro and small suppliers must be paid within their agreed credit period, capped at 45 days, or within 15 days
+        if none is agreed (Section 43B(h)). Late payments can only be deducted in the year they are paid.
+        Mark suppliers as MSME on the Parties page.
+      </p>
+      <div className="flex justify-end mb-3">
+        <ExportButton onClick={handleExport} />
+      </div>
+      {data.bills.length === 0 ? (
+        <EmptyState title="No unpaid MSME bills" description="Nothing owed to micro or small suppliers right now." />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Supplier</th>
+                <th>Bill</th>
+                <th>Bill date</th>
+                <th className="text-right">Outstanding</th>
+                <th>Pay by</th>
+                <th className="text-right">Days left</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.bills.map((b) => (
+                <tr key={b.invoiceId}>
+                  <td>
+                    <div className="font-medium">{b.partyName}</div>
+                    {b.udyamNumber && <div className="text-xs text-text-tertiary">{b.udyamNumber}</div>}
+                  </td>
+                  <td>{b.invoiceNumber}</td>
+                  <td>{formatDate(b.invoiceDate)}</td>
+                  <td className="text-right tabular-nums">{formatCurrency(b.outstanding)}</td>
+                  <td>{formatDate(b.payBy)}</td>
+                  <td className={cn("text-right tabular-nums font-medium", b.daysLeft < 0 ? "text-red-600" : b.daysLeft <= 7 ? "text-amber-600" : "")}>
+                    {b.daysLeft < 0 ? `${-b.daysLeft} overdue` : b.daysLeft}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -2801,6 +2889,8 @@ function ReportsPage() {
         return <PurchaseRegisterReport fromDate={fromDate} toDate={toDate} />;
       case "outstanding":
         return <OutstandingReport fromDate={fromDate} toDate={toDate} />;
+      case "msme-payables":
+        return <MsmePayablesReport />;
       case "party-statement":
         return <PartyStatementReport partyId={partyStatementPartyId || null} fromDate={fromDate} toDate={toDate} />;
       case "stock-summary":

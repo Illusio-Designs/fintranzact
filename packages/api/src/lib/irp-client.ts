@@ -445,6 +445,14 @@ export class IRPClient {
   }
 
   /**
+   * Look up a taxpayer's registration details by GSTIN (e-invoice "Get GSTIN
+   * Details" master API).
+   */
+  async getGstinDetails(gstin: string): Promise<IRPGstinDetails> {
+    return this.callApi<IRPGstinDetails>("GET", `/eivital/v1.04/Master/gstin/${encodeURIComponent(gstin)}`);
+  }
+
+  /**
    * Fetch IRN details from IRP.
    */
   async getIRNDetails(irn: string): Promise<IRPGenerateIRNResponse["Data"]> {
@@ -453,6 +461,28 @@ export class IRPClient {
       `/eicore/v1.03/Invoice/irn/${irn}`,
     );
   }
+}
+
+/** Response of the IRP "Get GSTIN Details" API (fields may be null). */
+export interface IRPGstinDetails {
+  Gstin: string;
+  TradeName?: string | null;
+  LegalName?: string | null;
+  AddrBnm?: string | null;
+  AddrBno?: string | null;
+  AddrFlno?: string | null;
+  AddrSt?: string | null;
+  AddrLoc?: string | null;
+  StateCode?: number | string | null;
+  AddrPncd?: number | string | null;
+  /** Taxpayer type, e.g. "REG" (regular), "COM" (composition), "SEZ". */
+  TxpType?: string | null;
+  /** Registration status, e.g. "ACT" (active), "CNL" (cancelled), "INA", "SUS". */
+  Status?: string | null;
+  /** "B" when blocked from generating e-invoices / e-way bills, "U" otherwise. */
+  BlkStatus?: string | null;
+  DtReg?: string | null;
+  DtDReg?: string | null;
 }
 
 // ── Custom error class ─────────────────────────────────────────────────────────
