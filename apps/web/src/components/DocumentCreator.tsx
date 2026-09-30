@@ -13,6 +13,7 @@ import { QuickItemCreate, type QuickItemCreateResult } from "@/components/QuickI
 import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
 import { Delete02Icon, Cancel01Icon, DeliveryTruck01Icon } from "@hugeicons/core-free-icons";
+import { WarehouseSelect, formatQty, useWarehouses } from "@/components/inventory/shared";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -91,6 +92,25 @@ const documentTypeLabels: Record<DocumentType, string> = {
   purchase_return: "Purchase Return",
 };
 
+/** Which way a document moves stock: -1 out, +1 in, 0 not at all (mirrors the server). */
+function stockDirection(documentType: DocumentType, invoiceType: "sale" | "purchase"): -1 | 0 | 1 {
+  if (documentType === "invoice") return invoiceType === "sale" ? -1 : 1;
+  if (documentType === "delivery_challan" || documentType === "purchase_return") return -1;
+  if (documentType === "sales_return") return 1;
+  return 0;
+}
+
+/** Quantity of each item a set of lines takes, in the item's base unit. */
+function baseQuantities(lines: Array<{ itemId?: string | null; quantity: string; conversionFactor?: string | null }>) {
+  const need = new Map<string, number>();
+  for (const li of lines) {
+    if (!li.itemId) continue;
+    const q = parseFloat(li.quantity || "0") * parseFloat(li.conversionFactor || "1");
+    if (Number.isFinite(q)) need.set(li.itemId, (need.get(li.itemId) ?? 0) + q);
+  }
+  return need;
+}
+
 function newLineItem(): LineItem {
   return {
     id: crypto.randomUUID(),
@@ -145,6 +165,9 @@ export function DocumentCreator({
   // integer" auto-fill so we don't silently undo their override.
   const [roundOffOverridden, setRoundOffOverridden] = useState(false);
   const [referenceDocumentId, _setReferenceDocumentId] = useState<string | undefined>(prefillFromInvoiceId || undefined);
+  // Warehouse the goods leave from or arrive into. Starts at the business
+  // default for this kind of document; only shown when there's a choice.
+  const [warehouseId, setWarehouseId] = useState("");
 
   // Confirm dialog when closing with unsaved data
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
@@ -224,9 +247,26 @@ export function DocumentCreator({
     { enabled: !!prefillId }
   );
 
+  const direction = stockDirection(documentType, invoiceType);
+  const { data: warehouseList } = useWarehouses();
+  const { data: inventorySettings } = trpc.stock.settings.useQuery(undefined, { enabled: direction !== 0, staleTime: 60_000 });
+  const activeWarehouses = (warehouseList ?? []).filter((w) => w.status === "active");
+  const showWarehouse = direction !== 0 && activeWarehouses.length > 1;
+
+  useEffect(() => {
+    if (warehouseId || !inventorySettings || isEditing) return;
+    const fallback =
+      documentType === "sales_return" ? inventorySettings.salesReturnWarehouseId
+      : documentType === "purchase_return" ? inventorySettings.purchaseReturnWarehouseId
+      : documentType === "invoice" && invoiceType === "purchase" ? inventorySettings.purchaseWarehouseId
+      : inventorySettings.salesWarehouseId;
+    if (fallback) setWarehouseId(fallback);
+  }, [inventorySettings, warehouseId, isEditing, documentType, invoiceType]);
+
   useEffect(() => {
     if (!editData) return;
     setPartyId(editData.partyId);
+    if (isEditing && editData.warehouseId) setWarehouseId(editData.warehouseId);
     if (isEditing) {
       // Editing: use the document's own date
       setInvoiceDate(formatDateInput(editData.invoiceDate));
@@ -435,6 +475,34 @@ export function DocumentCreator({
     }
   }, [bizDefaultRoundOff, isEditing, roundOffOverridden, totals.total, roundOff]);
 
+  const neededByItem = useMemo(() => baseQuantities(items), [items]);
+  const neededItemIds = useMemo(() => [...neededByItem.keys()].sort(), [neededByItem]);
+  const { data: availability } = trpc.stock.availability.useQuery(
+    { warehouseId: warehouseId || null, lines: neededItemIds.map((itemId) => ({ itemId })) },
+    { enabled: direction === -1 && neededItemIds.length > 0 },
+  );
+
+  const shortages = useMemo(() => {
+    if (!availability || availability.policy === "allow") return [];
+    // An edited document already holds its own stock at its warehouse.
+    const alreadyHeld =
+      isEditing && editData?.warehouseId && editData.warehouseId === availability.warehouseId
+        ? baseQuantities(editData.lineItems ?? [])
+        : new Map<string, number>();
+    const out: Array<{ name: string; available: number; needed: number; unit: string | null }> = [];
+    for (const row of availability.lines) {
+      if (row.variantId) continue;
+      const needed = neededByItem.get(row.itemId) ?? 0;
+      const available = parseFloat(row.available) + (alreadyHeld.get(row.itemId) ?? 0);
+      if (needed - available > 0.0005) {
+        const product = itemsData?.data.find((p) => p.id === row.itemId);
+        const line = items.find((li) => li.itemId === row.itemId);
+        out.push({ name: product?.name ?? line?.itemName ?? "Item", available, needed, unit: product?.unit ?? null });
+      }
+    }
+    return out;
+  }, [availability, neededByItem, isEditing, editData, itemsData, items]);
+
   function updateItem(id: string, field: keyof LineItem, value: string) {
     setItems((prev) =>
       prev.map((li) => (li.id === id ? { ...li, [field]: value } : li))
@@ -598,6 +666,7 @@ export function DocumentCreator({
         invoiceDiscountType,
         roundOff: roundOff || "0",
         lineItems: lineItemsPayload,
+        warehouseId: direction !== 0 && warehouseId ? warehouseId : undefined,
       });
     } else {
       createMutation.mutate({
@@ -613,6 +682,7 @@ export function DocumentCreator({
         roundOff: roundOff || undefined,
         referenceDocumentId: referenceDocumentId || undefined,
         lineItems: lineItemsPayload,
+        warehouseId: direction !== 0 && warehouseId ? warehouseId : undefined,
       });
     }
   }
@@ -654,6 +724,32 @@ export function DocumentCreator({
       title={isEditing ? `Edit ${label}` : `New ${label}`}
       description={isEditing ? `Edit ${invoiceType} ${label.toLowerCase()}` : `Create a new ${invoiceType} ${label.toLowerCase()}`}
       footer={
+        <div className="space-y-3">
+        {shortages.length > 0 && (
+          <div
+            role="alert"
+            className={cn(
+              "rounded-lg border px-3 py-2 text-xs",
+              availability?.policy === "block"
+                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+                : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+            )}
+          >
+            <p className="font-medium">
+              {availability?.policy === "block"
+                ? "Not enough stock — this can't be saved until the quantities fit"
+                : "Not enough stock — saving will take it below zero"}
+              {showWarehouse && ` at ${activeWarehouses.find((w) => w.id === availability?.warehouseId)?.name ?? "this warehouse"}`}
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {shortages.map((s) => (
+                <li key={s.name}>
+                  {s.name}: {formatQty(Math.max(s.available, 0), s.unit)} available, {formatQty(s.needed, s.unit)} needed
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="flex justify-end gap-3">
           <button
             type="button"
@@ -672,6 +768,7 @@ export function DocumentCreator({
               ? isEditing ? "Saving..." : "Creating..."
               : isEditing ? "Save Changes" : `Create ${label}`}
           </button>
+        </div>
         </div>
       }
     >
@@ -723,6 +820,16 @@ export function DocumentCreator({
             </div>
           )}
         </div>
+
+        {showWarehouse && (
+          <div className="max-w-xs">
+            <WarehouseSelect
+              label={direction === -1 ? "Dispatch from" : "Receive into"}
+              value={warehouseId}
+              onChange={setWarehouseId}
+            />
+          </div>
+        )}
 
         {/* Line items */}
         <div className="space-y-3">

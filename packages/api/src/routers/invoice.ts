@@ -1,6 +1,6 @@
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { syncDocumentStock } from "../lib/inventory-service.js";
+import { getDocumentWarehouseId, syncDocumentStock } from "../lib/inventory-service.js";
 import {
   invoices,
   invoiceItems,
@@ -289,7 +289,9 @@ export const invoiceRouter = router({
         ? "adjusted"
         : invoice.status;
 
-      return { ...invoice, status: effectiveStatus, lineItems: lineItemsWithUnit, party: party ?? null, relatedDocuments: relatedDocs, totalAdjusted };
+      const warehouseId = await getDocumentWarehouseId(ctx.db, ctx.businessId, invoice);
+
+      return { ...invoice, status: effectiveStatus, lineItems: lineItemsWithUnit, party: party ?? null, relatedDocuments: relatedDocs, totalAdjusted, warehouseId };
     }),
 
   create: memberProcedure.input(createInvoiceSchema).mutation(async ({ input, ctx }) => {
@@ -492,6 +494,8 @@ export const invoiceRouter = router({
         businessId: ctx.businessId,
         documentId: invoice.id,
         event: "CREATE",
+        warehouseId: input.warehouseId,
+        enforceStock: true,
         actorUserId: ctx.user!.id,
       });
 
@@ -799,6 +803,7 @@ export const invoiceRouter = router({
             businessId: ctx.businessId,
             documentId: input.id,
             event: isCancelled ? "CANCEL" : "REINSTATE",
+            enforceStock: !isCancelled,
             actorUserId: ctx.user!.id,
           });
         }
@@ -839,6 +844,7 @@ export const invoiceRouter = router({
       termsAndConditions: z.string().max(2000).optional().nullable(),
       charges: z.array(invoiceChargeSchema).optional(),
       invoiceDiscount: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+      warehouseId: z.string().uuid().optional(),
       invoiceDiscountType: z.enum(["amount", "percent"]).optional(),
       roundOff: z.string().regex(/^-?\d+(\.\d{1,2})?$/).optional(),
       lineItems: z.array(invoiceLineItemSchema).min(1).optional(),
@@ -964,6 +970,8 @@ export const invoiceRouter = router({
             businessId: ctx.businessId,
             documentId: input.id,
             event: "UPDATE",
+            warehouseId: input.warehouseId,
+            enforceStock: true,
             actorUserId: ctx.user!.id,
           });
 

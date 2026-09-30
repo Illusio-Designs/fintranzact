@@ -229,6 +229,11 @@ export const inventorySettings = pgTable("inventory_settings", {
   stockAdjustmentWarehouseId: uuid("stock_adjustment_warehouse_id")
     .references(() => warehouses.id, { onDelete: "set null" }),
 
+  // What happens when a document would take a warehouse below zero:
+  // "allow" silently, "warn" (the entry form flags it, saving still works) or
+  // "block" (the server refuses to save).
+  negativeStockPolicy: text("negative_stock_policy").default("warn").notNull(),
+
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

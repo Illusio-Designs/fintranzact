@@ -310,3 +310,83 @@ describe("invoice import", () => {
     await expectStock(item.id, 60);
   });
 });
+
+describe("warehouse choice and negative stock policy", () => {
+  async function secondWarehouse() {
+    const [main] = await caller().warehouse.warehouseList();
+    return caller().warehouse.warehouseCreate({
+      premiseId: main!.premiseId,
+      name: `Godown ${Math.random().toString(36).slice(2, 6)}`,
+      code: `G${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      warehouseType: "godown",
+    });
+  }
+
+  async function balanceAt(itemId: string, warehouseId: string) {
+    const [row] = await getTenantTestDb()
+      .select({ qty: sql<string>`COALESCE(SUM(${stockBalances.quantity}::numeric), 0)::text` })
+      .from(stockBalances)
+      .where(and(eq(stockBalances.itemId, itemId), eq(stockBalances.warehouseId, warehouseId)));
+    return Number(row!.qty);
+  }
+
+  it("posts to the chosen warehouse, and moving it on edit moves the stock", async () => {
+    const godown = await secondWarehouse();
+    const item = await newItem("0");
+    const purchase = await caller().invoice.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: now(),
+      warehouseId: godown.id,
+      lineItems: [line(item.id, "12")],
+    } as never);
+    expect(await balanceAt(item.id, godown.id)).toBe(12);
+    expect((await caller().invoice.getById({ id: purchase.id })).warehouseId).toBe(godown.id);
+
+    const settings = await caller().stock.settings();
+    await caller().invoice.update({ id: purchase.id, warehouseId: settings.purchaseWarehouseId!, lineItems: [line(item.id, "12")] } as never);
+    expect(await balanceAt(item.id, godown.id)).toBe(0);
+    expect(await balanceAt(item.id, settings.purchaseWarehouseId!)).toBe(12);
+    await expectStock(item.id, 12);
+  });
+
+  it("reports availability at a warehouse", async () => {
+    const item = await newItem("9");
+    const res = await caller().stock.availability({ lines: [{ itemId: item.id }] });
+    expect(Number(res.lines[0]!.available)).toBe(9);
+    expect(res.policy).toBe("warn");
+  });
+
+  it("warn lets stock go negative; block refuses and saves nothing", async () => {
+    const item = await newItem("5");
+    await sale(item.id, "7");
+    await expectStock(item.id, -2);
+
+    await caller().stock.updateSettings({ negativeStockPolicy: "block" });
+    try {
+      const item2 = await newItem("5");
+      await expect(sale(item2.id, "6")).rejects.toThrow(/Not enough stock/);
+      await expectStock(item2.id, 5);
+      await sale(item2.id, "5"); // exactly what's there is fine
+      await expectStock(item2.id, 0);
+
+      // Stock with no warehouse yet (legacy data) counts in the default warehouse.
+      const legacy = await createItem(getTenantTestDb(), world.business1.id, { name: "Unplaced", stockQuantity: "4.000" });
+      await sale(legacy.id, "4");
+      expect((await stock(legacy.id)).total).toBe(0);
+    } finally {
+      await caller().stock.updateSettings({ negativeStockPolicy: "warn" });
+    }
+  });
+
+  it("only admins can change the policy", async () => {
+    const seller = createTestCaller({
+      userId: world.suresh.id,
+      email: world.suresh.email,
+      name: world.suresh.name ?? null,
+      tenantId: world.tenant1.id,
+      businessId: world.business1.id,
+    });
+    await expect(seller.stock.updateSettings({ negativeStockPolicy: "allow" })).rejects.toThrow();
+  });
+});

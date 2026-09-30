@@ -127,6 +127,13 @@
       "when": 1790756884942,
       "tag": "0017_invoice_stock_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790761621506,
+      "tag": "0018_negative_stock_policy",
+      "breakpoints": true
     }
   ]
 }

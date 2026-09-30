@@ -58,6 +58,18 @@ vi.mock("@/lib/trpc", () => ({
         useQuery: () => businessListQuery(),
       },
     },
+    // One warehouse, so the form shows no warehouse picker.
+    stock: {
+      warehouses: {
+        useQuery: () => ({ data: [{ id: "wh-1", name: "Main warehouse", status: "active", isDefault: true }] }),
+      },
+      settings: {
+        useQuery: () => ({ data: { negativeStockPolicy: "warn", salesWarehouseId: "wh-1", purchaseWarehouseId: "wh-1", salesReturnWarehouseId: "wh-1", purchaseReturnWarehouseId: "wh-1", stockAdjustmentWarehouseId: "wh-1" } }),
+      },
+      availability: {
+        useQuery: () => ({ data: undefined }),
+      },
+    },
     party: {
       list: {
         useQuery: () => ({

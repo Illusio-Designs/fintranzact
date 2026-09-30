@@ -369,6 +369,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             businessId: ctx.businessId,
             documentId: result.id,
             event: "CREATE",
+            warehouseId: input.warehouseId,
+            enforceStock: true,
             actorUserId: ctx.user!.id,
           });
 
@@ -462,6 +464,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               businessId: ctx.businessId,
               documentId: input.id,
               event: isCancelled ? "CANCEL" : "REINSTATE",
+              enforceStock: !isCancelled,
               actorUserId: ctx.user!.id,
             });
           }

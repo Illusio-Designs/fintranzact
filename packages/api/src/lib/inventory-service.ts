@@ -1,4 +1,5 @@
 import { and, eq, sql, type SQL } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import {
   businesses,
   invoiceItems,
@@ -261,7 +262,7 @@ function documentMovementType(doc: StockDocument) {
 }
 
 /** Reference-type prefix for a document's movements: INVOICE… or DOCUMENT…. */
-function documentReferencePrefix(doc: StockDocument) {
+function documentReferencePrefix(doc: { documentType: string }) {
   return doc.documentType === "invoice" ? "INVOICE" : "DOCUMENT";
 }
 
@@ -294,8 +295,22 @@ export async function syncDocumentStock(
     /** Warehouse to hold the stock in. Defaults to where the document already
      *  holds it, else the business default for the operation. */
     warehouseId?: string | null;
+    /** Apply the business's negative stock policy: with "block", refuse any
+     *  change that would take a warehouse below zero. Set for changes a user
+     *  makes; background jobs and imports record what happened regardless. */
+    enforceStock?: boolean;
   },
 ) {
+  if (input.warehouseId) {
+    const [wh] = await tx
+      .select({ status: warehouses.status })
+      .from(warehouses)
+      .where(and(eq(warehouses.id, input.warehouseId), eq(warehouses.businessId, input.businessId)))
+      .limit(1);
+    if (!wh) throw new TRPCError({ code: "NOT_FOUND", message: "Warehouse not found" });
+    if (wh.status !== "active") throw new TRPCError({ code: "BAD_REQUEST", message: "That warehouse is inactive" });
+  }
+
   const [doc] = await tx
     .select({
       id: invoices.id,
@@ -364,6 +379,10 @@ export async function syncDocumentStock(
      AND h.variant_id IS NOT DISTINCT FROM d.variant_id
     WHERE COALESCE(d.qty, 0) - COALESCE(h.qty, 0) <> 0
   `)) as unknown as Array<{ warehouse_id: string; item_id: string; variant_id: string | null; diff: string }>;
+
+  if (input.enforceStock && diffs.some((d) => Number(d.diff) < 0)) {
+    await assertStockAvailable(tx, input.businessId, diffs);
+  }
 
   const movementType = documentMovementType(doc);
   const referenceType = input.event === "CREATE" ? prefix : `${prefix}_${input.event}`;
@@ -507,6 +526,60 @@ export async function postNewDocumentsStock(
       quantity: row.quantity,
     });
   }
+}
+
+export type NegativeStockPolicy = "allow" | "warn" | "block";
+
+export async function getNegativeStockPolicy(tx: InventoryDb, businessId: string): Promise<NegativeStockPolicy> {
+  const settings = await ensureDefaultWarehouse(tx, businessId);
+  const policy = settings.negativeStockPolicy;
+  return policy === "allow" || policy === "block" ? policy : "warn";
+}
+
+/**
+ * Under the "block" policy, refuse outgoing stock that a warehouse doesn't
+ * hold. Services never carry stock and are skipped. Unplaced stock is moved
+ * into the default warehouse first so it counts there.
+ */
+async function assertStockAvailable(
+  tx: InventoryDb,
+  businessId: string,
+  changes: Array<{ warehouse_id: string; item_id: string; variant_id: string | null; diff: string }>,
+) {
+  if ((await getNegativeStockPolicy(tx, businessId)) !== "block") return;
+
+  const short: string[] = [];
+  for (const c of changes) {
+    const change = Number(c.diff);
+    if (change >= 0) continue;
+    const [item] = await tx
+      .select({ name: items.name, itemType: items.itemType, unit: items.unit })
+      .from(items)
+      .where(and(eq(items.id, c.item_id), eq(items.businessId, businessId)))
+      .limit(1);
+    if (!item || item.itemType === "service") continue;
+
+    await placeUnplacedStock(tx, businessId, c.item_id, c.variant_id);
+    const available = await warehouseBalance(tx, businessId, c.warehouse_id, c.item_id, c.variant_id);
+    if (available + change < -0.0005) {
+      short.push(`${item.name}: ${qty3(Math.max(available, 0)).replace(/\.?0+$/, "")} ${item.unit} available, ${qty3(-change).replace(/\.?0+$/, "")} needed`);
+    }
+  }
+  if (short.length > 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Not enough stock — ${short.join("; ")}`,
+    });
+  }
+}
+
+/** The warehouse a document holds its stock in, or null if it holds none. */
+export async function getDocumentWarehouseId(
+  tx: InventoryDb,
+  businessId: string,
+  doc: { id: string; documentType: string },
+) {
+  return currentDocumentWarehouse(tx, businessId, doc.id, documentReferencePrefix(doc));
 }
 
 /** The warehouse a document most recently posted stock into, if any. */
@@ -828,4 +901,90 @@ export async function updateLegacyStockQuantity(
         eq(items.businessId, input.businessId),
       ),
     );
+}
+// ── Unplaced stock ──────────────────────────────────────────────
+
+function qty3(n: number) {
+  return n.toFixed(3);
+}
+
+/** Total stock for an item or variant, locked for the rest of the transaction. */
+async function lockTotal(tx: InventoryDb, businessId: string, itemId: string, variantId?: string | null) {
+  if (variantId) {
+    const [row] = await tx
+      .select({ stock: itemVariants.stockQuantity })
+      .from(itemVariants)
+      .innerJoin(items, eq(items.id, itemVariants.itemId))
+      .where(and(
+        eq(itemVariants.id, variantId),
+        eq(items.id, itemId),
+        eq(items.businessId, businessId),
+        sql`${items.deletedAt} IS NULL`,
+        sql`${itemVariants.deletedAt} IS NULL`,
+      ))
+      .for("update")
+      .limit(1);
+    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Item variant not found" });
+    return parseFloat(row.stock);
+  }
+  const [row] = await tx
+    .select({ stock: items.stockQuantity, itemType: items.itemType })
+    .from(items)
+    .where(and(eq(items.id, itemId), eq(items.businessId, businessId), sql`${items.deletedAt} IS NULL`))
+    .for("update")
+    .limit(1);
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Item not found" });
+  if (row.itemType === "service") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Services don't carry stock" });
+  }
+  return parseFloat(row.stock);
+}
+
+/** Sum of warehouse balances (all locations) for one item or variant. */
+async function placedTotal(tx: InventoryDb, businessId: string, itemId: string, variantId?: string | null) {
+  const rows = (await tx.execute(sql`
+    SELECT COALESCE(SUM(quantity::numeric), 0)::text AS placed
+    FROM stock_balances
+    WHERE business_id = ${businessId} AND item_id = ${itemId}
+      AND ${variantId ? sql`variant_id = ${variantId}` : sql`variant_id IS NULL`}
+  `)) as unknown as Array<{ placed: string }>;
+  return parseFloat(rows[0]?.placed ?? "0");
+}
+
+/** Balance at one warehouse (location-less row). */
+export async function warehouseBalance(tx: InventoryDb, businessId: string, warehouseId: string, itemId: string, variantId?: string | null) {
+  const rows = (await tx.execute(sql`
+    SELECT COALESCE(SUM(quantity::numeric), 0)::text AS qty
+    FROM stock_balances
+    WHERE business_id = ${businessId} AND warehouse_id = ${warehouseId}
+      AND item_id = ${itemId} AND location_id IS NULL
+      AND ${variantId ? sql`variant_id = ${variantId}` : sql`variant_id IS NULL`}
+  `)) as unknown as Array<{ qty: string }>;
+  return parseFloat(rows[0]?.qty ?? "0");
+}
+
+/**
+ * Put stock that no warehouse accounts for into the default warehouse, without
+ * changing the item's total. Records an OPENING_BALANCE movement for the audit
+ * trail. Call after lockTotal so the total cannot move underneath.
+ */
+export async function placeUnplacedStock(tx: InventoryDb, businessId: string, itemId: string, variantId?: string | null) {
+  const total = await lockTotal(tx, businessId, itemId, variantId);
+  const placed = await placedTotal(tx, businessId, itemId, variantId);
+  const diff = total - placed;
+  if (Math.abs(diff) < 0.0005) return total;
+
+  const settings = await ensureDefaultWarehouse(tx, businessId);
+  const warehouseId = settings.salesWarehouseId as string;
+  await tx.insert(stockMovements).values({
+    businessId,
+    warehouseId,
+    itemId,
+    variantId: variantId ?? null,
+    referenceType: "OPENING_BALANCE",
+    movementType: "UNPLACED_STOCK",
+    quantity: qty3(diff),
+  });
+  await updateStockBalance(tx, { businessId, warehouseId, locationId: null, itemId, variantId: variantId ?? null }, qty3(diff));
+  return total;
 }

@@ -415,6 +415,8 @@ export const createInvoiceSchema = z.object({
    * challan already decremented it).
    */
   skipStockAdjustment: z.boolean().optional(),
+  /** Warehouse the goods move from/to. Defaults to the business default for the operation. */
+  warehouseId: z.string().uuid().optional(),
   isReverseCharge: z.boolean().default(false),
   deliveryMethod: z.enum(deliveryMethods).default("self_pickup"),
   /**

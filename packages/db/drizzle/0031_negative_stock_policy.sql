@@ -1,0 +1,1 @@
+ALTER TABLE "inventory_settings" ADD COLUMN "negative_stock_policy" text DEFAULT 'warn' NOT NULL;
