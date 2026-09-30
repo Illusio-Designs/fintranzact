@@ -577,12 +577,22 @@ export const gstr2bRouter = router({
 
       // Verify invoice belongs to this business and is a purchase
       const [inv] = await ctx.db
-        .select({ id: invoices.id, type: invoices.type, businessId: invoices.businessId })
+        .select({
+          id: invoices.id,
+          type: invoices.type,
+          businessId: invoices.businessId,
+          status: invoices.status,
+          deletedAt: invoices.deletedAt,
+        })
         .from(invoices)
         .where(eq(invoices.id, input.invoiceId))
         .limit(1);
 
-      if (!inv || inv.businessId !== ctx.businessId || inv.type !== "purchase") {
+      // Same set the upload reconciles against: live, uncancelled purchases.
+      if (
+        !inv || inv.businessId !== ctx.businessId || inv.type !== "purchase"
+        || inv.deletedAt || inv.status === "cancelled"
+      ) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Purchase invoice not found" });
       }
 
