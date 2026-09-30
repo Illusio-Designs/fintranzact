@@ -13,14 +13,17 @@
  */
 import { test, expect, waitForPageReady } from "../helpers/fixtures";
 
+const GREETING = /^Good (morning|afternoon|evening)/;
+
 test.describe("Dashboard Flow", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await waitForPageReady(page);
   });
 
-  test("admin sees Dashboard page heading", async ({ page }) => {
-    await expect(page.locator("h1").first()).toContainText("Dashboard");
+  test("admin sees the dashboard greeting", async ({ page }) => {
+    // The dashboard heading greets the user ("Good morning, <name>").
+    await expect(page.locator("h1").first()).toHaveText(GREETING);
   });
 
   test("dashboard shows DateRangeBar with preset buttons", async ({ page }) => {
@@ -66,8 +69,8 @@ test.describe("Dashboard Flow", () => {
     // Click "Last Month" preset and verify the button becomes active (no crash)
     await page.getByRole("button", { name: "Last Month" }).first().click();
 
-    // Page should still show Dashboard heading — no error state
-    await expect(page.locator("h1").first()).toContainText("Dashboard");
+    // Page should still show the dashboard greeting — no error state
+    await expect(page.locator("h1").first()).toHaveText(GREETING);
     // Profit cards must still be visible after period change
     await expect(page.getByText("Gross Profit").first()).toBeVisible();
   });
@@ -75,7 +78,7 @@ test.describe("Dashboard Flow", () => {
   test("switching date preset to This FY refetches data", async ({ page }) => {
     await page.getByRole("button", { name: "This FY" }).first().click();
 
-    await expect(page.locator("h1").first()).toContainText("Dashboard");
+    await expect(page.locator("h1").first()).toHaveText(GREETING);
     await expect(page.getByText("Net Profit").first()).toBeVisible();
   });
 });

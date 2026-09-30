@@ -50,12 +50,13 @@ test.describe("Settings — Presence", () => {
     ).toBeVisible();
   });
 
-  test("theme toggle is available on the top bar", async ({ page }) => {
-    // Theme is controlled by a top-bar toggle, not a settings tab.
-    // The button cycles System → Light → Dark, so its aria-label matches one of those.
-    await expect(
-      page.getByRole("button", { name: /system theme|light mode|dark mode/i }).first(),
-    ).toBeVisible();
+  test("theme follows the time of day in India", async ({ page }) => {
+    // There is no theme toggle: the app is light from 06:00 to 18:59 IST and
+    // dark otherwise, and marks the choice on <html data-theme-lock>.
+    const lock = await page.locator("html").getAttribute("data-theme-lock");
+    expect(["light", "dark"]).toContain(lock);
+    const dark = await page.locator("html").evaluate((el) => el.classList.contains("dark"));
+    expect(dark).toBe(lock === "dark");
   });
 
   test("renders Data tab with import, CSV export, and backup sections", async ({ page }) => {

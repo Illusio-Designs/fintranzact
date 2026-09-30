@@ -76,12 +76,13 @@ export class CreditNotesPage extends BasePage {
     await expect(this.detailPanel).toBeVisible({ timeout: 5_000 });
   }
 
+  // Scoped to the page body: the sidebar also has "Sales"/"Purchases" text.
   async switchToSales() {
-    await this.page.getByText("Sales").first().click();
+    await this.page.locator("main").getByRole("button", { name: "Sales", exact: true }).click();
   }
 
   async switchToPurchases() {
-    await this.page.getByText("Purchases").first().click();
+    await this.page.locator("main").getByRole("button", { name: "Purchases", exact: true }).click();
   }
 
   async clickStatusTab(label: string) {
