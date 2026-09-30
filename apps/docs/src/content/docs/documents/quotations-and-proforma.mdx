@@ -1,0 +1,139 @@
+---
+title: Quotations and Proforma Invoices
+description: Create quotations and proforma invoices in Fintranzact, send them to customers, and convert them into tax invoices on the web and mobile app.
+sidebar:
+  order: 2
+---
+
+import ForDesktop from '../../../components/ForDesktop.astro';
+import ForMobile from '../../../components/ForMobile.astro';
+import ForBusiness from '../../../components/ForBusiness.astro';
+
+A **quotation** tells a customer what you would charge. A **proforma invoice** looks like an invoice and is usually sent to ask for an advance before you deliver. In Fintranzact both work the same way:
+
+- They are always on the **sales** side.
+- They do **not** change stock, do **not** add to the customer's ledger, and do **not** appear in GST reports.
+- You can **convert** either one into a tax invoice.
+
+| | Quotation | Proforma Invoice |
+|---|---|---|
+| Default number | `QTN-00001` | `PI-00001` |
+| Statuses | Draft, Sent, Cancelled | Draft, Sent, Cancelled |
+| Converts into | Invoice | Invoice |
+
+## Creating a quotation or proforma
+
+<ForDesktop>
+1. In the sidebar, under **VOUCHERS**, click **Quotations** (or **Proforma Invoices**).
+2. Click **+ New Quotation** (or **+ New Proforma**). The **New Quotation** panel slides in.
+3. Pick the **Customer**. Type to search, or choose **Create customer** to add a new one on the spot.
+4. Set the **Date** and **Due date**. The due date fills in from the customer's credit period (7 days if none is set) until you change it yourself. For a quotation, use it as the "valid until" date.
+5. Add **Line Items**: pick a product or type a custom item name, then set quantity, unit, price, tax % and discount %. Each line can also carry its own notes.
+6. Optionally add charges (**Shipping** or **+ Add charge**), a **Round Off**, **Notes** and **Terms & conditions**. The terms start from your business's default terms.
+7. Click **Create Quotation** (or **Create Proforma Invoice**).
+
+If the customer is on a price level, prices for picked items come from that level. Prices you type yourself are kept.
+</ForDesktop>
+
+<ForMobile>
+1. Tap **More** → **Quotations** (or **Proforma invoices**).
+2. Tap the **+** button. The **New Quotation** screen opens.
+3. Tap **Select customer...** and pick a customer.
+4. Set the **Quotation Date** (or **Proforma Date**) and **Valid Until**.
+5. Tap **Add Item** for each line and fill in the item, quantity, price, tax and discount.
+6. Optionally add **Notes (optional)**.
+7. Tap **Create Quotation** (or **Create Proforma Invoice**).
+
+The mobile form has no charges, round-off or separate terms field. Use the web app if you need them.
+</ForMobile>
+
+:::caution
+On these documents the **Discount** box at the bottom of the web form (the whole-document ₹ / % discount) is **not saved** — only line-level discount % is kept. Likewise, **Round Off** is only added to the saved total when the document also has at least one charge. Check the total in the detail panel after saving, and use line discounts instead of a document discount.
+:::
+
+## Working with the list
+
+<ForDesktop>
+The list has status tabs **All**, **Draft**, **Sent** and **Cancelled**, and the page search looks for a party name or number. Columns are **Party**, **Quotation #** (or **Proforma #**), **Date**, **Due Date**, **Status** and **Total**.
+
+Hover over a row to see its actions:
+
+| Action | When it shows | What it does |
+|---|---|---|
+| **Mark Sent** | Draft | Changes the status to Sent |
+| **Convert to Invoice** | Always | Creates a sale invoice from this document and takes you to **Invoices** |
+| **Delete** | Draft | Deletes the document after you confirm (Admin or Owner only) |
+
+Click a row to open the detail panel. It shows the party and phone, status, date, due date, items, totals, notes and terms, and a **Share link** section. Drafts have **Edit** and **Delete** buttons at the bottom.
+</ForDesktop>
+
+<ForMobile>
+The screen has status chips **All**, **Draft**, **Sent** and **Cancelled**, and a search bar that matches the number or party. Each card shows the number, party, date, total and status.
+
+| Action | When it shows | What it does |
+|---|---|---|
+| **To Invoice** | Not cancelled | Asks you to confirm, then creates a sale invoice and shows its number |
+| **Mark Sent** | Draft | Changes the status to Sent |
+| **Delete** | Draft | Deletes after you confirm (Admin or Owner only) |
+| **Cancel** | Sent | Cancels the document after you confirm |
+
+Quotations and proformas have no detail screen on mobile, and cannot be edited there.
+</ForMobile>
+
+## Sending it to the customer
+
+Open the document on the web and use **Share link** → **Get link**. You get a link the customer can open without signing in, plus a **WhatsApp** button. See [Share links](/documents/share-links).
+
+A proforma's link shows the **Amount due** and, if you have a UPI account set up, a UPI QR so the customer can pay the advance. A quotation's link shows only the total.
+
+:::note
+There is no PDF button on the Quotations or Proforma Invoices pages. The customer can download a PDF from the share link. That PDF currently uses the same layout and heading as a tax invoice, so mention in your message that it is a quotation. The shared web page itself is labelled correctly.
+:::
+
+## Converting to an invoice
+
+When the customer confirms, convert the quotation or proforma instead of typing the invoice again.
+
+<ForDesktop>
+Hover over the row and click **Convert to Invoice**. You see **Converted to invoice**, and the app opens **Invoices**, where you will find the new draft invoice.
+</ForDesktop>
+
+<ForMobile>
+Tap **To Invoice** on the card, then **Convert**. An alert shows the new invoice number. Open it from the **Invoices** tab.
+</ForMobile>
+
+The new invoice:
+
+- is a **draft** sale invoice with the next invoice number;
+- copies the customer, all line items, notes, terms, charges and round-off;
+- keeps the quotation's **date and due date** — edit the draft if you want today's date;
+- does not carry over a document-level discount;
+- takes stock out when it is saved, like any sale invoice;
+- links back to the quotation or proforma.
+
+The quotation or proforma itself is **not changed**: its status stays the same and you can convert it again. See [Converting between documents](/documents/#converting-between-documents).
+
+<ForBusiness>
+:::tip[Quote-to-cash in three steps]
+1. Send the quotation with a share link on WhatsApp.
+2. When the customer agrees, convert it and fix the invoice date if needed.
+3. Mark the invoice as sent and share it. If you have a UPI account under **Cash & Bank**, the invoice link shows a UPI QR so the customer can pay straight away.
+:::
+</ForBusiness>
+
+## Frequently asked questions
+
+**Does a quotation reserve stock?**
+No. Quotations and proformas never touch stock. Stock goes out only when you convert to an invoice (or send a delivery challan).
+
+**Can I create a purchase quotation?**
+Not in the app. The Quotations and Proforma Invoices pages only create sale documents.
+
+**Why does the invoice made from my quotation have last month's date?**
+Conversion keeps the quotation's date. Open the draft invoice, click **Edit**, and change the **Date** before you send it.
+
+**How is a proforma different from an invoice in the books?**
+A proforma is not an accounting entry. It does not add to the customer's ledger or to GSTR-1. Only the invoice you convert it into does.
+
+**Can I edit a quotation after sending it?**
+No — **Edit** is only offered on drafts. Create a new quotation with the changes.

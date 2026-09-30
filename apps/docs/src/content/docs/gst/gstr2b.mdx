@@ -1,0 +1,155 @@
+---
+title: GSTR-2B Reconciliation
+description: Upload the GSTR-2B JSON or CSV from the GST portal and reconcile it against your purchase invoices in Fintranzact. See matched, mismatched and missing invoices and the ITC at risk.
+sidebar:
+  order: 5
+---
+
+import ForCA from '../../../components/ForCA.astro';
+import ForBusiness from '../../../components/ForBusiness.astro';
+
+**GSTR-2B** is the monthly statement the GST portal builds from what your suppliers reported in their GSTR-1. It decides how much input tax credit (ITC) you can claim in GSTR-3B. Fintranzact lets you upload the GSTR-2B file and matches every record against your purchase invoices. It shows which invoices agree, which differ, which your suppliers reported but you haven't booked, and which you've booked but your suppliers haven't reported.
+
+:::note[Web and desktop only]
+GSTR-2B reconciliation is available in the web app and the desktop app. The mobile app doesn't have it.
+:::
+
+## Where to find it
+
+In the sidebar, under **Reports**, click **GSTR-2B Recon**. The page is titled **GSTR-2B Reconciliation**. The menu item appears only for GST-registered businesses.
+
+| Role | What they can do |
+|---|---|
+| Superadmin, Admin | Upload files, ignore records, view everything |
+| Accountant | View the reconciliation. Uploading and ignoring records need an admin. |
+
+The page has five tabs: **Upload**, **Reconciliation**, **Not in Books**, **Not in 2B** and **Upload History**. Below the tabs, the month and year selectors choose the **return period** that every tab works on (the current year and the four before it are available).
+
+## Uploading a GSTR-2B file
+
+1. Download GSTR-2B for the month from the GST portal, as JSON or as a CSV/spreadsheet export.
+2. On the **Upload** tab, pick the **month and year** the file belongs to. The upload is saved under the period selected on the page. The period inside the file isn't checked.
+3. Drop the file on *"Drop your GSTR-2B file here"*, or click the box to browse. `.json` and `.csv` files up to 50 MB are accepted. Any file that doesn't end in `.csv` is read as JSON.
+
+Processing starts immediately. When it finishes you see a message such as *"120 records processed — 104 matched, 9 missing in books."* and the page switches to the **Reconciliation** tab.
+
+### What is read from the file
+
+**JSON (portal format).** Fintranzact reads these sections from `docdata` (or `data.docdata`):
+
+| Section | Recorded as |
+|---|---|
+| `b2b` | B2B invoices |
+| `b2ba` | B2B amendments (B2BA) |
+| `cdnr`, `cdnra` | Credit/debit notes from registered suppliers |
+| `isd` | Input Service Distributor documents (always marked ITC available) |
+
+For each document it takes the supplier GSTIN and trade name, the invoice or note number, the date, the invoice value, the taxable value, CGST, SGST, IGST and cess (summed across the item rows), and the ITC availability flag.
+
+**CSV.** The first non-empty line must be a header row. Commas and tabs both work. Column names aren't case-sensitive, and spaces or punctuation are ignored.
+
+| Data | Accepted column names |
+|---|---|
+| Supplier GSTIN (**required**) | `GSTIN`, `Supplier GSTIN`, `ctin` |
+| Invoice number (**required**) | `Invoice No`, `Invoice Number`, `inum` |
+| Supplier name | `Trade Name`, `Supplier Name`, `trdnm` |
+| Invoice date | `Invoice Date`, `dt` (DD-MM-YYYY, DD/MM/YYYY or ISO) |
+| Invoice value | `Invoice Value`, `val` |
+| Taxable value | `Taxable Value`, `Taxable Amount`, `txval` |
+| Tax | `CGST`, `SGST`, `IGST`, `Cess` |
+| ITC flag | `ITC Eligible`, `ITC Available`, `itcavl` (Y/N) |
+
+Rows without a GSTIN or invoice number are skipped. Every CSV row is treated as a B2B invoice.
+
+## How matching works
+
+Each GSTR-2B record is compared with your **purchase invoices** that aren't cancelled or deleted. Invoices from every date are considered, not just the selected month.
+
+1. **Supplier**: the GSTIN on the 2B record must equal the GSTIN of the purchase invoice's party.
+2. **Invoice number**: it must match exactly, ignoring case and surrounding spaces. Enter the supplier's own bill number as the purchase invoice number, or it can't match.
+3. **Date**: if several invoices share the number, the one closest in date is chosen, preferring invoices within ±3 days.
+
+The matched pair is then compared field by field. Amounts may differ by up to ₹1.01 to allow for rounding.
+
+| Check | Reason shown when it fails |
+|---|---|
+| Taxable value vs. the purchase invoice's subtotal | Taxable value differs |
+| CGST | CGST differs |
+| SGST | SGST differs |
+| IGST | IGST differs |
+| Invoice date more than 3 days apart | Invoice date mismatch |
+
+:::caution[Inter-state purchases currently show as mismatched]
+When reconciling, Fintranzact splits the tax on your purchase invoices as **half CGST and half SGST, with IGST as zero**, even when the supplier is in another state. An inter-state (IGST) purchase will therefore show as **Mismatch** with *CGST differs*, *SGST differs* and *IGST differs*, even when the amounts agree. Compare the totals by eye for these rows.
+:::
+
+## Reconciliation tab
+
+This tab always shows the **most recent upload** for the selected period.
+
+**Summary cards:**
+
+| Card | Shows |
+|---|---|
+| **Matched** | Records that matched with no differences |
+| **Mismatched** | Records matched to an invoice but with one or more differences |
+| **Not in Books** | Records with no matching purchase invoice. The note shows **ITC at risk**: the tax on ITC-eligible records that are mismatched or not in books. |
+| **ITC Available** | Count of matched and pending records. The note shows the tax on the ITC-eligible ones. |
+
+Only records whose ITC flag is **Y** count towards the ITC amounts. If your CSV has no ITC column, the amounts stay at zero.
+
+Use the dropdown to filter by **All records**, **Matched**, **Mismatched**, **Not in Books**, **Pending** or **Ignored**. The table shows **Supplier GSTIN**, **Supplier**, **Invoice #**, **Date**, **Taxable**, **CGST**, **SGST**, **IGST**, **ITC** (Yes/No) and **Status**, 25 rows per page.
+
+- **Details** appears on mismatched rows and expands the list of differences.
+- **Ignore** marks a record as **Ignored**, for example a reverse-charge bill you've already dealt with. Ignored records drop out of the ITC figures. You can't undo it from the page, but uploading the file again creates a fresh set of records.
+
+## Not in Books tab
+
+This tab lists records from the latest upload that are in GSTR-2B but don't match any purchase invoice: *"These invoices are reported in the GSTR-2B by your suppliers but are absent from your purchase records. Create a purchase invoice to claim the ITC."* The **ITC** column shows **Available** or **Blocked**, according to the portal's flag.
+
+After you book the missing purchase invoices, upload the GSTR-2B file again to re-run the matching.
+
+## Not in 2B tab
+
+This tab lists your purchase invoices **dated in the selected month** whose party has a GSTIN but which didn't match any record in the latest upload: *"Follow up with the supplier to ensure they file their return correctly."* The columns are **Supplier GSTIN**, **Supplier**, **Invoice #**, **Date** and **Amount** (the invoice total). The tab stays empty until a file has been uploaded for the period.
+
+## Upload History tab
+
+This tab lists the last 20 uploads for the business with **Period**, **File**, **Total**, **Matched**, **Mismatch**, **Not in Books** and **Uploaded** date. **View** switches to the **Reconciliation** tab. That tab shows the period currently selected in the month and year pickers, so set them to the upload's period first.
+
+Each upload is kept separately. Uploading again for the same month doesn't delete the earlier one, but only the newest is used on the other tabs.
+
+:::note
+Reconciling doesn't change your books or your [ITC ledger](/gst/itc). Matching, mismatching or ignoring a record is for review only. Block or reverse credit on the **Input Tax Credit** page.
+:::
+
+<ForBusiness>
+**Once a month, after the 14th:** download GSTR-2B from the portal and upload it here. Then look at two tabs. **Not in Books** shows bills you forgot to enter. Enter them so you can claim the credit. **Not in 2B** shows suppliers who haven't filed yet. Call them, because until they file you can't claim that credit.
+</ForBusiness>
+
+<ForCA>
+:::tip[Using the reconciliation in a 3B review]
+- Ask the client to record the **supplier's invoice number exactly** as the purchase invoice number. That's the matching key.
+- Treat **Mismatch** rows on inter-state suppliers with care. The book-side tax split is always CGST/SGST, so IGST invoices never match cleanly. Check the total tax instead.
+- Records from the `cdnr` section (supplier credit/debit notes) are matched against purchase *invoice* numbers, so they will usually show as **Not in Books**.
+- A record flagged **Blocked** (ITC flag N) on the portal still counts towards **Matched**. Only the ITC amounts exclude it.
+- Manually linking a 2B record to a specific purchase invoice is possible through the API (`gstr2b.linkInvoice`) but not from the page.
+:::
+</ForCA>
+
+## Frequently asked questions
+
+**Which file should I download from the GST portal?**
+The GSTR-2B JSON is the most complete, because it includes B2B, amendments, credit/debit notes and ISD. A CSV works too if its header row uses the column names listed above.
+
+**I uploaded the file for the wrong month. What now?**
+Select the correct month and upload the file again. The upload is filed under whatever month is selected on the page. The wrong-month upload stays in **Upload History**, but it doesn't affect the correct month.
+
+**Why is an invoice I definitely booked shown as Not in Books?**
+The supplier GSTIN on the party or the invoice number doesn't match the 2B record exactly. Check the party's GSTIN and make sure the purchase invoice number is the supplier's bill number.
+
+**Does reconciliation update my ITC claim?**
+No. It's a review tool. ITC entries are created from purchase invoices, and you block or unblock them on the [Input Tax Credit](/gst/itc) page.
+
+**Why do all my IGST purchases show as mismatched?**
+When comparing, Fintranzact currently treats your purchase invoice tax as CGST + SGST. See the caution in *How matching works*.

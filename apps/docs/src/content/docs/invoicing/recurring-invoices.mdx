@@ -1,0 +1,208 @@
+---
+title: Recurring Invoices
+description: Automate repeat billing in Fintranzact — set up a recurring invoice template with a party, line items and a schedule (weekly to yearly or a custom interval), and Fintranzact generates the invoice for you on each due date.
+sidebar:
+  order: 7
+---
+
+import ForDesktop from '../../../components/ForDesktop.astro';
+import ForMobile from '../../../components/ForMobile.astro';
+import ForBusiness from '../../../components/ForBusiness.astro';
+
+If you bill the same customer the same amount on a schedule, such as monthly rent, an AMC, hosting fees or a retainer, set it up once as a recurring invoice template. Fintranzact then creates the invoice for you every time it falls due.
+
+## Where to find it
+
+<ForDesktop>
+Open **Vouchers → Recurring Invoices** in the sidebar. Press <kbd>N</kbd> on the page to create a new template.
+</ForDesktop>
+
+<ForMobile>
+Tap **More** in the bottom tab bar, then **Recurring invoices** under **Sales**.
+</ForMobile>
+
+| Role | View templates | Create, edit, pause, run | Delete |
+|---|---|---|---|
+| Owner / Admin | Yes | Yes | Yes |
+| Seller Manager | Yes | Yes | Yes |
+| Seller, Accountant | Yes | No | No |
+
+## How it works
+
+1. You create a **template**: the party, invoice type, line items and a schedule.
+2. Fintranzact's scheduler checks for due templates every minute.
+3. When a template's **Next Run** date has passed, it generates an invoice from the template, records the run, and moves **Next Run** forward by one period.
+4. The template keeps running until you pause or delete it, it reaches its **Max Runs**, or the next run would fall after its **End Date**.
+
+### What the generated invoice looks like
+
+- Same party, type (sale or purchase), line items, notes and terms as the template.
+- **Invoice date** is the date and time the run happened.
+- **Invoice number** is the next number from your business's invoice series, the same series used for invoices you create by hand.
+- Status is **Draft**, so review it and send it as you normally would.
+- Stock is updated for line items linked to an item, exactly as for a manual invoice.
+- The invoice is tagged as coming from a recurring template.
+
+Prices and tax rates are frozen in the template. If you change an item's price in **Stock Items**, update the template too.
+
+## Creating a template
+
+<ForDesktop>
+Click **+ New Template**. The **Create Template** panel opens.
+
+| Field | Required | Notes |
+|---|---|---|
+| **Template Name** | Yes | For your reference, for example "Monthly Website Hosting" |
+| **Party** | Yes | The customer or supplier to bill |
+| **Type** | Yes | **Sale** or **Purchase** |
+| **Frequency** | Yes | See the table below |
+| **Custom Interval (days)** | When Frequency is Custom | 1 to 365 days |
+| **Start Date** | Yes | First run date. Defaults to today. |
+| **End Date (optional)** | No | No runs are scheduled after this date |
+| **Max Runs (optional)** | No | Stop after this many invoices. Blank means unlimited. |
+| **Notes (optional)** | No | Printed on every generated invoice |
+| **Terms & Conditions (optional)** | No | Printed on every generated invoice |
+
+Under **Line Items**, click **+ Add Item** for each line:
+
+| Field | Notes |
+|---|---|
+| **Item (optional)** | Link the line to a stock item. This fills in **Item Name** and makes stock move when the invoice is generated. |
+| **Item Name** | Required. The name printed on the invoice. |
+| **Qty**, **Unit Price**, **Tax %**, **Discount %** | Line values |
+| **Notes (optional)** | Up to 500 characters, printed in italics under the item name |
+
+At least one line needs an item name and a unit price above zero. Click **Create Template** to save.
+</ForDesktop>
+
+<ForMobile>
+Tap the floating **+** button. Fill in **Template Name**, pick a **Party** from the list, choose **Invoice Type** (Sale or Purchase) and **Frequency** (enter **Interval (days)** for Custom). Then add **Line Items**, each with an item name, **Qty**, **Rate**, **GST %** and **Disc %**. A notes field appears once you type an item name, and the line **Amount** is calculated as you type. Tap **Add Line Item** for more lines.
+
+Set the **Start Date**, tick **Set End Date** to add an end date (it defaults to one year from today), optionally enter **Max Runs**, add **Notes**, and tap **Create Template**.
+
+On mobile, lines can't be linked to stock items and there's no Terms & Conditions field. Use the web or desktop app for those.
+</ForMobile>
+
+### Frequencies
+
+| Frequency | Label on web | Label on mobile | Next run |
+|---|---|---|---|
+| Weekly | Weekly | Weekly | +7 days |
+| Every 2 weeks | Every 2 Weeks | Bi-weekly | +14 days |
+| Monthly | Monthly | Monthly | +1 month |
+| Quarterly | Quarterly | Quarterly | +3 months |
+| Half-yearly | Every 6 Months | Half Yearly | +6 months |
+| Yearly | Yearly | Yearly | +12 months |
+| Custom | Custom | Custom | + your interval in days |
+
+Month-based schedules keep the same day of the month. If that day doesn't exist in a shorter month, the run moves to the last day of that month. For example, a template that runs on the 31st runs on 30 April and 28 or 29 February.
+
+### When does the first invoice go out?
+
+- **Start Date in the future:** the first run is on the Start Date.
+- **Start Date today or in the past:** the first run is one period from today (for example a month from today for Monthly). Back-dated start dates don't generate catch-up invoices. Use **Run Now** if you need an invoice straight away.
+
+## Smart Suggestions
+
+<ForDesktop>
+If your recent invoicing shows a regular pattern, a **Smart Suggestions** panel appears above the list. Fintranzact looks at the last two months of invoices and suggests parties that:
+
+- have at least three invoices in that period, and
+- were invoiced at fairly regular intervals.
+
+Each suggestion shows the party, the number of invoices, the detected frequency and the median amount. Click **Create Template** to open a new template pre-filled with the party, type, frequency and a suggested name. You still need to add the line items. Click the panel header to collapse it.
+</ForDesktop>
+
+<ForMobile>
+Smart Suggestions are only shown in the web and desktop app.
+</ForMobile>
+
+## Managing templates
+
+<ForDesktop>
+The list shows **Name**, **Party**, **Frequency**, **Status**, **Next Run** and **Runs** (runs so far, and the maximum if one is set). Filter by **All**, **Active**, **Paused**, **Completed** or **Expired**, and use the page search to filter by template or party name.
+
+Hover over a row for quick actions: **Pause**, **Resume**, **Run Now**, **Edit** and **Delete**. Click a row to open the detail panel, which has two tabs:
+
+- **Details** — status, type, party, frequency, start and end dates, next and last run, total and max runs, line items with amounts, notes and terms. The footer has **Pause** or **Resume**, **Run Now** and **Edit Template**.
+- **Execution History** — every run with its date, the **Invoice #** created, the status and any error.
+</ForDesktop>
+
+<ForMobile>
+Each card shows the template name, party, status, frequency, runs, and (for active templates) the next run date. Filter with the status chips at the top. Tap a card to open it. There you can **Pause** or **Resume**, **Run Now** (both ask for confirmation), and scroll down for the **Template Details**, **Line Items** and **Execution History** cards. Use the edit icon in the header to change the **Name**, **Notes** and **Max Runs**, then tap **Save**. Use the delete icon to remove the template.
+</ForMobile>
+
+### Template statuses
+
+| Status | Meaning |
+|---|---|
+| **Active** | Runs on schedule |
+| **Paused** | Skipped by the scheduler until you resume it |
+| **Completed** | Reached **Max Runs**, or the next run would fall after the **End Date**. No more invoices are generated. |
+| **Expired** | Listed as a filter, but nothing currently sets this status |
+
+### Pause and resume
+
+**Pause** stops scheduled runs. **Resume** makes the template active again and sets **Next Run** to one period from today, so missed periods are not back-filled.
+
+### Run Now
+
+**Run Now** generates an invoice from an active or paused template straight away. It counts as a run: **Runs** goes up, and **Next Run** moves forward by one period from its current date. Running a paused template doesn't resume it.
+
+### Editing
+
+On web and desktop, **Edit** opens the full template form. Changes apply to future runs only. Invoices already generated aren't changed. A few limits:
+
+- Changing the **Start Date** of an existing template has no effect.
+- Changing the **Frequency** doesn't recalculate the **Next Run** already scheduled. The new frequency applies from the run after that.
+- Clearing **Max Runs** on the web form doesn't remove a limit that is already set.
+
+### Deleting
+
+Deleting a template stops all future runs. Invoices it already created are kept.
+
+## Monthly run limits
+
+<ForDesktop>
+The **Automated Runs This Month** bar at the top of the page shows how many invoices your templates have generated this calendar month, against your plan's limit, and how many templates are configured.
+</ForDesktop>
+
+<ForMobile>
+The summary card at the top shows **Templates** and **Runs This Month**.
+</ForMobile>
+
+| Plan | Scheduled runs per business per month |
+|---|---|
+| Free (legacy) | 5 |
+| Pro, Business, Enterprise, Forever Free | Unlimited |
+| Self-hosted installation | 5 |
+
+When the limit is reached, the scheduler records a **skipped_limit** run with the message "Monthly limit of N runs reached" and moves the template to its next date. Skipped periods aren't retried. **Run Now** isn't blocked by the limit, but its runs count towards it.
+
+## If a run fails
+
+A scheduled run fails if the party has been deleted or a linked item no longer belongs to the business. The run is recorded as **failed**, with the reason in the **Error** column of the execution history. The template stays **Active** and is retried every minute until it succeeds, so fix the cause (or pause the template) promptly.
+
+<ForBusiness>
+Generated invoices start as **Draft**. If your customers expect the invoice on a set date, check the **Invoices** page each billing day and send the drafts. Nothing is emailed or shared automatically.
+</ForBusiness>
+
+## Frequently asked questions
+
+**Does Fintranzact send the invoice to my customer automatically?**
+No. It creates the invoice as a **Draft** in your **Invoices** list. You review it and share it as usual.
+
+**I set the start date to the 1st of last month. Why wasn't an invoice created for it?**
+Back-dated start dates don't generate catch-up invoices. The first run is scheduled one period from the day you create the template. Use **Run Now** for the missed period.
+
+**Can I automate purchase bills?**
+Yes. Set **Type** to **Purchase**. The generated bill uses the same invoice number series as your sales invoices.
+
+**Why did a month get skipped?**
+Either the template was paused, or your plan's monthly run limit was reached. The **Execution History** shows a **skipped_limit** entry in that case.
+
+**What happens to invoices if I delete the template?**
+They stay. Only future runs stop.
+
+**Can I change the amount for next month only?**
+Edit the template's line items before the run, then edit them back afterwards, or pause the template and create that month's invoice by hand.

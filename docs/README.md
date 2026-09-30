@@ -24,6 +24,11 @@ This folder contains **internal architecture documents, audit reports, and desig
 
 ### Deployment
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — Production deployment guide (Docker, ONCE, Vercel)
+- [`ROLLBACK.md`](ROLLBACK.md) — Migration rollback procedures (reverse SQL per Drizzle migration, backup-based recovery)
+
+### Testing & Workflows
+- [`INTEGRATION-TEST-WORKFLOWS.md`](INTEGRATION-TEST-WORKFLOWS.md) — Integration test workflow tree (every testable API workflow, grouped by test file)
+- [`workflows/WORKFLOW-SPECS.md`](workflows/WORKFLOW-SPECS.md) — Build-ready workflow specifications for BDD-style integration tests
 
 ## Feature Reference
 

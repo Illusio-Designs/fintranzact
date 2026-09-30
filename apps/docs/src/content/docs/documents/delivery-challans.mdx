@@ -1,0 +1,139 @@
+---
+title: Delivery Challans
+description: Send goods on a delivery challan in Fintranzact, track what is still unbilled, and bill all or part of a challan into a tax invoice without moving stock twice.
+sidebar:
+  order: 3
+---
+
+import ForDesktop from '../../../components/ForDesktop.astro';
+import ForMobile from '../../../components/ForMobile.astro';
+import ForCA from '../../../components/ForCA.astro';
+
+A **delivery challan** records goods leaving your premises before (or without) a tax invoice — for example goods sent on approval, for job work, or delivered now and billed at month end.
+
+What a challan does in Fintranzact:
+
+| Effect | Behaviour |
+|---|---|
+| **Stock** | Goods go **out** of stock as soon as the challan is saved, from the warehouse you pick. This applies to both sales and purchase challans. |
+| **Party ledger** | No effect. The amount becomes due only when you bill the challan on an invoice. |
+| **GST returns** | Not included in GSTR-1 or GSTR-3B. The invoice you make from it is. |
+| **Numbering** | `DC-00001`, `DC-00002`, … (change the prefix in [Settings](/settings/)) |
+| **Statuses** | Draft, Sent, Cancelled |
+
+On top of its status, a challan tracks how much of it has been billed: **Not billed**, **Partly billed**, **Billed**, or **Closed** (short-closed).
+
+## Creating a challan
+
+<ForDesktop>
+1. In the sidebar, under **VOUCHERS**, click **Delivery Challans**.
+2. Choose **Sales** or **Purchases** at the top left. New challans are created on the side that is selected.
+3. Click **+ New Challan**.
+4. Pick the **Customer** (or **Supplier**), and set the **Date** and **Due date**.
+5. If you have more than one active warehouse, choose **Dispatch from**. It starts at your default sales warehouse.
+6. Add the **Line Items**, and optionally charges, **Round Off**, **Notes** and **Terms & conditions**.
+7. Click **Create Delivery Challan**.
+
+If an item does not have enough stock, a warning lists what is available and what is needed. Depending on your stock settings, you can either save anyway (stock goes below zero) or you must reduce the quantities first.
+</ForDesktop>
+
+<ForMobile>
+1. Tap **More** → **Delivery challans**.
+2. Tap the **+** button.
+3. Tap **Select customer...** and pick the customer.
+4. Set the **Challan Date**.
+5. Under **Items (Dispatched)**, tap **Add Item** for each line.
+6. Use **Notes (optional)** for the delivery address, vehicle number and so on.
+7. Tap **Create Delivery Challan**.
+
+The screen reminds you: *Creating a delivery challan will decrement stock (dispatch).* Challans created on mobile are always sales challans and use your default warehouse.
+</ForMobile>
+
+:::caution
+The whole-document **Discount** box on the web form is not saved on challans, and **Round Off** only counts toward the saved total when the challan also has a charge. Use line discounts.
+:::
+
+## Tracking what is still unbilled
+
+<ForDesktop>
+The list shows **Party**, **Challan #**, **Date**, **Due Date**, **Status**, **Pending** and **Total**. The **Pending** column reads **Not billed**, **Partly billed**, **Billed** or **Closed**.
+
+Click a challan to open it. The **Fulfilment** table shows, for each item, the quantity **Ordered** (on the challan), **Done** (already billed) and **Pending**. Below it, every invoice made from the challan is listed with its number, date and status.
+</ForDesktop>
+
+<ForMobile>
+The list shows each challan's number, customer, date, total and status. Tap a challan to see its summary, items and notes, plus a reminder that *Stock was decremented when this challan was created.* The mobile app does not show billed and pending quantities; use the web app for that.
+</ForMobile>
+
+Pending quantities are worked out live from the invoices made from the challan. If you cancel or delete one of those invoices, its quantity becomes pending on the challan again.
+
+## Billing a challan
+
+<ForDesktop>
+1. Hover over the challan and click **Convert**, or open it and click **Convert** at the bottom.
+2. The **Convert pending items** dialog lists each item with **Ordered**, **Done**, **Pending** and **Take now**. **Take now** starts at the full pending quantity.
+3. Lower **Take now** for anything you are not billing yet. You cannot enter more than is pending.
+4. Click **Create Invoice**.
+
+You can bill a challan in several parts. Each invoice takes only what is still pending.
+</ForDesktop>
+
+<ForMobile>
+Open the challan and tap **Convert to Invoice**, then **Convert**. The app bills **everything still pending** in one invoice and shows the new invoice number. To bill only part of a challan, use the web app.
+</ForMobile>
+
+The invoice made from a challan:
+
+- is a draft invoice on the same side (sale or purchase) as the challan;
+- is **not** given a stock movement of its own — the challan already moved the goods;
+- keeps the challan's date and due date, notes and terms;
+- takes the challan's other charges and round-off only when it bills the whole challan in one go.
+
+:::note
+While an invoice made from a challan is still active, you cannot cancel or delete the challan. You will see *Invoice … was billed from this document. Cancel or delete that invoice first.* This stops the goods' stock movement from being lost.
+:::
+
+## Short-closing a challan
+
+If part of a challan will never be billed (for example, the customer kept only some goods and returned the rest outside the system), open it on the web and click **Short-close**. The challan is treated as done, its **Pending** shows **Closed**, and **Convert** is no longer offered. Click **Reopen** to make the remaining quantity pending again.
+
+Short-closing does not put stock back. If goods came back, record that separately — for example with a [stock adjustment](/items/inventory/).
+
+## Other actions
+
+| Action | Web | Mobile |
+|---|---|---|
+| **Mark Sent** | On draft rows | **Mark as Sent** on the detail screen, or **Mark Sent** on the card |
+| **Edit** | Drafts, from the detail panel | Not available |
+| **Delete** | Drafts (Admin or Owner) | **Delete** on draft cards (Admin or Owner) |
+| **Cancel** | Not available | **Cancel** on sent cards |
+| **Share link** | Sales challans, in the detail panel — see [Share links](/documents/share-links) | Not available |
+
+Cancelling or deleting a challan puts its stock back.
+
+:::caution
+The mobile detail screen also shows **Mark as Delivered**. The server does not accept a "delivered" status for challans, so this button currently returns an error. Use **Mark as Sent** instead.
+:::
+
+<ForCA>
+:::tip[For CAs]
+Challans do not generate output tax. Make sure goods sent on challan are billed within the time allowed under GST rules — the **Pending** column filtered on **Sales** gives you the list of unbilled challans. Because stock leaves at the challan and not at the invoice, closing stock reports stay correct even when billing happens later.
+:::
+</ForCA>
+
+## Frequently asked questions
+
+**Will converting a challan deduct stock again?**
+No. The invoice is saved without a stock movement because the challan already took the goods out.
+
+**I cancelled the invoice made from a challan. What happens?**
+The quantities on that invoice become pending on the challan again, so you can bill them on a new invoice.
+
+**Can I bill two challans on one invoice?**
+Not in the app. Each conversion creates one invoice from one challan.
+
+**Why does a purchase challan reduce my stock?**
+Every delivery challan is treated as goods going out, whichever side it is on. To record goods coming in before the bill, use a goods receipt note — see [Inventory](/items/inventory/).
+
+**Does a challan show on the customer's statement?**
+No. Only the invoice made from it does.

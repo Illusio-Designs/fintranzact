@@ -403,7 +403,7 @@ mcp_servers:
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_URL: "https://fintranzact-web.vercel.app"
       FINTRANZACT_API_KEY: "sess_..."
       FINTRANZACT_TENANT_ID: "tenant-uuid"
       FINTRANZACT_BUSINESS_ID: "business-uuid"
@@ -429,7 +429,7 @@ system_prompt: |
   Use INR for all amounts. Keep responses under 3 sentences unless
   the customer asks for details.
 
-escalation_webhook: https://your-fintranzact-instance.com/webhooks/escalate
+escalation_webhook: https://fintranzact-web.vercel.app/webhooks/escalate
 ```
 
 ### B2B account management agent
@@ -446,7 +446,7 @@ mcp_servers:
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_URL: "https://fintranzact-web.vercel.app"
       FINTRANZACT_API_KEY: "sess_..."
       FINTRANZACT_TENANT_ID: "tenant-uuid"
       FINTRANZACT_BUSINESS_ID: "business-uuid"
@@ -484,7 +484,7 @@ mcp_servers:
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_URL: "https://fintranzact-web.vercel.app"
       FINTRANZACT_API_KEY: "sess_client1_token..."
       FINTRANZACT_TENANT_ID: "tenant-uuid"
       FINTRANZACT_BUSINESS_ID: "sharma-traders-business-uuid"
@@ -492,7 +492,7 @@ mcp_servers:
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_URL: "https://fintranzact-web.vercel.app"
       FINTRANZACT_API_KEY: "sess_client2_token..."
       FINTRANZACT_TENANT_ID: "tenant-uuid"
       FINTRANZACT_BUSINESS_ID: "gupta-enterprises-business-uuid"
@@ -500,7 +500,7 @@ mcp_servers:
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_URL: "https://fintranzact-web.vercel.app"
       FINTRANZACT_API_KEY: "sess_client3_token..."
       FINTRANZACT_TENANT_ID: "tenant-uuid"
       FINTRANZACT_BUSINESS_ID: "vinod-sons-business-uuid"

@@ -1,0 +1,129 @@
+---
+title: Sales and Purchase Returns
+description: Record goods returned by customers and goods sent back to suppliers in Fintranzact — stock, party balance, invoice adjustment and GST effects of sales returns and purchase returns.
+sidebar:
+  order: 5
+---
+
+import ForDesktop from '../../../components/ForDesktop.astro';
+import ForMobile from '../../../components/ForMobile.astro';
+import ForCA from '../../../components/ForCA.astro';
+
+Use a return when goods physically move back:
+
+| | Sales Return | Purchase Return |
+|---|---|---|
+| Use it when | A customer sends goods back to you | You send goods back to a supplier |
+| Default number | `SR-00001` | `PR-00001` |
+| Statuses | Draft, Sent, Cancelled | Draft, Sent, Cancelled |
+| Stock | Comes **in**, into your sales-return warehouse | Goes **out**, from your purchase-return warehouse |
+| Party ledger | Credit — the customer owes you less | Debit — you owe the supplier less |
+| GSTR-1 | **Credit Notes** section | **Debit Notes** section |
+| Where to create | Web and mobile app | [CLI](/ai/cli) or [MCP server](/ai/mcp-server) only |
+
+If nothing comes back and you are only correcting the amount, use a [credit note](/documents/credit-and-debit-notes) instead.
+
+## Sales returns
+
+### Creating a return against an invoice
+
+Creating the return from the invoice links the two, so the invoice's balance goes down and GSTR-1 shows the original invoice number.
+
+<ForDesktop>
+1. Go to **Invoices** and open the sale invoice.
+2. Click **Create Sales Return**. It is shown once the invoice is no longer a draft, is not cancelled, and has not been fully credited or returned.
+3. The **New Sales Return** panel opens pre-filled with the invoice's customer, lines, notes and terms, dated today.
+4. Keep only the lines and quantities that came back.
+5. If you have more than one active warehouse, choose **Receive into**. It starts at the sales-return warehouse set in your inventory settings.
+6. Click **Create Sales Return**.
+
+The invoice's detail panel then shows a **See SR-…** link to the return.
+</ForDesktop>
+
+<ForMobile>
+1. Open the invoice from the **Invoices** tab.
+2. Tap **Create Sales Return**. It is hidden for drafts, cancelled invoices and invoices that are fully adjusted.
+3. The **New Sales Return** screen opens pre-filled with the customer and items, dated today (**Return Date**).
+4. Adjust **Items (Returned)** and add a reason in **Notes (optional)**.
+5. Check the **Return Amount** and tap **Create Sales Return**.
+
+The screen reminds you: *Creating a sales return will increment stock (goods returned by customer).*
+</ForMobile>
+
+:::caution
+**Create Sales Return** is also shown on **purchase** invoices on the web. Don't use it there: it creates a sales return on the purchases side that **adds** stock instead of removing it, and it won't appear on the **Sales Returns** page (which shows sales-side returns only). To send goods back to a supplier, use a purchase return.
+:::
+
+### How a sales return adjusts the invoice
+
+Sales returns and credit notes share one limit per invoice:
+
+- Together they cannot exceed the invoice total. If they would, saving fails with *Amount exceeds remaining adjustable amount*.
+- The invoice's balance due goes down by the return's total.
+- Once they cover the whole invoice, the invoice shows as **Adjusted**.
+
+Cancelling or deleting the return takes the stock back out and removes it from the invoice's adjusted amount.
+
+### Standalone sales returns
+
+<ForDesktop>
+Go to **VOUCHERS** → **Sales Returns** and click **+ New Sales Return**. The form has no field to link an invoice, so the return reduces the customer's overall balance but not any particular invoice.
+</ForDesktop>
+
+<ForMobile>
+Tap **More** → **Sales returns**, then the **+** button. Pick the customer, set the **Return Date**, add items and tap **Create Sales Return**. The return is not linked to an invoice.
+</ForMobile>
+
+### Managing sales returns
+
+<ForDesktop>
+The **Sales Returns** page has status tabs **All**, **Draft**, **Sent** and **Cancelled**. Columns are **Party**, **Return #**, **Date**, **Ref. Invoice** (**Linked** when made from an invoice), **Status** and **Total**. Draft rows offer **Mark Sent** and **Delete** (Admin or Owner). Click a row to see its details, the **Reference Invoice** link, and a **Share link** section. Drafts can be edited from the detail panel.
+</ForDesktop>
+
+<ForMobile>
+The **Sales returns** screen has chips **All**, **Draft**, **Sent**, **Refunded** and **Cancelled**. Cards offer **Mark Sent** and **Delete** as drafts, and **Cancel** once sent. Tap a card to see the customer, **Return Date**, **Source Invoice**, **Items (Returned)**, the **Return Amount**, and, for drafts, **Mark as Sent** and **Delete Sales Return**.
+
+The **Refunded** chip currently shows an error, because sales returns have no refunded status.
+</ForMobile>
+
+:::caution
+On the web form, the whole-document **Discount** box is not saved on returns, and **Round Off** only counts toward the saved total when the return also has a charge.
+:::
+
+## Purchase returns
+
+Purchase returns have no page in the web or mobile app. Create them with the [CLI](/ai/cli) or the [MCP server](/ai/mcp-server). When you pass the original purchase invoice as the reference, the same rules as sales returns apply: the return counts toward that invoice's adjustable amount, and the invoice shows as **Adjusted** once fully covered.
+
+A purchase return:
+
+- takes the goods **out** of stock, from the purchase-return warehouse in your inventory settings (or the warehouse you pass);
+- reduces what you owe the supplier in the [party ledger](/parties/party-ledger);
+- is posted in the derived accounts as **Dr Payable / Cr Purchase Returns + Input GST**;
+- appears in the **Debit Notes** section of GSTR-1.
+
+Warehouses and the default return warehouses are covered in [Inventory](/items/inventory/).
+
+<ForCA>
+:::caution[GST treatment to check]
+- Sales returns appear under GSTR-1 **Credit Notes** but are **not** deducted from GSTR-1 totals or GSTR-3B outward tax. Adjust 3B yourself.
+- Purchase returns appear under GSTR-1 **Debit Notes**, although they are inward documents. Remove them from the CDNR you file.
+- GSTR-3B's ITC total currently **adds** the tax on purchase returns instead of reversing it. Reverse that ITC manually.
+:::
+</ForCA>
+
+## Frequently asked questions
+
+**Where does the returned stock go?**
+Into the warehouse chosen in **Receive into** on the web form. If you don't pick one, the sales-return warehouse from your inventory settings is used. Returns created on mobile always use that default.
+
+**Can I return more than I sold?**
+Not against a linked invoice by value: sales returns and credit notes together can't exceed the invoice total. Quantities are not checked line by line.
+
+**I cancelled a sales return. Is the stock removed again?**
+Yes. Cancelling or deleting a return reverses its stock movement.
+
+**Why can't I find the Purchase Returns page?**
+There isn't one yet. Use the CLI or MCP server, or ask your developer to create them through the API.
+
+**Does a sales return show on the customer's statement?**
+Yes. It appears in the party ledger as a credit that reduces what the customer owes.
