@@ -878,10 +878,16 @@ function PartnerPanel({ id, onClose }: { id: string | null; onClose: () => void 
   const refresh = () => Promise.all([utils.platform.partners.invalidate(), utils.platform.partner.invalidate()]);
   const update = trpc.platform.updatePartner.useMutation({
     onSuccess: async (row, vars) => {
-      toast.success(
-        vars.status === "approved" ? "Partner approved" : vars.status === "rejected" ? "Application rejected" : "Partner saved",
-        vars.status === "approved" && row.referralCode ? `${row.companyName} · referral code ${row.referralCode}` : row.companyName,
-      );
+      if (vars.status === "approved" && row.referralCode) {
+        toast.success(
+          "Partner approved",
+          row.emailed
+            ? `We emailed ${row.companyName} their referral code ${row.referralCode}.`
+            : `Referral code ${row.referralCode}. Share it with them; it is shown in this panel.`,
+        );
+      } else {
+        toast.success(vars.status === "rejected" ? "Application rejected" : "Partner saved", row.companyName);
+      }
       await refresh();
       if (vars.status !== "approved") onClose();
     },

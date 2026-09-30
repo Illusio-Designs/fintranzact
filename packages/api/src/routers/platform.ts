@@ -3,6 +3,8 @@ import { TRPCError } from "@trpc/server";
 import { and, count, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
 import { controlDb, getTenantDb, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts } from "@fintranzact/db";
 import { ensureReferralCode, getPartnerStats } from "../lib/partner-program.js";
+import { emailService } from "../lib/email.js";
+import { logger } from "../lib/logger.js";
 import { PLAN_DEFAULTS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema } from "@fintranzact/shared";
 import { getPlanCatalog, invalidatePlanCatalog } from "../lib/plan-catalog.js";
 import { router, protectedProcedure } from "../trpc.js";
@@ -325,6 +327,7 @@ export const platformRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, status, ...rest } = input;
+      const [before] = await controlDb.select({ status: partners.status }).from(partners).where(eq(partners.id, id)).limit(1);
       const [row] = await controlDb
         .update(partners)
         .set({
@@ -336,7 +339,31 @@ export const platformRouter = router({
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Partner not found" });
       // Approved partners get the referral code they share with businesses.
       const referralCode = row.status === "approved" ? await ensureReferralCode(row.id) : null;
-      return { ...row, referralCode };
+
+      // First approval: email the partner their code. A failed email does not
+      // undo the approval; the admin can share the code from the panel.
+      let emailed = false;
+      if (referralCode && before?.status !== "approved") {
+        const [p] = await controlDb
+          .select({ email: partners.email, contactName: partners.contactName, companyName: partners.companyName })
+          .from(partners)
+          .where(eq(partners.id, row.id))
+          .limit(1);
+        const base = (process.env.APP_URL || "http://localhost:5173").replace(/\/$/, "");
+        try {
+          await emailService.sendPartnerApproved(p!.email, {
+            contactName: p!.contactName,
+            companyName: p!.companyName,
+            referralCode,
+            signupUrl: `${base}/register?ref=${referralCode}`,
+            statusUrl: `${base}/partner-status`,
+          });
+          emailed = true;
+        } catch (err) {
+          logger.warn({ err, partnerId: row.id }, "Could not email the approved partner");
+        }
+      }
+      return { ...row, referralCode, emailed };
     }),
 
   /** One partner: their referral code, badge, the organisations they brought in, and payouts. */

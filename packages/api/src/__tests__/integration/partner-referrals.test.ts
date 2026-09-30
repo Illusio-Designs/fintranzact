@@ -64,13 +64,42 @@ afterAll(async () => {
 });
 
 describe("referral codes", () => {
-  it("are given when a partner is approved, and never change", async () => {
+  it("are given when a partner is approved, emailed to them once, and never change", async () => {
+    const spy = vi.spyOn(emailService, "sendPartnerApproved").mockResolvedValue(undefined);
     const approved = await adminCaller().platform.updatePartner({ id: partnerId, status: "approved" });
     expect(approved.referralCode).toMatch(/^FTZ-[A-HJ-NP-Z2-9]{6}$/);
+    expect(approved.emailed).toBe(true);
     referralCode = approved.referralCode!;
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy.mock.calls[0]![0]).toBe("kiran@desaitax.in");
+    expect(spy.mock.calls[0]![1]).toMatchObject({
+      contactName: "Kiran Desai",
+      referralCode,
+      signupUrl: expect.stringMatching(new RegExp(`/register\\?ref=${referralCode}$`)),
+      statusUrl: expect.stringMatching(/\/partner-status$/),
+    });
 
     const again = await adminCaller().platform.updatePartner({ id: partnerId, status: "approved" });
     expect(again.referralCode).toBe(referralCode);
+    expect(spy).toHaveBeenCalledOnce();
+    spy.mockRestore();
+  });
+
+  it("still approve the partner when the email cannot be sent", async () => {
+    await publicCaller().partner.submitApplication({
+      contactName: "Nobody Mail",
+      companyName: "No Mail Co",
+      email: "nomail@example.in",
+      phone: "+91 90000 00000",
+      city: "Pune",
+      partnerType: "reseller",
+    });
+    const pending = (await adminCaller().platform.partners({ search: "No Mail" })).data[0]!;
+    const spy = vi.spyOn(emailService, "sendPartnerApproved").mockRejectedValue(new Error("down"));
+    const approved = await adminCaller().platform.updatePartner({ id: pending.id, status: "approved" });
+    spy.mockRestore();
+    expect(approved).toMatchObject({ status: "approved", emailed: false });
+    expect(approved.referralCode).toBeTruthy();
   });
 
   it("link an organisation registered with the code, however it is typed", async () => {
