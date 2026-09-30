@@ -525,7 +525,7 @@ function ProfitAndLossView() {
               <p className="text-lg font-bold tabular-nums text-emerald-600">{fmtStr(data.revenue)}</p>
             </div>
             <div className="card px-4 py-3">
-              <p className="text-xs text-text-tertiary mb-1">COGS (Purchases)</p>
+              <p className="text-xs text-text-tertiary mb-1">Cost of Goods Sold</p>
               <p className="text-lg font-bold tabular-nums text-blue-600">{fmtStr(data.cogs)}</p>
             </div>
             <div className="card px-4 py-3">
@@ -560,7 +560,24 @@ function ProfitAndLossView() {
                   <td className="text-right tabular-nums font-semibold text-emerald-600">{fmtStr(data.revenue)}</td>
                 </tr>
                 <tr>
-                  <td className="text-text-secondary pl-6">Less: Cost of Goods Sold (Purchases)</td>
+                  <td className="text-text-secondary pl-6">Opening stock</td>
+                  <td className="text-right tabular-nums text-text-tertiary">{fmtStr(data.openingStock)}</td>
+                </tr>
+                <tr>
+                  <td className="text-text-secondary pl-6">Add: Purchases</td>
+                  <td className="text-right tabular-nums text-text-tertiary">{fmtStr(data.purchases)}</td>
+                </tr>
+                <tr>
+                  <td className="text-text-secondary pl-6">
+                    Less: Closing stock
+                    <span className="ml-1 text-[11px] text-text-tertiary">
+                      ({data.valuationMethod === "fifo" ? "FIFO" : "average cost"})
+                    </span>
+                  </td>
+                  <td className="text-right tabular-nums text-text-tertiary">({fmtStr(data.closingStock)})</td>
+                </tr>
+                <tr>
+                  <td className="text-text-secondary pl-6">Less: Cost of Goods Sold</td>
                   <td className="text-right tabular-nums text-text-secondary">({fmtStr(data.cogs)})</td>
                 </tr>
                 <tr className="border-t border-border-light bg-surface-1">

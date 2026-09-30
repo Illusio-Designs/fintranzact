@@ -33,6 +33,7 @@ import {
   warehouseBalance,
 } from "../lib/inventory-service.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { getValuationMethod } from "../lib/stock-valuation.js";
 import { getBarcodeSetup, requireBarcodesEnabled, resolveCodes } from "../lib/barcode-setup.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -683,6 +684,7 @@ export const stockRouter = router({
     const settings = await ctx.db.transaction((tx: Tx) => ensureDefaultWarehouse(tx, ctx.businessId));
     return {
       negativeStockPolicy: await getNegativeStockPolicy(ctx.db, ctx.businessId),
+      valuationMethod: await getValuationMethod(ctx.db, ctx.businessId),
       salesWarehouseId: settings.salesWarehouseId as string | null,
       purchaseWarehouseId: settings.purchaseWarehouseId as string | null,
       salesReturnWarehouseId: settings.salesReturnWarehouseId as string | null,
@@ -692,7 +694,10 @@ export const stockRouter = router({
   }),
 
   updateSettings: adminProcedure
-    .input(z.object({ negativeStockPolicy: z.enum(["allow", "warn", "block"]) }))
+    .input(z.object({
+      negativeStockPolicy: z.enum(["allow", "warn", "block"]).optional(),
+      valuationMethod: z.enum(["weighted_average", "fifo"]).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       // A business-wide rule, so the same permission as editing the business.
       requireCan(ctx.ability, "update", "Business");
@@ -700,7 +705,11 @@ export const stockRouter = router({
         await ensureDefaultWarehouse(tx, ctx.businessId);
         await tx
           .update(inventorySettings)
-          .set({ negativeStockPolicy: input.negativeStockPolicy, updatedAt: new Date() })
+          .set({
+            ...(input.negativeStockPolicy ? { negativeStockPolicy: input.negativeStockPolicy } : {}),
+            ...(input.valuationMethod ? { valuationMethod: input.valuationMethod } : {}),
+            updatedAt: new Date(),
+          })
           .where(eq(inventorySettings.businessId, ctx.businessId));
       });
       return { ok: true };

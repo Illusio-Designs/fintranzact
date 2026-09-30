@@ -36,10 +36,65 @@ const POLICY_OPTIONS = [
   { value: "warn", label: "Warn", hint: "Entry forms flag a shortfall, but saving still works." },
   { value: "block", label: "Block", hint: "Documents that would take a warehouse below zero can't be saved." },
 ] as const;
-type Policy = (typeof POLICY_OPTIONS)[number]["value"];
 
-/** Business-wide rule for documents that would take stock below zero. */
-function NegativeStockSetting() {
+const VALUATION_OPTIONS = [
+  { value: "weighted_average", label: "Average cost", hint: "Stock is valued at the average cost of its purchases." },
+  { value: "fifo", label: "FIFO", hint: "What's left is valued at the most recent purchase prices." },
+] as const;
+
+type Option = { value: string; label: string; hint: string };
+
+/** One setting: its title and current explanation, and a segmented choice. */
+function SettingRow({
+  title,
+  options,
+  value,
+  canEdit,
+  pending,
+  onChange,
+}: {
+  title: string;
+  options: readonly Option[];
+  value: string;
+  canEdit: boolean;
+  pending: boolean;
+  onChange: (value: string) => void;
+}) {
+  const current = options.find((o) => o.value === value) ?? options[0]!;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
+        <p className="mt-0.5 text-xs text-text-tertiary">{current.hint}</p>
+      </div>
+      {canEdit ? (
+        <div className="inline-flex rounded-lg border border-border-light p-0.5" role="radiogroup" aria-label={title}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={o.value === current.value}
+              disabled={pending}
+              onClick={() => o.value !== current.value && onChange(o.value)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                o.value === current.value ? "bg-brand-600 text-white" : "text-text-secondary hover:bg-surface-2",
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-text-secondary">{current.label}</span>
+      )}
+    </div>
+  );
+}
+
+/** Business-wide stock rules: selling below zero, and how stock is valued. */
+function InventorySettings() {
   const utils = trpc.useUtils();
   const { data: session } = trpc.auth.me.useQuery();
   const { data: settings } = trpc.stock.settings.useQuery();
@@ -48,43 +103,31 @@ function NegativeStockSetting() {
     onSuccess: () => {
       utils.stock.settings.invalidate();
       utils.stock.availability.invalidate();
-      toast.success("Negative stock setting saved");
+      utils.reports.invalidate();
+      toast.success("Inventory setting saved");
     },
     onError: (err) => toast.error(err.message),
   });
   if (!settings) return null;
-  const current = POLICY_OPTIONS.find((p) => p.value === settings.negativeStockPolicy) ?? POLICY_OPTIONS[1];
 
   return (
-    <div className="card mb-6 flex flex-wrap items-center justify-between gap-4 p-5">
-      <div className="min-w-0">
-        <h2 className="text-sm font-semibold text-text-primary">Selling more than you have</h2>
-        <p className="mt-0.5 text-xs text-text-tertiary">{current.hint}</p>
-      </div>
-      {canEdit ? (
-        <div className="inline-flex rounded-lg border border-border-light p-0.5" role="radiogroup" aria-label="Negative stock">
-          {POLICY_OPTIONS.map((p) => (
-            <button
-              key={p.value}
-              type="button"
-              role="radio"
-              aria-checked={p.value === current.value}
-              disabled={update.isPending}
-              onClick={() => p.value !== current.value && update.mutate({ negativeStockPolicy: p.value as Policy })}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                p.value === current.value
-                  ? "bg-brand-600 text-white"
-                  : "text-text-secondary hover:bg-surface-2",
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-text-secondary">{current.label}</span>
-      )}
+    <div className="card mb-6 divide-y divide-border-light">
+      <SettingRow
+        title="Selling more than you have"
+        options={POLICY_OPTIONS}
+        value={settings.negativeStockPolicy}
+        canEdit={canEdit}
+        pending={update.isPending}
+        onChange={(v) => update.mutate({ negativeStockPolicy: v as (typeof POLICY_OPTIONS)[number]["value"] })}
+      />
+      <SettingRow
+        title="Stock valuation"
+        options={VALUATION_OPTIONS}
+        value={settings.valuationMethod}
+        canEdit={canEdit}
+        pending={update.isPending}
+        onChange={(v) => update.mutate({ valuationMethod: v as (typeof VALUATION_OPTIONS)[number]["value"] })}
+      />
     </div>
   );
 }
@@ -180,7 +223,7 @@ function WarehousesPage() {
         </div>
       )}
 
-      <NegativeStockSetting />
+      <InventorySettings />
 
       {/* Stock by warehouse */}
       <div className="card overflow-hidden">

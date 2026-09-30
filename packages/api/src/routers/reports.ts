@@ -33,6 +33,7 @@ import {
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { generateTallyXml } from "../lib/tally-xml-export.js";
+import { valueStock, type ValuationMethod } from "../lib/stock-valuation.js";
 
 // ── Shared variance helper ────────────────────────────────────────
 function computeVariance(current: string, previous: string): { variance: string; variancePercent: string } {
@@ -42,6 +43,66 @@ function computeVariance(current: string, previous: string): { variance: string;
     ? "N/A"
     : ((parseFloat(v) / parseFloat(prevAbs)) * 100).toFixed(1);
   return { variance: v, variancePercent };
+}
+
+// ── Stock in the P&L and balance sheet ─────────────────────────
+// Purchases are expensed when booked (account 5000), so the period's cost of
+// goods sold is purchases plus the change in stock on hand. Nothing is posted
+// to the ledger; the reports add it from the stock valuation.
+
+type PlLine = { accountCode: string; accountName: string; amount: string };
+type BsLine = { accountCode: string; accountName: string; balance: string };
+
+const STOCK_CHANGE_CODE = "5050";
+const INVENTORY_CODE = "1200";
+
+async function stockForPeriod(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  businessId: string,
+  from: Date,
+  to: Date,
+): Promise<{ opening: string; closing: string; method: ValuationMethod }> {
+  const [opening, closing] = await Promise.all([
+    valueStock(db, businessId, new Date(from.getTime() - 1)),
+    valueStock(db, businessId, to),
+  ]);
+  return { opening: opening.total, closing: closing.total, method: closing.method };
+}
+
+/** Opening stock less closing stock, as a cost line next to purchases. */
+function addStockChangeExpense(expenses: PlLine[], stock: { opening: string; closing: string }) {
+  const change = money.sub(stock.opening, stock.closing);
+  if (money.compare(change, "0") === 0) return;
+  expenses.push({
+    accountCode: STOCK_CHANGE_CODE,
+    accountName: "Changes in inventories of stock-in-trade",
+    amount: change,
+  });
+}
+
+/** Net sales less purchases (net of returns), direct expenses and the change in stock. */
+function computeGrossProfit(income: PlLine[], expenses: PlLine[]) {
+  const amount = (list: PlLine[], code: string) => list.find((a) => a.accountCode === code)?.amount ?? "0.00";
+  const netSales = money.sub(amount(income, "4000"), amount(expenses, "4010"));
+  const costOfSales = money.sum([
+    amount(expenses, "5000"), // purchases
+    amount(expenses, "5010"), // purchase returns (credit balance, so negative)
+    amount(expenses, "5100"), // direct expenses
+    amount(expenses, STOCK_CHANGE_CODE),
+  ]);
+  return money.sub(netSales, costOfSales);
+}
+
+/** Closing stock as the Inventory asset (added to any journal balance on 1200). */
+function addClosingStockAsset(assets: BsLine[], closingStock: string) {
+  if (money.compare(closingStock, "0") === 0) return;
+  const existing = assets.find((a) => a.accountCode === INVENTORY_CODE);
+  if (existing) {
+    existing.balance = money.add(existing.balance, closingStock);
+  } else {
+    assets.push({ accountCode: INVENTORY_CODE, accountName: "Inventory (closing stock)", balance: closingStock });
+  }
 }
 
 export const reportsRouter = router({
@@ -1018,6 +1079,7 @@ export const reportsRouter = router({
             totalValue: sql<string>`ROUND(SUM(GREATEST(${itemVariants.stockQuantity}::numeric, 0) * COALESCE(${itemVariants.purchasePrice}::numeric, 0)), 2)::text`,
             totalValueAtSale: sql<string>`ROUND(SUM(GREATEST(${itemVariants.stockQuantity}::numeric, 0) * COALESCE(${itemVariants.salePrice}::numeric, 0)), 2)::text`,
             variantDetails: sql<string>`JSON_AGG(JSON_BUILD_OBJECT(
+              'variantId', ${itemVariants.id},
               'sku', ${itemVariants.sku},
               'attributes', ${itemVariants.attributeValues},
               'stock', ${itemVariants.stockQuantity},
@@ -1039,6 +1101,38 @@ export const reportsRouter = router({
           )
           .orderBy(items.name),
       ]);
+
+      // Cost value comes from the business's valuation method (weighted
+      // average or FIFO over purchase bills), not today's purchase price.
+      const valuation = await valueStock(ctx.db, ctx.businessId, new Date());
+      const valued = (itemId: string, variantId: string | null) =>
+        valuation.units.get(`${itemId}:${variantId ?? ""}`);
+
+      for (const r of simpleRows) {
+        const v = valued(r.itemId, null);
+        if (v) {
+          r.stockValue = v.value.toFixed(2);
+          (r as typeof r & { valuationRate: string }).valuationRate = v.rate.toFixed(2);
+        }
+      }
+      for (const r of variantRows) {
+        try {
+          const details = JSON.parse(r.variantDetails) as Array<{ variantId: string; value: number; valuationRate?: number }>;
+          let sum = 0;
+          for (const d of details) {
+            const v = valued(r.itemId, d.variantId);
+            if (v) {
+              d.value = v.value;
+              d.valuationRate = v.rate;
+            }
+            sum += Number(d.value) || 0;
+          }
+          r.variantDetails = JSON.stringify(details);
+          r.totalValue = sum.toFixed(2);
+        } catch {
+          // keep the SQL values
+        }
+      }
 
       const totalCostValue = (
         parseFloat(money.sum(simpleRows.map((r) => r.stockValue))) +
@@ -1078,6 +1172,7 @@ export const reportsRouter = router({
           totalSaleValue,
           totalSkuCount: simpleRows.length + variantRows.length,
           lowStockCount,
+          valuationMethod: valuation.method,
         },
       };
     }),
@@ -1450,9 +1545,16 @@ export const reportsRouter = router({
         }
       }
 
-      const netIncome = money.sub(
-        money.sub(totalIncomeCredits, totalIncomeDebits),
-        money.sub(totalExpenseDebits, totalExpenseCredits),
+      // Purchases are expensed as they happen, so the stock still on hand is
+      // both an asset and profit not yet used up.
+      const closingStock = await valueStock(ctx.db, ctx.businessId, asOf);
+
+      const netIncome = money.add(
+        money.sub(
+          money.sub(totalIncomeCredits, totalIncomeDebits),
+          money.sub(totalExpenseDebits, totalExpenseCredits),
+        ),
+        closingStock.total,
       );
 
       // Build section arrays from cumulative balances (balance sheet accounts only)
@@ -1488,6 +1590,8 @@ export const reportsRouter = router({
         // income/expense accounts go into net income, not balance sheet directly
       }
 
+      addClosingStockAsset(assets, closingStock.total);
+
       // Sort each section by account code
       assets.sort((a, b) => a.accountCode.localeCompare(b.accountCode));
       liabilities.sort((a, b) => a.accountCode.localeCompare(b.accountCode));
@@ -1504,7 +1608,11 @@ export const reportsRouter = router({
       const totalLiabilities = money.sum(liabilities.map((a) => a.balance));
       const totalEquity = money.sum(equity.map((a) => a.balance));
 
-      return { assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity };
+      return {
+        assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity,
+        closingStock: closingStock.total,
+        valuationMethod: closingStock.method,
+      };
     }),
 
   // ── 13. Profit & Loss (CoA-based) ─────────────────────────────
@@ -1574,23 +1682,15 @@ export const reportsRouter = router({
         }
       }
 
+      const stock = await stockForPeriod(ctx.db, ctx.businessId, from, to);
+      addStockChangeExpense(expenseItems, stock);
+
       income.sort((a, b) => a.accountCode.localeCompare(b.accountCode));
       expenseItems.sort((a, b) => a.accountCode.localeCompare(b.accountCode));
 
       const totalIncome = money.sum(income.map((a) => a.amount));
       const totalExpenses = money.sum(expenseItems.map((a) => a.amount));
-
-      // Gross profit = Sales (4000) - Direct costs (5000 Purchases + 5100 Direct Expenses)
-      const salesAmt = income.find((a) => a.accountCode === "4000")?.amount ?? "0.00";
-      const salesReturnsAmt = expenseItems.find((a) => a.accountCode === "4010")?.amount ?? "0.00";
-      const purchasesAmt = expenseItems.find((a) => a.accountCode === "5000")?.amount ?? "0.00";
-      const directExpAmt = expenseItems.find((a) => a.accountCode === "5100")?.amount ?? "0.00";
-
-      const grossProfit = money.sub(
-        money.sub(salesAmt, salesReturnsAmt),
-        money.add(purchasesAmt, directExpAmt),
-      );
-
+      const grossProfit = computeGrossProfit(income, expenseItems);
       const netProfit = money.sub(totalIncome, totalExpenses);
 
       return {
@@ -1600,6 +1700,9 @@ export const reportsRouter = router({
         totalExpenses,
         grossProfit,
         netProfit,
+        openingStock: stock.opening,
+        closingStock: stock.closing,
+        valuationMethod: stock.method,
       };
     }),
 
@@ -1855,8 +1958,13 @@ export const reportsRouter = router({
         return money.sub(money.sub(incCredits, incDebits), money.sub(expDebits, expCredits));
       };
 
-      const currentNetIncome = calcNetIncome(curMap);
-      const previousNetIncome = calcNetIncome(prevMap);
+      // Stock on hand at each date: an asset, and profit not yet used up.
+      const [currentStock, previousStock] = await Promise.all([
+        valueStock(ctx.db, ctx.businessId, new Date(input.currentAsOf)),
+        valueStock(ctx.db, ctx.businessId, new Date(input.previousAsOf)),
+      ]);
+      const currentNetIncome = money.add(calcNetIncome(curMap), currentStock.total);
+      const previousNetIncome = money.add(calcNetIncome(prevMap), previousStock.total);
 
       // Build balance sheet sections for a given map + net income
       const allCodes = new Set([...curMap.keys(), ...prevMap.keys()]);
@@ -1896,6 +2004,23 @@ export const reportsRouter = router({
         else equity.push(item);
       }
 
+      if (money.compare(currentStock.total, "0") !== 0 || money.compare(previousStock.total, "0") !== 0) {
+        const existing = assets.find((a) => a.accountCode === INVENTORY_CODE);
+        const cur = money.add(existing?.currentBalance ?? "0.00", currentStock.total);
+        const prev = money.add(existing?.previousBalance ?? "0.00", previousStock.total);
+        const { variance, variancePercent } = computeVariance(cur, prev);
+        const row = {
+          accountCode: INVENTORY_CODE,
+          accountName: existing?.accountName ?? "Inventory (closing stock)",
+          currentBalance: cur,
+          previousBalance: prev,
+          variance,
+          variancePercent,
+        };
+        if (existing) Object.assign(existing, row);
+        else assets.push(row);
+      }
+
       // Add net income row to equity
       const { variance: niVariance, variancePercent: niVariancePct } = computeVariance(currentNetIncome, previousNetIncome);
       equity.push({
@@ -1923,6 +2048,9 @@ export const reportsRouter = router({
         currentTotalAssets, previousTotalAssets,
         currentTotalLiabilities, previousTotalLiabilities,
         currentTotalEquity, previousTotalEquity,
+        currentClosingStock: currentStock.total,
+        previousClosingStock: previousStock.total,
+        valuationMethod: currentStock.method,
       };
     }),
 
@@ -1992,6 +2120,24 @@ export const reportsRouter = router({
         else expenseItems.push(item);
       }
 
+      const [currentStock, previousStock] = await Promise.all([
+        stockForPeriod(ctx.db, ctx.businessId, new Date(input.currentFYStart), new Date(input.currentFYEnd)),
+        stockForPeriod(ctx.db, ctx.businessId, new Date(input.previousFYStart), new Date(input.previousFYEnd)),
+      ]);
+      const currentChange = money.sub(currentStock.opening, currentStock.closing);
+      const previousChange = money.sub(previousStock.opening, previousStock.closing);
+      if (money.compare(currentChange, "0") !== 0 || money.compare(previousChange, "0") !== 0) {
+        const { variance, variancePercent } = computeVariance(currentChange, previousChange);
+        expenseItems.push({
+          accountCode: STOCK_CHANGE_CODE,
+          accountName: "Changes in inventories of stock-in-trade",
+          currentAmount: currentChange,
+          previousAmount: previousChange,
+          variance,
+          variancePercent,
+        });
+      }
+
       income.sort((a, b) => a.accountCode.localeCompare(b.accountCode));
       expenseItems.sort((a, b) => a.accountCode.localeCompare(b.accountCode));
 
@@ -2014,6 +2160,11 @@ export const reportsRouter = router({
         previousNetProfit,
         netProfitVariance,
         netProfitVariancePercent,
+        currentOpeningStock: currentStock.opening,
+        currentClosingStock: currentStock.closing,
+        previousOpeningStock: previousStock.opening,
+        previousClosingStock: previousStock.closing,
+        valuationMethod: currentStock.method,
       };
     }),
 

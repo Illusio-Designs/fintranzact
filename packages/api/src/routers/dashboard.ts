@@ -5,6 +5,7 @@ import { money } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
+import { valueStock } from "../lib/stock-valuation.js";
 
 
 export const dashboardRouter = router({
@@ -538,21 +539,24 @@ export const dashboardRouter = router({
       invConditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
       expConditions.push(...buildBusinessDateFilter(expenses, { from: input.fromDate, to: input.toDate }));
 
+      // GST collected or paid is not income or cost, so both sides use the
+      // taxable value (invoice total less its tax).
       const [
         [sales],
         [purchases],
         [expenseTotal],
         expenseBreakdown,
+        stock,
       ] = await Promise.all([
         ctx.db.select({
-          total: sql<string>`COALESCE(SUM(${invoices.totalAmount}::numeric), 0)::text`,
+          total: sql<string>`COALESCE(SUM(${invoices.totalAmount}::numeric - ${invoices.taxAmount}::numeric), 0)::text`,
         }).from(invoices)
-          .where(and(...invConditions, eq(invoices.type, "sale"), eq(invoices.documentType, "invoice"), sql`${invoices.status} != 'cancelled'`)),
+          .where(and(...invConditions, eq(invoices.type, "sale"), eq(invoices.documentType, "invoice"), sql`${invoices.status} != 'cancelled'`, isNull(invoices.deletedAt))),
 
         ctx.db.select({
-          total: sql<string>`COALESCE(SUM(${invoices.totalAmount}::numeric), 0)::text`,
+          total: sql<string>`COALESCE(SUM(${invoices.totalAmount}::numeric - ${invoices.taxAmount}::numeric), 0)::text`,
         }).from(invoices)
-          .where(and(...invConditions, eq(invoices.type, "purchase"), eq(invoices.documentType, "invoice"), sql`${invoices.status} != 'cancelled'`)),
+          .where(and(...invConditions, eq(invoices.type, "purchase"), eq(invoices.documentType, "invoice"), sql`${invoices.status} != 'cancelled'`, isNull(invoices.deletedAt))),
 
         ctx.db.select({
           total: sql<string>`COALESCE(SUM(${expenses.amount}::numeric), 0)::text`,
@@ -566,16 +570,31 @@ export const dashboardRouter = router({
           .where(and(...expConditions))
           .groupBy(expenses.category)
           .orderBy(sql`SUM(${expenses.amount}::numeric) DESC`),
+
+        // Stock on hand before the period and at its end.
+        Promise.all([
+          input.fromDate
+            ? valueStock(ctx.db, ctx.businessId, new Date(new Date(input.fromDate).getTime() - 1))
+            : null,
+          valueStock(ctx.db, ctx.businessId, input.toDate ? new Date(input.toDate) : new Date()),
+        ]),
       ]);
 
+      const openingStock = stock[0]?.total ?? "0.00";
+      const closingStock = stock[1].total;
       const revenue = sales.total;
-      const cogs = purchases.total;
+      // Cost of goods sold = opening stock + purchases - closing stock.
+      const cogs = money.sub(money.add(openingStock, purchases.total), closingStock);
       const grossProfit = money.sub(revenue, cogs);
       const totalExpenses = expenseTotal.total;
       const netProfit = money.sub(grossProfit, totalExpenses);
 
       return {
         revenue,
+        purchases: purchases.total,
+        openingStock,
+        closingStock,
+        valuationMethod: stock[1].method,
         cogs,
         grossProfit,
         grossMarginPercent: money.toNumber(revenue) > 0

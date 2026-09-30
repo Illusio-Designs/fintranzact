@@ -232,6 +232,13 @@
       "when": 1790765039909,
       "tag": "0032_inventory_stock_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790766398063,
+      "tag": "0033_stock_valuation_method",
+      "breakpoints": true
     }
   ]
 }

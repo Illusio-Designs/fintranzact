@@ -244,6 +244,11 @@ export const inventorySettings = pgTable("inventory_settings", {
   // "block" (the server refuses to save).
   negativeStockPolicy: text("negative_stock_policy").default("warn").notNull(),
 
+  // How closing stock is valued in the stock summary, P&L and balance sheet:
+  // "weighted_average" (average cost of purchases, Tally's default) or "fifo"
+  // (the latest purchases are the ones still on the shelf).
+  valuationMethod: text("valuation_method").default("weighted_average").notNull(),
+
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
