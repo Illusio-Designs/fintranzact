@@ -524,6 +524,13 @@ export const items = pgTable("items", {
   // Stock group. When set, `category` mirrors the group's name.
   stockGroupId: uuid("stock_group_id").references(() => stockGroups.id, { onDelete: "set null" }),
   taxInclusive: boolean("tax_inclusive").default(false).notNull(),
+  // Batch / lot tracking. Off by default: an item that doesn't track batches
+  // moves stock exactly as before. When on, stock is held per batch
+  // (item_batches) and every movement names the batch it came from or went to.
+  trackBatches: boolean("track_batches").default(false).notNull(),
+  // Only meaningful with trackBatches: new batches need an expiry date, and
+  // sales pick the batch that expires first (FEFO) and skip expired ones.
+  trackExpiry: boolean("track_expiry").default(false).notNull(),
   source: text("source"),
   // ── Online Store fields ──
   storeEnabled: boolean("store_enabled").default(false).notNull(),
@@ -594,6 +601,36 @@ export const itemVariants = pgTable("item_variants", {
   // Partial index for the active-variant read path (variant lookups in
   // item detail pages, stock/reporting joins). Mirrors items_active_idx.
   index("item_variants_active_idx").on(t.itemId).where(sql`deleted_at IS NULL`),
+]);
+
+// ── Item batches (batch / lot numbers with expiry) ─────────────
+// The batch master for items that track batches. How much of a batch is
+// where is never stored: it is the sum of the stock movements that name the
+// batch, per warehouse — the same ledger that drives every other stock figure.
+
+export const itemBatches = pgTable("item_batches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  // Set for a batch of one variant of a variant item.
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  batchNumber: text("batch_number").notNull(),
+  mfgDate: date("mfg_date"),
+  expiryDate: date("expiry_date"),
+  // MRP printed on this batch's packs, when it differs from the item's.
+  mrp: numeric("mrp", { precision: 15, scale: 2 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  // A batch number names one batch per item (or per variant).
+  uniqueIndex("item_batches_item_number_idx")
+    .on(t.businessId, t.itemId, t.batchNumber)
+    .where(sql`${t.variantId} IS NULL`),
+  uniqueIndex("item_batches_variant_number_idx")
+    .on(t.businessId, t.itemId, t.variantId, t.batchNumber)
+    .where(sql`${t.variantId} IS NOT NULL`),
+  index("item_batches_item_idx").on(t.itemId),
+  index("item_batches_expiry_idx").on(t.businessId, t.expiryDate),
 ]);
 
 // ── Extra item barcodes (businesses on "many barcodes per item") ──
@@ -759,8 +796,20 @@ export const invoiceItems = pgTable("invoice_items", {
   selectedUnit: text("selected_unit"), // which unit was used (null = base unit)
   conversionFactor: numeric("conversion_factor", { precision: 10, scale: 4 }).default("1"), // how many base units per selected unit
   variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "set null" }),
+  // Free goods on the line ("10 + 1"), in the line's unit. They move stock
+  // with the billed quantity but carry no price, so they add nothing to the
+  // taxable value or the totals.
+  freeQuantity: numeric("free_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
+  // Goods receipt notes only: received but rejected at inspection, in the
+  // line's unit. `quantity` is what was accepted; rejected goods never enter
+  // stock and stay pending on the purchase order.
+  rejectedQuantity: numeric("rejected_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
+  rejectionReason: text("rejection_reason"),
+  // The batch this line brought in or took out (items that track batches).
+  batchId: uuid("batch_id").references(() => itemBatches.id, { onDelete: "set null" }),
 }, (t) => [
   index("invoice_items_invoice_idx").on(t.invoiceId),
+  index("invoice_items_batch_idx").on(t.batchId),
   index("invoice_items_item_idx").on(t.itemId),
   index("invoice_items_variant_idx").on(t.variantId),
 ]);
@@ -1199,7 +1248,9 @@ export const stockMovements = pgTable("stock_movements", {
   variantId: uuid("variant_id")
     .references(() => itemVariants.id, { onDelete: "cascade" }),
 
-  batchId: uuid("batch_id"),
+  // Set for items that track batches: the batch this stock belongs to.
+  batchId: uuid("batch_id")
+    .references(() => itemBatches.id, { onDelete: "set null" }),
 
   serialId: uuid("serial_id"),
 
@@ -1938,6 +1989,12 @@ export const itemVariantsRelations = relations(itemVariants, ({ one }) => ({
   item: one(items, { fields: [itemVariants.itemId], references: [items.id] }),
 }));
 
+export const itemBatchesRelations = relations(itemBatches, ({ one }) => ({
+  business: one(businesses, { fields: [itemBatches.businessId], references: [businesses.id] }),
+  item: one(items, { fields: [itemBatches.itemId], references: [items.id] }),
+  variant: one(itemVariants, { fields: [itemBatches.variantId], references: [itemVariants.id] }),
+}));
+
 export const invoicesRelations = relations(invoices, ({ one, many }) => ({
   business: one(businesses, { fields: [invoices.businessId], references: [businesses.id] }),
   party: one(parties, { fields: [invoices.partyId], references: [parties.id] }),
@@ -1951,6 +2008,7 @@ export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({
   invoice: one(invoices, { fields: [invoiceItems.invoiceId], references: [invoices.id] }),
   item: one(items, { fields: [invoiceItems.itemId], references: [items.id] }),
   variant: one(itemVariants, { fields: [invoiceItems.variantId], references: [itemVariants.id] }),
+  batch: one(itemBatches, { fields: [invoiceItems.batchId], references: [itemBatches.id] }),
 }));
 
 export const paymentsRelations = relations(payments, ({ one }) => ({

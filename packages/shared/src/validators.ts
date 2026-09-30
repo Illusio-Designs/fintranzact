@@ -205,6 +205,12 @@ export const createBusinessSchema = z.object({
       }),
     )
     .max(50)
+    .refine((methods) => new Set(methods.map((m) => m.id)).size === methods.length, {
+      message: "Each delivery method needs its own id",
+    })
+    .refine((methods) => !methods.some((m) => isBuiltInDeliveryMethod(m.id)), {
+      message: "A custom delivery method can't reuse a built-in method's id",
+    })
     .nullable()
     .optional(),
 });
@@ -379,6 +385,17 @@ export const itemVariantSchema = z.object({
 
 export type ItemVariant = z.infer<typeof itemVariantSchema>;
 
+/** A calendar date, YYYY-MM-DD. */
+export const dateOnlyStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
+
+/** Batch number, dates and MRP of one batch of an item that tracks batches. */
+export const batchFieldsSchema = z.object({
+  batchNumber: z.string().trim().min(1, "Enter a batch number").max(60),
+  mfgDate: dateOnlyStr.nullish(),
+  expiryDate: dateOnlyStr.nullish(),
+  mrp: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).nullish(),
+});
+
 const createItemBaseSchema = z.object({
   name: z.string().min(1).max(200),
   hsn: z.string().max(20).optional(),
@@ -408,6 +425,11 @@ const createItemBaseSchema = z.object({
   // group's name; null clears it.
   stockGroupId: z.string().uuid().nullish(),
   taxInclusive: z.boolean().default(false),
+  // Batch / lot tracking (see item_batches). Off by default.
+  trackBatches: z.boolean().optional(),
+  trackExpiry: z.boolean().optional(),
+  // Opening stock of a new batch-tracked item goes into this batch.
+  openingBatch: batchFieldsSchema.optional(),
   unitVariants: z.array(unitVariantSchema).optional(),
   variantAttributes: z.array(z.string().min(1).max(50)).max(5).optional(),
   variants: z.array(itemVariantSchema).optional(),
@@ -450,13 +472,54 @@ export const invoiceStatuses = ["draft", "unfulfilled", "sent", "paid", "partial
 export const deliveryMethods = ["self_pickup", "hand_delivery", "courier", "bus", "transport", "post"] as const;
 export type DeliveryMethod = (typeof deliveryMethods)[number];
 
+export function isBuiltInDeliveryMethod(method: string): method is DeliveryMethod {
+  return (deliveryMethods as readonly string[]).includes(method);
+}
+
+/**
+ * How the goods go out: a built-in method, or the id of one of the
+ * business's own methods from Settings → Shipping. Only the shape is checked
+ * here; the server checks custom ids against the business's list.
+ */
+export const deliveryMethodSchema = z.string().trim().min(1).max(100);
+
 export const invoiceChargeSchema = z.object({
   label: z.string().min(1).max(100),
   amount: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/),
   shipmentId: z.string().uuid().optional(),
 });
 
-export const invoiceLineItemSchema = z.object({
+/**
+ * Batch fields on a document line, for items that track batches.
+ * Inward lines name the batch by id, or by number (created if new, with its
+ * dates and MRP). Outward lines name a batch, or leave it empty to have
+ * stock taken first-expiry-first-out; an expired batch goes out only with
+ * `allowExpired`.
+ */
+export const lineBatchFields = {
+  batchId: z.string().uuid().nullish(),
+  batchNumber: z.string().trim().max(60).nullish(),
+  mfgDate: dateOnlyStr.nullish(),
+  expiryDate: dateOnlyStr.nullish(),
+  batchMrp: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).nullish(),
+  allowExpired: z.boolean().nullish(),
+};
+
+const lineQuantityStr = z.string().regex(/^\d+(\.\d{1,3})?$/);
+
+/**
+ * Document types whose lines can carry free goods ("10 + 1"). Credit and
+ * debit notes are money only.
+ */
+export const freeQuantityDocumentTypes = [
+  "invoice", "quotation", "proforma", "delivery_challan", "sales_return", "purchase_return",
+  "purchase_order", "sales_order", "goods_receipt_note",
+] as const;
+
+/** Reasons offered for goods rejected on receipt; any other text is allowed too. */
+export const rejectionReasons = ["Damaged", "Short expiry", "Wrong item", "Quality not as ordered", "Excess supply"] as const;
+
+const invoiceLineItemBaseSchema = z.object({
   itemId: z.string().uuid().optional(),
   // Snapshot of the item name at billing time. Required on every line — this
   // is the primary display text on invoices and must be frozen at create
@@ -466,13 +529,32 @@ export const invoiceLineItemSchema = z.object({
   // Nullable because the DB column is nullable and the client may pass null
   // explicitly to clear notes. Empty string is coerced to null downstream.
   description: z.string().max(500).optional().nullable(),
-  quantity: z.string().regex(/^\d+(\.\d{1,3})?$/).refine((v) => parseFloat(v) > 0, { message: "Quantity must be greater than 0" }),
+  /**
+   * Billed quantity: what the price, discount and tax apply to. On a goods
+   * receipt note, the quantity accepted. May be 0 only when the line has free
+   * or rejected goods.
+   */
+  quantity: lineQuantityStr,
   unitPrice: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/),
   taxPercent: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0").refine((v) => parseFloat(v) <= 56, { message: "Tax percent cannot exceed 56%" }),
   discountPercent: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0").refine((v) => parseFloat(v) <= 100, { message: "Discount cannot exceed 100%" }),
   selectedUnit: z.string().nullish(),
   conversionFactor: z.string().nullish(), // stored as string like all numerics
   variantId: z.string().uuid().nullish(),
+  /** Free goods on top of the billed quantity ("10 + 1"), in the line's unit. Moves stock, adds no value. */
+  freeQuantity: lineQuantityStr.nullish(),
+  /** Goods receipt notes only: received but rejected, in the line's unit. Never enters stock. */
+  rejectedQuantity: lineQuantityStr.nullish(),
+  rejectionReason: z.string().max(200).nullish(),
+  ...lineBatchFields,
+});
+
+export const invoiceLineItemSchema = invoiceLineItemBaseSchema.superRefine((li, ctx) => {
+  const billed = parseFloat(li.quantity);
+  const other = parseFloat(li.freeQuantity || "0") + parseFloat(li.rejectedQuantity || "0");
+  if (!(billed > 0) && !(other > 0)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["quantity"], message: "Quantity must be greater than 0" });
+  }
 });
 
 export const createInvoiceSchema = z.object({
@@ -499,7 +581,7 @@ export const createInvoiceSchema = z.object({
    */
   skipStockAdjustment: z.boolean().optional(),
   isReverseCharge: z.boolean().default(false),
-  deliveryMethod: z.enum(deliveryMethods).default("self_pickup"),
+  deliveryMethod: deliveryMethodSchema.default("self_pickup"),
   /**
    * Origin channel for this invoice. "pos" for the fullscreen register,
    * "online_store" for storefront orders, "webhook" for public-API /
@@ -640,8 +722,33 @@ export const convertDocumentSchema = z.object({
    */
   lines: z.array(z.object({
     sourceLineId: z.string().uuid(),
+    /** Billed quantity; on a GRN made from a purchase order, the quantity accepted. */
     quantity: z.string().regex(/^\d+(\.\d{1,3})?$/),
+    /**
+     * Free quantity to take, up to what is pending free. Omitted, all of the
+     * pending free quantity goes along when the whole pending billed quantity
+     * is taken, and none otherwise.
+     */
+    freeQuantity: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
+    /** Purchase order → GRN only: received but rejected. Stays pending on the order. */
+    rejectedQuantity: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
+    rejectionReason: z.string().max(200).optional(),
+    /**
+     * Items that track batches, when the new document brings goods in (a GRN
+     * or purchase invoice from a purchase order): the batch they arrive in,
+     * matched by number or created with these dates.
+     */
+    batchNumber: z.string().trim().max(60).optional(),
+    expiryDate: dateOnlyStr.optional(),
+    mfgDate: dateOnlyStr.optional(),
   })).optional(),
+  /**
+   * Goods receipt note → purchase return or debit note: take the goods
+   * rejected on receipt that have not been returned yet (or the quantities in
+   * `lines`, up to that). The return moves no stock, since rejected goods
+   * never came in.
+   */
+  fromRejected: z.boolean().optional(),
   /** Warehouse for the new document when it moves stock. Default warehouse when omitted. */
   warehouseId: z.string().uuid().nullish(),
 });

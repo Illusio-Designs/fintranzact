@@ -34,6 +34,7 @@ import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import type { TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPClient, IRPError } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
@@ -94,6 +95,7 @@ async function generateIRNForInvoice(
       itemName: invoiceItems.itemName,
       description: invoiceItems.description,
       quantity: invoiceItems.quantity,
+      freeQuantity: invoiceItems.freeQuantity,
       unitPrice: invoiceItems.unitPrice,
       taxPercent: invoiceItems.taxPercent,
       taxAmount: invoiceItems.taxAmount,
@@ -126,6 +128,7 @@ async function generateIRNForInvoice(
       itemName: li.itemName,
       description: li.description,
       quantity: li.quantity,
+      freeQuantity: li.freeQuantity,
       unitPrice: li.unitPrice,
       taxPercent: li.taxPercent,
       taxAmount: li.taxAmount,
@@ -539,12 +542,9 @@ export const eInvoiceRouter = router({
       if (input.status) {
         conditions.push(eq(invoices.eInvoiceStatus, input.status));
       }
-      if (input.fromDate) {
-        conditions.push(sql`${invoices.invoiceDate} >= ${new Date(input.fromDate)}`);
-      }
-      if (input.toDate) {
-        conditions.push(sql`${invoices.invoiceDate} <= ${new Date(input.toDate)}`);
-      }
+      // Bound through drizzle's column-typed comparisons: a raw Date inside a
+      // sql`` template is rejected by postgres-js
+      conditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
       if (input.search) {
         const term = `%${escapeLike(input.search)}%`;
         conditions.push(

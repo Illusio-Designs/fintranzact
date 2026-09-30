@@ -177,6 +177,8 @@ function addRow(a: TaxRow, b: TaxRow): TaxRow {
 function sumCreditNotes(gstr1: GSTR1Report): TaxRow {
   const row = zeroRow();
   for (const cn of gstr1.creditNotes) {
+    // Notes to small unregistered buyers are already netted into B2CS (4A)
+    if (cn.section === "b2cs") continue;
     const tax = parseFloat(cn.taxAmount);
     const taxable = parseFloat(cn.taxableAmount);
     // We don't have per-note CGST/SGST/IGST split stored — use half each as approximation
@@ -191,6 +193,8 @@ function sumCreditNotes(gstr1: GSTR1Report): TaxRow {
 function sumDebitNotes(gstr1: GSTR1Report): TaxRow {
   const row = zeroRow();
   for (const dn of gstr1.debitNotes) {
+    // Notes to small unregistered buyers are already netted into B2CS (4A)
+    if (dn.section === "b2cs") continue;
     const tax = parseFloat(dn.taxAmount);
     const taxable = parseFloat(dn.taxableAmount);
     row.taxableValue += taxable;

@@ -15,6 +15,8 @@ import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { unitKey, valueStock } from "../lib/stock-valuation.js";
 import { descendantIds, orderTree, type StockGroupRow } from "../lib/stock-groups.js";
+import { businessDay } from "../lib/batches.js";
+import { escapeLike } from "../lib/escape-like.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -150,7 +152,16 @@ export const inventoryReportsRouter = router({
         SELECT m.id, m.movement_date AS date, m.movement_type, m.reference_type, m.reference_id,
                m.quantity::text AS quantity, w.name AS warehouse,
                d.invoice_number AS document_number, d.document_type::text AS document_type,
-               p.name AS party, a.reason, mj.journal_number
+               p.name AS party, a.reason, mj.journal_number,
+               -- Free goods ("10 + 1") within a document's posting, in base units.
+               CASE WHEN m.reference_type IN ('INVOICE', 'DOCUMENT') THEN (
+                 SELECT SUM(COALESCE(li.free_quantity, 0)::numeric
+                   * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END)
+                 FROM invoice_items li
+                 WHERE li.invoice_id = m.reference_id
+                   AND COALESCE(li.item_id, (SELECT iv.item_id FROM item_variants iv WHERE iv.id = li.variant_id)) = m.item_id
+                   AND li.variant_id IS NOT DISTINCT FROM m.variant_id
+               ) END::text AS free
         FROM stock_movements m
         JOIN warehouses w ON w.id = m.warehouse_id
         LEFT JOIN invoices d ON d.id = m.reference_id
@@ -169,7 +180,7 @@ export const inventoryReportsRouter = router({
       `)) as Array<{
         id: string; date: string; movement_type: string; reference_type: string; reference_id: string | null;
         quantity: string; warehouse: string; document_number: string | null; document_type: string | null;
-        party: string | null; reason: string | null; journal_number: string | null;
+        party: string | null; reason: string | null; journal_number: string | null; free: string | null;
       }>;
 
       let balance = parseFloat(opening?.qty ?? "0");
@@ -188,6 +199,8 @@ export const inventoryReportsRouter = router({
           documentId: r.document_number ? r.reference_id : null,
           inward: q > 0 ? round3(q) : 0,
           outward: q < 0 ? round3(-q) : 0,
+          /** Of the quantity moved, how much was free goods. */
+          free: Math.min(round3(parseFloat(r.free ?? "0") || 0), round3(Math.abs(q))),
           balance,
         };
       });
@@ -567,6 +580,95 @@ export const inventoryReportsRouter = router({
         },
         items: rows,
         totalValue: round2(rows.reduce((s, r) => s + r.value, 0)),
+        valuationMethod: valuation.method,
+      };
+    }),
+
+  /**
+   * Stock per batch and warehouse for items that track batches, with each
+   * batch's dates and days to expiry. `status` narrows it to batches expiring
+   * within `days` (not yet expired), or to expired stock. Only batches that
+   * hold stock are listed.
+   */
+  batchStock: viewerProcedure
+    .input(z.object({
+      status: z.enum(["all", "expiring", "expired"]).default("all"),
+      days: z.number().int().min(1).max(3650).default(30),
+      warehouseId: z.string().uuid().nullish(),
+      itemId: z.string().uuid().nullish(),
+      search: z.string().max(100).nullish(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      requireCan(ctx.ability, "read", "Report");
+      const status = input?.status ?? "all";
+      const days = input?.days ?? 30;
+      const today = businessDay();
+      const like = input?.search ? `%${escapeLike(input.search)}%` : null;
+      const [rows, valuation] = await Promise.all([
+        ctx.db.execute(sql`
+          SELECT b.id AS batch_id, b.batch_number, b.mfg_date::text AS mfg_date, b.expiry_date::text AS expiry_date,
+                 b.mrp::text AS mrp, b.item_id, b.variant_id,
+                 i.name || COALESCE(' — ' || (SELECT string_agg(value, ' / ') FROM jsonb_each_text(v.attribute_values)), '') AS name,
+                 i.sku, i.unit::text AS unit,
+                 m.warehouse_id, w.name AS warehouse_name,
+                 SUM(m.quantity::numeric)::text AS qty
+          FROM stock_movements m
+          JOIN item_batches b ON b.id = m.batch_id
+          JOIN items i ON i.id = b.item_id
+          LEFT JOIN item_variants v ON v.id = b.variant_id
+          JOIN warehouses w ON w.id = m.warehouse_id
+          WHERE m.business_id = ${ctx.businessId}
+            AND i.deleted_at IS NULL
+            ${input?.warehouseId ? sql`AND m.warehouse_id = ${input.warehouseId}` : sql``}
+            ${input?.itemId ? sql`AND b.item_id = ${input.itemId}` : sql``}
+            ${like ? sql`AND (i.name ILIKE ${like} OR b.batch_number ILIKE ${like} OR i.sku ILIKE ${like})` : sql``}
+            ${status === "expired" ? sql`AND b.expiry_date < ${today}::date` : sql``}
+            ${status === "expiring"
+              ? sql`AND b.expiry_date >= ${today}::date AND b.expiry_date <= ${today}::date + ${days}::int`
+              : sql``}
+          GROUP BY b.id, b.batch_number, b.mfg_date, b.expiry_date, b.mrp, b.item_id, b.variant_id, i.name, v.attribute_values, i.sku, i.unit, m.warehouse_id, w.name
+          HAVING SUM(m.quantity::numeric) <> 0
+          ORDER BY b.expiry_date ASC NULLS LAST, name, b.batch_number, w.name
+        `) as Promise<Array<{
+          batch_id: string; batch_number: string; mfg_date: string | null; expiry_date: string | null; mrp: string | null;
+          item_id: string; variant_id: string | null; name: string; sku: string | null; unit: string;
+          warehouse_id: string; warehouse_name: string; qty: string;
+        }>>,
+        valueStock(ctx.db, ctx.businessId, new Date()),
+      ]);
+
+      const data = rows.map((r) => {
+        const quantity = round3(parseFloat(r.qty));
+        const rate = valuation.units.get(unitKey(r.item_id, r.variant_id))?.rate ?? 0;
+        const daysToExpiry = r.expiry_date
+          ? Math.round((Date.parse(`${r.expiry_date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000)
+          : null;
+        return {
+          batchId: r.batch_id,
+          batchNumber: r.batch_number,
+          mfgDate: r.mfg_date,
+          expiryDate: r.expiry_date,
+          mrp: r.mrp,
+          itemId: r.item_id,
+          variantId: r.variant_id,
+          name: r.name,
+          sku: r.sku,
+          unit: r.unit,
+          warehouseId: r.warehouse_id,
+          warehouseName: r.warehouse_name,
+          quantity,
+          value: round2(Math.max(quantity, 0) * rate),
+          daysToExpiry,
+          expired: daysToExpiry !== null && daysToExpiry < 0,
+        };
+      });
+      return {
+        data,
+        asOf: today,
+        status,
+        days,
+        totalQuantity: round3(data.reduce((s, r) => s + r.quantity, 0)),
+        totalValue: round2(data.reduce((s, r) => s + r.value, 0)),
         valuationMethod: valuation.method,
       };
     }),

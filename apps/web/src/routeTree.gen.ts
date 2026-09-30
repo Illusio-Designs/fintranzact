@@ -26,6 +26,7 @@ import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as RefundPolicyRouteImport } from './routes/refund-policy'
 import { Route as QuotationsRouteImport } from './routes/quotations'
+import { Route as PurchaseReturnsRouteImport } from './routes/purchase-returns'
 import { Route as PurchaseOrdersRouteImport } from './routes/purchase-orders'
 import { Route as ProformaInvoicesRouteImport } from './routes/proforma-invoices'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -166,6 +167,11 @@ const RefundPolicyRoute = RefundPolicyRouteImport.update({
 const QuotationsRoute = QuotationsRouteImport.update({
   id: '/quotations',
   path: '/quotations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PurchaseReturnsRoute = PurchaseReturnsRouteImport.update({
+  id: '/purchase-returns',
+  path: '/purchase-returns',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PurchaseOrdersRoute = PurchaseOrdersRouteImport.update({
@@ -505,6 +511,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/proforma-invoices': typeof ProformaInvoicesRoute
   '/purchase-orders': typeof PurchaseOrdersRoute
+  '/purchase-returns': typeof PurchaseReturnsRoute
   '/quotations': typeof QuotationsRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/register': typeof RegisterRoute
@@ -579,6 +586,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/proforma-invoices': typeof ProformaInvoicesRoute
   '/purchase-orders': typeof PurchaseOrdersRoute
+  '/purchase-returns': typeof PurchaseReturnsRoute
   '/quotations': typeof QuotationsRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/register': typeof RegisterRoute
@@ -654,6 +662,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/proforma-invoices': typeof ProformaInvoicesRoute
   '/purchase-orders': typeof PurchaseOrdersRoute
+  '/purchase-returns': typeof PurchaseReturnsRoute
   '/quotations': typeof QuotationsRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/register': typeof RegisterRoute
@@ -730,6 +739,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/proforma-invoices'
     | '/purchase-orders'
+    | '/purchase-returns'
     | '/quotations'
     | '/refund-policy'
     | '/register'
@@ -804,6 +814,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/proforma-invoices'
     | '/purchase-orders'
+    | '/purchase-returns'
     | '/quotations'
     | '/refund-policy'
     | '/register'
@@ -878,6 +889,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/proforma-invoices'
     | '/purchase-orders'
+    | '/purchase-returns'
     | '/quotations'
     | '/refund-policy'
     | '/register'
@@ -953,6 +965,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ProformaInvoicesRoute: typeof ProformaInvoicesRoute
   PurchaseOrdersRoute: typeof PurchaseOrdersRoute
+  PurchaseReturnsRoute: typeof PurchaseReturnsRoute
   QuotationsRoute: typeof QuotationsRoute
   RefundPolicyRoute: typeof RefundPolicyRoute
   RegisterRoute: typeof RegisterRoute
@@ -1098,6 +1111,13 @@ declare module '@tanstack/react-router' {
       path: '/quotations'
       fullPath: '/quotations'
       preLoaderRoute: typeof QuotationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/purchase-returns': {
+      id: '/purchase-returns'
+      path: '/purchase-returns'
+      fullPath: '/purchase-returns'
+      preLoaderRoute: typeof PurchaseReturnsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/purchase-orders': {
@@ -1537,6 +1557,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ProformaInvoicesRoute: ProformaInvoicesRoute,
   PurchaseOrdersRoute: PurchaseOrdersRoute,
+  PurchaseReturnsRoute: PurchaseReturnsRoute,
   QuotationsRoute: QuotationsRoute,
   RefundPolicyRoute: RefundPolicyRoute,
   RegisterRoute: RegisterRoute,

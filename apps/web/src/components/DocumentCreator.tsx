@@ -7,7 +7,7 @@ import { Combobox } from "@/components/ui/Combobox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
-import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
+import { calcLineItem, calcInvoiceTotals, money, freeQuantityDocumentTypes, rejectionReasons } from "@fintranzact/shared";
 import { QuickPartyCreate } from "@/components/QuickPartyCreate";
 import { QuickItemCreate, type QuickItemCreateResult } from "@/components/QuickItemCreate";
 import { DateInput } from "@/components/ui/DateInput";
@@ -15,6 +15,9 @@ import { Icon } from "@/components/ui/Icon";
 import { Delete02Icon, Cancel01Icon, DeliveryTruck01Icon } from "@hugeicons/core-free-icons";
 import { WarehouseSelect, formatQty, useWarehouses } from "@/components/inventory/shared";
 import { useLevelPricing } from "@/components/pricing/useLevelPricing";
+import { Select } from "@/components/ui/Select";
+import { useDeliveryMethods } from "@/lib/delivery-methods";
+import { BatchInFields, BatchOutSelect, batchInPayload } from "@/components/inventory/BatchFields";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -69,12 +72,33 @@ interface LineItem {
    */
   notes: string;
   quantity: string;
+  /** Free goods on top of the billed quantity ("10 + 1"); moves stock, adds no value. */
+  freeQuantity: string;
+  /** Goods receipt notes: received but rejected, and why. Never enters stock. */
+  rejectedQuantity: string;
+  rejectionReason: string;
   unitPrice: string;
   taxPercent: string;
   discountPercent: string;
   selectedUnit?: string;
   conversionFactor?: string;
   availableUnits?: UnitOption[];
+  /** On a return made against an invoice: the quantity that invoice had. */
+  sourceQuantity?: string;
+  /** The item keeps stock per batch: the line names its batch. */
+  trackBatches?: boolean;
+  trackExpiry?: boolean;
+  /** Picked (outward) or saved batch. Empty on an outward line = earliest expiry first. */
+  batchId?: string;
+  /** Inward: batch typed in — matched to an existing batch or created. */
+  batchNumber?: string;
+  mfgDate?: string;
+  expiryDate?: string;
+  batchMrp?: string;
+  /** Outward: the user allowed an expired batch to go out. */
+  allowExpired?: boolean;
+  /** Editing: the batch the line was saved with. */
+  savedBatchId?: string;
 }
 
 interface Charge {
@@ -114,15 +138,24 @@ function stockDirection(documentType: DocumentType, invoiceType: "sale" | "purch
   return 0;
 }
 
-/** Quantity of each item a set of lines takes, in the item's base unit. */
-function baseQuantities(lines: Array<{ itemId?: string | null; quantity: string; conversionFactor?: string | null }>) {
+/** Quantity of each item a set of lines takes (billed + free), in the item's base unit. */
+function baseQuantities(lines: Array<{ itemId?: string | null; quantity: string; freeQuantity?: string | null; conversionFactor?: string | null }>) {
   const need = new Map<string, number>();
   for (const li of lines) {
     if (!li.itemId) continue;
-    const q = parseFloat(li.quantity || "0") * parseFloat(li.conversionFactor || "1");
+    const q = (parseFloat(li.quantity || "0") + (parseFloat(li.freeQuantity || "0") || 0)) * parseFloat(li.conversionFactor || "1");
     if (Number.isFinite(q)) need.set(li.itemId, (need.get(li.itemId) ?? 0) + q);
   }
   return need;
+}
+
+/** Returns: goods coming back from a customer or going back to a supplier. */
+const RETURN_TYPES: DocumentType[] = ["sales_return", "purchase_return"];
+
+/** Documents that say how the goods go out to the party. */
+function showsDeliveryMethod(documentType: DocumentType, invoiceType: "sale" | "purchase"): boolean {
+  if (documentType === "purchase_return") return true;
+  return invoiceType === "sale" && ["invoice", "quotation", "proforma", "sales_order", "delivery_challan"].includes(documentType);
 }
 
 function newLineItem(): LineItem {
@@ -131,11 +164,16 @@ function newLineItem(): LineItem {
     itemName: "",
     notes: "",
     quantity: "1",
+    freeQuantity: "",
+    rejectedQuantity: "",
+    rejectionReason: "",
     unitPrice: "",
     taxPercent: "0",
     discountPercent: "0",
   };
 }
+
+const positive = (v: string | null | undefined) => (parseFloat(v || "0") || 0) > 0;
 
 function calcLine(li: LineItem) {
   const result = calcLineItem({
@@ -164,6 +202,9 @@ export function DocumentCreator({
   initialPartyId,
 }: DocumentCreatorProps) {
   const invoiceType = fixedInvoiceType[documentType] ?? requestedInvoiceType;
+  // Free goods ("10 + 1") on any goods document; rejections only on a GRN.
+  const allowsFree = (freeQuantityDocumentTypes as readonly string[]).includes(documentType);
+  const isGrn = documentType === "goods_receipt_note";
   const [partyId, setPartyId] = useState(initialPartyId ?? "");
   const [invoiceDate, setInvoiceDate] = useState(todayISODate);
   const [dueDate, setDueDate] = useState(() => dayjs().add(7, "day").format("YYYY-MM-DD"));
@@ -179,7 +220,18 @@ export function DocumentCreator({
   // document. Once true we stop applying the per-business "round down to
   // integer" auto-fill so we don't silently undo their override.
   const [roundOffOverridden, setRoundOffOverridden] = useState(false);
-  const [referenceDocumentId, _setReferenceDocumentId] = useState<string | undefined>(prefillFromInvoiceId || undefined);
+  const [referenceDocumentId, setReferenceDocumentId] = useState<string | undefined>(prefillFromInvoiceId || undefined);
+  // A return started from its own page picks the invoice it is against here;
+  // one started from the invoice arrives with prefillFromInvoiceId instead.
+  const isReturn = RETURN_TYPES.includes(documentType);
+  const [pickedSourceId, setPickedSourceId] = useState("");
+  const [sourceSearch, setSourceSearch] = useState("");
+  const debouncedSourceSearch = useDebounce(sourceSearch, 300);
+  // How the goods go out: built-in methods plus the business's own.
+  const withDelivery = showsDeliveryMethod(documentType, fixedInvoiceType[documentType] ?? requestedInvoiceType);
+  const [deliveryMethod, setDeliveryMethod] = useState("self_pickup");
+  const [deliveryMethodTouched, setDeliveryMethodTouched] = useState(false);
+  const deliveryOptions = useDeliveryMethods();
   // Warehouse the goods leave from or arrive into. Starts at the business
   // default for this kind of document; only shown when there's a choice.
   const [warehouseId, setWarehouseId] = useState("");
@@ -239,7 +291,29 @@ export function DocumentCreator({
   const [quickItemLineId, setQuickItemLineId] = useState<string | null>(null);
 
   const isEditing = !!editInvoiceId;
-  const prefillId = editInvoiceId || prefillFromInvoiceId;
+  const canPickSource = isReturn && !isEditing && !prefillFromInvoiceId;
+  const prefillId = editInvoiceId || prefillFromInvoiceId || pickedSourceId || undefined;
+
+  const { data: sourceInvoices, isFetching: sourceInvoicesFetching } = trpc.invoice.list.useQuery(
+    {
+      type: invoiceType,
+      partyId: partyId || undefined,
+      search: debouncedSourceSearch || undefined,
+      page: 1,
+      limit: 50,
+    },
+    { enabled: canPickSource },
+  );
+
+  // A sale's last delivery method is the likeliest one for the next.
+  const { data: lastDeliveryMethod } = trpc.invoice.lastDeliveryMethod.useQuery(
+    { partyId },
+    { enabled: withDelivery && invoiceType === "sale" && !!partyId && !isEditing },
+  );
+  useEffect(() => {
+    if (!lastDeliveryMethod || deliveryMethodTouched || isEditing) return;
+    if (deliveryOptions.some((o) => o.id === lastDeliveryMethod)) setDeliveryMethod(lastDeliveryMethod);
+  }, [lastDeliveryMethod, deliveryMethodTouched, isEditing, deliveryOptions]);
 
   // Pre-fill standard Terms & Conditions from business defaults on new docs
   // only — editing a saved doc must respect what was actually persisted.
@@ -295,6 +369,7 @@ export function DocumentCreator({
       // Editing: use the document's own date
       setInvoiceDate(formatDateInput(editData.invoiceDate));
       if (editData.dueDate) setDueDate(formatDateInput(editData.dueDate));
+      if (editData.deliveryMethod) setDeliveryMethod(editData.deliveryMethod);
     }
     // Prefill from source: keep today's date (already the default)
     setNotes(editData.notes || "");
@@ -321,12 +396,36 @@ export function DocumentCreator({
         itemName: li.itemName ?? "",
         notes: li.description ?? "",
         quantity: li.quantity,
+        freeQuantity: allowsFree && positive(li.freeQuantity) ? String(parseFloat(li.freeQuantity)) : "",
+        // Rejections belong to the GRN they were recorded on.
+        rejectedQuantity: isGrn && isEditing && positive(li.rejectedQuantity) ? String(parseFloat(li.rejectedQuantity)) : "",
+        rejectionReason: isGrn && isEditing ? li.rejectionReason ?? "" : "",
         unitPrice: li.unitPrice,
         taxPercent: li.taxPercent || "0",
         discountPercent: li.discountPercent || "0",
+        selectedUnit: li.selectedUnit || undefined,
+        conversionFactor: li.conversionFactor && parseFloat(li.conversionFactor) !== 1 ? li.conversionFactor : undefined,
+        // A return can't send back more than its invoice had.
+        sourceQuantity: RETURN_TYPES.includes(documentType) && !editInvoiceId ? String(parseFloat(li.quantity)) : undefined,
+        // A saved batch stays on the line (a return made from an invoice
+        // brings its goods back into the batch they went out of).
+        batchId: li.batchId || undefined,
+        savedBatchId: li.batchId || undefined,
+        batchNumber: li.batch?.batchNumber ?? undefined,
+        expiryDate: li.batch?.expiryDate ?? undefined,
+        mfgDate: li.batch?.mfgDate ?? undefined,
+        batchMrp: li.batch?.mrp ?? undefined,
+        // Sending expired stock back to the supplier is what purchase returns are for.
+        allowExpired: documentType === "purchase_return" && !!li.batchId ? true : undefined,
       })));
     }
   }, [editData]);
+
+  function pickSourceInvoice(id: string) {
+    setPickedSourceId(id);
+    setReferenceDocumentId(id || undefined);
+    if (!id) setItems((prev) => prev.map((li) => ({ ...li, sourceQuantity: undefined })));
+  }
 
   function invalidateLists() {
     utils.invoice.list.invalidate();
@@ -385,8 +484,9 @@ export function DocumentCreator({
       invoiceDiscount,
       invoiceDiscountType,
       roundOff,
+      deliveryMethod,
     }),
-    [partyId, invoiceDate, dueDate, notes, terms, items, charges, invoiceDiscount, invoiceDiscountType, roundOff]
+    [partyId, invoiceDate, dueDate, notes, terms, items, charges, invoiceDiscount, invoiceDiscountType, roundOff, deliveryMethod]
   );
   const formSnapshotRef = useRef(formSnapshot);
   formSnapshotRef.current = formSnapshot;
@@ -595,10 +695,22 @@ export function DocumentCreator({
               selectedUnit: undefined,
               conversionFactor: undefined,
               availableUnits: allUnits.length > 1 ? allUnits : undefined,
+              trackBatches: product.itemType !== "service" && !!product.trackBatches,
+              trackExpiry: !!product.trackExpiry,
+              batchId: undefined,
+              batchNumber: undefined,
+              mfgDate: undefined,
+              expiryDate: undefined,
+              batchMrp: undefined,
+              allowExpired: undefined,
             }
           : li
       )
     );
+  }
+
+  function updateBatch(id: string, patch: Partial<LineItem>) {
+    setItems((prev) => prev.map((li) => (li.id === id ? { ...li, ...patch } : li)));
   }
 
   function addLine() {
@@ -661,10 +773,28 @@ export function DocumentCreator({
       toast.error("Add at least one line item with an item name and price");
       return;
     }
+    const emptyLine = validItems.find((li) =>
+      !positive(li.quantity) && !(allowsFree && positive(li.freeQuantity)) && !(isGrn && positive(li.rejectedQuantity)));
+    if (emptyLine) {
+      toast.error(`Enter a quantity for ${emptyLine.itemName.trim()}`);
+      return;
+    }
+    const unexplained = isGrn && validItems.find((li) => positive(li.rejectedQuantity) && !li.rejectionReason.trim());
+    if (unexplained) {
+      toast.error(`Give a reason for rejecting ${unexplained.itemName.trim()}`);
+      return;
+    }
     if (!partyId) {
       toast.error(
         `Select a ${invoiceType === "sale" ? "customer" : "supplier"}`
       );
+      return;
+    }
+    const overReturned = validItems.find(
+      (li) => li.sourceQuantity && parseFloat(li.quantity || "0") - parseFloat(li.sourceQuantity) > 0.0005,
+    );
+    if (overReturned) {
+      toast.error(`Only ${overReturned.sourceQuantity} of ${overReturned.itemName} was on the invoice`);
       return;
     }
 
@@ -679,12 +809,20 @@ export function DocumentCreator({
         itemId: li.itemId,
         itemName: li.itemName.trim(),
         description: trimmedNotes.length > 0 ? trimmedNotes : undefined,
-        quantity: li.quantity,
+        quantity: li.quantity || "0",
+        freeQuantity: allowsFree && positive(li.freeQuantity) ? li.freeQuantity : undefined,
+        rejectedQuantity: isGrn && positive(li.rejectedQuantity) ? li.rejectedQuantity : undefined,
+        rejectionReason: isGrn && positive(li.rejectedQuantity) ? li.rejectionReason.trim() : undefined,
         unitPrice: li.unitPrice,
         taxPercent: li.taxPercent,
         discountPercent: li.discountPercent,
         selectedUnit: li.selectedUnit || undefined,
         conversionFactor: li.conversionFactor || undefined,
+        ...(direction === 1 || (direction === 0 && li.batchId)
+          ? batchInPayload(li)
+          : li.batchId
+            ? { batchId: li.batchId, ...(li.allowExpired ? { allowExpired: true } : {}) }
+            : {}),
       };
     });
 
@@ -710,6 +848,7 @@ export function DocumentCreator({
         roundOff: roundOff || "0",
         lineItems: lineItemsPayload,
         warehouseId: direction !== 0 && warehouseId ? warehouseId : undefined,
+        deliveryMethod: withDelivery ? deliveryMethod : undefined,
       });
     } else {
       createMutation.mutate({
@@ -726,11 +865,14 @@ export function DocumentCreator({
         referenceDocumentId: referenceDocumentId || undefined,
         lineItems: lineItemsPayload,
         warehouseId: direction !== 0 && warehouseId ? warehouseId : undefined,
+        deliveryMethod: withDelivery ? deliveryMethod : undefined,
       });
     }
   }
 
   const label = documentTypeLabels[documentType];
+  // "Sales return" and "purchase order" already say which side they are on.
+  const docKind = /^(sales|purchase) /i.test(label) ? label.toLowerCase() : `${invoiceType} ${label.toLowerCase()}`;
   const partyLabel = invoiceType === "sale" ? "Customer" : "Supplier";
 
   const partyOptions =
@@ -739,6 +881,29 @@ export function DocumentCreator({
       label: p.name,
       description: p.type === "customer" ? "Customer" : "Supplier",
     })) ?? [];
+
+  // Drafts, cancelled invoices and ones already fully credited or returned
+  // can't take a return.
+  const sourceOptions: Array<{ value: string; label: string; description: string }> = (sourceInvoices?.data ?? [])
+    .filter((inv: { status: string }) => !["draft", "cancelled", "adjusted"].includes(inv.status))
+    .map((inv: { id: string; invoiceNumber: string; invoiceDate: string | Date; totalAmount: string; partyName?: string | null }) => ({
+      value: inv.id,
+      label: inv.invoiceNumber,
+      description: `${inv.partyName ?? ""} · ${dayjs(inv.invoiceDate).format("DD MMM YYYY")} · ${formatCurrency(inv.totalAmount)}`,
+    }));
+  // Keep the picked invoice showing while the search narrows the list.
+  if (pickedSourceId && editData && !sourceOptions.some((o) => o.value === pickedSourceId)) {
+    sourceOptions.unshift({
+      value: pickedSourceId,
+      label: editData.invoiceNumber,
+      description: `${editData.party?.name ?? ""} · ${dayjs(editData.invoiceDate).format("DD MMM YYYY")} · ${formatCurrency(editData.totalAmount)}`,
+    });
+  }
+
+  // A saved method since removed from Settings → Shipping still shows.
+  const deliverySelectOptions = deliveryOptions.some((o) => o.id === deliveryMethod)
+    ? deliveryOptions
+    : [...deliveryOptions, { id: deliveryMethod, label: deliveryMethod, hasTracking: false }];
 
   const itemOptions =
     itemsData?.data.map((p) => ({
@@ -765,7 +930,7 @@ export function DocumentCreator({
       onClose={onClose}
       onCloseAttempt={handleCloseAttempt}
       title={isEditing ? `Edit ${label}` : `New ${label}`}
-      description={isEditing ? `Edit ${invoiceType} ${label.toLowerCase()}` : `Create a new ${invoiceType} ${label.toLowerCase()}`}
+      description={isEditing ? `Edit ${docKind}` : `Create a new ${docKind}`}
       footer={
         <div className="space-y-3">
         {shortages.length > 0 && (
@@ -824,6 +989,7 @@ export function DocumentCreator({
             value={partyId}
             onChange={(id) => {
               setPartyId(id);
+              if (pickedSourceId && editData && id !== editData.partyId) pickSourceInvoice("");
               // After picking a party, jump to the date input so Tab order
               // doesn't bounce focus back into the (now-selected) combobox
               // and re-open its dropdown.
@@ -867,6 +1033,43 @@ export function DocumentCreator({
           <p className="-mt-3 text-xs text-text-tertiary">
             Prices from the <span className="font-medium text-text-secondary">{pricing.priceLevelName}</span> price level
           </p>
+        )}
+
+        {canPickSource && (
+          <div>
+            <Combobox
+              label={`Against ${invoiceType === "sale" ? "sale" : "purchase"} invoice (optional)`}
+              value={pickedSourceId}
+              onChange={pickSourceInvoice}
+              options={sourceOptions}
+              placeholder="Search invoice number or party..."
+              emptyMessage="No invoices to return against"
+              onQueryChange={setSourceSearch}
+              isLoading={sourceInvoicesFetching && !!debouncedSourceSearch}
+            />
+            <p className="mt-1 text-xs text-text-tertiary">
+              {pickedSourceId
+                ? "Lines are copied from the invoice. Remove the ones not coming back and lower the quantities to what is returned."
+                : "Pick the invoice the goods came on to copy its lines and count the return against it."}
+            </p>
+          </div>
+        )}
+
+        {withDelivery && (
+          <div className="max-w-xs">
+            <label className="label" htmlFor={`${dateInputId}-delivery`}>Delivery method</label>
+            <Select
+              id={`${dateInputId}-delivery`}
+              aria-label="Delivery method"
+              value={deliveryMethod}
+              onChange={(e) => { setDeliveryMethod(e.target.value); setDeliveryMethodTouched(true); }}
+              className="input"
+            >
+              {deliverySelectOptions.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </Select>
+          </div>
         )}
 
         {showWarehouse && (
@@ -954,26 +1157,58 @@ export function DocumentCreator({
 
                 {/* Row 3: Numbers grid + total */}
                 <div className="flex items-end gap-2">
-                  <div className="grid grid-cols-4 gap-2 flex-1">
+                  <div className={cn("grid gap-2 flex-1", allowsFree ? "grid-cols-5" : "grid-cols-4")}>
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-qty`}
                         className="text-[10px] font-medium text-text-tertiary block mb-0.5"
                       >
-                        Qty
+                        {isGrn ? "Accepted" : "Qty"}
                       </label>
                       <input
                         id={`${lineItemIdPrefix}-${li.id}-qty`}
                         type="number"
                         value={li.quantity}
                         onChange={(e) => updateItem(li.id, "quantity", e.target.value)}
-                        min="0.001"
+                        min="0"
                         step="any"
-                        aria-label="Quantity"
+                        aria-label={isGrn ? "Accepted quantity" : "Quantity"}
                         className="input py-1.5 text-sm tabular-nums"
                         placeholder="1"
                       />
+                      {li.sourceQuantity && (
+                        <p
+                          className={cn(
+                            "mt-0.5 text-[10px] tabular-nums",
+                            parseFloat(li.quantity || "0") - parseFloat(li.sourceQuantity) > 0.0005 ? "text-red-600" : "text-text-tertiary",
+                          )}
+                        >
+                          of {li.sourceQuantity} invoiced
+                        </p>
+                      )}
                     </div>
+                    {allowsFree && (
+                      <div>
+                        <label
+                          htmlFor={`${lineItemIdPrefix}-${li.id}-free`}
+                          className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                          title="Given free on top of the billed quantity (10 + 1). Moves stock; not charged or taxed."
+                        >
+                          Free
+                        </label>
+                        <input
+                          id={`${lineItemIdPrefix}-${li.id}-free`}
+                          type="number"
+                          value={li.freeQuantity}
+                          onChange={(e) => updateItem(li.id, "freeQuantity", e.target.value)}
+                          min="0"
+                          step="any"
+                          aria-label="Free quantity"
+                          className="input py-1.5 text-sm tabular-nums"
+                          placeholder="0"
+                        />
+                      </div>
+                    )}
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-price`}
@@ -1044,6 +1279,75 @@ export function DocumentCreator({
                   </div>
                 </div>
 
+                {isGrn && (
+                  <div className="grid grid-cols-[7rem_1fr] gap-2">
+                    <div>
+                      <label
+                        htmlFor={`${lineItemIdPrefix}-${li.id}-rejected`}
+                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                      >
+                        Rejected
+                      </label>
+                      <input
+                        id={`${lineItemIdPrefix}-${li.id}-rejected`}
+                        type="number"
+                        value={li.rejectedQuantity}
+                        onChange={(e) => updateItem(li.id, "rejectedQuantity", e.target.value)}
+                        min="0"
+                        step="any"
+                        aria-label="Rejected quantity"
+                        className="input py-1.5 text-sm tabular-nums"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor={`${lineItemIdPrefix}-${li.id}-reason`}
+                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                      >
+                        Reason for rejecting
+                      </label>
+                      <input
+                        id={`${lineItemIdPrefix}-${li.id}-reason`}
+                        list={`${lineItemIdPrefix}-reasons`}
+                        value={li.rejectionReason}
+                        onChange={(e) => updateItem(li.id, "rejectionReason", e.target.value)}
+                        disabled={!positive(li.rejectedQuantity)}
+                        maxLength={200}
+                        aria-label="Reason for rejecting"
+                        className="input py-1.5 text-sm disabled:opacity-50"
+                        placeholder={positive(li.rejectedQuantity) ? "Damaged, short expiry…" : "Nothing rejected"}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Batch: typed in on the way in, picked (or earliest expiry
+                    first) on the way out. Only for items that track batches. */}
+                {li.itemId && direction !== 0 && (li.trackBatches || li.batchId) && (
+                  <div className="rounded-lg border border-border-light bg-surface-0 px-3 py-2">
+                    {direction === 1 ? (
+                      <BatchInFields
+                        itemId={li.itemId}
+                        trackExpiry={!!li.trackExpiry}
+                        value={li}
+                        onChange={(patch) => updateBatch(li.id, patch)}
+                      />
+                    ) : (
+                      <BatchOutSelect
+                        itemId={li.itemId}
+                        warehouseId={warehouseId || null}
+                        date={invoiceDate}
+                        needed={(parseFloat(li.quantity || "0") + parseFloat(li.freeQuantity || "0")) * parseFloat(li.conversionFactor || "1") || 0}
+                        batchId={li.batchId ?? ""}
+                        allowExpired={!!li.allowExpired}
+                        onChange={(patch) => updateBatch(li.id, patch)}
+                        savedBatch={isEditing && li.savedBatchId ? { id: li.savedBatchId, label: li.batchNumber ?? "Saved batch" } : null}
+                      />
+                    )}
+                  </div>
+                )}
+
                 {/* Row 4: Free-text notes for this line (optional). Stored
                     on the backend as `invoice_items.description` and
                     rendered as italic muted secondary text on the PDF and
@@ -1084,6 +1388,16 @@ export function DocumentCreator({
           >
             + Add line item
           </button>
+          {isGrn && (
+            <>
+              <datalist id={`${lineItemIdPrefix}-reasons`}>
+                {rejectionReasons.map((r) => <option key={r} value={r} />)}
+              </datalist>
+              <p className="text-xs text-text-tertiary">
+                Only the accepted and free quantities come into stock. Rejected goods stay pending on the purchase order and can go back on a purchase return or debit note.
+              </p>
+            </>
+          )}
         </div>
 
         {/* Totals summary */}

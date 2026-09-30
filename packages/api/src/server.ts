@@ -29,7 +29,9 @@ import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
 import { seedPlatformAdmin } from "./lib/platform-admin.js";
 import { logger } from "./lib/logger.js";
-import { syncDocumentStock } from "./lib/inventory-service.js";
+import { resolveDocumentWarehouseId, syncDocumentStock } from "./lib/inventory-service.js";
+import { resolveLineBatches } from "./lib/batches.js";
+import { lineBatchDetails } from "./lib/batch-display.js";
 import { validateEnv } from "./lib/env.js";
 import { createCsrfMiddleware } from "./lib/csrf-middleware.js";
 import { assertAllowedStoreOrigin } from "./lib/store-origin.js";
@@ -470,6 +472,9 @@ async function buildInvoicePdfData(
   };
   const hsnMap = new Map(itemMeta.map(i => [i.id, i.hsn || ""]));
   const itemUnitMap = new Map(itemMeta.map(i => [i.id, i.unit]));
+  // Batch and expiry of lines from batch-tracked items. A batch's own MRP
+  // wins over the item's.
+  const batchMap = await lineBatchDetails(db, businessId, lineItems);
 
   // Fetch bank accounts for payment info on invoice
   const bizBankAccounts = await db.select().from(bankAccounts)
@@ -525,7 +530,17 @@ async function buildInvoicePdfData(
       quantity: li.quantity,
       unit: li.selectedUnit || (li.itemId ? itemUnitMap.get(li.itemId) : undefined) || undefined,
       unitPrice: li.unitPrice,
-      mrp: lineMrp(li),
+      mrp: (() => {
+        const batchMrp = li.batchId ? batchMap.get(li.batchId)?.mrp : null;
+        return batchMrp && invoice.type === "sale"
+          ? money.mul(batchMrp, parseFloat(li.conversionFactor ?? "1") || 1)
+          : lineMrp(li);
+      })(),
+      freeQuantity: li.freeQuantity,
+      rejectedQuantity: li.rejectedQuantity,
+      rejectionReason: li.rejectionReason,
+      batchNumber: li.batchId ? batchMap.get(li.batchId)?.batchNumber ?? null : null,
+      expiryDate: li.batchId ? batchMap.get(li.batchId)?.expiryDate ?? null : null,
       taxPercent: li.taxPercent,
       taxAmount: li.taxAmount,
       discountPercent: li.discountPercent,
@@ -697,6 +712,7 @@ app.get("/api/share/:token", async (c) => {
       description: li.description ?? null,
       hsn: d.lineItemHsn?.[i] || null,
       quantity: li.quantity,
+      freeQuantity: li.freeQuantity && parseFloat(li.freeQuantity) > 0 ? li.freeQuantity : null,
       unit: li.unit ?? null,
       unitPrice: li.unitPrice,
       discountPercent: li.discountPercent,
@@ -1715,8 +1731,20 @@ app.post("/store/:slug/order", async (c) => {
         stockMode: "tracked",
       }).returning();
 
+      // Lines of batch-tracked items take stock first-expiry-first-out; a
+      // line that spans batches becomes one line per batch.
+      const stockDoc = { documentType: "invoice", type: "sale" };
+      const batchedLines = await resolveLineBatches(tx, {
+        businessId: resolved.businessId,
+        lines: lineItemInputs.map((li) => ({ ...li, itemName: li.name })),
+        direction: -1,
+        warehouseId: await resolveDocumentWarehouseId(tx, { businessId: resolved.businessId, doc: stockDoc }),
+        documentDate: new Date(),
+        strict: false,
+      });
+
       // Create invoice line items
-      const processedLineItems = lineItemInputs.map((li, idx) => {
+      const processedLineItems = batchedLines.map((li, idx) => {
         const calc = calcLineItem({
           quantity: li.quantity,
           unitPrice: li.unitPrice,
@@ -1742,6 +1770,7 @@ app.post("/store/:slug/order", async (c) => {
           conversionFactor: li.conversionFactor ?? "1",
           selectedUnit: li.selectedUnit ?? null,
           variantId: li.variantId ?? null,
+          batchId: li.batchId,
         };
       });
 

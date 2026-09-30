@@ -1,0 +1,117 @@
+---
+title: Batches and Expiry
+description: Track batch (lot) numbers and expiry dates in Fintranzact — record the batch on purchases, sell the batch that expires first, never sell expired stock by mistake, and see what is expiring soon.
+sidebar:
+  order: 6
+---
+
+Medicines, food, cosmetics, paints and chemicals are bought and sold in **batches** (also called lots). Each batch has its own number, expiry date and sometimes its own MRP. With batch tracking on, Fintranzact keeps stock **per batch**, so you always know which batch is on the shelf, how much of it is left, and when it expires.
+
+Batch tracking is switched on **item by item**. Items without it work exactly as they always have.
+
+## Switching it on
+
+1. Open **Items** and add a new item or edit an existing one (products only — services carry no stock).
+2. Open **Batches & expiry** and tick **Track batches**.
+3. Tick **Track expiry** as well if the item has an expiry date. Every new batch of the item then needs one, and expired batches aren't sold unless you allow it on the bill.
+4. For a new item with opening stock, fill in the **Opening stock batch** (number, expiry, manufacturing date). Leave the number blank to keep the opening stock outside any batch.
+
+You can switch tracking off again later. The item's existing batches and their stock are kept; new documents simply stop asking for a batch.
+
+:::note[Stock you already had]
+If you switch tracking on for an item that already has stock, that stock isn't in any batch yet. It is shown as "not in any batch" on the item and is sold **after** every dated batch. To put it into a batch, make a stock adjustment: remove it, then add it back with a batch number.
+:::
+
+## Stock coming in: record the batch
+
+On a **purchase invoice**, **goods receipt note**, **purchase (inward) delivery challan** or **sales return**, each line of a batch-tracked item shows batch fields under the quantity:
+
+| Field | What to enter |
+|---|---|
+| **Batch no.** | The batch or lot number printed on the pack. Existing batches of the item are suggested as you type. |
+| **Expiry** | Expiry date. Required for items that track expiry, when the batch is new. |
+| **Mfg date** | Manufacturing date (optional). |
+| **Batch MRP** | The MRP printed on this batch, if it differs from the item's (optional). |
+
+- Typing a number the item already has adds to that batch. Its saved dates fill in by themselves.
+- A new number creates the batch when you save.
+- An expiry that contradicts the one already saved for that batch is refused ("Batch B2407 of … already exists with expiry …"). Correct the batch first if the saved date was wrong.
+- A batch that is already past its expiry can still be received — you did receive it — and it shows up in the **Expired Stock** report.
+
+**Free goods and rejections.** Free goods on a line ("10 + 1") come into the same batch as the billed quantity. On a goods receipt note only the accepted and free quantity enters the batch; goods rejected at inspection never do, and a line rejected in full needs no batch. When you receive a purchase order through **Convert**, each batch-tracked line asks for its batch number and expiry. A purchase return of rejected goods moves no stock, so it doesn't touch any batch.
+
+A sales return made from an invoice starts with the same batches as the invoice, so returned goods go back into the batch they came from. A purchase return made from a purchase bill likewise takes the goods out of the batches they came in as — expired ones included.
+
+Stock adjustments that **add** stock and opening stock also record a batch (see below).
+
+## Stock going out: first expiry, first out
+
+On a **sale invoice**, **POS bill**, **sales delivery challan** or **purchase return**, each line of a batch-tracked item shows a **Batch** picker:
+
+- **Earliest expiry first** (the default). Fintranzact takes the stock from the batch that expires first, then the next, skipping expired batches. If one batch doesn't hold enough, the line is split into one line per batch at the same price when you save — for example 7 strips become 5 from batch B2 and 2 from batch A1. The picker previews the split before you save.
+- **A specific batch.** Each batch is listed with its expiry and how much is left in the chosen warehouse.
+
+Point-of-sale bills and online store orders always use earliest expiry first. Free goods on a line go out with the billed quantity: when a line is split across batches, the billed quantity fills the earliest batches first and the free goods follow, so the priced total doesn't change.
+
+### Expired batches
+
+A batch counts as **expired** from the day after its expiry date (it can still be sold on the expiry date itself). Expiry is judged against the **document date**.
+
+- Expired batches are never picked automatically.
+- They're hidden from the picker until you tick **Allow expired** on the line. Only then can you choose one — for example to return expired stock to the supplier on a purchase return.
+- Saving a line with an expired batch without allowing it is refused: "Batch … expired on …. Pick another batch, or allow expired stock on this line."
+
+### A batch never goes below zero
+
+Whatever your **Selling more than you have** setting, a bill can't take more out of a batch than the batch holds in that warehouse: "Not enough stock in batch — Paracetamol 500 batch A1: 10 pcs available, 11 needed". Two lines on the same batch are added together for the check.
+
+When no batch is picked and the unexpired batches together don't cover the quantity:
+
+- with the **Block** setting, the bill is refused ("Not enough stock of … in unexpired batches");
+- with **Warn** or **Allow**, the rest comes out of the item's stock that isn't in any batch, which can go below zero like any other stock.
+
+## Editing, cancelling and deleting
+
+Batches follow the same rules as the rest of your stock (see [How Stock Moves](/help/inventory/how-stock-moves)):
+
+- **Cancelling** a sale puts the stock back into the same batches. **Reinstating** it takes it out of those batches again — and is refused if one of them has since been sold out.
+- **Editing** a document posts only the difference, batch by batch. The stock the document already holds counts as available while you edit it.
+- **Deleting** a document puts its batch stock back.
+- An invoice made from a delivery challan or GRN doesn't move the goods again; it keeps the challan's batches on its lines for printing.
+
+## Transfers and adjustments
+
+- **Stock transfers**: for a batch-tracked item, pick the batch to move, or leave it on earliest expiry first. The batch keeps its number and expiry in the new warehouse. Expired batches can be transferred (for example to a returns godown). The transfer journal shows the batch next to each item.
+- **Stock adjustments — Add stock**: enter the batch number and dates, as on a purchase. A batch number is required for batch-tracked items.
+- **Stock adjustments — Remove stock**: pick the batch, or leave it on earliest expiry first. Here expired batches are taken **first** — writing off expired stock is the usual reason. The adjustments list shows the batch under the item.
+- Editing the stock number on the item form and physical stock counts don't pick a batch: stock they add goes outside any batch, and stock they remove comes out earliest expiry first (expired batches first, as for a write-off).
+- [Manufacturing](/help/inventory/manufacturing) doesn't use batches yet: components used and goods made are recorded outside any batch.
+
+## Seeing your batches
+
+- **On the item**: the item's detail panel lists its batches with stock, expiry, manufacturing date and MRP, and where each batch sits when you have more than one warehouse. Batches expiring within 30 days are marked, and expired ones are flagged.
+- **Reports → Inventory**:
+  - **Batch-wise Stock** — every batch in every warehouse with its expiry, days to expiry, quantity and value.
+  - **Expiring Soon** — batches expiring in the next 7, 15, 30, 60, 90 or 180 days (not yet expired).
+  - **Expired Stock** — batches past their expiry that are still in stock.
+
+  All three can be narrowed to one warehouse, searched by item or batch number, and exported to CSV. Values use your [valuation method](/help/inventory/stock-valuation).
+
+## On the invoice
+
+When a line has a batch, the printed and shared invoice shows it under the item name, for example "Batch B2407 · Exp 06/2027". If the batch has its own MRP, that MRP is printed instead of the item's.
+
+## Correcting a batch
+
+A batch's number, dates and MRP can be corrected through the API (`batch.update`), and a batch created by mistake that nothing refers to can be deleted (`batch.delete`, admins only). A batch that has moved stock or appears on a document can't be deleted.
+
+## Common questions
+
+**Can two items share a batch number?**
+Yes. A batch number only has to be unique within one item (or one variant of an item).
+
+**Does batch tracking change stock value or my accounts?**
+No. Stock value is worked out for the item as a whole, the same as before. Batches only record which lot the stock belongs to.
+
+**Can I print the batch on barcode labels?**
+Not yet. Labels print the item's barcode, name and prices.

@@ -742,8 +742,11 @@ describe("ITC dashboard", () => {
   it("defaults to current period when no period specified", async () => {
     const caller = callerForRamesh();
 
-    const now = new Date();
-    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    // The current return month is the calendar month in India, whatever the
+    // server's timezone (e.g. 30 Sep 20:00 UTC is already October in India)
+    const currentPeriod = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit",
+    }).format(new Date());
 
     // Create a purchase invoice with today's date
     await caller.invoice.create({

@@ -75,3 +75,25 @@ describe("ShippingTab — save", () => {
     });
   });
 });
+
+describe("ShippingTab — adding methods", () => {
+  beforeEach(() => {
+    updateMutate.mockReset();
+  });
+
+  it("won't add a custom method that is already built in", async () => {
+    const { toast } = await import("@/hooks/useToast");
+    render(<ShippingTab biz={{ id: "biz-1", customShippingMethods: null }} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/Dunzo, Porter/), { target: { value: "Courier" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(toast.error).toHaveBeenCalledWith("That is already a built-in method");
+    expect(screen.queryByRole("button", { name: /Save Shipping Settings/ })).not.toBeInTheDocument();
+  });
+
+  it("says where saved methods show up", () => {
+    render(<ShippingTab biz={{ id: "biz-1", customShippingMethods: null }} />);
+    expect(screen.getByText(/Once saved, they appear alongside the built-in methods/)).toBeInTheDocument();
+  });
+});

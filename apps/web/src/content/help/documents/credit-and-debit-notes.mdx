@@ -18,7 +18,7 @@ A **credit note** reduces what a party owes — for example a price correction, 
 | Statuses | Draft, Sent, Paid, Cancelled | Draft, Sent, Paid, Cancelled |
 | Stock | No change | No change |
 | Party ledger | Reduces the balance | Increases the balance (sales side) |
-| GSTR-1 | **Credit Notes** section | **Debit Notes** section |
+| GSTR-1 | **Credit Notes** section (sales side) | **Debit Notes** section (sales side) |
 | Where to create | Web and mobile app | [CLI](/help/ai/cli) or [MCP server](/help/ai/mcp-server) only |
 
 :::tip
@@ -108,15 +108,14 @@ See [Party Ledger](/help/parties/party-ledger).
 ## Effect on GST reports
 
 - Every non-cancelled credit note dated in the month is listed in the **Credit Notes** section of [GSTR-1](/help/gst/gstr1), together with sales returns. If the note was issued from an invoice, the original invoice number is shown.
-- The credit notes are **listed**, not netted: GSTR-1's B2B/B2C totals and the GSTR-3B outward supplies figures come from invoices only.
-- Debit notes (and purchase returns) are listed in the **Debit Notes** section.
+- In the portal GSTR-1 JSON, notes to customers with a GSTIN go to **CDNR**; notes to unregistered customers go to **CDNUR** when they amend a B2CL invoice, and are otherwise netted into the **B2CS** rows. See **Credit Notes** in [GSTR-1](/help/gst/gstr1).
+- Sale debit notes are listed in the **Debit Notes** section and follow the same rules.
 
 <ForCA>
 :::caution[Check before filing]
-- The **Credit Notes** section includes credit notes on **both** the sales and purchase side. Exclude supplier credit notes before reporting CDNR.
-- The **Debit Notes** section includes purchase returns and purchase-side debit notes, which are inward documents and do not belong in GSTR-1.
-- Reduce output tax in GSTR-3B by the eligible credit notes yourself — the 3B figures are not reduced automatically.
-- GSTR-3B's ITC figure adds up the tax on **every** purchases-side document except orders and GRNs, so a supplier's credit note currently **adds** to ITC instead of reducing it. Correct ITC manually.
+- GSTR-1 lists only notes issued **to customers**: sale credit notes and sales returns under **Credit Notes**, sale debit notes under **Debit Notes**. A supplier's credit or debit note and a purchase return are inward documents and are left out of GSTR-1.
+- GSTR-3B Table 3.1(a) is already **net** of the sale credit notes, sales returns and sale debit notes dated in the month — don't reduce it again. The B2B and B2CL rows in GSTR-1 still show the original invoices, with the notes reported separately in CDNR/CDNUR; B2CS rows are shown net.
+- GSTR-3B Table 4 (ITC) counts only purchase invoices and supplier debit notes, less supplier credit notes and purchase returns. Check that each supplier note is dated in the month you want it to affect ITC.
 - Credit notes made from the **Credit Notes** page have no original invoice number; add it before filing.
 - In the derived accounting (trial balance, P&L), every credit note is posted as **Dr Sales Returns + Output GST / Cr Receivable**, even when it is on the purchases side.
 :::
@@ -124,7 +123,7 @@ See [Party Ledger](/help/parties/party-ledger).
 
 ## Debit notes
 
-Debit notes have no page in the web or mobile app. Create them with the [CLI](/help/ai/cli) or [MCP server](/help/ai/mcp-server). Once created, they appear in the party ledger and in GSTR-1.
+Debit notes have no page in the web or mobile app. Create them with the [CLI](/help/ai/cli) or [MCP server](/help/ai/mcp-server). Once created, they appear in the party ledger. A sales-side debit note is reported in GSTR-1 and adds to GSTR-3B outward tax; a purchases-side one is not in GSTR-1 and adds to ITC in GSTR-3B.
 
 | Debit note on the… | Party ledger | Derived accounting |
 |---|---|---|

@@ -11,7 +11,9 @@
  * We parse only at the boundary here — never accumulate JS floats.
  */
 
+import { gstUqcForUnit } from "@fintranzact/shared";
 import type { IRPInvoiceJson } from "./irp-client.js";
+import { formatIstDate } from "./ist-date.js";
 
 // ── Types (subset of what we need from DB rows) ────────────────────────────────
 
@@ -66,6 +68,8 @@ export interface IRPLineItem {
   /** Optional free-text line notes (from invoice_items.description). */
   description: string | null;
   quantity: string;
+  /** Free goods on the line ("10 + 1"): reported as FreeQty, no value. */
+  freeQuantity?: string | null;
   unitPrice: string;
   taxPercent: string;
   taxAmount: string;
@@ -77,38 +81,11 @@ export interface IRPLineItem {
 }
 
 // ── UQC mapping (Fintranzact unit → IRP UQC code) ─────────────────────────────────
-// Reference: https://einvoice1.gst.gov.in/Others/MasterCodes
-
-const UQC_MAP: Record<string, string> = {
-  pcs: "PCS",
-  kg: "KGS",
-  g: "GMS",
-  l: "LTR",
-  ml: "MLT",
-  m: "MTR",
-  cm: "CMT",
-  ft: "FT",
-  in: "INH",
-  box: "BOX",
-  dozen: "DZN",
-  pair: "PAR",
-  set: "SET",
-  pkt: "PAC",
-  bun: "BUN",
-  pouch: "BAG",
-  jar: "JAR",
-  btl: "BTL",
-  bag: "BAG",
-  ton: "TON",
-  pack: "PAC",
-  pet: "NOS",
-  person: "NOS",
-  other: "OTH",
-};
+// Reference: https://einvoice1.gst.gov.in/Others/MasterCodes — the same UQC
+// master as the GSTR-1 HSN summary, so both use the shared mapping.
 
 function toUQC(unit: string | null | undefined): string {
-  if (!unit) return "OTH";
-  return UQC_MAP[unit.toLowerCase()] ?? "OTH";
+  return gstUqcForUnit(unit, "OTH");
 }
 
 // ── Document type mapping ──────────────────────────────────────────────────────
@@ -129,12 +106,9 @@ function toIRPDocType(documentType: string): string {
 // ── Date formatting ────────────────────────────────────────────────────────────
 
 function toIRPDate(date: Date): string {
-  // IRP requires DD/MM/YYYY
-  const d = new Date(date);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
+  // IRP requires DD/MM/YYYY — the calendar day in India, whatever the
+  // server's timezone (midnight IST is the previous day in UTC)
+  return formatIstDate(date, "/");
 }
 
 // ── Number helpers ─────────────────────────────────────────────────────────────
@@ -237,6 +211,7 @@ export function mapInvoiceToIRP(
       IsServc: isService,
       HsnCd: li.itemHsn ?? "9999",
       Qty: qty,
+      FreeQty: n(li.freeQuantity ?? "0"),
       Unit: toUQC(li.selectedUnit),
       UnitPrice: unitPrice,
       TotAmt: grossAmt,

@@ -43,6 +43,7 @@ Disallow: /pos
 Disallow: /price-levels
 Disallow: /proforma-invoices
 Disallow: /purchase-orders
+Disallow: /purchase-returns
 Disallow: /quotations
 Disallow: /reports
 Disallow: /sales-orders

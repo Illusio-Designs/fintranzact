@@ -473,6 +473,22 @@ describe("invoiceLineItemSchema — validates a single invoice line item", () =>
     expect(result.success).toBe(false);
   });
 
+  it("accepts free goods on top of the billed quantity ('10 + 1')", () => {
+    expect(invoiceLineItemSchema.safeParse({ ...validLine, freeQuantity: "1" }).success).toBe(true);
+    expect(invoiceLineItemSchema.safeParse({ ...validLine, freeQuantity: "-1" }).success).toBe(false);
+  });
+
+  it("allows a billed quantity of 0 only on an all-free or all-rejected line", () => {
+    expect(invoiceLineItemSchema.safeParse({ ...validLine, quantity: "0", freeQuantity: "2" }).success).toBe(true);
+    expect(invoiceLineItemSchema.safeParse({ ...validLine, quantity: "0", rejectedQuantity: "5", rejectionReason: "Damaged" }).success).toBe(true);
+    expect(invoiceLineItemSchema.safeParse({ ...validLine, quantity: "0", freeQuantity: "0" }).success).toBe(false);
+  });
+
+  it("rejects a rejection reason over 200 characters", () => {
+    const result = invoiceLineItemSchema.safeParse({ ...validLine, rejectedQuantity: "1", rejectionReason: "x".repeat(201) });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects a taxPercent above 56% (GST maximum + cess can reach ~56%)", () => {
     // The absolute maximum tax rate in India (28% GST + 28% cess) is 56%.
     // Values above this indicate a data entry error.

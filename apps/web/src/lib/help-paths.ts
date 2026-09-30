@@ -63,6 +63,7 @@ export const HELP_NAV: HelpNavSection[] = [
           { label: "Variants", slug: "items/variants" },
           { label: "Units & Conversions", slug: "items/units-and-conversions" },
           { label: "How Stock Moves", slug: "inventory/how-stock-moves" },
+          { label: "Batches & Expiry", slug: "inventory/batches-and-expiry" },
           { label: "Warehouses", slug: "inventory/warehouses" },
           { label: "Stock Transfers", slug: "inventory/stock-transfers" },
           { label: "Stock Adjustments", slug: "inventory/stock-adjustments" },

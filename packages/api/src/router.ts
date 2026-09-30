@@ -50,6 +50,7 @@ import { warehouseRouter } from "./routers/warehouse.js";
 import { barcodeRouter } from "./routers/barcode.js";
 import { shareRouter } from "./routers/share.js";
 import { stockRouter } from "./routers/stock.js";
+import { batchRouter } from "./routers/batch.js";
 import { inventoryReportsRouter } from "./routers/inventory-reports.js";
 import { stockGroupRouter } from "./routers/stockGroup.js";
 import { manufacturingRouter } from "./routers/manufacturing.js";
@@ -105,6 +106,7 @@ export const appRouter = router({
   pos: posRouter,
   warehouse: warehouseRouter,
   stock: stockRouter,
+  batch: batchRouter,
   inventoryReports: inventoryReportsRouter,
   stockGroup: stockGroupRouter,
   manufacturing: manufacturingRouter,

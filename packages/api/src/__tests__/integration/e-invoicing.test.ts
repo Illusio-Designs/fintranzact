@@ -544,6 +544,27 @@ describe("mapInvoiceToIRP", () => {
       expect(r.ValDtls.IgstVal).toBe(0);
     });
 
+    // Regression: the document date was read with the server's local-time
+    // getters. On a UTC server an invoice dated 3 Apr (entered in India, so
+    // stored as 2026-04-02T18:30Z) was sent to the IRP as 02/04/2026.
+    it("sends the invoice date as the calendar day in India", () => {
+      const r = mapInvoiceToIRP(
+        { ...inv, invoiceDate: new Date("2026-04-03T00:00:00+05:30") },
+        line(), buyer(), seller,
+      );
+      expect(r.DocDtls.Dt).toBe("03/04/2026");
+    });
+
+    it("maps item units to GST UQC codes", () => {
+      const unitLine = (selectedUnit: string | null) => line().map((l) => ({ ...l, selectedUnit }));
+      const uqc = (unit: string | null) => mapInvoiceToIRP(inv, unitLine(unit), buyer(), seller).ItemList[0]!.Unit;
+      expect(uqc("dozen")).toBe("DOZ");
+      expect(uqc("pair")).toBe("PRS");
+      expect(uqc("cm")).toBe("CMS");
+      expect(uqc("kg")).toBe("KGS");
+      expect(uqc(null)).toBe("OTH");
+    });
+
     it("treats a blank party state code as missing when deriving place of supply", () => {
       const r = mapInvoiceToIRP(inv, line(), buyer({ stateCode: "" }), seller);
       expect(r.BuyerDtls.Pos).toBe("29");
@@ -821,6 +842,30 @@ describe("eInvoice.dashboard", () => {
     });
 
     expect(result.data.every((inv) => inv.eInvoiceStatus === "generated")).toBe(true);
+  });
+
+  // Regression: the date range was bound as raw Date values inside a sql``
+  // template, which postgres-js rejects — any date filter failed the query.
+  it("filters by invoice date range", async () => {
+    const caller = callerForRamesh();
+    const all = await caller.eInvoice.dashboard({ page: 1, limit: 100 });
+    expect(all.data.length).toBeGreaterThan(0);
+
+    const inRange = await caller.eInvoice.dashboard({
+      fromDate: "2000-01-01T00:00:00.000Z",
+      toDate: "2099-12-31T23:59:59.999Z",
+      page: 1,
+      limit: 100,
+    });
+    expect(inRange.total).toBe(all.total);
+
+    const beforeAll = await caller.eInvoice.dashboard({
+      toDate: "2000-01-01T00:00:00.000Z",
+      page: 1,
+      limit: 100,
+    });
+    expect(beforeAll.total).toBe(0);
+    expect(beforeAll.data).toEqual([]);
   });
 });
 

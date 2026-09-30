@@ -106,15 +106,17 @@ Click **Save** on the card to apply changes.
 
 ## Shipping
 
-Found in **Settings → Shipping** (web and desktop app). This controls the delivery methods you can pick on invoices and shipments:
+Found in **Settings → Shipping** (web and desktop app). This controls the delivery methods you can pick on invoices, other documents and shipments:
 
-- **Built-in Delivery Methods** — Self Pickup, Self / Driver, Bus / Parcel Service, Transport, Courier (with tracking) and India Post (with tracking). These are always available.
-- **Custom Delivery Methods** — a form to add your own methods, such as "Porter" or "Local Tempo", with a **Method name** and whether it has a tracking number.
+- **Built-in Delivery Methods** — Self Pickup, Self / Driver, Bus / Parcel Service, Transport, Courier (with tracking) and India Post (with tracking). These are always available and cannot be removed.
+- **Custom Delivery Methods** — add your own methods, such as "Porter" or "Local Tempo": type a **Method name**, tick **Has tracking** if it gives a tracking number, click **Add**, then **Save Shipping Settings**. A name that matches a built-in method is not accepted.
 - **Carrier API Integration** — marked **Coming Soon**; carrier accounts cannot be connected yet.
 
-:::caution[Custom methods are not saved yet]
-In the current version, custom delivery methods cannot be saved — clicking **Save Shipping Settings** does not store them, and they do not appear on the invoice form. Use the built-in methods for now.
-:::
+Once saved, custom methods appear after the built-in ones in the **Delivery method** list on sale invoices, quotations, proforma invoices, sales orders, delivery challans and purchase returns, and in the **Mode** list when you create a shipment from an invoice. The last method used for a customer is picked for you on their next invoice.
+
+Removing a custom method stops it being offered on new documents. Documents already saved with it keep it, and editing them keeps it unless you pick another method. When you convert such a document (for example a quotation into an invoice), the new document starts at **Self Pickup** instead.
+
+Through the [API](/developers), [CLI](/help/ai/cli) or [MCP server](/help/ai/mcp-server), pass a built-in value (`self_pickup`, `hand_delivery`, `courier`, `bus`, `transport`, `post`) or a custom method's id (shown next to it in Settings → Shipping, e.g. `local_tempo`) as `deliveryMethod`. Its name also works, e.g. `Local Tempo`. Anything else is rejected with *Unknown delivery method*.
 
 See [Shipments](/help/invoicing/shipments) for how delivery methods are used.
 

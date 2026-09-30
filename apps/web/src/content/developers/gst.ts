@@ -381,7 +381,7 @@ with open(data["filename"], "w") as f:
       method: "query",
       path: "gst.cmp08",
       title: "Generate CMP-08 (Composition Scheme)",
-      description: "Generate CMP-08 quarterly return for composition scheme dealers. Composition dealers pay a flat tax rate on total outward supplies instead of collecting GST from customers. Calculates total taxable value from sale invoices in the quarter and applies the composition tax rate (default 1% for traders/manufacturers).",
+      description: "Generate CMP-08 quarterly return for composition scheme dealers. Composition dealers pay a flat tax rate on total outward supplies instead of collecting GST from customers. Calculates total taxable value from sale invoices in the quarter (plus sale debit notes, less sale credit notes and sales returns; quotations, proformas, orders, challans and deleted or cancelled documents are excluded) and applies the composition tax rate (default 1% for traders/manufacturers).",
       auth: "business",
       requiredRole: "viewer",
       input: [

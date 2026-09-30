@@ -12,6 +12,12 @@
  * Lines are matched by item (variant, else item, else name), in base units.
  * When an order has the same item on several lines, deliveries fill them in
  * line order.
+ *
+ * Billed and free quantities are tracked apart: a "10 + 1" order is
+ * fulfilled once 10 have been delivered billed and 1 free. On a GRN only the
+ * accepted quantity counts; what was rejected stays pending on the purchase
+ * order (and is shown as rejected there) until more arrives or the order is
+ * short-closed.
  */
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { invoiceItems, invoices, parties, items } from "@fintranzact/db";
@@ -59,6 +65,12 @@ export type PendingLine = {
   ordered: number;
   fulfilled: number;
   pending: number;
+  /** Free quantity on the line, how much of it was delivered, and what is left. */
+  freeOrdered: number;
+  freeFulfilled: number;
+  freePending: number;
+  /** Purchase orders: received on its GRNs but rejected. GRNs: rejected on the line itself. */
+  rejected: number;
 };
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -98,6 +110,8 @@ export async function loadPendingLines(db: Db, businessId: string, documentIds: 
         selectedUnit: invoiceItems.selectedUnit,
         conversionFactor: invoiceItems.conversionFactor,
         sortOrder: invoiceItems.sortOrder,
+        freeQuantity: invoiceItems.freeQuantity,
+        rejectedQuantity: invoiceItems.rejectedQuantity,
       })
       .from(invoiceItems)
       .innerJoin(invoices, eq(invoices.id, invoiceItems.invoiceId))
@@ -107,7 +121,11 @@ export async function loadPendingLines(db: Db, businessId: string, documentIds: 
       SELECT d.reference_document_id AS source_id,
              COALESCE(li.variant_id::text, li.item_id::text, 'name:' || lower(trim(li.item_name))) AS key,
              SUM(li.quantity::numeric
-               * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END)::text AS qty
+               * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END)::text AS qty,
+             SUM(COALESCE(li.free_quantity, 0)::numeric
+               * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END)::text AS free,
+             SUM(CASE WHEN d.document_type = 'goods_receipt_note' THEN COALESCE(li.rejected_quantity, 0)::numeric ELSE 0 END
+               * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END)::text AS rejected
       FROM invoices d
       JOIN invoices s ON s.id = d.reference_document_id
       JOIN invoice_items li ON li.invoice_id = d.id
@@ -121,28 +139,40 @@ export async function loadPendingLines(db: Db, businessId: string, documentIds: 
           OR (s.document_type IN ('goods_receipt_note', 'delivery_challan') AND d.document_type = 'invoice')
         )
       GROUP BY 1, 2
-    `) as Promise<Array<{ source_id: string; key: string; qty: string }>>,
+    `) as Promise<Array<{ source_id: string; key: string; qty: string; free: string; rejected: string }>>,
   ]);
 
-  // Base-unit quantity taken per (source document, item key).
+  // Base-unit quantities taken (billed, free) and rejected per (source document, item key).
   const remaining = new Map<string, number>();
-  for (const t of taken as Array<{ source_id: string; key: string; qty: string }>) {
+  const remainingFree = new Map<string, number>();
+  const remainingRejected = new Map<string, number>();
+  for (const t of taken as Array<{ source_id: string; key: string; qty: string; free: string; rejected: string }>) {
     remaining.set(`${t.source_id}|${t.key}`, parseFloat(t.qty));
+    remainingFree.set(`${t.source_id}|${t.key}`, parseFloat(t.free ?? "0"));
+    remainingRejected.set(`${t.source_id}|${t.key}`, parseFloat(t.rejected ?? "0"));
   }
+  /** Take up to `cap` (line units) from a pool, in base units. */
+  const draw = (pool: Map<string, number>, mapKey: string, cap: number, factor: number) => {
+    const available = pool.get(mapKey) ?? 0;
+    const takeBase = Math.min(available, cap * factor);
+    pool.set(mapKey, available - takeBase);
+    return round3(takeBase / factor);
+  };
 
   const lastLineOfKey = new Map<string, PendingLine & { factor: number }>();
   for (const li of sourceLines as Array<{
     id: string; invoiceId: string; itemId: string | null; variantId: string | null; itemName: string;
     description: string | null; quantity: string; unitPrice: string; taxPercent: string; discountPercent: string;
-    selectedUnit: string | null; conversionFactor: string | null;
+    selectedUnit: string | null; conversionFactor: string | null; freeQuantity: string | null; rejectedQuantity: string | null;
   }>) {
     const factor = lineFactor(li);
     const mapKey = `${li.invoiceId}|${lineKey(li)}`;
     const ordered = parseFloat(li.quantity);
-    const available = remaining.get(mapKey) ?? 0;
-    const takeBase = Math.min(available, ordered * factor);
-    remaining.set(mapKey, available - takeBase);
-    const fulfilled = round3(takeBase / factor);
+    const freeOrdered = parseFloat(li.freeQuantity ?? "0") || 0;
+    const fulfilled = draw(remaining, mapKey, ordered, factor);
+    const freeFulfilled = draw(remainingFree, mapKey, freeOrdered, factor);
+    // Rejections only ever count against what is still pending.
+    const rejectedOnGrns = draw(remainingRejected, mapKey, Math.max(ordered - fulfilled, 0), factor);
     const line = {
       lineId: li.id,
       documentId: li.invoiceId,
@@ -158,6 +188,10 @@ export async function loadPendingLines(db: Db, businessId: string, documentIds: 
       ordered: round3(ordered),
       fulfilled,
       pending: Math.max(round3(ordered - fulfilled), 0),
+      freeOrdered: round3(freeOrdered),
+      freeFulfilled,
+      freePending: Math.max(round3(freeOrdered - freeFulfilled), 0),
+      rejected: rejectedOnGrns + (parseFloat(li.rejectedQuantity ?? "0") || 0),
     };
     const list = result.get(li.invoiceId) ?? [];
     list.push(line);
@@ -169,6 +203,8 @@ export async function loadPendingLines(db: Db, businessId: string, documentIds: 
   for (const [mapKey, line] of lastLineOfKey) {
     const extra = remaining.get(mapKey) ?? 0;
     if (extra > EPS) line.fulfilled = round3(line.fulfilled + extra / line.factor);
+    const extraFree = remainingFree.get(mapKey) ?? 0;
+    if (extraFree > EPS) line.freeFulfilled = round3(line.freeFulfilled + extraFree / line.factor);
     delete (line as Partial<typeof line>).factor;
   }
 
@@ -182,8 +218,8 @@ export function fulfilmentStatus(
   if (doc.deletedAt || doc.status === "cancelled") return "cancelled";
   if (doc.closedAt) return "closed";
   const all = lines ?? [];
-  if (all.length > 0 && all.every((l) => l.pending <= EPS)) return "fulfilled";
-  if (all.some((l) => l.fulfilled > EPS)) return "partial";
+  if (all.length > 0 && all.every((l) => l.pending <= EPS && l.freePending <= EPS)) return "fulfilled";
+  if (all.some((l) => l.fulfilled > EPS || l.freeFulfilled > EPS)) return "partial";
   return "open";
 }
 
@@ -249,7 +285,7 @@ export async function listPendingLines(
   const now = Date.now();
   const data = docs.flatMap((d) =>
     (lines.get(d.id) ?? [])
-      .filter((l) => l.pending > EPS && (!input.itemId || l.itemId === input.itemId))
+      .filter((l) => (l.pending > EPS || l.freePending > EPS) && (!input.itemId || l.itemId === input.itemId))
       .map((l) => {
         // Pending value before tax, at the line's rate after its discount.
         const rate = money.sub(l.unitPrice, money.percent(l.unitPrice, l.discountPercent || "0"));
@@ -268,6 +304,8 @@ export async function listPendingLines(
           ordered: l.ordered,
           fulfilled: l.fulfilled,
           pending: l.pending,
+          freePending: l.freePending,
+          rejected: l.rejected,
           rate,
           pendingValue: money.mul(rate, l.pending),
         };
@@ -281,4 +319,85 @@ export async function listPendingLines(
       value: money.sum(data.map((r) => r.pendingValue)),
     },
   };
+}
+
+export type RejectedLine = {
+  lineId: string;
+  itemId: string | null;
+  variantId: string | null;
+  itemName: string;
+  selectedUnit: string | null;
+  reason: string | null;
+  /** In the line's own unit. */
+  rejected: number;
+  /** Sent back on purchase returns or debit notes made from the GRN. */
+  returned: number;
+  open: number;
+};
+
+/**
+ * Goods a GRN rejected, and how much of that has gone back to the supplier
+ * on purchase returns or debit notes made from it (live ones only).
+ */
+export async function loadRejectedLines(db: Db, businessId: string, grnId: string): Promise<RejectedLine[]> {
+  const [lines, returned] = await Promise.all([
+    db
+      .select({
+        id: invoiceItems.id,
+        itemId: invoiceItems.itemId,
+        variantId: invoiceItems.variantId,
+        itemName: invoiceItems.itemName,
+        selectedUnit: invoiceItems.selectedUnit,
+        conversionFactor: invoiceItems.conversionFactor,
+        rejectedQuantity: invoiceItems.rejectedQuantity,
+        rejectionReason: invoiceItems.rejectionReason,
+      })
+      .from(invoiceItems)
+      .innerJoin(invoices, eq(invoices.id, invoiceItems.invoiceId))
+      .where(and(eq(invoices.businessId, businessId), eq(invoiceItems.invoiceId, grnId)))
+      .orderBy(invoiceItems.sortOrder),
+    db.execute(sql`
+      SELECT COALESCE(li.variant_id::text, li.item_id::text, 'name:' || lower(trim(li.item_name))) AS key,
+             SUM((li.quantity::numeric + COALESCE(li.free_quantity, 0)::numeric)
+               * CASE WHEN li.variant_id IS NULL THEN COALESCE(li.conversion_factor, 1)::numeric ELSE 1 END)::text AS qty
+      FROM invoices d
+      JOIN invoice_items li ON li.invoice_id = d.id
+      WHERE d.business_id = ${businessId}
+        AND d.reference_document_id = ${grnId}
+        AND d.document_type IN ('purchase_return', 'debit_note')
+        AND d.deleted_at IS NULL
+        AND d.status <> 'cancelled'
+      GROUP BY 1
+    `) as Promise<Array<{ key: string; qty: string }>>,
+  ]);
+
+  const pool = new Map<string, number>();
+  for (const r of returned as Array<{ key: string; qty: string }>) pool.set(r.key, parseFloat(r.qty));
+
+  const out: RejectedLine[] = [];
+  for (const li of lines as Array<{
+    id: string; itemId: string | null; variantId: string | null; itemName: string; selectedUnit: string | null;
+    conversionFactor: string | null; rejectedQuantity: string; rejectionReason: string | null;
+  }>) {
+    const rejected = parseFloat(li.rejectedQuantity) || 0;
+    if (rejected <= EPS) continue;
+    const factor = lineFactor(li);
+    const key = lineKey(li);
+    const available = pool.get(key) ?? 0;
+    const takeBase = Math.min(available, rejected * factor);
+    pool.set(key, available - takeBase);
+    const back = round3(takeBase / factor);
+    out.push({
+      lineId: li.id,
+      itemId: li.itemId,
+      variantId: li.variantId,
+      itemName: li.itemName,
+      selectedUnit: li.selectedUnit,
+      reason: li.rejectionReason,
+      rejected: round3(rejected),
+      returned: back,
+      open: Math.max(round3(rejected - back), 0),
+    });
+  }
+  return out;
 }

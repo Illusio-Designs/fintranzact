@@ -37,6 +37,10 @@ You see "Stock adjusted" when it's saved. Lines with no item or a zero quantity 
 When removing stock, Fintranzact checks each item at the chosen warehouse. If you try to remove more than is there, you see "Only N in stock at this warehouse" and nothing is saved. This applies whatever your **Selling more than you have** setting is.
 :::
 
+:::note[Items that track batches]
+For an item that [tracks batches](/help/inventory/batches-and-expiry), each line also asks for the batch. **Add stock** needs a batch number (with expiry, for items that track expiry); **Remove stock** lets you pick the batch, or takes the batch that expires first — expired batches first, since writing them off is the usual reason. The list shows the batch under the item.
+:::
+
 ## The adjustments list
 
 The page lists adjustments newest first, 25 per page. Two tabs:

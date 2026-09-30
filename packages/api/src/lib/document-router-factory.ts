@@ -18,11 +18,16 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { logAudit } from "./audit.js";
-import { resolveInvoiceWarehouse, syncDocumentStock } from "./inventory-service.js";
+import { documentStockDirection, resolveDocumentWarehouseId, resolveInvoiceWarehouse, syncDocumentStock } from "./inventory-service.js";
+import { resolveLineBatches } from "./batches.js";
+import { lineBatchDetails } from "./batch-display.js";
 import { requireCan } from "./permissions.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
 import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
+import { assertLineExtras, lineExtras } from "./line-extras.js";
+import { resolveDeliveryMethod } from "./delivery-methods.js";
+import { recomputeReferencedInvoice } from "./invoice-status.js";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 
@@ -256,7 +261,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
         if (!invoice) return null;
 
-        const [lineItems, [party]] = await Promise.all([
+        const [lineRows, [party]] = await Promise.all([
           ctx.db
             .select()
             .from(invoiceItems)
@@ -264,6 +269,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             .orderBy(invoiceItems.sortOrder),
           ctx.db.select().from(parties).where(eq(parties.id, invoice.partyId)).limit(1),
         ]);
+        const batchDetails = await lineBatchDetails(ctx.db, ctx.businessId, lineRows);
+        const lineItems = lineRows.map((li) => ({ ...li, batch: li.batchId ? batchDetails.get(li.batchId) ?? null : null }));
 
         return { ...invoice, lineItems, party: party ?? null };
       }),
@@ -353,8 +360,32 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             docNumber = `${prefix}-${String(nextNum).padStart(5, "0")}`;
           }
 
+          assertLineExtras(docType, input.lineItems);
+          // Check a picked warehouse before anything reads stock in it.
+          const movesStock = config.stockEffect !== "none" && !input.skipStockAdjustment;
+          if (input.warehouseId && movesStock) {
+            await resolveInvoiceWarehouse(tx, {
+              businessId: ctx.businessId,
+              operation: "sale",
+              warehouseId: input.warehouseId,
+            });
+          }
+
+          // Lines of batch-tracked items get their batch (see lib/batches).
+          const stockDoc = { documentType: docType, type: config.fixedType ?? input.type, warehouseId: input.warehouseId ?? null };
+          const docDate = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
+          const direction = movesStock ? documentStockDirection(stockDoc) : 0;
+          const lineItems = await resolveLineBatches(tx, {
+            businessId: ctx.businessId,
+            lines: input.lineItems,
+            direction,
+            warehouseId: direction === 0 ? null : await resolveDocumentWarehouseId(tx, { businessId: ctx.businessId, doc: stockDoc }),
+            documentDate: docDate,
+            strict: true,
+          });
+
           // Calculate line item totals using fixed-point arithmetic
-          const processedItems = input.lineItems.map((li, idx) => {
+          const processedItems = lineItems.map((li, idx) => {
             const calc = calcLineItem({
               quantity: li.quantity,
               unitPrice: li.unitPrice,
@@ -375,12 +406,14 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               selectedUnit: li.selectedUnit || null,
               conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
               variantId: li.variantId || null,
+              ...lineExtras(li),
+              batchId: li.batchId,
             };
           });
 
           const charges = input.charges ?? [];
           const totals = calcInvoiceTotals({
-            lineItems: input.lineItems.map((li) => ({
+            lineItems: lineItems.map((li) => ({
               quantity: li.quantity,
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent || "0",
@@ -396,14 +429,25 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             : (input.additionalCharges || "0");
           const roundOff = input.roundOff || "0";
 
+          // A return or note made from a goods receipt note sends back goods
+          // rejected on receipt: the GRN is not a bill, so there is no bill
+          // total to hold it to or to mark adjusted.
+          let adjustsBill = !!input.referenceDocumentId
+            && ["credit_note", "sales_return", "purchase_return"].includes(docType);
+          if (adjustsBill) {
+            const [ref] = await tx
+              .select({ documentType: invoices.documentType })
+              .from(invoices)
+              .where(and(eq(invoices.id, input.referenceDocumentId!), eq(invoices.businessId, ctx.businessId)))
+              .limit(1);
+            if (ref?.documentType === "goods_receipt_note") adjustsBill = false;
+          }
+
           // Server-side guard: CN/SR/PR total must not exceed the referenced invoice's total.
           // This prevents over-crediting or over-returning against a single invoice.
-          if (
-            input.referenceDocumentId &&
-            ["credit_note", "sales_return", "purchase_return"].includes(docType)
-          ) {
+          if (adjustsBill && input.referenceDocumentId) {
             const [refInvoice] = await tx
-              .select({ totalAmount: invoices.totalAmount })
+              .select({ totalAmount: invoices.totalAmount, type: invoices.type })
               .from(invoices)
               .where(and(
                 eq(invoices.id, input.referenceDocumentId),
@@ -413,6 +457,18 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
             if (!refInvoice) {
               throw new TRPCError({ code: "BAD_REQUEST", message: "Referenced invoice not found" });
+            }
+
+            // Goods go back the way they came: a sales return is against a
+            // sale, a purchase return against a purchase. Anything else would
+            // move stock and GST the wrong way.
+            if (config.fixedType && refInvoice.type !== config.fixedType) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: refInvoice.type === "purchase"
+                  ? "A purchase invoice is returned with a purchase return, not a sales return"
+                  : "A sale invoice is returned with a sales return, not a purchase return",
+              });
             }
 
             // Sum all existing CN/SR/PR already issued against this invoice
@@ -438,14 +494,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             }
           }
 
-          // Check a picked warehouse before the document row references it.
-          if (input.warehouseId && config.stockEffect !== "none" && !input.skipStockAdjustment) {
-            await resolveInvoiceWarehouse(tx, {
-              businessId: ctx.businessId,
-              operation: "sale",
-              warehouseId: input.warehouseId,
-            });
-          }
+          // A built-in delivery method, or one of the business's own.
+          const deliveryMethod = await resolveDeliveryMethod(tx, ctx.businessId, input.deliveryMethod || "self_pickup");
 
           const [result] = await tx
             .insert(invoices)
@@ -456,7 +506,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               // ALWAYS use config.documentType — never trust client-supplied value
               documentType: docType as DocumentType,
               invoiceNumber: docNumber,
-              invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
+              invoiceDate: docDate,
               dueDate: input.dueDate ? new Date(input.dueDate) : null,
               subtotal: totals.subtotal,
               taxAmount: totals.taxTotal,
@@ -468,6 +518,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               notes: input.notes,
               termsAndConditions: input.termsAndConditions,
               referenceDocumentId: input.referenceDocumentId || null,
+              deliveryMethod,
               stockMode: config.stockEffect === "none" || input.skipStockAdjustment ? "none" : "tracked",
               warehouseId: config.stockEffect === "none" || input.skipStockAdjustment ? null : input.warehouseId ?? null,
               createdByUserId: ctx.user!.id,
@@ -490,37 +541,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             actorUserId: ctx.user!.id,
           });
 
-          // Auto-update referenced invoice status to "adjusted" when fully covered
-          if (
-            input.referenceDocumentId &&
-            ["credit_note", "sales_return", "purchase_return"].includes(docType)
-          ) {
-            const [{ totalAdj }] = await tx
-              .select({
-                totalAdj: sql<string>`COALESCE(SUM(${invoices.totalAmount}::numeric), 0)`,
-              })
-              .from(invoices)
-              .where(and(
-                eq(invoices.referenceDocumentId, input.referenceDocumentId),
-                eq(invoices.businessId, ctx.businessId),
-                sql`${invoices.documentType} IN ('credit_note', 'sales_return', 'purchase_return')`,
-                sql`${invoices.status} NOT IN ('cancelled')`,
-                isNull(invoices.deletedAt),
-              ));
-
-            const [{ refTotal }] = await tx
-              .select({ refTotal: invoices.totalAmount })
-              .from(invoices)
-              .where(eq(invoices.id, input.referenceDocumentId))
-              .limit(1);
-
-            if (parseFloat(totalAdj) >= parseFloat(refTotal) - 0.01) {
-              await tx
-                .update(invoices)
-                .set({ status: "adjusted", updatedAt: new Date() })
-                .where(eq(invoices.id, input.referenceDocumentId));
-            }
-          }
+          // The invoice it adjusts: adjusted, paid, partial... from what now settles it.
+          await recomputeReferencedInvoice(tx, ctx.businessId, result);
 
           return result;
         });
@@ -588,6 +610,10 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               enforceStock: !isCancelled,
               actorUserId: ctx.user!.id,
             });
+          }
+          // A cancelled or reinstated note or return changes what settles its invoice.
+          if (wasCancelled !== isCancelled) {
+            await recomputeReferencedInvoice(tx, ctx.businessId, updated);
           }
           return updated;
         });
@@ -660,6 +686,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             event: "DELETE",
             actorUserId: ctx.user!.id,
           });
+
+          // A deleted note or return no longer settles its invoice.
+          await recomputeReferencedInvoice(tx, ctx.businessId, doc);
 
           return { success: true, invoiceNumber: doc.invoiceNumber, deleted: true };
         });

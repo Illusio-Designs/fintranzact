@@ -696,7 +696,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                                   purchase: "/invoices",
                                   credit_note: "/credit-notes",
                                   sales_return: "/sales-returns",
-                                  purchase_return: "/invoices",
+                                  purchase_return: "/purchase-returns",
                                   debit_note: "/invoices",
                                 };
                                 onClose();

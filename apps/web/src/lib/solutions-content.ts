@@ -5,6 +5,7 @@ import {
   BarCode01Icon,
   Briefcase01Icon,
   Building03Icon,
+  Calendar03Icon,
   ChartBarLineIcon,
   CheckListIcon,
   ClipboardIcon,
@@ -50,8 +51,10 @@ import type { FeatureSlug } from "@/lib/feature-slugs";
  * Every capability named here exists in the product today — each entry in
  * FEATURES was checked against the web routes and API routers. When adding a
  * page, reuse these entries instead of writing new claims, and leave out
- * anything that is not built yet (batch/expiry tracking, serial/IMEI numbers,
- * KOT and table management are NOT built).
+ * anything that is not built yet (serial/IMEI numbers, KOT and table
+ * management are NOT built). Batch / lot numbers with expiry dates ARE built:
+ * per item, with first-expiry-first-out sales and expiry reports — but not in
+ * manufacturing or physical stock counts, so don't claim those.
  */
 
 export type SolutionFeature = {
@@ -195,6 +198,12 @@ export const FEATURES = {
     body: "Track stock per shop or godown, move it between them, and decide who may transfer or adjust stock where.",
     page: "warehouses",
     icon: WarehouseIcon,
+  },
+  batches: {
+    name: "Batches & expiry",
+    body: "Record the batch and expiry on every purchase; sales take the batch that expires first and skip expired stock.",
+    page: "inventory",
+    icon: Calendar03Icon,
   },
   stockCount: {
     name: "Physical stock counts",
@@ -502,12 +511,12 @@ export const SOLUTIONS: Solution[] = [
     group: "industry",
     name: "Pharmacy",
     icon: Medicine02Icon,
-    summary: "Counter billing, MRP, barcodes and reorder reports for chemists.",
+    summary: "Counter billing, MRP, barcodes, batch and expiry tracking for chemists.",
     title: "Counter billing and stock for pharmacies and medical stores",
     subtitle:
-      "Bill quickly at the counter with MRP and GST on every line, scan barcodes, and use reorder and dead-stock reports to keep the right medicines on the shelf.",
+      "Bill quickly at the counter with MRP and GST on every line, sell the batch that expires first, and use reorder and expiry reports to keep the right medicines on the shelf.",
     description:
-      "Billing software for pharmacies and medical stores: point of sale, MRP and price levels, barcodes, purchase bills, reorder reports and GST returns.",
+      "Billing software for pharmacies and medical stores: point of sale, MRP, batch and expiry tracking, barcodes, purchase bills, reorder reports and GST returns.",
     pains: [
       {
         pain: "Customers wait while each medicine is looked up and priced.",
@@ -518,6 +527,10 @@ export const SOLUTIONS: Solution[] = [
         answer: "Reorder status shows items below their reorder level, and dead-stock and ageing reports show what is not selling.",
       },
       {
+        pain: "Expired strips turn up on the shelf, or go out to a customer.",
+        answer: "Track batches and expiry on medicines: purchases record each batch, sales take the one that expires first and skip expired stock, and the Expiring Soon report shows what to return to the supplier.",
+      },
+      {
         pain: "Supplier bills and GST credit are hard to match.",
         answer: "Record purchase bills with GST and reconcile them against GSTR-2B to see which credit you can claim.",
       },
@@ -526,17 +539,17 @@ export const SOLUTIONS: Solution[] = [
         answer: "Run a physical stock count with a barcode scanner and post the difference in one go.",
       },
     ],
-    features: ["pos", "priceLevels", "barcodes", "stockReports", "stockCount", "gstr2b", "gstReturns", "payments"],
+    features: ["pos", "batches", "priceLevels", "barcodes", "stockReports", "stockCount", "gstr2b", "gstReturns"],
     workflow: [
-      { title: "Add your items", body: "Import or add items with HSN codes, tax rates, MRP and barcodes." },
-      { title: "Record purchases", body: "Enter supplier bills so stock and input tax credit are up to date." },
+      { title: "Add your items", body: "Import or add items with HSN codes, tax rates, MRP and barcodes, and turn on batch and expiry tracking for medicines." },
+      { title: "Record purchases", body: "Enter supplier bills with the batch number and expiry of each line, so stock and input tax credit are up to date." },
       { title: "Bill at the counter", body: "Use the point-of-sale screen with cash or UPI and thermal receipts." },
       { title: "Reorder and file", body: "Check reorder and dead-stock reports, then pull your GST summaries." },
     ],
     faqs: [
       {
         q: "Does Fintranzact track batch numbers and expiry dates?",
-        a: "Not yet. Batch and expiry tracking is not available today, so near-expiry alerts and batch-wise stock are not supported. Talk to us if this is essential for you.",
+        a: "Yes. Turn on Track batches and Track expiry on an item. Purchase bills record the batch, expiry and batch MRP; sales and POS bills take the batch that expires first (or the one you pick) and won't sell an expired batch unless you allow it; the invoice prints the batch and expiry under each line; and Batch-wise Stock, Expiring Soon and Expired Stock reports show what you hold.",
       },
       {
         q: "Can I sell by strip and by box?",

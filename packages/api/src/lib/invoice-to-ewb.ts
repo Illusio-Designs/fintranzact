@@ -16,6 +16,7 @@
 
 import type { GenerateEWBPayload, EWBItemPayload } from "./ewb-client.js";
 import { transportModeCode } from "./ewb-client.js";
+import { formatIstDate } from "./ist-date.js";
 
 // ── Input types ───────────────────────────────────────────────────────────────
 
@@ -51,6 +52,8 @@ export interface LineItemForEWB {
   /** Optional free-text line notes — not used by EWB payload. */
   description: string | null;
   quantity: string;
+  /** Free goods travel with the consignment, so they count in its quantity (not its value). */
+  freeQuantity?: string | null;
   unitPrice: string;
   taxPercent: string;
   taxAmount: string;
@@ -84,13 +87,11 @@ function docTypeCode(documentType: string, _invoiceType: "sale" | "purchase"): "
 }
 
 /**
- * Format Date to DD/MM/YYYY as required by NIC.
+ * Format Date to DD/MM/YYYY as required by NIC — the calendar day in India,
+ * whatever the server's timezone (midnight IST is the previous day in UTC).
  */
 function formatNICDate(date: Date): string {
-  const d = String(date.getDate()).padStart(2, "0");
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
+  return formatIstDate(date, "/");
 }
 
 /**
@@ -251,7 +252,7 @@ export function mapInvoiceToEWB(
       productName: li.itemName.slice(0, 100),
       productDesc: li.itemName.slice(0, 100),
       hsnCode: li.hsn ?? "",
-      quantity: qty,
+      quantity: qty + (parseFloat(li.freeQuantity ?? "0") || 0),
       qtyUnit: mapUnit(li.unit),
       cgstRate: rates.cgstRate,
       sgstRate: rates.sgstRate,

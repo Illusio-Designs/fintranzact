@@ -150,11 +150,11 @@ export function StockLedgerReport({ fromDate, toDate }: { fromDate?: string; toD
     if (!data || !picked) return;
     downloadCSV(
       `stock-ledger-${picked.name}`,
-      ["Date", "Particulars", "Party", "Warehouse", "Inward", "Outward", "Balance"],
+      ["Date", "Particulars", "Party", "Warehouse", "Inward", "Outward", "Of which free", "Balance"],
       [
-        ["", "Opening balance", "", "", "", "", data.opening],
-        ...data.lines.map((l) => [formatDate(l.date), l.particulars, l.party ?? "", l.warehouse, l.inward || "", l.outward || "", l.balance]),
-        ["", "Closing balance", "", "", data.inward, data.outward, data.closing],
+        ["", "Opening balance", "", "", "", "", "", data.opening],
+        ...data.lines.map((l) => [formatDate(l.date), l.particulars, l.party ?? "", l.warehouse, l.inward || "", l.outward || "", l.free || "", l.balance]),
+        ["", "Closing balance", "", "", data.inward, data.outward, "", data.closing],
       ],
     );
   }
@@ -227,6 +227,8 @@ export function StockLedgerReport({ fromDate, toDate }: { fromDate?: string; toD
                 { label: "Warehouse", hideBelow: "md", render: (l) => <span className="text-text-secondary">{l.warehouse}</span> },
                 { label: "Inward", align: "right", render: (l) => (l.inward ? formatQty(l.inward) : "") },
                 { label: "Outward", align: "right", render: (l) => (l.outward ? formatQty(l.outward) : "") },
+                // Free goods ("10 + 1") within the movement: they move stock but carry no value.
+                { label: "Free", align: "right", hideBelow: "md", render: (l) => (l.free ? <span className="text-text-secondary">{formatQty(l.free)}</span> : "") },
                 { label: "Balance", align: "right", render: (l) => <span className="font-medium">{formatQty(l.balance)}</span> },
               ]}
             />
@@ -593,6 +595,127 @@ export function StockGroupSummaryReport({ toDate }: { toDate?: string }) {
             { label: "Quantity", align: "right", render: (r) => formatQty(r.quantity, r.kind === "item" ? r.unit : undefined) },
             { label: "Rate", align: "right", hideBelow: "md", render: (r) => (r.kind === "item" ? formatCurrency(r.rate) : "") },
             { label: "Value", align: "right", render: (r) => <span className="font-medium">{formatCurrency(r.value)}</span> },
+          ]}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Batch-wise stock, expiring and expired ─────────────────────
+
+/**
+ * Stock per batch and warehouse for items that track batches. The same
+ * report narrowed to batches expiring within N days, or to expired stock.
+ */
+export function BatchStockReport({ status }: { status: "all" | "expiring" | "expired" }) {
+  const [days, setDays] = useState(30);
+  const [warehouseId, setWarehouseId] = useState("");
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+  const { data: warehouses } = useWarehouses();
+  const { data, isLoading, error } = trpc.inventoryReports.batchStock.useQuery({
+    status,
+    days,
+    warehouseId: warehouseId || null,
+    search: debouncedSearch || null,
+  });
+  if (isLoading) return <Loading />;
+  if (error || !data) return <LoadError what="batch stock" />;
+
+  const what = status === "expired" ? "expired stock" : status === "expiring" ? `batches expiring in ${days} days` : "batch-wise stock";
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {status === "expiring" && (
+          <div className="w-44">
+            <Listbox
+              value={String(days)}
+              onChange={(v) => setDays(Number(v))}
+              options={[7, 15, 30, 60, 90, 180].map((d) => ({ value: String(d), label: `Next ${d} days` }))}
+            />
+          </div>
+        )}
+        {(warehouses?.length ?? 0) > 1 && (
+          <div className="w-48">
+            <Listbox
+              value={warehouseId}
+              onChange={setWarehouseId}
+              options={[{ value: "", label: "All warehouses" }, ...(warehouses ?? []).map((w) => ({ value: w.id, label: w.name }))]}
+            />
+          </div>
+        )}
+        <input
+          className="input w-full sm:w-56"
+          placeholder="Search item or batch"
+          aria-label="Search item or batch"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <p className="text-xs text-text-tertiary">
+          {data.data.length} {data.data.length === 1 ? "batch" : "batches"} worth{" "}
+          <span className="font-semibold text-text-primary">{formatCurrency(data.totalValue)}</span>
+        </p>
+        {data.data.length > 0 && (
+          <div className="ml-auto">
+            <ExportButton onClick={() => downloadCSV(
+              status === "all" ? "batch-stock" : status === "expiring" ? `expiring-${days}-days` : "expired-stock",
+              ["Item", "Batch", "Mfg date", "Expiry", "Days to expiry", "Warehouse", "Quantity", "Unit", "Value"],
+              data.data.map((r) => [
+                r.name, r.batchNumber, r.mfgDate ?? "", r.expiryDate ?? "", r.daysToExpiry ?? "",
+                r.warehouseName, r.quantity, r.unit, r.value,
+              ]),
+            )} />
+          </div>
+        )}
+      </div>
+      {data.data.length === 0 ? (
+        <EmptyState
+          icon={<Icon icon={Alert02Icon} size={20} className="text-text-tertiary" />}
+          title={status === "expired" ? "No expired stock" : status === "expiring" ? "Nothing expiring soon" : "No batch stock"}
+          description={
+            status === "all"
+              ? "Items that track batches show their stock per batch here. Switch on \"Track batches\" on an item to start."
+              : `No ${what} right now.`
+          }
+        />
+      ) : (
+        <ReportTable
+          rows={data.data}
+          rowKey={(r) => `${r.batchId}:${r.warehouseId}`}
+          columns={[
+            {
+              label: "Item",
+              render: (r) => (
+                <div className="min-w-0">
+                  <p className="font-medium">{r.name}</p>
+                  <p className="text-xs text-text-tertiary md:hidden">Batch {r.batchNumber}</p>
+                </div>
+              ),
+            },
+            { label: "Batch", hideBelow: "md", render: (r) => <span className="font-mono text-xs">{r.batchNumber}</span> },
+            {
+              label: "Expiry",
+              render: (r) => (
+                <span className={cn(
+                  "whitespace-nowrap",
+                  r.expired ? "font-medium text-red-600 dark:text-red-400"
+                    : r.daysToExpiry !== null && r.daysToExpiry <= 30 ? "text-amber-700 dark:text-amber-400"
+                    : "text-text-secondary",
+                )}>
+                  {r.expiryDate ? formatDate(r.expiryDate) : "—"}
+                  {r.daysToExpiry !== null && (
+                    <span className="block text-[11px]">
+                      {r.expired ? `${-r.daysToExpiry}d ago` : r.daysToExpiry === 0 ? "today" : `in ${r.daysToExpiry}d`}
+                    </span>
+                  )}
+                </span>
+              ),
+            },
+            { label: "Warehouse", hideBelow: "lg", render: (r) => <span className="text-text-secondary">{r.warehouseName}</span> },
+            { label: "Quantity", align: "right", render: (r) => formatQty(r.quantity, r.unit) },
+            { label: "Value", align: "right", hideBelow: "md", render: (r) => <span className="font-medium">{formatCurrency(r.value)}</span> },
           ]}
         />
       )}

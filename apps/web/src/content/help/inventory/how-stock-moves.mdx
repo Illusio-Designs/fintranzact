@@ -30,6 +30,9 @@ A few details:
 - **Stock moves as soon as the document is saved, including drafts.** A new document starts as a draft, and a draft invoice or challan already takes the goods out. Marking it Sent doesn't move stock again.
 - **Units are converted.** Selling 2 boxes of an item tracked in pieces (1 box = 12 pcs) takes out 24 pcs. See [Units & Conversions](/help/items/units-and-conversions).
 - **Lines without an item** (typed-in descriptions) don't move stock.
+- **Free goods move stock.** A line of 10 + 1 free moves 11, though only 10 are billed. See [Free goods](/help/inventory/orders-and-grn).
+- **Goods rejected on a GRN don't.** Only the accepted (and free) quantity comes in; rejected goods stay pending on the purchase order. See [Rejections on goods receipt](/help/inventory/orders-and-grn).
+- **Batches.** For items that [track batches](/help/inventory/batches-and-expiry), each line also names its batch: incoming documents record it, outgoing ones take the batch that expires first unless you pick one. Cancelling, editing and deleting put batch stock back exactly like the rest of your stock.
 
 :::note[Credit and debit notes don't move stock]
 Credit and debit notes are money-only documents, for price corrections, discounts or extra charges. When goods physically come back from a customer, create a **sales return**. When you send goods back to a supplier, create a **purchase return**. Returns move the stock; notes don't.

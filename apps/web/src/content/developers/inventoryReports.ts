@@ -22,16 +22,16 @@ export const inventoryReportsEndpoints: EndpointGroup = {
         { name: "toDate", type: "string (ISO datetime)", required: true, description: "Period end, inclusive (e.g. `2026-09-30T23:59:59.999Z`)" },
       ],
       output: {
-        description: "Opening, inward, outward and closing quantities plus the movement lines in date order. `documentId` is set only when the line came from a sales/purchase document (invoice, challan, GRN, return) so a UI can link to it. `truncated` is true when the 2000-line cap was hit.",
+        description: "Opening, inward, outward and closing quantities plus the movement lines in date order. `documentId` is set only when the line came from a sales/purchase document (invoice, challan, GRN, return) so a UI can link to it. `free` is how much of a document's movement was free goods (\"10 + 1\"), in base units (0 otherwise). `truncated` is true when the 2000-line cap was hit.",
         example: {
           opening: 120,
           inward: 250,
           outward: 185.5,
           closing: 184.5,
           lines: [
-            { id: "movement-uuid-1", date: "2026-04-03T10:15:00.000Z", particulars: "Purchase PUR-0018", party: "Shree Balaji Traders", warehouse: "Main Godown", documentId: "invoice-uuid-1", inward: 250, outward: 0, balance: 370 },
-            { id: "movement-uuid-2", date: "2026-04-11T14:02:00.000Z", particulars: "Sale INV-0412", party: "Sharma Textiles Pvt Ltd", warehouse: "Main Godown", documentId: "invoice-uuid-2", inward: 0, outward: 180, balance: 190 },
-            { id: "movement-uuid-3", date: "2026-05-02T09:00:00.000Z", particulars: "Adjustment — Damaged in transit", party: null, warehouse: "Main Godown", documentId: null, inward: 0, outward: 5.5, balance: 184.5 },
+            { id: "movement-uuid-1", date: "2026-04-03T10:15:00.000Z", particulars: "Purchase PUR-0018", party: "Shree Balaji Traders", warehouse: "Main Godown", documentId: "invoice-uuid-1", inward: 250, outward: 0, free: 10, balance: 370 },
+            { id: "movement-uuid-2", date: "2026-04-11T14:02:00.000Z", particulars: "Sale INV-0412", party: "Sharma Textiles Pvt Ltd", warehouse: "Main Godown", documentId: "invoice-uuid-2", inward: 0, outward: 180, free: 0, balance: 190 },
+            { id: "movement-uuid-3", date: "2026-05-02T09:00:00.000Z", particulars: "Adjustment — Damaged in transit", party: null, warehouse: "Main Godown", documentId: null, inward: 0, outward: 5.5, free: 0, balance: 184.5 },
           ],
           truncated: false,
         },
@@ -330,6 +330,48 @@ console.log("Ungrouped:", report.ungrouped.value);`,
         "Quantity at `asOf` = today's total minus movements dated after it, so backdated reports reflect later corrections.",
       ],
       relatedEndpoints: ["stock-group-list", "inventory-reports-movement-summary"],
+    },
+    {
+      id: "inventory-reports-batch-stock",
+      method: "query",
+      path: "inventoryReports.batchStock",
+      title: "Batch-wise Stock",
+      description: "Stock per batch and warehouse for items that track batches, with each batch's dates, days to expiry and value (valuation rate of the item). `status: \"expiring\"` narrows it to batches expiring within `days` (not yet expired); `status: \"expired\"` to expired stock still on hand. Only batches holding stock are listed, earliest expiry first.",
+      auth: "business",
+      requiredRole: "viewer",
+      input: [
+        { name: "status", type: "string", required: false, description: "Which batches.", default: "all", enumValues: ["all", "expiring", "expired"] },
+        { name: "days", type: "number (integer)", required: false, description: "Window for `expiring` (1–3650).", default: "30" },
+        { name: "warehouseId", type: "string (UUID) | null", required: false, description: "Only this warehouse." },
+        { name: "itemId", type: "string (UUID) | null", required: false, description: "Only this item." },
+        { name: "search", type: "string | null", required: false, description: "Match item name, SKU or batch number." },
+      ],
+      output: {
+        description: "Rows per batch and warehouse, with totals.",
+        example: {
+          data: [
+            { batchId: "batch-uuid", batchNumber: "AMX2311", mfgDate: "2024-11-01", expiryDate: "2026-10-15", mrp: "85.00", itemId: "item-uuid", variantId: null, name: "Amoxicillin 250", sku: null, unit: "pcs", warehouseId: "wh-uuid", warehouseName: "Main warehouse", quantity: 40, value: 2400, daysToExpiry: 15, expired: false },
+          ],
+          asOf: "2026-09-30",
+          status: "expiring",
+          days: 30,
+          totalQuantity: 40,
+          totalValue: 2400,
+          valuationMethod: "weighted_average",
+        },
+      },
+      codeExamples: {
+        curl: `curl "${API_BASE_URL}/api/trpc/inventoryReports.batchStock?input=%7B%22json%22%3A%7B%22status%22%3A%22expiring%22%2C%22days%22%3A30%7D%7D" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "x-business-id: YOUR_BUSINESS_ID"`,
+        javascript: `const { data } = await trpc.inventoryReports.batchStock.query({ status: "expired" });
+data.forEach((r) => console.log(r.name, r.batchNumber, r.quantity));`,
+      },
+      gotchas: [
+        "Requires `Report:read` permission.",
+        "Dates are judged in India time (IST).",
+      ],
+      relatedEndpoints: ["batch-list"],
     },
   ],
 };

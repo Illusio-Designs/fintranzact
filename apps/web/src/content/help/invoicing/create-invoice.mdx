@@ -86,12 +86,13 @@ For each line item, fill in:
 | Field | Notes |
 |---|---|
 | Product | Searchable dropdown. Selecting an item auto-fills unit price, tax rate, and HSN. |
-| Qty | Number of units. Supports decimals. |
+| Qty | Number of units billed. Supports decimals. |
+| Free | Units given free on top ("10 + 1"). They leave stock with the billed quantity but aren't charged or taxed. |
 | Rate | Price per unit in INR. |
 | GST % | Auto-filled from the item. Override if needed. |
 | Discount % | Line-level discount, calculated before tax. |
 
-The four numeric fields (Qty, Rate, GST %, Discount %) are arranged in a single row for quick entry. The computed **Amount** is shown at the end of each line item card.
+The numeric fields (Qty, Free, Rate, GST %, Discount %) are arranged in a single row for quick entry. The computed **Amount** is shown at the end of each line item card.
 
 To add more items, click **+ Add line item** below the existing items. Remove a line item by clicking the **×** button on its card.
 </ForDesktop>
@@ -223,7 +224,7 @@ Fintranzact uses fixed-point arithmetic (strings passed through the shared `calc
 For a single line item:
 
 ```
-taxableAmount = quantity × unitPrice × (1 - discountPercent / 100)
+taxableAmount = quantity × unitPrice × (1 - discountPercent / 100)   (billed quantity only; free goods add nothing)
 taxAmount     = taxableAmount × (taxPercent / 100)
 totalAmount   = taxableAmount + taxAmount
 ```
@@ -239,6 +240,16 @@ total             = subtotal + taxTotal - invoiceDiscount + chargesTotal + round
 ```
 
 ## Frequently asked questions
+
+**How do I give "10 + 1 free"?**
+
+<ForDesktop>
+Enter 10 in **Qty** and 1 in **Free**. The amount and GST are for the 10; stock goes down by 11, and the PDF prints "+ 1 free" under the line. See [GST on free goods](/help/invoicing/gst-on-invoices). The mobile app doesn't have the Free field yet — make these invoices on the web.
+</ForDesktop>
+
+<ForMobile>
+The mobile app doesn't have the Free field yet. Make the invoice on the web: enter 10 in **Qty** and 1 in **Free**.
+</ForMobile>
 
 **Can I add a line item without linking it to an item in my catalogue?**
 

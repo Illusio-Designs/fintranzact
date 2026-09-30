@@ -10,6 +10,7 @@ import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { documentStockDirection, ensureDefaultWarehouse, recordOpeningStock, updateStockBalance } from "../lib/inventory-service.js";
 import { applyStockAdjustment } from "./stock.js";
+import { findOrCreateBatch } from "../lib/batches.js";
 import { groupSubtreeSql, resolveItemGroup } from "../lib/stock-groups.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -228,7 +229,9 @@ export const itemRouter = router({
 
   create: memberProcedure.input(createItemSchema).mutation(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "Item");
-    const { variants: initialVariants, stockGroupId, category, ...itemData } = input;
+    const { variants: initialVariants, stockGroupId, category, openingBatch, ...itemData } = input;
+    // Expiry is tracked per batch, so it only means something with batches.
+    itemData.trackExpiry = !!itemData.trackBatches && !!itemData.trackExpiry;
 
     return ctx.db.transaction(async (tx) => {
       const group = await resolveItemGroup(tx, ctx.businessId, { stockGroupId, category });
@@ -252,9 +255,20 @@ export const itemRouter = router({
         businessId: ctx.businessId,
       }).returning();
 
+      // Opening stock of a batch-tracked item goes into the batch given for it.
+      const opening = inserted.trackBatches && openingBatch && parseFloat(itemData.stockQuantity || "0") > 0
+        ? await findOrCreateBatch(tx, {
+            businessId: ctx.businessId,
+            itemId: inserted.id,
+            itemName: inserted.name,
+            ...openingBatch,
+            requireExpiry: inserted.trackExpiry,
+          })
+        : null;
       await recordOpeningStock(tx, {
         businessId: ctx.businessId,
         itemId: inserted.id,
+        batchId: opening?.id ?? null,
         quantity: itemData.stockQuantity,
         actorUserId: ctx.user.id,
       });
@@ -417,9 +431,9 @@ export const itemRouter = router({
       // Active-mutation contract: a soft-deleted item cannot be edited via
       // the public API. Re-activation would require an explicit restore
       // endpoint, which is deferred per FIXES.md.
-      const { stockQuantity, stockGroupId, category, ...data } = input.data;
+      const { stockQuantity, stockGroupId, category, openingBatch: _openingBatch, ...data } = input.data;
       const item = await ctx.db.transaction(async (tx) => {
-        const [before] = await tx.select({ stockQuantity: items.stockQuantity })
+        const [before] = await tx.select({ stockQuantity: items.stockQuantity, trackBatches: items.trackBatches })
           .from(items)
           .where(and(
             eq(items.id, input.id),
@@ -441,6 +455,10 @@ export const itemRouter = router({
             user: { id: ctx.user.id, name: ctx.user.name },
           });
         }
+
+        // Expiry is tracked per batch, so it only means something with batches.
+        if (data.trackBatches === false) data.trackExpiry = false;
+        else if (data.trackExpiry && !(data.trackBatches ?? before.trackBatches)) data.trackExpiry = false;
 
         const group = await resolveItemGroup(tx, ctx.businessId, { stockGroupId, category });
         const [updated] = await tx.update(items)
@@ -1235,6 +1253,8 @@ export const itemRouter = router({
     .input(z.object({
       itemId: z.string().uuid(),
       variantId: z.string().uuid().nullish(),
+      // Batch the stock goes into or comes out of (items that track batches).
+      batchId: z.string().uuid().nullish(),
       quantity: z.string().regex(/^-?\d+(\.\d{1,3})?$/).refine((v) => parseFloat(v) !== 0, { message: "Quantity cannot be zero" }),
       reason: z.string().max(500).optional(),
       adjustmentDate: z.string().datetime().optional(),
@@ -1251,6 +1271,7 @@ export const itemRouter = router({
           warehouseId: (settings.stockAdjustmentWarehouseId ?? settings.salesWarehouseId) as string,
           itemId: input.itemId,
           variantId: input.variantId,
+          batchId: input.batchId,
           quantity: parseFloat(input.quantity),
           reason: input.reason || null,
           date: input.adjustmentDate ? new Date(input.adjustmentDate) : new Date(),

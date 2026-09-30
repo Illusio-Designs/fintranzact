@@ -6,6 +6,7 @@ import { itemListCommand } from "../../commands/item/list.js";
 import { itemCreateCommand } from "../../commands/item/create.js";
 import { itemDeleteCommand } from "../../commands/item/delete.js";
 import { itemStockCommand } from "../../commands/item/stock.js";
+import { itemBatchesCommand, itemExpiringCommand } from "../../commands/item/batches.js";
 
 export function registerItemCommands(program: Command): void {
   // ── item ──────────────────────────────────────────────────────────────────
@@ -108,5 +109,26 @@ export function registerItemCommands(program: Command): void {
     .option("--reason <text>", "Reason for adjustment")
     .action(async (id, adjustment, opts) => {
       await itemStockCommand(id, adjustment, { json: opts.json, reason: opts.reason });
+    });
+
+  item
+    .command("batches <id>")
+    .description("List an item's batches with stock and expiry (items that track batches)")
+    .option("--json", "JSON output")
+    .option("--warehouse <id>", "Only stock in this warehouse")
+    .option("--all", "Include batches with no stock")
+    .action(async (id, opts) => {
+      await itemBatchesCommand(id, { json: opts.json, warehouse: opts.warehouse, all: opts.all });
+    });
+
+  item
+    .command("expiring")
+    .description("Batches expiring soon, or expired stock still on hand")
+    .option("--json", "JSON output")
+    .option("--days <n>", "Days ahead to look (default 30)", parseInt)
+    .option("--expired", "Show expired stock instead")
+    .option("--warehouse <id>", "Only this warehouse")
+    .action(async (opts) => {
+      await itemExpiringCommand({ json: opts.json, days: opts.days, expired: opts.expired, warehouse: opts.warehouse });
     });
 }

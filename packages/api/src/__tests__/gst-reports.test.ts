@@ -15,7 +15,8 @@
  *
  * 2. B2B/B2C classification — determines which section of GSTR-1 each invoice
  *    belongs to. B2B requires a GSTIN; B2C Large requires inter-state + total
- *    > ₹2.5L; everything else is B2C Small.
+ *    above the B2CL limit (₹1,00,000 from 1 Aug 2024, ₹2,50,000 before);
+ *    everything else is B2C Small.
  *
  * 3. Tax split — converts a single tax amount into CGST/SGST (intra-state) or
  *    IGST (inter-state). The split formula is tax/2 each for intra-state.
@@ -39,7 +40,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { gstr1ToCSV, gstr1ToPortalJson, type GSTR1Report } from "../lib/gst-reports.js";
+import { b2clThresholdFor, gstr1ToCSV, gstr1ToPortalJson, type GSTR1Report } from "../lib/gst-reports.js";
 
 // =============================================================================
 // Pure functions — extracted verbatim from lib/gst-reports.ts
@@ -94,18 +95,25 @@ function splitTax(
  * B2B/B2C classification — mirrors gst-reports.ts:222-255.
  *
  * Returns the section an invoice should be filed under.
- * Note: total is the invoice total (taxable + tax), used for the ₹2.5L threshold.
+ * Note: total is the invoice total (taxable + tax), compared with the B2CL
+ * limit for the invoice's date (b2clThresholdFor).
  */
 type InvoiceSection = "b2b" | "b2cLarge" | "b2cSmall";
+
+/** An invoice date after the B2CL limit dropped to ₹1,00,000 (1 Aug 2024). */
+const CURRENT_RULE_DATE = new Date("2025-08-15T12:00:00+05:30");
+/** An invoice date under the old ₹2,50,000 B2CL limit. */
+const OLD_RULE_DATE = new Date("2024-07-15T12:00:00+05:30");
 
 function classifyInvoice(
   partyGstin: string | null | undefined,
   sameState: boolean,
-  total: number
+  total: number,
+  invoiceDate: Date = CURRENT_RULE_DATE,
 ): InvoiceSection {
   if (partyGstin) {
     return "b2b";
-  } else if (!sameState && total > 250000) {
+  } else if (!sameState && total > b2clThresholdFor(invoiceDate)) {
     return "b2cLarge";
   } else {
     return "b2cSmall";
@@ -272,7 +280,9 @@ describe("classifyInvoice — B2B vs B2C Large vs B2C Small", () => {
   /**
    * Classification rules (in order of priority):
    *   1. Party has GSTIN → B2B (regardless of amount or state)
-   *   2. No GSTIN + inter-state + total > ₹2.5L → B2C Large (B2CL)
+   *   2. No GSTIN + inter-state + total above the B2CL limit → B2C Large
+   *      (B2CL). The limit is ₹1,00,000 for invoices dated from 1 Aug 2024
+   *      (Notification 12/2024-CT) and ₹2,50,000 before.
    *   3. Everything else → B2C Small (B2CS)
    */
 
@@ -288,32 +298,41 @@ describe("classifyInvoice — B2B vs B2C Large vs B2C Small", () => {
     expect(classifyInvoice("29XYZAB5678G1Z9", false, 300000)).toBe("b2b");
   });
 
-  it("classifies as B2B when party has GSTIN — even below ₹2.5L threshold", () => {
-    expect(classifyInvoice("07PQRST9999H1Z3", false, 100000)).toBe("b2b");
+  it("classifies as B2B when party has GSTIN — even below the B2CL limit", () => {
+    expect(classifyInvoice("07PQRST9999H1Z3", false, 50000)).toBe("b2b");
   });
 
   // ── B2C Large ────────────────────────────────────────────────────────────────
 
-  it("classifies as B2C Large — inter-state, total > ₹2.5L, no GSTIN", () => {
+  it("classifies as B2C Large — inter-state, total > ₹1L, no GSTIN", () => {
     // Walk-in customer from Gujarat, large purchase
     expect(classifyInvoice(null, false, 300000)).toBe("b2cLarge");
+    expect(classifyInvoice(null, false, 200000)).toBe("b2cLarge");
   });
 
-  it("classifies as B2C Large — inter-state, total exactly ₹250001", () => {
-    // One rupee above the threshold flips to B2C Large
-    expect(classifyInvoice(null, false, 250001)).toBe("b2cLarge");
+  it("classifies as B2C Large — inter-state, total exactly ₹100001", () => {
+    // One rupee above the limit flips to B2C Large
+    expect(classifyInvoice(null, false, 100001)).toBe("b2cLarge");
   });
 
-  it("boundary: total exactly ₹250000 is B2C Small, NOT B2C Large", () => {
-    /**
-     * The condition in the source is `total > 250000` (strictly greater than).
-     * ₹250000 exactly does NOT qualify as B2C Large.
-     */
-    expect(classifyInvoice(null, false, 250000)).toBe("b2cSmall");
+  it("boundary: total exactly ₹100000 is B2C Small, NOT B2C Large", () => {
+    // The limit is strict: the total must exceed ₹1,00,000
+    expect(classifyInvoice(null, false, 100000)).toBe("b2cSmall");
   });
 
-  it("boundary: total ₹249999 is B2C Small", () => {
-    expect(classifyInvoice(null, false, 249999)).toBe("b2cSmall");
+  it("boundary: total ₹99999 is B2C Small", () => {
+    expect(classifyInvoice(null, false, 99999)).toBe("b2cSmall");
+  });
+
+  it("invoices dated before 1 Aug 2024 keep the ₹2,50,000 limit", () => {
+    expect(classifyInvoice(null, false, 200000, OLD_RULE_DATE)).toBe("b2cSmall");
+    expect(classifyInvoice(null, false, 250000, OLD_RULE_DATE)).toBe("b2cSmall");
+    expect(classifyInvoice(null, false, 250001, OLD_RULE_DATE)).toBe("b2cLarge");
+  });
+
+  it("the limit changes at midnight IST on 1 Aug 2024", () => {
+    expect(b2clThresholdFor(new Date("2024-07-31T23:59:59+05:30"))).toBe(250000);
+    expect(b2clThresholdFor(new Date("2024-08-01T00:00:00+05:30"))).toBe(100000);
   });
 
   // ── B2C Small ────────────────────────────────────────────────────────────────
@@ -323,13 +342,13 @@ describe("classifyInvoice — B2B vs B2C Large vs B2C Small", () => {
     expect(classifyInvoice(null, true, 500000)).toBe("b2cSmall");
   });
 
-  it("classifies as B2C Small — intra-state, no GSTIN, amount below ₹2.5L", () => {
+  it("classifies as B2C Small — intra-state, no GSTIN, amount below the limit", () => {
     expect(classifyInvoice(null, true, 50000)).toBe("b2cSmall");
   });
 
-  it("classifies as B2C Small — inter-state, no GSTIN, amount <= ₹2.5L", () => {
+  it("classifies as B2C Small — inter-state, no GSTIN, amount <= ₹1L", () => {
     // Inter-state but small invoice → B2C Small
-    expect(classifyInvoice(null, false, 200000)).toBe("b2cSmall");
+    expect(classifyInvoice(null, false, 90000)).toBe("b2cSmall");
   });
 
   it("classifies as B2C Small — undefined GSTIN treated same as null", () => {
@@ -1573,7 +1592,38 @@ describe("gstr1ToPortalJson — HSN section", () => {
     expect(entry.qty).toBe(10);
     expect(entry.txval).toBe(100000);
     expect(entry.num).toBe(1);
-    expect(entry.uqc).toBe("NOS"); // default UQC when unit not known
+    expect(entry.uqc).toBe("OTH"); // GSTN's "others" code when the unit is not known
+  });
+
+  // Regression: HSN rows had no `rt` and every row's uqc was NOS.
+  it("emits rt and the row's UQC on each HSN row", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({
+        hsn: [
+          { hsn: "1006", description: "Rice", rate: 5, uqc: "KGS", quantity: 12.5, taxableValue: 1000, cgst: 25, sgst: 25, igst: 0, totalValue: 1050 },
+          { hsn: "1006", description: "Rice", rate: 12, uqc: "KGS", quantity: 2, taxableValue: 500, cgst: 30, sgst: 30, igst: 0, totalValue: 560 },
+          { hsn: "998314", description: "IT support", rate: 18, uqc: "NA", quantity: 0, taxableValue: 2000, cgst: 0, sgst: 0, igst: 360, totalValue: 2360 },
+        ],
+      }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    type HSNEntry = { hsn_sc: string; rt: number; uqc: string; qty: number };
+    const rows = (json.hsn as { data: HSNEntry[] }).data.map(({ hsn_sc, rt, uqc, qty }) => ({ hsn_sc, rt, uqc, qty }));
+    expect(rows).toEqual([
+      { hsn_sc: "1006", rt: 5, uqc: "KGS", qty: 12.5 },
+      { hsn_sc: "1006", rt: 12, uqc: "KGS", qty: 2 },
+      { hsn_sc: "998314", rt: 18, uqc: "NA", qty: 0 },
+    ]);
+  });
+
+  it("derives rt from the tax when a row carries no rate", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({
+        hsn: [{ hsn: "8471", description: "Computers", quantity: 1, taxableValue: 100000, cgst: 9000, sgst: 9000, igst: 0, totalValue: 118000 }],
+      }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    expect((json.hsn as { data: Array<{ rt: number }> }).data[0].rt).toBe(18);
   });
 
   it("assigns sequential num starting from 1", () => {
@@ -1616,6 +1666,85 @@ describe("gstr1ToPortalJson — HSN section", () => {
     expect(entry.samt).toBe(9000);
     expect(entry.iamt).toBe(0);
     expect(entry.csamt).toBe(0);
+  });
+});
+
+describe("gstr1ToPortalJson — notes to unregistered customers", () => {
+  const note = (over: Partial<GSTR1Report["creditNotes"][0]> = {}): GSTR1Report["creditNotes"][0] => ({
+    invoiceNumber: "CN-UR-1",
+    invoiceDate: "2025-08-20T06:30:00.000Z",
+    partyName: "Walk-in",
+    partyGstin: "",
+    totalAmount: "11800.00",
+    taxableAmount: "10000.00",
+    taxAmount: "1800.00",
+    igst: 1800,
+    rateItems: [{ rate: 18, taxableValue: 10000, cgst: 0, sgst: 0, igst: 1800 }],
+    ...over,
+  });
+
+  // Regression: notes to customers without a GSTIN were put in cdnr with an
+  // empty ctin, which the portal rejects.
+  it("puts a note on a B2C Large supply in cdnur with typ B2CL, not in cdnr", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({ creditNotes: [note({ section: "cdnur", pos: "29" })] }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    expect(json.cdnr).toEqual([]);
+    expect(json.cdnur).toEqual([
+      {
+        typ: "B2CL",
+        ntty: "C",
+        nt_num: "CN-UR-1",
+        nt_dt: "20-08-2025",
+        val: 11800,
+        pos: "29",
+        itms: [{ num: 1, itm_det: { txval: 10000, rt: 18, iamt: 1800, csamt: 0 } }],
+      },
+    ]);
+  });
+
+  it("leaves a note netted into B2CS out of both cdnr and cdnur", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({ debitNotes: [note({ invoiceNumber: "DN-UR-1", section: "b2cs", pos: "27" })] }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    expect(json.cdnr).toEqual([]);
+    expect(json.cdnur).toEqual([]);
+  });
+
+  it("never emits a cdnr entry with an empty ctin, even for a report without sections", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({ creditNotes: [note()] }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    expect(json.cdnr).toEqual([]);
+  });
+});
+
+describe("gstr1ToPortalJson — dates are the calendar day in India", () => {
+  // Regression: dates were cut from the UTC ISO string, so an invoice dated
+  // 25 Aug in India (stored as 2025-08-24T18:30:00Z) showed as 24-08-2025.
+  it("formats b2b idt and cdnr nt_dt in Asia/Kolkata", () => {
+    const json = gstr1ToPortalJson(
+      makePortalReport({
+        b2b: [{
+          partyGstin: "29XYZAB5678G1Z9", partyName: "Buyer", invoiceNumber: "INV-IST",
+          invoiceDate: "2025-08-24T18:30:00.000Z", invoiceType: "Regular",
+          taxableValue: 1000, cgst: 0, sgst: 0, igst: 180, totalInvoiceValue: 1180,
+        }],
+        creditNotes: [{
+          invoiceNumber: "CN-IST", invoiceDate: "2025-08-31T18:30:00.000Z",
+          partyName: "Buyer", partyGstin: "29XYZAB5678G1Z9",
+          totalAmount: "118.00", taxableAmount: "100.00", taxAmount: "18.00",
+        }],
+      }),
+      "27AABCA0000R1ZM", "2025-26", "082025"
+    );
+    type B2B = { inv: Array<{ idt: string }> };
+    type CDNR = { nt: Array<{ nt_dt: string }> };
+    expect((json.b2b as B2B[])[0].inv[0].idt).toBe("25-08-2025");
+    expect((json.cdnr as CDNR[])[0].nt[0].nt_dt).toBe("01-09-2025");
   });
 });
 

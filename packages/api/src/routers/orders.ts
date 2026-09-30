@@ -6,12 +6,12 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { invoices } from "@fintranzact/db";
+import { invoices, items } from "@fintranzact/db";
 import { pendingOrdersInputSchema, type PendingTrackedDocumentType } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
-import { FULFILLED_BY, fulfilmentStatus, isPendingTracked, listPendingLines, loadPendingLines } from "../lib/order-fulfilment.js";
+import { FULFILLED_BY, fulfilmentStatus, isPendingTracked, listPendingLines, loadPendingLines, loadRejectedLines } from "../lib/order-fulfilment.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -44,14 +44,15 @@ export const ordersRouter = router({
       return listPendingLines(ctx.db, ctx.businessId, input);
     }),
 
-  /** One document's lines with what is pending, and the documents made from it. */
+  /** One document's lines with what is pending (billed and free), and the documents made from it. */
   fulfilment: viewerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Invoice");
       const doc = await findTracked(ctx.db, ctx.businessId, input.id);
-      const [lines, linked] = await Promise.all([
+      const [lines, rejections, linked] = await Promise.all([
         loadPendingLines(ctx.db, ctx.businessId, [doc.id]).then((m) => m.get(doc.id) ?? []),
+        doc.documentType === "goods_receipt_note" ? loadRejectedLines(ctx.db, ctx.businessId, doc.id) : Promise.resolve([]),
         ctx.db
           .select({
             id: invoices.id,
@@ -66,18 +67,31 @@ export const ordersRouter = router({
           .where(and(
             eq(invoices.businessId, ctx.businessId),
             eq(invoices.referenceDocumentId, doc.id),
-            inArray(invoices.documentType, FULFILLED_BY[doc.documentType]),
+            // A GRN's rejected goods go back on purchase returns and debit notes.
+            inArray(invoices.documentType, doc.documentType === "goods_receipt_note"
+              ? [...FULFILLED_BY[doc.documentType], "purchase_return", "debit_note"]
+              : FULFILLED_BY[doc.documentType]),
             isNull(invoices.deletedAt),
           ))
           .orderBy(invoices.invoiceDate, invoices.createdAt),
       ]);
+      // Items that track batches ask for the batch when their goods come in.
+      const lineItemIds = [...new Set(lines.map((l) => l.itemId).filter((v): v is string => !!v))];
+      const tracked = lineItemIds.length === 0 ? [] : await ctx.db
+        .select({ id: items.id, trackExpiry: items.trackExpiry })
+        .from(items)
+        .where(and(eq(items.businessId, ctx.businessId), inArray(items.id, lineItemIds), eq(items.trackBatches, true)));
       return {
         id: doc.id,
         documentType: doc.documentType,
+        /** Items on the lines that track batches, and whether they track expiry. */
+        batchItems: Object.fromEntries(tracked.map((t) => [t.id, { trackExpiry: t.trackExpiry }])) as Record<string, { trackExpiry: boolean }>,
         status: fulfilmentStatus(doc, lines),
         closedAt: doc.closedAt,
         convertsTo: FULFILLED_BY[doc.documentType],
         lines,
+        /** GRNs: goods rejected on receipt, and how much has gone back to the supplier. */
+        rejections,
         linkedDocuments: linked,
       };
     }),

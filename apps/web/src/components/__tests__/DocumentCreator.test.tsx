@@ -32,8 +32,23 @@ import userEvent from "@testing-library/user-event";
 // reference normal top-level vars inside them. vi.hoisted() is the
 // official escape hatch — it runs BEFORE the hoisted factories so the
 // references are available at mock-initialisation time.
-const { invoiceCreateMutate, quotationCreateMutate, invalidateStub, businessListQuery, pricingResolveFetch } =
+const {
+  invoiceCreateMutate,
+  quotationCreateMutate,
+  grnCreateMutate,
+  purchaseReturnCreateMutate,
+  invalidateStub,
+  businessListQuery,
+  pricingResolveFetch,
+  invoiceGetByIdQuery,
+  invoiceListQuery,
+} =
   vi.hoisted(() => ({
+    purchaseReturnCreateMutate: vi.fn(),
+    // Returns data only for queries that are switched on; tests swap in a source invoice.
+    invoiceGetByIdQuery: vi.fn((_input: { id: string }, _opts?: { enabled?: boolean }): { data: unknown } => ({ data: null })),
+    invoiceListQuery: vi.fn((): { data: unknown; isFetching: boolean } => ({ data: { data: [] }, isFetching: false })),
+    grnCreateMutate: vi.fn(),
     // Price level lookups; rejects by default so lines keep the item price.
     pricingResolveFetch: vi.fn((): Promise<unknown> => Promise.reject(new Error("no pricing"))),
     invoiceCreateMutate: vi.fn(),
@@ -146,9 +161,10 @@ vi.mock("@/lib/trpc", () => ({
       },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       getById: {
-        useQuery: () => ({ data: null }),
+        useQuery: (input: { id: string }, opts?: { enabled?: boolean }) => invoiceGetByIdQuery(input, opts),
       },
-      list: { invalidate: invalidateStub },
+      list: { useQuery: () => invoiceListQuery(), invalidate: invalidateStub },
+      lastDeliveryMethod: { useQuery: () => ({ data: undefined }) },
     },
     quotation: {
       create: {
@@ -177,7 +193,7 @@ vi.mock("@/lib/trpc", () => ({
       list: { invalidate: invalidateStub },
     },
     purchaseReturn: {
-      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      create: { useMutation: () => ({ mutate: purchaseReturnCreateMutate, isPending: false }) },
       list: { invalidate: invalidateStub },
     },
     purchaseOrder: {
@@ -189,7 +205,7 @@ vi.mock("@/lib/trpc", () => ({
       list: { invalidate: invalidateStub },
     },
     goodsReceiptNote: {
-      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      create: { useMutation: () => ({ mutate: grnCreateMutate, isPending: false }) },
       list: { invalidate: invalidateStub },
     },
     dashboard: {
@@ -917,7 +933,7 @@ describe("DocumentCreator — price levels", () => {
 
     fireEvent.change(priceInput, { target: { value: "950" } });
     pricingResolveFetch.mockResolvedValue(resolved("850.00"));
-    const qty = screen.getAllByLabelText(/quantity/i)[0] as HTMLInputElement;
+    const qty = screen.getAllByLabelText("Quantity")[0] as HTMLInputElement;
     fireEvent.change(qty, { target: { value: "20" } });
 
     await waitFor(() => expect(pricingResolveFetch).toHaveBeenCalledTimes(2));
@@ -934,7 +950,7 @@ describe("DocumentCreator — price levels", () => {
     await waitFor(() => expect(priceInput.value).toBe("900"));
 
     pricingResolveFetch.mockResolvedValue(resolved("850.00"));
-    const qty = screen.getAllByLabelText(/quantity/i)[0] as HTMLInputElement;
+    const qty = screen.getAllByLabelText("Quantity")[0] as HTMLInputElement;
     fireEvent.change(qty, { target: { value: "20" } });
     await waitFor(() => expect(priceInput.value).toBe("850"));
   });
@@ -956,5 +972,264 @@ describe("DocumentCreator — price levels", () => {
     await user.click(await screen.findByRole("option", { name: /steel rod/i }));
     await new Promise((r) => setTimeout(r, 350));
     expect(pricingResolveFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("DocumentCreator — free quantities and rejections", () => {
+  beforeEach(() => {
+    invoiceCreateMutate.mockClear();
+    grnCreateMutate.mockClear();
+    vi.mocked(toast.error).mockClear();
+  });
+
+  it("sends a free quantity without changing the line amount", async () => {
+    renderCreator();
+    const user = userEvent.setup();
+    await pickParty(user);
+    await pickSteelRod(user);
+
+    const amountBefore = screen.getAllByText(/1,180/).length;
+    fireEvent.change(screen.getByLabelText("Free quantity"), { target: { value: "1" } });
+    // 1 × 1000 + 18% tax is still the amount: free goods aren't charged.
+    expect(screen.getAllByText(/1,180/).length).toBe(amountBefore);
+
+    await user.click(screen.getByRole("button", { name: /create invoice/i }));
+    await waitFor(() => expect(invoiceCreateMutate).toHaveBeenCalledTimes(1));
+    const li = invoiceCreateMutate.mock.calls[0][0].lineItems[0];
+    expect(li.quantity).toBe("1");
+    expect(li.freeQuantity).toBe("1");
+    expect(li.rejectedQuantity).toBeUndefined();
+  });
+
+  it("leaves freeQuantity out when none is given", async () => {
+    renderCreator();
+    const user = userEvent.setup();
+    await pickParty(user);
+    await pickSteelRod(user);
+    await user.click(screen.getByRole("button", { name: /create invoice/i }));
+    await waitFor(() => expect(invoiceCreateMutate).toHaveBeenCalledTimes(1));
+    expect(invoiceCreateMutate.mock.calls[0][0].lineItems[0].freeQuantity).toBeUndefined();
+  });
+
+  it("credit notes have no free quantity, and only a GRN has rejections", () => {
+    const { unmount } = renderCreator({ documentType: "credit_note" });
+    expect(screen.queryByLabelText("Free quantity")).not.toBeInTheDocument();
+    unmount();
+    renderCreator();
+    expect(screen.queryByLabelText("Rejected quantity")).not.toBeInTheDocument();
+  });
+
+  it("a GRN records accepted and rejected quantities and needs a reason", async () => {
+    renderCreator({ documentType: "goods_receipt_note", invoiceType: "purchase" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: /supplier/i }));
+    await user.click(screen.getByText("Ramesh Traders"));
+    await pickSteelRod(user);
+
+    expect(screen.getByLabelText("Accepted quantity")).toBeInTheDocument();
+    const reason = screen.getByLabelText("Reason for rejecting") as HTMLInputElement;
+    expect(reason).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Accepted quantity"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Rejected quantity"), { target: { value: "2" } });
+    expect(reason).not.toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /create goods receipt note/i }));
+    expect(grnCreateMutate).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Give a reason for rejecting Steel Rod");
+
+    fireEvent.change(reason, { target: { value: "Damaged" } });
+    await user.click(screen.getByRole("button", { name: /create goods receipt note/i }));
+    await waitFor(() => expect(grnCreateMutate).toHaveBeenCalledTimes(1));
+    const li = grnCreateMutate.mock.calls[0][0].lineItems[0];
+    expect(li).toMatchObject({ quantity: "8", rejectedQuantity: "2", rejectionReason: "Damaged" });
+  });
+
+  it("a GRN line can be wholly rejected", async () => {
+    renderCreator({ documentType: "goods_receipt_note", invoiceType: "purchase" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: /supplier/i }));
+    await user.click(screen.getByText("Ramesh Traders"));
+    await pickSteelRod(user);
+    fireEvent.change(screen.getByLabelText("Accepted quantity"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Rejected quantity"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Reason for rejecting"), { target: { value: "Wrong item" } });
+    await user.click(screen.getByRole("button", { name: /create goods receipt note/i }));
+    await waitFor(() => expect(grnCreateMutate).toHaveBeenCalledTimes(1));
+    expect(grnCreateMutate.mock.calls[0][0].lineItems[0]).toMatchObject({ quantity: "0", rejectedQuantity: "5" });
+  });
+});
+
+// ─── Delivery methods (Settings → Shipping) ───────────────────────────────
+
+describe("DocumentCreator — delivery method", () => {
+  beforeEach(() => {
+    invoiceCreateMutate.mockClear();
+    quotationCreateMutate.mockClear();
+    businessListQuery.mockReturnValue({
+      data: [
+        {
+          id: "biz-1",
+          name: "Test Business",
+          defaultRoundOff: false,
+          defaultTermsAndConditions: null,
+          customShippingMethods: [{ id: "porter", label: "Porter", hasTracking: false }],
+        } as never,
+      ],
+      isFetching: false,
+    });
+  });
+
+  afterEach(() => {
+    businessListQuery.mockReset();
+    businessListQuery.mockReturnValue({
+      data: [{ id: "biz-1", name: "Test Business", defaultRoundOff: false, defaultTermsAndConditions: null }],
+      isFetching: false,
+    });
+  });
+
+  it("offers the business's custom methods alongside the built-ins", async () => {
+    renderCreator();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: "Delivery method" }));
+    for (const name of ["Self Pickup", "Self / Driver", "Bus / Parcel Service", "Transport", "Courier", "India Post", "Porter"]) {
+      expect(screen.getByRole("option", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("sends the picked custom method on the invoice", async () => {
+    renderCreator();
+    const user = userEvent.setup();
+    await pickParty(user);
+    await pickSteelRod(user);
+    await user.click(screen.getByRole("combobox", { name: "Delivery method" }));
+    await user.click(screen.getByRole("option", { name: "Porter" }));
+
+    await user.click(screen.getByRole("button", { name: /create invoice/i }));
+    await waitFor(() => expect(invoiceCreateMutate).toHaveBeenCalledTimes(1));
+    expect(invoiceCreateMutate.mock.calls[0][0].deliveryMethod).toBe("porter");
+  });
+
+  it("defaults to self pickup and is also on other sale documents", async () => {
+    renderCreator({ documentType: "quotation" });
+    const user = userEvent.setup();
+    await pickParty(user);
+    await pickSteelRod(user);
+    await user.click(screen.getByRole("button", { name: /create quotation/i }));
+    await waitFor(() => expect(quotationCreateMutate).toHaveBeenCalledTimes(1));
+    expect(quotationCreateMutate.mock.calls[0][0].deliveryMethod).toBe("self_pickup");
+  });
+
+  it("is not asked on purchase invoices", () => {
+    renderCreator({ invoiceType: "purchase" });
+    expect(screen.queryByRole("combobox", { name: "Delivery method" })).not.toBeInTheDocument();
+  });
+});
+
+// ─── Purchase return against a purchase invoice ───────────────────────────
+
+describe("DocumentCreator — purchase return from a purchase invoice", () => {
+  const sourceInvoice = {
+    id: "11111111-1111-4111-8111-111111111111",
+    invoiceNumber: "PINV-00007",
+    invoiceDate: "2026-09-01T00:00:00.000Z",
+    totalAmount: "2000.00",
+    partyId: "party-1",
+    party: { name: "Ramesh Traders" },
+    notes: null,
+    termsAndConditions: null,
+    roundOff: "0",
+    discountAmount: "0",
+    charges: null,
+    deliveryMethod: "self_pickup",
+    lineItems: [
+      { id: "li-1", itemId: "item-1", itemName: "Steel Rod", description: null, quantity: "5", unitPrice: "300", taxPercent: "18", discountPercent: "0", selectedUnit: null, conversionFactor: "1" },
+      { id: "li-2", itemId: "item-2", itemName: "Cement Bag", description: null, quantity: "2", unitPrice: "250", taxPercent: "5", discountPercent: "0", selectedUnit: null, conversionFactor: "1" },
+    ],
+  };
+
+  beforeEach(() => {
+    purchaseReturnCreateMutate.mockClear();
+    vi.mocked(toast.error).mockClear();
+    invoiceListQuery.mockReturnValue({
+      data: { data: [{ id: sourceInvoice.id, invoiceNumber: "PINV-00007", invoiceDate: sourceInvoice.invoiceDate, totalAmount: "2000.00", partyName: "Ramesh Traders" }] },
+      isFetching: false,
+    });
+    invoiceGetByIdQuery.mockImplementation((input, opts) => ({
+      data: opts?.enabled && input.id === sourceInvoice.id ? sourceInvoice : null,
+    }));
+  });
+
+  afterEach(() => {
+    invoiceListQuery.mockReset();
+    invoiceListQuery.mockReturnValue({ data: { data: [] }, isFetching: false });
+    invoiceGetByIdQuery.mockReset();
+    invoiceGetByIdQuery.mockReturnValue({ data: null });
+  });
+
+  async function pickSource(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("combobox", { name: /against purchase invoice/i }));
+    await user.click(await screen.findByRole("option", { name: /PINV-00007/ }));
+  }
+
+  it("copies the invoice's lines, then sends only what is returned, linked to the invoice", async () => {
+    renderCreator({ documentType: "purchase_return", invoiceType: "purchase" });
+    const user = userEvent.setup();
+    await pickSource(user);
+
+    await waitFor(() => expect(screen.getAllByLabelText("Quantity")).toHaveLength(2));
+    expect(screen.getByText("of 5 invoiced")).toBeInTheDocument();
+
+    // Return 2 of the 5 rods and none of the cement.
+    fireEvent.change(screen.getAllByLabelText("Quantity")[0], { target: { value: "2" } });
+    await user.click(screen.getAllByRole("button", { name: "Remove line" })[1]);
+
+    await user.click(screen.getByRole("button", { name: /create purchase return/i }));
+    await waitFor(() => expect(purchaseReturnCreateMutate).toHaveBeenCalledTimes(1));
+    const payload = purchaseReturnCreateMutate.mock.calls[0][0];
+    expect(payload).toMatchObject({ type: "purchase", partyId: "party-1", referenceDocumentId: sourceInvoice.id });
+    expect(payload.lineItems).toEqual([expect.objectContaining({ itemId: "item-1", quantity: "2" })]);
+  });
+
+  it("won't send back more than the invoice had", async () => {
+    renderCreator({ documentType: "purchase_return", invoiceType: "purchase" });
+    const user = userEvent.setup();
+    await pickSource(user);
+    await waitFor(() => expect(screen.getAllByLabelText("Quantity")).toHaveLength(2));
+
+    fireEvent.change(screen.getAllByLabelText("Quantity")[0], { target: { value: "6" } });
+    await user.click(screen.getByRole("button", { name: /create purchase return/i }));
+
+    expect(purchaseReturnCreateMutate).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Only 5 of Steel Rod was on the invoice");
+  });
+
+  it("doesn't offer drafts, cancelled or fully adjusted invoices", async () => {
+    const row = (id: string, invoiceNumber: string, status: string) => ({ id, invoiceNumber, status, invoiceDate: sourceInvoice.invoiceDate, totalAmount: "100.00", partyName: "Ramesh Traders" });
+    invoiceListQuery.mockReturnValue({
+      data: {
+        data: [
+          row(sourceInvoice.id, "PINV-00007", "sent"),
+          row("22222222-2222-4222-8222-222222222222", "PINV-00008", "paid"),
+          row("33333333-3333-4333-8333-333333333333", "PINV-00009", "adjusted"),
+          row("44444444-4444-4444-8444-444444444444", "PINV-00010", "draft"),
+          row("55555555-5555-4555-8555-555555555555", "PINV-00011", "cancelled"),
+        ],
+      },
+      isFetching: false,
+    });
+    renderCreator({ documentType: "purchase_return", invoiceType: "purchase" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: /against purchase invoice/i }));
+    expect(await screen.findByRole("option", { name: /PINV-00007/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /PINV-00008/ })).toBeInTheDocument();
+    for (const n of ["PINV-00009", "PINV-00010", "PINV-00011"]) {
+      expect(screen.queryByRole("option", { name: new RegExp(n) })).not.toBeInTheDocument();
+    }
+  });
+
+  it("has no invoice picker when opened from the invoice itself", () => {
+    renderCreator({ documentType: "purchase_return", invoiceType: "purchase", prefillFromInvoiceId: sourceInvoice.id });
+    expect(screen.queryByRole("combobox", { name: /against purchase invoice/i })).not.toBeInTheDocument();
   });
 });
