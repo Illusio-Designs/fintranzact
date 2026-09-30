@@ -564,6 +564,14 @@ export const invoices = pgTable("invoices", {
   notes: text("notes"),
   termsAndConditions: text("terms_and_conditions"),
   referenceDocumentId: uuid("reference_document_id"),
+  // How this document's stock effect is recorded:
+  //   "tracked" — through stock_movements (warehouse-aware; net may be zero
+  //               while the document is cancelled)
+  //   "none"    — never moves stock (e.g. an invoice billed against a
+  //               delivery challan that already moved it)
+  //   "legacy"  — created before stock movements existed; its effect was
+  //               applied straight to item totals from its line items
+  stockMode: text("stock_mode").default("legacy").notNull(),
   // No FK to users — plain UUID, users live in control schema (different DB in cloud mode)
   createdByUserId: uuid("created_by_user_id"),
   createdByName: text("created_by_name"), // denormalized for display + imports

@@ -3,13 +3,14 @@
  * Used by both the scheduler (automatic) and the "runNow" manual trigger.
  */
 
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import {
-  invoices, invoiceItems, items, itemVariants, businesses, parties,
+  invoices, invoiceItems, items, businesses, parties,
   recurringInvoiceTemplates, recurringInvoiceRuns,
 } from "@fintranzact/db";
 import { calcLineItem, calcInvoiceTotals } from "@fintranzact/shared";
 import type { TenantDatabase } from "../trpc.js";
+import { syncDocumentStock } from "./inventory-service.js";
 
 interface TemplateRow {
   id: string;
@@ -180,6 +181,7 @@ export async function generateInvoiceFromTemplate(
       termsAndConditions: template.termsAndConditions,
       createdByUserId: template.createdByUserId,
       source: "recurring",
+      stockMode: "tracked",
     }).returning();
 
     if (processedItems.length > 0) {
@@ -188,26 +190,12 @@ export async function generateInvoiceFromTemplate(
       );
     }
 
-    // Update stock per line item using PostgreSQL NUMERIC arithmetic
-    // to avoid JS floating-point drift in intermediate accumulation
-    for (const li of template.lineItems) {
-      if (li.variantId) {
-        await tx.update(itemVariants).set({
-          stockQuantity: template.type === "sale"
-            ? sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`
-            : sql`${itemVariants.stockQuantity}::numeric + ${li.quantity}::numeric`,
-          updatedAt: new Date(),
-        }).where(eq(itemVariants.id, li.variantId));
-      } else if (li.itemId) {
-        const cf = li.conversionFactor || "1";
-        await tx.update(items).set({
-          stockQuantity: template.type === "sale"
-            ? sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`
-            : sql`${items.stockQuantity}::numeric + (${li.quantity}::numeric * ${cf}::numeric)`,
-          updatedAt: new Date(),
-        }).where(eq(items.id, li.itemId));
-      }
-    }
+    await syncDocumentStock(tx, {
+      businessId: template.businessId,
+      documentId: invoice.id,
+      event: "CREATE",
+      actorUserId: template.createdByUserId,
+    });
 
     // Record execution
     const [run] = await tx.insert(recurringInvoiceRuns).values({

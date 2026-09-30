@@ -5,7 +5,6 @@ import {
   invoices,
   invoiceItems,
   items,
-  itemVariants,
   businesses,
   parties,
 } from "@fintranzact/db";
@@ -18,6 +17,7 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { logAudit } from "./audit.js";
+import { syncDocumentStock } from "./inventory-service.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
@@ -352,6 +352,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               notes: input.notes,
               termsAndConditions: input.termsAndConditions,
               referenceDocumentId: input.referenceDocumentId || null,
+              stockMode: config.stockEffect === "none" || input.skipStockAdjustment ? "none" : "tracked",
               createdByUserId: ctx.user!.id,
               createdByName: ctx.user!.name,
             })
@@ -363,40 +364,13 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               .values(processedItems.map((li) => ({ ...li, invoiceId: result.id })));
           }
 
-          // Stock effects (adjusted for unit conversion)
-          // Group by itemId and sum quantities to avoid redundant per-row updates.
-          // skipStockAdjustment lets callers (e.g. challan→invoice conversion) opt out.
-          // Stock effects — one UPDATE per line item using PostgreSQL NUMERIC
-          // arithmetic to avoid JS floating-point drift in accumulation
-          if (config.stockEffect !== "none" && !input.skipStockAdjustment) {
-            for (const li of input.lineItems) {
-              if (li.variantId) {
-                await tx
-                  .update(itemVariants)
-                  .set({
-                    stockQuantity: config.stockEffect === "decrement"
-                      ? sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`
-                      : sql`${itemVariants.stockQuantity}::numeric + ${li.quantity}::numeric`,
-                    updatedAt: new Date(),
-                  })
-                  .where(and(
-                    eq(itemVariants.id, li.variantId),
-                    sql`EXISTS (SELECT 1 FROM items WHERE items.id = item_variants.item_id AND items.business_id = ${ctx.businessId})`
-                  ));
-              } else if (li.itemId) {
-                const cf = li.conversionFactor || "1";
-                await tx
-                  .update(items)
-                  .set({
-                    stockQuantity: config.stockEffect === "decrement"
-                      ? sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`
-                      : sql`${items.stockQuantity}::numeric + (${li.quantity}::numeric * ${cf}::numeric)`,
-                    updatedAt: new Date(),
-                  })
-                  .where(and(eq(items.id, li.itemId), eq(items.businessId, ctx.businessId)));
-              }
-            }
-          }
+          // Stock effect, recorded per warehouse.
+          await syncDocumentStock(tx, {
+            businessId: ctx.businessId,
+            documentId: result.id,
+            event: "CREATE",
+            actorUserId: ctx.user!.id,
+          });
 
           // Auto-update referenced invoice status to "adjusted" when fully covered
           if (
@@ -454,24 +428,45 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
         })
       )
       .mutation(async ({ input, ctx }) => {
-        const [doc] = await ctx.db
-          .update(invoices)
-          .set({
-            status: input.status as InvoiceStatus,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(invoices.id, input.id),
-              eq(invoices.businessId, ctx.businessId),
-              eq(invoices.documentType, docType as DocumentType)
-            )
-          )
-          .returning();
+        const doc = await ctx.db.transaction(async (tx) => {
+          const [before] = await tx
+            .select({ status: invoices.status })
+            .from(invoices)
+            .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
+            .limit(1);
 
-        if (!doc) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
-        }
+          const [updated] = await tx
+            .update(invoices)
+            .set({
+              status: input.status as InvoiceStatus,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(invoices.id, input.id),
+                eq(invoices.businessId, ctx.businessId),
+                eq(invoices.documentType, docType as DocumentType)
+              )
+            )
+            .returning();
+
+          if (!updated) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
+          }
+
+          // Cancelling gives the stock effect back; reinstating re-applies it.
+          const wasCancelled = before?.status === "cancelled";
+          const isCancelled = input.status === "cancelled";
+          if (wasCancelled !== isCancelled) {
+            await syncDocumentStock(tx, {
+              businessId: ctx.businessId,
+              documentId: input.id,
+              event: isCancelled ? "CANCEL" : "REINSTATE",
+              actorUserId: ctx.user!.id,
+            });
+          }
+          return updated;
+        });
 
         logAudit(ctx.db, {
           businessId: ctx.businessId,
@@ -509,37 +504,6 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           // Already soft-deleted — return early
           if (doc.deletedAt) return { success: true, invoiceNumber: doc.invoiceNumber, deleted: false };
 
-          // Reverse stock effects on delete (using stored conversionFactor)
-          if (config.stockEffect !== "none") {
-            const lineItems = await tx
-              .select()
-              .from(invoiceItems)
-              .where(eq(invoiceItems.invoiceId, input.id));
-
-            // Reverse stock per line item using PostgreSQL NUMERIC arithmetic
-            for (const li of lineItems) {
-              if (li.variantId) {
-                await tx.update(itemVariants).set({
-                  stockQuantity: config.stockEffect === "decrement"
-                    ? sql`${itemVariants.stockQuantity}::numeric + ${li.quantity}::numeric`
-                    : sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`,
-                  updatedAt: new Date(),
-                }).where(and(
-                  eq(itemVariants.id, li.variantId),
-                  sql`EXISTS (SELECT 1 FROM items WHERE items.id = item_variants.item_id AND items.business_id = ${ctx.businessId})`
-                ));
-              } else if (li.itemId) {
-                const cf = li.conversionFactor ?? "1";
-                await tx.update(items).set({
-                  stockQuantity: config.stockEffect === "decrement"
-                    ? sql`${items.stockQuantity}::numeric + (${li.quantity}::numeric * ${cf}::numeric)`
-                    : sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`,
-                  updatedAt: new Date(),
-                }).where(and(eq(items.id, li.itemId), eq(items.businessId, ctx.businessId)));
-              }
-            }
-          }
-
           // Soft delete: set deletedAt + cancel the document
           await tx
             .update(invoices)
@@ -550,6 +514,14 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
                 eq(invoices.businessId, ctx.businessId)
               )
             );
+
+          // A deleted document holds no stock.
+          await syncDocumentStock(tx, {
+            businessId: ctx.businessId,
+            documentId: input.id,
+            event: "DELETE",
+            actorUserId: ctx.user!.id,
+          });
 
           return { success: true, invoiceNumber: doc.invoiceNumber, deleted: true };
         });

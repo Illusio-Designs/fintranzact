@@ -25,6 +25,7 @@ import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
 import { logger } from "./lib/logger.js";
+import { syncDocumentStock } from "./lib/inventory-service.js";
 import { validateEnv } from "./lib/env.js";
 import { createCsrfMiddleware } from "./lib/csrf-middleware.js";
 import { assertAllowedStoreOrigin } from "./lib/store-origin.js";
@@ -1558,6 +1559,7 @@ app.post("/store/:slug/order", async (c) => {
         amountPaid: "0",
         notes: typeof notes === "string" ? notes : null,
         source: "online_store",
+        stockMode: "tracked",
       }).returning();
 
       // Create invoice line items
@@ -1592,8 +1594,8 @@ app.post("/store/:slug/order", async (c) => {
 
       await tx.insert(invoiceItems).values(processedLineItems);
 
-      // Stock adjustment per line item — use PostgreSQL NUMERIC arithmetic
-      // to avoid JS floating-point drift. Lock rows first for concurrency safety.
+      // Take the ordered stock out, per warehouse. Lock the item rows first
+      // so concurrent orders for the same item queue up.
       // No extra isNull filter needed here: items/variants were already confirmed
       // active by the foundItems/foundVariants queries earlier in this handler.
       const itemIds = [...new Set(lineItemInputs.filter(li => !li.variantId).map(li => li.itemId))];
@@ -1606,20 +1608,11 @@ app.post("/store/:slug/order", async (c) => {
         await tx.select({ id: itemVariants.id }).from(itemVariants)
           .where(inArray(itemVariants.id, variantIds)).for("update");
       }
-      for (const li of lineItemInputs) {
-        if (li.variantId) {
-          await tx.update(itemVariants).set({
-            stockQuantity: sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`,
-            updatedAt: new Date(),
-          }).where(eq(itemVariants.id, li.variantId));
-        } else {
-          const cf = li.conversionFactor || "1";
-          await tx.update(items).set({
-            stockQuantity: sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`,
-            updatedAt: new Date(),
-          }).where(eq(items.id, li.itemId));
-        }
-      }
+      await syncDocumentStock(tx, {
+        businessId: resolved.businessId,
+        documentId: invoice.id,
+        event: "CREATE",
+      });
 
       // Create the store order record
       const [order] = await tx.insert(storeOrders).values({

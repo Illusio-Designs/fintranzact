@@ -1,4 +1,4 @@
-import { and, eq, asc, sql } from "drizzle-orm";
+import { and, eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
@@ -7,13 +7,11 @@ import {
     warehouses,
     warehouseLocations,
     inventorySettings,
-    stockBalances,
     warehousePermissions,
     businessMembers,
 } from "@fintranzact/db";
 
 import { router, tenantProcedure } from "../trpc.js";
-import { recordStockMovement } from "../lib/inventory-service.js";
 
 export const warehouseRouter = router({
     // ============================================================
@@ -985,174 +983,6 @@ export const warehouseRouter = router({
 
             return permission;
         }),
-
-    stockTransfer: tenantProcedure
-        .input(
-            z.object({
-                sourceWarehouseId: z.string().uuid(),
-                destinationWarehouseId: z.string().uuid(),
-                itemId: z.string().uuid(),
-                variantId: z.string().uuid().optional(),
-                quantity: z.string(),
-                actorUserId: z.string().uuid().optional(),
-            }),
-        )
-        .mutation(async ({ ctx, input }) => {
-            if (!ctx.businessId) {
-                throw new TRPCError({
-                    code: "BAD_REQUEST",
-                    message: "Business context is required",
-                });
-            }
-
-            if (input.sourceWarehouseId === input.destinationWarehouseId) {
-                throw new TRPCError({
-                    code: "BAD_REQUEST",
-                    message: "Source and destination warehouse must be different",
-                });
-            }
-
-            const quantity = Number(input.quantity);
-
-            if (!Number.isFinite(quantity) || quantity <= 0) {
-                throw new TRPCError({
-                    code: "BAD_REQUEST",
-                    message: "Quantity must be greater than zero",
-                });
-            }
-
-            const warehouseRows = await ctx.db
-                .select({
-                    id: warehouses.id,
-                })
-                .from(warehouses)
-                .where(
-                    and(
-                        eq(warehouses.businessId, ctx.businessId),
-                        sql`${warehouses.id} IN (${input.sourceWarehouseId}, ${input.destinationWarehouseId})`,
-                    ),
-                );
-
-            const [businessMember] = await ctx.db
-                .select({
-                    id: businessMembers.id,
-                })
-                .from(businessMembers)
-                .where(
-                    and(
-                        eq(businessMembers.businessId, ctx.businessId),
-                        eq(businessMembers.userId, ctx.user!.id),
-                    ),
-                )
-                .limit(1);
-
-            if (!businessMember) {
-                throw new TRPCError({
-                    code: "FORBIDDEN",
-                    message: "You do not have access to this business",
-                });
-            }
-
-            const transferPermissions = await ctx.db
-                .select({
-                    warehouseId: warehousePermissions.warehouseId,
-                    canTransfer: warehousePermissions.canTransfer,
-                })
-                .from(warehousePermissions)
-                .where(
-                    and(
-                        eq(
-                            warehousePermissions.businessMemberId,
-                            businessMember.id,
-                        ),
-                        sql`${warehousePermissions.warehouseId} IN (${input.sourceWarehouseId}, ${input.destinationWarehouseId})`,
-                    ),
-                );
-
-            if (
-                transferPermissions.length !== 2 ||
-                transferPermissions.some((permission) => !permission.canTransfer)
-            ) {
-                throw new TRPCError({
-                    code: "FORBIDDEN",
-                    message: "You do not have transfer permission for both warehouses",
-                });
-            }
-
-            if (warehouseRows.length !== 2) {
-                throw new TRPCError({
-                    code: "NOT_FOUND",
-                    message: "Source or destination warehouse not found",
-                });
-            }
-
-            return await ctx.db.transaction(async (tx) => {
-                const sourceBalance = await tx
-                    .select({
-                        quantity: stockBalances.quantity,
-                    })
-                    .from(stockBalances)
-                    .where(
-                        and(
-                            eq(stockBalances.businessId, ctx.businessId!),
-                            eq(stockBalances.warehouseId, input.sourceWarehouseId),
-                            eq(stockBalances.itemId, input.itemId),
-                            input.variantId
-                                ? eq(stockBalances.variantId, input.variantId)
-                                : sql`${stockBalances.variantId} IS NULL`,
-                            sql`${stockBalances.locationId} IS NULL`,
-                        ),
-                    )
-                    .limit(1);
-
-                const availableQuantity = Number(sourceBalance[0]?.quantity ?? 0);
-
-                if (availableQuantity < quantity) {
-                    throw new TRPCError({
-                        code: "BAD_REQUEST",
-                        message: `Insufficient stock. Available: ${availableQuantity}`,
-                    });
-                }
-
-                const referenceId = crypto.randomUUID();
-
-                await recordStockMovement(tx, {
-                    businessId: ctx.businessId!,
-                    warehouseId: input.sourceWarehouseId,
-                    itemId: input.itemId,
-                    variantId: input.variantId,
-                    referenceType: "STOCK_TRANSFER",
-                    referenceId,
-                    movementType: "TRANSFER_OUT",
-                    quantity: sql<string>`-${input.quantity}::numeric`,
-                    actorUserId: input.actorUserId ?? ctx.user!.id,
-                });
-
-                await recordStockMovement(tx, {
-                    businessId: ctx.businessId!,
-                    warehouseId: input.destinationWarehouseId,
-                    itemId: input.itemId,
-                    variantId: input.variantId,
-                    referenceType: "STOCK_TRANSFER",
-                    referenceId,
-                    movementType: "TRANSFER_IN",
-                    quantity: sql<string>`${input.quantity}::numeric`,
-                    actorUserId: input.actorUserId ?? ctx.user!.id,
-                });
-
-                return {
-                    success: true,
-                    referenceId,
-                    sourceWarehouseId: input.sourceWarehouseId,
-                    destinationWarehouseId: input.destinationWarehouseId,
-                    quantity: input.quantity,
-                };
-            });
-        }),
-
-    // ============================================================
-    // INVENTORY SETTINGS
-    // ============================================================
 
     inventorySettingsGet: tenantProcedure.query(async ({ ctx }) => {
         if (!ctx.businessId) {

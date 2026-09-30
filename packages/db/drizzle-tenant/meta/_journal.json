@@ -120,6 +120,13 @@
       "when": 1790753074723,
       "tag": "0016_wet_tomorrow_man",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790756884942,
+      "tag": "0017_invoice_stock_mode",
+      "breakpoints": true
     }
   ]
 }
