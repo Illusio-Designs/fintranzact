@@ -35,6 +35,7 @@ Disallow: /items
 Disallow: /journal-entries
 Disallow: /manufacturing
 Disallow: /parties
+Disallow: /partner-portal
 Disallow: /payments
 Disallow: /physical-stock
 Disallow: /platform
