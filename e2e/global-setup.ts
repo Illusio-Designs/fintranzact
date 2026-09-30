@@ -5,7 +5,7 @@
  * then saves the browser storage state (cookies) so all test projects
  * can reuse the session without logging in again.
  *
- * Login page flow: Register tab (username, email, password) → Save
+ * Sign-up flow: /register (username, email, password) → Create free account
  * Business creation: done via API (more reliable than filling the complex form)
  */
 import { test as setup, expect } from "@playwright/test";
