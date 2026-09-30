@@ -140,10 +140,14 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            build_args: ""
+          # One universal app that runs on Apple Silicon and Intel Macs.
           - os: macos-latest
-            target: aarch64-apple-darwin
+            target: aarch64-apple-darwin,x86_64-apple-darwin
+            build_args: --target universal-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            build_args: ""
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
@@ -191,7 +195,7 @@ jobs:
           # Apply the production CSP overlay (strips localhost:3000 —
           # needed for `tauri dev` but dangerous in a signed release). See
           # apps/desktop/src-tauri/tauri.conf.prod.json.
-          args: "--config src-tauri/tauri.conf.prod.json"
+          args: "--config src-tauri/tauri.conf.prod.json ${{ matrix.build_args }}"
           tagName: ${{ github.ref_name }}
           releaseName: "Fintranzact ${{ github.ref_name }}"
           releaseBody: "Desktop builds for ${{ github.ref_name }}. See the [release notes](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}) for details."
