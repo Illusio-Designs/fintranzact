@@ -449,11 +449,10 @@ Then add to `claude_desktop_config.json` -- see the [MCP Server guide](https://f
 ```
 fintranzact/
 ├── apps/
-│   ├── web/          # React 19 admin dashboard
+│   ├── web/          # React 19 app, public site, help centre (/help) and API reference (/developers)
 │   ├── mobile/       # Expo SDK 55 iOS + Android app
 │   ├── store/        # Public customer-facing online storefront
-│   ├── desktop/      # Tauri v2 desktop (macOS, Windows, Linux)
-│   └── api-docs/     # API reference site
+│   └── desktop/      # Tauri v2 desktop (macOS, Windows, Linux)
 ├── packages/
 │   ├── api/          # Hono + tRPC server (20+ routers, 200+ procedures)
 │   ├── db/           # Drizzle ORM schema + PostgreSQL client
@@ -608,8 +607,8 @@ See [docs/architecture/gst-accounting-roadmap.md](docs/architecture/gst-accounti
 
 | Resource | URL |
 |---|---|
-| User documentation | [Help centre](https://fintranzact-web.vercel.app/help) (source: `apps/web/src/content/help`) |
-| API reference | [api.fintranzact.com](${import.meta.env.VITE_API_URL ?? 'https://fintranzact-production.up.railway.app'}) |
+| User documentation | Help centre at `/help` on the web app (articles in `apps/web/src/content/help`) |
+| API reference | `/developers` on the web app ([`apps/web/src/routes/developers`](apps/web/src/routes/developers)) |
 | Self-hosting guide | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
 | Contributing guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Security policy | [SECURITY.md](SECURITY.md) |

@@ -62,9 +62,9 @@ import { cn } from "@/lib/utils";
 
 export const CONTACT_EMAIL = "support@fintranzact.com";
 export const SECURITY_EMAIL = "security@fintranzact.com";
-/** The help centre, part of this site (it replaced docs.fintranzact.com). */
+/** The help centre and API reference, part of this site (they replaced docs.fintranzact.com and api-docs.fintranzact.com). */
 export const DOCS_URL = "/help";
-export const API_DOCS_URL = "https://api-docs.fintranzact.com";
+export const API_DOCS_URL = "/developers";
 
 type MenuLink = {
   label: string;
@@ -195,7 +195,7 @@ const MENUS: MegaMenu[] = [
           { label: "Find a partner", icon: UserGroupIcon, to: "/find-a-partner" },
           { label: "Partner login", icon: UserGroupIcon, to: "/partner-portal" },
           { label: "Widget gallery", icon: DashboardSquare01Icon, to: "/widgets" },
-          { label: "API docs", icon: ApiIcon, href: API_DOCS_URL },
+          { label: "API docs", icon: ApiIcon, to: API_DOCS_URL },
           { label: "Email us", icon: Mail01Icon, href: `mailto:${CONTACT_EMAIL}` },
         ],
       },

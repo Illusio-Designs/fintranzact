@@ -4,6 +4,7 @@ import { isHelpPath } from "./help-paths";
  * Which paths are public. Kept free of UI imports so low-level modules (the
  * tRPC client) can use it without pulling in the marketing components.
  */
+import { isDeveloperPath } from "./developer-paths";
 
 /** Paths served by the marketing layout instead of the app shell. */
 export const MARKETING_PATHS = [
@@ -71,7 +72,7 @@ export const AUTH_PUBLIC_PATHS = [
 
 export function isMarketingPath(pathname: string) {
   const path = pathname.replace(/\/+$/, "") || "/";
-  return MARKETING_PATHS.includes(path) || isSolutionPath(path) || isHelpPath(path);
+  return MARKETING_PATHS.includes(path) || isSolutionPath(path) || isHelpPath(path) || isDeveloperPath(path);
 }
 
 export function isAuthPublicPath(pathname: string) {

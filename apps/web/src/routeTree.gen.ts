@@ -8,6 +8,8 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
+import { createFileRoute } from '@tanstack/react-router'
+
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WidgetsRouteImport } from './routes/widgets'
 import { Route as WarehousesRouteImport } from './routes/warehouses'
@@ -72,6 +74,21 @@ import { Route as AuthVerifyEmailChangeRouteImport } from './routes/auth/verify-
 import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthPlanSelectionRouteImport } from './routes/auth/plan-selection'
 import { Route as AuthCompleteProfileRouteImport } from './routes/auth/complete-profile'
+
+const DevelopersIndexLazyRouteImport = createFileRoute('/developers/')()
+const DevelopersFaqLazyRouteImport = createFileRoute('/developers/faq')()
+const DevelopersConventionsLazyRouteImport = createFileRoute(
+  '/developers/conventions',
+)()
+const DevelopersAuthenticationLazyRouteImport = createFileRoute(
+  '/developers/authentication',
+)()
+const DevelopersSectionIndexLazyRouteImport = createFileRoute(
+  '/developers/$section/',
+)()
+const DevelopersSectionEndpointLazyRouteImport = createFileRoute(
+  '/developers/$section/$endpoint',
+)()
 
 const WidgetsRoute = WidgetsRouteImport.update({
   id: '/widgets',
@@ -333,6 +350,13 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevelopersIndexLazyRoute = DevelopersIndexLazyRouteImport.update({
+  id: '/developers/',
+  path: '/developers/',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/developers/index.lazy').then((d) => d.Route),
+)
 const SolutionsIndexRoute = SolutionsIndexRouteImport.update({
   id: '/solutions/',
   path: '/solutions/',
@@ -343,6 +367,29 @@ const HelpIndexRoute = HelpIndexRouteImport.update({
   path: '/help/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevelopersFaqLazyRoute = DevelopersFaqLazyRouteImport.update({
+  id: '/developers/faq',
+  path: '/developers/faq',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/developers/faq.lazy').then((d) => d.Route),
+)
+const DevelopersConventionsLazyRoute =
+  DevelopersConventionsLazyRouteImport.update({
+    id: '/developers/conventions',
+    path: '/developers/conventions',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/developers/conventions.lazy').then((d) => d.Route),
+  )
+const DevelopersAuthenticationLazyRoute =
+  DevelopersAuthenticationLazyRouteImport.update({
+    id: '/developers/authentication',
+    path: '/developers/authentication',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/developers/authentication.lazy').then((d) => d.Route),
+  )
 const SolutionsSlugRoute = SolutionsSlugRouteImport.update({
   id: '/solutions/$slug',
   path: '/solutions/$slug',
@@ -388,6 +435,22 @@ const AuthCompleteProfileRoute = AuthCompleteProfileRouteImport.update({
   path: '/auth/complete-profile',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevelopersSectionIndexLazyRoute =
+  DevelopersSectionIndexLazyRouteImport.update({
+    id: '/developers/$section/',
+    path: '/developers/$section/',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/developers/$section/index.lazy').then((d) => d.Route),
+  )
+const DevelopersSectionEndpointLazyRoute =
+  DevelopersSectionEndpointLazyRouteImport.update({
+    id: '/developers/$section/$endpoint',
+    path: '/developers/$section/$endpoint',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/developers/$section/$endpoint.lazy').then((d) => d.Route),
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -451,8 +514,14 @@ export interface FileRoutesByFullPath {
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
+  '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
+  '/developers/conventions': typeof DevelopersConventionsLazyRoute
+  '/developers/faq': typeof DevelopersFaqLazyRoute
   '/help/': typeof HelpIndexRoute
   '/solutions/': typeof SolutionsIndexRoute
+  '/developers/': typeof DevelopersIndexLazyRoute
+  '/developers/$section/$endpoint': typeof DevelopersSectionEndpointLazyRoute
+  '/developers/$section/': typeof DevelopersSectionIndexLazyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -516,8 +585,14 @@ export interface FileRoutesByTo {
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
+  '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
+  '/developers/conventions': typeof DevelopersConventionsLazyRoute
+  '/developers/faq': typeof DevelopersFaqLazyRoute
   '/help': typeof HelpIndexRoute
   '/solutions': typeof SolutionsIndexRoute
+  '/developers': typeof DevelopersIndexLazyRoute
+  '/developers/$section/$endpoint': typeof DevelopersSectionEndpointLazyRoute
+  '/developers/$section': typeof DevelopersSectionIndexLazyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -582,8 +657,14 @@ export interface FileRoutesById {
   '/i/$token': typeof ITokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/solutions/$slug': typeof SolutionsSlugRoute
+  '/developers/authentication': typeof DevelopersAuthenticationLazyRoute
+  '/developers/conventions': typeof DevelopersConventionsLazyRoute
+  '/developers/faq': typeof DevelopersFaqLazyRoute
   '/help/': typeof HelpIndexRoute
   '/solutions/': typeof SolutionsIndexRoute
+  '/developers/': typeof DevelopersIndexLazyRoute
+  '/developers/$section/$endpoint': typeof DevelopersSectionEndpointLazyRoute
+  '/developers/$section/': typeof DevelopersSectionIndexLazyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -649,8 +730,14 @@ export interface FileRouteTypes {
     | '/i/$token'
     | '/invite/$token'
     | '/solutions/$slug'
+    | '/developers/authentication'
+    | '/developers/conventions'
+    | '/developers/faq'
     | '/help/'
     | '/solutions/'
+    | '/developers/'
+    | '/developers/$section/$endpoint'
+    | '/developers/$section/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -714,8 +801,14 @@ export interface FileRouteTypes {
     | '/i/$token'
     | '/invite/$token'
     | '/solutions/$slug'
+    | '/developers/authentication'
+    | '/developers/conventions'
+    | '/developers/faq'
     | '/help'
     | '/solutions'
+    | '/developers'
+    | '/developers/$section/$endpoint'
+    | '/developers/$section'
   id:
     | '__root__'
     | '/'
@@ -779,8 +872,14 @@ export interface FileRouteTypes {
     | '/i/$token'
     | '/invite/$token'
     | '/solutions/$slug'
+    | '/developers/authentication'
+    | '/developers/conventions'
+    | '/developers/faq'
     | '/help/'
     | '/solutions/'
+    | '/developers/'
+    | '/developers/$section/$endpoint'
+    | '/developers/$section/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -845,8 +944,14 @@ export interface RootRouteChildren {
   ITokenRoute: typeof ITokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
   SolutionsSlugRoute: typeof SolutionsSlugRoute
+  DevelopersAuthenticationLazyRoute: typeof DevelopersAuthenticationLazyRoute
+  DevelopersConventionsLazyRoute: typeof DevelopersConventionsLazyRoute
+  DevelopersFaqLazyRoute: typeof DevelopersFaqLazyRoute
   HelpIndexRoute: typeof HelpIndexRoute
   SolutionsIndexRoute: typeof SolutionsIndexRoute
+  DevelopersIndexLazyRoute: typeof DevelopersIndexLazyRoute
+  DevelopersSectionEndpointLazyRoute: typeof DevelopersSectionEndpointLazyRoute
+  DevelopersSectionIndexLazyRoute: typeof DevelopersSectionIndexLazyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1215,6 +1320,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/developers/': {
+      id: '/developers/'
+      path: '/developers'
+      fullPath: '/developers/'
+      preLoaderRoute: typeof DevelopersIndexLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/solutions/': {
       id: '/solutions/'
       path: '/solutions'
@@ -1227,6 +1339,27 @@ declare module '@tanstack/react-router' {
       path: '/help'
       fullPath: '/help/'
       preLoaderRoute: typeof HelpIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers/faq': {
+      id: '/developers/faq'
+      path: '/developers/faq'
+      fullPath: '/developers/faq'
+      preLoaderRoute: typeof DevelopersFaqLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers/conventions': {
+      id: '/developers/conventions'
+      path: '/developers/conventions'
+      fullPath: '/developers/conventions'
+      preLoaderRoute: typeof DevelopersConventionsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers/authentication': {
+      id: '/developers/authentication'
+      path: '/developers/authentication'
+      fullPath: '/developers/authentication'
+      preLoaderRoute: typeof DevelopersAuthenticationLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/solutions/$slug': {
@@ -1290,6 +1423,20 @@ declare module '@tanstack/react-router' {
       path: '/auth/complete-profile'
       fullPath: '/auth/complete-profile'
       preLoaderRoute: typeof AuthCompleteProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers/$section/': {
+      id: '/developers/$section/'
+      path: '/developers/$section'
+      fullPath: '/developers/$section/'
+      preLoaderRoute: typeof DevelopersSectionIndexLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers/$section/$endpoint': {
+      id: '/developers/$section/$endpoint'
+      path: '/developers/$section/$endpoint'
+      fullPath: '/developers/$section/$endpoint'
+      preLoaderRoute: typeof DevelopersSectionEndpointLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -1357,8 +1504,14 @@ const rootRouteChildren: RootRouteChildren = {
   ITokenRoute: ITokenRoute,
   InviteTokenRoute: InviteTokenRoute,
   SolutionsSlugRoute: SolutionsSlugRoute,
+  DevelopersAuthenticationLazyRoute: DevelopersAuthenticationLazyRoute,
+  DevelopersConventionsLazyRoute: DevelopersConventionsLazyRoute,
+  DevelopersFaqLazyRoute: DevelopersFaqLazyRoute,
   HelpIndexRoute: HelpIndexRoute,
   SolutionsIndexRoute: SolutionsIndexRoute,
+  DevelopersIndexLazyRoute: DevelopersIndexLazyRoute,
+  DevelopersSectionEndpointLazyRoute: DevelopersSectionEndpointLazyRoute,
+  DevelopersSectionIndexLazyRoute: DevelopersSectionIndexLazyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -36,7 +36,6 @@ fi
 # All package.json files (root + apps + packages)
 PACKAGE_FILES=(
   package.json
-  apps/api-docs/package.json
   apps/mobile/package.json
   apps/store/package.json
   apps/web/package.json

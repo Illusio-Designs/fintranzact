@@ -66,7 +66,8 @@ function cspPlugin(apiOrigin: string | null): Plugin {
  * Search-engine files, built from the same list of public pages the app uses
  * (src/lib/public-paths.ts) so they cannot drift:
  *   - sitemap.xml is generated for "/" plus every indexable list in seo.ts
- *     (marketing, solutions and every /help article; served live in dev);
+ *     (marketing, solutions, every /help article and every /developers page;
+ *     served live in dev);
  *   - index.html, public/robots.txt and public/.well-known/security.txt carry
  *     the production URL, swapped for VITE_SITE_URL when that is set.
  */

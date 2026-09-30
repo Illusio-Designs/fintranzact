@@ -3,6 +3,7 @@
  * imports so vite.config.ts can use them at build time as well as the app.
  */
 import { HELP_PAGE_PATHS, MARKETING_PATHS, SOLUTION_PAGE_PATHS } from "./public-paths";
+import { DEVELOPER_PAGE_PATHS } from "./developer-paths";
 
 /**
  * The production web origin, used when VITE_SITE_URL is not set. It is the
@@ -32,6 +33,7 @@ export const INDEXABLE_PATH_LISTS: ReadonlyArray<readonly string[]> = [
   MARKETING_PATHS,
   SOLUTION_PAGE_PATHS,
   HELP_PAGE_PATHS,
+  DEVELOPER_PAGE_PATHS,
 ];
 
 /** Every public page a search engine should index: the home page plus every list above, de-duplicated. */
