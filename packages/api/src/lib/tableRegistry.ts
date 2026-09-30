@@ -9,6 +9,7 @@ import {
   eInvoiceConfigs,
   items,
   itemVariants,
+  stockGroups,
   salesTargets,
   invoices,
   invoiceItems,
@@ -186,6 +187,19 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
     redactedFields: ["clientSecret", "password", "authToken"],
     importable: false,
     selfFkFields: [],
+    chunkSize: 0,
+    recomputeOnImport: [],
+    scope: { type: "direct" },
+  },
+
+  // 7b. Stock Groups — depends on businesses; self-FK on parentId (nesting).
+  //     Must precede items, which reference it.
+  {
+    tableName: "stock_groups",
+    drizzleTable: stockGroups,
+    redactedFields: [],
+    importable: true,
+    selfFkFields: ["parentId"],
     chunkSize: 0,
     recomputeOnImport: [],
     scope: { type: "direct" },

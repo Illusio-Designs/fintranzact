@@ -34,6 +34,7 @@ import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { generateTallyXml } from "../lib/tally-xml-export.js";
 import { valueStock, type ValuationMethod } from "../lib/stock-valuation.js";
+import { groupSubtreeSql } from "../lib/stock-groups.js";
 
 // ── Shared variance helper ────────────────────────────────────────
 function computeVariance(current: string, previous: string): { variance: string; variancePercent: string } {
@@ -1038,6 +1039,8 @@ export const reportsRouter = router({
       ];
       if (!input.showZeroStock) simpleConditions.push(sql`${items.stockQuantity}::numeric != 0`);
       if (input.category) simpleConditions.push(eq(items.category, input.category));
+      const inGroup = input.stockGroupId ? sql`${items.stockGroupId} IN ${groupSubtreeSql(input.stockGroupId)}` : null;
+      if (inGroup) simpleConditions.push(inGroup);
 
       const variantConditions = [
         eq(items.businessId, ctx.businessId),
@@ -1047,6 +1050,7 @@ export const reportsRouter = router({
         isNull(itemVariants.deletedAt),
       ];
       if (input.category) variantConditions.push(eq(items.category, input.category));
+      if (inGroup) variantConditions.push(inGroup);
 
       const [simpleRows, variantRows] = await Promise.all([
         ctx.db

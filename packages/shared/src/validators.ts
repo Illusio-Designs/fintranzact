@@ -347,6 +347,9 @@ const createItemBaseSchema = z.object({
   description: z.string().max(1000).optional(),
   itemType: z.enum(itemTypes).default("product"),
   category: z.string().max(100).optional(),
+  // Stock group. Takes precedence over `category`, which then mirrors the
+  // group's name; null clears it.
+  stockGroupId: z.string().uuid().nullish(),
   taxInclusive: z.boolean().default(false),
   unitVariants: z.array(unitVariantSchema).optional(),
   variantAttributes: z.array(z.string().min(1).max(50)).max(5).optional(),
@@ -591,6 +594,8 @@ export const itemSalesInputSchema = z.object({
 
 export const stockSummaryInputSchema = z.object({
   category: z.string().optional(),
+  // Limit to one stock group and the groups under it.
+  stockGroupId: z.string().uuid().optional(),
   showZeroStock: z.boolean().default(false),
 });
 

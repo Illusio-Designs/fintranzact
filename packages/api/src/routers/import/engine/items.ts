@@ -2,6 +2,7 @@ import { items } from "@fintranzact/db";
 import { and, eq, isNull } from "drizzle-orm";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalItem } from "../types.js";
+import { linkCategoriesToGroups } from "../../../lib/stock-groups.js";
 
 export async function runItemsImport(
   db: TenantDatabase,
@@ -62,6 +63,8 @@ export async function runItemsImport(
       for (let i = 0; i < newItems.length; i += 500) {
         await tx.insert(items).values(newItems.slice(i, i + 500));
       }
+      // File the imported categories under stock groups of the same name.
+      await linkCategoriesToGroups(tx, businessId);
     });
   }
 

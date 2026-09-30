@@ -26,6 +26,13 @@ exceptions:
       - stock.transfers
       - stock.verify
       - stock.warehouses
+      # Stock groups (manage screen, item picker, stock group summary) are web screens for now.
+      - stockGroup.list
+      - stockGroup.create
+      - stockGroup.rename
+      - stockGroup.move
+      - stockGroup.delete
+      - inventoryReports.stockGroupSummary
       # Inventory settings (negative stock, valuation), the entry-form stock check
       # and the inventory reports are web screens for now.
       - stock.availability
@@ -336,6 +343,13 @@ exceptions:
       - stock.transfers
       - stock.verify
       - stock.warehouses
+      # Stock groups (manage screen, item picker, stock group summary) are web screens for now.
+      - stockGroup.list
+      - stockGroup.create
+      - stockGroup.rename
+      - stockGroup.move
+      - stockGroup.delete
+      - inventoryReports.stockGroupSummary
       # Inventory settings (negative stock, valuation), the entry-form stock check
       # and the inventory reports are web screens for now.
       - stock.availability
@@ -480,6 +494,13 @@ exceptions:
       - stock.transfers
       - stock.verify
       - stock.warehouses
+      # Stock groups (manage screen, item picker, stock group summary) are web screens for now.
+      - stockGroup.list
+      - stockGroup.create
+      - stockGroup.rename
+      - stockGroup.move
+      - stockGroup.delete
+      - inventoryReports.stockGroupSummary
       # Inventory settings (negative stock, valuation), the entry-form stock check
       # and the inventory reports are web screens for now.
       - stock.availability
