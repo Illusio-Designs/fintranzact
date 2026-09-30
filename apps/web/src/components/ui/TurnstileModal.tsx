@@ -18,6 +18,24 @@ import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { SecurityCheckIcon } from "@hugeicons/core-free-icons";
 import { Icon } from "./Icon";
+import { Spinner } from "./Spinner";
+
+const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+/** How long to wait for Cloudflare's script before telling the visitor it did not load. */
+const LOAD_TIMEOUT_MS = 10_000;
+
+/** Load the Turnstile script again (after an ad-blocker or network hiccup). */
+function reloadTurnstileScript() {
+  if (window.turnstile) return;
+  document.querySelectorAll(`script[src^="https://challenges.cloudflare.com/turnstile/"]`).forEach((el) => el.remove());
+  const script = document.createElement("script");
+  script.src = SCRIPT_SRC;
+  script.async = true;
+  script.defer = true;
+  document.head.appendChild(script);
+}
+
+type ModalState = "loading" | "ready" | "load-failed" | "check-failed";
 
 declare global {
   interface Window {
@@ -49,7 +67,9 @@ export function TurnstileModal({ open, onVerified, onClose }: TurnstileModalProp
   const dialogRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
-  const [error, setError] = useState(false);
+  const [state, setState] = useState<ModalState>("loading");
+  // Bumped by "Try again" to re-run the effect that loads and mounts the widget.
+  const [attempt, setAttempt] = useState(0);
 
   useFocusTrap(dialogRef, open);
 
@@ -63,7 +83,7 @@ export function TurnstileModal({ open, onVerified, onClose }: TurnstileModalProp
   useEffect(() => {
     if (!open || !containerRef.current) return;
 
-    setError(false);
+    setState(window.turnstile ? "ready" : "loading");
 
     const sitekey =
       (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined) ||
@@ -72,6 +92,7 @@ export function TurnstileModal({ open, onVerified, onClose }: TurnstileModalProp
     function mount() {
       if (!containerRef.current || !window.turnstile) return;
       if (widgetIdRef.current !== null) return;
+      setState("ready");
 
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey,
@@ -80,28 +101,44 @@ export function TurnstileModal({ open, onVerified, onClose }: TurnstileModalProp
         callback: (token: string) => {
           onVerified(token);
         },
-        "error-callback": () => setError(true),
-        "expired-callback": () => setError(true),
+        "error-callback": () => setState("check-failed"),
+        "expired-callback": () => setState("check-failed"),
       });
     }
 
     if (window.turnstile) {
       mount();
-    } else {
-      const interval = setInterval(() => {
-        if (window.turnstile) {
-          clearInterval(interval);
-          mount();
-        }
-      }, 100);
-      return () => {
-        clearInterval(interval);
-        cleanup();
-      };
+      return cleanup;
     }
 
-    return cleanup;
-  }, [open, onVerified, cleanup]);
+    // The script is still loading, or was blocked (ad-blocker, firewall,
+    // offline). Wait for it, but say so instead of showing an empty box.
+    const started = Date.now();
+    const interval = setInterval(() => {
+      if (window.turnstile) {
+        clearInterval(interval);
+        mount();
+      } else if (Date.now() - started > LOAD_TIMEOUT_MS) {
+        clearInterval(interval);
+        setState("load-failed");
+      }
+    }, 100);
+    return () => {
+      clearInterval(interval);
+      cleanup();
+    };
+  }, [open, onVerified, cleanup, attempt]);
+
+  const retry = () => {
+    cleanup();
+    if (window.turnstile) {
+      setState("ready");
+    } else {
+      reloadTurnstileScript();
+      setState("loading");
+    }
+    setAttempt((n) => n + 1);
+  };
 
   // Escape key closes
   useEffect(() => {
@@ -148,16 +185,27 @@ export function TurnstileModal({ open, onVerified, onClose }: TurnstileModalProp
         </div>
 
         {/* Turnstile widget */}
-        <div className="flex justify-center px-6 py-5">
-          <div ref={containerRef} />
+        <div className="flex min-h-[65px] items-center justify-center px-6 py-5">
+          {state === "loading" && (
+            <span className="flex items-center gap-2 text-sm text-text-tertiary" role="status">
+              <Spinner size="sm" className="text-brand-600" />
+              Loading security check…
+            </span>
+          )}
+          <div ref={containerRef} className={state === "loading" || state === "load-failed" ? "hidden" : undefined} />
         </div>
 
         {/* Error state */}
-        {error && (
-          <div className="px-6 pb-2 text-center">
-            <p className="text-sm text-red-500">
-              Verification failed. Please try again.
+        {(state === "load-failed" || state === "check-failed") && (
+          <div className="px-6 pb-2 text-center" role="alert">
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {state === "load-failed"
+                ? "The security check couldn't load. Check your internet connection, or pause any ad-blocker for this site, then try again."
+                : "Verification failed. Please try again."}
             </p>
+            <button type="button" onClick={retry} className="btn-primary mt-3">
+              Try again
+            </button>
           </div>
         )}
 
