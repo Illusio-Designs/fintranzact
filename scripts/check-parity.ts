@@ -121,6 +121,9 @@ function parseExceptions(filePath: string): Exceptions {
 // tRPC usage scanner — trpc.router.procedure pattern (web / mobile / desktop)
 // ---------------------------------------------------------------------------
 
+/** Documentation inside apps/web: code samples, not real usage. */
+const DOC_DIRS = ["apps/web/src/content", "apps/web/src/components/developers"];
+
 function scanTrpcDotPattern(dir: string): Set<string> {
   const procedures = new Set<string>();
   if (!fs.existsSync(dir)) return procedures;
@@ -130,6 +133,9 @@ function scanTrpcDotPattern(dir: string): Set<string> {
       const full = path.join(d, entry.name);
       if (entry.isDirectory()) {
         if (["node_modules", ".next", "dist", ".expo", "android", "ios"].includes(entry.name)) continue;
+        // The in-app API reference and help centre quote tRPC calls as documentation
+        // examples; they are not the app calling those procedures.
+        if (DOC_DIRS.some((doc) => full === path.join(ROOT, doc))) continue;
         walk(full);
       } else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
         const content = fs.readFileSync(full, "utf-8");
