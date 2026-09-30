@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Modal } from "@/components/ui/Modal";
+import { SlideOver } from "@/components/ui/SlideOver";
 import { Listbox } from "@/components/ui/Listbox";
 import { toast } from "@/hooks/useToast";
 import { cn, formatDate } from "@/lib/utils";
@@ -227,9 +227,36 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title="Invite Team Member">
+    <SlideOver
+      open={open}
+      onClose={handleClose}
+      title="Invite Team Member"
+      footer={
+        inviteResult ? (
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-primary" onClick={handleClose}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={handleClose}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="invite-member-form"
+              disabled={inviteMutation.isPending}
+              className="btn-primary"
+            >
+              {inviteMutation.isPending ? "Sending..." : "Send Invite"}
+            </button>
+          </div>
+        )
+      }
+    >
       {inviteResult ? (
-        <div className="space-y-4 py-2">
+        <div className="space-y-4">
           <div className="rounded-lg bg-emerald-600/[0.08] border border-emerald-200 dark:border-emerald-800 px-4 py-3">
             <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Invitation created!</p>
             <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
@@ -258,12 +285,9 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
               </button>
             </div>
           </div>
-          <button className="btn-primary w-full" onClick={handleClose}>
-            Done
-          </button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form id="invite-member-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="label">Email address</label>
             <input
@@ -284,21 +308,9 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
               options={roleOptions}
             />
           </div>
-          <div className="pt-1 flex gap-3">
-            <button type="button" className="btn-secondary flex-1" onClick={handleClose}>
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={inviteMutation.isPending}
-              className="btn-primary flex-1"
-            >
-              {inviteMutation.isPending ? "Sending..." : "Send Invite"}
-            </button>
-          </div>
         </form>
       )}
-    </Modal>
+    </SlideOver>
   );
 }
 

@@ -4,6 +4,7 @@ import { formatCurrency, cn, todayISODate, toISOString, formatDateInput } from "
 import dayjs from "dayjs";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { Combobox } from "@/components/ui/Combobox";
+import { Listbox } from "@/components/ui/Listbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -130,6 +131,8 @@ export function DocumentCreator({
   initialPartyId,
 }: DocumentCreatorProps) {
   const [partyId, setPartyId] = useState(initialPartyId ?? "");
+  // Where the goods come in (purchase) or go out (sale). "" = the default warehouse.
+  const [warehouseId, setWarehouseId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(todayISODate);
   const [dueDate, setDueDate] = useState(() => dayjs().add(7, "day").format("YYYY-MM-DD"));
   const [dueDateManuallySet, setDueDateManuallySet] = useState(false);
@@ -162,6 +165,9 @@ export function DocumentCreator({
     businessList?.find((b) => b.id === currentBizId) ?? businessList?.[0];
   const bizDefaultTerms = activeBusiness?.defaultTermsAndConditions ?? "";
   const bizDefaultRoundOff = activeBusiness?.defaultRoundOff ?? false;
+
+  const { data: warehouseList } = trpc.stock.warehouses.useQuery(undefined, { staleTime: 60_000 });
+  const activeWarehouses = (warehouseList ?? []).filter((w) => w.status === "active");
 
   // Server-side search for party picker
   const [partySearch, setPartySearch] = useState("");
@@ -228,6 +234,7 @@ export function DocumentCreator({
     if (!editData) return;
     setPartyId(editData.partyId);
     if (isEditing) {
+      setWarehouseId(editData.warehouseId ?? "");
       // Editing: use the document's own date
       setInvoiceDate(formatDateInput(editData.invoiceDate));
       if (editData.dueDate) setDueDate(formatDateInput(editData.dueDate));
@@ -598,6 +605,7 @@ export function DocumentCreator({
         invoiceDiscountType,
         roundOff: roundOff || "0",
         lineItems: lineItemsPayload,
+        ...(documentType === "invoice" ? { warehouseId: warehouseId || null } : {}),
       });
     } else {
       createMutation.mutate({
@@ -613,6 +621,7 @@ export function DocumentCreator({
         roundOff: roundOff || undefined,
         referenceDocumentId: referenceDocumentId || undefined,
         lineItems: lineItemsPayload,
+        ...(documentType === "invoice" && warehouseId ? { warehouseId } : {}),
       });
     }
   }
@@ -723,6 +732,21 @@ export function DocumentCreator({
             </div>
           )}
         </div>
+
+        {/* Warehouse — only asked when the business has more than one */}
+        {documentType === "invoice" && activeWarehouses.length > 1 && (
+          <div className="max-w-sm">
+            <Listbox
+              label={invoiceType === "purchase" ? "Receive into" : "Dispatch from"}
+              value={warehouseId}
+              onChange={setWarehouseId}
+              options={[
+                { value: "", label: "Default warehouse" },
+                ...activeWarehouses.map((w) => ({ value: w.id, label: w.name, description: w.premiseName ?? undefined })),
+              ]}
+            />
+          </div>
+        )}
 
         {/* Line items */}
         <div className="space-y-3">

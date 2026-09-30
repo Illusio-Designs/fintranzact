@@ -377,6 +377,8 @@ export const createInvoiceSchema = z.object({
   invoiceDiscountType: z.enum(["amount", "percent"]).default("amount"),
   roundOff: z.string().regex(/^-?\d{1,13}(\.\d{1,2})?$/).default("0"),
   referenceDocumentId: z.string().uuid().optional(),
+  /** Warehouse the goods come into (purchase) or go out of (sale). Default warehouse when omitted. */
+  warehouseId: z.string().uuid().nullish(),
   lineItems: z.array(invoiceLineItemSchema).min(1),
   /**
    * When true, skip stock adjustment on create. Used when converting a

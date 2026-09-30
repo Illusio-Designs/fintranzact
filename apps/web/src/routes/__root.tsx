@@ -245,6 +245,8 @@ const navSections = [
         icon: TaskDone01Icon,
         resource: "Item",
         action: "read",
+        // Counting is by barcode scan, so it goes away with barcodes.
+        barcodeOnly: true,
       },
       {
         to: "/shipments",
@@ -1347,6 +1349,7 @@ function RootLayout() {
   const isGstRegistered =
     activeBusiness?.gstRegistrationType !== "unregistered" ||
     !!activeBusiness?.gstin;
+  const barcodesOn = activeBusiness?.barcodesEnabled !== false;
 
   // No businesses yet — user is in the onboarding flow. Hide the sidebar
   // since nav items are meaningless without a business context.
@@ -1483,7 +1486,8 @@ function RootLayout() {
                   .filter(
                     (item) =>
                       canAccess(session?.role, item.resource, item.action) &&
-                      (!("gstOnly" in item && item.gstOnly) || isGstRegistered),
+                      (!("gstOnly" in item && item.gstOnly) || isGstRegistered) &&
+                      (!("barcodeOnly" in item && item.barcodeOnly) || barcodesOn),
                   )
                   .map((item) => {
                     // Rename reports label based on GST status (always visible)

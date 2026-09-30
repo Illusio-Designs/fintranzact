@@ -9,14 +9,16 @@
  * default warehouse: read paths add it there, and write paths move it there
  * for real before touching a balance, so the two layers stay consistent.
  */
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
   businessMembers,
   inventorySettings,
+  itemBarcodes,
   items,
   itemVariants,
+  physicalStockCounts,
   stockAdjustments,
   stockMovements,
   warehousePermissions,
@@ -27,6 +29,7 @@ import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { ensureDefaultWarehouse, recordStockMovement, updateStockBalance } from "../lib/inventory-service.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { getBarcodeSetup, requireBarcodesEnabled, resolveCodes } from "../lib/barcode-setup.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
@@ -258,6 +261,174 @@ function stockUnitsSql(businessId: string, search?: string | null) {
     ${like ? sql`WHERE name ILIKE ${like} OR sku ILIKE ${like}` : sql``}
   `;
 }
+
+/** Most scans one finished count can carry (after grouping by code). */
+const MAX_SCANNED_CODES = 5000;
+
+interface CountUnit {
+  itemId: string;
+  variantId: string | null;
+  name: string;
+  barcode: string | null;
+  unitCost: string | null;
+  books: number;
+  codes: Array<{ code: string; packQty: number }>;
+}
+
+/**
+ * Every stock unit with its book quantity at one warehouse (location-less
+ * balance, plus unplaced stock when it is the default warehouse — the same
+ * figure physical verification adjusts against) and the codes that scan to it.
+ */
+async function warehouseCountUnits(db: Tx, businessId: string, warehouseId: string, mode: "single" | "multi") {
+  const [settings] = await db
+    .select({ defaultId: inventorySettings.salesWarehouseId })
+    .from(inventorySettings)
+    .where(eq(inventorySettings.businessId, businessId))
+    .limit(1);
+  const isDefault = settings?.defaultId === warehouseId;
+
+  const rows = (await db.execute(sql`
+    WITH units AS (
+      SELECT i.id AS item_id, NULL::uuid AS variant_id, i.name, i.barcode,
+             i.purchase_price::text AS cost, i.stock_quantity::numeric AS total
+      FROM items i
+      WHERE i.business_id = ${businessId} AND i.deleted_at IS NULL
+        AND i.item_type = 'product' AND i.item_mode <> 'variants'
+      UNION ALL
+      SELECT i.id, v.id,
+             i.name || ' — ' || COALESCE((SELECT string_agg(value, ' / ') FROM jsonb_each_text(v.attribute_values)), 'Variant'),
+             v.barcode, COALESCE(v.purchase_price, i.purchase_price)::text, v.stock_quantity::numeric
+      FROM item_variants v JOIN items i ON i.id = v.item_id
+      WHERE i.business_id = ${businessId} AND i.deleted_at IS NULL AND v.deleted_at IS NULL
+        AND i.item_type = 'product'
+    ),
+    here AS (
+      SELECT item_id, variant_id, SUM(quantity::numeric) AS qty FROM stock_balances
+      WHERE business_id = ${businessId} AND warehouse_id = ${warehouseId} AND location_id IS NULL
+      GROUP BY item_id, variant_id
+    ),
+    placed AS (
+      SELECT item_id, variant_id, SUM(quantity::numeric) AS qty FROM stock_balances
+      WHERE business_id = ${businessId}
+      GROUP BY item_id, variant_id
+    )
+    SELECT u.item_id AS "itemId", u.variant_id AS "variantId", u.name, u.barcode, u.cost,
+           (COALESCE(h.qty, 0) + ${isDefault ? sql`(u.total - COALESCE(p.qty, 0))` : sql`0`})::text AS books
+    FROM units u
+    LEFT JOIN here h ON h.item_id = u.item_id AND h.variant_id IS NOT DISTINCT FROM u.variant_id
+    LEFT JOIN placed p ON p.item_id = u.item_id AND p.variant_id IS NOT DISTINCT FROM u.variant_id
+    ORDER BY u.name
+  `)) as unknown as Array<{
+    itemId: string; variantId: string | null; name: string; barcode: string | null; cost: string | null; books: string;
+  }>;
+
+  const extras = mode === "multi"
+    ? await db
+        .select({ itemId: itemBarcodes.itemId, variantId: itemBarcodes.variantId, code: itemBarcodes.code, packQty: itemBarcodes.packQty })
+        .from(itemBarcodes)
+        .where(eq(itemBarcodes.businessId, businessId))
+    : [];
+  const key = (itemId: string, variantId: string | null) => `${itemId}:${variantId ?? ""}`;
+  const extraByUnit = new Map<string, Array<{ code: string; packQty: number }>>();
+  for (const e of extras as Array<{ itemId: string; variantId: string | null; code: string; packQty: string }>) {
+    const k = key(e.itemId, e.variantId ?? null);
+    extraByUnit.set(k, [...(extraByUnit.get(k) ?? []), { code: e.code, packQty: parseFloat(e.packQty) || 1 }]);
+  }
+
+  return rows.map((r): CountUnit => ({
+    itemId: r.itemId,
+    variantId: r.variantId,
+    name: r.name,
+    barcode: r.barcode,
+    unitCost: r.cost,
+    books: parseFloat(r.books),
+    codes: [
+      ...(r.barcode ? [{ code: r.barcode, packQty: 1 }] : []),
+      ...(extraByUnit.get(key(r.itemId, r.variantId)) ?? []),
+    ],
+  }));
+}
+
+/** Books vs scanned for one warehouse, from grouped scans. */
+async function buildCountReport(
+  db: Tx,
+  businessId: string,
+  warehouseId: string,
+  scans: Array<{ code: string; count: number }>,
+) {
+  const setup = await getBarcodeSetup(db, businessId);
+  requireBarcodesEnabled(setup);
+  const units = await warehouseCountUnits(db, businessId, warehouseId, setup.mode);
+  const resolved = await resolveCodes(db, businessId, scans.map((s) => s.code), setup.mode);
+
+  const scanned = new Map<string, number>();
+  const unknown = new Map<string, number>();
+  for (const s of scans) {
+    const code = s.code.trim();
+    const hit = resolved.get(code);
+    if (!hit) {
+      unknown.set(code, (unknown.get(code) ?? 0) + s.count);
+      continue;
+    }
+    const k = `${hit.itemId}:${hit.variantId ?? ""}`;
+    scanned.set(k, (scanned.get(k) ?? 0) + s.count * hit.packQty);
+  }
+
+  const lines: Array<{ itemId: string; variantId: string | null; name: string; books: string; scanned: string; unitCost: string | null }> = [];
+  const notCounted: Array<{ itemId: string; variantId: string | null; name: string; books: string }> = [];
+  for (const u of units) {
+    const k = `${u.itemId}:${u.variantId ?? ""}`;
+    const got = scanned.get(k) ?? 0;
+    if (u.codes.length === 0 && !scanned.has(k)) {
+      if (Math.abs(u.books) >= 0.0005) notCounted.push({ itemId: u.itemId, variantId: u.variantId, name: u.name, books: qty(u.books) });
+      continue;
+    }
+    if (Math.abs(u.books) < 0.0005 && got === 0) continue;
+    lines.push({ itemId: u.itemId, variantId: u.variantId, name: u.name, books: qty(u.books), scanned: qty(got), unitCost: u.unitCost });
+  }
+  return {
+    lines,
+    notCounted,
+    unknownCodes: [...unknown.entries()].map(([code, count]) => ({ code, count })),
+  };
+}
+
+/** Apply a count's scanned quantities as the warehouse's stock. */
+async function postCountLines(
+  tx: Tx,
+  ctx: { businessId: string; user: { id: string; name: string | null } },
+  warehouseId: string,
+  lines: Array<{ itemId: string; variantId: string | null; scanned: string }>,
+  note: string | null,
+) {
+  const reason = note?.trim() ? `${PHYSICAL_REASON} (scan): ${note.trim()}` : `${PHYSICAL_REASON} (scan)`;
+  const date = new Date();
+  let adjusted = 0;
+  for (const line of lines) {
+    await placeUnplacedStock(tx, ctx.businessId, line.itemId, line.variantId);
+    const system = await warehouseBalance(tx, ctx.businessId, warehouseId, line.itemId, line.variantId);
+    const diff = parseFloat(line.scanned) - system;
+    if (Math.abs(diff) < 0.0005) continue;
+    await applyStockAdjustment(tx, {
+      businessId: ctx.businessId,
+      warehouseId,
+      itemId: line.itemId,
+      variantId: line.variantId,
+      quantity: diff,
+      reason,
+      date,
+      user: ctx.user,
+      referenceType: "PHYSICAL_STOCK",
+    });
+    adjusted++;
+  }
+  return adjusted;
+}
+
+const scansSchema = z
+  .array(z.object({ code: z.string().trim().min(1).max(64), count: z.number().int().min(1).max(100000) }))
+  .max(MAX_SCANNED_CODES);
 
 export const stockRouter = router({
   /** Create the default "Main" premise + warehouse if the business has none yet. */
@@ -581,5 +752,155 @@ export const stockRouter = router({
         }
         return { checked: input.counts.length, adjusted };
       });
+    }),
+
+  /**
+   * What a barcode count at this warehouse expects: every stock unit with its
+   * book quantity and the codes that scan to it, so the scanner screen can
+   * match scans instantly. Units without any code are listed separately —
+   * they can't be counted by scanning.
+   */
+  countSheet: viewerProcedure
+    .input(z.object({ warehouseId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      requireCan(ctx.ability, "read", "Item");
+      const setup = await getBarcodeSetup(ctx.db, ctx.businessId);
+      requireBarcodesEnabled(setup);
+      await assertWarehouses(ctx.db, ctx.businessId, [input.warehouseId]);
+      const units = await warehouseCountUnits(ctx.db, ctx.businessId, input.warehouseId, setup.mode);
+      return {
+        units: units.filter((u) => u.codes.length > 0).map((u) => ({ ...u, books: qty(u.books) })),
+        noBarcode: units
+          .filter((u) => u.codes.length === 0 && Math.abs(u.books) >= 0.0005)
+          .map((u) => ({ itemId: u.itemId, variantId: u.variantId, name: u.name, books: qty(u.books) })),
+      };
+    }),
+
+  /** The report for a set of scans, without saving anything. */
+  countPreview: viewerProcedure
+    .input(z.object({ warehouseId: z.string().uuid(), scans: scansSchema }))
+    .query(async ({ ctx, input }) => {
+      requireCan(ctx.ability, "read", "Item");
+      await assertWarehouses(ctx.db, ctx.businessId, [input.warehouseId]);
+      return buildCountReport(ctx.db, ctx.businessId, input.warehouseId, input.scans);
+    }),
+
+  /** End the scan: save the report, and post its differences when asked. */
+  countFinish: memberProcedure
+    .input(z.object({
+      warehouseId: z.string().uuid(),
+      startedAt: z.string().datetime(),
+      scans: scansSchema,
+      note: z.string().max(300).optional(),
+      post: z.boolean().default(false),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireCan(ctx.ability, "update", "Item");
+      return ctx.db.transaction(async (tx: Tx) => {
+        await assertWarehouses(tx, ctx.businessId, [input.warehouseId]);
+        if (input.post) await assertWarehousePermission(tx, ctx, [input.warehouseId], "canAdjust");
+        const report = await buildCountReport(tx, ctx.businessId, input.warehouseId, input.scans);
+        const adjusted = input.post
+          ? await postCountLines(tx, { businessId: ctx.businessId, user: { id: ctx.user.id, name: ctx.user.name } }, input.warehouseId, report.lines, input.note ?? null)
+          : 0;
+        const [row] = await tx.insert(physicalStockCounts).values({
+          businessId: ctx.businessId,
+          warehouseId: input.warehouseId,
+          status: input.post ? "posted" : "saved",
+          startedAt: new Date(input.startedAt),
+          endedAt: new Date(),
+          scanCount: input.scans.reduce((n, s) => n + s.count, 0),
+          note: input.note?.trim() || null,
+          lines: report.lines,
+          unknownCodes: report.unknownCodes,
+          notCounted: report.notCounted,
+          adjustedCount: adjusted,
+          postedAt: input.post ? new Date() : null,
+          createdByUserId: ctx.user.id,
+          createdByName: ctx.user.name,
+        }).returning({ id: physicalStockCounts.id });
+        return { id: row.id, adjusted };
+      });
+    }),
+
+  /** Post a saved count's differences later. */
+  countPost: memberProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      requireCan(ctx.ability, "update", "Item");
+      return ctx.db.transaction(async (tx: Tx) => {
+        const [count] = await tx
+          .select()
+          .from(physicalStockCounts)
+          .where(and(eq(physicalStockCounts.id, input.id), eq(physicalStockCounts.businessId, ctx.businessId)))
+          .for("update")
+          .limit(1);
+        if (!count) throw new TRPCError({ code: "NOT_FOUND", message: "Count not found" });
+        if (count.status === "posted") throw new TRPCError({ code: "BAD_REQUEST", message: "This count is already posted" });
+        await assertWarehouses(tx, ctx.businessId, [count.warehouseId]);
+        await assertWarehousePermission(tx, ctx, [count.warehouseId], "canAdjust");
+        const adjusted = await postCountLines(tx, { businessId: ctx.businessId, user: { id: ctx.user.id, name: ctx.user.name } }, count.warehouseId, count.lines, count.note);
+        await tx.update(physicalStockCounts)
+          .set({ status: "posted", postedAt: new Date(), adjustedCount: adjusted })
+          .where(eq(physicalStockCounts.id, count.id));
+        return { id: count.id, adjusted };
+      });
+    }),
+
+  /** Past counts, newest first. */
+  counts: viewerProcedure
+    .input(paginationSchema)
+    .query(async ({ ctx, input }) => {
+      requireCan(ctx.ability, "read", "Item");
+      const offset = (input.page - 1) * input.limit;
+      const rows = await ctx.db
+        .select({
+          id: physicalStockCounts.id,
+          warehouseId: physicalStockCounts.warehouseId,
+          warehouseName: warehouses.name,
+          status: physicalStockCounts.status,
+          startedAt: physicalStockCounts.startedAt,
+          endedAt: physicalStockCounts.endedAt,
+          scanCount: physicalStockCounts.scanCount,
+          adjustedCount: physicalStockCounts.adjustedCount,
+          lines: physicalStockCounts.lines,
+          unknownCodes: physicalStockCounts.unknownCodes,
+          createdByName: physicalStockCounts.createdByName,
+        })
+        .from(physicalStockCounts)
+        .innerJoin(warehouses, eq(warehouses.id, physicalStockCounts.warehouseId))
+        .where(eq(physicalStockCounts.businessId, ctx.businessId))
+        .orderBy(desc(physicalStockCounts.createdAt))
+        .limit(input.limit)
+        .offset(offset);
+      const [{ count }] = (await ctx.db.execute(sql`
+        SELECT COUNT(*)::int AS count FROM physical_stock_counts WHERE business_id = ${ctx.businessId}
+      `)) as unknown as Array<{ count: number }>;
+      return {
+        data: rows.map(({ lines, unknownCodes, ...r }) => ({
+          ...r,
+          itemsChecked: lines.length,
+          differences: lines.filter((l) => Math.abs(parseFloat(l.scanned) - parseFloat(l.books)) >= 0.0005).length,
+          unknownCount: unknownCodes.length,
+        })),
+        total: count,
+        page: input.page,
+        limit: input.limit,
+      };
+    }),
+
+  /** One saved count with its full report. */
+  count: viewerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      requireCan(ctx.ability, "read", "Item");
+      const [row] = await ctx.db
+        .select({ count: physicalStockCounts, warehouseName: warehouses.name })
+        .from(physicalStockCounts)
+        .innerJoin(warehouses, eq(warehouses.id, physicalStockCounts.warehouseId))
+        .where(and(eq(physicalStockCounts.id, input.id), eq(physicalStockCounts.businessId, ctx.businessId)))
+        .limit(1);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Count not found" });
+      return { ...row.count, warehouseName: row.warehouseName };
     }),
 });

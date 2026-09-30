@@ -132,6 +132,16 @@ export const businesses = pgTable("businesses", {
   nextBarcodeNumber: integer("next_barcode_number").default(1).notNull(),
   // Turn auto-generation off for businesses that print supplier barcodes only.
   autoGenerateBarcodes: boolean("auto_generate_barcodes").default(true).notNull(),
+  // Barcode setup. `barcodesEnabled` gates every barcode feature (fields,
+  // scanning, labels, physical stock). Type and mode decide what codes the
+  // business creates and whether an item can carry more than one; both are
+  // locked once `barcodeSetupLockedAt` is set, because every printed label
+  // and every code on the shelf follows them.
+  barcodesEnabled: boolean("barcodes_enabled").default(true).notNull(),
+  barcodeType: text("barcode_type").default("ean13").notNull(), // ean13 | code128 | qr
+  barcodeMode: text("barcode_mode").default("single").notNull(), // single | multi
+  barcodeSetupLockedAt: timestamp("barcode_setup_locked_at", { withTimezone: true }),
+  barcodeSetupLockedBy: text("barcode_setup_locked_by"),
   proformaPrefix: text("proforma_prefix").default("PI").notNull(),
   nextProformaNumber: integer("next_proforma_number").default(1).notNull(),
   financialYearStart: integer("financial_year_start_month").default(4).notNull(), // April
@@ -519,6 +529,27 @@ export const itemVariants = pgTable("item_variants", {
   index("item_variants_active_idx").on(t.itemId).where(sql`deleted_at IS NULL`),
 ]);
 
+// ── Extra item barcodes (businesses on "many barcodes per item") ──
+// The item's / variant's own `barcode` column stays the primary code — the one
+// printed on labels. These are the other codes that also scan to the item: a
+// supplier's code, an old code, or a box / carton code that stands for
+// `packQty` pieces in one scan.
+
+export const itemBarcodes = pgTable("item_barcodes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  packQty: numeric("pack_qty", { precision: 15, scale: 3 }).default("1").notNull(),
+  label: text("label"), // e.g. "Box of 12"
+  source: text("source").default("manual").notNull(), // supplier | generated | manual | old
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("item_barcodes_code_idx").on(t.businessId, t.code),
+  index("item_barcodes_item_idx").on(t.itemId),
+]);
+
 // ── Invoices ───────────────────────────────────────────────────
 
 export const invoices = pgTable("invoices", {
@@ -542,6 +573,9 @@ export const invoices = pgTable("invoices", {
   notes: text("notes"),
   termsAndConditions: text("terms_and_conditions"),
   referenceDocumentId: uuid("reference_document_id"),
+  // Where the goods physically came in (purchase) or went out (sale). Null
+  // means the business's default warehouse for that operation.
+  warehouseId: uuid("warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
   // No FK to users — plain UUID, users live in control schema (different DB in cloud mode)
   createdByUserId: uuid("created_by_user_id"),
   createdByName: text("created_by_name"), // denormalized for display + imports
@@ -762,6 +796,40 @@ export const stockAdjustments = pgTable("stock_adjustments", {
   index("stock_adj_item_idx").on(t.itemId),
   index("stock_adj_variant_idx").on(t.variantId),
   index("stock_adj_date_idx").on(t.businessId, t.adjustmentDate),
+]);
+
+// ── Physical stock counts (barcode scans) ─────────────────────
+// One row per finished scan session. `lines` is the report as it stood when
+// the count ended (books vs scanned per item), so a saved report still reads
+// the same after stock moves on. `posted` means its differences were applied
+// as stock adjustments.
+
+export const physicalStockCounts = pgTable("physical_stock_counts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  warehouseId: uuid("warehouse_id").notNull().references(() => warehouses.id, { onDelete: "cascade" }),
+  status: text("status").default("saved").notNull(), // saved | posted
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }).notNull(),
+  scanCount: integer("scan_count").default(0).notNull(),
+  note: text("note"),
+  lines: jsonb("lines").$type<Array<{
+    itemId: string;
+    variantId: string | null;
+    name: string;
+    books: string;
+    scanned: string;
+    unitCost: string | null;
+  }>>().notNull(),
+  unknownCodes: jsonb("unknown_codes").$type<Array<{ code: string; count: number }>>().notNull(),
+  notCounted: jsonb("not_counted").$type<Array<{ itemId: string; variantId: string | null; name: string; books: string }>>().notNull(),
+  adjustedCount: integer("adjusted_count").default(0).notNull(),
+  postedAt: timestamp("posted_at", { withTimezone: true }),
+  createdByUserId: uuid("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("physical_counts_business_idx").on(t.businessId, t.createdAt),
 ]);
 
 // ── Stock Balances ────────────────────────────────────────────

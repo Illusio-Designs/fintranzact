@@ -12,15 +12,17 @@ import {
     businessMembers,
 } from "@fintranzact/db";
 
-import { router, tenantProcedure } from "../trpc.js";
+import { router, authorizedProcedure } from "../trpc.js";
 import { recordStockMovement } from "../lib/inventory-service.js";
+import { requireCan } from "../lib/permissions.js";
 
 export const warehouseRouter = router({
     // ============================================================
     // PREMISES
     // ============================================================
 
-    premiseList: tenantProcedure.query(async ({ ctx }) => {
+    premiseList: authorizedProcedure.query(async ({ ctx }) => {
+        requireCan(ctx.ability, "read", "Item");
         if (!ctx.businessId) {
             throw new TRPCError({
                 code: "BAD_REQUEST",
@@ -37,13 +39,14 @@ export const warehouseRouter = router({
             .orderBy(asc(premises.name));
     }),
 
-    premiseGet: tenantProcedure
+    premiseGet: authorizedProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
             }),
         )
         .query(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "read", "Item");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -74,7 +77,7 @@ export const warehouseRouter = router({
             return premise;
         }),
 
-    premiseCreate: tenantProcedure
+    premiseCreate: authorizedProcedure
         .input(
             z.object({
                 name: z.string().min(1).max(255),
@@ -86,6 +89,7 @@ export const warehouseRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -129,7 +133,7 @@ export const warehouseRouter = router({
             return premise;
         }),
 
-    premiseUpdate: tenantProcedure
+    premiseUpdate: authorizedProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -142,6 +146,7 @@ export const warehouseRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -208,13 +213,14 @@ export const warehouseRouter = router({
             return updated;
         }),
 
-    premiseDelete: tenantProcedure
+    premiseDelete: authorizedProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -251,7 +257,7 @@ export const warehouseRouter = router({
     // WAREHOUSES
     // ============================================================
 
-    warehouseList: tenantProcedure
+    warehouseList: authorizedProcedure
         .input(
             z
                 .object({
@@ -260,6 +266,7 @@ export const warehouseRouter = router({
                 .optional(),
         )
         .query(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "read", "Item");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -286,13 +293,14 @@ export const warehouseRouter = router({
                 .orderBy(asc(warehouses.name));
         }),
 
-    warehouseGet: tenantProcedure
+    warehouseGet: authorizedProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
             }),
         )
         .query(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "read", "Item");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -323,7 +331,7 @@ export const warehouseRouter = router({
             return warehouse;
         }),
 
-    warehouseCreate: tenantProcedure
+    warehouseCreate: authorizedProcedure
         .input(
             z.object({
                 premiseId: z.string().uuid(),
@@ -335,6 +343,7 @@ export const warehouseRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -396,7 +405,7 @@ export const warehouseRouter = router({
             return warehouse;
         }),
 
-    warehouseUpdate: tenantProcedure
+    warehouseUpdate: authorizedProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -409,6 +418,7 @@ export const warehouseRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -495,13 +505,14 @@ export const warehouseRouter = router({
             return updated;
         }),
 
-    warehouseDelete: tenantProcedure
+    warehouseDelete: authorizedProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -538,13 +549,14 @@ export const warehouseRouter = router({
     // WAREHOUSE LOCATIONS
     // ============================================================
 
-    locationList: tenantProcedure
+    locationList: authorizedProcedure
         .input(
             z.object({
                 warehouseId: z.string().uuid(),
             }),
         )
         .query(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "read", "Item");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -584,7 +596,7 @@ export const warehouseRouter = router({
                 .orderBy(asc(warehouseLocations.name));
         }),
 
-    locationCreate: tenantProcedure
+    locationCreate: authorizedProcedure
         .input(
             z.object({
                 warehouseId: z.string().uuid(),
@@ -601,6 +613,7 @@ export const warehouseRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -694,7 +707,7 @@ export const warehouseRouter = router({
             return location;
         }),
 
-    locationUpdate: tenantProcedure
+    locationUpdate: authorizedProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
@@ -713,6 +726,7 @@ export const warehouseRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -824,13 +838,14 @@ export const warehouseRouter = router({
             return updated;
         }),
 
-    locationDelete: tenantProcedure
+    locationDelete: authorizedProcedure
         .input(
             z.object({
                 id: z.string().uuid(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -885,7 +900,7 @@ export const warehouseRouter = router({
             };
         }),
 
-    warehousePermissionCreate: tenantProcedure
+    warehousePermissionCreate: authorizedProcedure
         .input(
             z.object({
                 warehouseId: z.string().uuid(),
@@ -897,6 +912,7 @@ export const warehouseRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -986,7 +1002,7 @@ export const warehouseRouter = router({
             return permission;
         }),
 
-    stockTransfer: tenantProcedure
+    stockTransfer: authorizedProcedure
         .input(
             z.object({
                 sourceWarehouseId: z.string().uuid(),
@@ -998,6 +1014,7 @@ export const warehouseRouter = router({
             }),
         )
         .mutation(async ({ ctx, input }) => {
+        requireCan(ctx.ability, "update", "Item");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
@@ -1154,7 +1171,8 @@ export const warehouseRouter = router({
     // INVENTORY SETTINGS
     // ============================================================
 
-    inventorySettingsGet: tenantProcedure.query(async ({ ctx }) => {
+    inventorySettingsGet: authorizedProcedure.query(async ({ ctx }) => {
+        requireCan(ctx.ability, "read", "Item");
         if (!ctx.businessId) {
             throw new TRPCError({
                 code: "BAD_REQUEST",
@@ -1173,7 +1191,7 @@ export const warehouseRouter = router({
         return settings ?? null;
     }),
 
-    inventorySettingsUpdate: tenantProcedure
+    inventorySettingsUpdate: authorizedProcedure
         .input(
             z.object({
                 salesWarehouseId: z.string().uuid().nullable().optional(),
@@ -1185,6 +1203,7 @@ export const warehouseRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
