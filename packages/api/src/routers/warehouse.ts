@@ -1150,17 +1150,20 @@ export const warehouseRouter = router({
                 .where(eq(inventorySettings.businessId, businessId))
                 .limit(1);
 
+            // Only the defaults that were sent change; leaving one out keeps
+            // it, so a screen showing some of them can't clear the others.
+            const keys = [
+                "salesWarehouseId",
+                "purchaseWarehouseId",
+                "salesReturnWarehouseId",
+                "purchaseReturnWarehouseId",
+                "productionWarehouseId",
+                "stockAdjustmentWarehouseId",
+            ] as const;
             const data = {
-                salesWarehouseId: input.salesWarehouseId ?? null,
-                purchaseWarehouseId: input.purchaseWarehouseId ?? null,
-                salesReturnWarehouseId:
-                    input.salesReturnWarehouseId ?? null,
-                purchaseReturnWarehouseId:
-                    input.purchaseReturnWarehouseId ?? null,
-                productionWarehouseId:
-                    input.productionWarehouseId ?? null,
-                stockAdjustmentWarehouseId:
-                    input.stockAdjustmentWarehouseId ?? null,
+                ...Object.fromEntries(
+                    keys.filter((k) => input[k] !== undefined).map((k) => [k, input[k]]),
+                ),
                 updatedAt: new Date(),
             };
 

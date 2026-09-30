@@ -9,6 +9,7 @@
  */
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { stockGroups } from "@fintranzact/db";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -110,6 +111,15 @@ export const inventoryReportsRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       requireCan(ctx.ability, "read", "Report");
+      // The item (and variant) must belong to this business: the opening
+      // balance below reads its stock total by id.
+      const [owned] = (await ctx.db.execute(sql`
+        SELECT 1 FROM items i
+        ${input.variantId ? sql`JOIN item_variants v ON v.item_id = i.id AND v.id = ${input.variantId}` : sql``}
+        WHERE i.id = ${input.itemId} AND i.business_id = ${ctx.businessId}
+      `)) as unknown[];
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND", message: "Item not found" });
+
       const variant = input.variantId
         ? sql`m.variant_id = ${input.variantId}`
         : sql`m.variant_id IS NULL`;
