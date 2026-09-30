@@ -150,16 +150,16 @@
 | gst.gstr1CSV | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr1Json | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr3b | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
-| gst.gstr9 | query | authorized | read:GstReport | ✓ | ✓ | ✗ | ✗ | ✓ |
-| gst.gstr9Json | query | authorized | read:GstReport | ✓ | ✓ | ✗ | ✗ | ✓ |
+| gst.gstr9 | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
+| gst.gstr9Json | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
 | gstr2b.ignoreRecord | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
 | gstr2b.linkInvoice | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
-| gstr2b.missingIn2B | query | authorized | read:GstReport | ✓ | ✓ | ✗ | ✗ | ✓ |
-| gstr2b.missingInBooks | query | authorized | read:GstReport | ✓ | ✓ | ✗ | ✗ | ✓ |
-| gstr2b.records | query | authorized | read:GstReport | ✓ | ✓ | ✗ | ✗ | ✓ |
-| gstr2b.summary | query | authorized | read:GstReport | ✓ | ✓ | ✗ | ✗ | ✓ |
+| gstr2b.missingIn2B | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
+| gstr2b.missingInBooks | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
+| gstr2b.records | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
+| gstr2b.summary | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
 | gstr2b.upload | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
-| gstr2b.uploads | query | authorized | read:GstReport | ✓ | ✓ | ✗ | ✗ | ✓ |
+| gstr2b.uploads | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
 | hsn.search | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | hsn.validate | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | hsn.validateForTurnover | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -273,6 +273,11 @@
 | platform.plans | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.recordPayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.resetPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.roadmapCreate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.roadmapDelete | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.roadmapList | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.roadmapReorder | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.roadmapUpdate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenant | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
