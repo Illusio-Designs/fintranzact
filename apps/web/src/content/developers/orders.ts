@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./api-base";
 export const ordersEndpoints: EndpointGroup = {
   id: "orders",
   title: "Order Fulfilment",
-  description: "What is still pending on sales orders, purchase orders, goods receipt notes and delivery challans, and short-closing them. The documents themselves are created and listed through their own routers (`salesOrder.*`, `purchaseOrder.*`, `goodsReceiptNote.*`, `deliveryChallan.*`) and fulfilled with `document.convert`. A line's pending quantity is what was ordered minus what documents made from it (linked by `referenceDocumentId`) have taken, matched by variant, item or — for free-text lines — name, and converted between units. A sales order is fulfilled by delivery challans and invoices, a purchase order by GRNs and invoices, and a GRN or delivery challan by invoices. A document's fulfilment status is `cancelled` (cancelled or deleted), `closed` (short-closed), otherwise `open`, `partial` or `fulfilled` from its lines.",
+  description: "What is still pending on sales orders, purchase orders, goods receipt notes and delivery challans, and short-closing them. The documents themselves are created and listed through their own routers (`salesOrder.*`, `purchaseOrder.*`, `goodsReceiptNote.*`, `deliveryChallan.*`) and fulfilled with `document.convert`. A line's pending quantity is what was ordered minus what documents made from it (linked by `referenceDocumentId`) have taken, matched by variant, item or — for free-text lines — name, and converted between units. A sales order is fulfilled by delivery challans and invoices, a purchase order by GRNs and invoices, and a GRN or delivery challan by invoices. A document's fulfilment status is `cancelled` (cancelled or deleted), `closed` (short-closed), otherwise `open`, `partial` or `fulfilled` from its lines. Billed and free (\"10 + 1\") quantities are tracked apart, and a line is fulfilled only when both are. On a GRN only the accepted quantity counts toward its purchase order; rejected goods stay pending there.",
   endpoints: [
     {
       id: "orders-pending",
@@ -21,7 +21,7 @@ export const ordersEndpoints: EndpointGroup = {
         { name: "overdueOnly", type: "boolean", required: false, description: "Only documents whose due date has passed", default: "false" },
       ],
       output: {
-        description: "One row per pending line. Quantities are numbers in the line's own unit; `rate` is the unit price after the line discount and `pendingValue = rate × pending` (before tax), both strings. `totals.documents` counts distinct documents with pending lines.",
+        description: "One row per pending line (billed or free). Quantities are numbers in the line's own unit; `freePending` is free goods still owed, and on purchase orders `rejected` is what GRNs rejected that is still pending. `rate` is the unit price after the line discount and `pendingValue = rate × pending` (before tax; free goods carry no value), both strings. `totals.documents` counts distinct documents with pending lines.",
         example: {
           data: [
             {
@@ -39,6 +39,8 @@ export const ordersEndpoints: EndpointGroup = {
               ordered: 200,
               fulfilled: 120,
               pending: 80,
+              freePending: 2,
+              rejected: 0,
               rate: "95.00",
               pendingValue: "7600.00",
             },
@@ -74,7 +76,7 @@ console.log(\`\${totals.documents} orders, ₹\${totals.value} pending\`);`,
         { name: "id", type: "string (UUID)", required: true, description: "Sales order, purchase order, GRN or delivery challan ID" },
       ],
       output: {
-        description: "`status` is the fulfilment status. Each line carries `lineId`, `itemId`, `variantId`, `itemName`, `description`, `selectedUnit`, `conversionFactor`, `unitPrice`, `taxPercent`, `discountPercent`, `ordered`, `fulfilled` and `pending`.",
+        description: "`status` is the fulfilment status. Each line carries `lineId`, `itemId`, `variantId`, `itemName`, `description`, `selectedUnit`, `conversionFactor`, `unitPrice`, `taxPercent`, `discountPercent`, `ordered`, `fulfilled` and `pending`, the free quantity's `freeOrdered`, `freeFulfilled` and `freePending`, and `rejected` (purchase orders: rejected on its GRNs and still pending; GRNs: rejected on the line). For a GRN, `rejections` lists each rejected line with `reason`, `rejected`, `returned` (on purchase returns / debit notes made from it) and `open`; it is empty for other types. For a GRN, `linkedDocuments` also includes those returns and debit notes.",
         example: {
           id: "so-uuid",
           documentType: "sales_order",
@@ -97,8 +99,13 @@ console.log(\`\${totals.documents} orders, ₹\${totals.value} pending\`);`,
               ordered: 200,
               fulfilled: 120,
               pending: 80,
+              freeOrdered: 20,
+              freeFulfilled: 12,
+              freePending: 8,
+              rejected: 0,
             },
           ],
+          rejections: [],
           linkedDocuments: [
             { id: "dc-uuid", documentType: "delivery_challan", type: "sale", invoiceNumber: "DC-00007", invoiceDate: "2026-09-15T00:00:00.000Z", status: "sent", totalAmount: "13452.00" },
           ],

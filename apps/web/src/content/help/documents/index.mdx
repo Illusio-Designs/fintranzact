@@ -73,12 +73,13 @@ A conversion creates a **new** document from an existing one. The new document i
 | Invoice | Credit Note | **Issue Credit Note** on the invoice detail |
 | Invoice | Sales Return | **Create Sales Return** on the invoice detail |
 | Sales / purchase order, GRN | Challan, GRN or invoice | See [Orders & GRN](/help/inventory/orders-and-grn) |
+| GRN (goods rejected on receipt) | Purchase return or debit note | **Return rejected goods** on the GRN (web). See [Rejections on goods receipt](/help/inventory/orders-and-grn) |
 
 ### What gets copied
 
 When you convert a quotation, proforma or challan:
 
-- **Copied:** party, sale/purchase side, every line item (item, name, line notes, quantity, unit, price, tax %, line discount %), notes, terms and conditions, other charges and round-off.
+- **Copied:** party, sale/purchase side, every line item (item, name, line notes, quantity, free quantity, unit, price, tax %, line discount %), notes, terms and conditions, other charges and round-off.
 - **Date:** the new invoice keeps the **source document's date and due date**. It is not re-dated to today. Edit the draft invoice if you need today's date.
 - **Invoice-level discount** is not carried over.
 - **Challans only:** only quantities still **not billed** can be copied (on the web you choose how much of each line to bill), and the invoice is saved **without moving stock again** — the challan already took the goods out. If you bill only part of a challan, its other charges and round-off are not copied.

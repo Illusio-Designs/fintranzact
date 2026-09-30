@@ -90,13 +90,17 @@ The **Refunded** chip currently shows an error, because sales returns have no re
 On the web form, the whole-document **Discount** box is not saved on returns, and **Round Off** only counts toward the saved total when the return also has a charge.
 :::
 
+### Free goods on returns
+
+If the invoice gave goods free ("10 + 1"), the return copies the **Free** quantity too, so the free piece comes back into stock with the rest. Lower it if the customer kept it. Free goods carry no value, so they don't change the return's total. A return can also be for free goods alone, at no value.
+
 ## Purchase returns
 
-Purchase returns have no page in the web or mobile app. Create them with the [CLI](/help/ai/cli) or the [MCP server](/help/ai/mcp-server). When you pass the original purchase invoice as the reference, the same rules as sales returns apply: the return counts toward that invoice's adjustable amount, and the invoice shows as **Adjusted** once fully covered.
+Purchase returns have no page of their own in the web or mobile app. On the web, goods rejected on a goods receipt note go back with **Return rejected goods** on the GRN — that return moves no stock, since rejected goods never came in (see [Rejections on goods receipt](/help/inventory/orders-and-grn)). Other purchase returns are created with the [CLI](/help/ai/cli) or the [MCP server](/help/ai/mcp-server). When you pass the original purchase invoice as the reference, the same rules as sales returns apply: the return counts toward that invoice's adjustable amount, and the invoice shows as **Adjusted** once fully covered.
 
-A purchase return:
+A purchase return (other than one for rejected goods):
 
-- takes the goods **out** of stock, from the purchase-return warehouse in your inventory settings (or the warehouse you pass);
+- takes the goods **out** of stock (free goods included), from the purchase-return warehouse in your inventory settings (or the warehouse you pass);
 - reduces what you owe the supplier in the [party ledger](/help/parties/party-ledger);
 - is posted in the derived accounts as **Dr Payable / Cr Purchase Returns + Input GST**;
 - takes its tax back out of the ITC in GSTR-3B Table 4. It is an inward document, so it does not appear in GSTR-1.

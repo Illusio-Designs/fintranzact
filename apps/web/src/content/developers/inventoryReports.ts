@@ -22,16 +22,16 @@ export const inventoryReportsEndpoints: EndpointGroup = {
         { name: "toDate", type: "string (ISO datetime)", required: true, description: "Period end, inclusive (e.g. `2026-09-30T23:59:59.999Z`)" },
       ],
       output: {
-        description: "Opening, inward, outward and closing quantities plus the movement lines in date order. `documentId` is set only when the line came from a sales/purchase document (invoice, challan, GRN, return) so a UI can link to it. `truncated` is true when the 2000-line cap was hit.",
+        description: "Opening, inward, outward and closing quantities plus the movement lines in date order. `documentId` is set only when the line came from a sales/purchase document (invoice, challan, GRN, return) so a UI can link to it. `free` is how much of a document's movement was free goods (\"10 + 1\"), in base units (0 otherwise). `truncated` is true when the 2000-line cap was hit.",
         example: {
           opening: 120,
           inward: 250,
           outward: 185.5,
           closing: 184.5,
           lines: [
-            { id: "movement-uuid-1", date: "2026-04-03T10:15:00.000Z", particulars: "Purchase PUR-0018", party: "Shree Balaji Traders", warehouse: "Main Godown", documentId: "invoice-uuid-1", inward: 250, outward: 0, balance: 370 },
-            { id: "movement-uuid-2", date: "2026-04-11T14:02:00.000Z", particulars: "Sale INV-0412", party: "Sharma Textiles Pvt Ltd", warehouse: "Main Godown", documentId: "invoice-uuid-2", inward: 0, outward: 180, balance: 190 },
-            { id: "movement-uuid-3", date: "2026-05-02T09:00:00.000Z", particulars: "Adjustment — Damaged in transit", party: null, warehouse: "Main Godown", documentId: null, inward: 0, outward: 5.5, balance: 184.5 },
+            { id: "movement-uuid-1", date: "2026-04-03T10:15:00.000Z", particulars: "Purchase PUR-0018", party: "Shree Balaji Traders", warehouse: "Main Godown", documentId: "invoice-uuid-1", inward: 250, outward: 0, free: 10, balance: 370 },
+            { id: "movement-uuid-2", date: "2026-04-11T14:02:00.000Z", particulars: "Sale INV-0412", party: "Sharma Textiles Pvt Ltd", warehouse: "Main Godown", documentId: "invoice-uuid-2", inward: 0, outward: 180, free: 0, balance: 190 },
+            { id: "movement-uuid-3", date: "2026-05-02T09:00:00.000Z", particulars: "Adjustment — Damaged in transit", party: null, warehouse: "Main Godown", documentId: null, inward: 0, outward: 5.5, free: 0, balance: 184.5 },
           ],
           truncated: false,
         },

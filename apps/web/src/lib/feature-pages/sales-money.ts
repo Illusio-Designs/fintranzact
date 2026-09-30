@@ -119,6 +119,7 @@ export const SALES_MONEY_PAGES: FeaturePage[] = [
           "Sale and purchase invoices in one place, switched with a Sales / Purchases toggle.",
           "Items with variants (size, colour) and alternate units (box, dozen, piece), priced and stocked correctly.",
           "Customer price levels, so wholesale and retail customers get their own prices automatically.",
+          "Free goods schemes (10 + 1): the free pieces leave stock and print on the invoice, while GST is charged on the billed quantity only.",
           "Composition businesses get invoices without GST columns, and unregistered businesses can bill without any GST breakdown.",
           "Statuses from draft to sent, partly paid, paid and overdue, updated as payments are recorded.",
         ],

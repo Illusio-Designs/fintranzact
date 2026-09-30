@@ -754,7 +754,7 @@ export const INVENTORY_PAGES: FeaturePage[] = [
       },
       {
         title: "Goods receipt notes",
-        body: "Bring stock in when goods arrive, before the supplier's bill. The purchase invoice made from the GRN does not add them twice.",
+        body: "Bring stock in when goods arrive, before the supplier's bill. Record what you accept and what you reject, with a reason; only accepted goods come in.",
         icon: PackageReceiveIcon,
       },
       {
@@ -815,6 +815,15 @@ export const INVENTORY_PAGES: FeaturePage[] = [
         ],
       },
       {
+        heading: "Free goods and rejected goods",
+        points: [
+          "Enter a free quantity next to the billed one (10 + 1). Stock moves by 11, while price, GST and totals use the 10.",
+          "Orders track free goods apart, and every conversion carries them to the challan, GRN, invoice or return.",
+          "On a GRN, rejected goods never enter stock and stay pending on the purchase order until replaced or short-closed.",
+          "Send rejected goods back on a purchase return or debit note straight from the GRN, without touching stock.",
+        ],
+      },
+      {
         heading: "Pending reports",
         points: [
           "Pending Sales Orders and Pending Purchase Orders show what is still to be delivered or received.",
@@ -836,6 +845,10 @@ export const INVENTORY_PAGES: FeaturePage[] = [
       {
         q: "I typed a new invoice instead of converting the challan. What now?",
         a: "The goods were taken out of stock twice and the challan still shows as not billed. Delete the separate invoice and convert the challan instead.",
+      },
+      {
+        q: "Part of a delivery was damaged. How do I record it?",
+        a: "Receive the purchase order on a GRN with the good quantity accepted and the rest rejected with a reason. Only the accepted goods come into stock, and the order keeps expecting the rest.",
       },
       {
         q: "What is the difference between short-close and deleting?",

@@ -79,6 +79,22 @@ Composition dealers pay GST at a flat rate on turnover and cannot collect GST fr
 
 If your business turnover is below the GST threshold (₹20 lakh for services, ₹40 lakh for goods in most states), you do not need to register. Fintranzact generates invoices without any GST breakdown. You can still use the invoicing features fully.
 
+## Free goods
+
+A line can carry a **Free** quantity next to the billed **Qty**: a "10 + 1" scheme, where the customer pays for 10 and gets 1 more at no charge.
+
+The free goods carry **no separate consideration**, so nothing is charged on them:
+
+- **Taxable value and GST come from the billed quantity only.** 10 + 1 of an item at ₹100 with 18% GST is a taxable value of ₹1,000 and GST of ₹180. Nothing is charged on the free piece.
+- **Stock moves by billed + free.** 11 leave stock on that sale.
+- The e-invoice reports the free goods in the item's **FreeQty** field, and the e-way bill counts them in the quantity moving (not in its value).
+
+This follows the usual Indian practice for free goods given with a sale: when the free goods are part of the same bargain, the price paid is the price for everything supplied, so GST is charged on the transaction value (the 10) and not separately on the free piece (CBIC Circular 92/11/2019-GST, "buy one get one free" and similar offers). Input tax credit on the free goods you bought or made isn't reversed in that case.
+
+:::caution[Free samples and gifts are different]
+Goods given away on their own, with no sale they belong to (free samples, gifts), are not covered by the scheme above: input tax credit on them has to be reversed under section 17(5)(h) of the CGST Act, and goods given free to a related person (or gifts to an employee worth more than ₹50,000 in a year) can be a taxable supply at open-market value under Schedule I. Fintranzact doesn't work that out for you. Talk to your accountant, and record any reversal with a journal entry.
+:::
+
 ## Credit notes and debit notes
 
 ### Credit notes
