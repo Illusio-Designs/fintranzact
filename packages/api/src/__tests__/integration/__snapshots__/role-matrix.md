@@ -65,6 +65,10 @@
 | barcode.setup | query | authorized | read:Business | ✓ | ✓ | ✓ | ✓ | ✓ |
 | barcode.symbol | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ |
 | barcode.update | mutation | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ |
+| batch.create | mutation | authorized | update:Item | ✓ | ✓ | ✓ | ✗ | ✗ |
+| batch.delete | mutation | authorized | delete:Item | ✓ | ✓ | ✗ | ✗ | ✗ |
+| batch.list | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ |
+| batch.update | mutation | authorized | update:Item | ✓ | ✓ | ✓ | ✗ | ✗ |
 | business.addMember | mutation | tenant | — (+ requireTenantAdmin) | ✓ | ✓ | ✗ | ✗ | ✗ |
 | business.auditTrail | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | business.canCreate | query | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -166,6 +170,7 @@
 | import.importTransfers | mutation | authorized | manage:Import | ✓ | ✓ | ✗ | ✗ | ✗ |
 | import.reconcileDirectPayments | mutation | authorized | manage:Import | ✓ | ✓ | ✗ | ✗ | ✗ |
 | inventoryReports.ageing | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
+| inventoryReports.batchStock | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | inventoryReports.deadStock | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | inventoryReports.godownSummary | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | inventoryReports.movementSummary | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |

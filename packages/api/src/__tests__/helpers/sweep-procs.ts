@@ -133,7 +133,7 @@ function idKind(router: string, name: string): string | undefined {
   if (router === "ewayBill") return "ewayBill";
   if (router === "platform") return undefined;
   const byRouter: Record<string, string> = {
-    account: "account", bankAccount: "bankAccount", business: "business", expense: "expense",
+    account: "account", bankAccount: "bankAccount", batch: "batch", business: "business", expense: "expense",
     item: "item", journal: "journal", party: "party", payment: "payment", priceLevel: "priceLevel",
     recurringInvoice: "recurringInvoice", shipment: "shipment", stockGroup: "stockGroup", target: "target",
   };
@@ -174,6 +174,7 @@ const FIELD_KIND: Record<string, string> = {
   paymentIds: "payment",
   expenseId: "expense",
   bankTransactionId: "bankTransaction",
+  batchId: "batch",
   businessMemberId: "businessMember",
   shipmentId: "shipment",
   destinationWarehouseId: "warehouse2",

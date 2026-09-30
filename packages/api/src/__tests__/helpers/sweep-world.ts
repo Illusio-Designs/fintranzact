@@ -223,7 +223,7 @@ export function firstId(result: unknown): string | undefined {
 
 const today = () => new Date().toISOString();
 const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
-const uniq = () => randomUUID().slice(0, 6);
+const uniq = () => randomUUID().slice(0, 8);
 
 type Seeder = (b: SweepBusiness, c: Caller) => Promise<string | undefined>;
 
@@ -368,6 +368,7 @@ export const SEEDERS: Array<[string, Seeder]> = [
     const sql = getTestClient();
     return sqlId(sql`SELECT id FROM share_links WHERE document_id = ${b.ids.invoice!} LIMIT 1`);
   }],
+  ["batch", gen("batch.create", (b) => ({ itemId: b.ids.item, variantId: undefined, batchNumber: `B-${b.tag}-${uniq()}` }))],
   ["stockAdjustment", async (b, c) => firstId(await c.item.adjustStock({ itemId: b.ids.item!, quantity: "1", reason: `Adj ${b.tag}` } as never))],
   // Records that only come from outside systems: inserted directly.
   ["bankImport", async (b) => {
@@ -413,7 +414,7 @@ export const SEEDERS: Array<[string, Seeder]> = [
   // Org-level records.
   ["apiKey", async (b, c) => firstId(await c.apiKey.create({ name: `Key ${b.tag} ${uniq()}` } as never))],
   ["invitation", async (b, c) => {
-    const email = `invitee.${uniq()}@sweep.in`;
+    const email = `invitee.${randomUUID()}@sweep.in`;
     await c.tenant.inviteMember({ email, role: "seller" } as never);
     const sql = getTestClient();
     return sqlId(sql`SELECT id FROM invitations WHERE tenant_id = ${b.tenantId} AND email = ${email}`);
@@ -422,13 +423,13 @@ export const SEEDERS: Array<[string, Seeder]> = [
   // A throwaway org member who belongs to this business: the target of
   // member-management calls, so the sweep never removes or re-roles a real user.
   ["memberUser", async (b) => {
-    const u = await createUser({ email: `member.${uniq()}@sweep.in`, name: `Member ${b.tag}` });
+    const u = await createUser({ email: `member.${randomUUID()}@sweep.in`, name: `Member ${b.tag}` });
     await addMember(b.tenantId, u.id, "seller");
     await getTenantTestDb().insert(businessMembers).values({ businessId: b.id, userId: u.id, role: "member" });
     return u.id;
   }],
   ["memberBusinessMember", async (b) => {
-    const u = await createUser({ email: `member.${uniq()}@sweep.in`, name: `Member ${b.tag}` });
+    const u = await createUser({ email: `member.${randomUUID()}@sweep.in`, name: `Member ${b.tag}` });
     await addMember(b.tenantId, u.id, "seller");
     const [row] = await getTenantTestDb().insert(businessMembers).values({ businessId: b.id, userId: u.id, role: "member" }).returning();
     return row!.id;

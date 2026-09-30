@@ -173,10 +173,9 @@ async function requireBusinessAccess(
 ) {
   const access = await verifyBusinessAccess(ctx.db, businessId, ctx.tenantId, ctx.user.id);
   if (!access.ok) {
-    throw new TRPCError({
-      code: access.error === "Business not found" ? "NOT_FOUND" : "FORBIDDEN",
-      message: access.error,
-    });
+    // One answer for "no such business" and "not yours" (as getById always
+    // gave), so other organisations' business ids can't be probed.
+    throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this business" });
   }
 }
 
