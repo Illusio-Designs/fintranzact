@@ -16,6 +16,19 @@ schema_version: "2.0"
 exceptions:
   mobile:
     not-applicable:
+      # --- Inventory (warehouses & stock) ---
+      # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
+      - stock.adjust
+      - stock.adjustments
+      - stock.balances
+      - stock.setup
+      - stock.transfer
+      - stock.transfers
+      - stock.verify
+      - stock.warehouses
+      - warehouse.premiseList
+      - warehouse.warehouseCreate
+
       # --- Multi-Tenancy ---
       # Mobile derives current tenant info from auth.me; the standalone
       # procedure is not needed.
@@ -267,6 +280,19 @@ exceptions:
 
   cli:
     not-applicable:
+      # --- Inventory (warehouses & stock) ---
+      # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
+      - stock.adjust
+      - stock.adjustments
+      - stock.balances
+      - stock.setup
+      - stock.transfer
+      - stock.transfers
+      - stock.verify
+      - stock.warehouses
+      - warehouse.premiseList
+      - warehouse.warehouseCreate
+
       # --- Auth ---
       # Browser-only flows requiring email verification links / callbacks.
       - auth.requestEmailChange
@@ -352,6 +378,19 @@ exceptions:
 
   mcp:
     not-applicable:
+      # --- Inventory (warehouses & stock) ---
+      # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
+      - stock.adjust
+      - stock.adjustments
+      - stock.balances
+      - stock.setup
+      - stock.transfer
+      - stock.transfers
+      - stock.verify
+      - stock.warehouses
+      - warehouse.premiseList
+      - warehouse.warehouseCreate
+
       # --- Auth ---
       # MCP runs as a pre-authenticated server-side agent. It does not
       # manage user sessions, login flows, or account registration.
