@@ -26,7 +26,7 @@
  * The sandbox is used by default so no accidental production calls occur in dev.
  */
 
-import { eq, and, desc, gte, lte, sql, isNull } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -214,6 +214,8 @@ export const ewayBillRouter = router({
       }
 
       // ── 5. Check for existing active EWB ──────────────────────────────────
+      // Look for a live bill specifically: an invoice can also carry
+      // cancelled ones, and an unordered limit(1) could land on those.
       const [existingEwb] = await ctx.db
         .select({ id: ewayBills.id, status: ewayBills.status })
         .from(ewayBills)
@@ -221,11 +223,12 @@ export const ewayBillRouter = router({
           and(
             eq(ewayBills.businessId, ctx.businessId),
             eq(ewayBills.invoiceId, invoice.id),
+            inArray(ewayBills.status, ["generated", "active"]),
           ),
         )
         .limit(1);
 
-      if (existingEwb && (existingEwb.status === "generated" || existingEwb.status === "active")) {
+      if (existingEwb) {
         throw new TRPCError({
           code: "CONFLICT",
           message: "An active E-Way Bill already exists for this invoice",
@@ -547,6 +550,10 @@ export const ewayBillRouter = router({
 
       if (!ewb) {
         throw new TRPCError({ code: "NOT_FOUND", message: "E-Way Bill not found" });
+      }
+
+      if (ewb.status === "cancelled") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot extend a cancelled E-Way Bill" });
       }
 
       if (!ewb.validUpto) {
