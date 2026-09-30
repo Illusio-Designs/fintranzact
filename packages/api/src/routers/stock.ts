@@ -3,11 +3,12 @@
  * adjustments and physical stock verification.
  *
  * Stock has two layers. items/item_variants.stock_quantity is the business-wide
- * total every other screen reads (and many paths — opening stock, imports,
- * merges — write only that). stock_balances splits it by warehouse. Stock that
- * no warehouse accounts for yet ("unplaced") is treated as sitting in the
- * default warehouse: read paths add it there, and write paths move it there
- * for real before touching a balance, so the two layers stay consistent.
+ * total every other screen reads. stock_balances splits it by warehouse. Every
+ * write path records a movement that updates both, but data from before
+ * warehouses existed can leave stock that no warehouse accounts for
+ * ("unplaced"). It is treated as sitting in the default warehouse: read paths
+ * add it there, and write paths move it there for real before touching a
+ * balance, so the two layers stay consistent.
  */
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
