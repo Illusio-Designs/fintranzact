@@ -11,6 +11,7 @@ import { DataTab } from "@/components/settings/DataTab";
 import { AccountTab } from "@/components/settings/AccountTab";
 import { StoreTab } from "@/components/settings/StoreTab";
 import { POSTab } from "@/components/settings/POSTab";
+import { BarcodesTab } from "@/components/settings/BarcodesTab";
 import { ShippingTab } from "@/components/settings/ShippingTab";
 import { WhatsNextModal } from "@/components/settings/WhatsNextModal";
 import { ImportWizard } from "@/components/ImportWizard";
@@ -256,6 +257,7 @@ function SettingsPage() {
           {tab === "account" && <AccountTab />}
           {tab === "store" && <StoreTab />}
           {tab === "pos" && biz && <POSTab biz={biz} />}
+          {tab === "barcodes" && <BarcodesTab />}
         </div>
       </div>
     </div>

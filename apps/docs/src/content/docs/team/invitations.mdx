@@ -50,7 +50,7 @@ Admins and Owners can **revoke** any pending invitation at any time. Revoking in
 
 Pending invitations are also accessible via the CLI and MCP server:
 
-- CLI: `hisaabo tenant invitations`
+- CLI: `fintranzact tenant invitations`
 - MCP: `tenant_pending_invitations` tool
 
 ## What happens to new users
@@ -103,11 +103,11 @@ If you reach the limit, you must upgrade your plan or revoke an existing invitat
 
 ```bash
 # List pending invitations
-hisaabo tenant invitations
-hisaabo tenant invitations --json
+fintranzact tenant invitations
+fintranzact tenant invitations --json
 
 # Revoke a pending invitation
-hisaabo tenant revoke-invitation <invitationId>
+fintranzact tenant revoke-invitation <invitationId>
 ```
 
 ### MCP tools

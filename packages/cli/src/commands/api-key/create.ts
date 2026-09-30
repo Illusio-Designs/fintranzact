@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT, hasColor } from "../../output.js";
 import chalk from "chalk";
@@ -10,7 +10,7 @@ interface ApiKeyCreateOpts {
 
 export async function apiKeyCreateCommand(opts: ApiKeyCreateOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   if (!opts.name || opts.name.trim().length === 0) {
     fatalError("--name is required.", EXIT.USAGE);
@@ -40,8 +40,8 @@ export async function apiKeyCreateCommand(opts: ApiKeyCreateOpts): Promise<void>
         process.stdout.write("  " + chalk.cyan.bold(key) + "\n");
         process.stdout.write("\n");
       }
-      process.stdout.write(chalk.dim("  Use it with: hisaabo login --token <key>\n"));
-      process.stdout.write(chalk.dim("  Or set env: HISAABO_TOKEN=" + (key ? key : "<key>") + "\n"));
+      process.stdout.write(chalk.dim("  Use it with: fintranzact login --token <key>\n"));
+      process.stdout.write(chalk.dim("  Or set env: FINTRANZACT_TOKEN=" + (key ? key : "<key>") + "\n"));
       if (id) process.stdout.write(chalk.dim(`\n  Key ID: ${id}\n`));
       process.stdout.write("\n");
     } else {
@@ -49,15 +49,15 @@ export async function apiKeyCreateCommand(opts: ApiKeyCreateOpts): Promise<void>
       process.stdout.write("IMPORTANT: Copy this key now — it will NOT be shown again.\n\n");
       if (key) {
         process.stdout.write(`Your API key:\n\n  ${key}\n\n`);
-        process.stdout.write(`Usage: hisaabo login --token ${key}\n`);
+        process.stdout.write(`Usage: fintranzact login --token ${key}\n`);
       }
       if (id) process.stdout.write(`Key ID: ${id}\n`);
       process.stdout.write("\n");
     }
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "forbidden") fatalError(err.message, EXIT.FORBIDDEN);
       if (err.code === "validation_failed") {
         const msgs = Object.entries(err.fields)

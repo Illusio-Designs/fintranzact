@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -530,8 +531,10 @@ const PAGE_SIZE = 30;
 
 function StoreOrdersPage() {
   const [status, setStatus] = useState<OrderStatus | "">("");
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search customer, order #…");
   const [page, setPage] = useState(1);
+  // A new search starts from the first page.
+  useEffect(() => setPage(1), [search]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inlineConfirmId, setInlineConfirmId] = useState<string | null>(null);
   const [inlineCancelId, setInlineCancelId] = useState<string | null>(null);
@@ -586,197 +589,189 @@ function StoreOrdersPage() {
         description="Manage and track customer orders from your store"
       />
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <PillTabs
-          tabs={STATUS_TABS}
-          value={status}
-          onChange={(v) => {
-            setStatus(v as OrderStatus | "");
-            setPage(1);
-          }}
-        />
-        <div className="ml-auto">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+        {/* Filters */}
+        <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
+          <PillTabs
+            tabs={STATUS_TABS}
+            value={status}
+            onChange={(v) => {
+              setStatus(v as OrderStatus | "");
               setPage(1);
             }}
-            placeholder="Search customer, order #…"
-            className="h-8 rounded-lg border border-border-light bg-surface-0 px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-brand-500 w-52"
           />
         </div>
-      </div>
 
-      {/* Content */}
-      {isLoading ? (
-        <SkeletonRows count={7} height="h-14" />
-      ) : !orders.length ? (
-        <EmptyState
-          icon={
-            <Icon icon={ShoppingBag01Icon} size={24} className="text-text-tertiary" />
-          }
-          title="No orders found"
-          description={
-            status
-              ? `No ${STATUS_CONFIG[status as OrderStatus]?.label.toLowerCase() ?? status} orders${search ? ` matching "${search}"` : ""}.`
-              : search
-                ? `No orders matching "${search}".`
-                : "No store orders have been placed yet."
-          }
-        />
-      ) : (
-        <div className="card overflow-hidden">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="whitespace-nowrap">Order #</th>
-                <th>Customer</th>
-                <th className="whitespace-nowrap">Phone</th>
-                <th className="text-center">Items</th>
-                <th className="text-right whitespace-nowrap">Total</th>
-                <th>Status</th>
-                <th className="whitespace-nowrap">Date</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="group cursor-pointer"
-                  onClick={() => setSelectedId(order.id)}
-                >
-                  <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
-                    {order.orderNumber}
-                  </td>
-                  <td className="font-medium">
-                    <span className="block truncate max-w-[180px]">
-                      {order.customerName}
-                    </span>
-                  </td>
-                  <td className="text-text-secondary font-mono text-[13px] whitespace-nowrap">
-                    {order.customerPhone ?? "—"}
-                  </td>
-                  <td className="text-center tabular-nums text-text-secondary">
-                    {order.itemCount}
-                  </td>
-                  <td className="text-right tabular-nums font-medium whitespace-nowrap">
-                    {formatCurrency(order.totalAmount)}
-                  </td>
-                  <td className="whitespace-nowrap">
-                    <OrderStatusBadge status={order.status} />
-                  </td>
-                  <td className="text-text-secondary text-xs whitespace-nowrap">
-                    {formatDate(order.createdAt)}
-                  </td>
-                  <td
-                    className="text-right"
-                    onClick={(e) => e.stopPropagation()}
+        {/* Content */}
+        {isLoading ? (
+          <div className="p-4">
+            <SkeletonRows count={7} height="h-14" />
+          </div>
+        ) : !orders.length ? (
+          <EmptyState
+            icon={
+              <Icon icon={ShoppingBag01Icon} size={24} className="text-text-tertiary" />
+            }
+            title="No orders found"
+            description={
+              status
+                ? `No ${STATUS_CONFIG[status as OrderStatus]?.label.toLowerCase() ?? status} orders${search ? ` matching "${search}"` : ""}.`
+                : search
+                  ? `No orders matching "${search}".`
+                  : "No store orders have been placed yet."
+            }
+          />
+        ) : (
+          <div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th className="whitespace-nowrap">Order #</th>
+                  <th>Customer</th>
+                  <th className="whitespace-nowrap">Phone</th>
+                  <th className="text-center">Items</th>
+                  <th className="text-right whitespace-nowrap">Total</th>
+                  <th>Status</th>
+                  <th className="whitespace-nowrap">Date</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((order) => (
+                  <tr
+                    key={order.id}
+                    className="group cursor-pointer"
+                    onClick={() => setSelectedId(order.id)}
                   >
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {order.status === "pending" && (
-                        <button
-                          onClick={() => setInlineConfirmId(order.id)}
-                          className="text-xs px-2 py-1 rounded font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
-                        >
-                          Confirm
-                        </button>
-                      )}
-                      {order.status === "confirmed" && (
-                        <button
-                          onClick={() =>
-                            updateStatus.mutate({
-                              orderId: order.id,
-                              status: "preparing",
-                            })
-                          }
-                          disabled={updateStatus.isPending}
-                          className="text-xs px-2 py-1 rounded font-medium text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-colors disabled:opacity-50"
-                        >
-                          Preparing
-                        </button>
-                      )}
-                      {order.status === "preparing" && (
-                        <button
-                          onClick={() =>
-                            updateStatus.mutate({
-                              orderId: order.id,
-                              status: "ready",
-                            })
-                          }
-                          disabled={updateStatus.isPending}
-                          className="text-xs px-2 py-1 rounded font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors disabled:opacity-50"
-                        >
-                          Ready
-                        </button>
-                      )}
-                      {order.status === "ready" && (
-                        <button
-                          onClick={() =>
-                            updateStatus.mutate({
-                              orderId: order.id,
-                              status: "delivered",
-                            })
-                          }
-                          disabled={updateStatus.isPending}
-                          className="text-xs px-2 py-1 rounded font-medium text-green-600 hover:bg-green-50 dark:hover:bg-green-950 transition-colors disabled:opacity-50"
-                        >
-                          Delivered
-                        </button>
-                      )}
-                      {order.status !== "delivered" &&
-                        order.status !== "cancelled" && (
+                    <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
+                      {order.orderNumber}
+                    </td>
+                    <td className="font-medium">
+                      <span className="block truncate max-w-[180px]">
+                        {order.customerName}
+                      </span>
+                    </td>
+                    <td className="text-text-secondary font-mono text-[13px] whitespace-nowrap">
+                      {order.customerPhone ?? "—"}
+                    </td>
+                    <td className="text-center tabular-nums text-text-secondary">
+                      {order.itemCount}
+                    </td>
+                    <td className="text-right tabular-nums font-medium whitespace-nowrap">
+                      {formatCurrency(order.totalAmount)}
+                    </td>
+                    <td className="whitespace-nowrap">
+                      <OrderStatusBadge status={order.status} />
+                    </td>
+                    <td className="text-text-secondary text-xs whitespace-nowrap">
+                      {formatDate(order.createdAt)}
+                    </td>
+                    <td
+                      className="text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {order.status === "pending" && (
                           <button
-                            onClick={() => setInlineCancelId(order.id)}
-                            className="text-xs px-2 py-1 rounded font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                            onClick={() => setInlineConfirmId(order.id)}
+                            className="text-xs px-2 py-1 rounded font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
                           >
-                            Cancel
+                            Confirm
                           </button>
                         )}
-                      <button
-                        onClick={() => setSelectedId(order.id)}
-                        className="text-xs px-2 py-1 rounded font-medium text-text-secondary hover:bg-surface-2 transition-colors"
-                      >
-                        View
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                        {order.status === "confirmed" && (
+                          <button
+                            onClick={() =>
+                              updateStatus.mutate({
+                                orderId: order.id,
+                                status: "preparing",
+                              })
+                            }
+                            disabled={updateStatus.isPending}
+                            className="text-xs px-2 py-1 rounded font-medium text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-colors disabled:opacity-50"
+                          >
+                            Preparing
+                          </button>
+                        )}
+                        {order.status === "preparing" && (
+                          <button
+                            onClick={() =>
+                              updateStatus.mutate({
+                                orderId: order.id,
+                                status: "ready",
+                              })
+                            }
+                            disabled={updateStatus.isPending}
+                            className="text-xs px-2 py-1 rounded font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors disabled:opacity-50"
+                          >
+                            Ready
+                          </button>
+                        )}
+                        {order.status === "ready" && (
+                          <button
+                            onClick={() =>
+                              updateStatus.mutate({
+                                orderId: order.id,
+                                status: "delivered",
+                              })
+                            }
+                            disabled={updateStatus.isPending}
+                            className="text-xs px-2 py-1 rounded font-medium text-green-600 hover:bg-green-50 dark:hover:bg-green-950 transition-colors disabled:opacity-50"
+                          >
+                            Delivered
+                          </button>
+                        )}
+                        {order.status !== "delivered" &&
+                          order.status !== "cancelled" && (
+                            <button
+                              onClick={() => setInlineCancelId(order.id)}
+                              className="text-xs px-2 py-1 rounded font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        <button
+                          onClick={() => setSelectedId(order.id)}
+                          className="text-xs px-2 py-1 rounded font-medium text-text-secondary hover:bg-surface-2 transition-colors"
+                        >
+                          View
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-          {/* Pagination */}
-          {data && data.total > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border-light">
-              <p className="text-xs text-text-tertiary">
-                Showing {(page - 1) * PAGE_SIZE + 1}–
-                {Math.min(page * PAGE_SIZE, data.total)} of{" "}
-                {data.total.toLocaleString()} orders
-              </p>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="text-xs px-2.5 py-1 rounded-lg border border-border-light text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={page * PAGE_SIZE >= data.total}
-                  className="text-xs px-2.5 py-1 rounded-lg border border-border-light text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
+            {/* Pagination */}
+            {data && data.total > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border-light">
+                <p className="text-xs text-text-tertiary">
+                  Showing {(page - 1) * PAGE_SIZE + 1}–
+                  {Math.min(page * PAGE_SIZE, data.total)} of{" "}
+                  {data.total.toLocaleString()} orders
+                </p>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="text-xs px-2.5 py-1 rounded-lg border border-border-light text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => p + 1)}
+                    disabled={page * PAGE_SIZE >= data.total}
+                    className="text-xs px-2.5 py-1 rounded-lg border border-border-light text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Detail panel */}
       <OrderDetailPanel

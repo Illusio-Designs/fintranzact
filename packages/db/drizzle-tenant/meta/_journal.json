@@ -124,15 +124,15 @@
     {
       "idx": 17,
       "version": "7",
-      "when": 1790756884942,
-      "tag": "0017_invoice_stock_mode",
+      "when": 1790759610687,
+      "tag": "0017_barcode_setup",
       "breakpoints": true
     },
     {
       "idx": 18,
       "version": "7",
-      "when": 1790761621506,
-      "tag": "0018_negative_stock_policy",
+      "when": 1790765053019,
+      "tag": "0018_inventory_stock_controls",
       "breakpoints": true
     }
   ]

@@ -27,7 +27,7 @@
   (function () {
     function setPersona(persona) {
       document.documentElement.setAttribute('data-persona', persona);
-      localStorage.setItem('hisaabo-docs-persona', persona);
+      localStorage.setItem('fintranzact-docs-persona', persona);
       document.querySelectorAll('.persona-btn').forEach(function (btn) {
         var isActive = btn.getAttribute('data-persona-target') === persona;
         btn.classList.toggle('active', isActive);
@@ -38,7 +38,7 @@
     // Apply stored/default state. Coerce any legacy value (e.g. "developer"
     // from the 3-persona iteration) back to "all" so stale localStorage
     // doesn't leave the UI in a state with no active pill.
-    var stored = localStorage.getItem('hisaabo-docs-persona');
+    var stored = localStorage.getItem('fintranzact-docs-persona');
     setPersona(stored === 'ca' || stored === 'business' ? stored : 'all');
 
     // Event delegation — works regardless of how many copies of the buttons exist

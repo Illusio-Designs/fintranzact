@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { outputJSON, EXIT, fatalError, success } from "../../output.js";
 
@@ -8,7 +8,7 @@ export async function storeItemsToggleCommand(opts: {
   json?: boolean;
 }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   if (!opts.enable && !opts.disable) {
     fatalError("At least one of --enable or --disable is required", EXIT.USAGE);
@@ -30,9 +30,9 @@ export async function storeItemsToggleCommand(opts: {
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }

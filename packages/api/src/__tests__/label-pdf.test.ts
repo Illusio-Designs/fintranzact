@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   generateLabelSheetPDF,
   LABEL_PRESETS,
+  TYPE_PRESET,
   type LabelItem,
 } from "../lib/label-pdf.js";
 
@@ -137,5 +138,44 @@ describe("generateLabelSheetPDF", () => {
     });
 
     expect(printed).toBe(1);
+  });
+
+  it("prints each barcode type on its fixed label size", async () => {
+    const pageSize = (pdf: Buffer) => {
+      const m = pdf.toString("latin1").match(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/);
+      return m ? [Math.round(Number(m[1]) / (72 / 25.4)), Math.round(Number(m[2]) / (72 / 25.4))] : null;
+    };
+    const cases = [
+      ["ean13", "2000000000039", [50, 25]],
+      ["code128", "ACME-HC12-0004", [75, 25]],
+      ["qr", "FT000004", [78, 25]],
+    ] as const;
+    for (const [symbology, barcode, size] of cases) {
+      const { pdf, printed, skipped } = await generateLabelSheetPDF({
+        businessName: "Acme",
+        presetId: TYPE_PRESET[symbology],
+        symbology,
+        items: [item({ barcode, price: "₹25" })],
+        showPrice: true,
+        showName: true,
+      });
+      expect(printed).toBe(1);
+      expect(skipped).toEqual([]);
+      expect(pageSize(pdf)).toEqual(size);
+    }
+  });
+
+  it("falls back to Code 128 when an EAN-13 business prints a non-EAN code", async () => {
+    const { printed, skipped } = await generateLabelSheetPDF({
+      businessName: "Acme",
+      presetId: TYPE_PRESET.ean13,
+      symbology: "ean13",
+      items: [item({ barcode: "SUPPLIER-77" }), item({ barcode: "2000000000038" })],
+      showPrice: false,
+      showName: true,
+    });
+    // A wrong EAN check digit is still printable as Code 128.
+    expect(printed).toBe(2);
+    expect(skipped).toEqual([]);
   });
 });

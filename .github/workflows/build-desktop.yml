@@ -24,16 +24,16 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: hisaabo-linux
+            artifact_name: fintranzact-linux
             artifact_paths: |
               apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
               apps/desktop/src-tauri/target/release/bundle/deb/*.deb
           - os: macos-latest
-            artifact_name: hisaabo-macos
+            artifact_name: fintranzact-macos
             artifact_paths: |
               apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
           - os: windows-latest
-            artifact_name: hisaabo-windows
+            artifact_name: fintranzact-windows
             artifact_paths: |
               apps/desktop/src-tauri/target/release/bundle/msi/*.msi
               apps/desktop/src-tauri/target/release/bundle/nsis/*.exe

@@ -62,7 +62,7 @@ const PersonaContext = createContext<PersonaContextValue>({
   clearPersona: () => {},
 });
 
-const STORAGE_KEY = "hisaabo_docs_persona";
+const STORAGE_KEY = "fintranzact_docs_persona";
 
 export function PersonaProvider({ children }: { children: ReactNode }) {
   const [persona, setPersonaState] = useState<Persona>(

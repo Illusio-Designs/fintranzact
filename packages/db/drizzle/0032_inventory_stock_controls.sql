@@ -1,3 +1,4 @@
+ALTER TABLE "inventory_settings" ADD COLUMN "negative_stock_policy" text DEFAULT 'warn' NOT NULL;--> statement-breakpoint
 ALTER TABLE "invoices" ADD COLUMN "stock_mode" text DEFAULT 'legacy' NOT NULL;--> statement-breakpoint
 -- Documents that already post stock movements are tracked.
 UPDATE "invoices" SET "stock_mode" = 'tracked'

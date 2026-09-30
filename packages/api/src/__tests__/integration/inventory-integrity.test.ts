@@ -341,7 +341,7 @@ describe("warehouse choice and negative stock policy", () => {
       lineItems: [line(item.id, "12")],
     } as never);
     expect(await balanceAt(item.id, godown.id)).toBe(12);
-    expect((await caller().invoice.getById({ id: purchase.id })).warehouseId).toBe(godown.id);
+    expect((await caller().invoice.getById({ id: purchase.id }))?.warehouseId).toBe(godown.id);
 
     const settings = await caller().stock.settings();
     await caller().invoice.update({ id: purchase.id, warehouseId: settings.purchaseWarehouseId!, lineItems: [line(item.id, "12")] } as never);

@@ -7,7 +7,7 @@ import {
   transformTransfer,
 } from "./transforms.js";
 
-registerAdapter("hisaabo", {
+registerAdapter("fintranzact", {
   transformParty,
   transformItem,
   transformInvoice,

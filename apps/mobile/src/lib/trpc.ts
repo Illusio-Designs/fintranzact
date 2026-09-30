@@ -16,7 +16,7 @@ export const trpc = createTRPCReact<AppRouter>();
 /**
  * Build the common tRPC link options — URL, transformer, and headers.
  *
- * WHY `X-Requested-With: hisaabo` IS UNCONDITIONAL:
+ * WHY `X-Requested-With: fintranzact` IS UNCONDITIONAL:
  * The API enforces a CSRF check on every cookie-authenticated POST
  * (`packages/api/src/lib/csrf-middleware.ts` and the matching tRPC
  * middleware in `packages/api/src/trpc.ts`). Any request without this
@@ -41,7 +41,7 @@ export function commonOptions() {
     transformer: superjson,
     headers() {
       const headers: Record<string, string> = {
-        "X-Requested-With": "hisaabo",
+        "X-Requested-With": "fintranzact",
       };
       const token = getTokenSync();
       if (token) {
@@ -85,7 +85,7 @@ export const vanillaTRPC = createVanillaClient<AppRouter>({
           // vanilla client because the very first call it makes
           // (`auth.me` on app launch) can replay a stale native
           // cookie jar entry.
-          "X-Requested-With": "hisaabo",
+          "X-Requested-With": "fintranzact",
         };
         const token = getTokenSync();
         if (token) {

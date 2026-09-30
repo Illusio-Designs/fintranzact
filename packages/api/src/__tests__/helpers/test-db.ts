@@ -237,6 +237,7 @@ export async function truncateAllTables(): Promise<void> {
       parties,
       businesses,
       -- Control schema
+      share_links,
       access_tokens,
       api_keys,
       magic_link_tokens,

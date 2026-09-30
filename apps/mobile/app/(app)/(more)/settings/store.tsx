@@ -214,7 +214,7 @@ export default function StoreSettingsScreen() {
               <View style={styles.slugRow}>
                 <View style={styles.slugPrefix}>
                   <Text style={styles.slugPrefixText} numberOfLines={1}>
-                    store.hisaabo.in/
+                    store.fintranzact.com/
                   </Text>
                 </View>
                 <TextInput

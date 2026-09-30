@@ -101,7 +101,7 @@ export async function createContext(opts: FetchCreateContextFnOptions) {
   let authTokenKind: "access" | "refresh" | "cookie" | null = null;
 
   if (rawBearerToken) {
-    if (rawBearerToken.startsWith("hisaabo_key_")) {
+    if (rawBearerToken.startsWith("fintranzact_key_")) {
       // ── API key path ─────────────────────────────────────────────────────
       const keyHash = createHash("sha256").update(rawBearerToken).digest("hex");
 
@@ -430,7 +430,7 @@ export function getSessionIdFromRequest(req: Request): string | null {
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
     // API keys and short-lived access tokens are not session IDs — skip them
-    if (!token.startsWith("hisaabo_key_") && !token.startsWith("at_")) return token;
+    if (!token.startsWith("fintranzact_key_") && !token.startsWith("at_")) return token;
   }
   return null;
 }

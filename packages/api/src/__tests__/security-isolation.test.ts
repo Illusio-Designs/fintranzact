@@ -144,7 +144,7 @@ describe("SECURITY — middleware chain: procedure tier access control", () => {
   it("protectedProcedure: passes when user is present", () => {
     const ctx = createAuthenticatedContext({
       id: "u-001",
-      email: "test@hisaabo.in",
+      email: "test@fintranzact.com",
       name: "Test User",
     });
     expect(() => checkIsAuthenticated(ctx)).not.toThrow();
@@ -162,7 +162,7 @@ describe("SECURITY — middleware chain: procedure tier access control", () => {
 
   it("tenantProcedure: throws BAD_REQUEST when user present but no tenantId", () => {
     const ctx = createTestContext({
-      user: { id: "u-002", email: "t@hisaabo.in", name: "T" },
+      user: { id: "u-002", email: "t@fintranzact.com", name: "T" },
     });
     expect(() => checkHasTenantAccess(ctx)).toThrow(TRPCError);
     try {
@@ -175,7 +175,7 @@ describe("SECURITY — middleware chain: procedure tier access control", () => {
 
   it("tenantProcedure: passes when user and tenantId both present", () => {
     const ctx = createTestContext({
-      user: { id: "u-003", email: "t@hisaabo.in", name: "T" },
+      user: { id: "u-003", email: "t@fintranzact.com", name: "T" },
       tenantId: "tenant-abc",
     });
     expect(() => checkHasTenantAccess(ctx)).not.toThrow();
@@ -183,7 +183,7 @@ describe("SECURITY — middleware chain: procedure tier access control", () => {
 
   it("businessProcedure: throws BAD_REQUEST when businessId is null", () => {
     const ctx = createTestContext({
-      user: { id: "u-004", email: "t@hisaabo.in", name: "T" },
+      user: { id: "u-004", email: "t@fintranzact.com", name: "T" },
       tenantId: "tenant-abc",
       // no businessId
     });
@@ -199,7 +199,7 @@ describe("SECURITY — middleware chain: procedure tier access control", () => {
   it("businessProcedure: passes when businessId is present", () => {
     const ctx = createBusinessContext({
       userId: "u-005",
-      email: "t@hisaabo.in",
+      email: "t@fintranzact.com",
       name: "T",
       tenantId: "tenant-abc",
       businessId: "biz-xyz",
@@ -508,17 +508,17 @@ describe("SECURITY — rate limit origin detection scopes limits correctly", () 
    *
    * An attacker who can spoof their origin header could bypass external rate
    * limits by pretending to be a trusted origin. The isSameOrigin check must
-   * validate against configured CORS origins and *.hisaabo.in subdomain pattern.
+   * validate against configured CORS origins and *.fintranzact.com subdomain pattern.
    */
 
   // Replicate the isSameOrigin logic from server.ts for pure-function testing
-  const TEST_CORS_ORIGINS = ["http://localhost:5173", "https://app.hisaabo.in"];
+  const TEST_CORS_ORIGINS = ["http://localhost:5173", "https://app.fintranzact.com"];
 
   function isSameOrigin(origin: string, corsOrigins: string[]): boolean {
     if (!origin) return true; // No origin = server-side call
     if (corsOrigins.some((allowed) => origin === allowed)) return true;
-    // Match *.hisaabo.in subdomains — mirrors server.ts regex
-    if (/^https?:\/\/([a-z0-9-]+\.)?hisaabo\.in$/i.test(origin)) return true;
+    // Match *.fintranzact.com subdomains — mirrors server.ts regex
+    if (/^https?:\/\/([a-z0-9-]+\.)?fintranzact\.in$/i.test(origin)) return true;
     return false;
   }
 
@@ -528,24 +528,24 @@ describe("SECURITY — rate limit origin detection scopes limits correctly", () 
 
   it("configured CORS origin is treated as same-origin", () => {
     expect(isSameOrigin("http://localhost:5173", TEST_CORS_ORIGINS)).toBe(true);
-    expect(isSameOrigin("https://app.hisaabo.in", TEST_CORS_ORIGINS)).toBe(true);
+    expect(isSameOrigin("https://app.fintranzact.com", TEST_CORS_ORIGINS)).toBe(true);
   });
 
-  it("*.hisaabo.in subdomains are treated as same-origin", () => {
-    expect(isSameOrigin("https://store.hisaabo.in", TEST_CORS_ORIGINS)).toBe(true);
-    expect(isSameOrigin("https://beta.hisaabo.in", TEST_CORS_ORIGINS)).toBe(true);
-    expect(isSameOrigin("http://hisaabo.in", TEST_CORS_ORIGINS)).toBe(true);
+  it("*.fintranzact.com subdomains are treated as same-origin", () => {
+    expect(isSameOrigin("https://store.fintranzact.com", TEST_CORS_ORIGINS)).toBe(true);
+    expect(isSameOrigin("https://beta.fintranzact.com", TEST_CORS_ORIGINS)).toBe(true);
+    expect(isSameOrigin("http://fintranzact.com", TEST_CORS_ORIGINS)).toBe(true);
   });
 
   it("arbitrary external origins are NOT same-origin", () => {
     expect(isSameOrigin("https://evil.com", TEST_CORS_ORIGINS)).toBe(false);
-    expect(isSameOrigin("https://hisaabo.in.attacker.com", TEST_CORS_ORIGINS)).toBe(false);
-    expect(isSameOrigin("https://fakehisaabo.in", TEST_CORS_ORIGINS)).toBe(false);
+    expect(isSameOrigin("https://fintranzact.com.attacker.com", TEST_CORS_ORIGINS)).toBe(false);
+    expect(isSameOrigin("https://fakefintranzact.com", TEST_CORS_ORIGINS)).toBe(false);
   });
 
-  it("hisaabo.in look-alike with extra path component is NOT same-origin", () => {
-    // Prevent matching "https://evil.com/hisaabo.in" — regex anchors to end of hostname
-    expect(isSameOrigin("https://evil.com/hisaabo.in", TEST_CORS_ORIGINS)).toBe(false);
+  it("fintranzact.com look-alike with extra path component is NOT same-origin", () => {
+    // Prevent matching "https://evil.com/fintranzact.com" — regex anchors to end of hostname
+    expect(isSameOrigin("https://evil.com/fintranzact.com", TEST_CORS_ORIGINS)).toBe(false);
   });
 
   it("rate limit tier for unauthenticated external is 10/min (lowest tier)", () => {

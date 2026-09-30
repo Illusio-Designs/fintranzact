@@ -95,7 +95,7 @@ export function getGranularity(preset: string): "week" | "month" | "fy" {
 }
 
 export function useDateRange(pageKey: string, defaultPreset: DatePreset = "all") {
-  const storageKey = `hisaabo-daterange-${pageKey}`;
+  const storageKey = `fintranzact-daterange-${pageKey}`;
 
   const [preset, setPresetState] = useState<DatePreset>(() => {
     if (typeof window === "undefined") return defaultPreset;

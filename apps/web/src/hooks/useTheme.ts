@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 
 type Theme = "light" | "dark" | "system";
 
-const STORAGE_KEY = "hisaabo-theme";
+const STORAGE_KEY = "fintranzact-theme";
 
 function getSystemPreference(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";

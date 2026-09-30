@@ -23,7 +23,7 @@
     "directory": "packages/mcp"
   },
   "bin": {
-    "hisaabo-mcp": "./dist/index.js"
+    "fintranzact-mcp": "./dist/index.js"
   },
   "files": [
     "dist",

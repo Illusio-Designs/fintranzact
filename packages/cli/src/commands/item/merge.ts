@@ -1,5 +1,5 @@
 import * as readline from "readline";
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT, success } from "../../output.js";
 
@@ -11,7 +11,7 @@ interface MergeOpts {
 
 export async function itemMergeCommand(sourceId: string, targetId: string, opts: MergeOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   if (!opts.yes && process.stdin.isTTY) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -41,10 +41,10 @@ export async function itemMergeCommand(sourceId: string, targetId: string, opts:
     success(`Merged ${sourceId} into ${targetId}`);
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
       if (err.code === "not_found") fatalError(`Item not found`, EXIT.NOT_FOUND);
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }

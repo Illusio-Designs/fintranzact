@@ -5,7 +5,7 @@
  * then saves the browser storage state (cookies) so all test projects
  * can reuse the session without logging in again.
  *
- * Login page flow: Register tab (username, email, password) → Save
+ * Sign-up flow: /register (username, email, password) → Create free account
  * Business creation: done via API (more reliable than filling the complex form)
  */
 import { test as setup, expect } from "@playwright/test";
@@ -22,7 +22,7 @@ setup("authenticate", async ({ page, request }) => {
   const authDir = path.dirname(AUTH_FILE);
   if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
-  const email = `e2e-${Date.now()}@test.hisaabo.in`;
+  const email = `e2e-${Date.now()}@test.fintranzact.com`;
   const password = "Test@1234!";
   const name = "E2E Test User";
 

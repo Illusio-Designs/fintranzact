@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT } from "../../output.js";
 import { formatAmount, quarterRange, formatDate } from "../../format.js";
@@ -25,7 +25,7 @@ function resolveMonthYear(opts: GstOpts): { month: number; year: number } {
 
 export async function gstR1Command(opts: GstOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { month, year } = resolveMonthYear(opts);
 
   try {
@@ -48,12 +48,12 @@ export async function gstR1Command(opts: GstOpts): Promise<void> {
     }
     console.log();
     console.log("  Use --json for full report data.");
-    console.log("  Use: hisaabo gst r1-csv to download GSTN-compatible CSV.\n");
+    console.log("  Use: fintranzact gst r1-csv to download GSTN-compatible CSV.\n");
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -62,7 +62,7 @@ export async function gstR1Command(opts: GstOpts): Promise<void> {
 
 export async function gstR3bCommand(opts: GstOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { month, year } = resolveMonthYear(opts);
 
   try {
@@ -85,9 +85,9 @@ export async function gstR3bCommand(opts: GstOpts): Promise<void> {
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -96,7 +96,7 @@ export async function gstR3bCommand(opts: GstOpts): Promise<void> {
 
 export async function gstR1CsvCommand(opts: GstOpts & { output?: string }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { month, year } = resolveMonthYear(opts);
 
   try {
@@ -106,9 +106,9 @@ export async function gstR1CsvCommand(opts: GstOpts & { output?: string }): Prom
     console.log(`  Saved: ${outputPath}`);
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -117,7 +117,7 @@ export async function gstR1CsvCommand(opts: GstOpts & { output?: string }): Prom
 
 export async function gstR9Command(financialYear: string, opts: GstOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const report = await client.gst.gstr9({ financialYear });
@@ -141,9 +141,9 @@ export async function gstR9Command(financialYear: string, opts: GstOpts): Promis
     console.log("  Use --json for full GSTR-9 data.\n");
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -152,7 +152,7 @@ export async function gstR9Command(financialYear: string, opts: GstOpts): Promis
 
 export async function gstr2bUploadsCommand(opts: GstOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.gst.gstr2bUploads();
@@ -184,9 +184,9 @@ export async function gstr2bUploadsCommand(opts: GstOpts): Promise<void> {
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));

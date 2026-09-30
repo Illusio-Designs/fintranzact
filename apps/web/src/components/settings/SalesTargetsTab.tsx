@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Modal } from "@/components/ui/Modal";
+import { SlideOver } from "@/components/ui/SlideOver";
 import { Listbox } from "@/components/ui/Listbox";
 import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
@@ -369,12 +369,33 @@ function TargetFormModal({
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <Modal
+    <SlideOver
       open={open}
       onClose={onClose}
       title={editTarget ? "Edit Target" : "Set Sales Target"}
+      footer={
+        <div className="flex justify-end gap-3">
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="sales-target-form"
+            className="btn-primary"
+            disabled={isPending}
+          >
+            {isPending
+              ? editTarget
+                ? "Saving..."
+                : "Creating..."
+              : editTarget
+                ? "Save Changes"
+                : "Create Target"}
+          </button>
+        </div>
+      }
     >
-      <form onSubmit={handleSubmit} className="space-y-4 py-1">
+      <form id="sales-target-form" onSubmit={handleSubmit} className="space-y-4">
         {!editTarget && (
           <Listbox
             label="Seller"
@@ -478,27 +499,8 @@ function TargetFormModal({
             placeholder="e.g. Focus on enterprise accounts this quarter"
           />
         </div>
-
-        <div className="flex gap-3 pt-1">
-          <button type="button" className="btn-secondary flex-1" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="btn-primary flex-1"
-            disabled={isPending}
-          >
-            {isPending
-              ? editTarget
-                ? "Saving..."
-                : "Creating..."
-              : editTarget
-                ? "Save Changes"
-                : "Create Target"}
-          </button>
-        </div>
       </form>
-    </Modal>
+    </SlideOver>
   );
 }
 

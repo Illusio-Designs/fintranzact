@@ -17,8 +17,9 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { logAudit } from "./audit.js";
-import { syncDocumentStock } from "./inventory-service.js";
+import { resolveInvoiceWarehouse, syncDocumentStock } from "./inventory-service.js";
 import { buildBusinessDateFilter } from "./business-date.js";
+import { escapeLike } from "./escape-like.js";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 
@@ -109,6 +110,14 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
         }
         if (input.partyId) conditions.push(eq(invoices.partyId, input.partyId));
         conditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
+        if (input.search) {
+          const term = `%${escapeLike(input.search)}%`;
+          conditions.push(
+            sql`(${invoices.invoiceNumber} ILIKE ${term} OR EXISTS (
+              SELECT 1 FROM ${parties} WHERE ${parties.id} = ${invoices.partyId} AND ${parties.name} ILIKE ${term}
+            ))`
+          );
+        }
 
         const offset = (input.page - 1) * input.limit;
 
@@ -331,6 +340,15 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             }
           }
 
+          // Check a picked warehouse before the document row references it.
+          if (input.warehouseId && config.stockEffect !== "none" && !input.skipStockAdjustment) {
+            await resolveInvoiceWarehouse(tx, {
+              businessId: ctx.businessId,
+              operation: "sale",
+              warehouseId: input.warehouseId,
+            });
+          }
+
           const [result] = await tx
             .insert(invoices)
             .values({
@@ -353,6 +371,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               termsAndConditions: input.termsAndConditions,
               referenceDocumentId: input.referenceDocumentId || null,
               stockMode: config.stockEffect === "none" || input.skipStockAdjustment ? "none" : "tracked",
+              warehouseId: config.stockEffect === "none" || input.skipStockAdjustment ? null : input.warehouseId ?? null,
               createdByUserId: ctx.user!.id,
               createdByName: ctx.user!.name,
             })
@@ -369,7 +388,6 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             businessId: ctx.businessId,
             documentId: result.id,
             event: "CREATE",
-            warehouseId: input.warehouseId,
             enforceStock: true,
             actorUserId: ctx.user!.id,
           });

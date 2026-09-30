@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/bin/hisaabo.ts"],
+  entry: ["src/bin/fintranzact.ts"],
   format: ["esm"],
   target: "node20",
   outDir: "dist/bin",

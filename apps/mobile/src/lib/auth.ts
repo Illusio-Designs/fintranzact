@@ -1,6 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 
-const TOKEN_KEY = "hisaabo_session_token";
+const TOKEN_KEY = "fintranzact_session_token";
 let cachedToken: string | null = null;
 
 export async function getToken(): Promise<string | null> {

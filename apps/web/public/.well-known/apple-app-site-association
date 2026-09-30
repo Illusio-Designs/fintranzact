@@ -3,7 +3,7 @@
     "apps": [],
     "details": [
       {
-        "appID": "TEAM_ID.in.hisaabo.app",
+        "appID": "TEAM_ID.in.fintranzact.app",
         "paths": [
           "/auth/verify*",
           "/invite/*"

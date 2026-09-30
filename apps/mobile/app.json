@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Hisaabo",
-    "slug": "hisaabo",
+    "name": "Fintranzact",
+    "slug": "fintranzact",
     "version": "0.9.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "hisaabo",
+    "scheme": "fintranzact",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
@@ -13,9 +13,9 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "in.hisaabo.app",
+      "bundleIdentifier": "in.fintranzact.app",
       "associatedDomains": [
-        "applinks:app.hisaabo.in"
+        "applinks:app.fintranzact.com"
       ]
     },
     "android": {
@@ -23,7 +23,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#5b5bd6"
       },
-      "package": "in.hisaabo.app",
+      "package": "in.fintranzact.app",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -31,7 +31,7 @@
           "data": [
             {
               "scheme": "https",
-              "host": "app.hisaabo.in"
+              "host": "app.fintranzact.com"
             }
           ],
           "category": [
@@ -50,7 +50,7 @@
       [
         "expo-contacts",
         {
-          "contactsPermission": "Hisaabo needs access to your contacts to help you create invoices faster."
+          "contactsPermission": "Fintranzact needs access to your contacts to help you create invoices faster."
         }
       ],
       "@react-native-community/datetimepicker"

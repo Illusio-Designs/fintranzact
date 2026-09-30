@@ -77,8 +77,8 @@
     if (mql.addEventListener) mql.addEventListener('change', onOsChange);
     else if (mql.addListener) mql.addListener(onOsChange);
 
-    if (!document.__hisaaboThemeDelegated) {
-      document.__hisaaboThemeDelegated = true;
+    if (!document.__fintranzactThemeDelegated) {
+      document.__fintranzactThemeDelegated = true;
       document.addEventListener('click', function (e) {
         var btn = e.target.closest('.theme-btn');
         if (!btn) return;
@@ -91,8 +91,8 @@
     }
 
     // Keyboard: arrow-key navigation within the radio group.
-    if (!document.__hisaaboThemeKeysDelegated) {
-      document.__hisaaboThemeKeysDelegated = true;
+    if (!document.__fintranzactThemeKeysDelegated) {
+      document.__fintranzactThemeKeysDelegated = true;
       document.addEventListener('keydown', function (e) {
         var btn = e.target.closest('.theme-btn');
         if (!btn) return;

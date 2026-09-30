@@ -36,8 +36,8 @@ test.describe("Empty States", () => {
     await page.getByPlaceholder(/search invoices/i).fill(NONSENSE);
     await waitForSearchResults(page);
 
-    const rows = await page.locator("tbody tr").count();
-    expect(rows).toBe(0);
+    // Retries until the debounced search has replaced the list.
+    await expect(page.locator("tbody tr")).toHaveCount(0);
     await expect(
       page.getByText(/no.*invoices/i).first()
     ).toBeVisible({ timeout: 5_000 });
@@ -52,8 +52,8 @@ test.describe("Empty States", () => {
     await page.getByPlaceholder(/search/i).first().fill(NONSENSE);
     await waitForSearchResults(page);
 
-    const rows = await page.locator("tbody tr").count();
-    expect(rows).toBe(0);
+    // Retries until the debounced search has replaced the list.
+    await expect(page.locator("tbody tr")).toHaveCount(0);
     await expect(
       page.getByText(/no.*parties|no.*results/i).first()
     ).toBeVisible({ timeout: 5_000 });
@@ -68,8 +68,8 @@ test.describe("Empty States", () => {
     await page.getByPlaceholder(/search items/i).fill(NONSENSE);
     await waitForSearchResults(page);
 
-    const rows = await page.locator("tbody tr").count();
-    expect(rows).toBe(0);
+    // Retries until the debounced search has replaced the list.
+    await expect(page.locator("tbody tr")).toHaveCount(0);
     await expect(
       page.getByText(/no.*items/i).first()
     ).toBeVisible({ timeout: 5_000 });
@@ -86,8 +86,8 @@ test.describe("Empty States", () => {
       .fill(NONSENSE);
     await waitForSearchResults(page);
 
-    const rows = await page.locator("tbody tr").count();
-    expect(rows).toBe(0);
+    // Retries until the debounced search has replaced the list.
+    await expect(page.locator("tbody tr")).toHaveCount(0);
     await expect(
       page.getByText(/no expenses/i).first()
     ).toBeVisible({ timeout: 5_000 });

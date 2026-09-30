@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError, type ExpenseCreateInput } from "../../client.js";
+import { FintranzactClient, FintranzactApiError, type ExpenseCreateInput } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT, success } from "../../output.js";
 import { formatINR } from "../../format.js";
@@ -15,7 +15,7 @@ interface UpdateOpts {
 
 export async function expenseUpdateCommand(id: string, opts: UpdateOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   // Build update payload — only send fields explicitly provided
   const data: Partial<ExpenseCreateInput> = {};
@@ -45,10 +45,10 @@ export async function expenseUpdateCommand(id: string, opts: UpdateOpts): Promis
     success(`Updated: ${expense.category} — ${formatINR(expense.amount)}`);
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
       if (err.code === "not_found") fatalError(`Expense not found: ${id}`, EXIT.NOT_FOUND);
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "forbidden") fatalError(err.message, EXIT.FORBIDDEN);
       if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);

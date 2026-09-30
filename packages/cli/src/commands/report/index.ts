@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError, type DaybookEntry } from "../../client.js";
+import { FintranzactClient, FintranzactApiError, type DaybookEntry } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import {
   fatalError, outputJSON, outputTable, outputTSV, outputCSV, EXIT, type ColumnDef,
@@ -22,7 +22,7 @@ function resolveRange(opts: ReportOpts): { from: string; to: string } {
 
 export async function reportDaybookCommand(opts: ReportOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from, to } = resolveRange(opts);
 
   try {
@@ -60,9 +60,9 @@ export async function reportDaybookCommand(opts: ReportOpts): Promise<void> {
     }
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -71,7 +71,7 @@ export async function reportDaybookCommand(opts: ReportOpts): Promise<void> {
 
 export async function reportOutstandingCommand(opts: ReportOpts & { type?: string }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.reports.outstanding({
@@ -101,9 +101,9 @@ export async function reportOutstandingCommand(opts: ReportOpts & { type?: strin
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -112,7 +112,7 @@ export async function reportOutstandingCommand(opts: ReportOpts & { type?: strin
 
 export async function reportTaxSummaryCommand(opts: ReportOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from, to } = resolveRange(opts);
 
   try {
@@ -137,9 +137,9 @@ export async function reportTaxSummaryCommand(opts: ReportOpts): Promise<void> {
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -148,7 +148,7 @@ export async function reportTaxSummaryCommand(opts: ReportOpts): Promise<void> {
 
 export async function reportItemSalesCommand(opts: ReportOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from, to } = resolveRange(opts);
 
   try {
@@ -173,9 +173,9 @@ export async function reportItemSalesCommand(opts: ReportOpts): Promise<void> {
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -184,7 +184,7 @@ export async function reportItemSalesCommand(opts: ReportOpts): Promise<void> {
 
 export async function reportStockSummaryCommand(opts: { json?: boolean; category?: string }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.reports.stockSummary({ category: opts.category });
@@ -208,9 +208,9 @@ export async function reportStockSummaryCommand(opts: { json?: boolean; category
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -239,7 +239,7 @@ export async function reportSalesRegisterCommand(
   opts: ReportOpts & { partyId?: string },
 ): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from, to } = resolveRange(opts);
 
   try {
@@ -278,9 +278,9 @@ export async function reportSalesRegisterCommand(
     }
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -293,7 +293,7 @@ export async function reportPurchaseRegisterCommand(
   opts: ReportOpts & { partyId?: string },
 ): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from, to } = resolveRange(opts);
 
   try {
@@ -332,9 +332,9 @@ export async function reportPurchaseRegisterCommand(
     }
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -361,7 +361,7 @@ export async function reportPartyStatementCommand(
   opts: ReportOpts,
 ): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from, to } = resolveRange(opts);
 
   try {
@@ -403,9 +403,9 @@ export async function reportPartyStatementCommand(
     }
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -418,7 +418,7 @@ export async function reportPaymentSummaryCommand(
   opts: ReportOpts & { type?: string },
 ): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from, to } = resolveRange(opts);
 
   try {
@@ -457,9 +457,9 @@ export async function reportPaymentSummaryCommand(
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -470,7 +470,7 @@ export async function reportPaymentSummaryCommand(
 
 export async function reportCashFlowCommand(opts: { json?: boolean }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const result = await client.reports.cashFlowForecast();
@@ -513,9 +513,9 @@ export async function reportCashFlowCommand(opts: { json?: boolean }): Promise<v
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -526,7 +526,7 @@ export async function reportCashFlowCommand(opts: { json?: boolean }): Promise<v
 
 export async function reportTrialBalanceCommand(opts: ReportOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from: _from, to } = resolveRange(opts);
 
   try {
@@ -556,9 +556,9 @@ export async function reportTrialBalanceCommand(opts: ReportOpts): Promise<void>
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -569,7 +569,7 @@ export async function reportTrialBalanceCommand(opts: ReportOpts): Promise<void>
 
 export async function reportBalanceSheetCommand(opts: ReportOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { to } = resolveRange(opts);
 
   try {
@@ -595,9 +595,9 @@ export async function reportBalanceSheetCommand(opts: ReportOpts): Promise<void>
     console.log("  Use --json for full balance sheet breakdown.\n");
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -608,7 +608,7 @@ export async function reportBalanceSheetCommand(opts: ReportOpts): Promise<void>
 
 export async function reportCashFlowStatementCommand(opts: ReportOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from, to } = resolveRange(opts);
 
   try {
@@ -635,9 +635,9 @@ export async function reportCashFlowStatementCommand(opts: ReportOpts): Promise<
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -648,7 +648,7 @@ export async function reportCashFlowStatementCommand(opts: ReportOpts): Promise<
 
 export async function reportGeneralLedgerCommand(accountId: string, opts: ReportOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from, to } = resolveRange(opts);
 
   try {
@@ -684,9 +684,9 @@ export async function reportGeneralLedgerCommand(accountId: string, opts: Report
     console.log(`\n  Closing Balance:  ${formatAmount(closing).padStart(14)}\n`);
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));
@@ -697,7 +697,7 @@ export async function reportGeneralLedgerCommand(accountId: string, opts: Report
 
 export async function reportCollectionEfficiencyCommand(opts: ReportOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
   const { from, to } = resolveRange(opts);
 
   try {
@@ -726,9 +726,9 @@ export async function reportCollectionEfficiencyCommand(opts: ReportOpts): Promi
     console.log();
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));

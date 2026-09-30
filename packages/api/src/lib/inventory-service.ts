@@ -292,8 +292,9 @@ export async function syncDocumentStock(
     documentId: string;
     event: DocumentStockEvent;
     actorUserId?: string | null;
-    /** Warehouse to hold the stock in. Defaults to where the document already
-     *  holds it, else the business default for the operation. */
+    /** Warehouse to hold the stock in. Defaults to the document's saved
+     *  warehouse, then where it already holds stock, then the business
+     *  default for the operation. */
     warehouseId?: string | null;
     /** Apply the business's negative stock policy: with "block", refuse any
      *  change that would take a warehouse below zero. Set for changes a user
@@ -320,6 +321,7 @@ export async function syncDocumentStock(
       deletedAt: invoices.deletedAt,
       stockMode: invoices.stockMode,
       invoiceDate: invoices.invoiceDate,
+      warehouseId: invoices.warehouseId,
     })
     .from(invoices)
     .where(and(eq(invoices.id, input.documentId), eq(invoices.businessId, input.businessId)))
@@ -339,6 +341,7 @@ export async function syncDocumentStock(
 
   const warehouseId = holdsStock
     ? input.warehouseId
+      ?? doc.warehouseId
       ?? (await currentDocumentWarehouse(tx, input.businessId, doc.id, prefix))
       ?? (await getDefaultWarehouse(tx, { businessId: input.businessId, operation: documentOperation(doc) })).id
     : null;
@@ -987,4 +990,28 @@ export async function placeUnplacedStock(tx: InventoryDb, businessId: string, it
   });
   await updateStockBalance(tx, { businessId, warehouseId, locationId: null, itemId, variantId: variantId ?? null }, qty3(diff));
   return total;
+}
+
+/**
+ * The warehouse an invoice moves stock through: the one the user picked, or
+ * the business default for the operation. A picked warehouse must belong to
+ * the business and be active.
+ */
+export async function resolveInvoiceWarehouse(
+  tx: InventoryDb,
+  input: { businessId: string; operation: InventoryOperation; warehouseId?: string | null },
+) {
+  if (!input.warehouseId) return getDefaultWarehouse(tx, input);
+  const [warehouse] = await tx
+    .select({ id: warehouses.id, name: warehouses.name, status: warehouses.status })
+    .from(warehouses)
+    .where(and(eq(warehouses.id, input.warehouseId), eq(warehouses.businessId, input.businessId)))
+    .limit(1);
+  if (!warehouse) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Warehouse not found in this business" });
+  }
+  if (warehouse.status !== "active") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That warehouse is inactive" });
+  }
+  return warehouse;
 }

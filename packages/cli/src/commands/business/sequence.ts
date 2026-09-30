@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, success, outputJSON, EXIT } from "../../output.js";
 
@@ -11,7 +11,7 @@ interface BusinessSequenceOpts {
 
 export async function businessSequenceCommand(opts: BusinessSequenceOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   if (!opts.type) {
     fatalError("--type is required (sale or purchase).", EXIT.USAGE);
@@ -48,9 +48,9 @@ export async function businessSequenceCommand(opts: BusinessSequenceOpts): Promi
     if (opts.nextNumber !== undefined) parts.push(`next number → ${opts.nextNumber}`);
     success(`${typeLabel} invoice sequence updated: ${parts.join(", ")}.`);
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "forbidden") fatalError(err.message, EXIT.FORBIDDEN);
       if (err.code === "validation_failed") {
         const msgs = Object.entries(err.fields)

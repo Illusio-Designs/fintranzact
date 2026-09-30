@@ -173,7 +173,7 @@ describe("verifyTurnstile — Cloudflare response drives the return value", () =
 
 describe("verifyTurnstile — request body sent to Cloudflare siteverify API", () => {
   beforeEach(() => {
-    process.env.TURNSTILE_SECRET_KEY = "cf-secret-key-for-hisaabo";
+    process.env.TURNSTILE_SECRET_KEY = "cf-secret-key-for-fintranzact";
   });
 
   it("sends the secret key in the request body", async () => {
@@ -187,7 +187,7 @@ describe("verifyTurnstile — request body sent to Cloudflare siteverify API", (
     await verifyTurnstile("user-token", null);
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.secret).toBe("cf-secret-key-for-hisaabo");
+    expect(body.secret).toBe("cf-secret-key-for-fintranzact");
   });
 
   it("sends the Turnstile token as 'response' field in the request body", async () => {

@@ -109,9 +109,9 @@ This is the simplest integration to set up — a cron job and a Slack webhook.
 
 SLACK_WEBHOOK="https://hooks.slack.com/services/your/webhook/url"
 
-DASH=$(hisaabo dashboard --period today --json)
-OVERDUE=$(hisaabo invoice list --status overdue --json)
-LOW=$(hisaabo item list --low-stock --json)
+DASH=$(fintranzact dashboard --period today --json)
+OVERDUE=$(fintranzact invoice list --status overdue --json)
+LOW=$(fintranzact item list --low-stock --json)
 
 REVENUE=$(echo $DASH | jq -r '.totalRevenue')
 OUTSTANDING=$(echo $DASH | jq -r '.totalOutstanding')
@@ -158,8 +158,8 @@ import Anthropic from "@anthropic-ai/sdk";
 const app = new App({ token: process.env.SLACK_BOT_TOKEN });
 const claude = new Anthropic();
 
-app.message(/hisaabo/i, async ({ message, say }) => {
-  const userMessage = message.text.replace(/hisaabo/i, "").trim();
+app.message(/fintranzact/i, async ({ message, say }) => {
+  const userMessage = message.text.replace(/fintranzact/i, "").trim();
 
   const response = await claude.messages.create({
     model: "claude-opus-4-5",
@@ -176,9 +176,9 @@ app.message(/hisaabo/i, async ({ message, say }) => {
 
 Usage in Slack:
 ```
-@hisaabo-bot what's today's revenue?
-@hisaabo-bot how much does Gupta Enterprises owe us?
-@hisaabo-bot which items are low on stock?
+@fintranzact-bot what's today's revenue?
+@fintranzact-bot how much does Gupta Enterprises owe us?
+@fintranzact-bot which items are low on stock?
 ```
 
 ---
@@ -200,7 +200,7 @@ const execAsync = promisify(exec);
 async function syncInvoicesToSheets() {
   // Pull invoice data from Fintranzact CLI
   const { stdout } = await execAsync(
-    "hisaabo invoice list --from 2026-04-01 --to 2026-03-31 --json"
+    "fintranzact invoice list --from 2026-04-01 --to 2026-03-31 --json"
   );
   const invoices = JSON.parse(stdout);
 
@@ -238,12 +238,12 @@ async function syncInvoicesToSheets() {
 
 | Sheet | Fintranzact CLI command | Refresh frequency |
 |---|---|---|
-| Invoices | `hisaabo invoice list --json` | Daily |
-| Payments | `hisaabo payment list --json` | Daily |
-| Outstanding | `hisaabo party list --outstanding --json` | Daily |
-| GST summary | `hisaabo gst r3b --month 3 --year 2026 --json` | Monthly |
-| Outstanding aging | `hisaabo report outstanding --json` | Weekly |
-| Stock levels | `hisaabo item list --json` | Daily |
+| Invoices | `fintranzact invoice list --json` | Daily |
+| Payments | `fintranzact payment list --json` | Daily |
+| Outstanding | `fintranzact party list --outstanding --json` | Daily |
+| GST summary | `fintranzact gst r3b --month 3 --year 2026 --json` | Monthly |
+| Outstanding aging | `fintranzact report outstanding --json` | Weekly |
+| Stock levels | `fintranzact item list --json` | Daily |
 
 ---
 
@@ -260,7 +260,7 @@ This integration is on the [Fintranzact roadmap](/ai/#shiprocket-integration) as
 
 export async function onInvoiceConfirmed(invoiceId: string) {
   // Fetch invoice details from Fintranzact
-  const { stdout } = await execAsync(`hisaabo invoice get ${invoiceId} --json`);
+  const { stdout } = await execAsync(`fintranzact invoice get ${invoiceId} --json`);
   const invoice = JSON.parse(stdout);
 
   if (invoice.type !== "sale") return; // Only process sale invoices
@@ -293,7 +293,7 @@ export async function onInvoiceConfirmed(invoiceId: string) {
 
   // Create a shipment record in Fintranzact via CLI
   await execAsync(
-    `hisaabo shipment create \
+    `fintranzact shipment create \
       --invoice ${invoiceId} \
       --mode "Shiprocket" \
       --tracking "${shipment.awb_code}"`
@@ -324,7 +324,7 @@ Fintranzact already includes Tally XML export for party data. Here is how to use
 
 ```bash
 # Export all parties as Tally XML
-hisaabo party list --format tally-xml --output parties.xml
+fintranzact party list --format tally-xml --output parties.xml
 ```
 
 The output follows the Tally XML import schema and can be imported via **Tally > Import Data > Masters**.
@@ -333,7 +333,7 @@ The output follows the Tally XML import schema and can be imported via **Tally >
 
 ```bash
 # Export invoices as Tally-compatible XML
-hisaabo invoice list \
+fintranzact invoice list \
   --from 2026-04-01 \
   --to 2026-03-31 \
   --format tally-xml \
@@ -352,12 +352,12 @@ OUTPUT_DIR="/var/tally-exports"
 mkdir -p "$OUTPUT_DIR"
 
 # Export parties (masters)
-hisaabo party list \
+fintranzact party list \
   --format tally-xml \
   --output "$OUTPUT_DIR/parties-$(date -d 'last month' +%Y-%m).xml"
 
 # Export sale invoices (vouchers)
-hisaabo invoice list \
+fintranzact invoice list \
   --type sale \
   --from "$LAST_MONTH_START" \
   --to "$LAST_MONTH_END" \
@@ -365,7 +365,7 @@ hisaabo invoice list \
   --output "$OUTPUT_DIR/sales-$(date -d 'last month' +%Y-%m).xml"
 
 # Export purchase invoices
-hisaabo invoice list \
+fintranzact invoice list \
   --type purchase \
   --from "$LAST_MONTH_START" \
   --to "$LAST_MONTH_END" \
@@ -399,14 +399,14 @@ name: store-support-agent
 description: "Customer service agent for Fintranzact online store"
 
 mcp_servers:
-  - name: hisaabo
+  - name: fintranzact
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      HISAABO_API_URL: "https://your-hisaabo-instance.com"
-      HISAABO_API_KEY: "sess_..."
-      HISAABO_TENANT_ID: "tenant-uuid"
-      HISAABO_BUSINESS_ID: "business-uuid"
+      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_KEY: "sess_..."
+      FINTRANZACT_TENANT_ID: "tenant-uuid"
+      FINTRANZACT_BUSINESS_ID: "business-uuid"
     # Use an accountant-role user account so the agent cannot create or modify records
 
 system_prompt: |
@@ -429,7 +429,7 @@ system_prompt: |
   Use INR for all amounts. Keep responses under 3 sentences unless
   the customer asks for details.
 
-escalation_webhook: https://your-hisaabo-instance.com/webhooks/escalate
+escalation_webhook: https://your-fintranzact-instance.com/webhooks/escalate
 ```
 
 ### B2B account management agent
@@ -442,14 +442,14 @@ name: b2b-account-manager
 schedule: "0 9 * * 1"  # Every Monday at 9 AM
 
 mcp_servers:
-  - name: hisaabo
+  - name: fintranzact
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      HISAABO_API_URL: "https://your-hisaabo-instance.com"
-      HISAABO_API_KEY: "sess_..."
-      HISAABO_TENANT_ID: "tenant-uuid"
-      HISAABO_BUSINESS_ID: "business-uuid"
+      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_KEY: "sess_..."
+      FINTRANZACT_TENANT_ID: "tenant-uuid"
+      FINTRANZACT_BUSINESS_ID: "business-uuid"
 
 instructions: |
   Review the outstanding balances for all B2B customers.
@@ -478,32 +478,32 @@ name: ca-client-agent
 description: "CA agent with read-only access to client businesses"
 
 # Multiple MCP server connections — one per client business
-# Each uses a separate HISAABO_BUSINESS_ID pointing to that client's business
+# Each uses a separate FINTRANZACT_BUSINESS_ID pointing to that client's business
 mcp_servers:
   - name: client-sharma-traders
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      HISAABO_API_URL: "https://your-hisaabo-instance.com"
-      HISAABO_API_KEY: "sess_client1_token..."
-      HISAABO_TENANT_ID: "tenant-uuid"
-      HISAABO_BUSINESS_ID: "sharma-traders-business-uuid"
+      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_KEY: "sess_client1_token..."
+      FINTRANZACT_TENANT_ID: "tenant-uuid"
+      FINTRANZACT_BUSINESS_ID: "sharma-traders-business-uuid"
   - name: client-gupta-enterprises
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      HISAABO_API_URL: "https://your-hisaabo-instance.com"
-      HISAABO_API_KEY: "sess_client2_token..."
-      HISAABO_TENANT_ID: "tenant-uuid"
-      HISAABO_BUSINESS_ID: "gupta-enterprises-business-uuid"
+      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_KEY: "sess_client2_token..."
+      FINTRANZACT_TENANT_ID: "tenant-uuid"
+      FINTRANZACT_BUSINESS_ID: "gupta-enterprises-business-uuid"
   - name: client-vinod-sons
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      HISAABO_API_URL: "https://your-hisaabo-instance.com"
-      HISAABO_API_KEY: "sess_client3_token..."
-      HISAABO_TENANT_ID: "tenant-uuid"
-      HISAABO_BUSINESS_ID: "vinod-sons-business-uuid"
+      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_KEY: "sess_client3_token..."
+      FINTRANZACT_TENANT_ID: "tenant-uuid"
+      FINTRANZACT_BUSINESS_ID: "vinod-sons-business-uuid"
 
 system_prompt: |
   You are a CA assistant managing accounts for three clients.

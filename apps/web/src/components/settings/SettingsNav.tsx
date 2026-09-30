@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/Icon";
 import {
+  BarCode02Icon,
   Building03Icon,
   CashierIcon,
   Database01Icon,
@@ -32,6 +33,7 @@ const SETTINGS_TABS: SettingsTab[] = [
   { value: "account", label: "Account", icon: <Icon icon={UserIcon} size={18} /> },
   { value: "store", label: "Online Store", icon: <Icon icon={Store01Icon} size={18} /> },
   { value: "pos", label: "Point-of-Sale", icon: <Icon icon={CashierIcon} size={18} />, adminOnly: true },
+  { value: "barcodes", label: "Barcodes", icon: <Icon icon={BarCode02Icon} size={18} />, adminOnly: true },
 ];
 
 interface SettingsNavProps {

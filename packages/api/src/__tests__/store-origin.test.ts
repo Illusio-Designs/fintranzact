@@ -50,7 +50,7 @@ async function withContext(
 
 describe("parseOriginLike", () => {
   it("parseOriginLike normalizes a full URL down to scheme://host[:port] — the Referer header often includes a path and query string that must be stripped before comparison", () => {
-    expect(parseOriginLike("https://store.hisaabo.in/cart?foo=1")).toBe("https://store.hisaabo.in");
+    expect(parseOriginLike("https://store.fintranzact.com/cart?foo=1")).toBe("https://store.fintranzact.com");
   });
 
   it("parseOriginLike returns null for undefined, empty, or literal 'null' values — sandboxed iframes report Origin: null and must fall through to the missing-headers branch", () => {
@@ -72,44 +72,44 @@ describe("parseOriginLike", () => {
 });
 
 describe("isSubdomainOf", () => {
-  it("isSubdomainOf accepts the exact parent host — 'hisaabo.in' is a subdomain of 'hisaabo.in' for allow-list purposes", () => {
-    expect(isSubdomainOf("hisaabo.in", "hisaabo.in")).toBe(true);
+  it("isSubdomainOf accepts the exact parent host — 'fintranzact.com' is a subdomain of 'fintranzact.com' for allow-list purposes", () => {
+    expect(isSubdomainOf("fintranzact.com", "fintranzact.com")).toBe(true);
   });
 
-  it("isSubdomainOf accepts true subdomains — 'store.hisaabo.in' matches parent 'hisaabo.in' because the label boundary is the dot", () => {
-    expect(isSubdomainOf("store.hisaabo.in", "hisaabo.in")).toBe(true);
-    expect(isSubdomainOf("a.b.hisaabo.in", "hisaabo.in")).toBe(true);
+  it("isSubdomainOf accepts true subdomains — 'store.fintranzact.com' matches parent 'fintranzact.com' because the label boundary is the dot", () => {
+    expect(isSubdomainOf("store.fintranzact.com", "fintranzact.com")).toBe(true);
+    expect(isSubdomainOf("a.b.fintranzact.com", "fintranzact.com")).toBe(true);
   });
 
   it("isSubdomainOf rejects the classic suffix-trick 'example.com.attacker.com' against parent 'example.com' — a naive endsWith check would accept this and leak the allow-list to attacker-controlled hosts", () => {
     expect(isSubdomainOf("example.com.attacker.com", "example.com")).toBe(false);
-    expect(isSubdomainOf("hisaabo.in.evil.com", "hisaabo.in")).toBe(false);
+    expect(isSubdomainOf("fintranzact.com.evil.com", "fintranzact.com")).toBe(false);
   });
 
   it("isSubdomainOf rejects unrelated hosts", () => {
-    expect(isSubdomainOf("attacker.com", "hisaabo.in")).toBe(false);
-    expect(isSubdomainOf("", "hisaabo.in")).toBe(false);
-    expect(isSubdomainOf("hisaabo.in", "")).toBe(false);
+    expect(isSubdomainOf("attacker.com", "fintranzact.com")).toBe(false);
+    expect(isSubdomainOf("", "fintranzact.com")).toBe(false);
+    expect(isSubdomainOf("fintranzact.com", "")).toBe(false);
   });
 });
 
 describe("isOriginAllowed (pure predicate)", () => {
   const config = {
-    allowedOrigins: ["https://store.hisaabo.in", "https://app.hisaabo.in"],
-    allowedSubdomainsOf: ["hisaabo.in"],
+    allowedOrigins: ["https://store.fintranzact.com", "https://app.fintranzact.com"],
+    allowedSubdomainsOf: ["fintranzact.com"],
     allowLocalhost: true,
   };
 
   it("isOriginAllowed accepts an exact match from allowedOrigins", () => {
-    expect(isOriginAllowed("https://store.hisaabo.in", config)).toBe(true);
+    expect(isOriginAllowed("https://store.fintranzact.com", config)).toBe(true);
   });
 
-  it("isOriginAllowed accepts subdomain-wildcard matches — 'https://shop.hisaabo.in' passes because 'hisaabo.in' is in allowedSubdomainsOf", () => {
-    expect(isOriginAllowed("https://shop.hisaabo.in", config)).toBe(true);
+  it("isOriginAllowed accepts subdomain-wildcard matches — 'https://shop.fintranzact.com' passes because 'fintranzact.com' is in allowedSubdomainsOf", () => {
+    expect(isOriginAllowed("https://shop.fintranzact.com", config)).toBe(true);
   });
 
-  it("isOriginAllowed rejects the subdomain suffix trick — 'https://hisaabo.in.attacker.com' must NOT match parent 'hisaabo.in'", () => {
-    expect(isOriginAllowed("https://hisaabo.in.attacker.com", config)).toBe(false);
+  it("isOriginAllowed rejects the subdomain suffix trick — 'https://fintranzact.com.attacker.com' must NOT match parent 'fintranzact.com'", () => {
+    expect(isOriginAllowed("https://fintranzact.com.attacker.com", config)).toBe(false);
   });
 
   it("isOriginAllowed accepts http://localhost:<port> when allowLocalhost is true — non-production must keep dev ergonomics", () => {
@@ -130,14 +130,14 @@ describe("isOriginAllowed (pure predicate)", () => {
 
 describe("isAllowedStoreOrigin (Context-aware)", () => {
   const opts = {
-    allowedOrigins: ["https://store.hisaabo.in"],
-    allowedSubdomainsOf: ["hisaabo.in"],
+    allowedOrigins: ["https://store.fintranzact.com"],
+    allowedSubdomainsOf: ["fintranzact.com"],
     allowLocalhost: false,
   };
 
   it("isAllowedStoreOrigin returns true when Origin is present and allow-listed — the happy-path SaaS checkout", async () => {
     const ok = await withContext(
-      { origin: "https://store.hisaabo.in" },
+      { origin: "https://store.fintranzact.com" },
       (c) => isAllowedStoreOrigin(c, opts),
     );
     expect(ok).toBe(true);
@@ -158,16 +158,16 @@ describe("isAllowedStoreOrigin (Context-aware)", () => {
 
   it("isAllowedStoreOrigin falls back to Referer when Origin is absent — parses the Referer URL down to scheme://host before matching", async () => {
     const ok = await withContext(
-      { referer: "https://shop.hisaabo.in/cart?item=1" },
+      { referer: "https://shop.fintranzact.com/cart?item=1" },
       (c) => isAllowedStoreOrigin(c, opts),
     );
-    // shop.hisaabo.in matches the subdomain-wildcard parent
+    // shop.fintranzact.com matches the subdomain-wildcard parent
     expect(ok).toBe(true);
   });
 
-  it("isAllowedStoreOrigin rejects a Referer-only request whose host is not allow-listed — the suffix-trick host 'https://hisaabo.in.attacker.com' must fail even when the path component 'looks trusted'", async () => {
+  it("isAllowedStoreOrigin rejects a Referer-only request whose host is not allow-listed — the suffix-trick host 'https://fintranzact.com.attacker.com' must fail even when the path component 'looks trusted'", async () => {
     const ok = await withContext(
-      { referer: "https://hisaabo.in.attacker.com/?spoof=hisaabo.in" },
+      { referer: "https://fintranzact.com.attacker.com/?spoof=fintranzact.com" },
       (c) => isAllowedStoreOrigin(c, opts),
     );
     expect(ok).toBe(false);
@@ -176,14 +176,14 @@ describe("isAllowedStoreOrigin (Context-aware)", () => {
   it("isAllowedStoreOrigin prefers Origin over Referer when both are present — Origin is the more trustworthy header; Referer can be edited by some ad/privacy extensions", async () => {
     // Origin allow-listed, Referer disallowed → allow (Origin wins).
     const allowed = await withContext(
-      { origin: "https://store.hisaabo.in", referer: "https://attacker.com/page" },
+      { origin: "https://store.fintranzact.com", referer: "https://attacker.com/page" },
       (c) => isAllowedStoreOrigin(c, opts),
     );
     expect(allowed).toBe(true);
 
     // Origin disallowed, Referer allow-listed → reject (Origin wins).
     const rejected = await withContext(
-      { origin: "https://attacker.com", referer: "https://store.hisaabo.in/cart" },
+      { origin: "https://attacker.com", referer: "https://store.fintranzact.com/cart" },
       (c) => isAllowedStoreOrigin(c, opts),
     );
     expect(rejected).toBe(false);

@@ -40,8 +40,8 @@ export class CreditNotesPage extends BasePage {
   }
 
   async expectTypeFilter() {
-    await expect(this.page.getByText("Sales").first()).toBeVisible();
-    await expect(this.page.getByText("Purchases").first()).toBeVisible();
+    await expect(this.page.locator("main").getByText("Sales", { exact: true }).first()).toBeVisible();
+    await expect(this.page.locator("main").getByText("Purchases", { exact: true }).first()).toBeVisible();
   }
 
   async expectStatusTabs() {
@@ -77,11 +77,11 @@ export class CreditNotesPage extends BasePage {
   }
 
   async switchToSales() {
-    await this.page.getByText("Sales").first().click();
+    await this.page.locator("main").getByText("Sales", { exact: true }).first().click();
   }
 
   async switchToPurchases() {
-    await this.page.getByText("Purchases").first().click();
+    await this.page.locator("main").getByText("Purchases", { exact: true }).first().click();
   }
 
   async clickStatusTab(label: string) {

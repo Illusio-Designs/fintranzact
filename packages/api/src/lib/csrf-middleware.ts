@@ -3,7 +3,7 @@
  *
  * WHY THIS FILE EXISTS:
  * State-changing requests authenticated via cookies must carry the
- * `X-Requested-With: fintranzact` header (legacy `hisaabo` still accepted). This blocks cross-origin form
+ * `X-Requested-With: fintranzact` header. This blocks cross-origin form
  * submissions and navigation-based CSRF attacks on cookie-authenticated
  * endpoints (web app, desktop).
  *

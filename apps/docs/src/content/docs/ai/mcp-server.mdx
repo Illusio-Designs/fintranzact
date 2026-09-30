@@ -26,17 +26,17 @@ Log in to your Fintranzact dashboard and run the CLI `whoami` command to get all
 npm install -g @fintranzact/cli
 
 # Authenticate
-hisaabo login
+fintranzact login
 
 # Print all credential values in JSON — copy these for Step 3
-hisaabo whoami --json
+fintranzact whoami --json
 ```
 
 Expected output:
 ```json
 {
   "email": "owner@yourshop.in",
-  "apiUrl": "https://your-hisaabo-instance.com",
+  "apiUrl": "https://your-fintranzact-instance.com",
   "token": "sess_VbK2mQ9xP4nR7wA1...",
   "tenantId": "tenant-uuid-here",
   "businessId": "business-uuid-here",
@@ -66,19 +66,19 @@ Open your Claude Desktop config file:
   </TabItem>
 </Tabs>
 
-Add the `hisaabo` entry using the values from `hisaabo whoami --json`:
+Add the `fintranzact` entry using the values from `fintranzact whoami --json`:
 
 ```json
 {
   "mcpServers": {
-    "hisaabo": {
+    "fintranzact": {
       "command": "npx",
       "args": ["@fintranzact/mcp"],
       "env": {
-        "HISAABO_API_URL": "https://your-hisaabo-instance.com",
-        "HISAABO_API_KEY": "sess_VbK2mQ9xP4nR7wA1...",
-        "HISAABO_TENANT_ID": "tenant-uuid-here",
-        "HISAABO_BUSINESS_ID": "business-uuid-here"
+        "FINTRANZACT_API_URL": "https://your-fintranzact-instance.com",
+        "FINTRANZACT_API_KEY": "sess_VbK2mQ9xP4nR7wA1...",
+        "FINTRANZACT_TENANT_ID": "tenant-uuid-here",
+        "FINTRANZACT_BUSINESS_ID": "business-uuid-here"
       }
     }
   }
@@ -87,7 +87,7 @@ Add the `hisaabo` entry using the values from `hisaabo whoami --json`:
 
 **Step 3: Restart Claude Desktop and test**
 
-Restart Claude Desktop — you will see "hisaabo" appear in the tools list. Then try:
+Restart Claude Desktop — you will see "fintranzact" appear in the tools list. Then try:
 
 ```
 "What is my business's total outstanding receivables?"
@@ -271,28 +271,28 @@ The MCP server is configured entirely through environment variables passed in th
 
 | Variable | Where to find it | Description |
 |---|---|---|
-| `HISAABO_API_URL` | Your deployment URL | Base URL of your Fintranzact API, e.g. `https://your-hisaabo-instance.com` |
-| `HISAABO_API_KEY` | `hisaabo whoami --json` → `token` | Session token (same as Bearer token used by the mobile app) |
-| `HISAABO_TENANT_ID` | `hisaabo whoami --json` → `tenantId` | Your organization/tenant UUID |
-| `HISAABO_BUSINESS_ID` | `hisaabo whoami --json` → `businessId` | The business to operate on |
+| `FINTRANZACT_API_URL` | Your deployment URL | Base URL of your Fintranzact API, e.g. `https://your-fintranzact-instance.com` |
+| `FINTRANZACT_API_KEY` | `fintranzact whoami --json` → `token` | Session token (same as Bearer token used by the mobile app) |
+| `FINTRANZACT_TENANT_ID` | `fintranzact whoami --json` → `tenantId` | Your organization/tenant UUID |
+| `FINTRANZACT_BUSINESS_ID` | `fintranzact whoami --json` → `businessId` | The business to operate on |
 
 The fastest way to get all four values at once:
 
 ```bash
-hisaabo whoami --json
+fintranzact whoami --json
 ```
 
 If the `token` field is missing or expired, log in again:
 
 ```bash
-hisaabo login
+fintranzact login
 ```
 
 ---
 
 ## Connecting to Claude Desktop
 
-1. Run `hisaabo whoami --json` to get your credentials (see [Configuration](#configuration) above).
+1. Run `fintranzact whoami --json` to get your credentials (see [Configuration](#configuration) above).
 
 2. Open your Claude Desktop configuration file:
 
@@ -319,14 +319,14 @@ hisaabo login
 ```json
 {
   "mcpServers": {
-    "hisaabo": {
+    "fintranzact": {
       "command": "npx",
       "args": ["@fintranzact/mcp"],
       "env": {
-        "HISAABO_API_URL": "https://your-hisaabo-instance.com",
-        "HISAABO_API_KEY": "sess_VbK2mQ9xP4nR7wA1...",
-        "HISAABO_TENANT_ID": "tenant-uuid-here",
-        "HISAABO_BUSINESS_ID": "business-uuid-here"
+        "FINTRANZACT_API_URL": "https://your-fintranzact-instance.com",
+        "FINTRANZACT_API_KEY": "sess_VbK2mQ9xP4nR7wA1...",
+        "FINTRANZACT_TENANT_ID": "tenant-uuid-here",
+        "FINTRANZACT_BUSINESS_ID": "business-uuid-here"
       }
     }
   }
@@ -335,7 +335,7 @@ hisaabo login
 
 The MCP server runs as a child process of Claude Desktop over stdio — Claude Desktop starts and stops it automatically. You do not need to keep a separate server process running.
 
-4. Restart Claude Desktop. You will see "hisaabo" appear in the tools list in Claude's interface.
+4. Restart Claude Desktop. You will see "fintranzact" appear in the tools list in Claude's interface.
 
 5. Test the connection:
 
@@ -345,7 +345,7 @@ The MCP server runs as a child process of Claude Desktop over stdio — Claude D
 
 Claude will call the `dashboard_summary` tool and return a structured response with your current data.
 
-**If Claude reports it cannot connect:** Check that the `HISAABO_API_KEY` is not expired (`hisaabo login` to refresh it) and that `HISAABO_API_URL` is reachable from the machine running Claude Desktop.
+**If Claude reports it cannot connect:** Check that the `FINTRANZACT_API_KEY` is not expired (`fintranzact login` to refresh it) and that `FINTRANZACT_API_URL` is reachable from the machine running Claude Desktop.
 
 ---
 
@@ -356,14 +356,14 @@ OpenClaw agents connect to stdio-based MCP servers by launching them as a subpro
 ```yaml
 # openclaw-agent.yaml
 mcp_servers:
-  - name: hisaabo
+  - name: fintranzact
     command: npx
     args: ["@fintranzact/mcp"]
     env:
-      HISAABO_API_URL: "https://your-hisaabo-instance.com"
-      HISAABO_API_KEY: "sess_VbK2mQ9xP4nR7wA1..."
-      HISAABO_TENANT_ID: "tenant-uuid-here"
-      HISAABO_BUSINESS_ID: "business-uuid-here"
+      FINTRANZACT_API_URL: "https://your-fintranzact-instance.com"
+      FINTRANZACT_API_KEY: "sess_VbK2mQ9xP4nR7wA1..."
+      FINTRANZACT_TENANT_ID: "tenant-uuid-here"
+      FINTRANZACT_BUSINESS_ID: "business-uuid-here"
     description: "Fintranzact business management — invoices, parties, inventory, GST, shipping, banking"
 ```
 
@@ -1533,7 +1533,7 @@ Documents recording goods returned to suppliers. Status flow: `draft → sent �
 
 ### Tenant / Team Management
 
-Manage the organization (tenant) and its members. Tenant tools operate at the organization level, above individual businesses. The `HISAABO_TENANT_ID` environment variable determines which tenant is active.
+Manage the organization (tenant) and its members. Tenant tools operate at the organization level, above individual businesses. The `FINTRANZACT_TENANT_ID` environment variable determines which tenant is active.
 
 #### `tenant_list`
 
@@ -1617,7 +1617,7 @@ Terminate a specific session by ID. Cannot revoke the current session (use logou
 
 ### Business
 
-List and create businesses. These tools operate at the account level — they are not scoped to the active `HISAABO_BUSINESS_ID`. Use them when building agents that manage multiple businesses or that onboard new ones.
+List and create businesses. These tools operate at the account level — they are not scoped to the active `FINTRANZACT_BUSINESS_ID`. Use them when building agents that manage multiple businesses or that onboard new ones.
 
 #### `business_list`
 
@@ -1646,13 +1646,13 @@ Create a new business under the authenticated account.
 }
 ```
 
-**Output:** The newly created business object including its `id`. Pass this `id` as `HISAABO_BUSINESS_ID` to operate on the new business in subsequent tool calls.
+**Output:** The newly created business object including its `id`. Pass this `id` as `FINTRANZACT_BUSINESS_ID` to operate on the new business in subsequent tool calls.
 
 **Creating a second business via conversation:**
 ```
 You: "I want to set up a second business — Sharma Exports Pvt Ltd, GSTIN 27AABCS1234A1Z9"
 Claude: "Done. Sharma Exports Pvt Ltd has been created (ID: biz_xxxxx).
-         To operate on this business, update HISAABO_BUSINESS_ID in your
+         To operate on this business, update FINTRANZACT_BUSINESS_ID in your
          MCP config and restart the server, or ask me to pass the business
          ID directly in any tool call."
 ```
@@ -1729,7 +1729,7 @@ MCP resources are read-only data snapshots that AI agents can load into their co
 
 **Use a limited-privilege account** — Create a dedicated Fintranzact user account for MCP access with the lowest role needed (e.g. `accountant` for read-only reporting, `seller` for invoice creation). The MCP server inherits the permissions of the authenticated user.
 
-**Token rotation** — The `HISAABO_API_KEY` is a session token with a 30-day expiry. Set a calendar reminder to refresh it before it expires: `hisaabo login && hisaabo whoami --json` to get a new token.
+**Token rotation** — The `FINTRANZACT_API_KEY` is a session token with a 30-day expiry. Set a calendar reminder to refresh it before it expires: `fintranzact login && fintranzact whoami --json` to get a new token.
 
 **Do not share tokens** — Each Claude Desktop instance or OpenClaw agent should use its own session token tied to a purpose-specific user account. This makes it possible to revoke one agent's access without affecting others.
 

@@ -99,7 +99,7 @@ export function ShippingTab({ biz }: ShippingTabProps) {
         <p className="text-xs text-text-tertiary mb-3">
           These are always available when creating invoices. They cannot be removed.
         </p>
-        <div className="rounded-xl border border-border-light overflow-hidden">
+        <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
           <table className="w-full text-sm">
             <tbody>
               {BUILT_IN_METHODS.map((m) => (

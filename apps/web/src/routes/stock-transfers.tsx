@@ -64,7 +64,7 @@ function StockTransfersPage() {
   return (
     <div>
       <PageHeader
-        title="Stock transfers"
+        title="Stock Transfers"
         description="Move stock between your warehouses. Every transfer is kept in this journal."
         actions={
           <button className="btn-primary" onClick={() => setOpen(true)}>

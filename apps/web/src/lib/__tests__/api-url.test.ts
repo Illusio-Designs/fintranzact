@@ -4,8 +4,8 @@
  * This helper fixes a production bug: several non-tRPC fetches in the web
  * app (invoice PDF, ledger PDF) were hardcoded to relative "/api/..." URLs.
  * In single-origin deploys that works fine — Vite's dev proxy or nginx
- * forwards /api/* to the API. In split-host deploys (e.g. app.hisaabo.in
- * for the web bundle, api.hisaabo.in for the API) the relative URL hits
+ * forwards /api/* to the API. In split-host deploys (e.g. app.fintranzact.com
+ * for the web bundle, api.fintranzact.com for the API) the relative URL hits
  * the web host's SPA fallback and returns index.html, which downloads
  * as an "HTML PDF" for the user.
  *
@@ -44,9 +44,9 @@ describe("apiUrl", () => {
 
   it("keeps the path same-origin when API_URL is empty (browser resolution)", () => {
     vi.stubEnv("API_URL", "");
-    const baseUrl = "https://app.hisaabo.in";
+    const baseUrl = "https://app.fintranzact.com";
     const resolved = new URL(apiUrl("/api/invoices/abc/pdf"), baseUrl).href;
-    expect(resolved).toBe("https://app.hisaabo.in/api/invoices/abc/pdf");
+    expect(resolved).toBe("https://app.fintranzact.com/api/invoices/abc/pdf");
     // The whole bug this helper guards against: in split-host prod, this
     // same-origin resolution would hit the SPA and return HTML.
     expect(new URL(resolved).origin).toBe(baseUrl);

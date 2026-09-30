@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError, type GatewayChargeConfig } from "../../client.js";
+import { FintranzactClient, FintranzactApiError, type GatewayChargeConfig } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT, success } from "../../output.js";
 
@@ -26,7 +26,7 @@ export async function bankUpdateGatewayCommand(
   opts: UpdateGatewayOpts,
 ): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     // Fetch existing config to merge with updates
@@ -72,9 +72,9 @@ export async function bankUpdateGatewayCommand(
     success(`Gateway configuration updated for account: ${accountId}`);
     console.log(`  Settlement Account: ${result.settlementAccountId}\n`);
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
       if (err.code === "not_found") fatalError(`Bank account not found: ${accountId}`, EXIT.NOT_FOUND);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);

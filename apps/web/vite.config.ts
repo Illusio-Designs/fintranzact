@@ -10,7 +10,7 @@ const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "ut
 // SHA-256 hash of the inline theme-detection script in index.html (lines 36-40).
 // Recompute with: node -e "const c=require('crypto'),f=require('fs');
 //   const h=f.readFileSync('index.html','utf-8');
-//   const s=h.slice(h.indexOf('<script>\n',h.indexOf('hisaabo-theme'))+8, h.indexOf('</script>',h.indexOf('hisaabo-theme')));
+//   const s=h.slice(h.indexOf('<script>\n',h.indexOf('fintranzact-theme'))+8, h.indexOf('</script>',h.indexOf('fintranzact-theme')));
 //   console.log('sha256-'+c.createHash('sha256').update(s).digest('base64'));"
 const THEME_SCRIPT_HASH = "sha256-7v6Dh3op5YztyC/jZCheSbtL3NqCrnIjQcllTk6J6Ug=";
 

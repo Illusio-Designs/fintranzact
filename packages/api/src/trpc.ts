@@ -61,9 +61,8 @@ export const createCallerFactory = t.createCallerFactory;
 //     cookie jar replays stale `session_id` cookies that must not
 //     trip this check.
 //   - No session cookie: exempt — nothing to protect.
-//   - Otherwise: require `X-Requested-With: fintranzact` (legacy
-//     `hisaabo` still accepted — see lib/client-headers.ts) or throw
-//     TRPCError({code: "FORBIDDEN"}).
+//   - Otherwise: require `X-Requested-With: fintranzact`
+//     or throw TRPCError({code: "FORBIDDEN"}).
 const csrfCheck = t.middleware(({ ctx, next }) => {
   const req = ctx.req;
   const method = req.method.toUpperCase();

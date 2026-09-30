@@ -12,10 +12,10 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { HisaaboClient } from "../client.js";
+import type { FintranzactClient } from "../client.js";
 import { wrapTool } from "../lib/errors.js";
 
-export function registerGstr2bTools(server: McpServer, client: HisaaboClient) {
+export function registerGstr2bTools(server: McpServer, client: FintranzactClient) {
 
   server.tool(
     "gstr2b_uploads",

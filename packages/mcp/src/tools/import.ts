@@ -13,10 +13,10 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { HisaaboClient } from "../client.js";
+import type { FintranzactClient } from "../client.js";
 import { wrapTool } from "../lib/errors.js";
 
-export function registerImportTools(server: McpServer, client: HisaaboClient) {
+export function registerImportTools(server: McpServer, client: FintranzactClient) {
 
   server.tool(
     "import_parties",

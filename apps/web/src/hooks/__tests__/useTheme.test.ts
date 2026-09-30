@@ -33,7 +33,7 @@ function mockMatchMedia(prefersDark: boolean) {
   return mq;
 }
 
-const STORAGE_KEY = "hisaabo-theme";
+const STORAGE_KEY = "fintranzact-theme";
 
 describe("useTheme", () => {
   beforeEach(() => {

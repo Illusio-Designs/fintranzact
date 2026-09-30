@@ -21,7 +21,7 @@ function getSecret(): string {
   const key = process.env.ENCRYPTION_KEY || process.env.SESSION_SECRET;
   if (!key) {
     // In dev, derive a stable secret from a fixed string so tokens survive hot reloads.
-    return "hisaabo-export-dev-secret-NOT-FOR-PRODUCTION";
+    return "fintranzact-export-dev-secret-NOT-FOR-PRODUCTION";
   }
   return key;
 }

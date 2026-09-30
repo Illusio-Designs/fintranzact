@@ -278,6 +278,32 @@ exceptions:
       - hsn.validate
       - hsn.validateForTurnover
 
+      # --- Inventory: scan-based physical stock and barcodes (mobile) ---
+      # Scan-based physical counts are desk / counter workflows built for the web and desktop
+      # app (barcode scanner on a PC, label printing through the system
+      # print window). Not yet exposed on mobile.
+      - stock.countSheet
+      - stock.countPreview
+      - stock.countFinish
+      - stock.countPost
+      - stock.counts
+      - stock.count
+      # Barcode setup (Settings → Barcodes), extra item codes and on-screen
+      # barcode previews for label printing.
+      - barcode.setup
+      - barcode.update
+      - barcode.lock
+      - barcode.generate
+      - barcode.itemCodes
+      - barcode.addItemCode
+      - barcode.removeItemCode
+      - barcode.symbol
+      # Public share links for documents. Web-only for now; mobile gets a
+      # "Share link" button in a later chunk.
+      - share.get
+      - share.create
+      - share.revoke
+
   cli:
     not-applicable:
       # --- Inventory (warehouses & stock) ---
@@ -375,6 +401,32 @@ exceptions:
       # CSV upload and per-record ignore are interactive UI workflows — not CLI.
       - gstr2b.upload
       - gstr2b.ignoreRecord
+
+      # --- Inventory: scan-based physical stock and barcodes (the CLI) ---
+      # Scan-based physical counts are desk / counter workflows built for the web and desktop
+      # app (barcode scanner on a PC, label printing through the system
+      # print window). Not yet exposed on the CLI.
+      - stock.countSheet
+      - stock.countPreview
+      - stock.countFinish
+      - stock.countPost
+      - stock.counts
+      - stock.count
+      # Barcode setup (Settings → Barcodes), extra item codes and on-screen
+      # barcode previews for label printing.
+      - barcode.setup
+      - barcode.update
+      - barcode.lock
+      - barcode.generate
+      - barcode.itemCodes
+      - barcode.addItemCode
+      - barcode.removeItemCode
+      - barcode.symbol
+      # Public share links for documents. Web-only for now; mobile gets a
+      # "Share link" button in a later chunk.
+      - share.get
+      - share.create
+      - share.revoke
 
   mcp:
     not-applicable:
@@ -502,3 +554,29 @@ exceptions:
       # CSV upload and per-record ignore are interactive UI workflows.
       - gstr2b.upload
       - gstr2b.ignoreRecord
+
+      # --- Inventory: scan-based physical stock and barcodes (MCP) ---
+      # Scan-based physical counts are desk / counter workflows built for the web and desktop
+      # app (barcode scanner on a PC, label printing through the system
+      # print window). Not yet exposed on MCP.
+      - stock.countSheet
+      - stock.countPreview
+      - stock.countFinish
+      - stock.countPost
+      - stock.counts
+      - stock.count
+      # Barcode setup (Settings → Barcodes), extra item codes and on-screen
+      # barcode previews for label printing.
+      - barcode.setup
+      - barcode.update
+      - barcode.lock
+      - barcode.generate
+      - barcode.itemCodes
+      - barcode.addItemCode
+      - barcode.removeItemCode
+      - barcode.symbol
+      # Public share links for documents. Web-only for now; mobile gets a
+      # "Share link" button in a later chunk.
+      - share.get
+      - share.create
+      - share.revoke

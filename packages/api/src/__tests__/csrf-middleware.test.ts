@@ -31,7 +31,7 @@ import { createCsrfMiddleware, isOriginAllowedForBearer, CSRF_TAURI_ORIGINS } fr
 // Default allowedBearerOrigins used throughout these tests — deterministic,
 // env-var independent. Mirrors a minimal CORS_ORIGINS config for a deployed
 // web app plus the Tauri desktop origins baked into the middleware.
-const TEST_CORS_ORIGINS = ["http://localhost:5173", "https://app.hisaabo.in"];
+const TEST_CORS_ORIGINS = ["http://localhost:5173", "https://app.fintranzact.com"];
 
 function buildTestApp(
   opts: { skipPathPrefixes?: string[]; allowedBearerOrigins?: readonly string[] } = {},
@@ -114,22 +114,6 @@ describe("CSRF middleware — Hono layer for non-tRPC routes", () => {
     expect(body).toEqual({ ok: true });
   });
 
-  it("CSRF middleware still accepts the legacy X-Requested-With: hisaabo value — already-installed mobile/desktop builds must keep working after the rename", async () => {
-    const app = buildTestApp();
-
-    const res = await app.request("/api/store/order", {
-      method: "POST",
-      headers: {
-        "cookie": "session_id=real-browser-session",
-        "x-requested-with": "hisaabo",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ items: [] }),
-    });
-
-    expect(res.status).toBe(200);
-  });
-
   it("CSRF middleware rejects any other X-Requested-With value on a cookie POST — only the first-party markers are accepted", async () => {
     const app = buildTestApp();
 
@@ -183,7 +167,7 @@ describe("CSRF middleware — Hono layer for non-tRPC routes", () => {
     const res = await app.request("/api/store/order", {
       method: "OPTIONS",
       headers: {
-        "origin": "https://app.hisaabo.in",
+        "origin": "https://app.fintranzact.com",
         "access-control-request-method": "POST",
       },
     });
@@ -314,7 +298,7 @@ describe("SECURITY — CSRF middleware Bearer-auth Origin allowlist (P1 #7 defen
 
   // Pure-function tests for isOriginAllowedForBearer — fast and env-independent.
   describe("isOriginAllowedForBearer — pure-function unit tests", () => {
-    const corsOrigins = ["http://localhost:5173", "https://app.hisaabo.in"];
+    const corsOrigins = ["http://localhost:5173", "https://app.fintranzact.com"];
 
     it("returns true for an empty origin string — mobile / server-to-server callers omit Origin and must never be blocked", () => {
       expect(isOriginAllowedForBearer("", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(true);
@@ -324,8 +308,8 @@ describe("SECURITY — CSRF middleware Bearer-auth Origin allowlist (P1 #7 defen
       expect(isOriginAllowedForBearer("http://localhost:5173", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(true);
     });
 
-    it("returns true for https://app.hisaabo.in — exact CORS origins list match", () => {
-      expect(isOriginAllowedForBearer("https://app.hisaabo.in", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(true);
+    it("returns true for https://app.fintranzact.com — exact CORS origins list match", () => {
+      expect(isOriginAllowedForBearer("https://app.fintranzact.com", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(true);
     });
 
     it("returns true for https://billing.fintranzact.com — *.fintranzact.com wildcard covers all first-party subdomains", () => {
@@ -352,8 +336,8 @@ describe("SECURITY — CSRF middleware Bearer-auth Origin allowlist (P1 #7 defen
       expect(isOriginAllowedForBearer("https://notreallyfintranzact.com.evil.com", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(false);
     });
 
-    it("returns false for https://hisaabo.in.evil.com — another subdomain-spoofing variant that anchors '.in' mid-string", () => {
-      expect(isOriginAllowedForBearer("https://hisaabo.in.evil.com", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(false);
+    it("returns false for https://fintranzact.com.evil.com — another subdomain-spoofing variant that anchors '.in' mid-string", () => {
+      expect(isOriginAllowedForBearer("https://fintranzact.com.evil.com", corsOrigins, CSRF_TAURI_ORIGINS)).toBe(false);
     });
   });
 
@@ -396,14 +380,14 @@ describe("SECURITY — CSRF middleware Bearer-auth Origin allowlist (P1 #7 defen
       expect(body).toEqual({ ok: true });
     });
 
-    it("Bearer + https://app.hisaabo.in Origin → request passes — production web app origin must not be blocked", async () => {
+    it("Bearer + https://app.fintranzact.com Origin → request passes — production web app origin must not be blocked", async () => {
       const app = buildTestApp();
 
       const res = await app.request("/api/store/order", {
         method: "POST",
         headers: {
           "authorization": "Bearer web-app-token",
-          "origin": "https://app.hisaabo.in",
+          "origin": "https://app.fintranzact.com",
           "content-type": "application/json",
         },
         body: "{}",

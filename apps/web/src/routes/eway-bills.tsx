@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
+import { SlideOver } from "@/components/ui/SlideOver";
 import { Listbox } from "@/components/ui/Listbox";
 import { InputField } from "@/components/ui/FormField";
 import { Spinner } from "@/components/ui/Spinner";
@@ -383,16 +384,34 @@ function EWayBillsPage() {
         />
       )}
 
-      {/* ── Generate EWB Modal ── */}
-      <Modal
+      {/* ── Generate EWB SlideOver ── */}
+      <SlideOver
         open={showGenerateModal}
         onClose={() => setShowGenerateModal(false)}
         title="Generate E-Way Bill"
+        description="Provide transport details to generate an EWB for a goods invoice above ₹50,000"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setShowGenerateModal(false)}
+              disabled={generateMutation.isPending}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleGenerate}
+              disabled={generateMutation.isPending}
+            >
+              {generateMutation.isPending ? "Generating..." : "Generate EWB"}
+            </button>
+          </div>
+        }
       >
         <div className="space-y-4">
-          <p className="text-sm text-text-secondary">
-            Provide transport details to generate an EWB for a goods invoice above ₹50,000
-          </p>
           <InputField
             label="Invoice ID"
             placeholder="Paste the invoice UUID"
@@ -477,35 +496,37 @@ function EWayBillsPage() {
           <p className="text-xs text-text-tertiary">
             The EWB will be generated for invoices with goods above ₹50,000. Services-only invoices are not eligible.
           </p>
-          <div className="flex justify-end gap-3 pt-2 border-t border-border-light">
+        </div>
+      </SlideOver>
+
+      {/* ── Update Vehicle SlideOver ── */}
+      <SlideOver
+        open={!!updateVehicleEwbId}
+        onClose={() => setUpdateVehicleEwbId(null)}
+        title="Update Vehicle (Part-B)"
+        description="Update vehicle details for transshipment, breakdown, or route change"
+        footer={
+          <div className="flex justify-end gap-3">
             <button
+              type="button"
               className="btn-secondary"
-              onClick={() => setShowGenerateModal(false)}
-              disabled={generateMutation.isPending}
+              onClick={() => setUpdateVehicleEwbId(null)}
+              disabled={updateVehicleMutation.isPending}
             >
               Cancel
             </button>
             <button
+              type="button"
               className="btn-primary"
-              onClick={handleGenerate}
-              disabled={generateMutation.isPending}
+              onClick={handleUpdateVehicle}
+              disabled={updateVehicleMutation.isPending}
             >
-              {generateMutation.isPending ? "Generating..." : "Generate EWB"}
+              {updateVehicleMutation.isPending ? "Updating..." : "Update Vehicle"}
             </button>
           </div>
-        </div>
-      </Modal>
-
-      {/* ── Update Vehicle Modal ── */}
-      <Modal
-        open={!!updateVehicleEwbId}
-        onClose={() => setUpdateVehicleEwbId(null)}
-        title="Update Vehicle (Part-B)"
+        }
       >
         <div className="space-y-4">
-          <p className="text-sm text-text-secondary">
-            Update vehicle details for transshipment, breakdown, or route change
-          </p>
           <InputField
             label="New Vehicle Number"
             placeholder="e.g. MH14CD5678"
@@ -530,24 +551,8 @@ function EWayBillsPage() {
               options={UPDATE_REASON_OPTIONS}
             />
           </div>
-          <div className="flex justify-end gap-3 pt-2 border-t border-border-light">
-            <button
-              className="btn-secondary"
-              onClick={() => setUpdateVehicleEwbId(null)}
-              disabled={updateVehicleMutation.isPending}
-            >
-              Cancel
-            </button>
-            <button
-              className="btn-primary"
-              onClick={handleUpdateVehicle}
-              disabled={updateVehicleMutation.isPending}
-            >
-              {updateVehicleMutation.isPending ? "Updating..." : "Update Vehicle"}
-            </button>
-          </div>
         </div>
-      </Modal>
+      </SlideOver>
 
       {/* ── Cancel Confirm Dialog ── */}
       <Modal
