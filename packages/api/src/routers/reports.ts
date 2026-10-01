@@ -958,6 +958,8 @@ export const reportsRouter = router({
     }),
 
   // ── 8. Item-wise Sales Report ─────────────────────────────────
+  // Revenue is each line's taxable value (line total less its GST): GST is
+  // collected for the government, and costs are compared ex-GST.
   itemSales: viewerProcedure
     .input(itemSalesInputSchema)
     .query(async ({ input, ctx }) => {
@@ -983,8 +985,8 @@ export const reportsRouter = router({
           : input.sortBy === "invoices"
             ? sql`COUNT(DISTINCT ${invoices.id}) DESC`
             : input.sortBy === "margin"
-              ? sql`(SUM(${invoiceItems.totalAmount}::numeric) - SUM((${invoiceItems.quantity}::numeric + ${invoiceItems.freeQuantity}::numeric) * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0))) / NULLIF(SUM(${invoiceItems.totalAmount}::numeric), 0) DESC NULLS LAST`
-              : sql`SUM(${invoiceItems.totalAmount}::numeric) DESC`;
+              ? sql`(SUM(${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric) - SUM((${invoiceItems.quantity}::numeric + ${invoiceItems.freeQuantity}::numeric) * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0))) / NULLIF(SUM(${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric), 0) DESC NULLS LAST`
+              : sql`SUM(${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric) DESC`;
 
       async function queryPeriod(periodConditions: typeof conditions) {
         return ctx.db
@@ -996,15 +998,15 @@ export const reportsRouter = router({
             soldQty: sql<string>`SUM(${invoiceItems.quantity}::numeric * COALESCE(${invoiceItems.conversionFactor}::numeric, 1))::text`,
             // Given free on top of what was sold, in base units.
             freeQty: sql<string>`SUM(${invoiceItems.freeQuantity}::numeric * COALESCE(${invoiceItems.conversionFactor}::numeric, 1))::text`,
-            totalRevenue: sql<string>`SUM(${invoiceItems.totalAmount}::numeric)::text`,
-            avgUnitPrice: sql<string>`ROUND(SUM(${invoiceItems.totalAmount}::numeric) / NULLIF(SUM(${invoiceItems.quantity}::numeric * COALESCE(${invoiceItems.conversionFactor}::numeric, 1)), 0), 2)::text`,
+            totalRevenue: sql<string>`SUM(${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric)::text`,
+            avgUnitPrice: sql<string>`ROUND(SUM(${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric) / NULLIF(SUM(${invoiceItems.quantity}::numeric * COALESCE(${invoiceItems.conversionFactor}::numeric, 1)), 0), 2)::text`,
             invoiceCount: sql<number>`COUNT(DISTINCT ${invoices.id})::int`,
             uniqueCustomers: sql<number>`COUNT(DISTINCT ${invoices.partyId})::int`,
             estimatedCost: sql<string>`SUM((${invoiceItems.quantity}::numeric + ${invoiceItems.freeQuantity}::numeric) * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0))::text`,
             grossMarginPct: sql<string>`
               ROUND(
-                (SUM(${invoiceItems.totalAmount}::numeric) - SUM((${invoiceItems.quantity}::numeric + ${invoiceItems.freeQuantity}::numeric) * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0)))
-                / NULLIF(SUM(${invoiceItems.totalAmount}::numeric), 0) * 100,
+                (SUM(${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric) - SUM((${invoiceItems.quantity}::numeric + ${invoiceItems.freeQuantity}::numeric) * COALESCE(${invoiceItems.conversionFactor}::numeric, 1) * COALESCE(${items.purchasePrice}::numeric, 0)))
+                / NULLIF(SUM(${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric), 0) * 100,
                 1
               )::text`,
           })

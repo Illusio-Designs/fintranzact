@@ -30,6 +30,9 @@ describe("contact.submit", () => {
 
   beforeEach(() => {
     resetEnquiryRateLimit();
+    // Test files share one process; another file may have left the e2e
+    // switch on, which turns this limiter off.
+    delete process.env.DISABLE_RATE_LIMIT;
     delete process.env.TURNSTILE_SECRET_KEY;
     delete process.env.CONTACT_INBOX;
     send = vi.spyOn(emailService, "sendEnquiry").mockResolvedValue(undefined);

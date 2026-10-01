@@ -2312,7 +2312,7 @@ function ItemSalesReport({
       "Unit",
       "Qty Sold",
       "Free Qty",
-      "Revenue",
+      "Revenue (excl. GST)",
       "Avg Price",
       "Invoices",
       "Customers",
@@ -2342,7 +2342,7 @@ function ItemSalesReport({
     <div>
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
-        <SummaryCard label="Total Revenue" value={formatCurrency(data.totalRevenue)} accent="green" />
+        <SummaryCard label="Total Revenue (excl. GST)" value={formatCurrency(data.totalRevenue)} accent="green" />
         <SummaryCard label="Items" value={String(data.count)} />
         {compareToPrevious && <SummaryCard label="Comparison Period" value="Enabled" accent="blue" />}
       </div>
@@ -2387,7 +2387,7 @@ function ItemSalesReport({
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Item</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Category</th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Qty Sold</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Revenue</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Revenue (excl. GST)</th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Avg Price</th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Invoices</th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Customers</th>

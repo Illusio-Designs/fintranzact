@@ -261,7 +261,8 @@ describe("reports", () => {
   it("item sales, party statement and payment summary", async () => {
     const range = { fromDate: iso(-60), toDate: iso(1) };
     const items = await caller().reports.itemSales(range);
-    expect(items.rows[0]).toMatchObject({ itemId: world.item1.id, totalRevenue: "525.00", invoiceCount: 1 });
+    // Revenue is the taxable value: ₹525 billed is ₹500 + ₹25 GST.
+    expect(items.rows[0]).toMatchObject({ itemId: world.item1.id, totalRevenue: "500.00", invoiceCount: 1 });
     await expectCode(caller().reports.itemSales({ ...range, sortBy: "name" as never }), "BAD_REQUEST");
     const st = await caller().reports.partyStatement({ partyId: world.party1.id });
     expect(st!.party.id).toBe(world.party1.id);

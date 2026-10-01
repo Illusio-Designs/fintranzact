@@ -401,7 +401,8 @@ describe("reports", () => {
   it("registers and item sales show free goods", async () => {
     const item = await newItem("100");
     const from = daysAgo(1);
-    const inv = await sale([line(item.id, "10", "100.00", { freeQuantity: "1" })]);
+    // 18% GST on the sale, so revenue and margin must leave it out.
+    const inv = await sale([line(item.id, "10", "100.00", { freeQuantity: "1", taxPercent: "18" })]);
     const bill = await purchase([line(item.id, "20", "80.00", { freeQuantity: "4" })]);
     // Item sales count issued invoices, not drafts.
     await caller().invoice.updateStatus({ id: inv.id, status: "sent" } as never);
@@ -420,6 +421,9 @@ describe("reports", () => {
     expect(Number(row!.freeQty)).toBe(1);
     // The free piece cost something too: 11 × 80.
     expect(Number(row!.estimatedCost)).toBe(880);
+    // Revenue and margin leave GST out: (1,000 − 880) / 1,000.
+    expect(Number(row!.totalRevenue)).toBe(1000);
+    expect(row!.grossMarginPct).toBe("12.0");
   });
 
   it("the stock ledger shows how much of each movement was free", async () => {
