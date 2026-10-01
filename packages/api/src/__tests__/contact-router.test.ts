@@ -100,6 +100,20 @@ describe("contact.submit", () => {
     await expect(anonymousCaller("198.51.100.21").contact.submit(CONTACT)).resolves.toEqual({ success: true });
   });
 
+  // The e2e harness's DISABLE_RATE_LIMIT=1 (ignored in production) covers
+  // this limiter too: repeated e2e runs of the contact form (J15) were refused.
+  it("is not limited under DISABLE_RATE_LIMIT outside production", async () => {
+    process.env.DISABLE_RATE_LIMIT = "1";
+    try {
+      const caller = anonymousCaller("198.51.100.30");
+      for (let i = 0; i <= ENQUIRY_LIMIT; i++) {
+        await expect(caller.contact.submit(CONTACT)).resolves.toEqual({ success: true });
+      }
+    } finally {
+      delete process.env.DISABLE_RATE_LIMIT;
+    }
+  });
+
   it("requires a Turnstile token when a secret is configured", async () => {
     process.env.TURNSTILE_SECRET_KEY = "secret";
     await expect(anonymousCaller().contact.submit(CONTACT)).rejects.toMatchObject({ code: "BAD_REQUEST" });

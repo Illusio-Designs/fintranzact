@@ -88,7 +88,9 @@ function PartnerPortalPage() {
 function PortalShell({ email, hasOrganisation, children }: { email?: string; hasOrganisation: boolean; children: ReactNode }) {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
-  const { data: platformMe } = trpc.platform.me.useQuery();
+  // Signed in only: a visitor opening the portal from "Partner login" is sent
+  // to /login, and asking first logged a 401.
+  const { data: platformMe } = trpc.platform.me.useQuery(undefined, { enabled: !!email });
   const logout = trpc.auth.logout.useMutation({
     onSuccess: async () => {
       await clearDesktopToken();

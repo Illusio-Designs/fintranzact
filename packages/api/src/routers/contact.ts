@@ -76,7 +76,9 @@ export const contactRouter = router({
   submit: publicProcedure.input(enquiryInputSchema).mutation(async ({ input, ctx }) => {
     const ip = ctx.ipAddress ?? null;
 
-    if (!limiter.hit(ip ?? "unknown")) {
+    // The e2e escape hatch (server.ts) covers this limiter too, outside production.
+    const limitOff = process.env.DISABLE_RATE_LIMIT === "1" && process.env.NODE_ENV !== "production";
+    if (!limitOff && !limiter.hit(ip ?? "unknown")) {
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",
         message: "Too many messages from your network. Please try again in a few minutes, or email us.",
