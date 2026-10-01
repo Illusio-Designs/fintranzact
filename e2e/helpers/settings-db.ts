@@ -130,3 +130,60 @@ export async function tenantPlan(tenantId: string) {
   const [row] = await db()`select plan from tenants where id = ${tenantId}`;
   return (row as { plan: string | null }).plan;
 }
+
+// ── Online store (J12) ──────────────────────────────────────────
+
+export async function storeSettings(businessId: string) {
+  const [row] = await db()`
+    select store_enabled, store_slug, store_tagline, store_min_order_amount, store_delivery_note
+    from businesses where id = ${businessId}`;
+  return row as {
+    store_enabled: boolean;
+    store_slug: string | null;
+    store_tagline: string | null;
+    store_min_order_amount: string | null;
+    store_delivery_note: string | null;
+  };
+}
+
+export async function storeEnabledItems(businessId: string) {
+  const rows = await db()`select name from items where business_id = ${businessId} and store_enabled order by name`;
+  return rows.map((r) => (r as { name: string }).name);
+}
+
+export type StoreOrderRow = {
+  id: string;
+  order_number: string;
+  status: string;
+  customer_name: string;
+  customer_phone: string;
+  delivery_city: string | null;
+  delivery_pincode: string | null;
+  total_amount: string;
+  item_count: number;
+  cancellation_reason: string | null;
+  confirmed_at: Date | null;
+  cancelled_at: Date | null;
+  invoice_id: string | null;
+  invoice_number: string | null;
+  invoice_status: string | null;
+  invoice_source: string | null;
+  subtotal: string | null;
+  tax_amount: string | null;
+  invoice_total: string | null;
+  party_name: string | null;
+};
+
+/** A business's store orders, oldest first, with the invoice each raised. */
+export async function storeOrdersOf(businessId: string) {
+  return (await db()`
+    select o.id, o.order_number, o.status, o.customer_name, o.customer_phone, o.delivery_city, o.delivery_pincode,
+           o.total_amount, o.item_count, o.cancellation_reason, o.confirmed_at, o.cancelled_at, o.invoice_id,
+           i.invoice_number, i.status as invoice_status, i.source as invoice_source, i.subtotal, i.tax_amount,
+           i.total_amount as invoice_total, p.name as party_name
+    from store_orders o
+    left join invoices i on i.id = o.invoice_id
+    left join parties p on p.id = i.party_id
+    where o.business_id = ${businessId}
+    order by o.created_at`) as unknown as StoreOrderRow[];
+}

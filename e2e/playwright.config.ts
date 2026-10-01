@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:5173";
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
+const STORE_URL = process.env.STORE_URL ?? "http://localhost:5174";
 
 export default defineConfig({
   testDir: ".",
@@ -74,6 +75,18 @@ export default defineConfig({
       timeout: 60_000,
       stdout: "pipe",
       stderr: "pipe",
+    },
+    // The customer-facing online store (apps/store) for the J12 journey. The
+    // web app links to it (VITE_STORE_DOMAIN, localhost:5174 in dev); its dev
+    // proxy sends /<slug>/catalog.json, /order and /identify to the API.
+    {
+      command: "pnpm --filter @fintranzact/store dev",
+      url: STORE_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { API_PROXY_TARGET: API_URL },
     },
   ],
 });

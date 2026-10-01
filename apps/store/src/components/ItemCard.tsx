@@ -317,6 +317,7 @@ export function ItemCard({
                   accent={accent}
                   onAdd={handleAdd}
                   onRemove={handleRemove}
+                  itemName={item.name}
                 />
               )}
             </div>
@@ -335,6 +336,7 @@ export function ItemCard({
               accent={accent}
               onAdd={handleAdd}
               onRemove={handleRemove}
+              itemName={item.name}
             />
           )}
         </div>
@@ -369,18 +371,21 @@ function QuantityStepper({
   accent,
   onAdd,
   onRemove,
+  itemName,
 }: {
   qty: number;
   accent: string;
   onAdd: () => void;
   onRemove: () => void;
+  /** Names the buttons, so each card's stepper is told apart. */
+  itemName: string;
 }) {
   return (
     <div className="qty-stepper" style={{ borderColor: accent }}>
       <button
         onClick={onRemove}
         style={{ color: accent }}
-        aria-label="Remove"
+        aria-label={`Remove one ${itemName}`}
       >
         {qty === 1 ? (
           <TrashIcon size={13} color={accent} />
@@ -395,7 +400,7 @@ function QuantityStepper({
         onClick={onAdd}
         className="qty-add"
         style={{ background: accent }}
-        aria-label="Add more"
+        aria-label={`Add one more ${itemName}`}
       >
         +
       </button>

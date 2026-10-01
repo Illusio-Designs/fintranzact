@@ -175,13 +175,14 @@ function StoreSettingsCard() {
 
       {/* Store URL */}
       <div className="mb-4">
-        <label className="label">Store URL</label>
+        <label className="label" htmlFor="store-slug">Store URL</label>
         <div className="flex items-center gap-0">
           <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-border-color bg-surface-1 text-text-tertiary text-sm select-none whitespace-nowrap">
             {STORE_PREFIX}
           </span>
           <div className="relative flex-1">
             <input
+              id="store-slug"
               className={cn(
                 "input rounded-l-none w-full",
                 isSlugLocked && "bg-surface-1 text-text-tertiary cursor-not-allowed",
@@ -235,8 +236,9 @@ function StoreSettingsCard() {
 
       {/* Tagline */}
       <div className="mb-4">
-        <label className="label">Store Tagline</label>
+        <label className="label" htmlFor="store-tagline">Store Tagline</label>
         <input
+          id="store-tagline"
           className="input"
           value={effectiveTagline}
           onChange={(e) => setTagline(e.target.value)}
@@ -256,8 +258,9 @@ function StoreSettingsCard() {
 
       {/* Min order amount */}
       <div className="mb-4">
-        <label className="label">Minimum Order Amount</label>
+        <label className="label" htmlFor="store-min-order">Minimum Order Amount</label>
         <input
+          id="store-min-order"
           className="input"
           value={effectiveMinOrder}
           onChange={(e) => setMinOrder(e.target.value)}
@@ -268,8 +271,9 @@ function StoreSettingsCard() {
 
       {/* Delivery note */}
       <div className="mb-4">
-        <label className="label">Delivery Note</label>
+        <label className="label" htmlFor="store-delivery-note">Delivery Note</label>
         <input
+          id="store-delivery-note"
           className="input"
           value={effectiveDeliveryNote}
           onChange={(e) => setDeliveryNote(e.target.value)}
@@ -441,7 +445,17 @@ function StoreItemsModal({ open, onClose }: StoreItemsModalProps) {
             return (
               <div
                 key={item.id}
+                role="checkbox"
+                aria-checked={enabled}
+                aria-label={item.name}
+                tabIndex={0}
                 onClick={() => toggleItem(item.id, item.storeEnabled)}
+                onKeyDown={(e) => {
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    toggleItem(item.id, item.storeEnabled);
+                  }
+                }}
                 className={cn(
                   "flex items-center gap-3 py-3 cursor-pointer transition-colors",
                   isPending ? "bg-brand-600/5" : "hover:bg-surface-1",

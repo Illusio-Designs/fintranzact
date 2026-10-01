@@ -1461,9 +1461,13 @@ app.post("/store/:slug/order", async (c) => {
     deliveryAddress,
     deliveryCity,
     deliveryPincode,
-    notes,
+    deliveryNotes,
+    notes: legacyNotes,
     items: orderItems,
   } = body as Record<string, unknown>;
+  // The storefront sends the customer's order notes as `deliveryNotes`
+  // (apps/store api.ts); only `notes` was read, so they were dropped.
+  const notes = deliveryNotes ?? legacyNotes;
 
   // Validate Turnstile for order submission
   const orderIp = getClientIp(c) || null;
