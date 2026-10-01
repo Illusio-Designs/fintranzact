@@ -172,7 +172,7 @@ function StockAdjustmentsPage() {
                 })
               }
             >
-              {adjust.isPending ? "Saving..." : direction === "remove" ? "Remove stock" : "Add stock"}
+              {adjust.isPending ? "Saving…" : direction === "remove" ? "Remove stock" : "Add stock"}
             </button>
           </div>
         }

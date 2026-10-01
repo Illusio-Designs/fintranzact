@@ -304,14 +304,14 @@ describe("DateRangeBar — date filter toolbar for reports and lists", () => {
     it("shows 'Preparing...' label while exporting is true so the user knows the download is in progress", () => {
       renderBar({ onExport: vi.fn(), exporting: true });
 
-      expect(screen.getByText("Preparing...")).toBeInTheDocument();
+      expect(screen.getByText("Preparing…")).toBeInTheDocument();
       expect(screen.queryByText("Export CSV")).not.toBeInTheDocument();
     });
 
     it("disables the Export button while exporting is true to prevent duplicate requests", () => {
       renderBar({ onExport: vi.fn(), exporting: true });
 
-      // The button wrapping "Preparing..." text must be disabled.
+      // The button wrapping "Preparing…" text must be disabled.
       const exportButton = screen.getByRole("button", { name: /preparing/i });
       expect(exportButton).toBeDisabled();
     });

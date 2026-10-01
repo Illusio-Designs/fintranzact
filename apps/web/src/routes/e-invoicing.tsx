@@ -138,7 +138,7 @@ function DashboardTab() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search invoice # or party..."
+            placeholder="Search invoice # or party…"
             className="max-w-xs"
           />
           {hasFailed && (
@@ -192,7 +192,7 @@ function DashboardTab() {
                     <td className="text-text-secondary whitespace-nowrap">{formatDate(inv.invoiceDate)}</td>
                     <td className="text-text-primary max-w-[180px] truncate">{inv.partyName}</td>
                     <td className="text-right tabular-nums font-semibold">{formatCurrency(inv.totalAmount)}</td>
-                    <td className="font-mono text-[10px] text-text-tertiary max-w-[140px] truncate">
+                    <td className="font-mono text-2xs text-text-tertiary max-w-[140px] truncate">
                       {inv.irn ?? "—"}
                     </td>
                     <td className="text-text-secondary whitespace-nowrap text-xs">
@@ -214,7 +214,7 @@ function DashboardTab() {
                           <button
                             onClick={() => generateMutation.mutate({ invoiceId: inv.id })}
                             disabled={generateMutation.isPending}
-                            className="text-[11px] px-2 py-0.5 rounded bg-brand-600/[0.08] text-brand-700 dark:text-brand-400 hover:bg-brand-600/[0.14] transition-colors"
+                            className="text-2xs px-2 py-0.5 rounded bg-brand-600/[0.08] text-brand-700 dark:text-brand-400 hover:bg-brand-600/[0.14] transition-colors"
                             title="Retry"
                           >
                             Retry
@@ -224,7 +224,7 @@ function DashboardTab() {
                           <button
                             onClick={() => generateMutation.mutate({ invoiceId: inv.id })}
                             disabled={generateMutation.isPending}
-                            className="text-[11px] px-2 py-0.5 rounded bg-brand-600/[0.08] text-brand-700 dark:text-brand-400 hover:bg-brand-600/[0.14] transition-colors"
+                            className="text-2xs px-2 py-0.5 rounded bg-brand-600/[0.08] text-brand-700 dark:text-brand-400 hover:bg-brand-600/[0.14] transition-colors"
                           >
                             Generate
                           </button>
@@ -236,7 +236,7 @@ function DashboardTab() {
                               setCancelReason("1");
                               setCancelRemarks("");
                             }}
-                            className="text-[11px] px-2 py-0.5 rounded bg-red-600/[0.08] text-red-600 dark:text-red-400 hover:bg-red-600/[0.14] transition-colors"
+                            className="text-2xs px-2 py-0.5 rounded bg-red-600/[0.08] text-red-600 dark:text-red-400 hover:bg-red-600/[0.14] transition-colors"
                           >
                             Cancel
                           </button>
@@ -302,7 +302,7 @@ function DashboardTab() {
             value={cancelRemarks}
             onChange={(e) => setCancelRemarks(e.target.value)}
             maxLength={100}
-            placeholder="Additional details..."
+            placeholder="Additional details…"
           />
         </div>
         <div className="flex items-center justify-end gap-2 pt-4 mt-4 border-t border-border-light">
@@ -457,7 +457,7 @@ function SettingsTab() {
               onChange={(e) => setField("thresholdCrore", e.target.value)}
               className="input w-full"
             />
-            <p className="text-[10px] text-text-tertiary mt-1">
+            <p className="text-2xs text-text-tertiary mt-1">
               Annual turnover threshold for mandatory e-invoicing
             </p>
           </div>

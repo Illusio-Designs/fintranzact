@@ -9,7 +9,7 @@ interface SearchInputProps {
   className?: string;
 }
 
-export function SearchInput({ value, onChange, placeholder = "Search...", className }: SearchInputProps) {
+export function SearchInput({ value, onChange, placeholder = "Search…", className }: SearchInputProps) {
   return (
     <div className={cn("relative", className)}>
       <Icon

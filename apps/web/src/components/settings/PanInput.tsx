@@ -26,9 +26,9 @@ export function PanInput({ value, onChange, error }: PanInputProps) {
         autoCapitalize="characters"
       />
       {showError && (
-        <p className="text-[11px] text-red-500 mt-1">Invalid PAN format (5 letters + 4 digits + 1 letter)</p>
+        <p className="text-2xs text-red-500 mt-1">Invalid PAN format (5 letters + 4 digits + 1 letter)</p>
       )}
-      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+      {error && <p className="text-2xs text-red-500 mt-1">{error}</p>}
     </div>
   );
 }

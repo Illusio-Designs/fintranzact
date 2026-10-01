@@ -68,7 +68,7 @@ function CompleteProfilePage() {
         setStep("org-choice");
       } else {
         // No invite — go straight to business creation
-        setDoneMessage("Setting up your account...");
+        setDoneMessage("Setting up your account…");
         setStep("done");
         setTimeout(() => navigate({ to: "/settings" }), 800);
       }
@@ -110,7 +110,7 @@ function CompleteProfilePage() {
 
   function handleCreateOwn() {
     sessionStorage.removeItem("pendingInviteToken");
-    setDoneMessage("Setting up your organization...");
+    setDoneMessage("Setting up your organization…");
     setStep("done");
     setTimeout(() => navigate({ to: "/settings" }), 800);
   }
@@ -164,7 +164,7 @@ function CompleteProfilePage() {
                 disabled={profileMutation.isPending}
                 className="btn-primary w-full py-2.5"
               >
-                {profileMutation.isPending ? "Saving..." : "Continue"}
+                {profileMutation.isPending ? "Saving…" : "Continue"}
               </button>
             </form>
           </>

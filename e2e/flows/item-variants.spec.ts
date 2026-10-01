@@ -6,7 +6,7 @@
  *
  * Key UI facts (from items.tsx):
  *   - Items table row click → sets selectedItemId → renders ItemDetailPanel as SlideOver (role="dialog").
- *   - Search placeholder: "Search items..."
+ *   - Search placeholder: "Search items…"
  *   - Detail tabs: "Overview", "Price History", "Stock Movements"
  *   - Variant items show a "Variants" badge / mode indicator in the list.
  *   - The item.create API derives itemMode from variantAttributes: if variantAttributes.length > 0
@@ -78,7 +78,7 @@ test.describe("Item Variants Flow", () => {
     await page.goto("/items");
     await waitForPageReady(page);
 
-    await page.getByPlaceholder("Search items...").fill(variantItemName);
+    await page.getByPlaceholder("Search items…").fill(variantItemName);
     await waitForSearchResults(page);
 
     // At least one row should appear and the item name should be visible
@@ -93,7 +93,7 @@ test.describe("Item Variants Flow", () => {
     await page.goto("/items");
     await waitForPageReady(page);
 
-    await page.getByPlaceholder("Search items...").fill(variantItemName);
+    await page.getByPlaceholder("Search items…").fill(variantItemName);
     await waitForSearchResults(page);
 
     const rows = page.locator("tbody tr");
@@ -116,7 +116,7 @@ test.describe("Item Variants Flow", () => {
     await page.goto("/items");
     await waitForPageReady(page);
 
-    await page.getByPlaceholder("Search items...").fill(variantItemName);
+    await page.getByPlaceholder("Search items…").fill(variantItemName);
     await waitForSearchResults(page);
 
     const rows = page.locator("tbody tr");
@@ -140,7 +140,7 @@ test.describe("Item Variants Flow", () => {
     await page.goto("/items");
     await waitForPageReady(page);
 
-    await page.getByPlaceholder("Search items...").fill(variantItemName);
+    await page.getByPlaceholder("Search items…").fill(variantItemName);
     await waitForSearchResults(page);
 
     const rows = page.locator("tbody tr");
@@ -165,7 +165,7 @@ test.describe("Item Variants Flow", () => {
     await page.goto("/items");
     await waitForPageReady(page);
 
-    await page.getByPlaceholder("Search items...").fill(variantItemName);
+    await page.getByPlaceholder("Search items…").fill(variantItemName);
     await waitForSearchResults(page);
 
     const rows = page.locator("tbody tr");
@@ -190,7 +190,7 @@ test.describe("Item Variants Flow", () => {
     await page.goto("/items");
     await waitForPageReady(page);
 
-    await page.getByPlaceholder("Search items...").fill(variantItemName);
+    await page.getByPlaceholder("Search items…").fill(variantItemName);
     await waitForSearchResults(page);
 
     const rows = page.locator("tbody tr");

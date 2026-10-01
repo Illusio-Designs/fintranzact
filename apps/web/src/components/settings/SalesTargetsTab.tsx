@@ -110,7 +110,7 @@ function ProgressBar({
     <div className={cn("h-1.5 bg-surface-3 rounded-full overflow-hidden", className)}>
       <div
         className={cn(
-          "h-full rounded-full transition-all duration-500",
+          "h-full rounded-full transition-[width] duration-500",
           percentage >= 100
             ? "bg-emerald-500"
             : onTrack
@@ -149,7 +149,7 @@ function TargetCard({
             <span className="text-sm font-semibold text-text-primary">{memberName}</span>
             <span
               className={cn(
-                "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                "px-1.5 py-0.5 rounded text-2xs font-medium",
                 isExpired
                   ? "bg-surface-2 text-text-tertiary"
                   : "bg-brand-600/[0.08] text-brand-700 dark:text-brand-400",
@@ -158,7 +158,7 @@ function TargetCard({
               {target.periodType}
             </span>
             {isExpired && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-2 text-text-tertiary">
+              <span className="px-1.5 py-0.5 rounded text-2xs font-medium bg-surface-2 text-text-tertiary">
                 ended
               </span>
             )}
@@ -218,7 +218,7 @@ function TargetCard({
             percentage={progress.percentage}
             onTrack={progress.onTrack}
           />
-          <div className="flex items-center justify-between text-[11px] text-text-tertiary">
+          <div className="flex items-center justify-between text-2xs text-text-tertiary">
             {progress.percentage >= 100 ? (
               <span className="text-emerald-600 font-medium">Target achieved</span>
             ) : (
@@ -386,8 +386,8 @@ function TargetFormModal({
           >
             {isPending
               ? editTarget
-                ? "Saving..."
-                : "Creating..."
+                ? "Saving…"
+                : "Creating…"
               : editTarget
                 ? "Save Changes"
                 : "Create Target"}

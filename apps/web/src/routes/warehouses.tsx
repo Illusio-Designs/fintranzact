@@ -93,13 +93,13 @@ function WarehousesPage() {
                   <p className="flex flex-wrap items-center gap-2 font-semibold text-text-primary">
                     <span className="truncate">{w.name}</span>
                     {w.isDefault && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-2xs font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                         <Icon icon={CheckmarkCircle02Icon} size={12} />
                         Default
                       </span>
                     )}
                     {w.status !== "active" && (
-                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text-secondary">Inactive</span>
+                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-2xs font-semibold text-text-secondary">Inactive</span>
                     )}
                   </p>
                   <p className="mt-0.5 truncate text-xs text-text-tertiary">
@@ -110,7 +110,7 @@ function WarehousesPage() {
               </div>
               <div className="mt-4 flex items-end justify-between border-t border-border-light pt-3">
                 <div>
-                  <p className="text-[11px] text-text-tertiary">Units in stock</p>
+                  <p className="text-2xs text-text-tertiary">Units in stock</p>
                   <p className="text-lg font-bold tabular-nums text-text-primary">{formatQty(w.quantity)}</p>
                 </div>
                 <p className="max-w-[55%] truncate text-right text-xs text-text-tertiary">{w.address || "No address"}</p>
@@ -130,7 +130,7 @@ function WarehousesPage() {
               setSearch(v);
               setPage(1);
             }}
-            placeholder="Search item or SKU..."
+            placeholder="Search item or SKU…"
             className="max-w-xs"
           />
         </div>
@@ -173,7 +173,7 @@ function WarehousesPage() {
                         })}
                         <td className={cn("text-right font-semibold tabular-nums", low ? "text-amber-700 dark:text-amber-400" : "text-text-primary")}>
                           {formatQty(row.total, row.unit)}
-                          {low && <span className="ml-1.5 text-[11px] font-medium">low</span>}
+                          {low && <span className="ml-1.5 text-2xs font-medium">low</span>}
                         </td>
                       </tr>
                     );
@@ -211,7 +211,7 @@ function WarehousesPage() {
                 })
               }
             >
-              {create.isPending ? "Adding..." : "Add warehouse"}
+              {create.isPending ? "Adding…" : "Add warehouse"}
             </button>
           </div>
         }

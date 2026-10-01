@@ -283,7 +283,7 @@ export function DateInput({
             </div>
             <div role="grid" className="grid grid-cols-7 gap-0.5 text-center">
               {WEEKDAYS.map((w) => (
-                <span key={w} role="columnheader" className="py-1 text-[11px] font-semibold text-text-tertiary">
+                <span key={w} role="columnheader" className="py-1 text-2xs font-semibold text-text-tertiary">
                   {w}
                 </span>
               ))}
@@ -301,7 +301,7 @@ export function DateInput({
                     disabled={outOfRange(iso)}
                     onClick={() => pick(iso)}
                     className={cn(
-                      "h-9 rounded-full text-[13px] tabular-nums text-text-primary transition-colors",
+                      "h-9 rounded-full text-ui tabular-nums text-text-primary transition-colors",
                       "hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent",
                       iso === today && iso !== current && "font-bold ring-1 ring-inset ring-brand-500",
                       iso === focusIso && iso !== current && "bg-surface-2",

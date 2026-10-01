@@ -34,14 +34,14 @@ export function GstinInput({ value, onChange, onPanDetected, error }: GstinInput
         autoCapitalize="characters"
       />
       {showError && (
-        <p className="text-[11px] text-red-500 mt-1">Invalid GSTIN format</p>
+        <p className="text-2xs text-red-500 mt-1">Invalid GSTIN format</p>
       )}
-      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+      {error && <p className="text-2xs text-red-500 mt-1">{error}</p>}
       {!showError && !error && (
-        <p className="text-[11px] text-text-tertiary mt-1">15-character GST Identification Number</p>
+        <p className="text-2xs text-text-tertiary mt-1">15-character GST Identification Number</p>
       )}
       {detectedPan && (
-        <p className="text-[11px] text-brand-600 mt-1">
+        <p className="text-2xs text-brand-600 mt-1">
           PAN detected: {detectedPan}
         </p>
       )}

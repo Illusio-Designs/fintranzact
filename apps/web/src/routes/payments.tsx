@@ -411,7 +411,7 @@ function PaymentsPage() {
               <tbody>
                 {list.items.map((p) => (
                   <tr key={p.id} className="group cursor-pointer" onClick={() => setSelectedPaymentId(p.id)}>
-                    <td className="font-mono text-[13px] text-text-secondary">
+                    <td className="font-mono text-ui text-text-secondary">
                       {p.paymentNumber || "—"}
                     </td>
                     <td className="font-medium">{p.partyName}</td>
@@ -593,7 +593,7 @@ function PaymentDetailPanel({
           {/* Linked invoices */}
           {payment.linkedInvoices.length > 0 && (
             <div>
-              <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">
+              <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">
                 Applied to Invoice{payment.linkedInvoices.length > 1 ? "s" : ""}
               </p>
               <div className="card overflow-hidden">
@@ -618,7 +618,7 @@ function PaymentDetailPanel({
                         }}
                       >
                         <td className="px-3 py-2.5">
-                          <span className="font-mono text-[12px] font-medium text-brand-600 hover:underline">
+                          <span className="font-mono text-xs font-medium text-brand-600 hover:underline">
                             {inv.invoiceNumber}
                           </span>
                         </td>

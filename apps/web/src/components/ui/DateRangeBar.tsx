@@ -87,7 +87,7 @@ export function DateRangeBar({
           {exporting ? (
             <>
               <Spinner size="xs" />
-              Preparing...
+              Preparing…
             </>
           ) : (
             <>

@@ -242,7 +242,7 @@ export function RestoreOnboarding({ tenantId, onBack }: RestoreOnboardingProps) 
             </div>
             <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
               <div
-                className="h-full rounded-full bg-brand-600 transition-all duration-150"
+                className="h-full rounded-full bg-brand-600 transition-[width] duration-150"
                 style={{ width: `${uploadProgress}%` }}
               />
             </div>
@@ -266,7 +266,7 @@ export function RestoreOnboarding({ tenantId, onBack }: RestoreOnboardingProps) 
           aria-label="Restore from backup"
         >
           {isUploading ? <Spinner size="sm" /> : <Icon icon={Upload04Icon} size={20} />}
-          {isUploading ? "Restoring..." : "Restore from backup"}
+          {isUploading ? "Restoring…" : "Restore from backup"}
         </button>
 
         <ConfirmDialog

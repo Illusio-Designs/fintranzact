@@ -40,7 +40,7 @@ export function StatCard({
         )}
       >
         {chip}
-        <p className={cn("text-[11px] font-semibold uppercase tracking-wider text-text-tertiary", labelColor)}>
+        <p className={cn("text-2xs font-semibold uppercase tracking-wider text-text-tertiary", labelColor)}>
           {label}
         </p>
         <p
@@ -55,7 +55,7 @@ export function StatCard({
         {subItems && subItems.length > 0 && (
           <div className="mt-2 space-y-0.5">
             {subItems.map((item) => (
-              <p key={item.label} className="text-[11px] text-text-tertiary">
+              <p key={item.label} className="text-2xs text-text-tertiary">
                 {item.label}: {item.value}
               </p>
             ))}
@@ -88,7 +88,7 @@ export function StatCard({
         {subItems && subItems.length > 0 && (
           <div className="mt-2 space-y-0.5">
             {subItems.map((item) => (
-              <p key={item.label} className="text-[11px] text-text-tertiary">
+              <p key={item.label} className="text-2xs text-text-tertiary">
                 {item.label}: {item.value}
               </p>
             ))}
@@ -121,7 +121,7 @@ export function StatCard({
       {subItems && subItems.length > 0 && (
         <div className="mt-2 space-y-0.5">
           {subItems.map((item) => (
-            <p key={item.label} className="text-[11px] text-text-tertiary">
+            <p key={item.label} className="text-2xs text-text-tertiary">
               {item.label}: {item.value}
             </p>
           ))}

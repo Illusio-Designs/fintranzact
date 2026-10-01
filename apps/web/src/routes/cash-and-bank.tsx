@@ -343,7 +343,7 @@ function CashAndBankPage() {
                     </button>
                     {/* Edit button — always available on hover */}
                     <button
-                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition-all"
+                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition"
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditAccountId(account.id);
@@ -453,7 +453,7 @@ function CashAndBankPage() {
                     ) : (
                       <Icon icon={Download04Icon} size={14} />
                     )}
-                    {exporting ? "Preparing..." : "Export CSV"}
+                    {exporting ? "Preparing…" : "Export CSV"}
                   </button>
                 )}
               </div>
@@ -505,7 +505,7 @@ function CashAndBankPage() {
                           <td>
                             <span
                               className={cn(
-                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium",
+                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium",
                                 txn.type === "deposit"
                                   ? "bg-emerald-600/[0.08] text-emerald-600 dark:text-emerald-400"
                                   : txn.type === "withdrawal"
@@ -536,7 +536,7 @@ function CashAndBankPage() {
                   {txnFetching && allTxns.length > 0 && (
                     <div className="flex items-center justify-center py-3 border-t border-border-light">
                       <Spinner size="sm" className="text-brand-600" />
-                      <span className="ml-2 text-xs text-text-tertiary">Loading more...</span>
+                      <span className="ml-2 text-xs text-text-tertiary">Loading more…</span>
                     </div>
                   )}
                   {!hasMoreTxns && allTxns.length > TXN_PAGE_SIZE && (
@@ -566,7 +566,7 @@ function CashAndBankPage() {
             <div>
               <h3 className="text-sm font-semibold text-text-primary">
                 Untracked Payments
-                <span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-600/[0.08] text-amber-700 dark:text-amber-400 text-[11px] font-bold">
+                <span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-600/[0.08] text-amber-700 dark:text-amber-400 text-2xs font-bold">
                   {untrackedData?.total ?? 0}
                 </span>
               </h3>
@@ -670,7 +670,7 @@ function CashAndBankPage() {
                   }}
                 >
                   {assignMutation.isPending
-                    ? "Assigning..."
+                    ? "Assigning…"
                     : selectAllMatching
                       ? `Assign all ${untrackedData?.total.toLocaleString()}`
                       : `Assign ${selectedUntracked.size}`}
@@ -743,7 +743,7 @@ function CashAndBankPage() {
                           className="w-4 h-4 rounded"
                         />
                       </td>
-                      <td className="font-mono text-[13px] text-brand-600 dark:text-brand-400 hover:underline">
+                      <td className="font-mono text-ui text-brand-600 dark:text-brand-400 hover:underline">
                         {pmt.paymentNumber || "—"}
                       </td>
                       <td className="font-medium">{pmt.partyName}</td>
@@ -1012,7 +1012,7 @@ function EditAccountSlideOver({
               onClick={handleSave}
               disabled={isPending || !accountName.trim() || isLoading}
             >
-              {isPending ? "Saving..." : "Save Changes"}
+              {isPending ? "Saving…" : "Save Changes"}
             </button>
           </div>
         </div>
@@ -1357,7 +1357,7 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
             onClick={handleCreate}
             disabled={isPending || !accountName.trim()}
           >
-            {isPending ? "Creating..." : "Create Account"}
+            {isPending ? "Creating…" : "Create Account"}
           </button>
         </div>
       }
@@ -1572,7 +1572,7 @@ function AddTransactionModal({
             onClick={handleAdd}
             disabled={addTxnMutation.isPending || !txnAmount}
           >
-            {addTxnMutation.isPending ? "Adding..." : "Add Transaction"}
+            {addTxnMutation.isPending ? "Adding…" : "Add Transaction"}
           </button>
         </div>
       }
@@ -1682,7 +1682,7 @@ function TransferModal({
               !transferAmount
             }
           >
-            {transferMutation.isPending ? "Transferring..." : "Transfer"}
+            {transferMutation.isPending ? "Transferring…" : "Transfer"}
           </button>
         </div>
       }

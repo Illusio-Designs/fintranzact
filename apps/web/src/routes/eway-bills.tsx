@@ -406,7 +406,7 @@ function EWayBillsPage() {
               onClick={handleGenerate}
               disabled={generateMutation.isPending}
             >
-              {generateMutation.isPending ? "Generating..." : "Generate EWB"}
+              {generateMutation.isPending ? "Generating…" : "Generate EWB"}
             </button>
           </div>
         }
@@ -521,7 +521,7 @@ function EWayBillsPage() {
               onClick={handleUpdateVehicle}
               disabled={updateVehicleMutation.isPending}
             >
-              {updateVehicleMutation.isPending ? "Updating..." : "Update Vehicle"}
+              {updateVehicleMutation.isPending ? "Updating…" : "Update Vehicle"}
             </button>
           </div>
         }
@@ -1003,7 +1003,7 @@ function SummaryCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "card p-4 text-left border transition-all hover:shadow-sm hover:-translate-y-0.5",
+        "card p-4 text-left border transition hover:shadow-sm hover:-translate-y-0.5",
         colorMap[color],
       )}
     >

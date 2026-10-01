@@ -320,7 +320,7 @@ function ItemsPage() {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search items..."
+          placeholder="Search items…"
           className="max-w-xs"
         />
         <SegmentedControl
@@ -352,7 +352,7 @@ function ItemsPage() {
                 {exporting ? (
                   <>
                     <Spinner size="xs" />
-                    Preparing...
+                    Preparing…
                   </>
                 ) : (
                   <>
@@ -411,12 +411,12 @@ function ItemsPage() {
                     <td>
                       <div className="flex items-center gap-2">
                         {item.itemType === "service" && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400 shrink-0">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400 shrink-0">
                             SVC
                           </span>
                         )}
                         {item.itemMode === "variants" && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-400 shrink-0">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-400 shrink-0">
                             VAR
                           </span>
                         )}
@@ -723,7 +723,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
             onClick={handleCreate}
             disabled={createMutation.isPending || !name.trim()}
           >
-            {createMutation.isPending ? "Creating..." : "Create Item"}
+            {createMutation.isPending ? "Creating…" : "Create Item"}
           </button>
         </div>
       }
@@ -794,7 +794,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
 
         {/* Section divider */}
         <div className="flex items-center gap-3 pt-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
             Additional Details
           </span>
           <div className="flex-1 h-px bg-border-light" />
@@ -895,7 +895,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                   onAddRow={addUnitVariant}
                 />
                 {unitVariants.some((v) => v.unit && v.salePrice) && (
-                  <p className="text-[11px] text-teal-600 dark:text-teal-400 mt-1">
+                  <p className="text-2xs text-teal-600 dark:text-teal-400 mt-1">
                     Adding alternate units makes this an alt-unit product.
                   </p>
                 )}
@@ -979,7 +979,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                   </div>
 
                   {variantAttributes.length > 0 && (
-                    <p className="text-[11px] text-purple-600 dark:text-purple-400">
+                    <p className="text-2xs text-purple-600 dark:text-purple-400">
                       Adding variant attributes makes this a variant product. Stock and pricing are tracked per variant.
                     </p>
                   )}
@@ -1003,11 +1003,11 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                           <thead>
                             <tr className="border-b border-border-light">
                               {variantAttributes.map((a) => (
-                                <th key={a} className="text-left px-2 py-1.5 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">{a}</th>
+                                <th key={a} className="text-left px-2 py-1.5 text-2xs font-semibold text-text-tertiary uppercase tracking-wider">{a}</th>
                               ))}
-                              <th className="text-left px-2 py-1.5 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">SKU</th>
-                              <th className="text-right px-2 py-1.5 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Price</th>
-                              <th className="text-right px-2 py-1.5 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Stock</th>
+                              <th className="text-left px-2 py-1.5 text-2xs font-semibold text-text-tertiary uppercase tracking-wider">SKU</th>
+                              <th className="text-right px-2 py-1.5 text-2xs font-semibold text-text-tertiary uppercase tracking-wider">Price</th>
+                              <th className="text-right px-2 py-1.5 text-2xs font-semibold text-text-tertiary uppercase tracking-wider">Stock</th>
                               <th className="w-7"></th>
                             </tr>
                           </thead>
@@ -1048,7 +1048,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                                   <button
                                     type="button"
                                     onClick={() => removeVariantRow(i)}
-                                    className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950 text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                    className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950 text-red-500 opacity-0 group-hover:opacity-100 transition"
                                     aria-label="Remove variant"
                                   >
                                     <Icon icon={Cancel01Icon} size={12} />
@@ -1068,7 +1068,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                       + Add variant manually
                     </button>
                     {variantRows.length > 0 && (
-                      <p className="text-[11px] text-text-tertiary">
+                      <p className="text-2xs text-text-tertiary">
                         {variantRows.length} variant{variantRows.length !== 1 ? "s" : ""} defined. Leave price blank to use the default price above.
                       </p>
                     )}
@@ -1272,7 +1272,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
             onClick={handleSave}
             disabled={updateMutation.isPending || !name.trim()}
           >
-            {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            {updateMutation.isPending ? "Saving…" : "Save Changes"}
           </button>
         </div>
       }
@@ -1356,7 +1356,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
               placeholder="Select unit"
             />
             {item && unit !== item.unit && (
-              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+              <p className="text-2xs text-amber-600 dark:text-amber-400 mt-1">
                 Saving will rename {item.unit.toUpperCase()} → {unit.toUpperCase()} on all existing invoices.
               </p>
             )}
@@ -1365,7 +1365,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
 
         {/* Section divider */}
         <div className="flex items-center gap-3 pt-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
             Additional Details
           </span>
           <div className="flex-1 h-px bg-border-light" />
@@ -1431,7 +1431,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
                   <div className="input flex items-center text-text-secondary cursor-not-allowed opacity-75 tabular-nums">
                     {parseFloat(stockQuantity).toLocaleString()}
                   </div>
-                  <p className="text-[10px] text-text-tertiary mt-1">Use "Adjust Stock" in the item detail panel.</p>
+                  <p className="text-2xs text-text-tertiary mt-1">Use "Adjust Stock" in the item detail panel.</p>
                 </div>
                 <InputField
                   label="Low Stock Alert"
@@ -1592,7 +1592,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
                         className="text-xs font-medium text-brand-600"
                         disabled={createVariantMutation.isPending}
                       >
-                        {createVariantMutation.isPending ? "Adding..." : "Add Variant"}
+                        {createVariantMutation.isPending ? "Adding…" : "Add Variant"}
                       </button>
                       <button onClick={() => setShowAddVariant(false)} className="text-xs text-text-tertiary">Cancel</button>
                     </div>
@@ -1763,7 +1763,7 @@ function PriceHistoryTab({
                 <tbody>
                   {priceChangedRows.map((h, i) => (
                     <tr key={i}>
-                      <td className="font-mono text-[13px]">
+                      <td className="font-mono text-ui">
                         <Link to="/invoices" search={{ id: h.invoiceId }} className="text-brand-600 hover:text-brand-700 hover:underline">
                           {h.invoiceNumber}
                         </Link>
@@ -1771,7 +1771,7 @@ function PriceHistoryTab({
                       <td className="text-right tabular-nums font-medium">
                         {formatCurrency(String(parseFloat(h.unitPrice) / parseFloat(h.conversionFactor || "1")))}
                         {h.selectedUnit && h.conversionFactor && parseFloat(h.conversionFactor) !== 1 && (
-                          <span className="text-[10px] text-text-tertiary ml-1">
+                          <span className="text-2xs text-text-tertiary ml-1">
                             ({formatCurrency(h.unitPrice)}/{h.selectedUnit})
                           </span>
                         )}
@@ -1938,7 +1938,7 @@ function StockMovementsTab({
               {tableRows.map((r, i) => (
                 <tr key={i}>
                   <td className="text-text-secondary text-xs">{r.date}</td>
-                  <td className="font-mono text-[13px]">
+                  <td className="font-mono text-ui">
                     <Link to={DOC_TYPE_ROUTE[r.documentType] ?? "/invoices"} search={{ id: r.invoiceId }} className="text-brand-600 hover:text-brand-700 hover:underline">
                       {r.invoiceNumber}
                     </Link>
@@ -1999,7 +1999,7 @@ function PeriodToggle({ value, onChange }: { value: PeriodFilter; onChange: (v: 
           key={o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors",
+            "px-2.5 py-1 rounded-full text-2xs font-medium transition-colors",
             value === o.value
               ? "bg-brand-600 text-white"
               : "bg-surface-1 text-text-secondary hover:bg-surface-2 border border-border-light"
@@ -2116,33 +2116,33 @@ function ItemDetailPanel({
             {/* Sales metrics row */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-surface-1 border border-border-light px-4 py-3">
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Total Sales</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider">Total Sales</p>
                 <p className="text-lg font-bold tabular-nums text-text-primary mt-1">
                   {salesStats ? formatCurrency(salesStats.totalSaleAmount) : "—"}
                 </p>
               </div>
               <div className="rounded-xl bg-surface-1 border border-border-light px-4 py-3">
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Total Qty Sold</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider">Total Qty Sold</p>
                 <p className="text-lg font-bold tabular-nums text-text-primary mt-1">
                   {salesStats ? parseFloat(salesStats.totalSaleQty).toLocaleString() : "—"}
                 </p>
-                {salesStats && <p className="text-[11px] text-text-tertiary">{item.unit}</p>}
+                {salesStats && <p className="text-2xs text-text-tertiary">{item.unit}</p>}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-surface-1 border border-border-light px-4 py-3">
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Avg List Price</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider">Avg List Price</p>
                 <p className="text-lg font-bold tabular-nums text-text-primary mt-1">
                   {salesStats ? formatCurrency(salesStats.avgGrossPrice) : "—"}
                 </p>
-                <p className="text-[11px] text-text-tertiary">per {item.unit}, before discount</p>
+                <p className="text-2xs text-text-tertiary">per {item.unit}, before discount</p>
               </div>
               <div className="rounded-xl bg-surface-1 border border-border-light px-4 py-3">
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Avg Realized Price</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider">Avg Realized Price</p>
                 <p className="text-lg font-bold tabular-nums text-text-primary mt-1">
                   {salesStats ? formatCurrency(salesStats.avgNetPrice) : "—"}
                 </p>
-                <p className="text-[11px] text-text-tertiary">per {item.unit}, after discount, excl. tax</p>
+                <p className="text-2xs text-text-tertiary">per {item.unit}, after discount, excl. tax</p>
               </div>
             </div>
 
@@ -2177,8 +2177,8 @@ function ItemDetailPanel({
             {item.itemMode === "variants" && item.variants && item.variants.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">Variants</p>
-                  <p className="text-[11px] text-text-tertiary">
+                  <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide">Variants</p>
+                  <p className="text-2xs text-text-tertiary">
                     Total stock: {item.variants.reduce((sum, v) => sum + parseFloat(v.stockQuantity), 0).toLocaleString()} {item.unit}
                   </p>
                 </div>
@@ -2218,7 +2218,7 @@ function ItemDetailPanel({
             {/* Unit Variants */}
             {item.unitVariants && Array.isArray(item.unitVariants) && item.unitVariants.length > 0 && (
               <div>
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">Unit Variants</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">Unit Variants</p>
                 <div className="rounded-xl border border-border-light overflow-hidden">
                   <table className="data-table">
                     <thead>
@@ -2371,7 +2371,7 @@ function SwitchUnitModal({
                   type="button"
                   onClick={() => selectVariant(v.unit)}
                   className={cn(
-                    "w-full text-left px-3 py-2.5 rounded-lg border transition-all text-sm",
+                    "w-full text-left px-3 py-2.5 rounded-lg border transition text-sm",
                     newUnit === v.unit && !isCustom
                       ? "border-brand-500 bg-brand-600/[0.08]"
                       : "border-border-light hover:border-brand-300"
@@ -2395,13 +2395,13 @@ function SwitchUnitModal({
             type="button"
             onClick={selectCustom}
             className={cn(
-              "w-full text-left px-3 py-2.5 rounded-lg border transition-all text-sm",
+              "w-full text-left px-3 py-2.5 rounded-lg border transition text-sm",
               isCustom
                 ? "border-brand-500 bg-brand-600/[0.08]"
                 : "border-border-light hover:border-brand-300"
             )}
           >
-            <span className="font-medium">Custom unit...</span>
+            <span className="font-medium">Custom unit…</span>
           </button>
           {isCustom && (
             <div className="grid grid-cols-2 gap-3 mt-3">
@@ -2450,7 +2450,7 @@ function SwitchUnitModal({
             })}
             disabled={!newUnit || factor <= 0 || switchMutation.isPending}
           >
-            {switchMutation.isPending ? "Switching..." : "Switch Unit"}
+            {switchMutation.isPending ? "Switching…" : "Switch Unit"}
           </button>
         </div>
       </div>
@@ -2504,7 +2504,7 @@ function MergeItemModal({
             onChange={(e) => setTargetId(e.target.value)}
             className="input-field w-full"
           >
-            <option value="">Select target item...</option>
+            <option value="">Select target item…</option>
             {targetOptions.map((i) => (
               <option key={i.id} value={i.id}>
                 {i.name} ({i.unit.toUpperCase()}{i.salePrice ? ` — ₹${i.salePrice}` : ""})
@@ -2527,7 +2527,7 @@ function MergeItemModal({
               onChange={(e) => setConversionFactor(e.target.value)}
               placeholder="Conversion factor"
             />
-            <p className="text-[11px] text-text-tertiary mt-1">
+            <p className="text-2xs text-text-tertiary mt-1">
               Stock and invoice quantities will be converted using this factor.
             </p>
           </div>
@@ -2546,7 +2546,7 @@ function MergeItemModal({
             }
             disabled={!targetId || mergeMutation.isPending}
           >
-            {mergeMutation.isPending ? "Merging..." : "Merge & Delete"}
+            {mergeMutation.isPending ? "Merging…" : "Merge & Delete"}
           </button>
         </div>
       </div>
@@ -2632,7 +2632,7 @@ function AdjustStockModal({
             onClick={handleSubmit}
             disabled={!qty || adjustMutation.isPending || (isVariantItem && !selectedVariantId)}
           >
-            {adjustMutation.isPending ? "Adjusting..." : `${adjustType === "add" ? "Add" : "Remove"} Stock`}
+            {adjustMutation.isPending ? "Adjusting…" : `${adjustType === "add" ? "Add" : "Remove"} Stock`}
           </button>
         </div>
       }
@@ -2648,7 +2648,7 @@ function AdjustStockModal({
               onChange={(e) => setSelectedVariantId(e.target.value)}
               className="input w-full"
             >
-              <option value="">Select variant...</option>
+              <option value="">Select variant…</option>
               {variants.map((v) => {
                 const attrs = v.attributeValues as Record<string, string>;
                 const label = Object.values(attrs).join(" / ");
@@ -2664,7 +2664,7 @@ function AdjustStockModal({
 
         {/* Current stock display */}
         <div className="rounded-lg bg-surface-1 border border-border-light px-4 py-3">
-          <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Current Stock</p>
+          <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider">Current Stock</p>
           <p className="text-lg font-bold tabular-nums text-text-primary">
             {parseFloat(resolvedStock).toLocaleString()} <span className="text-sm font-normal text-text-tertiary">{unit}</span>
           </p>
@@ -2727,7 +2727,7 @@ function AdjustStockModal({
         {/* Recent adjustments */}
         {history && history.data.length > 0 && (
           <div>
-            <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider mb-2">Recent Adjustments</p>
+            <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider mb-2">Recent Adjustments</p>
             <div className="space-y-1 max-h-32 overflow-y-auto">
               {history.data.map((adj) => (
                 <div key={adj.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-surface-1">

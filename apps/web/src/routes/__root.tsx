@@ -499,7 +499,7 @@ function NoOrgScreen() {
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-border-light hover:border-border-medium hover:bg-surface-1 transition-colors text-sm font-medium text-text-secondary"
                 >
                   {createOrgMutation.isPending
-                    ? "Creating..."
+                    ? "Creating…"
                     : "I want my own organization instead"}
                 </button>
               </>
@@ -529,7 +529,7 @@ function NoOrgScreen() {
                 className="btn-primary w-full py-2.5"
               >
                 {createOrgMutation.isPending
-                  ? "Creating..."
+                  ? "Creating…"
                   : "Create Organization"}
               </button>
             )}
@@ -592,7 +592,7 @@ function TenantPicker({
               </div>
               <span
                 className={cn(
-                  "text-[11px] font-medium px-2 py-0.5 rounded",
+                  "text-2xs font-medium px-2 py-0.5 rounded",
                   t.role === "owner"
                     ? "bg-brand-50 text-brand-700"
                     : t.role === "admin"
@@ -1469,7 +1469,7 @@ function RootLayout() {
                     <button
                       type="button"
                       onClick={() => setNavCollapsed(false)}
-                      className="mx-auto hidden h-9 w-9 place-items-center rounded-[9px] bg-brand-600 text-[13px] font-extrabold text-white md:grid"
+                      className="mx-auto hidden h-9 w-9 place-items-center rounded-[9px] bg-brand-600 text-ui font-extrabold text-white md:grid"
                       aria-label={`Business: ${activeBusiness?.name ?? ""}. Expand sidebar to switch`}
                     >
                       {(activeBusiness?.name ?? "B").charAt(0).toUpperCase()}
@@ -1510,7 +1510,7 @@ function RootLayout() {
                 // Collapsed, the rail is too narrow for a text heading, so
                 // groups read as a hairline rule instead of disappearing.
                 const base = cn(
-                  "flex items-center rounded-[9px] text-[13.5px] transition-colors",
+                  "flex items-center rounded-[9px] text-ui transition-colors",
                   navCollapsed
                     ? "mx-2 px-0 py-2 md:justify-center gap-2.5 md:gap-0"
                     : "mx-2 px-3 py-[7px] gap-2.5",
@@ -1546,7 +1546,7 @@ function RootLayout() {
                       aria-controls={panelId}
                       className={cn(
                         "w-full flex items-center justify-between gap-2 px-3 pt-5 pb-1.5",
-                        "text-[10px] font-bold uppercase tracking-widest text-[#7f90b5]",
+                        "text-2xs font-bold uppercase tracking-widest text-[#7f90b5]",
                         "hover:text-[#c3cee6] transition-colors",
                         isRail && "md:hidden",
                       )}
@@ -1609,7 +1609,7 @@ function RootLayout() {
                   to="/settings"
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    "flex items-center gap-2.5 rounded-[9px] py-2 text-[13.5px] transition-colors",
+                    "flex items-center gap-2.5 rounded-[9px] py-2 text-ui transition-colors",
                     navCollapsed ? "px-3 md:justify-center md:px-0" : "px-3",
                   )}
                   activeProps={{ className: "bg-brand-600 text-white font-semibold" }}
@@ -1626,16 +1626,16 @@ function RootLayout() {
                   navCollapsed && "md:flex-col md:px-0",
                 )}
               >
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#243c77] text-[11px] font-bold text-white">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#243c77] text-2xs font-bold text-white">
                   {initials}
                 </span>
                 <div className={cn("min-w-0 flex-1", navCollapsed && "md:hidden")}>
-                  <p className="truncate text-[13px] font-semibold text-white">{displayName}</p>
+                  <p className="truncate text-ui font-semibold text-white">{displayName}</p>
                   {hasMultipleTenants || canCreateOrg ? (
                     <button
                       type="button"
                       onClick={() => setShowTenantPicker(true)}
-                      className="flex max-w-full items-center gap-1 text-[11px] text-[#9fb0d6] hover:text-white"
+                      className="flex max-w-full items-center gap-1 text-2xs text-[#9fb0d6] hover:text-white"
                       aria-label={`Switch organization — currently ${tenantName}`}
                     >
                       <span className="truncate">
@@ -1645,7 +1645,7 @@ function RootLayout() {
                       <Icon icon={UnfoldMoreIcon} size={11} className="shrink-0" />
                     </button>
                   ) : (
-                    <p className="truncate text-[11px] text-[#9fb0d6]">
+                    <p className="truncate text-2xs text-[#9fb0d6]">
                       {session.role ? `${formatRole(session.role)} · ` : ""}
                       {tenantName}
                     </p>
@@ -1663,7 +1663,7 @@ function RootLayout() {
                   </button>
                 </Tooltip>
               </div>
-              <p className={cn("px-2 text-[10px] tabular-nums text-[#7f90b5]", navCollapsed && "md:text-center md:px-0")}>
+              <p className={cn("px-2 text-2xs tabular-nums text-[#7f90b5]", navCollapsed && "md:text-center md:px-0")}>
                 v{__APP_VERSION__}
               </p>
             </div>
@@ -1706,7 +1706,7 @@ function RootLayout() {
               >
                 <Icon icon={Search01Icon} size={17} className="shrink-0" />
                 <span className="hidden flex-1 truncate text-left sm:block">Search or jump to…</span>
-                <kbd className="hidden rounded-md border border-border-light px-1.5 py-0.5 font-sans text-[11px] font-semibold sm:block">
+                <kbd className="hidden rounded-md border border-border-light px-1.5 py-0.5 font-sans text-2xs font-semibold sm:block">
                   ⌘K
                 </kbd>
               </button>
@@ -1891,7 +1891,7 @@ function BusinessPicker({
             <button
               type="button"
               onClick={onSwitchTenant}
-              className="ml-2 flex h-9 min-w-0 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[13.5px] font-semibold transition hover:bg-white/10 sm:ml-4"
+              className="ml-2 flex h-9 min-w-0 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-ui font-semibold transition hover:bg-white/10 sm:ml-4"
               aria-label={`Switch organization — currently ${tenantName}`}
             >
               <span className="hidden font-medium text-[#9fb0d6] md:inline">Organization</span>
@@ -1899,21 +1899,21 @@ function BusinessPicker({
               <Icon icon={UnfoldMoreIcon} size={14} className="shrink-0" />
             </button>
           ) : (
-            <span className="ml-2 truncate text-[13.5px] font-semibold text-[#c3cee6] sm:ml-4">{tenantName}</span>
+            <span className="ml-2 truncate text-ui font-semibold text-[#c3cee6] sm:ml-4">{tenantName}</span>
           )}
           <div className="ml-auto flex items-center gap-3">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 text-xs font-bold">
               {userInitials}
             </span>
             <span className="hidden leading-tight sm:block">
-              <span className="block text-[13.5px] font-semibold">{userName}</span>
-              {role && <span className="block text-[11.5px] text-[#9fb0d6]">{formatRole(role)}</span>}
+              <span className="block text-ui font-semibold">{userName}</span>
+              {role && <span className="block text-2xs text-[#9fb0d6]">{formatRole(role)}</span>}
             </span>
             <button
               type="button"
               onClick={onSignOut}
               disabled={signingOut}
-              className="flex h-9 items-center gap-1.5 rounded-[9px] border border-white/15 px-3 text-[13px] font-semibold text-[#c3cee6] transition hover:bg-white/10 hover:text-white disabled:opacity-60"
+              className="flex h-9 items-center gap-1.5 rounded-[9px] border border-white/15 px-3 text-ui font-semibold text-[#c3cee6] transition hover:bg-white/10 hover:text-white disabled:opacity-60"
             >
               <Icon icon={Logout01Icon} size={15} />
               <span className="hidden sm:inline">Sign out</span>
@@ -1925,7 +1925,7 @@ function BusinessPicker({
       <main className="mx-auto max-w-6xl px-4 py-10 md:px-8 md:py-12">
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-300">
+            <p className="text-ui font-bold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-300">
               Welcome back{firstName ? `, ${firstName}` : ""}
             </p>
             <h1 className="mt-2 font-display text-3xl font-extrabold tracking-[-0.025em] text-[#0f1b3d] dark:text-white md:text-[34px]">
@@ -1943,7 +1943,7 @@ function BusinessPicker({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search by name, GSTIN or city"
-                className="h-full min-w-0 flex-1 bg-transparent text-[14.5px] text-text-primary outline-none placeholder:text-text-tertiary"
+                className="h-full min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-tertiary"
               />
             </label>
           )}
@@ -1971,7 +1971,7 @@ function BusinessPicker({
                     <span className="block truncate text-[17px] font-bold text-text-primary">{b.name}</span>
                     <span
                       className={cn(
-                        "mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold",
+                        "mt-1 inline-flex rounded-full px-2.5 py-0.5 text-2xs font-semibold",
                         gst
                           ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
                           : "bg-surface-2 text-text-secondary",
@@ -1981,7 +1981,7 @@ function BusinessPicker({
                     </span>
                   </span>
                 </div>
-                <div className="space-y-2 text-[13.5px] text-text-secondary">
+                <div className="space-y-2 text-ui text-text-secondary">
                   <p className="flex items-center gap-2">
                     <Icon icon={File01Icon} size={16} className="shrink-0 text-text-tertiary" />
                     <span className="truncate">{b.gstin ? `GSTIN ${b.gstin}` : "No GSTIN"}</span>
@@ -1996,10 +1996,10 @@ function BusinessPicker({
                   </p>
                 </div>
                 <span className="mt-auto flex items-center justify-between border-t border-border-light pt-3.5">
-                  <span className="text-[12.5px] text-text-tertiary">
+                  <span className="text-xs text-text-tertiary">
                     {REGISTRATION_LABELS[b.gstRegistrationType ?? ""] ?? (gst ? "GST registered" : "Unregistered")}
                   </span>
-                  <span className="inline-flex h-8 items-center rounded-[9px] bg-brand-50 px-3.5 text-[13.5px] font-bold text-brand-700 transition group-hover:bg-brand-600 group-hover:text-white dark:bg-brand-950 dark:text-brand-300">
+                  <span className="inline-flex h-8 items-center rounded-[9px] bg-brand-50 px-3.5 text-ui font-bold text-brand-700 transition group-hover:bg-brand-600 group-hover:text-white dark:bg-brand-950 dark:text-brand-300">
                     Open →
                   </span>
                 </span>
@@ -2017,7 +2017,7 @@ function BusinessPicker({
                 <Icon icon={PlusSignIcon} size={22} />
               </span>
               <span className="text-base font-bold text-text-primary">Add a business</span>
-              <span className="text-[13px] text-text-tertiary">Another GSTIN, branch or company</span>
+              <span className="text-ui text-text-tertiary">Another GSTIN, branch or company</span>
             </button>
           )}
         </div>
@@ -2112,7 +2112,7 @@ function ShortcutsDialog({
           )
           .map(({ scope, defs }) => (
             <div key={scope}>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-text-tertiary mb-2">
+              <p className="text-2xs font-semibold uppercase tracking-widest text-text-tertiary mb-2">
                 {scopeLabels[scope] || scope}
               </p>
               <div className="space-y-0.5">

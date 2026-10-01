@@ -103,7 +103,7 @@ export function DocumentsTab({ biz }: DocumentsTabProps) {
               onClick={handleSavePrefixes}
               disabled={updateMutation.isPending}
             >
-              {updateMutation.isPending ? "Saving..." : "Save"}
+              {updateMutation.isPending ? "Saving…" : "Save"}
             </button>
           )}
         </div>
@@ -173,7 +173,7 @@ export function DocumentsTab({ biz }: DocumentsTabProps) {
               onClick={handleSaveDefaults}
               disabled={defaultsMutation.isPending}
             >
-              {defaultsMutation.isPending ? "Saving..." : "Save"}
+              {defaultsMutation.isPending ? "Saving…" : "Save"}
             </button>
           )}
         </div>
@@ -228,7 +228,7 @@ export function DocumentsTab({ biz }: DocumentsTabProps) {
               }}
               placeholder="e.g. Payment due within 15 days. Goods once sold will not be taken back. Subject to local jurisdiction."
             />
-            <p className="text-[11px] text-text-tertiary text-right mt-1 tabular-nums">
+            <p className="text-2xs text-text-tertiary text-right mt-1 tabular-nums">
               {defaultTerms.length} / 2000
             </p>
           </div>
@@ -289,7 +289,7 @@ function SequenceEditor({
             onClick={() => onConfirm(value)}
             disabled={isPending}
           >
-            {isPending ? "Saving..." : "Confirm Change"}
+            {isPending ? "Saving…" : "Confirm Change"}
           </button>
         </div>
       </div>

@@ -252,7 +252,7 @@ export function InvoiceCreator({ type, onClose }: Props) {
                   required
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none"
                 >
-                  <option value="">Select...</option>
+                  <option value="">Select…</option>
                   {partiesData?.data.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </Select>
               </div>
@@ -274,7 +274,7 @@ export function InvoiceCreator({ type, onClose }: Props) {
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-light)" }}>
               {/* Table header */}
               <div
-                className="grid gap-2 px-3 py-2 text-[11px] font-medium"
+                className="grid gap-2 px-3 py-2 text-2xs font-medium"
                 style={{
                   gridTemplateColumns: "1fr 180px 72px 90px 64px 64px 90px 28px",
                   background: "var(--surface-1)",
@@ -428,7 +428,7 @@ export function InvoiceCreator({ type, onClose }: Props) {
                         />
                         {li.notes.length > 400 && (
                           <p
-                            className={`absolute right-2 bottom-1 text-[10px] tabular-nums pointer-events-none ${
+                            className={`absolute right-2 bottom-1 text-2xs tabular-nums pointer-events-none ${
                               li.notes.length > 500 ? "text-red-500" : "text-text-tertiary"
                             }`}
                             aria-live="polite"
@@ -443,12 +443,12 @@ export function InvoiceCreator({ type, onClose }: Props) {
                     {isAltUnitProduct && (selectedProduct?.unitVariants as any[])?.length > 0 && (
                       <div className="px-3 pb-2">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-medium" style={{ color: "var(--text-tertiary)" }}>Unit:</span>
+                          <span className="text-2xs font-medium" style={{ color: "var(--text-tertiary)" }}>Unit:</span>
                           <div className="flex gap-1 flex-wrap">
                             <button
                               type="button"
                               onClick={() => selectUnit(li.id, "__base__")}
-                              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                              className={`px-2 py-0.5 rounded text-2xs font-medium transition-colors ${
                                 !li.selectedUnit
                                   ? "bg-brand-100 text-brand-700 dark:bg-brand-950 dark:text-brand-400"
                                   : "bg-[var(--surface-1)] text-[var(--text-secondary)] hover:bg-[var(--surface-2)]"
@@ -462,7 +462,7 @@ export function InvoiceCreator({ type, onClose }: Props) {
                                 key={uv.unit}
                                 type="button"
                                 onClick={() => selectUnit(li.id, uv.unit)}
-                                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                                className={`px-2 py-0.5 rounded text-2xs font-medium transition-colors ${
                                   li.selectedUnit === uv.unit
                                     ? "bg-brand-100 text-brand-700 dark:bg-brand-950 dark:text-brand-400"
                                     : "bg-[var(--surface-1)] text-[var(--text-secondary)] hover:bg-[var(--surface-2)]"
@@ -530,7 +530,7 @@ export function InvoiceCreator({ type, onClose }: Props) {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={3}
-                  placeholder="Additional notes for the customer..."
+                  placeholder="Additional notes for the customer…"
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
                   style={{ background: "var(--surface-1)", border: "1px solid var(--border-color)", color: "var(--text-primary)" }}
                 />
@@ -542,7 +542,7 @@ export function InvoiceCreator({ type, onClose }: Props) {
                   value={terms}
                   onChange={(e) => setTerms(e.target.value)}
                   rows={3}
-                  placeholder="Payment terms, warranty, etc..."
+                  placeholder="Payment terms, warranty, etc…"
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
                   style={{ background: "var(--surface-1)", border: "1px solid var(--border-color)", color: "var(--text-primary)" }}
                 />
@@ -570,7 +570,7 @@ export function InvoiceCreator({ type, onClose }: Props) {
                 disabled={createMutation.isPending || !partyId || !items.some((li) => li.itemName.trim() && li.unitPrice)}
                 className="px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium disabled:opacity-50 transition-colors"
               >
-                {createMutation.isPending ? "Creating..." : "Create invoice"}
+                {createMutation.isPending ? "Creating…" : "Create invoice"}
               </button>
             </div>
           </div>
@@ -589,21 +589,21 @@ function VariantSelector({ itemId, selectedVariantId, onSelect }: {
 }) {
   const { data: variants, isLoading } = trpc.item.listVariants.useQuery({ itemId });
 
-  if (isLoading) return <span className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>Loading variants...</span>;
-  if (!variants || variants.length === 0) return <span className="text-[10px] text-amber-600">No variants defined</span>;
+  if (isLoading) return <span className="text-2xs" style={{ color: "var(--text-tertiary)" }}>Loading variants…</span>;
+  if (!variants || variants.length === 0) return <span className="text-2xs text-amber-600">No variants defined</span>;
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-[10px] font-medium" style={{ color: "var(--text-tertiary)" }}>Variant:</span>
+      <span className="text-2xs font-medium" style={{ color: "var(--text-tertiary)" }}>Variant:</span>
       <Select
         value={selectedVariantId || ""}
         onChange={(e) => {
           const v = variants.find((v) => v.id === e.target.value);
           if (v) onSelect({ id: v.id, attributeValues: v.attributeValues as Record<string, string>, salePrice: v.salePrice, purchasePrice: v.purchasePrice });
         }}
-        className="px-2 py-0.5 rounded text-[10px] outline-none"
+        className="px-2 py-0.5 rounded text-2xs outline-none"
       >
-        <option value="">Select variant...</option>
+        <option value="">Select variant…</option>
         {variants.map((v) => {
           const label = Object.values(v.attributeValues as Record<string, string>).join(" / ");
           return (
@@ -614,7 +614,7 @@ function VariantSelector({ itemId, selectedVariantId, onSelect }: {
         })}
       </Select>
       {!selectedVariantId && (
-        <span className="text-[10px] text-amber-600">Please select a variant</span>
+        <span className="text-2xs text-amber-600">Please select a variant</span>
       )}
     </div>
   );

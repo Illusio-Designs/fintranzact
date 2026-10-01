@@ -435,7 +435,7 @@ export function RecordPaymentPanel({
               type="button"
             >
               {activeMutation.isPending
-                ? (isEditMode ? "Saving..." : "Recording...")
+                ? (isEditMode ? "Saving…" : "Recording…")
                 : displayAmount && parseFloat(displayAmount) > 0
                   ? `${isEditMode ? "Save" : "Record"} ${formatCurrency(displayAmount)}`
                   : (isEditMode ? "Save Payment" : "Record Payment")}
@@ -482,7 +482,7 @@ export function RecordPaymentPanel({
                       setAmountOverridden(false);
                     }
                   }}
-                  className="text-[11px] font-medium text-brand-600 hover:text-brand-700 dark:hover:text-brand-400 transition-colors"
+                  className="text-2xs font-medium text-brand-600 hover:text-brand-700 dark:hover:text-brand-400 transition-colors"
                 >
                   {unpaidInvoices.every((inv) => checkedInvoices.has(inv.id))
                     ? "Clear All"
@@ -541,7 +541,7 @@ export function RecordPaymentPanel({
                               aria-label={`Select invoice ${inv.invoiceNumber}`}
                               onClick={() => handleToggleInvoice(inv.id, inv.balance)}
                               className={cn(
-                                "w-[18px] h-[18px] rounded border-[1.5px] flex items-center justify-center transition-all",
+                                "w-[18px] h-[18px] rounded border-[1.5px] flex items-center justify-center transition",
                                 isFullyPaid
                                   ? "bg-brand-600 border-brand-600"
                                   : isPartial
@@ -565,7 +565,7 @@ export function RecordPaymentPanel({
                                 className="flex items-center gap-2 cursor-pointer"
                                 onClick={() => handleToggleInvoice(inv.id, inv.balance)}
                               >
-                                <span className="font-mono text-[13px] font-medium text-text-primary">
+                                <span className="font-mono text-ui font-medium text-text-primary">
                                   {inv.invoiceNumber}
                                 </span>
                                 <span className="text-xs text-text-tertiary">
@@ -595,7 +595,7 @@ export function RecordPaymentPanel({
                             <div className="mt-1.5 h-1.5 rounded-full bg-surface-2 overflow-hidden">
                               <div
                                 className={cn(
-                                  "h-full rounded-full transition-all duration-300",
+                                  "h-full rounded-full transition-[width] duration-300",
                                   isFullyPaid || projectedPaid >= totalAmt
                                     ? "bg-emerald-500"
                                     : projectedPaid > 0
@@ -634,10 +634,10 @@ export function RecordPaymentPanel({
                                   />
                                 </div>
                                 {isFullyPaid && (
-                                  <span className="text-[11px] font-medium text-emerald-600">Full</span>
+                                  <span className="text-2xs font-medium text-emerald-600">Full</span>
                                 )}
                                 {isPartial && (
-                                  <span className="text-[11px] font-medium text-amber-600">Partial</span>
+                                  <span className="text-2xs font-medium text-amber-600">Partial</span>
                                 )}
                               </div>
                             )}
@@ -706,7 +706,7 @@ export function RecordPaymentPanel({
                     type="button"
                     onClick={() => setSelectedAccountId(account.id)}
                     className={cn(
-                      "flex flex-col items-start gap-0.5 rounded-xl border-2 p-3 cursor-pointer transition-all text-left min-w-[110px] max-w-[150px]",
+                      "flex flex-col items-start gap-0.5 rounded-xl border-2 p-3 cursor-pointer transition text-left min-w-[110px] max-w-[150px]",
                       isSelected
                         ? "border-brand-500 bg-brand-600/[0.06]"
                         : "border-border-light hover:border-brand-300 hover:bg-surface-1"
@@ -722,19 +722,19 @@ export function RecordPaymentPanel({
                     >
                       {account.accountName}
                     </span>
-                    <span className="text-[11px] text-text-tertiary">
+                    <span className="text-2xs text-text-tertiary">
                       {accountTypeLabel(account.accountType)}
                     </span>
                     <span
                       className={cn(
-                        "text-[11px] font-medium tabular-nums mt-0.5",
+                        "text-2xs font-medium tabular-nums mt-0.5",
                         isSelected ? "text-brand-600" : "text-text-secondary"
                       )}
                     >
                       {formatCurrency(account.currentBalance)}
                     </span>
                     {account.isDefault && (
-                      <span className="text-[10px] text-brand-500 font-medium">
+                      <span className="text-2xs text-brand-500 font-medium">
                         Default
                       </span>
                     )}
@@ -820,14 +820,14 @@ export function RecordPaymentPanel({
                 label="Reference #"
                 value={referenceNumber}
                 onChange={(e) => setReferenceNumber(e.target.value)}
-                placeholder="Transaction ID, cheque number..."
+                placeholder="Transaction ID, cheque number…"
               />
               <TextareaField
                 label="Notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
-                placeholder="Optional notes..."
+                placeholder="Optional notes…"
               />
             </div>
           </Disclosure>

@@ -119,7 +119,7 @@ function OrderStatusBadge({ status }: { status: OrderStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium",
+        "inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium",
         cfg.classes
       )}
     >
@@ -197,7 +197,7 @@ function StatusTimeline({ current }: { current: OrderStatus }) {
               </div>
               <p
                 className={cn(
-                  "text-[10px] mt-1.5 text-center leading-tight",
+                  "text-2xs mt-1.5 text-center leading-tight",
                   isDone
                     ? "text-brand-600 dark:text-brand-400 font-medium"
                     : isActive
@@ -356,7 +356,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
           <div className="space-y-5">
             {/* Status timeline */}
             <div>
-              <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-3">
+              <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-3">
                 Order Progress
               </p>
               <StatusTimeline current={o.status} />
@@ -369,7 +369,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
 
             {/* Customer info */}
             <div>
-              <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">
+              <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">
                 Customer
               </p>
               <div className="card rounded-xl border border-border-light bg-surface-1 p-4 space-y-2">
@@ -385,14 +385,14 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                   </p>
                 )}
                 <div className="flex items-center justify-between pt-1 border-t border-border-light">
-                  <span className="text-[11px] text-text-tertiary">Order Date</span>
+                  <span className="text-2xs text-text-tertiary">Order Date</span>
                   <span className="text-xs text-text-secondary">
                     {formatDate(o.createdAt)}
                   </span>
                 </div>
                 {o.invoiceNumber && (
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-text-tertiary">Invoice</span>
+                    <span className="text-2xs text-text-tertiary">Invoice</span>
                     <span className="text-xs font-mono text-brand-600">
                       {o.invoiceNumber}
                     </span>
@@ -403,23 +403,23 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
 
             {/* Line items */}
             <div>
-              <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">
+              <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">
                 Items
               </p>
               <div className="card rounded-xl border border-border-light bg-surface-1 overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border-light bg-surface-2">
-                      <th className="px-4 py-2.5 text-left text-[11px] font-medium text-text-tertiary uppercase tracking-wide">
+                      <th className="px-4 py-2.5 text-left text-2xs font-medium text-text-tertiary uppercase tracking-wide">
                         Item
                       </th>
-                      <th className="px-4 py-2.5 text-center text-[11px] font-medium text-text-tertiary uppercase tracking-wide">
+                      <th className="px-4 py-2.5 text-center text-2xs font-medium text-text-tertiary uppercase tracking-wide">
                         Qty
                       </th>
-                      <th className="px-4 py-2.5 text-right text-[11px] font-medium text-text-tertiary uppercase tracking-wide">
+                      <th className="px-4 py-2.5 text-right text-2xs font-medium text-text-tertiary uppercase tracking-wide">
                         Price
                       </th>
-                      <th className="px-4 py-2.5 text-right text-[11px] font-medium text-text-tertiary uppercase tracking-wide">
+                      <th className="px-4 py-2.5 text-right text-2xs font-medium text-text-tertiary uppercase tracking-wide">
                         Amount
                       </th>
                     </tr>
@@ -436,7 +436,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                         <td className="px-4 py-3 text-center text-text-secondary tabular-nums">
                           {item.quantity}
                           {(item.selectedUnit || item.unit) ? (
-                            <span className="text-text-tertiary ml-0.5 text-[11px]">
+                            <span className="text-text-tertiary ml-0.5 text-2xs">
                               {item.selectedUnit || item.unit}
                             </span>
                           ) : null}
@@ -454,7 +454,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                     <tr className="border-t border-border-light bg-surface-2">
                       <td
                         colSpan={3}
-                        className="px-4 py-3 text-right text-[11px] font-semibold text-text-secondary uppercase tracking-wide"
+                        className="px-4 py-3 text-right text-2xs font-semibold text-text-secondary uppercase tracking-wide"
                       >
                         Total
                       </td>
@@ -470,7 +470,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
             {/* Notes */}
             {o.notes && (
               <div>
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">
                   Notes
                 </p>
                 <p className="text-sm text-text-secondary whitespace-pre-wrap">
@@ -514,7 +514,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                 disabled={cancelOrder.isPending}
                 onClick={() => orderId && cancelOrder.mutate({ orderId, reason: cancelReason.trim() || undefined })}
               >
-                {cancelOrder.isPending ? "Cancelling..." : "Cancel Order"}
+                {cancelOrder.isPending ? "Cancelling…" : "Cancel Order"}
               </button>
             </div>
           </div>
@@ -649,7 +649,7 @@ function StoreOrdersPage() {
                   className="group cursor-pointer"
                   onClick={() => setSelectedId(order.id)}
                 >
-                  <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
+                  <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
                     {order.orderNumber}
                   </td>
                   <td className="font-medium">
@@ -657,7 +657,7 @@ function StoreOrdersPage() {
                       {order.customerName}
                     </span>
                   </td>
-                  <td className="text-text-secondary font-mono text-[13px] whitespace-nowrap">
+                  <td className="text-text-secondary font-mono text-ui whitespace-nowrap">
                     {order.customerPhone ?? "—"}
                   </td>
                   <td className="text-center tabular-nums text-text-secondary">

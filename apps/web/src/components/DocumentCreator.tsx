@@ -678,7 +678,7 @@ export function DocumentCreator({
             disabled={activeMutation.isPending || !partyId || !items.some((li) => li.itemName.trim() && li.unitPrice)}
           >
             {activeMutation.isPending
-              ? isEditing ? "Saving..." : "Creating..."
+              ? isEditing ? "Saving…" : "Creating…"
               : isEditing ? "Save Changes" : `Create ${label}`}
           </button>
         </div>
@@ -750,7 +750,7 @@ export function DocumentCreator({
 
         {/* Line items */}
         <div className="space-y-3">
-          <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">Line Items</p>
+          <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide">Line Items</p>
 
           {items.map((li) => {
             const calc = calcLine(li);
@@ -827,7 +827,7 @@ export function DocumentCreator({
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-qty`}
-                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                        className="text-2xs font-medium text-text-tertiary block mb-0.5"
                       >
                         Qty
                       </label>
@@ -846,7 +846,7 @@ export function DocumentCreator({
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-price`}
-                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                        className="text-2xs font-medium text-text-tertiary block mb-0.5"
                       >
                         Price
                       </label>
@@ -865,7 +865,7 @@ export function DocumentCreator({
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-tax`}
-                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                        className="text-2xs font-medium text-text-tertiary block mb-0.5"
                       >
                         Tax %
                       </label>
@@ -884,7 +884,7 @@ export function DocumentCreator({
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-disc`}
-                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                        className="text-2xs font-medium text-text-tertiary block mb-0.5"
                       >
                         Disc %
                       </label>
@@ -903,7 +903,7 @@ export function DocumentCreator({
                     </div>
                   </div>
                   <div className="text-right shrink-0 pb-1">
-                    <p className="text-[10px] text-text-tertiary mb-0.5">Amount</p>
+                    <p className="text-2xs text-text-tertiary mb-0.5">Amount</p>
                     <p className="text-sm font-semibold tabular-nums text-text-primary">
                       {li.unitPrice ? formatCurrency(calc.total) : "—"}
                     </p>
@@ -927,7 +927,7 @@ export function DocumentCreator({
                   />
                   {li.notes.length > 400 && (
                     <p
-                      className={`absolute right-2 bottom-1 text-[10px] tabular-nums pointer-events-none ${
+                      className={`absolute right-2 bottom-1 text-2xs tabular-nums pointer-events-none ${
                         li.notes.length > 500
                           ? "text-red-500"
                           : "text-text-tertiary"
@@ -984,14 +984,14 @@ export function DocumentCreator({
                   <button
                     type="button"
                     onClick={() => setInvoiceDiscountType("amount")}
-                    className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${invoiceDiscountType === "amount" ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400" : "text-text-tertiary hover:text-text-secondary"}`}
+                    className={`px-1.5 py-0.5 text-2xs font-medium transition-colors ${invoiceDiscountType === "amount" ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400" : "text-text-tertiary hover:text-text-secondary"}`}
                   >
                     ₹
                   </button>
                   <button
                     type="button"
                     onClick={() => setInvoiceDiscountType("percent")}
-                    className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${invoiceDiscountType === "percent" ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400" : "text-text-tertiary hover:text-text-secondary"}`}
+                    className={`px-1.5 py-0.5 text-2xs font-medium transition-colors ${invoiceDiscountType === "percent" ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400" : "text-text-tertiary hover:text-text-secondary"}`}
                   >
                     %
                   </button>
@@ -1069,7 +1069,7 @@ export function DocumentCreator({
                   <button
                     type="button"
                     onClick={() => setCharges([...charges, { label: "Shipping", amount: "" }])}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors border border-dashed border-border-light"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-2xs font-medium text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors border border-dashed border-border-light"
                   >
                     <Icon icon={DeliveryTruck01Icon} size={12} />
                     Shipping
@@ -1078,7 +1078,7 @@ export function DocumentCreator({
                 <button
                   type="button"
                   onClick={() => setCharges([...charges, { label: "", amount: "" }])}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-2xs font-medium text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
                 >
                   + Add charge
                 </button>
@@ -1101,7 +1101,7 @@ export function DocumentCreator({
                 <span className="text-text-secondary">Round Off</span>
                 {bizDefaultRoundOff && !isEditing && !roundOffOverridden && (
                   <span
-                    className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded text-brand-700 dark:text-brand-400 bg-brand-600/[0.1]"
+                    className="text-2xs font-medium uppercase tracking-wide px-1.5 py-0.5 rounded text-brand-700 dark:text-brand-400 bg-brand-600/[0.1]"
                     title="Auto-rounded down to nearest integer (per Settings → Documents). Edit to override."
                   >
                     Auto

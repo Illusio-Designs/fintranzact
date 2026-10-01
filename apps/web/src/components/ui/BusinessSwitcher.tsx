@@ -141,7 +141,7 @@ export function BusinessSwitcher({
         <span
           className={cn(
             "rounded-lg bg-brand-600 text-white flex items-center justify-center font-semibold shrink-0",
-            sidebar ? "w-8 h-8 text-[13px] font-extrabold rounded-[9px]" : "w-7 h-7 text-xs",
+            sidebar ? "w-8 h-8 text-ui font-extrabold rounded-[9px]" : "w-7 h-7 text-xs",
           )}
         >
           {sidebar ? businessInitials(activeBusiness.name) : activeInitial}
@@ -152,14 +152,14 @@ export function BusinessSwitcher({
           <span className="flex-1 min-w-0 text-left">
             <span
               className={cn(
-                "block truncate text-[13px]",
+                "block truncate text-ui",
                 sidebar ? "font-bold text-white" : "font-medium text-text-primary",
               )}
             >
               {activeBusiness.name}
             </span>
             {sidebar && subtitle && (
-              <span className="block truncate text-[11px] text-[#9fb0d6]">{subtitle}</span>
+              <span className="block truncate text-2xs text-[#9fb0d6]">{subtitle}</span>
             )}
           </span>
         )}
@@ -203,7 +203,7 @@ export function BusinessSwitcher({
                     triggerRef.current?.focus();
                   }}
                   className={cn(
-                    "w-full flex items-center gap-2.5 px-3 py-2 text-[13px] transition-colors text-left",
+                    "w-full flex items-center gap-2.5 px-3 py-2 text-ui transition-colors text-left",
                     isFocused ? "bg-surface-1" : "hover:bg-surface-1",
                     isActive ? "font-medium text-brand-700" : "text-text-secondary"
                   )}
@@ -211,7 +211,7 @@ export function BusinessSwitcher({
                   {/* Avatar */}
                   <span
                     className={cn(
-                      "w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-semibold shrink-0",
+                      "w-5 h-5 rounded-md flex items-center justify-center text-2xs font-semibold shrink-0",
                       isActive
                         ? "bg-brand-600 text-white"
                         : "bg-brand-100 text-brand-700"
@@ -245,7 +245,7 @@ export function BusinessSwitcher({
                     close();
                     onCreateNew();
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-surface-1 hover:text-text-primary transition-colors text-left"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-ui text-text-secondary hover:bg-surface-1 hover:text-text-primary transition-colors text-left"
                 >
                   <span className="w-5 h-5 rounded-md border border-dashed border-border flex items-center justify-center shrink-0">
                     <PlusIcon />

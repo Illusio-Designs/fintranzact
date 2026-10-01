@@ -23,6 +23,13 @@
   --chart-3: #1baf7a;
   --chart-4: #eda100;
   --chart-5: #e87ba4;
+  /* Motion: fast, ease-out, never ease-in. Durations in ms. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-press: 120ms;
+  --dur-fast: 150ms;
+  --dur-pop: 180ms;
+  --dur-panel: 280ms;
 }
 
 /* Navy dark theme, matching the brand sidebar. Cards (surface-0) sit lighter
@@ -51,7 +58,7 @@
 }
 
 html {
-  font-family: "DM Sans", system-ui, sans-serif;
+  font-family: "DM Sans Variable", "DM Sans", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--surface-0);
@@ -74,9 +81,23 @@ body {
   outline-offset: 2px;
 }
 
-/* Smooth transitions */
+/* Smooth transitions: only colour, border and shadow (never "all", which
+   also animates layout and makes typing feel laggy). */
 button, a, input, select, textarea {
-  transition: all 0.15s ease;
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: ease;
+}
+
+/* Everything respects the device's reduced-motion setting: keep fades,
+   drop movement and long animations. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Input base */
@@ -88,10 +109,10 @@ input, select, textarea {
 @layer components {
   /* Buttons */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium transition-all duration-150 hover:bg-brand-700 active:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium transition duration-150 active:scale-[0.97] hover:bg-brand-700 active:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 border disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition duration-150 active:scale-[0.97] border disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
     background: var(--surface-0);
     color: var(--text-secondary);
     border-color: var(--border-color);
@@ -101,7 +122,7 @@ input, select, textarea {
     color: var(--text-primary);
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 disabled:opacity-50 focus-visible:outline-none;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition duration-150 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-none;
     color: var(--text-secondary);
   }
   .btn-ghost:hover {
@@ -109,7 +130,7 @@ input, select, textarea {
     color: var(--text-primary);
   }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium transition-all duration-150 hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium transition duration-150 active:scale-[0.97] hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none;
   }
   .btn-icon {
     @apply inline-flex items-center justify-center p-2 rounded-lg transition-colors duration-150;
@@ -278,7 +299,7 @@ input, select, textarea {
   }
   /* Subtle lift on hover — opt-in via .card-interactive */
   .card-interactive {
-    @apply rounded-xl transition-all duration-200;
+    @apply rounded-xl transition duration-200;
     background: var(--surface-0);
     border: 1px solid var(--border-light);
   }

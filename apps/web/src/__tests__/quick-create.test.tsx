@@ -314,9 +314,9 @@ describe("QuickItemCreate", () => {
     expect(btn).toBeEnabled();
   });
 
-  it('unit select starts with "Select unit..." placeholder', () => {
+  it('unit select starts with "Select unit…" placeholder', () => {
     render(<QuickItemCreate {...defaultProps} />);
-    expect(screen.getByRole("combobox", { name: /unit/i })).toHaveTextContent("Select unit...");
+    expect(screen.getByRole("combobox", { name: /unit/i })).toHaveTextContent("Select unit…");
   });
 
   it("renders exactly one asterisk per required field (Name, Unit = 2 total)", () => {

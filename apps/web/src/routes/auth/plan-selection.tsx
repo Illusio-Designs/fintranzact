@@ -60,14 +60,14 @@ function PlanSelectionPage() {
                 key={plan.id}
                 type="button"
                 onClick={() => setSelectedPlan(plan.id)}
-                className={`rounded-2xl border p-4 text-left transition-all ${
+                className={`rounded-2xl border p-4 text-left transition ${
                   selectedPlan === plan.id
                     ? "border-brand-500 bg-brand-50 shadow-sm ring-2 ring-brand-100"
                     : "border-border-light bg-surface-0 hover:border-border-medium"
                 }`}
               >
                 {plan.highlight && (
-                  <span className="inline-flex rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
+                  <span className="inline-flex rounded-full bg-emerald-100 px-2 py-1 text-2xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
                     Recommended
                   </span>
                 )}
@@ -115,7 +115,7 @@ function PlanSelectionPage() {
               className="btn-primary mt-6 w-full py-3"
             >
               {updatePlanMutation.isPending
-                ? "Saving plan..."
+                ? "Saving plan…"
                 : "Continue to dashboard"}
             </button>
           </div>

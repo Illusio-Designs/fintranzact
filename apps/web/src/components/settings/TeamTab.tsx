@@ -74,7 +74,7 @@ function TeamSection() {
         {pendingInvitations && pendingInvitations.length > 0 && (
           <div className="border-b border-border-light">
             <div className="px-6 py-2">
-              <span className="text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">
+              <span className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider">
                 Pending Invitations
               </span>
             </div>
@@ -93,7 +93,7 @@ function TeamSection() {
                     <td className="text-text-secondary">{inv.email}</td>
                     <td>
                       <span className={cn(
-                        "px-2 py-0.5 rounded text-[11px] font-medium",
+                        "px-2 py-0.5 rounded text-2xs font-medium",
                         inv.role === "admin"
                           ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400"
                           : "bg-surface-2 text-text-secondary",
@@ -146,7 +146,7 @@ function TeamSection() {
                   <td>
                     <span
                       className={cn(
-                        "px-2 py-0.5 rounded text-[11px] font-medium",
+                        "px-2 py-0.5 rounded text-2xs font-medium",
                         m.role === "owner" || m.role === "superadmin"
                           ? "bg-brand-600/[0.08] text-brand-700 dark:text-brand-400"
                           : m.role === "admin"
@@ -249,7 +249,7 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
               disabled={inviteMutation.isPending}
               className="btn-primary"
             >
-              {inviteMutation.isPending ? "Sending..." : "Send Invite"}
+              {inviteMutation.isPending ? "Sending…" : "Send Invite"}
             </button>
           </div>
         )

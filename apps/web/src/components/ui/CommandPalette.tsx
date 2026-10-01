@@ -179,7 +179,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): React.JS
             Object.entries(sections).map(([section, cmds]) => (
               <li key={section}>
                 <p
-                  className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-text-tertiary"
+                  className="px-4 pt-2 pb-1 text-2xs font-semibold uppercase tracking-widest text-text-tertiary"
                   role="presentation"
                 >
                   {section}
@@ -221,7 +221,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): React.JS
 
         {/* Footer hint */}
         <div
-          className="px-4 py-2.5 flex items-center gap-4 text-[11px] text-text-tertiary border-t border-border-light bg-surface-1"
+          className="px-4 py-2.5 flex items-center gap-4 text-2xs text-text-tertiary border-t border-border-light bg-surface-1"
         >
           <span className="flex items-center gap-1.5">
             <KbdShortcut keys={["↑"]} />

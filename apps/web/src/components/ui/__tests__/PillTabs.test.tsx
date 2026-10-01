@@ -115,7 +115,7 @@ describe("PillTabs — pill-style tab bar used across all list pages", () => {
     // the tabs, and individual buttons use smaller padding/font classes.
     const firstButton = screen.getByRole("button", { name: "All" });
     expect(firstButton.className).toMatch(/px-2/);
-    expect(firstButton.className).toMatch(/text-\[10px\]/);
+    expect(firstButton.className).toMatch(/text-2xs/);
   });
 
   it("renders numeric badge counts alongside tab labels so users can see pending-item volumes at a glance", () => {

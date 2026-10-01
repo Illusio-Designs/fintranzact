@@ -76,7 +76,7 @@ export function PartyShippingAddresses({
             rows={2}
             value={draft.address}
             onChange={(e) => update(index, { address: e.target.value })}
-            placeholder="Street, area..."
+            placeholder="Street, area…"
           />
           <div className="grid grid-cols-3 gap-3">
             <InputField

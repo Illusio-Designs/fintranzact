@@ -108,11 +108,11 @@ export function ShippingTab({ biz }: ShippingTabProps) {
                   <td className="px-4 py-2.5 text-text-tertiary text-xs">{m.description}</td>
                   <td className="px-4 py-2.5 text-right">
                     {m.hasTracking ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 font-medium">
+                      <span className="text-2xs px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 font-medium">
                         Tracking
                       </span>
                     ) : (
-                      <span className="text-[10px] text-text-tertiary">No tracking</span>
+                      <span className="text-2xs text-text-tertiary">No tracking</span>
                     )}
                   </td>
                 </tr>
@@ -139,11 +139,11 @@ export function ShippingTab({ biz }: ShippingTabProps) {
                     <td className="px-4 py-2.5 text-xs text-text-tertiary font-mono">{m.id}</td>
                     <td className="px-4 py-2.5">
                       {m.hasTracking ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 font-medium">
+                        <span className="text-2xs px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 font-medium">
                           Tracking
                         </span>
                       ) : (
-                        <span className="text-[10px] text-text-tertiary">No tracking</span>
+                        <span className="text-2xs text-text-tertiary">No tracking</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right">
@@ -196,7 +196,7 @@ export function ShippingTab({ biz }: ShippingTabProps) {
       <section className="opacity-60 pointer-events-none select-none">
         <div className="flex items-center gap-2 mb-1">
           <h3 className="text-sm font-semibold text-text-primary">Carrier API Integration</h3>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 text-text-tertiary font-medium">Coming Soon</span>
+          <span className="text-2xs px-2 py-0.5 rounded-full bg-surface-2 text-text-tertiary font-medium">Coming Soon</span>
         </div>
         <p className="text-xs text-text-tertiary mb-3">
           Connect carrier accounts for automatic tracking updates and label generation.
@@ -206,7 +206,7 @@ export function ShippingTab({ biz }: ShippingTabProps) {
           {KNOWN_CARRIERS.map((carrier) => (
             <div key={carrier.slug} className="rounded-xl border border-border-light px-4 py-3 flex items-center justify-between">
               <span className="text-sm font-medium text-text-primary">{carrier.name}</span>
-              <span className="text-[10px] text-text-tertiary">API integration</span>
+              <span className="text-2xs text-text-tertiary">API integration</span>
             </div>
           ))}
         </div>
@@ -220,7 +220,7 @@ export function ShippingTab({ biz }: ShippingTabProps) {
             disabled={updateBiz.isPending}
             className="btn-primary"
           >
-            {updateBiz.isPending ? "Saving..." : "Save Shipping Settings"}
+            {updateBiz.isPending ? "Saving…" : "Save Shipping Settings"}
           </button>
         </div>
       )}

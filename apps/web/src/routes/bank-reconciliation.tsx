@@ -689,7 +689,7 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
             onClick={() => handleConfirm()}
             disabled={confirmMutation.isPending || !mapping.date || !mapping.narration}
           >
-            {confirmMutation.isPending ? <><Spinner size="sm" /> Processing...</> : "Confirm & Auto-Match"}
+            {confirmMutation.isPending ? <><Spinner size="sm" /> Processing…</> : "Confirm & Auto-Match"}
           </button>
           <button
             className="btn-secondary"
@@ -806,7 +806,7 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
         onClick={handleUpload}
         disabled={uploadMutation.isPending || !csvContent || !selectedAccountId}
       >
-        {uploadMutation.isPending ? <><Spinner size="sm" /> Parsing...</> : "Upload & Detect Columns"}
+        {uploadMutation.isPending ? <><Spinner size="sm" /> Parsing…</> : "Upload & Detect Columns"}
       </button>
     </div>
   );
@@ -1703,7 +1703,7 @@ function TemplatesTab() {
         <div className="flex-1 max-w-xs">
           <InputField
             label=""
-            placeholder="Search by bank name..."
+            placeholder="Search by bank name…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

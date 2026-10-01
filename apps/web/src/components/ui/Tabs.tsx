@@ -25,7 +25,7 @@ export function PillTabs({ tabs, value, onChange, size = "md", className }: Pill
           onClick={() => tab.value !== value && onChange(tab.value)}
           className={cn(
             "font-medium transition-colors inline-flex items-center gap-1.5 rounded-md",
-            isSmall ? "px-2 py-0.5 text-[10px]" : "px-3.5 py-1.5 text-sm rounded-full",
+            isSmall ? "px-2 py-0.5 text-2xs" : "px-3.5 py-1.5 text-sm rounded-full",
             tab.value === value
               ? isSmall
                 ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-400 shadow-sm"
@@ -38,7 +38,7 @@ export function PillTabs({ tabs, value, onChange, size = "md", className }: Pill
             <span
               className={cn(
                 "inline-flex items-center justify-center rounded-full font-medium min-w-[18px] px-1",
-                isSmall ? "text-[9px]" : "text-[11px]",
+                isSmall ? "text-2xs" : "text-2xs",
                 tab.value === value
                   ? isSmall
                     ? "bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-400"
@@ -77,7 +77,7 @@ export function SegmentedControl({ tabs, value, onChange }: SegmentedControlProp
           type="button"
           onClick={() => tab.value !== value && onChange(tab.value)}
           className={cn(
-            "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+            "px-3 py-1.5 rounded-md text-sm font-medium transition",
             tab.value === value
               ? "bg-surface-0 shadow-sm text-text-primary"
               : "text-text-tertiary hover:text-text-secondary"

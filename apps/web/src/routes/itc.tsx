@@ -454,7 +454,7 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
 
                   return (
                     <tr key={entry.id} className="group">
-                      <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
+                      <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
                         {entry.invoiceNumber}
                       </td>
                       <td className="text-text-primary max-w-[160px] truncate">
@@ -494,7 +494,7 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
                                   invoiceNumber: entry.invoiceNumber ?? "—",
                                 })
                               }
-                              className="px-2 py-1 rounded text-[11px] font-medium text-red-600 hover:bg-red-600/[0.08] transition-colors"
+                              className="px-2 py-1 rounded text-2xs font-medium text-red-600 hover:bg-red-600/[0.08] transition-colors"
                               aria-label={`Block ITC for ${entry.invoiceNumber}`}
                             >
                               Block
@@ -508,7 +508,7 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
                                   invoiceNumber: entry.invoiceNumber ?? "—",
                                 })
                               }
-                              className="px-2 py-1 rounded text-[11px] font-medium text-emerald-600 hover:bg-emerald-600/[0.08] transition-colors"
+                              className="px-2 py-1 rounded text-2xs font-medium text-emerald-600 hover:bg-emerald-600/[0.08] transition-colors"
                               aria-label={`Unblock ITC for ${entry.invoiceNumber}`}
                             >
                               Unblock
@@ -575,13 +575,13 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
               value={blockReason}
               onChange={(v) => setBlockReason(v as ItcBlockReason)}
               options={BLOCK_REASONS}
-              placeholder="Select reason..."
+              placeholder="Select reason…"
             />
           </div>
 
           <TextareaField
             label="Notes (optional)"
-            placeholder="Additional details about the block..."
+            placeholder="Additional details about the block…"
             value={blockNotes}
             onChange={(e) => setBlockNotes(e.target.value)}
             rows={3}
@@ -717,7 +717,7 @@ function AgingAlertsView() {
             <tbody>
               {sorted.map((alert) => (
                 <tr key={alert.invoiceId}>
-                  <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
+                  <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
                     {alert.invoiceNumber}
                   </td>
                   <td className="text-text-primary max-w-[160px] truncate">
@@ -905,7 +905,7 @@ function UtilizationView({
 
           <TextareaField
             label="Notes (optional)"
-            placeholder="Any notes about this utilization..."
+            placeholder="Any notes about this utilization…"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}

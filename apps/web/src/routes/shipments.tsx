@@ -92,7 +92,7 @@ function ShipmentStatusBadge({ status }: { status: ShipmentStatus }) {
     returned: "Returned",
   };
   return (
-    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium", cfg[status])}>
+    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium", cfg[status])}>
       {labels[status]}
     </span>
   );
@@ -301,11 +301,11 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
 
             {/* Carrier / Mode / Tracking */}
             <div>
-              <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">Shipping Details</p>
+              <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">Shipping Details</p>
               <div className="card rounded-xl border border-border-light bg-surface-1 p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-[11px] text-text-tertiary mb-1">Carrier</p>
+                    <p className="text-2xs text-text-tertiary mb-1">Carrier</p>
                     {editing ? (
                       <input
                         type="text"
@@ -319,7 +319,7 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
                     )}
                   </div>
                   <div>
-                    <p className="text-[11px] text-text-tertiary mb-1">Mode</p>
+                    <p className="text-2xs text-text-tertiary mb-1">Mode</p>
                     {editing ? (
                       <Select
                         value={editMode}
@@ -337,7 +337,7 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
                   </div>
                 </div>
                 <div>
-                  <p className="text-[11px] text-text-tertiary mb-1">Tracking Number</p>
+                  <p className="text-2xs text-text-tertiary mb-1">Tracking Number</p>
                   {editing ? (
                     <input
                       type="text"
@@ -364,14 +364,14 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
 
             {/* Dates */}
             <div>
-              <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">Dates</p>
+              <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">Dates</p>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <p className="text-[11px] text-text-tertiary mb-1">Shipped</p>
+                  <p className="text-2xs text-text-tertiary mb-1">Shipped</p>
                   <p className="text-sm text-text-primary">{s.shipmentDate ? formatDate(s.shipmentDate) : "—"}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-text-tertiary mb-1">Est. Delivery</p>
+                  <p className="text-2xs text-text-tertiary mb-1">Est. Delivery</p>
                   {editing ? (
                     <DateInput
                       value={editEstDelivery}
@@ -383,7 +383,7 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
                   )}
                 </div>
                 <div>
-                  <p className="text-[11px] text-text-tertiary mb-1">Delivered</p>
+                  <p className="text-2xs text-text-tertiary mb-1">Delivered</p>
                   <p className="text-sm text-text-primary">{s.actualDelivery ? formatDate(s.actualDelivery) : "—"}</p>
                 </div>
               </div>
@@ -392,12 +392,12 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
             {/* Cost + Weight */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-0.5">Shipping Cost</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-0.5">Shipping Cost</p>
                 <p className="text-sm font-semibold text-text-primary tabular-nums">{formatCurrency(s.cost)}</p>
               </div>
               {s.weight && (
                 <div>
-                  <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-0.5">Weight</p>
+                  <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-0.5">Weight</p>
                   <p className="text-sm text-text-primary">{s.weight} kg</p>
                 </div>
               )}
@@ -406,7 +406,7 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
             {/* Shipping address */}
             {(s.shippingAddress || s.shippingCity || s.shippingPincode) && (
               <div>
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Shipping Address</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Shipping Address</p>
                 <p className="text-sm text-text-secondary">
                   {[s.shippingAddress, s.shippingCity, s.shippingPincode].filter(Boolean).join(", ")}
                 </p>
@@ -415,7 +415,7 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
 
             {/* Notes */}
             <div>
-              <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Notes</p>
+              <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Notes</p>
               {editing ? (
                 <textarea
                   value={editNotes}
@@ -579,7 +579,7 @@ function ShipmentsPage() {
                     <td className="text-text-secondary whitespace-nowrap text-xs">
                       {formatDate(s.shipmentDate ?? s.createdAt)}
                     </td>
-                    <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
+                    <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
                       {s.invoiceNumber ?? "—"}
                     </td>
                     <td className="font-medium">

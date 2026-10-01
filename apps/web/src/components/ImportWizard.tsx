@@ -604,7 +604,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
               </div>
               <span
                 className={cn(
-                  "text-[10px] mt-0.5 font-medium",
+                  "text-2xs mt-0.5 font-medium",
                   active ? "text-brand-700" : "text-text-tertiary"
                 )}
               >
@@ -2075,7 +2075,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
               type="button"
               onClick={() => handleSourceChange(src.key)}
               className={cn(
-                "w-full text-left rounded-xl border-2 px-5 py-4 transition-all",
+                "w-full text-left rounded-xl border-2 px-5 py-4 transition",
                 state.source === src.key
                   ? "border-brand-500 bg-brand-600/[0.08]"
                   : "border-border-light hover:border-brand-300 hover:bg-surface-1"
@@ -2088,7 +2088,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       {src.label}
                     </span>
                     {src.recommended && (
-                      <span className="text-[10px] font-medium bg-brand-600/[0.12] text-brand-600 dark:text-brand-400 rounded px-1.5 py-0.5">
+                      <span className="text-2xs font-medium bg-brand-600/[0.12] text-brand-600 dark:text-brand-400 rounded px-1.5 py-0.5">
                         Recommended
                       </span>
                     )}
@@ -2180,17 +2180,17 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-semibold text-text-primary">{file.name}</span>
-                          <span className={cn("text-[10px] font-medium rounded px-1.5 py-0.5", file.badgeColor)}>
+                          <span className={cn("text-2xs font-medium rounded px-1.5 py-0.5", file.badgeColor)}>
                             {file.badge}
                           </span>
                         </div>
-                        <p className="text-[11px] text-text-tertiary mt-0.5">{file.what}</p>
-                        <p className="text-[11px] text-text-secondary mt-0.5 font-mono">{file.path}</p>
+                        <p className="text-2xs text-text-tertiary mt-0.5">{file.what}</p>
+                        <p className="text-2xs text-text-secondary mt-0.5 font-mono">{file.path}</p>
                       </div>
                     </div>
                   ))}
                 </div>
-                <p className="text-[11px] text-text-tertiary mt-3 pt-2 border-t border-border-light">
+                <p className="text-2xs text-text-tertiary mt-3 pt-2 border-t border-border-light">
                   Tip: Export each file for every financial year you want to import. Drop them all at once — duplicates are handled automatically.
                 </p>
               </div>
@@ -2232,7 +2232,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                 </div>
                 <div>
                   {isProcessing ? (
-                    <p className="text-sm font-medium text-text-primary">Detecting files...</p>
+                    <p className="text-sm font-medium text-text-primary">Detecting files…</p>
                   ) : (
                     <>
                       <p className="text-sm font-medium text-text-primary">Drop your myBillBook exports here</p>
@@ -2287,7 +2287,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                         <IconCircle icon={ft.icon} size="sm" />
                         <div>
                           <p className="text-sm font-medium text-text-primary">{ft.label}</p>
-                          <p className="text-[11px] text-text-tertiary">{ft.description}</p>
+                          <p className="text-2xs text-text-tertiary">{ft.description}</p>
                         </div>
                       </div>
                       {detected ? (() => {
@@ -2323,7 +2323,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       <IconCircle icon={ChartBarLineIcon} size="sm" />
                       <div>
                         <p className="text-sm font-medium text-text-primary">GST Sales Report</p>
-                        <p className="text-[11px] text-text-tertiary">Line items per invoice — items, quantities, prices, GST</p>
+                        <p className="text-2xs text-text-tertiary">Line items per invoice — items, quantities, prices, GST</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -2346,7 +2346,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       <IconCircle icon={ChartBarLineIcon} size="sm" />
                       <div>
                         <p className="text-sm font-medium text-text-primary">GST Sales Report</p>
-                        <p className="text-[11px] text-text-tertiary">Line items per invoice — items, quantities, prices, GST</p>
+                        <p className="text-2xs text-text-tertiary">Line items per invoice — items, quantities, prices, GST</p>
                       </div>
                     </div>
                     <span className="text-xs text-text-tertiary">Optional</span>
@@ -2572,7 +2572,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
                       <span className="text-xs px-2 py-0.5 rounded bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 font-medium">
                         Base: {conflict.baseUnit.toUpperCase()}
                       </span>
-                      <span className="text-[11px] text-text-tertiary">
+                      <span className="text-2xs text-text-tertiary">
                         ({(unitConflicts[ci].totalLines - conflict.altUnits.reduce((s, a) => s + a.count, 0)).toLocaleString()} lines)
                       </span>
                     </div>
@@ -2693,33 +2693,33 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
       const importStepLabels: Record<EntityKey, string> = state.source === "mybillbook"
         ? {
             parties: state.files.parties
-              ? "Importing parties from Party Balance + Sales Summary fallback..."
-              : "Extracting parties from Sales Summary...",
+              ? "Importing parties from Party Balance + Sales Summary fallback…"
+              : "Extracting parties from Sales Summary…",
             items: (() => {
               const isStockSummary = state.files.items?.headers.some((h) => h.toLowerCase().includes("stock quantity"));
-              return isStockSummary ? "Importing items from Stock Summary..." : "Importing items from Rate List...";
+              return isStockSummary ? "Importing items from Stock Summary…" : "Importing items from Rate List…";
             })(),
             invoices: gstReportFile
-              ? `Importing invoices with line items from GST Report (${gstReportFile.rows.length.toLocaleString()} line items)...`
-              : "Importing invoices...",
+              ? `Importing invoices with line items from GST Report (${gstReportFile.rows.length.toLocaleString()} line items)…`
+              : "Importing invoices…",
             payments: "Payments",
             cashBank: isCashBankCsv
-              ? "Importing payments from Cash & Bank CSV (with invoice linkage)..."
-              : "Importing payments from Cash & Bank statement...",
+              ? "Importing payments from Cash & Bank CSV (with invoice linkage)…"
+              : "Importing payments from Cash & Bank statement…",
           }
         : {
-            parties: "Importing Parties...",
-            items: "Importing Items...",
-            invoices: "Importing Invoices...",
-            payments: "Importing Payments...",
-            cashBank: "Importing Cash & Bank Payments...",
+            parties: "Importing Parties…",
+            items: "Importing Items…",
+            invoices: "Importing Invoices…",
+            payments: "Importing Payments…",
+            cashBank: "Importing Cash & Bank Payments…",
           };
 
       return (
         <div className="space-y-3">
           {!importDone && (
             <p className="text-sm text-text-secondary mb-2">
-              Importing data in sequence. Please wait...
+              Importing data in sequence. Please wait…
             </p>
           )}
 

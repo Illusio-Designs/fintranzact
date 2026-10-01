@@ -93,7 +93,7 @@ const FLAGS: Record<string, (props: { className?: string; title?: string }) => R
 function Flag({ code, className }: { code: string; className?: string }) {
   const F = FLAGS[code];
   if (!F) {
-    return <span className="text-[10px] font-bold text-text-secondary">{code}</span>;
+    return <span className="text-2xs font-bold text-text-secondary">{code}</span>;
   }
   return <F className={cn("block h-[14px] w-[21px] shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.08)]", className)} aria-hidden="true" />;
 }

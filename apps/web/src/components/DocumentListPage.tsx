@@ -263,7 +263,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
               {data.data.map((doc: any) => (
                 <tr key={doc.id} className="group cursor-pointer" onClick={() => setSelectedId(doc.id)}>
                   <td className="font-medium">{doc.partyName}</td>
-                  <td className="font-mono text-[13px] text-text-secondary">
+                  <td className="font-mono text-ui text-text-secondary">
                     {doc.invoiceNumber}
                   </td>
                   <td className="text-text-secondary">
@@ -277,7 +277,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                         "—"
                       )
                     ) : doc.referenceDocumentId ? (
-                      <span className="font-mono text-[13px] text-brand-600">
+                      <span className="font-mono text-ui text-brand-600">
                         Linked
                       </span>
                     ) : (
@@ -393,31 +393,31 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-3">
                 <div>
-                  <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Party</p>
+                  <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Party</p>
                   <p className="font-semibold text-text-primary">{selectedDoc.party?.name ?? "—"}</p>
                   {selectedDoc.party?.phone && (
                     <p className="text-xs text-text-tertiary">{selectedDoc.party.phone}</p>
                   )}
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Status</p>
+                  <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Status</p>
                   <StatusBadge status={selectedDoc.status} size="sm" />
                 </div>
               </div>
               <div className="space-y-3">
                 <div>
-                  <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Date</p>
+                  <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Date</p>
                   <p className="text-sm text-text-primary">{formatDate(selectedDoc.invoiceDate)}</p>
                 </div>
                 {selectedDoc.dueDate && (
                   <div>
-                    <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Due Date</p>
+                    <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Due Date</p>
                     <p className="text-sm text-text-primary">{formatDate(selectedDoc.dueDate)}</p>
                   </div>
                 )}
                 {selectedDoc.referenceDocumentId && (
                   <div>
-                    <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Reference Invoice</p>
+                    <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Reference Invoice</p>
                     <button
                       onClick={() => {
                         setSelectedId(null);
@@ -434,7 +434,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
 
             {/* Line items */}
             <div>
-              <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">Items</p>
+              <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">Items</p>
               <div className={cn("overflow-hidden rounded-xl border border-border-light")}>
                 <table className="w-full text-xs">
                   <thead>
@@ -452,7 +452,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                         <td className="px-3 py-2">
                           <p className="font-medium text-text-primary">{li.itemName}</p>
                           {li.description && (
-                            <p className="text-[11px] italic text-text-secondary mt-0.5">{li.description}</p>
+                            <p className="text-2xs italic text-text-secondary mt-0.5">{li.description}</p>
                           )}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-text-secondary">{li.quantity}</td>
@@ -509,13 +509,13 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
               <div className="grid grid-cols-2 gap-4">
                 {selectedDoc.notes && (
                   <div>
-                    <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Notes</p>
+                    <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Notes</p>
                     <p className="text-xs text-text-secondary whitespace-pre-wrap">{selectedDoc.notes}</p>
                   </div>
                 )}
                 {selectedDoc.termsAndConditions && (
                   <div>
-                    <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Terms &amp; Conditions</p>
+                    <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Terms &amp; Conditions</p>
                     <p className="text-xs text-text-secondary whitespace-pre-wrap">{selectedDoc.termsAndConditions}</p>
                   </div>
                 )}

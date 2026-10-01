@@ -150,7 +150,7 @@ function StockTransfersPage() {
                 })
               }
             >
-              {transfer.isPending ? "Transferring..." : `Transfer ${ready.length || ""} item${ready.length === 1 ? "" : "s"}`}
+              {transfer.isPending ? "Transferring…" : `Transfer ${ready.length || ""} item${ready.length === 1 ? "" : "s"}`}
             </button>
           </div>
         }

@@ -468,7 +468,7 @@ function AutomatedInvoicesPage() {
             <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
               <div
                 className={cn(
-                  "h-full rounded-full transition-all duration-300",
+                  "h-full rounded-full transition-[width] duration-300",
                   planUsage.runsThisMonth >= planUsage.limit
                     ? "bg-red-500"
                     : planUsage.runsThisMonth >= planUsage.limit * 0.8
@@ -500,7 +500,7 @@ function AutomatedInvoicesPage() {
               <span className="text-sm font-medium text-text-primary">
                 Smart Suggestions
               </span>
-              <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-400">
+              <span className="text-2xs font-medium px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-400">
                 {suggestions.length}
               </span>
             </div>
@@ -547,7 +547,7 @@ function AutomatedInvoicesPage() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search templates..."
+            placeholder="Search templates…"
             className="max-w-xs"
           />
         </div>
@@ -734,8 +734,8 @@ function AutomatedInvoicesPage() {
             >
               {isSubmitting
                 ? editTemplateId
-                  ? "Saving..."
-                  : "Creating..."
+                  ? "Saving…"
+                  : "Creating…"
                 : editTemplateId
                   ? "Save Changes"
                   : "Create Template"}
@@ -858,7 +858,7 @@ function AutomatedInvoicesPage() {
                       {/* Item picker (optional) */}
                       {itemOptions.length > 0 && (
                         <div>
-                          <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                          <label className="block text-2xs font-medium text-text-tertiary mb-1">
                             Item (optional)
                           </label>
                           <Listbox
@@ -873,12 +873,12 @@ function AutomatedInvoicesPage() {
                               }
                             }}
                             options={[{ value: "", label: "None" }, ...itemOptions]}
-                            placeholder="Link to an item..."
+                            placeholder="Link to an item…"
                           />
                         </div>
                       )}
                       <div>
-                        <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                        <label className="block text-2xs font-medium text-text-tertiary mb-1">
                           Item Name <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -891,7 +891,7 @@ function AutomatedInvoicesPage() {
                       </div>
                       <div className="grid grid-cols-4 gap-2">
                         <div>
-                          <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                          <label className="block text-2xs font-medium text-text-tertiary mb-1">
                             Qty
                           </label>
                           <input
@@ -905,7 +905,7 @@ function AutomatedInvoicesPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                          <label className="block text-2xs font-medium text-text-tertiary mb-1">
                             Unit Price
                           </label>
                           <input
@@ -919,7 +919,7 @@ function AutomatedInvoicesPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                          <label className="block text-2xs font-medium text-text-tertiary mb-1">
                             Tax %
                           </label>
                           <input
@@ -933,7 +933,7 @@ function AutomatedInvoicesPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                          <label className="block text-2xs font-medium text-text-tertiary mb-1">
                             Discount %
                           </label>
                           <input
@@ -950,7 +950,7 @@ function AutomatedInvoicesPage() {
                       {/* Free-text line notes — rendered as italic secondary
                           text beneath the item name on the generated PDFs. */}
                       <div>
-                        <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                        <label className="block text-2xs font-medium text-text-tertiary mb-1">
                           Notes (optional)
                         </label>
                         <div className="relative">
@@ -965,7 +965,7 @@ function AutomatedInvoicesPage() {
                           />
                           {li.notes.length > 400 && (
                             <p
-                              className={`absolute right-2 bottom-1 text-[10px] tabular-nums pointer-events-none ${
+                              className={`absolute right-2 bottom-1 text-2xs tabular-nums pointer-events-none ${
                                 li.notes.length > 500 ? "text-red-500" : "text-text-tertiary"
                               }`}
                               aria-live="polite"
@@ -1166,11 +1166,11 @@ function TemplateDetailSlideOver({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-surface-1">
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Item</th>
-                      <th className="text-right px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Qty</th>
-                      <th className="text-right px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Price</th>
-                      <th className="text-right px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Tax%</th>
-                      <th className="text-right px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Amount</th>
+                      <th className="text-left px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Item</th>
+                      <th className="text-right px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Qty</th>
+                      <th className="text-right px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Price</th>
+                      <th className="text-right px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Tax%</th>
+                      <th className="text-right px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Amount</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -1237,10 +1237,10 @@ function TemplateDetailSlideOver({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-surface-1">
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Date</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Invoice #</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Status</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Error</th>
+                      <th className="text-left px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Date</th>
+                      <th className="text-left px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Invoice #</th>
+                      <th className="text-left px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Status</th>
+                      <th className="text-left px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Error</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -1305,7 +1305,7 @@ function TemplateDetailSlideOver({
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[11px] font-medium text-text-tertiary uppercase">{label}</dt>
+      <dt className="text-2xs font-medium text-text-tertiary uppercase">{label}</dt>
       <dd className="text-sm text-text-primary mt-0.5">{value}</dd>
     </div>
   );

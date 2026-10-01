@@ -522,7 +522,7 @@ function ReportBody({ report }: { report: ReportData }) {
                     <tr key={unitKey(r.itemId, r.variantId)}>
                       <td>
                         <p className="font-medium text-text-primary">{r.name}</p>
-                        <span className={cn("mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold", kindStyle[r.kind])}>{r.kind}</span>
+                        <span className={cn("mt-1 inline-block rounded-full px-2 py-0.5 text-2xs font-bold", kindStyle[r.kind])}>{r.kind}</span>
                       </td>
                       <td className="text-right tabular-nums">{formatQty(r.booksN)}</td>
                       <td className="text-right tabular-nums">{formatQty(r.scannedN)}</td>

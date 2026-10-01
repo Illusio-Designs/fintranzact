@@ -189,7 +189,7 @@ function PartiesPage() {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search by name..."
+          placeholder="Search by name…"
           className="max-w-xs"
         />
         <PillTabs
@@ -212,7 +212,7 @@ function PartiesPage() {
               {exporting ? (
                 <>
                   <Spinner size="xs" />
-                  Preparing...
+                  Preparing…
                 </>
               ) : (
                 <>
@@ -281,7 +281,7 @@ function PartiesPage() {
                   </td>
                   <td className="capitalize text-text-secondary">{party.type}</td>
                   <td className="text-text-secondary">{party.phone || "—"}</td>
-                  <td className="font-mono text-[13px] text-text-secondary">
+                  <td className="font-mono text-ui text-text-secondary">
                     {party.gstin || "—"}
                   </td>
                   <td className="text-right tabular-nums font-medium">
@@ -415,14 +415,14 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
             <div className="grid grid-cols-2 gap-3">
               {/* Party Info */}
               <div className="rounded-xl bg-surface-1 border border-border-light p-4 space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
                   Party Info
                 </p>
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span
                       className={cn(
-                        "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium",
+                        "inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium",
                         party.type === "customer"
                           ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
                           : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
@@ -438,36 +438,36 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                     <p className="text-sm text-text-secondary">{party.email}</p>
                   )}
                   {party.gstin && (
-                    <p className="font-mono text-[13px] text-text-secondary">{party.gstin}</p>
+                    <p className="font-mono text-ui text-text-secondary">{party.gstin}</p>
                   )}
                   {party.pan && (
-                    <p className="font-mono text-[13px] text-text-secondary">PAN: {party.pan}</p>
+                    <p className="font-mono text-ui text-text-secondary">PAN: {party.pan}</p>
                   )}
                   {party.legalName && party.legalName !== party.name && (
-                    <p className="text-[13px] text-text-secondary">Legal name: {party.legalName}</p>
+                    <p className="text-ui text-text-secondary">Legal name: {party.legalName}</p>
                   )}
                   {party.tradeName && party.tradeName !== party.name && (
-                    <p className="text-[13px] text-text-secondary">Trade name: {party.tradeName}</p>
+                    <p className="text-ui text-text-secondary">Trade name: {party.tradeName}</p>
                   )}
                   {party.gstRegistrationType && (
-                    <p className="text-[13px] text-text-secondary">
+                    <p className="text-ui text-text-secondary">
                       {partyGstTypeLabels[party.gstRegistrationType as PartyGstType] ?? party.gstRegistrationType}
                       {party.constitution && ` · ${partyConstitutionLabels[party.constitution as PartyConstitution] ?? party.constitution}`}
                     </p>
                   )}
                   {party.gstinStatus && (
-                    <p className={cn("text-[13px]", party.gstinStatus === "active" ? "text-green-600" : "text-red-600")}>
+                    <p className={cn("text-ui", party.gstinStatus === "active" ? "text-green-600" : "text-red-600")}>
                       GSTIN {party.gstinStatus}
                       {party.gstinVerifiedAt && ` (checked ${formatDate(party.gstinVerifiedAt)})`}
                     </p>
                   )}
                   {party.isMsme && (
-                    <p className="text-[13px] text-text-secondary">
+                    <p className="text-ui text-text-secondary">
                       MSME{party.msmeCategory ? ` (${party.msmeCategory})` : ""}{party.udyamNumber ? ` · ${party.udyamNumber}` : ""}
                     </p>
                   )}
                   {party.tdsSection && (
-                    <p className="text-[13px] text-text-secondary">
+                    <p className="text-ui text-text-secondary">
                       TDS: {tdsSections.find((t) => t.code === party.tdsSection)?.label ?? party.tdsSection} @ {tdsRateFor(party)}%
                     </p>
                   )}
@@ -476,7 +476,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
 
               {/* Balance */}
               <div className="rounded-xl bg-surface-1 border border-border-light p-4 space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
                   Balance
                 </p>
                 <p
@@ -526,14 +526,14 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
 
             {party.additionalShippingAddresses && party.additionalShippingAddresses.length > 0 && (
               <div className="rounded-xl border border-border-light p-4 space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
                   Shipping addresses
                 </p>
                 {party.shippingAddress && (
-                  <p className="text-[13px] text-text-secondary">{party.shippingAddress}</p>
+                  <p className="text-ui text-text-secondary">{party.shippingAddress}</p>
                 )}
                 {party.additionalShippingAddresses.map((a, i) => (
-                  <p key={i} className="text-[13px] text-text-secondary">
+                  <p key={i} className="text-ui text-text-secondary">
                     {a.label && <span className="font-medium text-text-primary">{a.label}: </span>}
                     {[a.address, a.city, a.state, a.pincode].filter(Boolean).join(", ")}
                   </p>
@@ -570,7 +570,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                       {topItems.map((item, i) => (
                         <tr key={item.itemId ?? i}>
                           <td>
-                            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface-2 text-[11px] font-semibold text-text-tertiary">
+                            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface-2 text-2xs font-semibold text-text-tertiary">
                               {i + 1}
                             </span>
                           </td>
@@ -582,7 +582,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                             {formatCurrency(item.totalAmount)}
                           </td>
                           <td className="text-right">
-                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-surface-2 text-text-secondary">
+                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-2xs font-medium bg-surface-2 text-text-secondary">
                               {item.invoiceCount}
                             </span>
                           </td>
@@ -623,7 +623,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                           <td>
                             <span
                               className={cn(
-                                "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                "inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium",
                                 row.type === "payment"
                                   ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
                                   : row.type === "credit_note" || row.type === "sales_return"
@@ -634,7 +634,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                               {{ payment: "Payment", purchase: "Purchase", invoice: "Invoice", credit_note: "Credit Note", sales_return: "Sales Return", purchase_return: "Purchase Return", debit_note: "Debit Note" }[row.type] ?? row.type}
                             </span>
                           </td>
-                          <td className="font-mono text-[13px] text-text-secondary">{row.documentNumber}</td>
+                          <td className="font-mono text-ui text-text-secondary">{row.documentNumber}</td>
                           <td className="text-right tabular-nums font-medium text-text-primary">
                             {formatCurrency(row.runningBalance)}
                           </td>
@@ -679,7 +679,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                           <td>
                             <span
                               className={cn(
-                                "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                "inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium",
                                 row.type === "payment"
                                   ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
                                   : row.type === "credit_note" || row.type === "sales_return"
@@ -692,7 +692,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                           </td>
                           <td>
                             <LinkButton
-                              className="font-mono text-[13px]"
+                              className="font-mono text-ui"
                               onClick={() => {
                                 const routes: Record<string, string> = {
                                   payment: "/payments",
@@ -766,7 +766,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                             navigate({ to: "/invoices", search: { id: inv.id } });
                           }}
                         >
-                          <td className="font-mono text-[13px] text-brand-600 hover:underline">
+                          <td className="font-mono text-ui text-brand-600 hover:underline">
                             {inv.invoiceNumber}
                           </td>
                           <td className="text-text-secondary text-xs">{formatDate(inv.invoiceDate)}</td>
@@ -821,12 +821,12 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                         <td className="text-text-secondary whitespace-nowrap">
                           {formatDate(pmt.paymentDate)}
                         </td>
-                        <td className="font-mono text-[13px] text-text-secondary">
+                        <td className="font-mono text-ui text-text-secondary">
                           {pmt.paymentNumber || "—"}
                         </td>
                         <td>
                           <span className={cn(
-                            "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium",
+                            "inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium",
                             pmt.mode === "cash" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
                               : pmt.mode === "upi" ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-400"
                               : pmt.mode === "bank" ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
@@ -876,7 +876,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                       {topItems.map((item, i) => (
                         <tr key={item.itemId ?? i}>
                           <td>
-                            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface-2 text-[11px] font-semibold text-text-tertiary">
+                            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface-2 text-2xs font-semibold text-text-tertiary">
                               {i + 1}
                             </span>
                           </td>
@@ -888,7 +888,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                             {formatCurrency(item.totalAmount)}
                           </td>
                           <td className="text-right">
-                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-surface-2 text-text-secondary">
+                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-2xs font-medium bg-surface-2 text-text-secondary">
                               {item.invoiceCount}
                             </span>
                           </td>
@@ -979,20 +979,20 @@ function MergePartyModal({
         <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-start">
           {/* Source column */}
           <div className="rounded-xl border-2 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-3 space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-red-500 dark:text-red-400">
+            <p className="text-2xs font-bold uppercase tracking-wider text-red-500 dark:text-red-400">
               Merge FROM
             </p>
             <p className="font-semibold text-sm text-text-primary truncate" title={sourceName}>
               {sourceName}
             </p>
             {sourceStats && (
-              <p className="text-[11px] text-text-tertiary">
+              <p className="text-2xs text-text-tertiary">
                 {sourceStats.invoiceCount} invoice{sourceStats.invoiceCount !== 1 ? "s" : ""}
                 {" · "}
                 {sourceStats.paymentCount} payment{sourceStats.paymentCount !== 1 ? "s" : ""}
               </p>
             )}
-            <p className="text-[10px] text-red-500 dark:text-red-400 font-medium mt-1">
+            <p className="text-2xs text-red-500 dark:text-red-400 font-medium mt-1">
               Will be removed
             </p>
           </div>
@@ -1010,7 +1010,7 @@ function MergePartyModal({
               : "border-dashed border-border-light bg-surface-1"
           )}>
             <p className={cn(
-              "text-[10px] font-bold uppercase tracking-wider",
+              "text-2xs font-bold uppercase tracking-wider",
               selectedTarget ? "text-emerald-600 dark:text-emerald-400" : "text-text-tertiary"
             )}>
               Merge INTO
@@ -1021,18 +1021,18 @@ function MergePartyModal({
                   {selectedTarget.name}
                 </p>
                 {targetStats && (
-                  <p className="text-[11px] text-text-tertiary">
+                  <p className="text-2xs text-text-tertiary">
                     {targetStats.invoiceCount} invoice{targetStats.invoiceCount !== 1 ? "s" : ""}
                     {" · "}
                     {targetStats.paymentCount} payment{targetStats.paymentCount !== 1 ? "s" : ""}
                   </p>
                 )}
-                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
+                <p className="text-2xs text-emerald-600 dark:text-emerald-400 font-medium mt-1">
                   Will be kept
                 </p>
               </>
             ) : (
-              <p className="text-[11px] text-text-tertiary italic">Select a party below</p>
+              <p className="text-2xs text-text-tertiary italic">Select a party below</p>
             )}
           </div>
         </div>
@@ -1060,7 +1060,7 @@ function MergePartyModal({
               <input
                 type="text"
                 className="input w-full mb-2"
-                placeholder="Search parties..."
+                placeholder="Search parties…"
                 value={targetSearch}
                 onChange={(e) => setTargetSearch(e.target.value)}
                 autoFocus
@@ -1070,7 +1070,7 @@ function MergePartyModal({
           {!selectedTarget && (
           <div className="border border-border-light rounded-lg overflow-hidden max-h-40 overflow-y-auto bg-surface-0">
             {partiesLoading ? (
-              <p className="text-sm text-text-tertiary px-3 py-2">Loading parties...</p>
+              <p className="text-sm text-text-tertiary px-3 py-2">Loading parties…</p>
             ) : allParties.length === 0 ? (
               <p className="text-sm text-text-tertiary px-3 py-2 italic">No parties found</p>
             ) : (
@@ -1087,7 +1087,7 @@ function MergePartyModal({
                   )}
                 >
                   <span className="truncate">{p.name}</span>
-                  <span className="text-[11px] text-text-tertiary capitalize shrink-0">{p.type}</span>
+                  <span className="text-2xs text-text-tertiary capitalize shrink-0">{p.type}</span>
                 </button>
               ))
             )}
@@ -1189,7 +1189,7 @@ function MergePartyModal({
             onClick={() => mergeMutation.mutate({ sourceId, targetId })}
             disabled={!targetId || !confirmed || mergeMutation.isPending}
           >
-            {mergeMutation.isPending ? "Merging..." : "Merge & Delete"}
+            {mergeMutation.isPending ? "Merging…" : "Merge & Delete"}
           </button>
         </div>
       </div>
@@ -1421,7 +1421,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
             onClick={handleCreate}
             disabled={createMutation.isPending || !name.trim()}
           >
-            {createMutation.isPending ? "Creating..." : "Create Party"}
+            {createMutation.isPending ? "Creating…" : "Create Party"}
           </button>
         </div>
       }
@@ -1506,7 +1506,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
 
         {/* Section divider */}
         <div className="flex items-center gap-3 pt-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
             Additional Details
           </span>
           <div className="flex-1 h-px bg-border-light" />
@@ -1579,7 +1579,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
                 rows={3}
                 value={billingAddress}
                 onChange={(e) => setBillingAddress(e.target.value)}
-                placeholder="Street, Area..."
+                placeholder="Street, Area…"
               />
               <div className="flex flex-col gap-1">
                 <TextareaField

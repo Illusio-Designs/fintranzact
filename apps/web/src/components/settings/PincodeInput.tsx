@@ -83,24 +83,24 @@ export function PincodeInput({ value, onChange, onCityStateResolved, currentCity
           </div>
         )}
       </div>
-      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+      {error && <p className="text-2xs text-red-500 mt-1">{error}</p>}
       {lookupState === "found" && justFilled && !error && (
-        <p className="text-[11px] text-emerald-600 mt-1" style={{ animation: "pincode-slide 0.3s ease-out" }}>
+        <p className="text-2xs text-emerald-600 mt-1" style={{ animation: "pincode-slide 0.3s ease-out" }}>
           Got it! {resolvedInfo?.district}, {resolvedInfo?.state}
         </p>
       )}
       {lookupState === "found" && !justFilled && !error && (
-        <p className="text-[11px] text-emerald-600 mt-1">
+        <p className="text-2xs text-emerald-600 mt-1">
           {resolvedInfo?.district}, {resolvedInfo?.state}
         </p>
       )}
       {lookupState === "found-mismatch" && !error && resolvedInfo && (
-        <p className="text-[11px] text-amber-600 mt-1">
+        <p className="text-2xs text-amber-600 mt-1">
           PIN suggests {resolvedInfo.district}, {resolvedInfo.state} — your entry differs
         </p>
       )}
       {lookupState === "not-found" && !error && (
-        <p className="text-[11px] text-text-tertiary mt-1">Pincode not recognized — enter city and state manually</p>
+        <p className="text-2xs text-text-tertiary mt-1">Pincode not recognized — enter city and state manually</p>
       )}
       <style>{`
         @keyframes pincode-pop { 0% { transform: scale(0); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }

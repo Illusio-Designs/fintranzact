@@ -150,7 +150,7 @@ function VerifyPage() {
               <Icon icon={Loading03Icon} size={24} className="text-brand-600 animate-spin" />
             </div>
             <h1 className="text-lg font-semibold text-text-primary mb-1">
-              Verifying your link...
+              Verifying your link…
             </h1>
             <p className="text-sm text-text-tertiary">
               Just a moment

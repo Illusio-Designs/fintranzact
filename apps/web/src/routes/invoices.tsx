@@ -72,13 +72,13 @@ function SourceChip({ source }: { source: string | null | undefined }) {
   const entry = source ? cfg[source] : null;
   if (!entry) {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-surface-2 text-text-tertiary">
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-2xs font-medium bg-surface-2 text-text-tertiary">
         Manual
       </span>
     );
   }
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${entry.cls}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-2xs font-medium ${entry.cls}`}>
       {entry.label}
     </span>
   );
@@ -208,7 +208,7 @@ const INVOICE_MODE_LABELS: Record<string, string> = {
 
 function InvoiceShipmentStatusBadge({ status }: { status: ShipmentStatus }) {
   return (
-    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium", SHIPMENT_STATUS_CFG[status])}>
+    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium", SHIPMENT_STATUS_CFG[status])}>
       {SHIPMENT_STATUS_LABELS[status]}
     </span>
   );
@@ -337,7 +337,7 @@ function InvoiceShipmentCard({ invoiceId, partyId, invoiceStatus }: { invoiceId:
 
   return (
     <div>
-      <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">Shipment</p>
+      <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">Shipment</p>
 
       {!shipment ? (
         <div>
@@ -373,7 +373,7 @@ function InvoiceShipmentCard({ invoiceId, partyId, invoiceStatus }: { invoiceId:
                 <button
                   onClick={() => markStatus("shipped")}
                   disabled={updateMutation.isPending}
-                  className="text-[11px] px-2 py-1 rounded-md font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 border border-blue-200 dark:border-blue-800 transition-colors disabled:opacity-50"
+                  className="text-2xs px-2 py-1 rounded-md font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 border border-blue-200 dark:border-blue-800 transition-colors disabled:opacity-50"
                 >
                   Mark Shipped
                 </button>
@@ -382,7 +382,7 @@ function InvoiceShipmentCard({ invoiceId, partyId, invoiceStatus }: { invoiceId:
                 <button
                   onClick={() => markStatus("delivered")}
                   disabled={updateMutation.isPending}
-                  className="text-[11px] px-2 py-1 rounded-md font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 transition-colors disabled:opacity-50"
+                  className="text-2xs px-2 py-1 rounded-md font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 transition-colors disabled:opacity-50"
                 >
                   Mark Delivered
                 </button>
@@ -655,7 +655,7 @@ function InvoiceDetailPanel({
 
           {/* Line items */}
           <div>
-            <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">Items</p>
+            <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">Items</p>
             <div className="card overflow-hidden">
               <table className="w-full text-xs">
                 <thead>
@@ -678,7 +678,7 @@ function InvoiceDetailPanel({
                             placeholder gap when description is null/empty. */}
                         <p className="font-medium text-text-primary">{li.itemName}</p>
                         {li.description && (
-                          <p className="text-[11px] italic text-text-secondary mt-0.5 whitespace-pre-wrap">
+                          <p className="text-2xs italic text-text-secondary mt-0.5 whitespace-pre-wrap">
                             {li.description}
                           </p>
                         )}
@@ -765,13 +765,13 @@ function InvoiceDetailPanel({
             <div className="grid grid-cols-2 gap-4">
               {invoice.notes && (
                 <div>
-                  <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Notes</p>
+                  <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Notes</p>
                   <p className="text-xs text-text-secondary whitespace-pre-wrap">{invoice.notes}</p>
                 </div>
               )}
               {invoice.termsAndConditions && (
                 <div>
-                  <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">Terms &amp; Conditions</p>
+                  <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">Terms &amp; Conditions</p>
                   <p className="text-xs text-text-secondary whitespace-pre-wrap">{invoice.termsAndConditions}</p>
                 </div>
               )}
@@ -781,7 +781,7 @@ function InvoiceDetailPanel({
           {/* Payments linked to this invoice */}
           {invoicePayments && invoicePayments.data.length > 0 && (
             <div>
-              <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">
+              <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">
                 Payments ({invoicePayments.data.length})
               </p>
               <div className="card overflow-hidden">
@@ -806,7 +806,7 @@ function InvoiceDetailPanel({
                         }}
                       >
                         <td className="px-3 py-2">
-                          <span className="font-mono text-[12px] font-medium text-brand-600 hover:underline">
+                          <span className="font-mono text-xs font-medium text-brand-600 hover:underline">
                             {pmt.paymentNumber || "—"}
                           </span>
                         </td>
@@ -827,7 +827,7 @@ function InvoiceDetailPanel({
                   </tbody>
                   <tfoot>
                     <tr className="bg-surface-1 border-t border-border-light">
-                      <td colSpan={4} className="px-3 py-2 text-right text-[11px] font-medium text-text-secondary">
+                      <td colSpan={4} className="px-3 py-2 text-right text-2xs font-medium text-text-secondary">
                         Total Paid
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums font-bold text-emerald-600">
@@ -1056,7 +1056,7 @@ function InvoicesPage() {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search invoices..."
+          placeholder="Search invoices…"
           className="max-w-xs"
         />
         <SegmentedControl
@@ -1149,7 +1149,7 @@ function InvoicesPage() {
                       onClick={() => setSelectedInvoiceId(inv.id)}
                     >
                       <td className="font-medium"><span className="block truncate max-w-[250px]">{inv.partyName}</span></td>
-                      <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
+                      <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
                         {inv.invoiceNumber}
                       </td>
                       <td className="text-text-secondary whitespace-nowrap">

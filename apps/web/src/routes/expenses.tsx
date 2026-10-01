@@ -279,7 +279,7 @@ function ExpensesPage() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search category or description..."
+            placeholder="Search category or description…"
             className="max-w-xs"
           />
           <DateRangeBar
@@ -446,8 +446,8 @@ function ExpensesPage() {
             >
               {isSubmitting
                 ? editExpenseId
-                  ? "Saving..."
-                  : "Adding..."
+                  ? "Saving…"
+                  : "Adding…"
                 : editExpenseId
                   ? "Save Changes"
                   : "Add Expense"}
