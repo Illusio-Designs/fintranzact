@@ -586,7 +586,7 @@ function InvoiceStatusChart({ fromDate, toDate }: { fromDate?: string; toDate?: 
   const total = data.reduce((sum, d) => sum + d.count, 0);
 
   return (
-    <div className={cn(PANEL, "flex flex-col overflow-hidden")}>
+    <div className={cn(PANEL, "flex flex-col overflow-hidden")} data-testid="dashboard-invoice-status">
       <PanelHeader title="Invoice status" icon={Invoice03Icon}>
         <span className="text-xs tabular-nums text-text-tertiary">{total} invoices</span>
       </PanelHeader>
@@ -794,7 +794,7 @@ function PaymentModeWidget({ fromDate, toDate }: { fromDate?: string; toDate?: s
   const grandTotal = data.reduce((s, d) => s + parseFloat(d.total), 0);
 
   return (
-    <div className={cn(PANEL, "overflow-hidden")}>
+    <div className={cn(PANEL, "overflow-hidden")} data-testid="dashboard-payment-modes">
       <PanelHeader title="Payment modes" icon={CreditCardIcon}>
         <span className="text-xs tabular-nums text-text-tertiary">{formatCurrency(String(grandTotal))} received</span>
       </PanelHeader>
@@ -991,7 +991,7 @@ function MonthlyComparisonWidget() {
   ];
 
   return (
-    <div className={cn(PANEL, "overflow-hidden")}>
+    <div className={cn(PANEL, "overflow-hidden")} data-testid="dashboard-month-on-month">
       <PanelHeader title="Month on Month" icon={Analytics01Icon} />
       <div className="px-4 py-3">
         {/* Header row */}
@@ -1036,12 +1036,16 @@ function SummaryCards({
     payable: string;
     cashInHand: string;
     totalExpenses: string;
+    grossProfit: string;
+    netProfit: string;
     fyStart: string;
   };
   periodLabel: string;
 }) {
-  const grossProfit = parseFloat(data.totalSales) - parseFloat(data.totalPurchases);
-  const netProfit = grossProfit - parseFloat(data.totalExpenses);
+  // Worked out by the API as the P&L report does (taxable value, net of
+  // credit notes, cost of goods sold from stock)
+  const grossProfit = parseFloat(data.grossProfit);
+  const netProfit = parseFloat(data.netProfit);
 
   const hero: Array<{ label: string; value: string; note: string; icon: IconSvgElement }> = [
     { label: "Sales", value: data.totalSales, note: periodLabel, icon: ChartLineData01Icon },
@@ -1067,7 +1071,10 @@ function SummaryCards({
                 <Icon icon={c.icon} size={18} />
               </span>
             </div>
-            <p className="mt-2.5 font-display text-[17px] font-extrabold leading-tight tracking-[-0.02em] tabular-nums text-text-primary sm:text-[22px] xl:text-[26px]">
+            <p
+              data-testid={`dashboard-${c.label.toLowerCase().replace(/\s+/g, "-")}`}
+              className="mt-2.5 font-display text-[17px] font-extrabold leading-tight tracking-[-0.02em] tabular-nums text-text-primary sm:text-[22px] xl:text-[26px]"
+            >
               {formatCurrency(c.value)}
             </p>
             <p className="mt-1 truncate text-xs text-text-tertiary">{c.note}</p>
@@ -1092,6 +1099,7 @@ function SummaryCards({
             <div className="min-w-0">
               <p className="text-[11px] font-medium text-text-tertiary">{c.label}</p>
               <p
+                data-testid={`dashboard-${c.label.toLowerCase().replace(/\s+/g, "-")}`}
                 className={cn(
                   "truncate text-[13.5px] font-bold tabular-nums sm:text-[15px]",
                   c.signed

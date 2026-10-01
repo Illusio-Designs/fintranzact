@@ -25,6 +25,7 @@ import {
   gstr2bIgnoreRecordSchema,
   isIntraStateSupply,
   istPeriodRange,
+  money,
   splitIntraStateTax,
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
@@ -88,8 +89,11 @@ export const gstr2bRouter = router({
         .select({
           id: invoices.id,
           invoiceNumber: invoices.invoiceNumber,
+          supplierInvoiceNumber: invoices.supplierInvoiceNumber,
           invoiceDate: invoices.invoiceDate,
           subtotal: invoices.subtotal,
+          discountAmount: invoices.discountAmount,
+          additionalCharges: invoices.additionalCharges,
           taxAmount: invoices.taxAmount,
           partyGstin: parties.gstin,
           partyStateCode: parties.stateCode,
@@ -130,10 +134,12 @@ export const gstr2bRouter = router({
         const halfPaise = Math.round(cgstRs * 100);
         return {
           id: r.id,
-          invoiceNumber: r.invoiceNumber,
+          // The supplier reports its own bill number; ours is internal
+          invoiceNumber: r.supplierInvoiceNumber || r.invoiceNumber,
           invoiceDate: r.invoiceDate,
           partyGstin: r.partyGstin ?? null,
-          subtotal: r.subtotal,
+          // Taxable value: lines less the document discount, plus charges
+          subtotal: money.add(money.sub(r.subtotal, r.discountAmount || "0"), r.additionalCharges || "0"),
           cgst: interState ? ZERO : (halfPaise / 100).toFixed(2),
           sgst: interState ? ZERO : ((taxPaise - halfPaise) / 100).toFixed(2),
           igst: interState ? (taxPaise / 100).toFixed(2) : ZERO,
@@ -518,6 +524,7 @@ export const gstr2bRouter = router({
         .select({
           id: invoices.id,
           invoiceNumber: invoices.invoiceNumber,
+          supplierInvoiceNumber: invoices.supplierInvoiceNumber,
           invoiceDate: invoices.invoiceDate,
           totalAmount: invoices.totalAmount,
           subtotal: invoices.subtotal,
@@ -550,6 +557,7 @@ export const gstr2bRouter = router({
         records: page.map((r) => ({
           id: r.id,
           invoiceNumber: r.invoiceNumber,
+          supplierInvoiceNumber: r.supplierInvoiceNumber,
           invoiceDate: r.invoiceDate,
           totalAmount: r.totalAmount,
           subtotal: r.subtotal,

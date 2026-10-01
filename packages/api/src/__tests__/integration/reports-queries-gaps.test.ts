@@ -184,7 +184,8 @@ describe("dashboard widgets", () => {
     expect((await c.dashboard.receivablesAging()).summary.total).toBe("425.00");
     expect(await c.dashboard.shippingSummary({})).toEqual({ charged: "0.00", spent: "0.00", net: "0.00" });
     const statuses = await c.dashboard.invoiceStatusBreakdown({});
-    expect(statuses.reduce((s, r) => s + r.count, 0)).toBeGreaterThanOrEqual(2);
+    // The sale invoice only: the purchase bill is not an invoice the business raised
+    expect(statuses.reduce((s, r) => s + r.count, 0)).toBe(1);
     // The rent expense is dated 2 days ago; on the 1st or 2nd of an Indian
     // month that falls in the previous month's bucket.
     const mc = await c.dashboard.monthlyComparison();

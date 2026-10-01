@@ -499,6 +499,7 @@ export const invoiceRouter = router({
         type: input.type,
         documentType: "invoice",
         invoiceNumber,
+        supplierInvoiceNumber: input.type === "purchase" ? input.supplierInvoiceNumber || null : null,
         invoiceDate,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         subtotal: totals.subtotal,
@@ -892,6 +893,8 @@ export const invoiceRouter = router({
       partyId: z.string().uuid().optional(),
       invoiceDate: z.string().datetime().optional(),
       dueDate: z.string().datetime().optional().nullable(),
+      /** Purchase invoices: the supplier's bill number (null clears it). */
+      supplierInvoiceNumber: z.string().trim().max(50).optional().nullable(),
       notes: z.string().max(2000).optional().nullable(),
       termsAndConditions: z.string().max(2000).optional().nullable(),
       charges: z.array(invoiceChargeSchema).optional(),
@@ -999,6 +1002,9 @@ export const invoiceRouter = router({
         if (input.dueDate !== undefined) updates.dueDate = input.dueDate ? new Date(input.dueDate) : null;
         if (input.notes !== undefined) updates.notes = input.notes;
         if (input.termsAndConditions !== undefined) updates.termsAndConditions = input.termsAndConditions;
+        if (input.supplierInvoiceNumber !== undefined && existing.type === "purchase") {
+          updates.supplierInvoiceNumber = input.supplierInvoiceNumber || null;
+        }
         // Keeping the saved method is always fine, even one since removed
         // from Settings → Shipping; a change must be one the business offers.
         if (input.deliveryMethod !== undefined && input.deliveryMethod !== existing.deliveryMethod) {

@@ -183,6 +183,13 @@
       "when": 1790798367934,
       "tag": "0025_item_batches",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790847336129,
+      "tag": "0026_supplier_invoice_number",
+      "breakpoints": true
     }
   ]
 }

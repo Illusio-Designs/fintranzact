@@ -206,11 +206,14 @@ export function DocumentCreator({
   // Free goods ("10 + 1") on any goods document; rejections only on a GRN.
   const allowsFree = (freeQuantityDocumentTypes as readonly string[]).includes(documentType);
   const isGrn = documentType === "goods_receipt_note";
+  const isPurchaseBill = documentType === "invoice" && invoiceType === "purchase";
   const [partyId, setPartyId] = useState(initialPartyId ?? "");
   const [invoiceDate, setInvoiceDate] = useState(todayISODate);
   const [dueDate, setDueDate] = useState(() => dayjs().add(7, "day").format("YYYY-MM-DD"));
   const [dueDateManuallySet, setDueDateManuallySet] = useState(false);
   const [notes, setNotes] = useState("");
+  // Purchase invoices: the supplier's own bill number (matched against GSTR-2B)
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
   const [terms, setTerms] = useState("");
   const [items, setItems] = useState<LineItem[]>([newLineItem()]);
   const [charges, setCharges] = useState<Charge[]>([]);
@@ -381,6 +384,7 @@ export function DocumentCreator({
       setInvoiceDate(formatDateInput(editData.invoiceDate));
       if (editData.dueDate) setDueDate(formatDateInput(editData.dueDate));
       if (editData.deliveryMethod) setDeliveryMethod(editData.deliveryMethod);
+      setSupplierInvoiceNumber(editData.supplierInvoiceNumber || "");
     }
     // Prefill from source: keep today's date (already the default)
     setNotes(editData.notes || "");
@@ -869,6 +873,7 @@ export function DocumentCreator({
         lineItems: lineItemsPayload,
         warehouseId: direction !== 0 && warehouseId ? warehouseId : undefined,
         deliveryMethod: withDelivery ? deliveryMethod : undefined,
+        ...(isPurchaseBill ? { supplierInvoiceNumber: supplierInvoiceNumber.trim() || null } : {}),
       });
     } else {
       createMutation.mutate({
@@ -886,6 +891,7 @@ export function DocumentCreator({
         lineItems: lineItemsPayload,
         warehouseId: direction !== 0 && warehouseId ? warehouseId : undefined,
         deliveryMethod: withDelivery ? deliveryMethod : undefined,
+        ...(isPurchaseBill && supplierInvoiceNumber.trim() ? { supplierInvoiceNumber: supplierInvoiceNumber.trim() } : {}),
       });
     }
   }
@@ -1049,6 +1055,20 @@ export function DocumentCreator({
             </div>
           )}
         </div>
+        {isPurchaseBill && (
+          <div className="max-w-xs">
+            <label className="label" htmlFor={`${dateInputId}-supplier-invoice`}>Supplier invoice no.</label>
+            <input
+              id={`${dateInputId}-supplier-invoice`}
+              className="input"
+              value={supplierInvoiceNumber}
+              maxLength={50}
+              onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
+              placeholder="As printed on the supplier's bill"
+            />
+            <p className="mt-1 text-xs text-text-tertiary">Matched against the supplier's invoices in GSTR-2B.</p>
+          </div>
+        )}
         {pricing.priceLevelName && (
           <p className="-mt-3 text-xs text-text-tertiary">
             Prices from the <span className="font-medium text-text-secondary">{pricing.priceLevelName}</span> price level

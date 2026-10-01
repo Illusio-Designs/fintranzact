@@ -563,6 +563,11 @@ export const createInvoiceSchema = z.object({
   documentType: z.enum(documentTypes).default("invoice"),
   invoiceDate: z.string().datetime().optional(),
   dueDate: z.string().datetime().optional(),
+  /**
+   * Purchase invoices: the supplier's own bill number, as it appears in the
+   * supplier's GSTR-1 and so in our GSTR-2B. Ignored on sales.
+   */
+  supplierInvoiceNumber: z.string().trim().max(50).optional(),
   notes: z.string().max(2000).optional(),
   termsAndConditions: z.string().max(2000).optional(),
   additionalCharges: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0"),

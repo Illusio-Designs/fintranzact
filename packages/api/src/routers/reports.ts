@@ -34,9 +34,13 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { outstandingConditions, outstandingOnRow } from "../lib/outstanding.js";
 import { generateTallyXml } from "../lib/tally-xml-export.js";
 import { valueStock, type ValuationMethod } from "../lib/stock-valuation.js";
-import { notOrderDocument } from "../lib/order-fulfilment.js";
+import { billDocument, notOrderDocument, reducesBalance, reducingDocument } from "../lib/order-fulfilment.js";
+
+/** A note or return (taking off what a party owes) rather than a bill. */
+const isReducing = (doc: { documentType: string; type: string }) => reducesBalance(doc.documentType, doc.type);
 import { groupSubtreeSql } from "../lib/stock-groups.js";
 
 // ── Shared variance helper ────────────────────────────────────────
@@ -116,8 +120,13 @@ export const reportsRouter = router({
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Report");
 
-      const dayStart = new Date(`${input.fromDate}T00:00:00`);
-      const dayEnd = new Date(`${input.toDate}T23:59:59.999`);
+      // The days are Indian calendar days: a date picked in India is stored
+      // at 00:00 IST (18:30 UTC the day before), so cutting at the server's
+      // midnight left the first day's entries out of the book.
+      const [fy, fm, fd] = input.fromDate.split("-").map(Number);
+      const [ty, tm, td] = input.toDate.split("-").map(Number);
+      const dayStart = istStartOfDay(fy!, fm!, fd!);
+      const dayEnd = new Date(istStartOfDay(ty!, tm!, td! + 1).getTime() - 1);
 
       const [dayInvoices, dayPayments, dayExpenses] = await Promise.all([
         input.typeFilter === "payments" || input.typeFilter === "expenses"
@@ -138,6 +147,11 @@ export const reportsRouter = router({
               .where(
                 and(
                   eq(invoices.businessId, ctx.businessId),
+                  // Transactions only: bills and the notes and returns
+                  // against them — not quotations, proformas, orders,
+                  // challans or GRNs; cancelled ones never happened
+                  billDocument(),
+                  sql`${invoices.status} <> 'cancelled'`,
                   ...buildBusinessDateFilter(invoices, { from: dayStart, to: dayEnd }),
                   isNull(invoices.deletedAt),
                 ),
@@ -209,8 +223,10 @@ export const reportsRouter = router({
           entryType: "invoice" as const,
           number: inv.number,
           partyOrCategory: inv.partyName,
-          debit: inv.type === "purchase" ? inv.totalAmount : "0",
-          credit: inv.type === "sale" ? inv.totalAmount : "0",
+          // A sale is a credit (income) and a purchase a debit; a note or
+          // return reverses its side (a credit note to a customer is a debit)
+          debit: (inv.type === "purchase") !== isReducing(inv) ? inv.totalAmount : "0",
+          credit: (inv.type === "sale") !== isReducing(inv) ? inv.totalAmount : "0",
           mode: null,
           status: inv.status,
           meta: { type: inv.type, documentType: inv.documentType },
@@ -241,15 +257,17 @@ export const reportsRouter = router({
         })),
       ].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
+      // Net of the credit notes and returns of the day(s)
+      const signedTotal = (i: (typeof dayInvoices)[number]) => (isReducing(i) ? money.sub(0, i.totalAmount) : i.totalAmount);
       const totalSalesInvoiced = money.sum(
         (dayInvoices as typeof dayInvoices)
           .filter((i) => i.type === "sale")
-          .map((i) => i.totalAmount),
+          .map(signedTotal),
       );
       const totalPurchaseInvoiced = money.sum(
         (dayInvoices as typeof dayInvoices)
           .filter((i) => i.type === "purchase")
-          .map((i) => i.totalAmount),
+          .map(signedTotal),
       );
       const totalPaymentsReceived = money.sum(
         (dayPayments as typeof dayPayments)
@@ -301,21 +319,14 @@ export const reportsRouter = router({
             dueDate: invoices.dueDate,
             totalAmount: invoices.totalAmount,
             amountPaid: invoices.amountPaid,
-            outstanding: sql<string>`(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)::text`,
+            // Less payments and the credit notes / returns against it; a
+            // note not made against a bill is a negative row of its own
+            outstanding: sql<string>`(${outstandingOnRow})::text`,
             daysOverdue: sql<string>`GREATEST(0, EXTRACT(DAY FROM ${asOf.toISOString()}::timestamptz - COALESCE(${invoices.dueDate}, ${invoices.invoiceDate})))::text`,
           })
           .from(invoices)
           .innerJoin(parties, eq(parties.id, invoices.partyId))
-          .where(
-            and(
-              eq(invoices.businessId, ctx.businessId),
-              eq(invoices.type, invoiceType),
-              eq(invoices.documentType, "invoice"),
-              sql`${invoices.status} NOT IN ('paid', 'cancelled', 'draft')`,
-              sql`${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric > 0`,
-              isNull(invoices.deletedAt),
-            ),
-          )
+          .where(outstandingConditions(ctx.businessId, invoiceType, { includeDrafts: false }))
           .orderBy(parties.name, sql`COALESCE(${invoices.dueDate}, ${invoices.invoiceDate}) ASC`);
       }
 
@@ -539,9 +550,11 @@ export const reportsRouter = router({
         freeByInvoice.set(row.invoiceId, (freeByInvoice.get(row.invoiceId) ?? 0) + (parseFloat(row.freeQuantity) || 0));
       }
 
-      const totalSubtotal = money.sum(rows.map((r) => r.subtotal));
-      const totalTax = money.sum(rows.map((r) => r.taxAmount));
-      const totalAmount = money.sum(rows.map((r) => r.totalAmount));
+      // Credit notes take value off the period's sales (debit notes add)
+      const signed = (r: (typeof rows)[number], amount: string) => (r.documentType === "credit_note" ? money.sub(0, amount) : amount);
+      const totalSubtotal = money.sum(rows.map((r) => signed(r, r.subtotal)));
+      const totalTax = money.sum(rows.map((r) => signed(r, r.taxAmount)));
+      const totalAmount = money.sum(rows.map((r) => signed(r, r.totalAmount)));
 
       return {
         rows: rows.map((r) => ({
@@ -655,21 +668,24 @@ export const reportsRouter = router({
             ? sql`${invoices.type} = 'purchase'`
             : sql`${invoices.type} IN ('sale', 'purchase')`;
 
+      // Credit notes and returns take their tax back (on either side), as in
+      // GSTR-3B; a sale debit note adds. Counts are of invoices.
+      const sign = sql`(CASE WHEN ${reducingDocument()} THEN -1 ELSE 1 END)`;
       const rows = await ctx.db
         .select({
           invoiceType: invoices.type,
           taxPercent: invoiceItems.taxPercent,
-          invoiceCount: sql<number>`COUNT(DISTINCT ${invoices.id})::int`,
-          taxableAmount: sql<string>`SUM(${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric)::text`,
-          taxAmount: sql<string>`SUM(${invoiceItems.taxAmount}::numeric)::text`,
-          grossAmount: sql<string>`SUM(${invoiceItems.totalAmount}::numeric)::text`,
+          invoiceCount: sql<number>`COUNT(DISTINCT CASE WHEN ${invoices.documentType} = 'invoice' THEN ${invoices.id} END)::int`,
+          taxableAmount: sql<string>`SUM(${sign} * (${invoiceItems.totalAmount}::numeric - ${invoiceItems.taxAmount}::numeric))::text`,
+          taxAmount: sql<string>`SUM(${sign} * ${invoiceItems.taxAmount}::numeric)::text`,
+          grossAmount: sql<string>`SUM(${sign} * ${invoiceItems.totalAmount}::numeric)::text`,
         })
         .from(invoiceItems)
         .innerJoin(invoices, eq(invoices.id, invoiceItems.invoiceId))
         .where(
           and(
             eq(invoices.businessId, ctx.businessId),
-            eq(invoices.documentType, "invoice"),
+            billDocument(),
             sql`${invoices.status} NOT IN ('draft', 'cancelled')`,
             isNull(invoices.deletedAt),
             ...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }),

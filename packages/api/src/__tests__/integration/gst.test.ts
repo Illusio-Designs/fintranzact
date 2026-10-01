@@ -1188,10 +1188,11 @@ describe("GSTR-1 portal JSON — b2cl and b2cs follow the GSTN schema", () => {
       .map(({ sply_ty, pos, rt, txval, iamt, camt, samt }) => ({ sply_ty, pos, rt, txval, iamt, camt, samt }))
       .sort((a, b) => a.rt - b.rt || a.sply_ty.localeCompare(b.sply_ty));
     expect(rows).toEqual([
-      { sply_ty: "INTRA", pos: "27", rt: 0, txval: 1000, iamt: 0, camt: 0, samt: 0 },
       { sply_ty: "INTER", pos: "29", rt: 18, txval: 10000, iamt: 1800, camt: 0, samt: 0 },
       { sply_ty: "INTRA", pos: "27", rt: 18, txval: 10000, iamt: 0, camt: 900, samt: 900 },
     ]);
+    // The 0% supply is nil-rated: Table 8 (`nil`), not B2CS
+    expect(json.nil).toEqual({ inv: [{ sply_ty: "INTRAB2C", nil_amt: 1000, expt_amt: 0, ngsup_amt: 0 }] });
   });
 });
 

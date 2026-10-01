@@ -364,12 +364,12 @@ test.describe("J6 point of sale", () => {
     await expect(page.getByRole("heading", { name: /^B2CS/ })).toBeVisible();
     const b2cs = page.getByRole("table").filter({ has: page.getByRole("columnheader", { name: "Tax Rate" }) });
     const rateRow = (rate: string) => b2cs.getByRole("row").filter({ has: page.getByRole("cell", { name: rate, exact: true }) });
-    await expect(rateRow("18%").getByRole("cell")).toHaveText(["18%", inr(750), inr(67.5), inr(67.5), inr(0)]);
-    await expect(rateRow("12%").getByRole("cell")).toHaveText(["12%", inr(3600), inr(216), inr(216), inr(0)]);
+    await expect(rateRow("18%").getByRole("cell")).toHaveText(["18%", "Intra-state", "27", inr(750), inr(67.5), inr(67.5), inr(0)]);
+    await expect(rateRow("12%").getByRole("cell")).toHaveText(["12%", "Intra-state", "27", inr(3600), inr(216), inr(216), inr(0)]);
     // Each invoice splits its own tax, CGST taking an odd paisa (half up):
     // the 5% tax of ₹4.50, ₹6.75 and ₹2.25 splits 2.25/2.25, 3.38/3.37 and
     // 1.13/1.12, so the rate adds up to ₹6.76 + ₹6.74 = ₹13.50.
-    await expect(rateRow("5%").getByRole("cell")).toHaveText(["5%", inr(270), inr(6.76), inr(6.74), inr(0)]);
+    await expect(rateRow("5%").getByRole("cell")).toHaveText(["5%", "Intra-state", "27", inr(270), inr(6.76), inr(6.74), inr(0)]);
     await expect(summary("CGST")).toHaveText(inr(290.26));
     await expect(summary("SGST")).toHaveText(inr(290.24));
     await expect(summary("IGST")).toHaveText(inr(0));

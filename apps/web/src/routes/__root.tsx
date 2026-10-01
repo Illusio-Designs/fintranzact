@@ -1569,10 +1569,18 @@ function RootLayout() {
                         ? `GSTIN ${activeBusiness.gstin}`
                         : activeBusiness?.city || "Not GST registered"
                     }
-                    onSwitch={handleBusinessSwitch}
+                    // On a phone the switcher sits in the nav drawer: close it,
+                    // as following a nav link does, to show the new business
+                    onSwitch={(id) => {
+                      setSidebarOpen(false);
+                      handleBusinessSwitch(id);
+                    }}
                     onCreateNew={
                       canCreateBiz && canAccess(session?.role, "Business", "manage")
-                        ? () => navigate({ to: "/business/create" })
+                        ? () => {
+                            setSidebarOpen(false);
+                            navigate({ to: "/business/create" });
+                          }
                         : undefined
                     }
                   />

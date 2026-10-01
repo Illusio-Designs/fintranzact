@@ -338,8 +338,8 @@ export async function generateGSTR1(
         .from(itemsTable)
         .where(inArray(itemsTable.id, [...allItemIds]))
     : [];
-  const itemHsnLookup = new Map(itemHsnData.map((i) => [i.id, i.hsn || "0000"]));
-  const itemUnitLookup = new Map(itemHsnData.map((i) => [i.id, i.unit]));
+  const itemHsnLookup = new Map<string, string>(itemHsnData.map((i) => [i.id, i.hsn || "0000"]));
+  const itemUnitLookup = new Map<string, string | null>(itemHsnData.map((i) => [i.id, i.unit]));
 
   // Place of supply: state codes decide (a GSTIN's prefix counts as the
   // code), then state names; a party with no state on record is intra-state.
@@ -375,6 +375,45 @@ export async function generateGSTR1(
     existing.sgst += sign * heads.sgst;
     existing.igst += sign * heads.igst;
     b2cSmallMap.set(key, existing);
+  };
+
+  /**
+   * Add (sign 1) or take away (sign -1) one line in the HSN summary. Table 12
+   * is reported net of the credit and debit notes issued in the period.
+   */
+  const addToHsn = (li: typeof allLineItems[0], sameState: boolean, sign: 1 | -1) => {
+    const itemHsn = li.itemId
+      ? (itemHsnLookup.get(li.itemId) || "0000")
+      : "0000";
+    const rate = parseFloat(li.taxPercent);
+    // Quantities are summed in the item's base unit: a line billed in an
+    // alternate unit (a box of 12) converts through its conversion factor
+    const baseUnit = li.itemId ? itemUnitLookup.get(li.itemId) : undefined;
+    const unit = baseUnit ?? li.selectedUnit;
+    const factor = baseUnit && li.selectedUnit && li.selectedUnit !== baseUnit
+      ? parseFloat(li.conversionFactor ?? "1") || 1
+      : 1;
+    // Services (SAC codes start with 99) carry no quantity: UQC "NA", qty 0
+    const isService = itemHsn.startsWith("99");
+    const uqc = isService ? "NA" : gstUqcForUnit(unit, "OTH");
+    const hsnKey = `${itemHsn}|${rate}|${uqc}`;
+    const existing = hsnSummaryMap.get(hsnKey) || {
+      // HSN summary description is a human-readable label for the HSN
+      // group — use itemName (required snapshot), not the optional notes
+      // column.
+      hsn: itemHsn, description: li.itemName, rate, uqc, quantity: 0,
+      taxableValue: 0, cgst: 0, sgst: 0, igst: 0, totalValue: 0,
+    };
+    const itemTaxable = parseFloat(li.totalAmount) - parseFloat(li.taxAmount);
+    const itemTax = parseFloat(li.taxAmount);
+    if (!isService) existing.quantity += sign * parseFloat(li.quantity) * factor;
+    existing.taxableValue += sign * itemTaxable;
+    existing.totalValue += sign * parseFloat(li.totalAmount);
+    const heads = taxHeads(itemTax, sameState);
+    existing.cgst += sign * heads.cgst;
+    existing.sgst += sign * heads.sgst;
+    existing.igst += sign * heads.igst;
+    hsnSummaryMap.set(hsnKey, existing);
   };
 
   let totalTaxableValue = 0;
@@ -445,40 +484,7 @@ export async function generateGSTR1(
 
     // HSN summary: one row per HSN, rate and UQC, using the item's HSN and
     // unit from the items table
-    for (const li of lineItems) {
-      const itemHsn = li.itemId
-        ? (itemHsnLookup.get(li.itemId) || "0000")
-        : "0000";
-      const rate = parseFloat(li.taxPercent);
-      // Quantities are summed in the item's base unit: a line billed in an
-      // alternate unit (a box of 12) converts through its conversion factor
-      const baseUnit = li.itemId ? itemUnitLookup.get(li.itemId) : undefined;
-      const unit = baseUnit ?? li.selectedUnit;
-      const factor = baseUnit && li.selectedUnit && li.selectedUnit !== baseUnit
-        ? parseFloat(li.conversionFactor ?? "1") || 1
-        : 1;
-      // Services (SAC codes start with 99) carry no quantity: UQC "NA", qty 0
-      const isService = itemHsn.startsWith("99");
-      const uqc = isService ? "NA" : gstUqcForUnit(unit, "OTH");
-      const hsnKey = `${itemHsn}|${rate}|${uqc}`;
-      const existing = hsnSummaryMap.get(hsnKey) || {
-        // HSN summary description is a human-readable label for the HSN
-        // group — use itemName (required snapshot), not the optional notes
-        // column.
-        hsn: itemHsn, description: li.itemName, rate, uqc, quantity: 0,
-        taxableValue: 0, cgst: 0, sgst: 0, igst: 0, totalValue: 0,
-      };
-      const itemTaxable = parseFloat(li.totalAmount) - parseFloat(li.taxAmount);
-      const itemTax = parseFloat(li.taxAmount);
-      if (!isService) existing.quantity += parseFloat(li.quantity) * factor;
-      existing.taxableValue += itemTaxable;
-      existing.totalValue += parseFloat(li.totalAmount);
-      const heads = taxHeads(itemTax, sameState);
-      existing.cgst += heads.cgst;
-      existing.sgst += heads.sgst;
-      existing.igst += heads.igst;
-      hsnSummaryMap.set(hsnKey, existing);
-    }
+    for (const li of lineItems) addToHsn(li, sameState, 1);
   }
 
   // Fix 2: Fetch credit notes for the period. Only notes issued to customers
@@ -571,6 +577,17 @@ export async function generateGSTR1(
     const lines = noteLinesByNote.get(n.id);
     if (lines) noteLinesByNote.set(n.id, withChargeLine(n, lines));
   }
+  // HSN and unit of items that only appear on notes
+  const noteOnlyItemIds = [...new Set(noteLineItems.map((li) => li.itemId).filter((id): id is string => !!id && !itemHsnLookup.has(id)))];
+  if (noteOnlyItemIds.length > 0) {
+    const rows = await db.select({ id: itemsTable.id, hsn: itemsTable.hsn, unit: itemsTable.unit })
+      .from(itemsTable)
+      .where(inArray(itemsTable.id, noteOnlyItemIds));
+    for (const r of rows) {
+      itemHsnLookup.set(r.id, r.hsn || "0000");
+      itemUnitLookup.set(r.id, r.unit);
+    }
+  }
   const noteRateItems = (n: typeof rawCreditNotes[0]) =>
     groupLinesByRate(noteLinesByNote.get(n.id) || [], isSameState(n.partyState, n.partyStateCode, n.partyGstin));
   const noteTaxSplit = (n: typeof rawCreditNotes[0]) => {
@@ -598,6 +615,8 @@ export async function generateGSTR1(
   const toNote = (n: typeof rawCreditNotes[0], sign: 1 | -1): GSTR1Report["creditNotes"][0] => {
     const sameState = isSameState(n.partyState, n.partyStateCode, n.partyGstin);
     const section = noteSection(n);
+    // The HSN summary is net of notes: a credit note takes its lines off
+    for (const li of noteLinesByNote.get(n.id) || []) addToHsn(li, sameState, sign);
     const pos = n.partyGstin
       ? n.partyGstin.substring(0, 2)
       : b2cPos(sameState, n.partyState, n.partyStateCode);
@@ -649,7 +668,15 @@ export async function generateGSTR1(
       sgst: round2(row.sgst),
       igst: round2(row.igst),
     })),
-    hsn: Array.from(hsnSummaryMap.values()),
+    hsn: Array.from(hsnSummaryMap.values()).map((row) => ({
+      ...row,
+      quantity: Math.round(row.quantity * 1000) / 1000,
+      taxableValue: round2(row.taxableValue),
+      cgst: round2(row.cgst),
+      sgst: round2(row.sgst),
+      igst: round2(row.igst),
+      totalValue: round2(row.totalValue),
+    })),
     creditNotes,
     debitNotes,
     totalTaxableValue,
@@ -763,7 +790,10 @@ export async function generateGSTR3B(
   for (const b of gstr1.b2b) exemptTaxable += zeroRated(b.rateItems);
   for (const s of gstr1.b2cLarge) for (const i of s.invoices ?? []) exemptTaxable += zeroRated(i.rateItems);
   for (const s of gstr1.b2cSmall) if (s.taxRate === 0) exemptTaxable += s.taxableValue;
-  for (const { note, sign } of notes) exemptTaxable += sign * zeroRated(note.rateItems);
+  // (notes netted into B2CS are already in the b2cSmall rows above)
+  for (const { note, sign } of notes) {
+    if (note.section !== "b2cs") exemptTaxable += sign * zeroRated(note.rateItems);
+  }
   exemptTaxable = round2(exemptTaxable);
   outTaxable = round2(outTaxable - exemptTaxable);
 
@@ -948,8 +978,9 @@ export function gstr1ToPortalJson(
   }
 
   // B2CS: supply type and place of supply from the report; older reports
-  // without them fall back to the presence of CGST and our own state
-  const b2cs = report.b2cSmall.map((entry) => ({
+  // without them fall back to the presence of CGST and our own state.
+  // Nil-rated / exempt (0%) supplies are not B2CS: they go to Table 8 (`nil`).
+  const b2cs = report.b2cSmall.filter((entry) => entry.taxRate !== 0).map((entry) => ({
     sply_ty: entry.supplyType ?? (entry.cgst > 0 ? "INTRA" : "INTER"),
     pos: entry.pos ?? gstin.substring(0, 2),
     typ: "OE",
@@ -1036,12 +1067,27 @@ export function gstr1ToPortalJson(
     csamt: 0,
   }));
 
+  // Table 8: nil-rated and exempt supplies to unregistered persons, by
+  // intra-/inter-state. The app keeps no separate exempt flag, so 0% supplies
+  // are reported as nil-rated.
+  const nilBySupply = new Map<string, number>();
+  for (const entry of report.b2cSmall) {
+    if (entry.taxRate !== 0) continue;
+    const intra = (entry.supplyType ?? (entry.igst > 0 ? "INTER" : "INTRA")) === "INTRA";
+    const key = intra ? "INTRAB2C" : "INTRB2C";
+    nilBySupply.set(key, round2((nilBySupply.get(key) ?? 0) + entry.taxableValue));
+  }
+  const nil = nilBySupply.size > 0
+    ? { inv: Array.from(nilBySupply.entries()).map(([sply_ty, amt]) => ({ sply_ty, nil_amt: amt, expt_amt: 0, ngsup_amt: 0 })) }
+    : undefined;
+
   return {
     gstin,
     fp: taxPeriod,
     b2b: Array.from(b2bMap.values()),
     b2cl: Array.from(b2clMap.values()),
     b2cs,
+    ...(nil ? { nil } : {}),
     cdnr: Array.from(cdnrMap.values()),
     cdnur,
     hsn: { data: hsnData },
@@ -1080,6 +1126,48 @@ export function gstr1ToCSV(report: GSTR1Report): string {
     lines.push([
       row.taxRate, row.taxableValue.toFixed(2),
       row.cgst.toFixed(2), row.sgst.toFixed(2), row.igst.toFixed(2),
+    ].join(","));
+  }
+  lines.push("");
+
+  // B2C Large: invoice-wise
+  lines.push("B2CL - Outward Supplies to Unregistered Persons (Large; inter-state)");
+  lines.push("Place of Supply,Invoice No,Invoice Date,Taxable Value,IGST,Total Value");
+  for (const entry of report.b2cLarge) {
+    for (const inv of entry.invoices ?? []) {
+      lines.push([
+        `"${entry.state}"`, inv.invoiceNumber, formatIstDate(inv.invoiceDate, "/"),
+        inv.taxableValue.toFixed(2), inv.igst.toFixed(2), inv.totalInvoiceValue.toFixed(2),
+      ].join(","));
+    }
+  }
+  lines.push("");
+
+  // Credit and debit notes, with the GSTR-1 table each belongs to
+  lines.push("Credit / Debit Notes");
+  lines.push("Section,Type,Note No,Note Date,Original Invoice,Party GSTIN,Party Name,Taxable Value,CGST,SGST,IGST,Note Value");
+  const noteRows = [
+    ...report.creditNotes.map((n) => ({ n, type: "Credit" })),
+    ...report.debitNotes.map((n) => ({ n, type: "Debit" })),
+  ];
+  for (const { n, type } of noteRows) {
+    lines.push([
+      (n.section ?? (n.partyGstin ? "cdnr" : "b2cs")).toUpperCase(), type, n.invoiceNumber,
+      formatIstDate(n.invoiceDate, "/"), n.originalInvoiceNumber ?? "", n.partyGstin, `"${n.partyName}"`,
+      parseFloat(n.taxableAmount).toFixed(2), (n.cgst ?? 0).toFixed(2), (n.sgst ?? 0).toFixed(2), (n.igst ?? 0).toFixed(2),
+      parseFloat(n.totalAmount).toFixed(2),
+    ].join(","));
+  }
+  lines.push("");
+
+  // HSN summary (net of notes)
+  lines.push("HSN Summary");
+  lines.push("HSN,Description,UQC,Quantity,Rate %,Taxable Value,CGST,SGST,IGST,Total Value");
+  for (const row of report.hsn) {
+    lines.push([
+      row.hsn, `"${row.description}"`, row.uqc ?? "OTH", row.quantity, row.rate ?? "",
+      row.taxableValue.toFixed(2), row.cgst.toFixed(2), row.sgst.toFixed(2), row.igst.toFixed(2),
+      row.totalValue.toFixed(2),
     ].join(","));
   }
   lines.push("");

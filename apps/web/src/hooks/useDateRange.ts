@@ -1,65 +1,57 @@
 import { useState, useCallback } from "react";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
+import { istDateParts, istPeriodRange, istStartOfDay } from "@fintranzact/shared";
 import { toISOString, toISOStringEndOfDay } from "@/lib/utils";
-
-dayjs.extend(utc);
 
 export type DatePreset = "this-month" | "last-month" | "last-30" | "this-fy" | "last-fy" | "custom" | "all";
 
 /**
- * Build UTC ISO strings for date boundaries.
+ * ISO strings for the boundaries of a preset period, cut on the Indian
+ * calendar (00:00 IST), the same way the API reads business dates and GST
+ * periods (@fintranzact/shared dates.ts).
  *
- * CRITICAL: All FY and calendar-month boundaries are constructed in UTC.
- * Without this, `dayjs().startOf("month")` in IST (UTC+5:30) produces
- * "2025-03-31T18:30:00Z" for April 1 — which pulled the previous March into
- * every FY chart and is the bug the prior implementation had to work around.
- * We rely on the dayjs UTC plugin (loaded at module scope above) so `.utc()`
- * is available.
+ * A date picked in an Indian browser is stored as local midnight — 18:30 UTC
+ * the day before — so a month cut at UTC midnight dropped invoices dated the
+ * 1st (stored on the previous UTC day) from "This Month" and pulled the next
+ * month's 1st into it. A date stored at UTC midnight (a browser running on
+ * UTC) is 05:30 IST the same day, so it falls in the same period either way.
+ * "Today" is also read in India: at 00:05 IST on the 1st it is already the
+ * new month.
  *
  * Public contract: the {fromDate, toDate} strings this returns are always
- * UTC ISO-8601, or empty strings for the "all" preset.
+ * ISO-8601 instants (toDate inclusive, to the millisecond), or empty strings
+ * for the "all" preset.
  */
 export function getDatePreset(preset: string): { fromDate: string; toDate: string } {
-  const now = dayjs.utc();
-  const yyyy = now.year();
-  const mm = now.month();
+  const now = new Date();
+  const { year, month } = istDateParts(now);
+  const iso = (d: Date) => d.toISOString();
+  // Start year of the Indian financial year (April–March) we are in
+  const fyYear = month >= 4 ? year : year - 1;
 
   switch (preset) {
     case "this-month": {
-      return {
-        fromDate: now.startOf("month").toISOString(),
-        toDate: now.endOf("month").toISOString(),
-      };
+      const { from, to } = istPeriodRange(year, month);
+      return { fromDate: iso(from), toDate: iso(to) };
     }
     case "last-month": {
-      const lastMonth = now.subtract(1, "month");
-      return {
-        fromDate: lastMonth.startOf("month").toISOString(),
-        toDate: lastMonth.endOf("month").toISOString(),
-      };
+      const { from, to } = istPeriodRange(year, month - 1);
+      return { fromDate: iso(from), toDate: iso(to) };
     }
     case "last-30": {
       return {
-        fromDate: now.subtract(30, "day").toISOString(),
-        toDate: now.toISOString(),
+        fromDate: iso(new Date(now.getTime() - 30 * 86_400_000)),
+        toDate: iso(now),
       };
     }
     case "this-fy": {
-      // Indian FY runs April → March. If we're in Jan–Mar, the FY started
-      // last calendar year.
-      const fyYear = mm >= 3 ? yyyy : yyyy - 1;
       return {
-        fromDate: dayjs.utc().year(fyYear).month(3).date(1).startOf("day").toISOString(),
-        toDate: now.toISOString(),
+        fromDate: iso(istStartOfDay(fyYear, 4, 1)),
+        toDate: iso(now),
       };
     }
     case "last-fy": {
-      const lastFyYear = mm >= 3 ? yyyy - 1 : yyyy - 2;
-      return {
-        fromDate: dayjs.utc().year(lastFyYear).month(3).date(1).startOf("day").toISOString(),
-        toDate: dayjs.utc().year(lastFyYear + 1).month(2).date(31).endOf("day").toISOString(),
-      };
+      const { from, to } = istPeriodRange(fyYear - 1, 4, 12);
+      return { fromDate: iso(from), toDate: iso(to) };
     }
     case "all":
     default:
