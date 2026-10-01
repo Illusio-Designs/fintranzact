@@ -141,7 +141,7 @@ export function BarcodesTab() {
   const modeName = MODES.find((m) => m.value === (locked ? setup.mode : mode))!.name;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] items-start">
+    <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] items-start">
       <div className="space-y-6 min-w-0">
         <div className="card p-6 flex items-start justify-between gap-6">
           <div className="min-w-0">
@@ -288,7 +288,7 @@ export function BarcodesTab() {
         <div className="flex justify-center rounded-lg bg-surface-2 p-4">
           <div
             className={cn(
-              "bg-white rounded shadow-sm p-2 flex items-center justify-center gap-2 text-black",
+              "bg-white rounded shadow-sm p-2 flex items-center justify-center gap-2 text-black max-w-full",
               shownType === "qr" ? "flex-row w-[190px] h-[125px]" : "flex-col",
               shownType === "ean13" && "w-[250px] h-[125px]",
               shownType === "code128" && "w-[300px] h-[100px]",

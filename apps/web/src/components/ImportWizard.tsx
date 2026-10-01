@@ -8,6 +8,7 @@ import { Alert02Icon, ArrowRight01Icon, BankIcon, Cancel01Icon, ChartBarLineIcon
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
+import { buildFieldNameMapping } from "@/lib/import-mapping";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -696,6 +697,7 @@ function DropZone({
               ? "border-brand-300 bg-brand-50"
               : "border-border-light hover:border-brand-300 hover:bg-surface-1"
           )}
+          data-testid={`import-dropzone-${entityKey}`}
           onClick={() => inputRef.current?.click()}
           onDragOver={(e) => {
             e.preventDefault();
@@ -793,6 +795,7 @@ function MappingPanel({
                 )}
               </span>
               <Select
+                aria-label={`${ENTITY_LABELS[entityKey]}: ${field.label} column`}
                 value={selectedHeader}
                 onChange={(e) =>
                   onChange({ ...mapping, [field.key]: e.target.value })
@@ -1122,6 +1125,8 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
       const file = state.files[key];
       if (file && preset[key]) {
         newMappings[key] = buildAutoMapping(file.headers, preset[key]!);
+      } else if (file && key !== "cashBank") {
+        newMappings[key] = buildFieldNameMapping(file.headers, ENTITY_FIELDS[key]);
       } else if (state.mappings[key]) {
         newMappings[key] = state.mappings[key];
       }
@@ -1131,9 +1136,10 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
 
   function handleFile(entityKey: EntityKey, parsedFile: ParsedFile) {
     const preset = PRESET_MAPS[state.source][entityKey];
+    // Without a preset (Tally, Generic CSV), columns named after a field map to it.
     const mapping = preset
       ? buildAutoMapping(parsedFile.headers, preset)
-      : {};
+      : buildFieldNameMapping(parsedFile.headers, ENTITY_FIELDS[entityKey]);
     setState((s) => ({
       ...s,
       files: { ...s.files, [entityKey]: parsedFile },

@@ -43,4 +43,15 @@ describe("cspDirectives", () => {
     expect(directive("connect-src", false)).toBe("connect-src 'self' https://api.example.test");
     expect(directive("connect-src", true)).toBe("connect-src 'self' ws: https://api.example.test");
   });
+
+  // Regression: img-src allowed only 'self', so with the API on its own
+  // origin the business logo / signature images (served by the API) were
+  // refused and Settings showed a broken image.
+  it("lets images served by the API origin load", () => {
+    for (const isDev of [true, false]) {
+      expect(directive("img-src", isDev)).toBe("img-src 'self' data: blob: https://api.example.test");
+    }
+    const sameOrigin = cspDirectives({ isDev: false, apiOrigin: null, inlineScriptSources: "" });
+    expect(sameOrigin).toContain("img-src 'self' data: blob:");
+  });
 });

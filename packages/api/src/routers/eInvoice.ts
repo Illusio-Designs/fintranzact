@@ -241,18 +241,29 @@ export const eInvoiceRouter = router({
       requireCan(ctx.ability, "manage", "EInvoice");
 
       const existing = await ctx.db
-        .select({ id: eInvoiceConfigs.id })
+        .select({ id: eInvoiceConfigs.id, password: eInvoiceConfigs.password, clientSecret: eInvoiceConfigs.clientSecret })
         .from(eInvoiceConfigs)
         .where(eq(eInvoiceConfigs.businessId, ctx.businessId))
         .limit(1);
+
+      // The settings form never shows the stored password or client secret
+      // back ("enter to update"), so a blank one on a re-save keeps what is
+      // stored rather than wiping it.
+      if (!input.password && existing.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Enter the IRP password." });
+      }
 
       // Encrypt sensitive fields before persisting
       const encrypted = encryptEInvoiceConfig({
         clientId: input.clientId || null,
         clientSecret: input.clientSecret || null,
         username: input.username,
-        password: input.password,
+        password: input.password || "",
       });
+      if (existing.length > 0) {
+        if (!input.password) encrypted.password = existing[0]!.password;
+        if (!input.clientSecret && input.clientId) encrypted.clientSecret = existing[0]!.clientSecret;
+      }
 
       if (existing.length > 0) {
         const [updated] = await ctx.db
@@ -346,7 +357,9 @@ export const eInvoiceRouter = router({
       await client.authenticate();
       return { success: true, message: "Successfully connected to IRP" };
     } catch (err) {
-      const message = err instanceof IRPError ? err.message : "Connection failed";
+      // IRPError: the portal answered; TRPCError: stopped before calling it
+      // (e.g. no GSP client credentials on this server) — say which.
+      const message = err instanceof IRPError || err instanceof TRPCError ? err.message : "Connection failed";
       return { success: false, message };
     }
   }),

@@ -147,18 +147,25 @@ export async function runInvoicesImport(
         });
       }
     } else {
+      // Synthetic single-line fallback when the source CSV had no line
+      // items. Use itemName as the placeholder display text; description
+      // (notes) stays null. The line carries the invoice's tax: GST reports
+      // and the HSN summary are built from lines, so a line priced at the
+      // tax-inclusive total with no tax showed the whole amount as taxable
+      // at 0% while the invoice itself said otherwise.
+      const total = money.toNumber(inv.totalAmount);
+      const tax = money.toNumber(inv.taxAmount);
+      const taxable = total - tax;
+      const carriesTax = tax > 0 && taxable > 0;
       lineItemRows.push({
         invoiceId,
         itemId: null,
-        // Synthetic single-line fallback when the source CSV had no line
-        // items. Use itemName as the placeholder display text; description
-        // (notes) stays null.
         itemName: `Imported: ${inv.invoiceNumber}`,
         description: null,
         quantity: "1",
-        unitPrice: inv.totalAmount,
-        taxPercent: "0",
-        taxAmount: "0",
+        unitPrice: carriesTax ? taxable.toFixed(2) : inv.totalAmount,
+        taxPercent: carriesTax ? ((tax / taxable) * 100).toFixed(2) : "0",
+        taxAmount: carriesTax ? tax.toFixed(2) : "0",
         discountPercent: "0",
         totalAmount: inv.totalAmount,
         sortOrder: 0,

@@ -39,7 +39,9 @@ export function cspDirectives(opts: { isDev: boolean; apiOrigin: string | null; 
     `script-src 'self' ${inlineScriptSources} https://challenges.cloudflare.com`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob:",
+    // The business logo and signature are images served by the API
+    // (/api/businesses/:id/logo), so a split-host API origin must be allowed.
+    `img-src 'self' data: blob:${apiOrigin ? ` ${apiOrigin}` : ""}`,
     connectSrc,
     // blob: — the POS prints its thermal receipt from a PDF the app fetched,
     // loaded into a hidden iframe as a blob: URL.

@@ -128,6 +128,23 @@ describe("eInvoice.configure / getConfig", () => {
     expect(shown).toMatchObject({ username: "u", password: "••••••••", clientSecret: "csec••••••••" });
   });
 
+  // Regression (J11 settings journey): the settings form leaves the password
+  // and client secret blank ("enter to update"), so re-saving it — to change
+  // the threshold, say — was refused (password too short) or, for the client
+  // secret, wiped the stored one.
+  it("a re-save with the password and client secret left blank keeps the stored ones", async () => {
+    await caller().eInvoice.configure(CONFIG);
+    await caller().eInvoice.configure({ ...CONFIG, password: "", clientSecret: "", thresholdCrore: "10" });
+    const [row] = await getTenantTestDb().select().from(eInvoiceConfigs).where(eq(eInvoiceConfigs.businessId, world.business1.id));
+    expect(row).toMatchObject({ password: "p", clientSecret: "csecret", thresholdCrore: "10.00" });
+    await caller().eInvoice.configure(CONFIG);
+  });
+
+  it("the first save needs a password", async () => {
+    await expectCode(other().eInvoice.configure({ ...CONFIG, password: "" }), "BAD_REQUEST");
+    expect(await other().eInvoice.getConfig()).toBeNull();
+  });
+
   it("each business has its own config", async () => {
     expect(await other().eInvoice.getConfig()).toBeNull();
   });
@@ -150,6 +167,27 @@ describe("eInvoice.testConnection", () => {
     await expect(caller().eInvoice.testConnection()).resolves.toEqual({ success: false, message: "Invalid credentials" });
     irp.authenticate.mockRejectedValueOnce(new Error("socket hang up"));
     await expect(caller().eInvoice.testConnection()).resolves.toEqual({ success: false, message: "Connection failed" });
+  });
+
+  // Regression (J11 settings journey): with no GSP client credentials saved or
+  // on the server, the app stops before calling the IRP — and said only
+  // "Connection failed". It now says why.
+  it("says when the server has no GSP client credentials, without calling the IRP", async () => {
+    const saved = { id: process.env.IRP_CLIENT_ID, secret: process.env.IRP_CLIENT_SECRET };
+    delete process.env.IRP_CLIENT_ID;
+    delete process.env.IRP_CLIENT_SECRET;
+    try {
+      await caller().eInvoice.configure({ ...CONFIG, clientId: "", clientSecret: "" });
+      await expect(caller().eInvoice.testConnection()).resolves.toEqual({
+        success: false,
+        message: "IRP GSP credentials are not configured on this server. Contact your administrator.",
+      });
+      expect(irp.authenticate).not.toHaveBeenCalled();
+    } finally {
+      if (saved.id !== undefined) process.env.IRP_CLIENT_ID = saved.id;
+      if (saved.secret !== undefined) process.env.IRP_CLIENT_SECRET = saved.secret;
+      await caller().eInvoice.configure(CONFIG);
+    }
   });
 });
 

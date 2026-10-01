@@ -37,6 +37,20 @@ import {
 
 
 /**
+ * A business row as the client may receive it: the logo and signature bytes
+ * (bytea) are served by /api/businesses/:id/{logo,signature}, never in JSON.
+ * A bytea column travels as a superjson Buffer, which the browser cannot
+ * rebuild, so a response carrying one fails on the client — once a business
+ * had a logo, every Settings save looked like it did nothing.
+ */
+function withoutImageBytes<T extends { logoData?: unknown; signatureData?: unknown }>(
+  biz: T,
+): Omit<T, "logoData" | "signatureData"> {
+  const { logoData: _logoData, signatureData: _signatureData, ...rest } = biz;
+  return rest;
+}
+
+/**
  * Persist the per-business compliance portal credentials captured during
  * business setup.
  *
@@ -182,7 +196,10 @@ async function requireBusinessAccess(
 export const businessRouter = router({
   list: tenantProcedure.query(async ({ ctx }) => {
     await backfillLegacyBusinessMembers(ctx.db, ctx.tenantId);
-    const { logoData: _logoData, ...cols } = getTableColumns(businesses);
+    // Image bytes are served by /api/businesses/:id/{logo,signature}, never in
+    // JSON: a bytea column goes over the wire as a superjson Buffer, which the
+    // browser cannot rebuild, so the whole list failed to load on the client.
+    const { logoData: _logoData, signatureData: _signatureData, ...cols } = getTableColumns(businesses);
 
     const rows = await ctx.db
       .select(cols)
@@ -378,7 +395,7 @@ export const businessRouter = router({
       // database): the business must also belong to this organisation.
       await requireBusinessAccess(ctx, input.id);
 
-      const { logoData: _logoData, ...cols } = getTableColumns(businesses);
+      const { logoData: _logoData, signatureData: _signatureData, ...cols } = getTableColumns(businesses);
 
       const [biz] = await ctx.db
         .select(cols)
@@ -567,7 +584,7 @@ export const businessRouter = router({
         ipAddress: ctx.ipAddress,
       });
 
-      return biz;
+      return withoutImageBytes(biz);
     }),
 
   // Upload a business logo. Stored as bytea on the businesses row so it

@@ -214,6 +214,15 @@ export function BusinessTab({ biz }: BusinessTabProps) {
         logoUpdatedAt={biz.logoUpdatedAt}
         hasLogo={!!biz.logoMimeType}
       />
+
+      {/* The edit form skips the branding step (prefixes live on the
+          Documents tab), so the signature is changed here, like the logo. */}
+      <LogoUploader
+        kind="signature"
+        businessId={biz.id}
+        logoUpdatedAt={biz.signatureUpdatedAt}
+        hasLogo={!!biz.signatureMimeType}
+      />
     </div>
   );
 }
@@ -257,15 +266,18 @@ function BusinessCard({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+      {/* One column on a phone; long values (emails, legal names) wrap
+          instead of pushing the page sideways. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
         {fields.map(([label, value]) => (
-          <div key={label}>
+          <div key={label} className="min-w-0">
             <span className="text-xs text-text-tertiary">{label}</span>
 
             <p
-              className={
-                value ? "text-text-primary" : "text-text-tertiary"
-              }
+              className={cn(
+                "break-words",
+                value ? "text-text-primary" : "text-text-tertiary",
+              )}
             >
               {value || "—"}
             </p>
