@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
-import { DateInput, formatDisplayDate } from "../DateInput";
+import { DateInput, formatDisplayDate, parseTypedDate } from "../DateInput";
 
 describe("DateInput — custom calendar drop-in for <input type=date>", () => {
   it("formats ISO dates for display", () => {
@@ -48,6 +48,57 @@ describe("DateInput — custom calendar drop-in for <input type=date>", () => {
     await userEvent.click(screen.getByRole("button", { name: "Due date" }));
     await userEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ target: expect.objectContaining({ value: "" }) }));
+  });
+
+  it("reads typed dates day first (DDMMYY and with separators)", () => {
+    expect(parseTypedDate("120325")).toBe("2025-03-12");
+    expect(parseTypedDate("12032025")).toBe("2025-03-12");
+    expect(parseTypedDate("12/3/25")).toBe("2025-03-12");
+    expect(parseTypedDate("1-4-2024")).toBe("2024-04-01");
+    expect(parseTypedDate("0105", 2026)).toBe("2026-05-01");
+    expect(parseTypedDate("15.8", 2026)).toBe("2026-08-15");
+    expect(parseTypedDate("310225")).toBeNull(); // no 31 Feb
+    expect(parseTypedDate("12/13/25")).toBeNull(); // month 13
+    expect(parseTypedDate("abc")).toBeNull();
+  });
+
+  it("picks a typed DDMMYY date with Enter", async () => {
+    const onChange = vi.fn();
+    render(<DateInput aria-label="Date" value="2026-10-01" onChange={onChange} />);
+    screen.getByRole("button", { name: "Date" }).focus();
+    await userEvent.keyboard("120325{Enter}");
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ target: expect.objectContaining({ value: "2025-03-12" }) }));
+  });
+
+  it("does not pick a typed date outside min/max", async () => {
+    const onChange = vi.fn();
+    render(<DateInput aria-label="Date" value="2026-10-01" min="2026-01-01" onChange={onChange} />);
+    screen.getByRole("button", { name: "Date" }).focus();
+    await userEvent.keyboard("120325{Enter}");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByText("That date is outside the allowed range")).toBeInTheDocument();
+  });
+
+  it("jumps by year and month through the title", async () => {
+    const onChange = vi.fn();
+    render(<DateInput aria-label="Date" value="2026-10-01" onChange={onChange} />);
+    await userEvent.click(screen.getByRole("button", { name: "Date" }));
+    await userEvent.click(screen.getByRole("button", { name: /choose month and year/ }));
+    await userEvent.click(screen.getByRole("button", { name: /choose year/ }));
+    await userEvent.click(screen.getByRole("button", { name: "2024" }));
+    await userEvent.click(screen.getByRole("button", { name: "April 2024" }));
+    await userEvent.click(screen.getByRole("gridcell", { name: "1 Apr 2024" }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ target: expect.objectContaining({ value: "2024-04-01" }) }));
+  });
+
+  it("moves a year with the year buttons and Shift+PageUp", async () => {
+    render(<DateInput aria-label="Date" value="2026-10-01" />);
+    await userEvent.click(screen.getByRole("button", { name: "Date" }));
+    await userEvent.click(screen.getByRole("button", { name: "Previous year" }));
+    expect(screen.getByRole("gridcell", { name: "1 Oct 2025" })).toBeInTheDocument();
+    screen.getByRole("button", { name: "Date" }).focus();
+    await userEvent.keyboard("{Shift>}{PageUp}{/Shift}");
+    expect(screen.getByRole("gridcell", { name: "1 Oct 2025" })).toBeInTheDocument();
   });
 
   it("has no axe violations", async () => {
