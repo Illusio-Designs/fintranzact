@@ -69,6 +69,8 @@
 | batch.delete | mutation | authorized | delete:Item | ✓ | ✓ | ✗ | ✗ | ✗ |
 | batch.list | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ |
 | batch.update | mutation | authorized | update:Item | ✓ | ✓ | ✓ | ✗ | ✗ |
+| billing.config | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| billing.demoCheckout | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | business.addMember | mutation | tenant | — (+ requireTenantAdmin) | ✓ | ✓ | ✗ | ✗ | ✗ |
 | business.auditTrail | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | business.canCreate | query | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ |

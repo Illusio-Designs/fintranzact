@@ -88,6 +88,7 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   "tenant.removeMember": { allow: ADMINS, why: "tenant owner/admin only" },
   "tenant.updateMemberRole": { allow: ADMINS, why: "tenant owner/admin only" },
   "tenant.updatePlan": { allow: [], why: "plans are changed by the platform team only" },
+  "billing.demoCheckout": { allow: ["owner"], why: "org owner only" },
   "business.members": { allow: ADMINS, why: "requireTenantAdmin" },
   "business.addMember": { allow: ADMINS, why: "requireTenantAdmin" },
   "business.updateMemberRole": { allow: ADMINS, why: "requireTenantAdmin" },

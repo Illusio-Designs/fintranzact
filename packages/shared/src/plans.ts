@@ -235,3 +235,30 @@ export function formatPlanLimit(value: number | null, unit?: "days"): string {
   }
   return value.toLocaleString("en-IN");
 }
+
+// ── Checkout amounts ───────────────────────────────────────────────────────
+
+export const BILLING_CYCLES = ["monthly", "yearly"] as const;
+export type BillingCycle = (typeof BILLING_CYCLES)[number];
+
+/** GST charged on a subscription. */
+export const PLAN_GST_RATE_PERCENT = 18;
+
+export interface PlanCheckoutAmount {
+  /** Plan price for the cycle, before GST, in paise. */
+  basePaise: number;
+  gstPaise: number;
+  totalPaise: number;
+}
+
+/**
+ * What a plan costs for one billing cycle, in paise, with 18% GST on top.
+ * Plans carry a monthly price only, so a year is twelve months. Integer math:
+ * prices are whole rupees, so 18% of them is always a whole number of paise.
+ */
+export function planCheckoutAmount(monthlyPriceInr: number, cycle: BillingCycle): PlanCheckoutAmount {
+  const months = cycle === "yearly" ? 12 : 1;
+  const basePaise = monthlyPriceInr * 100 * months;
+  const gstPaise = Math.round((basePaise * PLAN_GST_RATE_PERCENT) / 100);
+  return { basePaise, gstPaise, totalPaise: basePaise + gstPaise };
+}

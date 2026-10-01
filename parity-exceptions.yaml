@@ -260,6 +260,9 @@ exceptions:
       - platform.roadmapReorder
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
+      # Demo plan checkout: web sign-up checkout only; real Razorpay later.
+      - billing.config
+      - billing.demoCheckout
       # Public contact/partner forms and the emailed email-change confirmation
       # link are pages of the public website (/contact, /partners,
       # /auth/verify-email-change); the link opens in a browser, not the app.
@@ -523,6 +526,9 @@ exceptions:
       - platform.roadmapReorder
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
+      # Demo plan checkout: web sign-up checkout only; real Razorpay later.
+      - billing.config
+      - billing.demoCheckout
       # Public contact/partner forms and the emailed email-change confirmation
       # link are pages of the public website (/contact, /partners,
       # /auth/verify-email-change); the link opens in a browser, not the app.
@@ -750,6 +756,9 @@ exceptions:
       - platform.roadmapReorder
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
+      # Demo plan checkout: web sign-up checkout only; real Razorpay later.
+      - billing.config
+      - billing.demoCheckout
       # Public contact/partner forms and the emailed email-change confirmation
       # link are pages of the public website (/contact, /partners,
       # /auth/verify-email-change); the link opens in a browser, not the app.
