@@ -281,41 +281,6 @@ fintranzact party create \
   --state Maharashtra
 ```
 
-#### `fintranzact party ledger-report`
-
-Full ledger report with opening balance, all transactions, and closing balance for a date range:
-
-```bash
-fintranzact party ledger-report --party "Gupta Enterprises" --from 2026-04-01 --to 2026-03-31
-fintranzact party ledger-report --party party_xxxxxxxxxx --json
-```
-
-#### `fintranzact party stats`
-
-Aggregate transaction statistics (total sales, purchases, payments) for a party:
-
-```bash
-fintranzact party stats party_xxxxxxxxxx
-fintranzact party stats "Sharma Traders" --json
-```
-
-#### `fintranzact party top-items`
-
-Items most frequently bought from or sold to a party, ranked by quantity or value:
-
-```bash
-fintranzact party top-items party_xxxxxxxxxx
-fintranzact party top-items "Gupta Enterprises" --limit 10 --json
-```
-
-#### `fintranzact party merge`
-
-Merge two duplicate party records. All invoices, payments, and ledger entries are reassigned to the target party and the source is deleted.
-
-```bash
-fintranzact party merge --source party_xxxxxxxxxx --target party_yyyyyyyyyy
-```
-
 #### `fintranzact party delete`
 
 ```bash
@@ -396,96 +361,6 @@ Batches expiring soon, or expired stock still on hand, across all batch-tracked 
 fintranzact item expiring              # next 30 days
 fintranzact item expiring --days 90
 fintranzact item expiring --expired --json
-```
-
-#### `fintranzact item stock-history`
-
-Full log of every stock adjustment ever made on an item:
-
-```bash
-fintranzact item stock-history "Basmati Rice 25kg"
-fintranzact item stock-history item_xxxxxxxxxx --from 2026-01-01 --json
-```
-
-#### `fintranzact item stock-movements`
-
-Every stock movement including invoice deductions, purchase additions, and manual adjustments:
-
-```bash
-fintranzact item stock-movements "Mustard Oil 15L"
-fintranzact item stock-movements item_xxxxxxxxxx --json
-```
-
-#### `fintranzact item low-stock-count`
-
-Quick count of items currently at or below their low-stock threshold:
-
-```bash
-fintranzact item low-stock-count
-```
-
-#### `fintranzact item price-history`
-
-Historical sale price changes for an item:
-
-```bash
-fintranzact item price-history "Basmati Rice 25kg"
-fintranzact item price-history item_xxxxxxxxxx --json
-```
-
-#### `fintranzact item sales-stats`
-
-Total units sold and revenue for an item over a period:
-
-```bash
-fintranzact item sales-stats "Basmati Rice 25kg" --from 2026-04-01 --to 2026-03-31
-fintranzact item sales-stats item_xxxxxxxxxx --json
-```
-
-#### `fintranzact item variants`
-
-Manage variants (size, grade, colour, etc.) for an item that has multiple options at different prices or units.
-
-```bash
-# List variants
-fintranzact item variants list item_xxxxxxxxxx
-
-# Add a variant
-fintranzact item variants create \
-  --item item_xxxxxxxxxx \
-  --name "500g Pack" \
-  --price 120 \
-  --unit pack
-
-# Update a variant
-fintranzact item variants update variant_xxxxxxxxxx --price 130
-
-# Delete a variant
-fintranzact item variants delete variant_xxxxxxxxxx
-```
-
-#### `fintranzact item merge`
-
-Merge two duplicate item records. All line items and stock history are reassigned to the target and the source is deleted.
-
-```bash
-fintranzact item merge --source item_xxxxxxxxxx --target item_yyyyyyyyyy
-```
-
-#### `fintranzact item switch-base-unit`
-
-Change the base unit of measurement for an item (e.g. `kg` to `g`). Provide the conversion factor.
-
-```bash
-fintranzact item switch-base-unit item_xxxxxxxxxx --new-unit g --factor 1000
-```
-
-#### `fintranzact item rename-unit`
-
-Rename a unit on an item without changing any quantities (e.g. rename `pcs` to `pieces`):
-
-```bash
-fintranzact item rename-unit item_xxxxxxxxxx --from pcs --to pieces
 ```
 
 ---
@@ -1492,8 +1367,8 @@ export const fintranzactCLI = {
     "Run a fintranzact CLI command and return the JSON output. " +
     "Available subcommands: dashboard, " +
     "invoice list/get/create/update/pdf/delete, " +
-    "party list/get/create/delete/ledger/ledger-report/stats/top-items/merge, " +
-    "item list/get/create/delete/stock/stock-history/stock-movements/low-stock-count/price-history/sales-stats/variants/merge/switch-base-unit/rename-unit, " +
+    "party list/get/create/delete/ledger, " +
+    "item list/get/create/delete/stock/batches/expiring, " +
     "payment list/create/delete/unpaid-invoices/untracked/default-account/assign-account, " +
     "expense list/create/delete, " +
     "gst r1/r3b, shipment list/get/create/update, " +
