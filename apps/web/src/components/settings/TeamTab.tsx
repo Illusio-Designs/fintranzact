@@ -141,7 +141,9 @@ function TeamSection() {
             <tbody>
               {members?.map((m) => (
                 <tr key={m.id}>
-                  <td className="font-medium">
+                  {/* A long name may wrap anywhere, so it can't push the table
+                      (and the page, on a phone) wider than the screen. */}
+                  <td className="font-medium [overflow-wrap:anywhere]">
                     {m.userName}
                     {/* Phones have no Email column: show it under the name. */}
                     <span className="block sm:hidden text-xs font-normal text-text-secondary break-all">
