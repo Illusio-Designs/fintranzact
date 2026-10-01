@@ -507,6 +507,9 @@ function InvoiceDetailPanel({
     onError: (err) => toast.error("Failed to update status", err.message),
   });
 
+  // Sellers can view invoices but not edit them.
+  const { data: me } = trpc.auth.me.useQuery();
+
   if (!invoiceId) return null;
 
   // Compute how much has been credited/returned against this invoice (combined limit)
@@ -537,7 +540,6 @@ function InvoiceDetailPanel({
     balance > 0.01;
 
   const isDraftLike = invoice?.status === "draft" || invoice?.status === "unfulfilled";
-  const { data: me } = trpc.auth.me.useQuery();
 
   return (
     <SlideOver
