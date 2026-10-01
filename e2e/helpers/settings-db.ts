@@ -187,3 +187,69 @@ export async function storeOrdersOf(businessId: string) {
     where o.business_id = ${businessId}
     order by o.created_at`) as unknown as StoreOrderRow[];
 }
+
+// ── Platform admin and partners (J13, J14) ──────────────────────
+
+/** A plan's saved overrides (null = the built-in settings). */
+export async function planOverride(plan: string) {
+  const [row] = await db()`
+    select name, tagline, monthly_price_inr, visible, highlight, limits, features from plan_settings where plan = ${plan}`;
+  return row as
+    | { name: string; tagline: string; monthly_price_inr: number | null; visible: boolean; highlight: boolean; limits: Record<string, unknown>; features: string[] }
+    | undefined;
+}
+
+export async function partnerByEmail(email: string) {
+  const [row] = await db()`
+    select id, status, referral_code, commission_percent, list_publicly, partner_type, company_name, contact_name,
+           city, phone, website, client_count, message, reviewed_at
+    from partners where email = lower(${email}) order by created_at desc limit 1`;
+  return row as
+    | {
+        id: string;
+        status: string;
+        referral_code: string | null;
+        commission_percent: number | null;
+        list_publicly: boolean;
+        partner_type: string;
+        company_name: string;
+        contact_name: string;
+        city: string | null;
+        phone: string | null;
+        website: string | null;
+        client_count: string | null;
+        message: string | null;
+        reviewed_at: Date | null;
+      }
+    | undefined;
+}
+
+export async function partnerPayoutsOf(partnerId: string) {
+  return (await db()`
+    select period, amount::text as amount, status, reference, paid_at from partner_payouts
+    where partner_id = ${partnerId} order by created_at`) as unknown as Array<{
+    period: string;
+    amount: string;
+    status: string;
+    reference: string | null;
+    paid_at: Date | null;
+  }>;
+}
+
+export async function roadmapItemsTitled(title: string) {
+  return (await db()`select id, status, category, priority from roadmap_items where title = ${title}`) as unknown as Array<{
+    id: string;
+    status: string;
+    category: string;
+    priority: string;
+  }>;
+}
+
+/** Organisations that signed up with a partner's code. */
+export async function tenantsReferredBy(partnerId: string) {
+  return (await db()`select id, name, plan from tenants where partner_id = ${partnerId} order by created_at`) as unknown as Array<{
+    id: string;
+    name: string;
+    plan: string | null;
+  }>;
+}

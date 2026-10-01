@@ -1344,7 +1344,12 @@ function DashboardPage() {
   const myTargets: TargetProgress[] = myTargetsRaw ?? [];
 
   // Current business, for the greeting and the GST panel (cached by the shell).
-  const { data: businesses } = trpc.business.list.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
+  // Only with an organisation: a platform admin or partner without one passes
+  // through this page on sign-in, and the list is refused (400) without it.
+  const { data: businesses } = trpc.business.list.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    enabled: !!session?.tenantId,
+  });
   const activeBusiness = businesses?.find((b) => b.id === getBusinessId()) ?? businesses?.[0];
   const isGstRegistered =
     !!activeBusiness && (activeBusiness.gstRegistrationType !== "unregistered" || !!activeBusiness.gstin);
