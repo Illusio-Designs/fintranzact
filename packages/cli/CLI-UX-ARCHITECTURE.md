@@ -1,1269 +1,426 @@
 # Fintranzact CLI: UX Architecture & Interaction Patterns
 
+This document describes the CLI **as built** in `packages/cli`. It started as a pre-build design; ideas from that design that were not built are listed in [section 9](#9-not-built).
+
 ## Table of Contents
 
-1. [Global Conventions](#1-global-conventions)
-2. [Information Density](#2-information-density)
-3. [Interactive Flows](#3-interactive-flows)
-4. [Non-Interactive Mode](#4-non-interactive-mode)
-5. [Error States](#5-error-states)
-6. [Navigation Patterns](#6-navigation-patterns)
+1. [Overview](#1-overview)
+2. [Global Conventions](#2-global-conventions)
+3. [Command Reference](#3-command-reference)
+4. [Interactive Flows](#4-interactive-flows)
+5. [Non-Interactive Mode and Output Formats](#5-non-interactive-mode-and-output-formats)
+6. [Error States and Exit Codes](#6-error-states-and-exit-codes)
 7. [Configuration & Auth](#7-configuration--auth)
 8. [Implementation Notes](#8-implementation-notes)
+9. [Not Built](#9-not-built)
 
 ---
 
-## 1. Global Conventions
+## 1. Overview
 
-### Command Grammar
+| | |
+|---|---|
+| Package | `@fintranzact/cli` (version 0.9.0), published to npm |
+| Location | `packages/cli` |
+| Binary | `fintranzact` → `dist/bin/fintranzact.js` |
+| Entry point | `src/bin/fintranzact.ts` |
+| Build | `tsup` → one ESM bundle for Node 20, with a `#!/usr/bin/env node` banner; the version is injected as `__CLI_VERSION__` |
+| Node | `>=20` |
 
-Every command follows: `fintranzact <resource> <action> [flags]`
+### Libraries actually used
+
+From `package.json`:
+
+| Concern | Library | Notes |
+|---|---|---|
+| Command parsing | `commander` ^13 | Every command, option, alias and help text |
+| Colours | `chalk` ^5 | Only when `hasColor()` is true (see below) |
+| Config storage | `conf` ^13 | Encrypted JSON config file |
+| Opening files | `open` ^10 | Only for `invoice pdf --open` |
+| API payloads | `superjson` ^2 | Matches the API's tRPC transformer |
+| HTTP | Node's built-in `fetch` | No HTTP library |
+| Prompts | Node's built-in `readline` | No prompt library |
+| Tables | Own code in `src/output.ts` | No table library |
+
+### Code layout
+
+```
+packages/cli/
+  package.json
+  tsup.config.ts
+  src/
+    bin/
+      fintranzact.ts          # creates the commander program, calls every registrar, parses argv
+      registrars/*.ts         # 26 files, one per command group: define commands, options, help
+    commands/<group>/*.ts     # command handlers (fetch, format, print)
+    client.ts                 # FintranzactClient: hand-written tRPC-over-HTTP client
+    config.ts                 # config file, env-var auth, maintenance check
+    auth.ts                   # login (password / API key), logout, whoami
+    output.ts                 # exit codes, colour detection, table/TSV/CSV/ids/JSON output
+    format.ts                 # INR, dates, status badges, financial year helpers
+```
+
+### How commands are registered
+
+`src/bin/fintranzact.ts` creates one `commander` `Command` named `fintranzact` and calls 26 registrar functions in order (`registerAuthCommands`, `registerDashboardCommands`, … `registerBackupCommands`). Each registrar in `src/bin/registrars/` adds its commands with `program.command(...)`, declares options, and in `.action()` calls a handler from `src/commands/`. Several registrars load their handler with a dynamic `import()` so unused commands are not evaluated at start-up.
+
+Totals (counted from the registrars): **26 registrars, 38 top-level commands, 184 runnable commands.** Not every registrar adds one group: `auth.ts` adds five top-level commands, `backup.ts` adds two, and `document.ts` adds eight (seven document types plus `document`).
+
+---
+
+## 2. Global Conventions
+
+### Command grammar
+
+Most commands follow `fintranzact <group> <action> [args] [flags]`:
 
 ```
 fintranzact login
-fintranzact dashboard
-fintranzact invoice list
-fintranzact invoice create
-fintranzact invoice get INV-0042
-fintranzact invoice pdf INV-0042
+fintranzact dashboard summary
+fintranzact invoice list --this-month
+fintranzact invoice get <id>
 fintranzact party list --type customer
-fintranzact payment create
-fintranzact expense list --from 2026-04-01 --to 2026-06-30
 fintranzact gst r1 --quarter Q1
 fintranzact report daybook --from 2026-04-01 --to 2026-04-30
 ```
 
-Resources match the existing tRPC router names exactly: `invoice`, `party`, `item`, `payment`, `expense`, `bank`, `shipment`, `gst`, `report`.
+A few commands sit at the top level: `login`, `logout`, `whoami`, `switch`, `profile`, `export`, `restore`.
 
-### INR Formatting
+Aliases: `dashboard` → `dash`, `api-key` → `key`, `automated-invoice` → `auto-inv`.
 
-All monetary values use the Indian numbering system with the rupee symbol. This matches the existing `formatCurrency` in `packages/shared`:
+Running a group with no subcommand (for example `fintranzact dashboard`) prints that group's help.
 
-```
-  12,345.00    -- amounts under 1 lakh, no symbol in tables (column header has it)
-1,23,456.78    -- lakhs grouping
-15,00,000.00   -- standard crore notation
-```
+### INR formatting (`src/format.ts`)
 
-Right-align all currency columns. Use the `en-IN` locale for grouping. The column header carries the symbol once:
+- `formatINR()` uses `Intl.NumberFormat("en-IN")` with two decimals and a `₹` prefix, e.g. `₹1,23,456.78`. Negative amounts get a leading `-`.
+- `formatAmount()` is the same without the symbol, for table cells; the column header carries `(₹)`.
+- Amount columns are right-aligned.
 
-```
-  Amount (₹)
-─────────────
-  12,345.00
-1,23,456.78
-```
+### Date formatting
 
-Negative amounts (credit notes, refunds) use a minus prefix, not parentheses:
+- `formatDate()` prints `dd MMM yyyy`, e.g. `30 Mar 2026`.
+- `formatRelativeDate()` prints `Today`, `Yesterday`, `5d ago`, `3mo ago`, `1y ago`.
+- Financial year helpers (`currentFY()`, `fyStart()`, `quarterRange()`) assume the FY starts on 1 April. `--this-fy` and `--quarter Q1..Q4` use them.
 
-```
- -5,000.00
-```
+### Status badges
 
-### Date Formatting
+`formatStatus()` prints text badges such as `[PAID]`, `[OVERDUE]`, `[CANCEL]`, coloured when colour is on:
 
-Match the existing `formatDate` function (en-IN, `dd MMM yyyy`):
+| Status | Badge | Colour |
+|---|---|---|
+| paid | `[PAID]` | green |
+| sent | `[SENT]` | blue |
+| draft | `[DRAFT]` | dim |
+| partial | `[PARTIAL]` | yellow |
+| overdue | `[OVERDUE]` | red |
+| cancelled | `[CANCEL]` | dim + strikethrough |
+| adjusted | `[ADJUST]` | magenta |
+| unfulfilled | `[UNFUL]` | blue |
+| pending | `[PEND]` | yellow |
+| confirmed | `[CONF]` | blue |
+| delivered | `[DELIV]` | green |
+| shipped | `[SHIPPED]` | blue |
+| in_transit | `[TRANSIT]` | cyan |
+| returned | `[RETURN]` | red |
+| preparing | `[PREP]` | yellow |
+| ready | `[READY]` | cyan |
 
-```
-30 Mar 2026
-01 Apr 2025
-```
+Unknown statuses print as `[STATUS]` in upper case, uncoloured.
 
-For relative dates in status contexts (overdue by, due in):
+### Colour
 
-```
-Due in 3 days
-Overdue by 12 days
-Due today
-```
+`hasColor()` (in `src/output.ts`) returns false when `NO_COLOR` is set or `FORCE_COLOR=0`; otherwise it uses `process.stdout.hasColors()` or whether stdout is a TTY. Without colour, `success()` prints `OK: ` instead of `✓ `.
 
-### Status Indicators
+### Terminal width
 
-Terminal-safe Unicode characters with ANSI colors. These map directly to the `invoiceStatusEnum` and the existing `STATUS_CONFIG` in the mobile app:
-
-```
-Status      Symbol   Color (ANSI)        Code
-──────────────────────────────────────────────
-paid        [PAID]    green  (32)        \x1b[32m
-sent        [SENT]    blue   (34)        \x1b[34m
-draft       [DRAFT]   dim    (2)         \x1b[2m
-partial     [PARTIAL] yellow (33)        \x1b[33m
-overdue     [OVERDUE] red    (31)        \x1b[31m
-cancelled   [CANCEL]  dim    (2;9)       \x1b[2;9m  (dim + strikethrough)
-unfulfilled [UNFUL]   blue   (34)        \x1b[34m
-pending     [PEND]    yellow (33)        \x1b[33m
-confirmed   [CONF]    blue   (34)        \x1b[34m
-delivered   [DELIV]   green  (32)        \x1b[32m
-```
-
-When `--no-color` is set or `NO_COLOR` env var is present, strip all ANSI codes and use text-only badges:
-
-```
-[PAID]   [OVERDUE]   [DRAFT]   [PARTIAL]
-```
-
-### Terminal Width Awareness
-
-Detect terminal width via `process.stdout.columns` (default 80). Three layout tiers:
-
-- **Narrow (< 80)**: Compact single-line per record, truncate party names to 15 chars
-- **Standard (80-120)**: Full table with all relevant columns
-- **Wide (> 120)**: Add extra columns (notes, created by, etc.)
+`getWidthTier()` reads `process.stdout.columns` (default 80): **narrow** under 80, **standard** 80–120, **wide** over 120. List commands such as `invoice list` pick a column set per tier: narrow shows number, party, amount, status; standard adds date; wide adds due date, paid and balance.
 
 ---
 
-## 2. Information Density
+## 3. Command Reference
 
-### 2.1 Invoice List
+One table per registrar, in the order they are registered. Arguments in `<>` are required.
 
-The most-used screen. Optimized for scanning 50+ invoices quickly.
+**`auth.ts`** — top-level commands
 
-**Standard width (80-120 cols):**
+| Command | What it does |
+|---|---|
+| `login` | Log in with email/password or `--token` (API key). Options `--api-url`, `--email`, `--password`, `--token`. |
+| `logout` | Clear saved credentials; `--all` also signs out every session on the server. |
+| `whoami` | Show the user and active business. |
+| `profile update-name <name>` | Change your display name. |
+| `switch` | List businesses and mark the active one. |
 
-```
- Sale Invoices                                              FY 2025-26
- ══════════════════════════════════════════════════════════════════════
+**`dashboard.ts`** — `dashboard` (alias `dash`): `summary`, `sales-trend`, `top-outstanding`, `top-customers`, `top-items`, `expenses`, `invoice-breakdown`, `profit-loss`, `receivables-aging`, `payment-modes`, `collection-efficiency`, `monthly-comparison`.
 
-  #           Party            Date          Amount (₹)    Status
- ─────────────────────────────────────────────────────────────────────
-  INV-0042    Sharma Traders   30 Mar 2026    15,400.00    [PAID]
-  INV-0041    Patel & Sons     28 Mar 2026    1,23,000.00  [PARTIAL]
-  INV-0040    Gupta Retail     27 Mar 2026       800.00    [OVERDUE]
-  INV-0039    ABC Wholesale    25 Mar 2026    45,200.00    [SENT]
-  INV-0038    Kumar Stores     24 Mar 2026     2,500.00    [DRAFT]
- ─────────────────────────────────────────────────────────────────────
-  Showing 1-20 of 156           Total: 8,45,900.00
+**`invoice.ts`** — `invoice`: `list`, `get <id>`, `create`, `status <id> <status>`, `pdf <id>` (`--output`, `--open`), `delete <id>`.
 
-  [n] Next page  [p] Previous  [/] Search  [q] Quit
-```
+**`party.ts`** — `party`: `list`, `get <id>`, `create`, `delete <id>`, `ledger <partyId>`.
 
-**Narrow width (< 80 cols):**
+**`item.ts`** — `item`: `list`, `get <id>`, `create`, `delete <id>`, `stock <id> <adjustment>` (e.g. `+10`, `-5`, `100`), `batches <id>`, `expiring`.
 
-```
- INV-0042  Sharma Traders     15,400.00  [PAID]
- INV-0041  Patel & Sons     1,23,000.00  [PARTIAL]
- INV-0040  Gupta Retail          800.00  [OVERDUE]
-```
+**`payment.ts`** — `payment`: `list`, `create`, `delete <id>`, `get <id>`, `update <id>`, `unpaid-invoices <partyId>`, `untracked`, `default-account`.
 
-**Wide width (> 120 cols) adds columns:**
+**`expense.ts`** — `expense`: `list`, `create`, `delete <id>`, `update <id>`, `categories`.
 
-```
-  #           Party            Date          Due           Amount (₹)    Paid (₹)     Balance (₹)   Status
- ──────────────────────────────────────────────────────────────────────────────────────────────────────────
-  INV-0042    Sharma Traders   30 Mar 2026   14 Apr 2026    15,400.00    15,400.00          0.00    [PAID]
-  INV-0041    Patel & Sons     28 Mar 2026   12 Apr 2026   1,23,000.00   50,000.00     73,000.00    [PARTIAL]
-```
+**`gst.ts`** — `gst`: `r1`, `r3b`, `r1-csv`, `gstr9 <fy>`, `gstr2b-uploads`.
 
-### 2.2 Invoice Detail View
+**`report.ts`** — `report`: `daybook`, `outstanding`, `tax-summary`, `item-sales`, `stock`, `sales-register`, `purchase-register`, `party-statement <partyId>`, `payment-summary`, `cash-flow`, `collection-efficiency`, `trial-balance`, `balance-sheet`, `cash-flow-statement`, `general-ledger <accountId>`.
 
-When a user runs `fintranzact invoice get INV-0042`:
+**`bank.ts`** — `bank`: `list`, `get <id>`, `create`, `transfer`, `transactions <accountId>`, `gateway-config <accountId>`, `update-gateway <accountId>`.
 
-```
- ┌─────────────────────────────────────────────────────────────────┐
- │  SALE INVOICE  INV-0042                           [PAID]        │
- ├─────────────────────────────────────────────────────────────────┤
- │  Party:    Sharma Traders (Customer)                            │
- │  Date:     30 Mar 2026                                          │
- │  Due:      14 Apr 2026                                          │
- │  Created:  Saurabh (30 Mar 2026, 10:32 AM)                     │
- │  Delivery: Hand Delivery                                        │
- ├─────────────────────────────────────────────────────────────────┤
- │                                                                  │
- │   #  Item               Qty   Rate (₹)    Tax%   Amount (₹)    │
- │  ── ─────────────────── ───── ────────── ────── ────────────    │
- │   1  Basmati Rice 5kg   10    1,200.00    5%      12,600.00    │
- │   2  Toor Dal 1kg        5      180.00   12%       1,008.00    │
- │   3  Packing Charges     1      200.00    0%         200.00    │
- │                                                                  │
- ├─────────────────────────────────────────────────────────────────┤
- │  Subtotal:             13,808.00                                │
- │  Tax:                   1,608.00                                │
- │  Additional Charges:      200.00  (Delivery)                    │
- │  Discount:               -216.00                                │
- │  Round Off:                 0.22                                │
- │  ─────────────────────────────────                              │
- │  Total:                15,400.00                                │
- │  Paid:                 15,400.00                                │
- │  Balance:                   0.00                                │
- ├─────────────────────────────────────────────────────────────────┤
- │  Notes: Deliver before Holi                                     │
- │  Terms: Payment within 15 days of invoice date                  │
- └─────────────────────────────────────────────────────────────────┘
+**`shipment.ts`** — `shipment`: `list`, `get <id>`, `create`, `update <id>`.
 
- Actions: [e] Edit  [p] PDF  [s] Share  [d] Duplicate  [pay] Record Payment
-```
+**`target.ts`** — `target`: `list`, `my`, `create`.
 
-### 2.3 Dashboard Summary
+**`store.ts`** — `store`: `settings`, `update-settings`, `items`, `items-toggle`, `orders`, `order-get <id>`, `order-confirm <id>`, `order-cancel <id>`, `order-update <id>`, `check-slug <slug>`.
 
-`fintranzact dashboard`:
+**`import.ts`** — `import`: `parties <file>`, `items <file>`, `invoices <file>`, `payments <file>` (JSON or CSV, detected from the extension or `--format`).
+
+**`automated-invoice.ts`** — `automated-invoice` (alias `auto-inv`): `list`, `get <id>`, `create`, `pause <id>`, `resume <id>`, `run-now <id>`, `delete <id>`, `update <id>`, `history <templateId>`, `usage`, `suggestions`.
+
+**`business.ts`** — `business`: `list`, `get`, `update`, `sequence`, `audit-trail`, `export`, `switch`.
+
+**`document.ts`** — one group per document type, each with `list`, `get <id>`, `create`, `update-status <id> <status>`, `delete <id>`:
+`quotation`, `credit-note`, `debit-note`, `delivery-challan`, `proforma`, `sales-return`, `purchase-return`. Plus `document convert --from-type --from-id --to-type`.
+
+**`tenant.ts`** — `tenant`: `list`, `members`, `invite <email>`, `remove <userId>`, `update-role <userId> <role>`, `invitations`, `revoke-invitation <invitationId>`.
+
+**`api-key.ts`** — `api-key` (alias `key`): `list`, `create`, `revoke <id>`.
+
+**`session.ts`** — `session`: `list`, `revoke <sessionId>`, `revoke-all`.
+
+**`journal.ts`** — `journal`: `list`, `get <id>`, `void <id>`, `templates`.
+
+**`itc.ts`** — `itc`: `dashboard`, `ledger`, `aging`, `block <invoiceId>`, `unblock <invoiceId>`.
+
+**`bank-recon.ts`** — `bank-recon`: `imports`, `summary <importId>`, `rules`.
+
+**`einvoice.ts`** — `einvoice`: `dashboard`, `generate <invoiceId>`, `cancel <invoiceId>`, `retry <invoiceId>`.
+
+**`ewb.ts`** — `ewb`: `dashboard`, `generate <invoiceId>`, `expiring`.
+
+**`backup.ts`** — top-level commands: `export --tenant <slug-or-id> -o <file>` (download a `.tar.gz` tenant backup) and `restore --tenant <slug-or-id> -i <file>` (upload into an empty tenant).
+
+Use `fintranzact <command> --help` for each command's options.
+
+### Common filter flags
+
+List and report commands share these where they apply (check `--help` per command):
 
 ```
- Fintranzact Dashboard                     Sharma Trading Co.
- FY 2025-26 (01 Apr 2025 - 31 Mar 2026)
- ═══════════════════════════════════════════════════════════
-
- ┌─ Revenue ───────────┐  ┌─ Expenses ──────────┐
- │  Sales    18,45,000  │  │  Purchases 8,20,000 │
- │  Cash In  15,30,000  │  │  Expenses  2,15,000 │
- │                      │  │  Cash Out  9,80,000  │
- └──────────────────────┘  └─────────────────────┘
-
- ┌─ Outstanding ────────────────────────────────────┐
- │  Receivable    3,15,000   from 12 parties        │
- │  Payable       1,40,000   to 5 parties           │
- │  Net Position  1,75,000   receivable              │
- └──────────────────────────────────────────────────┘
-
- ┌─ Recent Invoices ───────────────────────────────────────┐
- │  INV-0042  Sharma Traders   15,400.00  [PAID]    Today  │
- │  INV-0041  Patel & Sons   1,23,000.00  [PARTIAL] 2d ago │
- │  INV-0040  Gupta Retail       800.00   [OVERDUE] 3d ago │
- │  INV-0039  ABC Wholesale   45,200.00   [SENT]    5d ago │
- │  INV-0038  Kumar Stores     2,500.00   [DRAFT]   6d ago │
- └─────────────────────────────────────────────────────────┘
-
- Low Stock Alerts: Basmati Rice 5kg (2 left), Toor Dal 1kg (5 left)
+--from <YYYY-MM-DD>  --to <YYYY-MM-DD>
+--this-month  --this-quarter  --this-fy     # not every command has all three
+--status <status>  --type <type>  --party <name>  --party-id <id>  --search <q>
+--page <n>  --limit <n>                       # default page size is 20
+--quarter Q1..Q4  --month <n>  --year <n>     # gst commands
 ```
 
-### 2.4 Party List
-
-`fintranzact party list --type customer`:
-
-```
- Customers                                           12 total
- ════════════════════════════════════════════════════════════════
-
-  Name               Phone          Balance (₹)   Invoices  Category
- ──────────────────────────────────────────────────────────────────────
-  Sharma Traders     +91 98765xxxxx   45,200.00    23        Retail
-  Patel & Sons       +91 87654xxxxx   73,000.00    18        Wholesale
-  Gupta Retail       +91 76543xxxxx      800.00     4        Retail
-  ABC Wholesale      +91 65432xxxxx        0.00    31        Wholesale
-
- Sort: [n] Name  [b] Balance  [i] Invoice count  [q] Quit
-```
-
-### 2.5 Item List
-
-`fintranzact item list`:
-
-```
- Items                                                45 total
- ═══════════════════════════════════════════════════════════════
-
-  Name              HSN       Unit    Sale (₹)   Stock   Tax%
- ─────────────────────────────────────────────────────────────
-  Basmati Rice 5kg  10063010  pcs     1,200.00    2 !     5%
-  Toor Dal 1kg      07139090  kg        180.00    5      12%
-  Packing Box       48191000  pcs        50.00   200      0%
-  Courier Service   996812    -         250.00    -      18%
-
- ! = below low stock alert threshold
-```
-
-### 2.6 GST Reports
-
-`fintranzact gst r1 --quarter Q4`:
-
-```
- GSTR-1 Summary                            Q4 FY 2025-26
- Jan 2026 - Mar 2026                    GSTIN: 07AAACR5055K1Z5
- ═════════════════════════════════════════════════════════════
-
- B2B Invoices (> ₹2,50,000)
- ──────────────────────────────────────────────────────────────
-  Invoice     Party GSTIN        Taxable (₹)    Tax (₹)
-  INV-0035    07AAACR5055K1Z5    3,50,000.00    63,000.00
-  INV-0029    27AABCU9603R1ZM    2,80,000.00    50,400.00
-
- B2C (Small) Summary
- ──────────────────────────────────────────────────────────────
-  Rate     Taxable (₹)     CGST (₹)     SGST (₹)
-   5%      4,50,000.00    11,250.00    11,250.00
-  12%      2,80,000.00    16,800.00    16,800.00
-  18%        95,000.00     8,550.00     8,550.00
-
- Totals
- ──────────────────────────────────────────────────────────────
-  Total Taxable:    14,55,000.00
-  Total Tax:         1,61,550.00
-  Total Invoices:    42
-```
+Text search is a flag on `list`, e.g. `party list --search sharma` and `item list --search basmati`.
 
 ---
 
-## 3. Interactive Flows
+## 4. Interactive Flows
 
-### 3.1 First-Time Login
+Interactive prompts use Node's `readline`. A command is interactive only when stdin is a TTY and `-y/--yes` is not given.
 
-```
-$ fintranzact login
+### 4.1 Login
 
-  Fintranzact CLI
-  ───────────
+`fintranzact login` asks for any of server URL (default `http://localhost:3000`), email and password that were not passed as flags. The password is masked with `*` as you type. It then lists your businesses and asks you to pick one if there is more than one, and prints the config file path.
 
-  Server URL [http://localhost:3000]: https://billing.mycompany.in
-  Email: saurabh@example.com
-  Password: ••••••••
+With `--token <api key>` it skips email/password, validates the key with `auth.me`, then does the same business selection.
 
-  Authenticating... done
+### 4.2 Invoice creation
 
-  You have access to 2 businesses:
+`fintranzact invoice create` with no item flags runs a wizard:
 
-   #  Business              GSTIN               Role
-  ── ────────────────────── ─────────────────── ──────
-   1  Sharma Trading Co.    07AAACR5055K1Z5     owner
-   2  Kumar Enterprises     27AABCU9603R1ZM     admin
+1. Party search: type a search term, pick from up to 5 matches.
+2. Line items: search an item (or type a free-text description), pick a match (or `0` to use the text as a description), then enter quantity, unit price, tax % and discount % (price and tax default from the item). An empty search ends the list.
+3. A summary, then `Create this invoice? (y/n)`.
 
-  Select business [1]: 1
+On success it prints the invoice number and total, plus `invoice get` and `invoice pdf` commands for the new invoice.
 
-  Active business: Sharma Trading Co.
-  Config saved to ~/.config/fintranzact/config.json
-
-  You can switch businesses anytime with:
-    fintranzact business switch
-```
-
-### 3.2 Invoice Creation (Interactive)
-
-`fintranzact invoice create`:
-
-The flow mirrors the web `InvoiceCreator.tsx` but linearized for terminal. Each step can be skipped or pre-filled via flags.
+With flags it runs without prompts:
 
 ```
-$ fintranzact invoice create
-
-  New Sale Invoice
-  ────────────────
-
-  Type (sale/purchase) [sale]: sale
-
-  Select Party:
-  > Search: sha█
-    1  Sharma Traders     +91 98765xxxxx   Customer
-    2  Shankar & Co.      +91 87654xxxxx   Customer
-
-  Party [1]: 1
-  Party: Sharma Traders
-
-  Add Line Items (empty description to finish):
-
-  Item 1:
-    Search item: bas█
-      1  Basmati Rice 5kg   ₹1,200.00/pcs   Stock: 2
-      2  Basmati Rice 1kg     ₹280.00/pcs    Stock: 15
-    Item [1]: 1
-    Quantity [1]: 10
-    Unit Price [1200.00]: 1200
-    Tax % [5]: 5
-    Discount % [0]:
-    > Basmati Rice 5kg  x10  @1,200.00  5% tax  = 12,600.00
-
-  Item 2:
-    Search item: toor█
-      1  Toor Dal 1kg   ₹180.00/kg   Stock: 5
-    Item [1]: 1
-    Quantity [1]: 5
-    Unit Price [180.00]:
-    Tax % [12]:
-    Discount % [0]:
-    > Toor Dal 1kg  x5  @180.00  12% tax  = 1,008.00
-
-  Item 3:
-    Description:      (empty, done adding items)
-
-  ─── Invoice Summary ───────────────────────────
-  Subtotal:          13,608.00
-  Tax:                1,608.00
-  Additional Charges [0]:
-  Discount [0]:
-  Round Off [auto]: 0.22
-
-  Total:             15,216.22
-
-  Invoice Date [30 Mar 2026]:
-  Due Date [14 Apr 2026]:
-  Delivery Method [self_pickup]: hand_delivery
-  Notes:
-  Terms:
-  ───────────────────────────────────────────────
-
-  Create this invoice? (y/n) [y]: y
-
-  Created: INV-0042 for ₹15,216.22
-  View:    fintranzact invoice get INV-0042
-  PDF:     fintranzact invoice pdf INV-0042
+fintranzact invoice create \
+  --party "Sharma Traders" \
+  --item "Basmati Rice 5kg" --qty 10 --rate 1200 \
+  --item "Toor Dal 1kg" --qty 5 \
+  --delivery hand_delivery \
+  --yes
 ```
 
-**Shortcut for power users** -- supply everything via flags:
+`--party` takes the first search match. Without `--rate`, the item's sale price is used; if the item is not found and no rate is given, the command fails. `--item/--qty/--rate` can repeat.
 
-```
-$ fintranzact invoice create \
-    --party "Sharma Traders" \
-    --item "Basmati Rice 5kg" --qty 10 --rate 1200 \
-    --item "Toor Dal 1kg" --qty 5 \
-    --delivery hand_delivery \
-    --yes
-```
+### 4.3 Payment recording
 
-### 3.3 Payment Recording (Interactive)
+`fintranzact payment create` without flags: party search and pick, a list of that party's unpaid invoices (sent / partial / overdue), then prompts for amount, mode (default `upi`), reference, date and notes, and a confirmation. The payment can be linked to one invoice with `--invoice-id`; there is no per-invoice allocation prompt.
 
-`fintranzact payment create`:
+### 4.4 Other prompts
 
-```
-$ fintranzact payment create
+`item create`, `party create` and `bank create` prompt for required fields that were not passed as flags.
 
-  Record Payment
-  ──────────────
+### 4.5 Confirmations
 
-  Select Party:
-  > Search: pat█
-    1  Patel & Sons   Balance: ₹73,000.00 receivable
-
-  Party [1]: 1
-
-  Unpaid Invoices for Patel & Sons:
-   #  Invoice     Date          Total (₹)    Paid (₹)     Due (₹)      Status
-  ── ────────── ────────────── ─────────── ─────────── ─────────── ──────────
-   1  INV-0041   28 Mar 2026   1,23,000.00  50,000.00   73,000.00  [PARTIAL]
-   2  INV-0036   15 Mar 2026     25,000.00       0.00   25,000.00  [SENT]
-
-  Allocate to specific invoices? (y/n) [y]: y
-
-  INV-0041 - Due: ₹73,000.00
-    Amount to allocate [73000.00]: 50000
-
-  INV-0036 - Due: ₹25,000.00
-    Amount to allocate [25000.00]: 25000
-
-  Total Payment: 75,000.00
-
-  Payment Mode (cash/bank/upi/cheque/other) [upi]: upi
-  Reference Number: TXN123456
-  Bank Account [HDFC Current]: 1
-  Payment Date [30 Mar 2026]:
-  Notes:
-
-  Record this payment? (y/n) [y]: y
-
-  Recorded: PAY-0089 for ₹75,000.00
-  Allocated: INV-0041 (₹50,000.00), INV-0036 (₹25,000.00)
-  Patel & Sons new balance: ₹23,000.00 receivable
-```
-
-### 3.4 Quick Operations (No Wizard Needed)
-
-Some operations should be instant, no wizard:
-
-```
-# Mark invoice as sent
-$ fintranzact invoice status INV-0042 sent
-  INV-0042 status updated: draft -> [SENT]
-
-# Download PDF
-$ fintranzact invoice pdf INV-0042
-  Saved: INV-0042.pdf (45 KB)
-
-$ fintranzact invoice pdf INV-0042 --output ~/Desktop/
-  Saved: ~/Desktop/INV-0042.pdf (45 KB)
-
-# Quick expense entry
-$ fintranzact expense create --amount 500 --category "Office Supplies" --mode cash
-  Created: Expense #45 - Office Supplies ₹500.00
-
-# Switch business
-$ fintranzact business switch
-  1  Sharma Trading Co.    [active]
-  2  Kumar Enterprises
-  Select [2]: 2
-  Switched to: Kumar Enterprises
-```
-
-### 3.5 Search and Filtering
-
-Consistent filtering grammar across all resources:
-
-```
-# Date ranges
-$ fintranzact invoice list --from 2026-01-01 --to 2026-03-31
-$ fintranzact invoice list --this-month
-$ fintranzact invoice list --this-quarter
-$ fintranzact invoice list --this-fy
-
-# Status filtering
-$ fintranzact invoice list --status overdue
-$ fintranzact invoice list --status overdue,partial
-
-# Party filtering
-$ fintranzact invoice list --party "Sharma Traders"
-$ fintranzact invoice list --party-id 550e8400-e29b-41d4-a716-446655440000
-
-# Type filtering
-$ fintranzact invoice list --type sale
-$ fintranzact party list --type customer
-
-# Combined
-$ fintranzact invoice list --type sale --status overdue --this-month
-
-# Full text search
-$ fintranzact party search "sharma"
-$ fintranzact item search "basmati"
-```
+These commands ask `(y/n)` before acting when interactive: deletes (invoice, party, item, payment, expense, document types, automated invoice), `api-key revoke`, `tenant remove`, `store order-confirm` / `order-cancel`, `document convert`, `business export`, `restore`. `-y/--yes` skips the prompt.
 
 ---
 
-## 4. Non-Interactive Mode
+## 5. Non-Interactive Mode and Output Formats
 
-### 4.1 JSON Output
+### 5.1 JSON
 
-Every command supports `--json` for machine-readable output:
+Almost every command accepts `--json` and prints the API result with `JSON.stringify(data, null, 2)`. The exceptions are `login`, `logout`, `profile update-name`, `export`, `restore`, `gst r1-csv`, `invoice pdf` and `session revoke-all`.
 
-```
-$ fintranzact invoice list --status overdue --json
-```
+Paginated lists wrap the rows, for example `invoice list --json`:
 
 ```json
 {
-  "data": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "invoiceNumber": "INV-0040",
-      "party": {
-        "id": "...",
-        "name": "Gupta Retail"
-      },
-      "type": "sale",
-      "status": "overdue",
-      "invoiceDate": "2026-03-27T00:00:00.000Z",
-      "dueDate": "2026-03-30T00:00:00.000Z",
-      "totalAmount": "800.00",
-      "amountPaid": "0.00",
-      "balance": "800.00"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 3,
-    "hasMore": false
-  }
+  "data": [ { "id": "…", "invoiceNumber": "INV-0040", "status": "overdue", "totalAmount": "800.00", … } ],
+  "pagination": { "page": 1, "limit": 20, "total": 3, "hasMore": false }
 }
 ```
 
-### 4.2 Piping Patterns
+Other commands print the API's response as-is.
 
-TSV output for piping to standard Unix tools:
+### 5.2 `--format`
 
-```
-# Pipe to awk for custom calculations
-$ fintranzact invoice list --status overdue --format tsv | awk -F'\t' '{sum += $5} END {print sum}'
+| Value | Output | Where |
+|---|---|---|
+| (default) / `table` | Box-drawn table, width-aware | All list/report commands |
+| `tsv` | Header row + tab-separated rows, ANSI stripped | Commands that list `--format` in `--help` |
+| `csv` | Header row + RFC-style quoted CSV | Same |
+| `ids` | One ID per line | `invoice list`, `party list`, `item list`, `payment list`, `expense list`, `automated-invoice list`, document-type `list` |
 
-# Pipe to grep
-$ fintranzact party list --format tsv | grep "Wholesale"
+`--format` on `import` commands means the **input** file format (`json` or `csv`).
 
-# Feed into another command
-$ fintranzact invoice list --status draft --format ids | xargs -I{} fintranzact invoice status {} sent
+Paginated tables end with a `Showing 1-20 of 156` footer.
 
-# CSV export
-$ fintranzact invoice list --this-fy --format csv > invoices-fy2526.csv
-```
-
-Output formats:
-
-| Flag | Format | Use Case |
-|------|--------|----------|
-| (default) | Pretty table | Human reading |
-| `--json` | JSON | Scripts, jq |
-| `--format tsv` | Tab-separated | Unix pipes, awk |
-| `--format csv` | CSV with headers | Spreadsheet import |
-| `--format ids` | One ID per line | xargs, loops |
-| `--quiet` / `-q` | Suppress all output except errors | Cron jobs |
-
-### 4.3 Exit Codes
+### 5.3 Piping
 
 ```
-0    Success
-1    General error (unexpected)
-2    Usage error (bad arguments, missing required flags)
-3    Authentication error (not logged in, expired token)
-4    Authorization error (insufficient permissions)
-5    Not found (resource doesn't exist)
-6    Validation error (business logic violation)
-7    Network error (API unreachable)
-8    Conflict (duplicate invoice number, concurrent edit)
+fintranzact invoice list --status overdue --format tsv | awk -F'\t' '{print $1}'
+fintranzact invoice list --this-fy --format csv > invoices.csv
+fintranzact invoice list --status draft --format ids | xargs -I{} fintranzact invoice status {} sent
+fintranzact invoice list --json | jq '.data[].invoiceNumber'
 ```
 
-Script example:
-
-```bash
-#!/bin/bash
-# Daily overdue reminder script (cron: 0 9 * * *)
-
-overdue=$(fintranzact invoice list --status overdue --json 2>/dev/null)
-exit_code=$?
-
-if [ $exit_code -eq 3 ]; then
-  echo "Auth expired, re-login needed" >&2
-  exit 1
-fi
-
-if [ $exit_code -eq 7 ]; then
-  echo "API unreachable" >&2
-  exit 1
-fi
-
-count=$(echo "$overdue" | jq '.pagination.total')
-total=$(echo "$overdue" | jq '[.data[].balance | tonumber] | add')
-
-if [ "$count" -gt 0 ]; then
-  echo "ALERT: $count overdue invoices totaling INR $total"
-  echo "$overdue" | jq -r '.data[] | "\(.invoiceNumber) - \(.party.name) - INR \(.balance)"'
-fi
-```
-
-### 4.4 Idempotent Operations
-
-For scripting safety, create operations accept `--idempotency-key`:
-
-```
-# Safe to retry -- won't create duplicate invoices
-$ fintranzact invoice create --idempotency-key "daily-sharma-2026-03-30" \
-    --party "Sharma Traders" \
-    --item "Basmati Rice 5kg" --qty 10 \
-    --yes
-
-# First run:  Created: INV-0043
-# Second run: Already exists: INV-0043 (idempotency key match)
-```
-
-### 4.5 Batch Operations
-
-```
-# Bulk status update
-$ fintranzact invoice status --from-status draft --to-status sent --this-week
-  Updated 8 invoices: draft -> sent
-
-# Import from CSV (matches existing import router)
-$ fintranzact import parties --file customers.csv --dry-run
-  Parsed 45 records: 40 new, 3 duplicates (will skip), 2 errors
-  Run without --dry-run to import.
-
-$ fintranzact import parties --file customers.csv
-  Imported 40 parties, skipped 3 duplicates, 2 errors (see import-errors.log)
-```
+Errors and warnings go to stderr, so stdout stays clean for pipes.
 
 ---
 
-## 5. Error States
+## 6. Error States and Exit Codes
 
-### 5.1 Validation Errors
+### 6.1 Exit codes (`EXIT` in `src/output.ts`)
 
-Field-level errors with the exact field name (matching Zod validator paths from `packages/shared`):
+| Code | Name | Used for |
+|---|---|---|
+| 0 | `SUCCESS` | Success, or a cancelled confirmation |
+| 1 | `GENERAL` | Unexpected errors; also commander's own parse errors (unknown command or option, missing argument) |
+| 2 | `USAGE` | Bad or missing arguments caught by the command |
+| 3 | `AUTH` | Not logged in, or session/API key rejected |
+| 4 | `FORBIDDEN` | Permission denied |
+| 5 | `NOT_FOUND` | Resource not found |
+| 6 | `VALIDATION` | API validation errors |
+| 7 | `NETWORK` | API unreachable |
+| 8 | `CONFLICT` | Defined, not currently used by any command |
+| 9 | `RATE_LIMITED` | Defined, not currently used by any command |
 
-```
-$ fintranzact party create --name "" --phone "abc"
+Exception: `export` and `restore` (`src/commands/backup/*.ts`) use their own codes, listed in their `--help`: export — 1 auth/permission, 2 rate limit (2 exports per day), 5 server or network error; restore — 1 auth/permission, 3 target tenant not empty, 4 file error, 5 server error.
 
-  Error: Validation failed (2 errors)
+### 6.2 Error output
 
-    name      String must contain at least 1 character(s)
-    phone     Invalid phone number format
+`fatalError(message, code)` writes `Error: <message>` to stderr (red when colour is on) and exits with the code. `warn()` writes `Warning: <message>` to stderr. There is no JSON error format: with `--json`, errors are still plain text on stderr.
 
-  Run with --help for field requirements.
-```
-
-For interactive mode, validate inline and re-prompt:
-
-```
-  Name: █
-  Error: Name is required. Try again.
-  Name: █
-```
-
-### 5.2 Network Errors
+The API client normalises tRPC errors into `unauthorized`, `forbidden`, `not_found`, `validation_failed` (with Zod field errors), `rate_limited`, `network_error` and `api_error`. Validation errors print one line per field:
 
 ```
-$ fintranzact dashboard
-
-  Error: Cannot reach Fintranzact API at https://billing.mycompany.in
-
-  Possible causes:
-    - Server is not running (try: docker compose up -d)
-    - Network is unreachable
-    - URL is wrong (check: fintranzact config show)
-
-  Last successful connection: 30 Mar 2026, 09:15 AM
+Error: Validation failed:
+  name: String must contain at least 1 character(s)
 ```
 
-### 5.3 Authentication Errors
+Commands map these to exit codes, e.g. an expired session prints `Session expired. Run: fintranzact login` and exits 3.
 
-```
-$ fintranzact invoice list
+### 6.3 Warnings
 
-  Error: Session expired
-
-  Run 'fintranzact login' to re-authenticate.
-  Your business selection will be preserved.
-```
-
-Token refresh happens silently. Only show auth errors when refresh also fails.
-
-### 5.4 Business Logic Errors
-
-Map these to user-understandable messages:
-
-```
-# Insufficient stock
-$ fintranzact invoice create --party "Sharma" --item "Basmati Rice 5kg" --qty 100 --yes
-
-  Error: Insufficient stock for Basmati Rice 5kg
-
-    Available: 2 pcs
-    Requested: 100 pcs
-
-  Use --skip-stock-check to override (for back-orders).
-
-# Duplicate invoice number
-$ fintranzact invoice create ...
-
-  Error: Invoice number INV-0042 already exists
-
-  The server auto-assigns the next number. If you need to reset:
-    fintranzact business sequence invoice 100
-
-# Credit limit exceeded
-$ fintranzact invoice create --party "Kumar Stores" ...
-
-  Warning: This invoice will exceed Kumar Stores' credit limit.
-
-    Credit Limit:    50,000.00
-    Current Balance: 48,000.00
-    This Invoice:     5,000.00
-    New Balance:     53,000.00
-
-  Proceed anyway? (y/n) [n]:
-```
-
-### 5.5 Error Output Convention
-
-Errors always go to stderr, never stdout. This keeps piping clean:
-
-```
-# stdout has the data, stderr has the error
-$ fintranzact invoice list --json 2>errors.log | jq '.data | length'
-```
-
-Error format in `--json` mode:
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Validation failed",
-    "fields": {
-      "name": "String must contain at least 1 character(s)",
-      "phone": "Invalid phone number format"
-    }
-  }
-}
-```
-
----
-
-## 6. Navigation Patterns
-
-### 6.1 Help Structure
-
-Three levels of help, matching how users actually ask for help:
-
-**Level 1: Overview** (`fintranzact --help`):
-
-```
-Fintranzact CLI - Self-hosted invoicing for Indian businesses
-
-Usage: fintranzact <command> [options]
-
-Commands:
-  login              Authenticate with your Fintranzact server
-  dashboard          View business summary and key metrics
-  business           Manage businesses and settings
-
-  invoice            Create, list, and manage invoices
-  party              Manage customers and suppliers
-  item               Manage products and services
-  payment            Record and track payments
-  expense            Track business expenses
-
-  bank               Manage bank accounts and transactions
-  shipment           Track deliveries and shipments
-  gst                GST returns and compliance
-  report             Financial reports (daybook, outstanding, P&L, etc.)
-  import             Import data from CSV or other apps
-
-  config             View and edit CLI configuration
-
-Run 'fintranzact <command> --help' for details on a specific command.
-Run 'fintranzact <command> <subcommand> --help' for subcommand details.
-
-Examples:
-  fintranzact invoice list --this-month --status overdue
-  fintranzact invoice create --party "Sharma Traders" --item "Rice" --qty 10
-  fintranzact dashboard
-  fintranzact gst r1 --quarter Q4
-```
-
-**Level 2: Command help** (`fintranzact invoice --help`):
-
-```
-fintranzact invoice - Manage invoices
-
-Usage: fintranzact invoice <subcommand> [options]
-
-Subcommands:
-  list               List invoices with filters
-  get <number>       View invoice details
-  create             Create a new invoice (interactive or flags)
-  edit <number>      Edit a draft invoice
-  status <number>    Update invoice status
-  pdf <number>       Download invoice PDF
-  delete <number>    Delete a draft invoice
-  duplicate <number> Create a copy of an invoice
-
-Common Flags:
-  --type <sale|purchase>     Filter by invoice type
-  --status <status>          Filter by status
-  --party <name>             Filter by party name
-  --from <YYYY-MM-DD>        Start date
-  --to <YYYY-MM-DD>          End date
-  --this-month               Current month shortcut
-  --this-quarter             Current quarter shortcut
-  --this-fy                  Current financial year shortcut
-  --json                     Output as JSON
-  --format <tsv|csv|ids>     Alternative output formats
-  --no-color                 Disable colored output
-
-Examples:
-  fintranzact invoice list --type sale --this-month
-  fintranzact invoice get INV-0042
-  fintranzact invoice create --party "Sharma" --item "Rice" --qty 10 --yes
-  fintranzact invoice pdf INV-0042 --output ~/invoices/
-  fintranzact invoice status INV-0042 paid
-  fintranzact invoice list --status overdue --json | jq '.data[].party.name'
-```
-
-**Level 3: Subcommand help** (`fintranzact invoice create --help`):
-
-```
-fintranzact invoice create - Create a new invoice
-
-Usage: fintranzact invoice create [options]
-
-Without flags, starts an interactive wizard.
-With flags, creates directly (use --yes to skip confirmation).
-
-Options:
-  --type <sale|purchase>     Invoice type (default: sale)
-  --party <name|id>          Party name (fuzzy match) or UUID
-  --item <name> --qty <n>    Add a line item (repeatable)
-    --rate <amount>            Override item sale price
-    --tax <percent>            Override tax percentage
-    --discount <percent>       Line item discount
-  --date <YYYY-MM-DD>        Invoice date (default: today)
-  --due <YYYY-MM-DD>         Due date (default: party credit period)
-  --delivery <method>        self_pickup|hand_delivery|courier|bus|transport|post
-  --notes <text>             Invoice notes
-  --terms <text>             Terms and conditions
-  --additional-charges <n>   Additional charges amount
-  --invoice-discount <n>     Invoice-level discount
-  --invoice-discount-type    amount|percent (default: amount)
-  --skip-stock-check         Allow negative stock
-  --yes                      Skip confirmation prompt
-  --idempotency-key <key>    Prevent duplicate creation on retry
-  --json                     Output created invoice as JSON
-
-Examples:
-  # Interactive wizard
-  fintranzact invoice create
-
-  # Quick sale
-  fintranzact invoice create --party "Sharma" --item "Rice" --qty 10 --yes
-
-  # Multiple items
-  fintranzact invoice create \
-    --party "Patel & Sons" \
-    --item "Basmati Rice 5kg" --qty 10 --rate 1200 \
-    --item "Toor Dal 1kg" --qty 5 \
-    --delivery hand_delivery \
-    --notes "Deliver before Holi" \
-    --yes
-
-  # Scripted with JSON output
-  fintranzact invoice create --party "Sharma" --item "Rice" --qty 10 --yes --json
-```
-
-### 6.2 Command Discovery
-
-**Fuzzy matching on typos:**
-
-```
-$ fintranzact invioce list
-
-  Unknown command: invioce
-
-  Did you mean?
-    invoice     Manage invoices
-
-  Run 'fintranzact --help' for all commands.
-```
-
-**Contextual suggestions after actions:**
-
-```
-$ fintranzact invoice create ... --yes
-
-  Created: INV-0043 for ₹15,216.22
-
-  Next steps:
-    fintranzact invoice get INV-0043      View details
-    fintranzact invoice pdf INV-0043      Download PDF
-    fintranzact invoice status INV-0043 sent    Mark as sent
-    fintranzact payment create            Record a payment
-```
-
-**Shortest unique prefix (for power users):**
-
-```
-$ fintranzact inv list          # matches 'invoice'
-$ fintranzact pay create        # matches 'payment'
-$ fintranzact dash              # matches 'dashboard'
-$ fintranzact exp list          # matches 'expense'
-```
-
-### 6.3 Shell Completions
-
-Provide installable completions for bash, zsh, and fish:
-
-```
-$ fintranzact completion bash >> ~/.bashrc
-$ fintranzact completion zsh >> ~/.zshrc
-$ fintranzact completion fish > ~/.config/fish/completions/fintranzact.fish
-```
-
-Completions cover:
-
-- Commands and subcommands
-- Flag names and their allowed values (statuses, types, modes)
-- Party names (cached locally, refreshed on `fintranzact party list`)
-- Item names (cached locally)
-- Invoice numbers (recent, cached)
-- Bank account names
-
-Cache location: `~/.cache/fintranzact/completions.json`, refreshed every 5 minutes or on explicit list commands.
-
-### 6.4 Recent Command Context
-
-```
-$ fintranzact invoice list --type sale --this-month --status overdue
-
-  ... (results) ...
-
-$ fintranzact invoice list --repeat
-  (re-runs the previous invoice list command with same filters)
-
-$ fintranzact invoice list --last
-  (shows what filters were used last time)
-  Last: --type sale --this-month --status overdue (30 Mar 2026, 10:45 AM)
-```
+- Session tokens older than 25 days: `Session expires soon. Run: fintranzact login` (not shown for API keys).
+- `checkMaintenance()` warns when the server reports maintenance mode or a scheduled maintenance window. It never blocks; failures are ignored.
 
 ---
 
 ## 7. Configuration & Auth
 
-### 7.1 Config File
+### 7.1 Config file (`src/config.ts`)
 
-Location: `~/.config/fintranzact/config.json`
+Stored with `conf` under project name `fintranzact`, file `config.json`, so on Linux `~/.config/fintranzact/config.json` (macOS and Windows use their usual config folders). `login` prints the exact path.
 
-```json
-{
-  "server": "https://billing.mycompany.in",
-  "session": {
-    "id": "...",
-    "expiresAt": "2026-04-29T10:32:00.000Z"
-  },
-  "activeBusinessId": "550e8400-e29b-41d4-a716-446655440000",
-  "activeBusiness": "Sharma Trading Co.",
-  "defaults": {
-    "invoiceType": "sale",
-    "deliveryMethod": "hand_delivery",
-    "pageSize": 20
-  },
-  "display": {
-    "color": true,
-    "dateFormat": "en-IN",
-    "compactMode": false
-  }
-}
-```
+- The file is **encrypted** with a key derived from the OS user ID and hostname (SHA-256). This stops casual reading; it is not strong protection.
+- File mode `0600` (owner read/write only).
 
-### 7.2 Config Commands
+Fields: `apiUrl`, `token`, `tenantId`, `businessId`, `businessName`, `tokenCreatedAt`.
 
-```
-$ fintranzact config show
-  Server:    https://billing.mycompany.in
-  Business:  Sharma Trading Co. (07AAACR5055K1Z5)
-  User:      saurabh@example.com
-  Session:   Valid until 29 Apr 2026
-  Defaults:  invoice type=sale, delivery=hand_delivery, page=20
+`token` is either the session ID returned by `auth.login` or an API key (`fintranzact_key_…`). There is no OS keychain support.
 
-$ fintranzact config set defaults.pageSize 50
-  Updated: defaults.pageSize = 50
+### 7.2 Environment variables
 
-$ fintranzact config set display.color false
-  Updated: display.color = false
-```
+When both `FINTRANZACT_TOKEN` and `FINTRANZACT_API_URL` are set, they are used instead of the config file and nothing is written to disk (for CI and scripts). Optional: `FINTRANZACT_TENANT_ID`, `FINTRANZACT_BUSINESS_ID`, `FINTRANZACT_BUSINESS_NAME`.
 
-### 7.3 Environment Variable Overrides
+Colour: `NO_COLOR` or `FORCE_COLOR=0` turns it off.
 
-Every config value can be overridden via env var (useful for CI/CD):
+### 7.3 Auth checks
 
-```
-FINTRANZACT_SERVER=https://billing.mycompany.in
-FINTRANZACT_SESSION_ID=...
-FINTRANZACT_BUSINESS_ID=...
-FINTRANZACT_NO_COLOR=1
-FINTRANZACT_FORMAT=json
-```
-
-Priority: CLI flags > env vars > config file > defaults.
+- `requireAuth()` needs token, API URL, business ID and tenant ID; otherwise it exits 3 with `Not authenticated. Run: fintranzact login`.
+- `requireTenantAuth()` (used by `export`/`restore`) needs only token, API URL and tenant ID.
 
 ---
 
 ## 8. Implementation Notes
 
-### 8.1 Recommended Libraries
+### 8.1 API communication (`src/client.ts`)
 
-| Concern | Library | Why |
-|---------|---------|-----|
-| CLI framework | `@oclif/core` or `commander` + `inquirer` | oclif for plugin architecture, commander+inquirer for simpler setup |
-| Table rendering | `cli-table3` | Handles Unicode box drawing, column alignment, width truncation |
-| Colors | `chalk` | Respects `NO_COLOR`, supports 256-color detection |
-| Spinners | `ora` | Non-blocking progress for API calls |
-| Prompts | `@inquirer/prompts` | Modern, composable, supports autocomplete |
-| JSON output | Built-in `JSON.stringify` | No dependency needed |
-| HTTP client | `ofetch` or `ky` | Small, handles retries, timeout |
-| Fuzzy search | `fuse.js` | For party/item name matching in interactive mode |
-| Keychain | `keytar` | Secure session storage on macOS/Linux |
+`FintranzactClient` is a hand-written client for the API's tRPC HTTP endpoints. It does not import the API's types; each method declares its own return type. It has 254 methods in 35 namespaces (`auth`, `business`, `invoice`, … `selfImport`).
 
-### 8.2 Package Structure
+- Queries: `GET {apiUrl}/api/trpc/<path>?input=<superjson>`.
+- Mutations: `POST {apiUrl}/api/trpc/<path>` with a superjson body.
+- No request batching and no request timeout.
+- Headers: `Authorization: Bearer <token>`, `x-tenant-id`, `x-client-type: cli`, and `x-business-id` when a business is selected.
+- HTTP 429 becomes a `rate_limited` error using `Retry-After` (capped at 2 minutes). Queries retry up to 2 times, waiting at most 10 s each; mutations do not retry.
+- Responses are unwrapped from the tRPC envelope and deserialised with superjson.
 
-```
-apps/cli/
-  package.json                 # @fintranzact/cli
-  src/
-    index.ts                   # Entry point, CLI parser setup
-    commands/
-      login.ts
-      dashboard.ts
-      invoice/
-        list.ts
-        get.ts
-        create.ts
-        status.ts
-        pdf.ts
-      party/
-        list.ts
-        get.ts
-        create.ts
-      item/
-        list.ts
-        create.ts
-      payment/
-        list.ts
-        create.ts
-      expense/
-        list.ts
-        create.ts
-      bank/
-        list.ts
-        create.ts
-        transfer.ts
-      gst/
-        r1.ts
-        r3b.ts
-      report/
-        daybook.ts
-        outstanding.ts
-        pnl.ts
-        tax-summary.ts
-      shipment/
-        list.ts
-        track.ts
-      import.ts
-      config.ts
-      business/
-        list.ts
-        switch.ts
-      completion.ts
-    lib/
-      api.ts                   # HTTP client, auth header injection, business ID header
-      config.ts                # Read/write ~/.config/fintranzact/config.json
-      format.ts                # INR formatting, date formatting, status badges
-      table.ts                 # Table rendering with width detection
-      prompt.ts                # Interactive prompts, party/item search
-      errors.ts                # Error classification and display
-      cache.ts                 # Completion cache, party/item name cache
-    types.ts                   # CLI-specific types (extends @fintranzact/shared)
-  bin/
-    fintranzact                    # Shebang entry: #!/usr/bin/env node
-  tsconfig.json
-  tsup.config.ts               # Bundle for distribution
-```
+`export` and `restore` stream the archive with `fetch` directly.
 
-### 8.3 API Communication
+### 8.2 Document types
 
-The CLI talks to the same Hono+tRPC API as the web app. Two options:
+Seven document types are separate groups (`quotation`, `credit-note`, `debit-note`, `delivery-challan`, `proforma`, `sales-return`, `purchase-return`), all built from one config list in `registrars/document.ts` and one handler module, `commands/document/factory.ts`. `document convert` converts between types.
 
-**Option A: Direct tRPC client** (recommended -- get full type safety):
+### 8.3 Reports
 
-```typescript
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import type { AppRouter } from "@fintranzact/api";
-import SuperJSON from "superjson";
-
-const trpc = createTRPCClient<AppRouter>({
-  links: [
-    httpBatchLink({
-      url: `${config.server}/api/trpc`,
-      headers: () => ({
-        cookie: `session_id=${config.session.id}`,
-        "x-business-id": config.activeBusinessId,
-      }),
-      transformer: SuperJSON,
-    }),
-  ],
-});
-
-// Fully typed:
-const invoices = await trpc.invoice.list.query({
-  type: "sale",
-  status: "overdue",
-  page: 1,
-  limit: 20,
-});
-```
-
-**Option B: REST-like HTTP** (for simpler build, but loses type safety):
-
-```typescript
-const response = await fetch(`${config.server}/api/trpc/invoice.list`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Cookie: `session_id=${config.session.id}`,
-    "x-business-id": config.activeBusinessId,
-  },
-  body: JSON.stringify({ json: { type: "sale", status: "overdue" } }),
-});
-```
-
-Option A is strongly preferred since the existing monorepo already has `@fintranzact/api` available as a devDependency for type imports.
-
-### 8.4 Auth Flow
-
-The API uses session cookies (HttpOnly, 30-day expiry). The CLI stores the session ID in the config file (or system keychain if `keytar` is available):
-
-```typescript
-// Login: call auth.login, extract session_id from Set-Cookie header
-const response = await fetch(`${server}/api/trpc/auth.login`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ json: { email, password } }),
-});
-
-const setCookie = response.headers.get("set-cookie");
-const sessionId = parseCookie(setCookie, "session_id");
-
-// Store in config
-await saveConfig({ session: { id: sessionId, expiresAt: "..." } });
-```
-
-### 8.5 Performance Budget
-
-For a user billing 50 invoices a day, every millisecond counts:
-
-| Operation | Target | How |
-|-----------|--------|-----|
-| CLI startup | < 200ms | Lazy-load commands, minimal top-level imports |
-| Invoice list | < 500ms | Single tRPC batch call, stream table rows |
-| Invoice create (flags) | < 800ms | Single mutation call |
-| Dashboard | < 1s | Single batch call (matches existing Promise.all in dashboard router) |
-| PDF download | < 2s | Stream to file, show progress bar |
-| Completion load | < 100ms | Read from local cache file |
-
-### 8.6 Offline Considerations
-
-The CLI requires network access (it talks to the API). But provide graceful degradation:
-
-- Cache the last dashboard response for `fintranzact dashboard --cached`
-- Cache party and item lists for completion (5 min TTL)
-- Queue operations for later with `fintranzact invoice create ... --queue` (writes to `~/.local/share/fintranzact/queue.json`, flushed on `fintranzact sync`)
-
-### 8.7 Document Type Support
-
-The CLI should support all 8 document types from the schema, using the existing `document-router-factory.ts` endpoints:
-
-```
-fintranzact invoice list                    # type=invoice (default)
-fintranzact quotation list                  # documentType=quotation
-fintranzact credit-note list                # documentType=credit_note
-fintranzact debit-note list                 # documentType=debit_note
-fintranzact challan list                    # documentType=delivery_challan
-fintranzact proforma list                   # documentType=proforma
-fintranzact sales-return list               # documentType=sales_return
-fintranzact purchase-return list            # documentType=purchase_return
-```
-
-Or use a unified flag:
-
-```
-fintranzact invoice list --doc-type quotation
-```
-
-### 8.8 Report Command Mapping
-
-Maps to the 11 report types in `routers/reports.ts`:
-
-```
-fintranzact report daybook --from 2026-04-01 --to 2026-04-30
-fintranzact report outstanding --type receivable
-fintranzact report sale-register --this-fy
-fintranzact report purchase-register --this-fy
-fintranzact report tax-summary --this-quarter
-fintranzact report pnl --this-fy
-fintranzact report balance-sheet --as-of 2026-03-31
-fintranzact report stock --low-stock
-fintranzact report ageing --type receivable
-fintranzact report party-statement --party "Sharma Traders"
-fintranzact report expense-summary --this-fy
-```
+`report` covers 15 report commands that call the API's `reports` router; `dashboard` covers 12 widgets from the `dashboard` router; `gst` covers GSTR-1, GSTR-3B, GSTR-1 CSV, GSTR-9 and GSTR-2B uploads.
 
 ---
 
-## Design Decisions and Rationale
+## 9. Not Built
 
-**Why text badges (`[PAID]`) instead of emoji?**
-Emoji rendering varies wildly across terminals and SSH sessions. A user SSH-ing into their billing server from PuTTY on Windows will see broken emoji. Text badges with ANSI colors work everywhere.
+These ideas were in the original design and do not exist in the code:
 
-**Why right-aligned currency with Indian grouping?**
-Indian accountants read numbers from right to left (thousands, lakhs, crores). Right-alignment makes columns scannable. The `en-IN` locale grouping (12,34,567) matches what they see in Tally, GST portal, and bank statements.
-
-**Why interactive by default, flags for scripting?**
-An accountant creating their first invoice needs guidance. A developer writing a cron job needs flags. Defaulting to interactive with a `--yes` escape hatch serves both without a mode switch.
-
-**Why fuzzy search for party/item names?**
-Users remember "Sharma" not the full "Sharma Trading Co. Pvt. Ltd." Fuzzy search with ranked results prevents UUID lookups for simple operations.
-
-**Why separate exit codes?**
-A cron job needs to distinguish "invoice not found" (exit 5, retry later) from "auth expired" (exit 3, alert admin). Generic exit 1 for everything makes automation brittle.
-
-**Why `--format ids` output?**
-The most common scripting pattern is "get a list of things, do something to each." Piping IDs through xargs is the Unix way. Without this, users parse JSON with jq just to get IDs.
+- **Libraries**: `@oclif/core`, `inquirer`/`@inquirer/prompts`, `ora` spinners, `cli-table3`, `ofetch`/`ky`, `fuse.js`, `keytar`. The CLI uses `commander`, `readline`, its own table code and `fetch`.
+- **Location `apps/cli/`**: it lives in `packages/cli/`.
+- **Typed tRPC client** (`createTRPCClient<AppRouter>`): a hand-written client is used instead. Auth is a bearer token, not a `session_id` cookie.
+- **Config commands** (`config show`, `config set`), `defaults` / `display` config sections, and `FINTRANZACT_SERVER`, `FINTRANZACT_SESSION_ID`, `FINTRANZACT_NO_COLOR`, `FINTRANZACT_FORMAT` env vars.
+- **`--no-color` and `--quiet`/`-q` flags** (use `NO_COLOR`).
+- **`--idempotency-key`** on create commands.
+- **Batch operations**: bulk `invoice status --from-status … --to-status …`, `import … --dry-run`, `import --file`.
+- **Invoice extras**: `invoice edit`, `invoice duplicate`, `--skip-stock-check`, `--additional-charges`, `--invoice-discount`, per-line `--tax`/`--discount`; `get` by invoice number (it takes an ID).
+- **Payment allocation prompts** across several invoices.
+- **`party search` / `item search` commands** (use `list --search`).
+- **Interactive table keys** (`[n] Next page`, `[q] Quit`, sort keys) and action menus on detail views.
+- **Shell completions** (`fintranzact completion bash|zsh|fish`) and the completion cache.
+- **Shortest-unique-prefix commands** (`fintranzact inv list`). Only the three aliases above exist. Commander's built-in "Did you mean …?" suggestion for unknown commands is the only fuzzy matching.
+- **"Next steps" hints** after actions (only `invoice create` prints follow-up commands).
+- **`--repeat` / `--last`** recent-command context.
+- **Offline support**: `dashboard --cached`, local party/item caches, `--queue` and `fintranzact sync`.
+- **JSON error output** on stderr in `--json` mode.
+- **Exit code 8 (conflict)**: defined but unused.
+- **Report commands** `report pnl`, `report ageing`, `report expense-summary`, `report sale-register` (P&L is `dashboard profit-loss`; ageing is `dashboard receivables-aging`; the register is `sales-register`).
+- **`invoice list --doc-type`** (each document type has its own group) and a `challan` alias (the group is `delivery-challan`).
