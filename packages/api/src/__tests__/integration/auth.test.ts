@@ -128,6 +128,30 @@ describe("auth.register", () => {
     expect(msUntilExpiry).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
   });
 
+  it("registers on a single-database server without creating a database", async () => {
+    // Managed Postgres (Railway) refuses CREATE DATABASE; point provisioning at
+    // an unreachable server so any attempt to create one fails the sign-up.
+    const saved = { multi: process.env.MULTI_TENANT, control: process.env.CONTROL_DATABASE_URL };
+    delete process.env.MULTI_TENANT;
+    process.env.CONTROL_DATABASE_URL = "postgresql://nobody:nobody@127.0.0.1:1/none";
+    try {
+      const result = await unauthCaller().auth.register({
+        email: "single.db@vyapar.in",
+        name: "Single DB",
+        password: "SecurePass1!",
+        confirmPassword: "SecurePass1!",
+      });
+      const memberships = await db.select().from(tenantMembers).where(eq(tenantMembers.userId, result.user.id));
+      expect(memberships).toHaveLength(1);
+      expect(memberships[0]!.role).toBe("owner");
+    } finally {
+      if (saved.multi === undefined) delete process.env.MULTI_TENANT;
+      else process.env.MULTI_TENANT = saved.multi;
+      if (saved.control === undefined) delete process.env.CONTROL_DATABASE_URL;
+      else process.env.CONTROL_DATABASE_URL = saved.control;
+    }
+  });
+
   it("creates a fresh tenant for each self-hosted registration and makes the user the owner", async () => {
     const caller = unauthCaller();
 
