@@ -153,3 +153,23 @@ describe("generateInvoicePDF — itemName + description rendering (Bug B)", () =
     });
   }
 });
+
+describe("generateInvoicePDF — TCS collected with a sale", () => {
+  const lines: InvoicePDFData["lineItems"] = [
+    { itemName: "Metal scrap", quantity: "1", unit: "pcs", unitPrice: "1000.00", taxPercent: "0", taxAmount: "0.00", discountPercent: "0", totalAmount: "1000.00" } as InvoicePDFData["lineItems"][number],
+  ];
+  for (const format of ["a4", "a5", "thermal"] as const) {
+    it(`draws a TCS row in the ${format} totals`, async () => {
+      const without = await renderToBuffer(baseData(lines), format);
+      const withTcs = await renderToBuffer({ ...baseData(lines), tcsAmount: "10.00", totalAmount: "1010.00" }, format);
+      expect(withTcs.length).toBeGreaterThan(0);
+      expect(withTcs.length).toBeGreaterThan(without.length);
+    });
+
+    it(`leaves the ${format} totals alone when no TCS was collected`, async () => {
+      const a = await renderToBuffer(baseData(lines), format);
+      const b = await renderToBuffer({ ...baseData(lines), tcsAmount: "0.00" }, format);
+      expect(Math.abs(a.length - b.length)).toBeLessThan(50);
+    });
+  }
+});

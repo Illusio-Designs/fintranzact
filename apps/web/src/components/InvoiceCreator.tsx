@@ -10,6 +10,8 @@ import { Cancel01Icon, Download04Icon, ArrowDown01Icon } from "@hugeicons/core-f
 
 import { Spinner } from "@/components/ui/Spinner";
 import { toast } from "@/hooks/useToast";
+import { TdsBillPanel, emptyTdsBill, type TdsBillValue } from "@/components/TdsBillPanel";
+import { TcsInvoicePanel, type TcsMode } from "@/components/TcsInvoicePanel";
 interface LineItem {
   id: string;
   itemId?: string;
@@ -61,6 +63,8 @@ export function InvoiceCreator({ type, onClose }: Props) {
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [items, setItems] = useState<LineItem[]>([newLineItem()]);
+  const [tds, setTds] = useState<TdsBillValue>(emptyTdsBill);
+  const [tcsMode, setTcsMode] = useState<TcsMode>("auto");
 
   // Role check: sellers cannot edit tax/discount fields (flow from item)
   const { data: session } = trpc.auth.me.useQuery();
@@ -95,6 +99,19 @@ export function InvoiceCreator({ type, onClose }: Props) {
     }
     return { subtotal, taxTotal, discountTotal, total: subtotal + taxTotal };
   }, [items]);
+
+  // TCS (s.206C) on a sale: worked out by the server from the items' TCS sections.
+  const tcsLines = useMemo(
+    () => items
+      .filter((li) => li.itemId && li.unitPrice)
+      .map((li) => ({ itemId: li.itemId!, taxable: calcLine(li).afterDiscount.toFixed(2) })),
+    [items],
+  );
+  const { data: tcsPreview } = trpc.tds.tcsPreview.useQuery(
+    { partyId, invoiceDate: toISOString(invoiceDate), lines: tcsLines },
+    { enabled: type === "sale" && !!partyId && tcsLines.length > 0 },
+  );
+  const tcsAmount = type === "sale" && tcsMode === "auto" ? parseFloat(tcsPreview?.amount ?? "0") || 0 : 0;
 
   function updateItem(id: string, field: keyof LineItem, value: string) {
     setItems((prev) => prev.map((li) => li.id === id ? { ...li, [field]: value } : li));
@@ -191,6 +208,15 @@ export function InvoiceCreator({ type, onClose }: Props) {
       dueDate: toISOString(dueDate),
       notes: notes || undefined,
       termsAndConditions: terms || undefined,
+      // TCS on a sale: collected on items with a TCS section unless switched off.
+      ...(type === "sale" ? { tcsMode } : {}),
+      // TDS we deduct on a purchase bill (worked out by the server unless entered here).
+      ...(type === "purchase"
+        ? {
+            tdsMode: tds.mode,
+            ...(tds.mode === "manual" ? { tdsSection: tds.section as never, tdsAmount: tds.amount || "0" } : {}),
+          }
+        : {}),
       // Bug B: itemName is the required frozen snapshot; description carries
       // the optional free-text notes. Empty notes become `undefined` so the
       // validator keeps the stored column NULL rather than persisting "".
@@ -513,14 +539,35 @@ export function InvoiceCreator({ type, onClose }: Props) {
                   <span style={{ color: "var(--text-secondary)" }}>Tax</span>
                   <span className="tabular-nums" style={{ color: "var(--text-primary)" }}>{formatCurrency(totals.taxTotal)}</span>
                 </div>
+                {tcsAmount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: "var(--text-secondary)" }}>TCS (s.206C)</span>
+                    <span className="tabular-nums" style={{ color: "var(--text-primary)" }}>{formatCurrency(tcsAmount)}</span>
+                  </div>
+                )}
                 <div className="pt-1.5 border-t flex justify-between" style={{ borderColor: "var(--border-light)" }}>
                   <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Total</span>
                   <span className="text-lg font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
-                    {formatCurrency(totals.total)}
+                    {formatCurrency(totals.total + tcsAmount)}
                   </span>
                 </div>
               </div>
             </div>
+
+            {type === "sale" && (
+              <TcsInvoicePanel mode={tcsMode} onModeChange={setTcsMode} preview={tcsPreview} />
+            )}
+
+            {type === "purchase" && (
+              <TdsBillPanel
+                partyId={partyId}
+                taxable={totals.subtotal}
+                total={totals.total}
+                billDate={toISOString(invoiceDate)}
+                value={tds}
+                onChange={setTds}
+              />
+            )}
 
             {/* Notes and terms */}
             <div className="grid grid-cols-2 gap-3">

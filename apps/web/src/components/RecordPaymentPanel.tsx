@@ -8,6 +8,7 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
 import { BankIcon, Cash01Icon, CreditCardIcon, Link01Icon, MinusSignIcon, SmartPhone01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { TdsPaymentFields, emptyTdsPayment, type TdsPaymentValue } from "@/components/TdsPaymentFields";
 import { calculateGatewayCharge } from "@fintranzact/shared";
 import type { GatewayChargeConfig } from "@fintranzact/shared";
 
@@ -102,6 +103,8 @@ export function RecordPaymentPanel({
   const [paymentDate, setPaymentDate] = useState(todayISODate);
   const [notes, setNotes] = useState("");
   const [gatewayMode, setGatewayMode] = useState<string>("credit_card");
+  // Tax withheld on this payment (a customer's TDS, or TDS on an advance to a supplier).
+  const [tds, setTds] = useState<TdsPaymentValue>(emptyTdsPayment);
 
   const utils = trpc.useUtils();
 
@@ -160,6 +163,10 @@ export function RecordPaymentPanel({
         editData.paymentDate ? formatDateInput(editData.paymentDate) : todayISODate()
       );
       setNotes(editData.notes ?? "");
+      setTds({
+        section: editData.tdsSection ?? "",
+        amount: parseFloat(editData.tdsAmount) > 0 ? editData.tdsAmount : "",
+      });
       // Restore gateway mode from edit data if it's a gateway mode
       const gwModes = ["credit_card", "debit_card", "net_banking", "wallet"];
       if (editData.mode && gwModes.includes(editData.mode)) {
@@ -189,6 +196,7 @@ export function RecordPaymentPanel({
       setReferenceNumber("");
       setPaymentDate(todayISODate());
       setNotes("");
+      setTds(emptyTdsPayment);
       setGatewayMode("credit_card");
     }
   }, [open, isEditMode, editData, preSelectedPartyId]);
@@ -311,6 +319,7 @@ export function RecordPaymentPanel({
     setCheckedInvoices(new Set());
     setAmountOverridden(false);
     setManualAmount("");
+    setTds(emptyTdsPayment);
   };
 
   // ── Submit ──────────────────────────────────────────────────────────────────
@@ -410,6 +419,17 @@ export function RecordPaymentPanel({
       return;
     }
 
+    // Tax withheld: only when an amount is entered, and then it needs a section.
+    const tdsAmount = parseFloat(tds.amount) > 0 ? parseFloat(tds.amount).toFixed(2) : "0";
+    if (tdsAmount !== "0" && !tds.section) {
+      toast.error("Choose the TDS section for the tax withheld");
+      return;
+    }
+    if (tdsAmount !== "0" && parseFloat(tdsAmount) >= parseFloat(displayAmount)) {
+      toast.error("TDS must be less than the payment amount");
+      return;
+    }
+
     if (isEditMode) {
       updateMutation.mutate({
         id: editPaymentId!,
@@ -420,6 +440,8 @@ export function RecordPaymentPanel({
         paymentDate: paymentDateISO,
         notes: notes || null,
         allocations: allocationList.length > 0 ? allocationList : undefined,
+        tdsAmount,
+        tdsSection: tdsAmount !== "0" ? (tds.section as never) : null,
       });
     } else {
       createMutation.mutate({
@@ -432,6 +454,7 @@ export function RecordPaymentPanel({
         paymentDate: paymentDateISO,
         notes: notes || undefined,
         allocations: allocationList.length > 0 ? allocationList : undefined,
+        ...(tdsAmount !== "0" ? { tdsAmount, tdsSection: tds.section as never } : {}),
       });
     }
   }
@@ -716,6 +739,16 @@ export function RecordPaymentPanel({
             </p>
           )}
         </div>
+
+        {/* ── TDS withheld (customer receipts, advances to suppliers) ─────── */}
+        <TdsPaymentFields
+          partyId={partyId}
+          amount={displayAmount}
+          paymentDate={toISOString(paymentDate)}
+          hasAllocations={checkedInvoices.size > 0}
+          value={tds}
+          onChange={setTds}
+        />
 
         {/* ── Receive Into (Account Selector) ────────────────────────────── */}
         <div>

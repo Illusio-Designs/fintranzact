@@ -23,3 +23,11 @@ process.env.MULTI_TENANT = "false";
 process.env.NODE_ENV = "test";
 // Prevent real email delivery during tests
 process.env.RESEND_API_KEY = "";
+// A developer's real Sandbox.co.in keys (loaded from .env) must never leak
+// into tests: they would route e-invoice / e-way bill calls to the live
+// gateway instead of the mocked NIC clients. Tests that exercise the Sandbox
+// provider set these themselves.
+delete process.env.SANDBOX_API_KEY;
+delete process.env.SANDBOX_API_SECRET;
+delete process.env.SANDBOX_BASE_URL;
+delete process.env.GOV_API_PROVIDER;

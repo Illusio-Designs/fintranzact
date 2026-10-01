@@ -13,6 +13,7 @@ import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { withAudit } from "../lib/audit.js";
+import { assertPeriodOpen } from "../lib/period-lock.js";
 
 export const journalRouter = router({
   list: viewerProcedure
@@ -100,6 +101,8 @@ export const journalRouter = router({
     .input(createJournalEntrySchema)
     .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "Account");
+      // Nothing can be added to a locked period.
+      await assertPeriodOpen(ctx.db, ctx.businessId, [input.entryDate]);
 
       // Verify all account IDs belong to this business
       const accountIds = input.lines.map(l => l.accountId);
@@ -182,6 +185,9 @@ export const journalRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Journal entry not found" });
       }
+
+      // Neither the old nor the new date may be in a locked period.
+      await assertPeriodOpen(ctx.db, ctx.businessId, [existing.entryDate, input.entryDate]);
 
       if (existing.source !== "manual") {
         throw new TRPCError({
@@ -282,6 +288,9 @@ export const journalRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Journal entry not found" });
       }
 
+      // Voiding posts a reversal on the same date, so a locked date can't be voided.
+      await assertPeriodOpen(ctx.db, ctx.businessId, [existing.entryDate]);
+
       if (existing.isVoided) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -377,6 +386,8 @@ export const journalRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Journal entry not found" });
       }
+
+      await assertPeriodOpen(ctx.db, ctx.businessId, [existing.entryDate]);
 
       // Lines are cascade-deleted by FK constraint
       await ctx.db
@@ -499,6 +510,7 @@ export const journalRouter = router({
     }))
     .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "Account");
+      await assertPeriodOpen(ctx.db, ctx.businessId, [input.entryDate]);
 
       // Fetch template
       const [template] = await ctx.db

@@ -14,6 +14,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WidgetsRouteImport } from './routes/widgets'
 import { Route as WarehousesRouteImport } from './routes/warehouses'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as TdsRouteImport } from './routes/tds'
 import { Route as StoreOrdersRouteImport } from './routes/store-orders'
 import { Route as StockTransfersRouteImport } from './routes/stock-transfers'
 import { Route as StockGroupsRouteImport } from './routes/stock-groups'
@@ -107,6 +108,11 @@ const WarehousesRoute = WarehousesRouteImport.update({
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TdsRoute = TdsRouteImport.update({
+  id: '/tds',
+  path: '/tds',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StoreOrdersRoute = StoreOrdersRouteImport.update({
@@ -524,6 +530,7 @@ export interface FileRoutesByFullPath {
   '/stock-groups': typeof StockGroupsRoute
   '/stock-transfers': typeof StockTransfersRoute
   '/store-orders': typeof StoreOrdersRoute
+  '/tds': typeof TdsRoute
   '/terms': typeof TermsRoute
   '/warehouses': typeof WarehousesRoute
   '/widgets': typeof WidgetsRoute
@@ -599,6 +606,7 @@ export interface FileRoutesByTo {
   '/stock-groups': typeof StockGroupsRoute
   '/stock-transfers': typeof StockTransfersRoute
   '/store-orders': typeof StoreOrdersRoute
+  '/tds': typeof TdsRoute
   '/terms': typeof TermsRoute
   '/warehouses': typeof WarehousesRoute
   '/widgets': typeof WidgetsRoute
@@ -675,6 +683,7 @@ export interface FileRoutesById {
   '/stock-groups': typeof StockGroupsRoute
   '/stock-transfers': typeof StockTransfersRoute
   '/store-orders': typeof StoreOrdersRoute
+  '/tds': typeof TdsRoute
   '/terms': typeof TermsRoute
   '/warehouses': typeof WarehousesRoute
   '/widgets': typeof WidgetsRoute
@@ -752,6 +761,7 @@ export interface FileRouteTypes {
     | '/stock-groups'
     | '/stock-transfers'
     | '/store-orders'
+    | '/tds'
     | '/terms'
     | '/warehouses'
     | '/widgets'
@@ -827,6 +837,7 @@ export interface FileRouteTypes {
     | '/stock-groups'
     | '/stock-transfers'
     | '/store-orders'
+    | '/tds'
     | '/terms'
     | '/warehouses'
     | '/widgets'
@@ -902,6 +913,7 @@ export interface FileRouteTypes {
     | '/stock-groups'
     | '/stock-transfers'
     | '/store-orders'
+    | '/tds'
     | '/terms'
     | '/warehouses'
     | '/widgets'
@@ -978,6 +990,7 @@ export interface RootRouteChildren {
   StockGroupsRoute: typeof StockGroupsRoute
   StockTransfersRoute: typeof StockTransfersRoute
   StoreOrdersRoute: typeof StoreOrdersRoute
+  TdsRoute: typeof TdsRoute
   TermsRoute: typeof TermsRoute
   WarehousesRoute: typeof WarehousesRoute
   WidgetsRoute: typeof WidgetsRoute
@@ -1027,6 +1040,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tds': {
+      id: '/tds'
+      path: '/tds'
+      fullPath: '/tds'
+      preLoaderRoute: typeof TdsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/store-orders': {
@@ -1570,6 +1590,7 @@ const rootRouteChildren: RootRouteChildren = {
   StockGroupsRoute: StockGroupsRoute,
   StockTransfersRoute: StockTransfersRoute,
   StoreOrdersRoute: StoreOrdersRoute,
+  TdsRoute: TdsRoute,
   TermsRoute: TermsRoute,
   WarehousesRoute: WarehousesRoute,
   WidgetsRoute: WidgetsRoute,

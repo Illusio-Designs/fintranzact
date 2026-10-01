@@ -1,5 +1,7 @@
 export * from "./validators.js";
 export * from "./party-compliance.js";
+export * from "./tds.js";
+export * from "./tcs.js";
 export * from "./money.js";
 export { calcLineItem, calcInvoiceTotals, allocatePaise, chargeTaxRateFor, chargeSupplyOf } from "./calc.js";
 export type { LineItemInput, LineItemResult, InvoiceTotalsInput, InvoiceTotals, AllocatedLine } from "./calc.js";

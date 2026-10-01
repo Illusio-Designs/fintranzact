@@ -37,6 +37,8 @@ import { journalRouter } from "./routers/journal.js";
 import { itcRouter } from "./routers/itc.js";
 import { eInvoiceRouter } from "./routers/eInvoice.js";
 import { ewayBillRouter } from "./routers/ewayBill.js";
+import { tdsRouter } from "./routers/tds.js";
+import { periodRouter } from "./routers/period.js";
 import { bankReconRouter } from "./routers/bankRecon.js";
 import { gstr2bRouter } from "./routers/gstr2b.js";
 import { systemRouter } from "./routers/system.js";
@@ -95,6 +97,8 @@ export const appRouter = router({
   itc: itcRouter,
   eInvoice: eInvoiceRouter,
   ewayBill: ewayBillRouter,
+  tds: tdsRouter,
+  period: periodRouter,
   bankRecon: bankReconRouter,
   gstr2b: gstr2bRouter,
   system: systemRouter,

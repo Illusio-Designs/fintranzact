@@ -2,6 +2,7 @@ import { bankAccounts, bankTransactions } from "@fintranzact/db";
 import { eq, sql } from "drizzle-orm";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalTransfer } from "../types.js";
+import { loadPeriodLockState, lockViolation } from "../../../lib/period-lock.js";
 
 export interface TransfersImportResult {
   created: number;
@@ -63,7 +64,13 @@ export async function runTransfersImport(
   }
 
   // Process transfers
+  const lockState = await loadPeriodLockState(db, businessId);
   for (const t of canonicalTransfers) {
+    const locked = lockViolation(lockState, t.date);
+    if (locked) {
+      errors.push(`Transfer ${t.fromMode} → ${t.toMode} skipped: ${locked.message}`);
+      continue;
+    }
     const fromType = modeToType[t.fromMode] || "savings";
     const toType = modeToType[t.toMode] || "savings";
     const fromAccount = accountByType.get(fromType);

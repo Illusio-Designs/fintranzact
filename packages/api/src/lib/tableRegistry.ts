@@ -10,6 +10,11 @@ import {
   items,
   itemVariants,
   itemBatches,
+  taxChallans,
+  periodLocks,
+  financialYearCloses,
+  taxDeductions,
+  tdsSectionSettings,
   stockGroups,
   salesTargets,
   invoices,
@@ -303,6 +308,62 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
     chunkSize: 5000,
     recomputeOnImport: [],
     scope: { type: "child", parentTable: "payments", parentFk: "payment_id" },
+  },
+
+  // 14b. TDS / TCS — rates per year a business edited, the challans it deposited
+  //      tax with, and every deduction (which points at its payment, bill, party
+  //      and challan, so it comes after all of those).
+  {
+    tableName: "tds_section_settings",
+    drizzleTable: tdsSectionSettings,
+    redactedFields: [],
+    importable: true,
+    selfFkFields: [],
+    chunkSize: 5000,
+    recomputeOnImport: [],
+    scope: { type: "direct" },
+  },
+  {
+    tableName: "tax_challans",
+    drizzleTable: taxChallans,
+    redactedFields: [],
+    importable: true,
+    selfFkFields: [],
+    chunkSize: 5000,
+    recomputeOnImport: [],
+    scope: { type: "direct" },
+  },
+  {
+    tableName: "tax_deductions",
+    drizzleTable: taxDeductions,
+    redactedFields: [],
+    importable: true,
+    selfFkFields: [],
+    chunkSize: 5000,
+    recomputeOnImport: [],
+    scope: { type: "direct" },
+  },
+
+  // 14c. Period locks and closed financial years — standalone per-business rows.
+  {
+    tableName: "period_locks",
+    drizzleTable: periodLocks,
+    redactedFields: [],
+    importable: true,
+    selfFkFields: [],
+    chunkSize: 5000,
+    recomputeOnImport: [],
+    scope: { type: "direct" },
+  },
+  {
+    tableName: "financial_year_closes",
+    drizzleTable: financialYearCloses,
+    redactedFields: [],
+    importable: true,
+    selfFkFields: [],
+    chunkSize: 5000,
+    recomputeOnImport: [],
+    scope: { type: "direct" },
   },
 
   // 15. Bank Transactions — depends on businesses + bankAccounts.

@@ -274,6 +274,13 @@
       "when": 1790868999562,
       "tag": "0038_repair_skipped_migrations",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790878420143,
+      "tag": "0039_tds_tcs_period_locks",
+      "breakpoints": true
     }
   ]
 }

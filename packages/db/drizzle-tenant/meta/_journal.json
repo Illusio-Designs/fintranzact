@@ -190,6 +190,13 @@
       "when": 1790847336129,
       "tag": "0026_supplier_invoice_number",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790878416926,
+      "tag": "0027_tds_tcs_period_locks",
+      "breakpoints": true
     }
   ]
 }

@@ -18,6 +18,7 @@
 import { TRPCError } from "@trpc/server";
 import { decryptEInvoiceConfig } from "./field-encryption.js";
 import type { EInvoiceConfig } from "./irp-client.js";
+import { useSandboxProvider } from "./gov-provider.js";
 
 export function resolveIRPConfig(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,6 +28,12 @@ export function resolveIRPConfig(
 
   const clientId = config.clientId || process.env.IRP_CLIENT_ID;
   const clientSecret = config.clientSecret || process.env.IRP_CLIENT_SECRET;
+
+  // Through Sandbox.co.in the GSP client id/secret are not used (the gateway
+  // owns the NIC handshake), so only the direct IRP client needs them.
+  if (useSandboxProvider()) {
+    return { ...config, clientId: clientId ?? "", clientSecret: clientSecret ?? "" } as EInvoiceConfig;
+  }
 
   if (!clientId || !clientSecret) {
     throw new TRPCError({

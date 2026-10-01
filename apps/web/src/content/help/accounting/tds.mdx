@@ -1,0 +1,111 @@
+---
+title: TDS & TCS (Tax at Source)
+description: Deduct income-tax TDS on purchase bills, collect TCS on specified goods you sell, record TDS your customers withhold, track what is deposited with challans, and see due dates by quarter.
+sidebar:
+  order: 3
+---
+
+import { ForCA } from "@/components/help/mdx";
+
+TDS is income-tax you hold back when you pay a supplier for contract work, professional fees, rent, commission or goods, and then deposit with the government. Fintranzact works it out when you enter a purchase bill, keeps a running ledger, and tells you what is still to deposit and by when.
+
+:::caution
+Sections, rates, yearly limits and due dates change, usually in the Budget. The defaults here are a starting point. Check them with your CA, and edit them under **TDS → Sections & limits** if yours differ.
+:::
+
+## Set up your suppliers
+
+1. Open **Parties** and edit the supplier.
+2. Choose the **TDS section** that applies to what you buy from them (for example 194J professional fees, or 194C contractors).
+3. Add their **PAN** (or GSTIN, which contains it). Without a PAN, TDS is deducted at the higher rate (section 206AA), and Fintranzact warns you.
+
+## TDS on a purchase bill
+
+TDS is worked out **when the bill is entered**, not when you pay it. On the **New purchase invoice** form, the **TDS on this purchase** box shows what will be deducted and what you will owe the supplier after it:
+
+| Choice | What happens |
+|---|---|
+| **Work it out** (default) | Uses the supplier's section, their PAN, and the purchases from them so far this financial year |
+| **No TDS on this bill** | No TDS is deducted on this bill |
+| **Enter it myself** | You choose the section and type the amount |
+
+How the amount is worked out:
+
+- **Below the limit, nothing is deducted.** Each section has a yearly limit (for 194C there is also a limit per bill). Purchases under it carry no TDS.
+- **Crossing the limit catches up.** The bill that takes the year's purchases over the limit is taxed on the whole amount not yet taxed, including the earlier smaller bills.
+- **194Q (purchase of goods)** is deducted only on the part of the year's purchases above ₹50 lakh.
+- **The base is the bill value without GST.**
+- **No PAN** means the higher rate; **proprietors and HUFs** get the lower individual rate where there is one (194C).
+- The amount is rounded to the nearest rupee.
+
+The TDS is settled against the bill as a separate **TDS-…** entry, so the bill shows its total, the TDS adjusted, and what is left to pay. When you pay the supplier, you pay only what is left. Editing, cancelling or deleting the bill updates or removes its TDS automatically.
+
+<ForCA>
+The TDS entry posts Dr Accounts Payable, Cr TDS Payable (2200). It moves no cash. Cancelled and deleted bills carry no TDS.
+</ForCA>
+
+## TDS your customers deduct
+
+If a customer pays you after deducting TDS, open **Record Payment**, choose the customer, and fill in **TDS deducted by customer** (section and amount). The invoice is marked paid in full, only the net amount lands in your bank account, and the TDS is kept as a credit you can claim, in **TDS receivable** (account 1250).
+
+## Advances to suppliers
+
+A payment to a supplier that is **not against a bill** (an advance) can carry its own TDS. Open **Record Payment**, choose the supplier, and use **TDS on this advance**. Fintranzact can suggest the amount. Payments against a purchase bill do not take TDS, because the bill already carries it.
+
+## TCS on sales of specified goods
+
+TCS is income-tax you **collect from the customer** on certain goods you sell, and then deposit with the government. It applies to a short list under section 206C: scrap, minerals (coal, lignite, iron ore), alcoholic liquor, forest produce and timber, tendu leaves, parking lots, toll plazas and mining, and motor vehicles sold for more than ₹10 lakh.
+
+1. Open the item (**Items**), and under **Identification** choose its **TCS section**. Leave it blank for everything else.
+2. Sell it as usual. On the **New sale invoice** form, a **TCS on this sale** box shows the TCS that will be collected, section by section. The TCS is added to the total: the customer pays goods + GST + TCS. You can switch it off for one invoice.
+
+How it is worked out:
+
+- **On the taxable value, without GST,** line by line, and only on lines whose item has a TCS section.
+- **Motor vehicles:** nothing is collected at or below ₹10 lakh, and above it TCS is on the whole value.
+- **No PAN or GSTIN** for the customer means the higher rate: twice the rate or 5%, whichever is more (section 206CC).
+- Rounded to the nearest rupee.
+- Editing, cancelling or deleting the invoice updates or removes its TCS. Once its TCS is on a challan, the invoice cannot be changed until you remove the challan.
+
+The invoice shows a **TCS (s.206C)** line, the e-invoice carries it as other charges so the invoice value adds up, and in the books it is a liability (**TCS Payable**), not income.
+
+On the **TDS & TCS** page, switch to **TCS** at the top. Everything below works the same way for TCS: the overview, deductions list, challans, and return figures. Two dates differ from TDS: TCS is deposited by the **7th of the next month for every month, including March**, and the quarterly TCS return is due on the **15th** after the quarter (15 July, 15 October, 15 January, 15 May).
+
+## The TDS & TCS page
+
+Open **TDS & TCS** in the sidebar and pick the financial year (April to March).
+
+| Tab | What it shows |
+|---|---|
+| **Overview** | TDS deducted, deposited and still to deposit; deposits due with due dates; totals by quarter and section; TDS receivable |
+| **Deductions** | Every entry, with supplier, PAN, section, rate and due date. Filter by quarter or "not yet deposited" |
+| **Challans** | The challans you have recorded |
+| **Return data** | The figures for a quarter's TDS return, with CSV downloads |
+| **Sections & limits** | The rates and limits for the year, which you can edit |
+
+## Recording a deposit
+
+When you deposit TDS with the government, record it so Fintranzact knows what is paid:
+
+1. On **Deductions → TDS payable**, tick the entries you deposited. They must be from one quarter.
+2. Click **Record challan** and enter the challan serial number, the 7-digit BSR code, the date, and the amount (plus any interest).
+
+Those entries now show as **Deposited**. Removing the challan puts them back as pending. A bill or payment whose TDS is on a challan cannot be edited or deleted until you remove it from the challan.
+
+## Due dates
+
+- **Deposit:** by the 7th of the month after the deduction (30 April for March).
+- **Quarterly return:** 31 July, 31 October, 31 January and 31 May.
+
+The Overview shows what is overdue. Confirm the dates for your case with your CA. (TCS dates are different: see above.)
+
+## Figures for your quarterly return
+
+Open **TDS → Return data**, choose the quarter, and you get what a CA or return software needs: for each deduction, the deductee, their PAN, the section, the amount paid or credited, the TDS, the bill, and the challan it was deposited with, plus the quarter's challans.
+
+- **Download deductees (CSV)** and **Download challans (CSV)** give you the two lists as spreadsheets. A deductee with no PAN shows `PANNOTAVBL`.
+- **Fix before filing** lists what is missing: your **TAN** (add it under **Settings → Business**), deductees without a PAN, and deductions that are not on a challan yet. A return needs every deduction to be on a challan.
+
+:::note
+This is the data for preparing the return. Fintranzact does not file the return or produce TDS certificates yet. Check the layout with your CA or return software.
+:::

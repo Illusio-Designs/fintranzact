@@ -296,6 +296,36 @@ exceptions:
       - itc.recordUtilization
       - itc.gstr3bTable4
 
+      # --- TDS ---
+      # Section limits, the TDS ledger and challans are an accountant's desktop workflow.
+      # Purchase bills created on mobile still get their TDS worked out by the server.
+      - tds.sections
+      - tds.updateSection
+      - tds.resetSection
+      - tds.preview
+      - tds.deductions
+      - tds.summary
+      - tds.challans
+      - tds.createChallan
+      - tds.deleteChallan
+      - tds.returnData
+      - tds.tcsPreview
+
+      # --- Period locks & year-end close ---
+      # Set up and reviewed from the web app by the owner or accountant. The locks
+      # themselves are enforced in the API, so every platform is blocked from
+      # editing a locked period and sees the same message.
+      - period.status
+      - period.lockBooks
+      - period.unlockBooks
+      - period.lockGstMonth
+      - period.unlockGstMonth
+      - period.closeYearPreview
+      - period.closeYear
+      - period.reopenYear
+      - period.closes
+      - period.closeDetail
+
       # --- Bank Reconciliation ---
       # Bank recon requires CSV upload and review — desktop workflow.
       - bankRecon.uploadCSV
@@ -401,6 +431,35 @@ exceptions:
 
   cli:
     not-applicable:
+      # --- TDS ---
+      # Not in the CLI / MCP yet; the web screens and the API cover it.
+      - tds.sections
+      - tds.updateSection
+      - tds.resetSection
+      - tds.preview
+      - tds.deductions
+      - tds.summary
+      - tds.challans
+      - tds.createChallan
+      - tds.deleteChallan
+      - tds.returnData
+      - tds.tcsPreview
+
+      # --- Period locks & year-end close ---
+      # Set up and reviewed from the web app by the owner or accountant. The locks
+      # themselves are enforced in the API, so every platform is blocked from
+      # editing a locked period and sees the same message.
+      - period.status
+      - period.lockBooks
+      - period.unlockBooks
+      - period.lockGstMonth
+      - period.unlockGstMonth
+      - period.closeYearPreview
+      - period.closeYear
+      - period.reopenYear
+      - period.closes
+      - period.closeDetail
+
       # --- Invoicing ---
       # The web invoice form pre-selects the delivery method last used for the
       # customer. Scripts and agents name the method outright (built-in value
@@ -620,6 +679,35 @@ exceptions:
 
   mcp:
     not-applicable:
+      # --- TDS ---
+      # Not in the CLI / MCP yet; the web screens and the API cover it.
+      - tds.sections
+      - tds.updateSection
+      - tds.resetSection
+      - tds.preview
+      - tds.deductions
+      - tds.summary
+      - tds.challans
+      - tds.createChallan
+      - tds.deleteChallan
+      - tds.returnData
+      - tds.tcsPreview
+
+      # --- Period locks & year-end close ---
+      # Set up and reviewed from the web app by the owner or accountant. The locks
+      # themselves are enforced in the API, so every platform is blocked from
+      # editing a locked period and sees the same message.
+      - period.status
+      - period.lockBooks
+      - period.unlockBooks
+      - period.lockGstMonth
+      - period.unlockGstMonth
+      - period.closeYearPreview
+      - period.closeYear
+      - period.reopenYear
+      - period.closes
+      - period.closeDetail
+
       # --- Invoicing ---
       # The web invoice form pre-selects the delivery method last used for the
       # customer. Scripts and agents name the method outright (built-in value

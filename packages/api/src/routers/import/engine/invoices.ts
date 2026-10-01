@@ -4,6 +4,7 @@ import { calcLineItem, money } from "@fintranzact/shared";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalInvoice } from "../types.js";
 import { postNewDocumentsStock } from "../../../lib/inventory-service.js";
+import { loadPeriodLockState, lockViolation } from "../../../lib/period-lock.js";
 
 export interface InvoiceImportOpts {
   autoCreatePayments: boolean;
@@ -48,6 +49,8 @@ export async function runInvoicesImport(
       .map(r => r.n)
   );
 
+  const lockState = await loadPeriodLockState(db, businessId);
+
   // ── Phase 1: Pre-validate and prepare all rows in memory ──
   const validInvoices: Array<{
     invoiceId: string;
@@ -68,6 +71,13 @@ export async function runInvoicesImport(
     }
 
     if (existingNumbers.has(inv.invoiceNumber)) {
+      skipped++;
+      continue;
+    }
+
+    const locked = lockViolation(lockState, inv.invoiceDate);
+    if (locked) {
+      errors.push(`Invoice ${inv.invoiceNumber} skipped: ${locked.message}`);
       skipped++;
       continue;
     }

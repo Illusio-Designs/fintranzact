@@ -19,6 +19,7 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { assertReturnPeriodOpen } from "../lib/period-lock.js";
 import { withAudit } from "../lib/audit.js";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -215,6 +216,8 @@ export const itcRouter = router({
           message: "No available ITC entry found for this invoice",
         });
       }
+      // An ITC claim sits in its return month: that month must be open.
+      await assertReturnPeriodOpen(ctx.db, ctx.businessId, [entry.returnPeriod]);
 
       const [updated] = await ctx.db
         .update(itcLedgerEntries)
@@ -256,6 +259,7 @@ export const itcRouter = router({
           message: "No blocked ITC entry found for this invoice",
         });
       }
+      await assertReturnPeriodOpen(ctx.db, ctx.businessId, [entry.returnPeriod]);
 
       const [updated] = await ctx.db
         .update(itcLedgerEntries)
@@ -335,6 +339,7 @@ export const itcRouter = router({
     .input(recordItcUtilizationSchema)
     .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "ITC");
+      await assertReturnPeriodOpen(ctx.db, ctx.businessId, [input.returnPeriod]);
 
       // Calculate total available ITC for the period
       const [availableSums] = await ctx.db

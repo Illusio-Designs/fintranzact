@@ -17,7 +17,7 @@ import {
   itcLedgerEntries,
   eInvoiceConfigs,
 } from "@fintranzact/db";
-import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, deliveryMethodSchema, calcLineItem, calcInvoiceTotals, isIntraStateSupply, istReturnPeriod, money, splitIntraStateTax } from "@fintranzact/shared";
+import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, deliveryMethodSchema, calcLineItem, calcInvoiceTotals, isIntraStateSupply, istReturnPeriod, money, splitIntraStateTax, tdsSectionCodes } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
@@ -26,7 +26,12 @@ import { assertInBusiness } from "../lib/business-scope.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
-import { IRPClient, IRPError } from "../lib/irp-client.js";
+import { IRPError } from "../lib/irp-client.js";
+import { createIRPClient } from "../lib/gov-provider.js";
+import { assertBillTdsInput, syncBillTds } from "../lib/tds-service.js";
+import { syncPurchaseItc } from "../lib/purchase-itc.js";
+import { syncInvoiceTcs } from "../lib/tcs-service.js";
+import { assertPeriodOpen } from "../lib/period-lock.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { ensureBarcodeForStock } from "../lib/barcode-setup.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
@@ -34,61 +39,6 @@ import { assertLineExtras, lineExtras } from "../lib/line-extras.js";
 import { resolveDeliveryMethod } from "../lib/delivery-methods.js";
 import { recomputeInvoiceStatus, recomputeReferencedInvoice } from "../lib/invoice-status.js";
 import { syncReversingItc } from "../lib/itc-reversal.js";
-
-/**
- * Keep a purchase invoice's live ITC entry equal to the invoice after an edit:
- * the claim is its tax, split CGST+SGST for a supplier in the business's
- * state and IGST otherwise, in the invoice's month. Mirrors the entry
- * invoice.create writes. Reversed/utilised entries are history and left alone.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function syncPurchaseItc(tx: any, businessId: string, invoiceId: string) {
-  const [inv] = await tx.select({
-    type: invoices.type,
-    documentType: invoices.documentType,
-    taxAmount: invoices.taxAmount,
-    invoiceDate: invoices.invoiceDate,
-    isReverseCharge: invoices.isReverseCharge,
-    partyStateCode: parties.stateCode,
-    partyState: parties.state,
-    partyGstin: parties.gstin,
-  }).from(invoices)
-    .innerJoin(parties, eq(parties.id, invoices.partyId))
-    .where(and(eq(invoices.id, invoiceId), eq(invoices.businessId, businessId)))
-    .limit(1);
-  if (!inv || inv.type !== "purchase" || inv.documentType !== "invoice") return;
-
-  const [biz] = await tx.select({
-    gstRegistrationType: businesses.gstRegistrationType,
-    stateCode: businesses.stateCode,
-    state: businesses.state,
-    gstin: businesses.gstin,
-  }).from(businesses).where(eq(businesses.id, businessId)).limit(1);
-  if (biz?.gstRegistrationType === "composition") return;
-
-  // Same place-of-supply and CGST/SGST rules as invoice.create (shared).
-  const sameState = isIntraStateSupply(biz ?? {}, { stateCode: inv.partyStateCode, state: inv.partyState, gstin: inv.partyGstin });
-  const taxPaise = Math.round(parseFloat(inv.taxAmount) * 100);
-  const intra = splitIntraStateTax(inv.taxAmount);
-  const split = sameState
-    ? { cgst: intra.cgst.toFixed(2), sgst: intra.sgst.toFixed(2), igst: "0" }
-    : { cgst: "0", sgst: "0", igst: money.add(inv.taxAmount, 0) };
-  const returnPeriod = istReturnPeriod(inv.invoiceDate);
-
-  const live = await tx.update(itcLedgerEntries)
-    .set({ ...split, returnPeriod, isReverseCharge: inv.isReverseCharge, updatedAt: new Date() })
-    .where(and(
-      eq(itcLedgerEntries.invoiceId, invoiceId),
-      eq(itcLedgerEntries.businessId, businessId),
-      inArray(itcLedgerEntries.status, ["available", "blocked"]),
-    ))
-    .returning({ id: itcLedgerEntries.id });
-  if (live.length === 0 && taxPaise > 0) {
-    await tx.insert(itcLedgerEntries).values({
-      businessId, invoiceId, returnPeriod, status: "available", ...split, cess: "0", isReverseCharge: inv.isReverseCharge,
-    });
-  }
-}
 
 export const invoiceRouter = router({
   list: viewerProcedure
@@ -433,6 +383,8 @@ export const invoiceRouter = router({
       // into one line per batch.
       const stockDoc = { documentType: "invoice", type: input.type, warehouseId: input.warehouseId ?? null };
       const invoiceDate = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
+      // Nothing can be added to a locked period.
+      await assertPeriodOpen(tx, ctx.businessId, [invoiceDate]);
       const lineItems = await resolveLineBatches(tx, {
         businessId: ctx.businessId,
         lines: input.lineItems,
@@ -493,6 +445,10 @@ export const invoiceRouter = router({
       // A built-in delivery method, or one of the business's own.
       const deliveryMethod = await resolveDeliveryMethod(tx, ctx.businessId, input.deliveryMethod || "self_pickup");
 
+      // TDS applies to purchase bills only; the amount itself is worked out after insert.
+      const isBill = input.type === "purchase" && input.documentType === "invoice";
+      const billTds = isBill ? assertBillTdsInput(input.tdsMode, input.tdsSection, input.tdsAmount, totals.total) : null;
+
       const [invoice] = await tx.insert(invoices).values({
         businessId: ctx.businessId,
         partyId: input.partyId,
@@ -517,6 +473,8 @@ export const invoiceRouter = router({
         isReverseCharge: input.isReverseCharge ?? false,
         source: input.source ?? null,
         stockMode: input.skipStockAdjustment ? "none" : "tracked",
+        ...(billTds ? { tdsMode: billTds.mode, tdsSection: billTds.section, tdsAmount: billTds.amount } : {}),
+        tcsMode: input.type === "sale" && input.documentType === "invoice" ? input.tcsMode : "auto",
         createdByUserId: ctx.user!.id,
         createdByName: ctx.user!.name,
       }).returning();
@@ -626,6 +584,20 @@ export const invoiceRouter = router({
         }
       }
 
+      // TDS on the purchase: deducted when the bill is credited, settled against it.
+      if (isBill) {
+        await syncBillTds(tx, { businessId: ctx.businessId, invoiceId: invoice.id, userId: ctx.user!.id, userName: ctx.user!.name });
+        const [fresh] = await tx.select().from(invoices).where(eq(invoices.id, invoice.id)).limit(1);
+        return fresh ?? invoice;
+      }
+
+      // TCS on the sale: collected from the customer with the invoice, on items with a TCS section.
+      if (input.type === "sale" && input.documentType === "invoice") {
+        await syncInvoiceTcs(tx, { businessId: ctx.businessId, invoiceId: invoice.id });
+        const [fresh] = await tx.select().from(invoices).where(eq(invoices.id, invoice.id)).limit(1);
+        return fresh ?? invoice;
+      }
+
       return invoice;
     });
 
@@ -718,6 +690,7 @@ export const invoiceRouter = router({
               taxAmount: inv.taxAmount,
               discountAmount: inv.discountAmount,
               additionalCharges: inv.additionalCharges,
+              tcsAmount: inv.tcsAmount,
               roundOff: inv.roundOff,
               totalAmount: inv.totalAmount,
               isReverseCharge: inv.isReverseCharge ?? false,
@@ -762,7 +735,7 @@ export const invoiceRouter = router({
             },
           );
 
-          const client = new IRPClient(resolveIRPConfig(config), db);
+          const client = createIRPClient(resolveIRPConfig(config), db);
           const result = await client.generateIRN(irpJson);
 
           await db
@@ -829,10 +802,11 @@ export const invoiceRouter = router({
         await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "cancel");
       }
       // Fetch current status before the update for audit metadata
-      const [before] = await ctx.db.select({ status: invoices.status })
+      const [before] = await ctx.db.select({ status: invoices.status, invoiceDate: invoices.invoiceDate })
         .from(invoices)
         .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
         .limit(1);
+      await assertPeriodOpen(ctx.db, ctx.businessId, [before?.invoiceDate]);
 
       const invoice = await ctx.db.transaction(async (tx) => {
         const [updated] = await tx.update(invoices)
@@ -859,6 +833,18 @@ export const invoiceRouter = router({
           // A cancelled or reinstated note or return changes what settles its invoice.
           await recomputeReferencedInvoice(tx, ctx.businessId, updated);
           await syncReversingItc(tx, ctx.businessId, input.id);
+        }
+        // A sale invoice's TCS follows whether it is live (not cancelled or deleted).
+        if (updated.type === "sale" && updated.documentType === "invoice" && before?.status !== input.status) {
+          await syncInvoiceTcs(tx, { businessId: ctx.businessId, invoiceId: updated.id });
+          const [fresh] = await tx.select().from(invoices).where(eq(invoices.id, updated.id)).limit(1);
+          return fresh ?? updated;
+        }
+        // A purchase bill's TDS follows whether the bill is live (not cancelled or deleted).
+        if (updated.type === "purchase" && updated.documentType === "invoice" && before?.status !== input.status) {
+          await syncBillTds(tx, { businessId: ctx.businessId, invoiceId: updated.id, userId: ctx.user!.id, userName: ctx.user!.name });
+          const [fresh] = await tx.select().from(invoices).where(eq(invoices.id, updated.id)).limit(1);
+          return fresh ?? updated;
         }
         return updated;
       });
@@ -905,6 +891,12 @@ export const invoiceRouter = router({
       warehouseId: z.string().uuid().nullish(),
       /** A built-in delivery method or one from Settings → Shipping. */
       deliveryMethod: deliveryMethodSchema.optional(),
+      /** TDS on a purchase bill: auto, none, or manual (with tdsSection + tdsAmount). */
+      tdsMode: z.enum(["auto", "none", "manual"]).optional(),
+      tdsSection: z.enum(tdsSectionCodes).optional().nullable(),
+      tdsAmount: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
+      /** TCS on a sale: auto (from the items' TCS sections) or none. */
+      tcsMode: z.enum(["auto", "none"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Invoice");
@@ -923,6 +915,8 @@ export const invoiceRouter = router({
           .limit(1);
 
         if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" });
+        // Neither the old nor the new date may be in a locked period.
+        await assertPeriodOpen(tx, ctx.businessId, [existing.invoiceDate, input.invoiceDate]);
         if (existing.status === "paid") throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot edit a paid invoice. Remove payments first." });
 
         // Security: validate partyId belongs to this business before applying the update.
@@ -980,7 +974,11 @@ export const invoiceRouter = router({
           const [paid] = await tx.select({ id: paymentAllocations.id })
             .from(paymentAllocations)
             .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
-            .where(and(eq(paymentAllocations.invoiceId, input.id), isNull(payments.deletedAt)))
+            .where(and(
+              eq(paymentAllocations.invoiceId, input.id),
+              isNull(payments.deletedAt),
+              sql`${payments.source} IS DISTINCT FROM 'tds'`, // the bill's own TDS adjustment is re-worked below
+            ))
             .limit(1);
           const [adjusted] = await tx.select({ id: invoices.id })
             .from(invoices)
@@ -1164,9 +1162,28 @@ export const invoiceRouter = router({
           updates.subtotal = totals.subtotal;
           updates.taxAmount = totals.taxTotal;
           updates.discountAmount = totals.invoiceDiscountAmount;
-          updates.totalAmount = totals.total;
+          // The total includes the TCS already collected; syncInvoiceTcs below adjusts it.
+          updates.totalAmount = existing.type === "sale" && existing.documentType === "invoice"
+            ? money.add(totals.total, existing.tcsAmount)
+            : totals.total;
           // The document discount is shared over the lines, so their tax moves with it.
           await saveAllocatedLines(tx, input.id, totals.lines);
+        }
+
+        if (input.tcsMode !== undefined && existing.type === "sale" && existing.documentType === "invoice") {
+          updates.tcsMode = input.tcsMode;
+        }
+
+        // TDS settings entered on a purchase bill.
+        const isBill = existing.type === "purchase" && existing.documentType === "invoice";
+        if (isBill && (input.tdsMode !== undefined || input.tdsSection !== undefined || input.tdsAmount !== undefined)) {
+          const mode = input.tdsMode ?? (existing.tdsMode as "auto" | "none" | "manual");
+          const section = input.tdsSection === undefined ? existing.tdsSection : input.tdsSection;
+          const amount = input.tdsAmount ?? existing.tdsAmount;
+          const checked = assertBillTdsInput(mode, section ?? undefined, amount, updates.totalAmount ?? existing.totalAmount);
+          updates.tdsMode = checked.mode;
+          updates.tdsSection = checked.section;
+          updates.tdsAmount = checked.amount;
         }
 
         // 5. Apply update
@@ -1187,6 +1204,20 @@ export const invoiceRouter = router({
         // A purchase's input tax credit follows its tax, party and date.
         if (existing.status !== "cancelled" && !existing.deletedAt && (input.lineItems || input.partyId || input.invoiceDate)) {
           await syncPurchaseItc(tx, ctx.businessId, input.id);
+        }
+
+        // A sale invoice's TCS follows its lines, customer, date and TCS mode.
+        if (existing.type === "sale" && existing.documentType === "invoice") {
+          await syncInvoiceTcs(tx, { businessId: ctx.businessId, invoiceId: input.id });
+          const [fresh] = await tx.select().from(invoices).where(eq(invoices.id, input.id)).limit(1);
+          return fresh ?? result;
+        }
+
+        // A purchase bill's TDS follows its value, supplier, date and TDS settings.
+        if (isBill) {
+          await syncBillTds(tx, { businessId: ctx.businessId, invoiceId: input.id, userId: ctx.user!.id, userName: ctx.user!.name });
+          const [fresh] = await tx.select().from(invoices).where(eq(invoices.id, input.id)).limit(1);
+          return fresh ?? result;
         }
 
         return result;
@@ -1210,13 +1241,14 @@ export const invoiceRouter = router({
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "Invoice");
 
-      const [inv] = await ctx.db.select({ status: invoices.status, type: invoices.type, documentType: invoices.documentType, invoiceNumber: invoices.invoiceNumber, deletedAt: invoices.deletedAt, createdAt: invoices.createdAt })
+      const [inv] = await ctx.db.select({ status: invoices.status, type: invoices.type, documentType: invoices.documentType, invoiceNumber: invoices.invoiceNumber, invoiceDate: invoices.invoiceDate, deletedAt: invoices.deletedAt, createdAt: invoices.createdAt })
         .from(invoices)
         .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
         .limit(1);
 
       if (!inv) return { success: true };
       if (inv.deletedAt) return { success: true }; // already soft-deleted
+      await assertPeriodOpen(ctx.db, ctx.businessId, [inv.invoiceDate]);
       await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "delete");
 
       // seller_manager: can only delete unpaid invoices created within the last 2 hours
@@ -1256,6 +1288,15 @@ export const invoiceRouter = router({
           event: "DELETE",
           actorUserId: ctx.user!.id,
         });
+
+        // ...and no TDS: take the bill's TDS adjustment out.
+        if (inv.type === "purchase" && inv.documentType === "invoice") {
+          await syncBillTds(tx, { businessId: ctx.businessId, invoiceId: input.id });
+        }
+        // ...and no TCS on a deleted sale.
+        if (inv.type === "sale" && inv.documentType === "invoice") {
+          await syncInvoiceTcs(tx, { businessId: ctx.businessId, invoiceId: input.id });
+        }
 
         // A deleted note or return no longer settles its invoice.
         const [deleted] = await tx.select({ documentType: invoices.documentType, referenceDocumentId: invoices.referenceDocumentId })

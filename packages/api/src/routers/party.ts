@@ -19,9 +19,11 @@ import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
 import { assertPriceLevel } from "../lib/pricing.js";
 import { logAudit } from "../lib/audit.js";
+import { LOCKED_BOOKS_OPENING_BALANCE_MESSAGE, hasAnyLock } from "../lib/period-lock.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
-import { IRPClient, IRPError, type IRPGstinDetails } from "../lib/irp-client.js";
+import { IRPError, type IRPGstinDetails } from "../lib/irp-client.js";
+import { createIRPClient } from "../lib/gov-provider.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { billDocument, reducesBalance, reducingDocument } from "../lib/order-fulfilment.js";
 
@@ -262,7 +264,7 @@ export const partyRouter = router({
       }
 
       try {
-        const client = new IRPClient(resolveIRPConfig(rawConfig), ctx.db);
+        const client = createIRPClient(resolveIRPConfig(rawConfig), ctx.db);
         const details = await client.getGstinDetails(input.gstin);
         return { available: true as const, details: partyFieldsFromIrp(details, input.gstin), verifiedAt: new Date().toISOString() };
       } catch (err) {
@@ -279,6 +281,10 @@ export const partyRouter = router({
   create: memberProcedure.input(createPartySchema).mutation(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "Party");
     await assertPriceLevel(ctx.db, ctx.businessId, input.priceLevelId);
+    // An opening balance reaches back to the start of the books, so it can't be added once a period is locked.
+    if (parseFloat(input.openingBalance ?? "0") !== 0 && await hasAnyLock(ctx.db, ctx.businessId)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: LOCKED_BOOKS_OPENING_BALANCE_MESSAGE });
+    }
     const [party] = await ctx.db.insert(parties).values({
       ...input,
       // A GSTIN embeds the PAN and the state, so fill them in when left blank.
@@ -309,6 +315,15 @@ export const partyRouter = router({
       requireCan(ctx.ability, "update", "Party");
       await assertPriceLevel(ctx.db, ctx.businessId, input.data.priceLevelId);
       const { contactPersonDob, gstinVerifiedAt, ...rest } = input.data;
+
+      // Changing the opening balance rewrites the whole history, so it's blocked once a period is locked.
+      if (rest.openingBalance !== undefined) {
+        const [current] = await ctx.db.select({ openingBalance: parties.openingBalance }).from(parties)
+          .where(and(eq(parties.id, input.id), eq(parties.businessId, ctx.businessId))).limit(1);
+        if (current && parseFloat(rest.openingBalance) !== parseFloat(current.openingBalance) && await hasAnyLock(ctx.db, ctx.businessId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: LOCKED_BOOKS_OPENING_BALANCE_MESSAGE });
+        }
+      }
 
       // A new GSTIN fills PAN / state only where the party has none yet, and
       // forgets the verification result of the old GSTIN.
@@ -451,6 +466,10 @@ export const partyRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "Party");
+      // A merge moves every document of one party to the other, changing closed periods' records.
+      if (await hasAnyLock(ctx.db, ctx.businessId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "This period is locked. Parties can't be merged while any period is locked, because a merge moves their past invoices and payments. Ask the business owner to unlock the period first." });
+      }
       if (input.sourceId === input.targetId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot merge a party into itself" });
       }

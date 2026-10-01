@@ -496,6 +496,8 @@ export const items = pgTable("items", {
   businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   hsn: text("hsn"),
+  // TCS section (s.206C) for specified goods such as scrap; sales of this item carry TCS.
+  tcsSection: text("tcs_section"),
   sku: text("sku"),
   // Scannable product code (EAN-13 / UPC-A / Code 128). Kept separate from
   // `sku`: an SKU is an internal catalogue code chosen by the business, while
@@ -749,6 +751,18 @@ export const invoices = pgTable("invoices", {
   createdByName: text("created_by_name"), // denormalized for display + imports
   deliveryMethod: text("delivery_method").default("self_pickup"), // self_pickup, hand_delivery, courier, bus, transport, post
   isReverseCharge: boolean("is_reverse_charge").default(false).notNull(),
+  // TDS we deduct from a supplier on a purchase bill (worked out on the bill,
+  // when it is credited). `tds_mode`: auto (worked out from the party's section
+  // and the yearly limits), none (no TDS on this bill) or manual (the amount
+  // entered). The tax is settled against the bill by a system payment
+  // (payments.source = 'tds') so balances and statuses need no special case.
+  tdsMode: text("tds_mode").default("auto").notNull(),
+  tdsSection: text("tds_section"),
+  tdsAmount: numeric("tds_amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  // TCS (s.206C) collected from the customer on a sale, included in `total_amount`.
+  // `tcs_mode`: auto (from the items' TCS sections) or none. The tax rows are in tax_deductions.
+  tcsMode: text("tcs_mode").default("auto").notNull(),
+  tcsAmount: numeric("tcs_amount", { precision: 15, scale: 2 }).default("0").notNull(),
   source: text("source"),
   // E-Invoicing (IRP) fields
   irn: text("irn"),
@@ -828,6 +842,11 @@ export const payments = pgTable("payments", {
   partyId: uuid("party_id").notNull().references(() => parties.id, { onDelete: "restrict" }),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   discount: numeric("discount", { precision: 15, scale: 2 }).default("0").notNull(),
+  // Income tax withheld from this payment (we deduct it from a supplier, or a
+  // customer deducts it from us). `amount` is the gross that settles the
+  // invoices; the bank moves `amount - tds_amount`.
+  tdsAmount: numeric("tds_amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  tdsSection: text("tds_section"),
   mode: paymentModeEnum("mode").notNull(),
   referenceNumber: text("reference_number"),
   paymentDate: timestamp("payment_date", { withTimezone: true }).defaultNow().notNull(),
@@ -858,6 +877,125 @@ export const paymentAllocations = pgTable("payment_allocations", {
 }, (t) => [
   index("payment_alloc_payment_idx").on(t.paymentId),
   index("payment_alloc_invoice_idx").on(t.invoiceId),
+]);
+
+// ── Period locks and year-end close ────────────────────────────
+// A locked period cannot take new entries, edits or deletions. Two kinds:
+//   books — everything dated on or before `locked_through` (one row per business),
+//           set when a year is closed or by hand;
+//   gst   — one row per return month ("2026-08") whose GST return is filed.
+// Locking is for owners, admins and accountants; unlocking is owner-only and
+// recorded in the audit log with a reason.
+export const periodLocks = pgTable("period_locks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  // books: the last Indian calendar day that is locked.
+  lockedThrough: date("locked_through"),
+  // gst: the return month, "YYYY-MM".
+  returnPeriod: text("return_period"),
+  note: text("note"),
+  lockedByUserId: uuid("locked_by_user_id"),
+  lockedByName: text("locked_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("period_locks_books_idx").on(t.businessId).where(sql`${t.kind} = 'books'`),
+  uniqueIndex("period_locks_gst_idx").on(t.businessId, t.returnPeriod).where(sql`${t.kind} = 'gst'`),
+]);
+
+// One row per closed financial year: the closing balances carried into the next
+// year (ledger accounts, stock, what customers owe and we owe), frozen at close.
+export const financialYearCloses = pgTable("financial_year_closes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  // "2025-26" (the business's own financial year).
+  financialYear: text("financial_year").notNull(),
+  closedAt: timestamp("closed_at", { withTimezone: true }).defaultNow().notNull(),
+  closedByUserId: uuid("closed_by_user_id"),
+  closedByName: text("closed_by_name"),
+  note: text("note"),
+  snapshot: jsonb("snapshot").notNull(),
+}, (t) => [
+  uniqueIndex("financial_year_closes_year_idx").on(t.businessId, t.financialYear),
+]);
+
+// ── Income-tax TDS / TCS ───────────────────────────────────────
+// Rates and thresholds change most Budgets, so the defaults live in code
+// (@fintranzact/shared tds.ts) and a business only stores what it overrides
+// for a financial year. Null columns mean "use the default".
+
+export const tdsSectionSettings = pgTable("tds_section_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  // "2026-27" — always April to March.
+  financialYear: text("financial_year").notNull(),
+  sectionCode: text("section_code").notNull(),
+  rate: numeric("rate", { precision: 6, scale: 3 }),
+  individualRate: numeric("individual_rate", { precision: 6, scale: 3 }),
+  rateWithoutPan: numeric("rate_without_pan", { precision: 6, scale: 3 }),
+  singleThreshold: numeric("single_threshold", { precision: 15, scale: 2 }),
+  aggregateThreshold: numeric("aggregate_threshold", { precision: 15, scale: 2 }),
+  // Turn a section off for the year (a business that never deducts it).
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("tds_section_settings_year_code_idx").on(t.businessId, t.financialYear, t.sectionCode),
+]);
+
+// Tax deposited with the government. One challan can cover many deductions.
+export const taxChallans = pgTable("tax_challans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  // "tds" (tax deducted) or "tcs" (tax collected).
+  kind: text("kind").notNull(),
+  financialYear: text("financial_year").notNull(),
+  quarter: integer("quarter").notNull(),
+  // ITNS 281 challan serial number and the 7-digit BSR code of the bank branch.
+  challanNumber: text("challan_number").notNull(),
+  bsrCode: text("bsr_code").notNull(),
+  depositedOn: timestamp("deposited_on", { withTimezone: true }).notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  interest: numeric("interest", { precision: 15, scale: 2 }).default("0").notNull(),
+  notes: text("notes"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("tax_challans_cin_idx").on(t.businessId, t.kind, t.bsrCode, t.challanNumber, t.depositedOn),
+  index("tax_challans_period_idx").on(t.businessId, t.kind, t.financialYear, t.quarter),
+]);
+
+// One row per amount of TDS/TCS deducted or collected.
+//   payable    — we withheld it from a supplier (TDS) or collected it from a
+//                customer (TCS); it is owed to the government.
+//   receivable — a customer withheld it from what they paid us; it is a credit
+//                we claim against our own tax.
+export const taxDeductions = pgTable("tax_deductions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  direction: text("direction").notNull(),
+  partyId: uuid("party_id").notNull().references(() => parties.id, { onDelete: "restrict" }),
+  paymentId: uuid("payment_id").references(() => payments.id, { onDelete: "cascade" }),
+  invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+  sectionCode: text("section_code").notNull(),
+  financialYear: text("financial_year").notNull(),
+  quarter: integer("quarter").notNull(),
+  // The amount the tax was worked out on, the percent used, and the tax.
+  baseAmount: numeric("base_amount", { precision: 15, scale: 2 }).notNull(),
+  rate: numeric("rate", { precision: 6, scale: 3 }).notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  hasPan: boolean("has_pan").default(true).notNull(),
+  deductedOn: timestamp("deducted_on", { withTimezone: true }).notNull(),
+  // Set once the tax is deposited (payable) — links to the challan.
+  challanId: uuid("challan_id").references(() => taxChallans.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("tax_deductions_period_idx").on(t.businessId, t.kind, t.direction, t.financialYear, t.quarter),
+  index("tax_deductions_party_year_idx").on(t.businessId, t.partyId, t.financialYear, t.sectionCode),
+  index("tax_deductions_payment_idx").on(t.paymentId),
+  index("tax_deductions_challan_idx").on(t.challanId),
 ]);
 
 // ── Expenses ───────────────────────────────────────────────────

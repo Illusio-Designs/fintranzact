@@ -64,6 +64,7 @@ import {
   DocumentValidationIcon,
   Analytics01Icon,
   Coins01Icon,
+  Money03Icon,
   CheckListIcon,
   Building03Icon,
   HierarchySquare01Icon,
@@ -389,6 +390,13 @@ const navSections = [
         resource: "ITC",
         action: "read",
         gstOnly: true,
+      },
+      {
+        to: "/tds",
+        label: "TDS & TCS",
+        icon: Money03Icon,
+        resource: "Tds",
+        action: "read",
       },
       {
         to: "/e-invoicing",

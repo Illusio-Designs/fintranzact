@@ -5,6 +5,7 @@
  */
 
 import type { TableCoverage } from "../types.js";
+import { tdsSectionCodes } from "@fintranzact/shared";
 import { MONEY_TOLERANCE, intraStateSql, rule, userEntered } from "../sql-fragments.js";
 
 const PAYMENT_WRITERS = ["payment.create / payment.update / payment.delete (Payments, POS)", "payment.assignAccount (untracked payments)"];
@@ -40,6 +41,45 @@ export const moneyTables: TableCoverage[] = [
          WHERE p.deleted_at IS NULL AND p.source IS NULL
            AND ((p.invoice_id IS NULL AND EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id))
              OR (p.invoice_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id AND pa.invoice_id = p.invoice_id)))`),
+      rule("payments", "tds-consistent", "error",
+        "Tax withheld from a payment is never negative and is below the payment, names its section, and is recorded as exactly one tax_deductions row of the same amount, party, section, direction and period; a payment with no tax withheld has none.",
+        PAYMENT_WRITERS,
+        `SELECT p.business_id, p.id::text, COALESCE(p.payment_number, '') || ': tds ' || p.tds_amount || ' of ' || p.amount ||
+                ', section ' || COALESCE(p.tds_section, 'NULL') || ', ' || COUNT(d.id) || ' deduction rows' ||
+                COALESCE(' (' || string_agg(d.direction || ' ' || d.amount || ' ' || d.section_code, '; ') || ')', '')
+         FROM payments p JOIN parties pp ON pp.id = p.party_id
+         LEFT JOIN invoices pi ON pi.id = p.invoice_id
+         LEFT JOIN tax_deductions d ON d.payment_id = p.id
+         GROUP BY p.id, pp.type, pi.type
+         HAVING p.tds_amount::numeric < 0
+             OR (p.tds_amount::numeric > 0 AND (p.tds_amount::numeric >= p.amount::numeric OR p.tds_section IS NULL))
+             OR (p.deleted_at IS NOT NULL AND COUNT(d.id) > 0)
+             OR (p.deleted_at IS NULL AND p.tds_amount::numeric > 0 AND (
+                   COUNT(d.id) <> 1
+                   OR bool_or(ABS(d.amount::numeric - p.tds_amount::numeric) > ${MONEY_TOLERANCE})
+                   OR bool_or(d.party_id <> p.party_id)
+                   OR bool_or(d.section_code IS DISTINCT FROM p.tds_section)
+                   OR bool_or(d.deducted_on <> p.payment_date)
+                   OR bool_or(d.direction <> (CASE WHEN ${PAYMENT_DIRECTION} = 'withdrawal' THEN 'payable' ELSE 'receivable' END))))
+             OR (p.deleted_at IS NULL AND p.tds_amount::numeric = 0 AND COUNT(d.id) > 0 AND p.source IS DISTINCT FROM 'tds')`),
+      rule("payments", "bill-tds-adjustment", "error",
+        "The system payment that settles a purchase bill's TDS (source 'tds') is for a live (not cancelled or deleted) purchase bill of the same party, moves no money (no bank account, no tax of its own), is allocated wholly to that bill, and is exactly one payable tax_deductions row for the same bill and amount.",
+        ["invoice.create / update / updateStatus / delete (syncBillTds)"],
+        `SELECT p.business_id, p.id::text, COALESCE(p.payment_number, '') || ': ' || p.amount || ' on ' || COALESCE(i.invoice_number, 'no bill') ||
+                ', ' || COUNT(DISTINCT pa.id) || ' allocations, ' || COUNT(DISTINCT d.id) || ' deductions'
+         FROM payments p
+         LEFT JOIN invoices i ON i.id = p.invoice_id
+         LEFT JOIN payment_allocations pa ON pa.payment_id = p.id
+         LEFT JOIN tax_deductions d ON d.payment_id = p.id
+         WHERE p.source = 'tds'
+         GROUP BY p.id, i.id
+         HAVING p.bank_account_id IS NOT NULL OR p.tds_amount::numeric <> 0
+             OR i.id IS NULL OR i.type <> 'purchase' OR i.document_type <> 'invoice' OR i.party_id <> p.party_id
+             OR (p.deleted_at IS NULL AND (
+                   i.deleted_at IS NOT NULL OR i.status = 'cancelled'
+                   OR COUNT(DISTINCT pa.id) <> 1 OR bool_or(pa.invoice_id <> p.invoice_id) OR bool_or(ABS(pa.amount::numeric - p.amount::numeric) > ${MONEY_TOLERANCE})
+                   OR COUNT(DISTINCT d.id) <> 1 OR bool_or(d.direction <> 'payable') OR bool_or(d.invoice_id IS DISTINCT FROM p.invoice_id)
+                   OR bool_or(ABS(d.amount::numeric - p.amount::numeric) > ${MONEY_TOLERANCE})))`),
       rule("payments", "allocations-within-amount", "error",
         "What a payment allocates to invoices adds up to no more than the payment.",
         PAYMENT_WRITERS,
@@ -52,7 +92,7 @@ export const moneyTables: TableCoverage[] = [
         `SELECT p.business_id, p.id::text, COALESCE(p.payment_number, '') || ' deleted but still allocated'
          FROM payments p WHERE p.deleted_at IS NOT NULL AND EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)`),
       rule("payments", "bank-posting", "error",
-        "A live payment with a bank/cash account has exactly one 'payment' bank transaction on that account, for the same amount and date, in the right direction (money in from customers / sale invoices, money out to suppliers / purchase invoices); a deleted or untracked payment has none.",
+        "A live payment with a bank/cash account has exactly one 'payment' bank transaction on that account, for the amount less any TDS withheld, on the same date, in the right direction (money in from customers / sale invoices, money out to suppliers / purchase invoices); a deleted or untracked payment has none.",
         PAYMENT_WRITERS,
         `SELECT p.business_id, p.id::text, COALESCE(p.payment_number, '') || ' (' || pp.type || COALESCE(', ' || pi.type || ' invoice', ', on account') || '): ' ||
                 COUNT(t.id) || ' txns, expected ' || CASE WHEN p.deleted_at IS NULL AND p.bank_account_id IS NOT NULL THEN '1 ' || ${PAYMENT_DIRECTION} ELSE 'none' END ||
@@ -65,7 +105,7 @@ export const moneyTables: TableCoverage[] = [
              OR (p.deleted_at IS NULL AND p.bank_account_id IS NOT NULL AND (
                    COUNT(t.id) <> 1
                    OR bool_or(t.bank_account_id <> p.bank_account_id)
-                   OR bool_or(ABS(t.amount::numeric - p.amount::numeric) > ${MONEY_TOLERANCE})
+                   OR bool_or(ABS(t.amount::numeric - (p.amount::numeric - p.tds_amount::numeric)) > ${MONEY_TOLERANCE})
                    OR bool_or(t.type::text <> ${PAYMENT_DIRECTION})
                    OR bool_or(t.transaction_date <> p.payment_date)))`),
       rule("payments", "mode-matches-account", "warning",
@@ -486,6 +526,102 @@ export const moneyTables: TableCoverage[] = [
          WHERE u.business_id <> r.business_id
             OR (r.match_status IN ('matched', 'mismatched') AND i.id IS NULL)
             OR (i.id IS NOT NULL AND (i.business_id <> r.business_id OR i.type <> 'purchase'))`),
+    ],
+  },
+  {
+    table: "tds_section_settings",
+    rules: [
+      rule("tds_section_settings", "valid", "error",
+        "A section override is for a real section and an April-March financial year (YYYY-YY, the second part the next year), its rates are 0-100 percent and its thresholds are not negative.",
+        ["tds.updateSection (TDS settings)"],
+        `SELECT s.business_id, s.id::text, s.financial_year || ' ' || s.section_code
+         FROM tds_section_settings s
+         WHERE s.financial_year !~ '^[0-9]{4}-[0-9]{2}$'
+            OR (s.financial_year ~ '^[0-9]{4}-[0-9]{2}$' AND LPAD(((SUBSTRING(s.financial_year, 1, 4)::int + 1) % 100)::text, 2, '0') <> SUBSTRING(s.financial_year, 6, 2))
+            OR s.section_code NOT IN (${tdsSectionCodes.map((c) => `'${c}'`).join(", ")})
+            OR s.rate::numeric NOT BETWEEN 0 AND 100 OR s.individual_rate::numeric NOT BETWEEN 0 AND 100 OR s.rate_without_pan::numeric NOT BETWEEN 0 AND 100
+            OR s.single_threshold::numeric < 0 OR s.aggregate_threshold::numeric < 0`),
+      rule("tds_section_settings", "audit-trail", "error",
+        "Every section override has an audit entry for the change that created or last changed it.",
+        ["tds.updateSection (TDS settings)"],
+        `SELECT s.business_id, s.id::text, s.financial_year || ' ' || s.section_code || ' override has no audit entry'
+         FROM tds_section_settings s WHERE NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.entity_id = s.id AND a.action = 'tds.updateSection')`),
+    ],
+  },
+  {
+    table: "tax_challans",
+    rules: [
+      rule("tax_challans", "valid", "error",
+        "A challan is for TDS or TCS in a quarter 1-4, has a 7-digit BSR code, a challan number and a positive amount, and is not for more than the tax it is linked to.",
+        ["tds.createChallan (Challans)"],
+        `SELECT c.business_id, c.id::text, c.kind || ' ' || c.financial_year || ' Q' || c.quarter || ' CIN ' || c.bsr_code || '/' || c.challan_number
+         FROM tax_challans c LEFT JOIN tax_deductions d ON d.challan_id = c.id
+         GROUP BY c.id
+         HAVING c.kind NOT IN ('tds', 'tcs') OR c.quarter NOT BETWEEN 1 AND 4
+             OR c.bsr_code !~ '^[0-9]{7}$' OR NULLIF(c.challan_number, '') IS NULL
+             OR c.amount::numeric <= 0 OR c.interest::numeric < 0
+             OR COALESCE(SUM(d.amount::numeric), 0) > c.amount::numeric + ${MONEY_TOLERANCE}`),
+      rule("tax_challans", "audit-trail", "error",
+        "Every challan has an audit entry for the deposit being recorded.",
+        ["tds.createChallan (Challans)"],
+        `SELECT c.business_id, c.id::text, c.kind || ' ' || c.financial_year || ' Q' || c.quarter || ' ' || c.challan_number || ' has no audit entry'
+         FROM tax_challans c WHERE NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.entity_id = c.id AND a.action = 'tds.createChallan')`),
+    ],
+  },
+  {
+    table: "tax_deductions",
+    rules: [
+      rule("tax_deductions", "valid", "error",
+        "A deduction is TDS or TCS, payable or receivable, in a section of its own financial year and quarter (April-March, by Indian date), with a positive tax that is no more than the amount it was worked out on.",
+        PAYMENT_WRITERS,
+        `SELECT d.business_id, d.id::text, d.kind || ' ' || d.direction || ' ' || d.section_code || ' ' || d.amount || ' on ' || d.base_amount || ', ' || d.financial_year || ' Q' || d.quarter
+         FROM tax_deductions d
+         CROSS JOIN LATERAL (SELECT d.deducted_on AT TIME ZONE 'Asia/Kolkata' AS ist) x
+         CROSS JOIN LATERAL (SELECT CASE WHEN EXTRACT(MONTH FROM x.ist) >= 4 THEN EXTRACT(YEAR FROM x.ist)::int ELSE EXTRACT(YEAR FROM x.ist)::int - 1 END AS fy_start) y
+         WHERE d.kind NOT IN ('tds', 'tcs') OR d.direction NOT IN ('payable', 'receivable')
+            OR d.amount::numeric <= 0 OR d.base_amount::numeric <= 0 OR d.amount::numeric > d.base_amount::numeric
+            OR d.financial_year <> y.fy_start || '-' || LPAD(((y.fy_start + 1) % 100)::text, 2, '0')
+            OR d.quarter <> FLOOR(((EXTRACT(MONTH FROM x.ist)::int + 8) % 12) / 3) + 1`),
+      rule("tax_deductions", "links", "error",
+        "A deduction's payment, party and challan belong to its business, a challan covers the same kind, year and quarter, and only tax we owe (payable) is deposited.",
+        PAYMENT_WRITERS,
+        `SELECT d.business_id, d.id::text, d.kind || ' ' || d.direction || ' ' || d.section_code
+         FROM tax_deductions d
+         LEFT JOIN payments p ON p.id = d.payment_id
+         JOIN parties pp ON pp.id = d.party_id
+         LEFT JOIN tax_challans c ON c.id = d.challan_id
+         WHERE pp.business_id <> d.business_id OR p.business_id <> d.business_id OR c.business_id <> d.business_id
+            OR (c.id IS NOT NULL AND (c.kind <> d.kind OR c.financial_year <> d.financial_year OR c.quarter <> d.quarter))
+            OR (c.id IS NOT NULL AND d.direction <> 'payable')`),
+    ],
+  },
+  {
+    table: "period_locks",
+    rules: [
+      rule("period_locks", "valid", "error",
+        "A books lock has a date and no return month; a GST lock has a return month (YYYY-MM) and no date.",
+        ["period.lockBooks", "period.lockGstMonth"],
+        `SELECT business_id, id::text, kind || ' lock is malformed'
+         FROM period_locks
+         WHERE kind NOT IN ('books', 'gst')
+            OR (kind = 'books' AND (locked_through IS NULL OR return_period IS NOT NULL))
+            OR (kind = 'gst' AND (return_period IS NULL OR return_period !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' OR locked_through IS NOT NULL))`),
+      rule("period_locks", "audit-trail", "error",
+        "Every lock has an audit entry for the lock being set.",
+        ["period.lockBooks", "period.lockGstMonth", "period.closeYear"],
+        `SELECT l.business_id, l.id::text, l.kind || ' lock has no audit entry'
+         FROM period_locks l WHERE NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.entity_id = l.id AND a.action IN ('period.lockBooks', 'period.lockGstMonth'))
+           AND NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.business_id = l.business_id AND a.action = 'period.closeYear')`),
+    ],
+  },
+  {
+    table: "financial_year_closes",
+    rules: [
+      rule("financial_year_closes", "audit-trail", "error",
+        "Every closed year has an audit entry for the close.",
+        ["period.closeYear"],
+        `SELECT c.business_id, c.id::text, c.financial_year || ' close has no audit entry'
+         FROM financial_year_closes c WHERE NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.entity_id = c.id AND a.action = 'period.closeYear')`),
     ],
   },
 ];

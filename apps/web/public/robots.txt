@@ -54,6 +54,7 @@ Disallow: /stock-adjustments
 Disallow: /stock-groups
 Disallow: /stock-transfers
 Disallow: /store-orders
+Disallow: /tds
 Disallow: /warehouses
 
 Sitemap: https://fintranzact-web.vercel.app/sitemap.xml
