@@ -125,16 +125,24 @@ jobs:
       - name: Build all packages
         run: pnpm build
 
-  # E2E runs in 4 shards side by side (each with its own database and
-  # servers), then "E2E Tests" reports the combined result.
+  # E2E runs in parallel jobs (each with its own database and servers),
+  # then "E2E Tests" reports the combined result. The long journeys get
+  # their own jobs per screen size so they don't pile into one shard.
   e2e-shard:
-    name: E2E (${{ matrix.shard }}/4)
+    name: E2E (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        include:
+          - { name: "routes 1/3", project: chromium, shard: 1/3 }
+          - { name: "routes 2/3", project: chromium, shard: 2/3 }
+          - { name: "routes 3/3", project: chromium, shard: 3/3 }
+          - { name: "journeys desktop 1/2", project: journeys-desktop, shard: 1/2 }
+          - { name: "journeys desktop 2/2", project: journeys-desktop, shard: 2/2 }
+          - { name: "journeys phone 1/2", project: journeys-phone, shard: 1/2 }
+          - { name: "journeys phone 2/2", project: journeys-phone, shard: 2/2 }
 
     services:
       postgres:
@@ -199,13 +207,13 @@ jobs:
         run: pnpm db:push
 
       - name: Run E2E tests
-        run: pnpm test:e2e --shard=${{ matrix.shard }}/4
+        run: pnpm test:e2e --project=${{ matrix.project }} --shard=${{ matrix.shard }}
 
       - name: Upload Playwright traces
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces-${{ matrix.shard }}
+          name: playwright-traces-${{ matrix.project }}-${{ strategy.job-index }}
           path: e2e/test-results/
           retention-days: 7
 
@@ -214,7 +222,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: e2e-shard
-    if: always()
+    if: ${{ !cancelled() }}
     steps:
       - name: All shards passed
         run: |

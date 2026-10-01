@@ -35,16 +35,19 @@ export default defineConfig({
     { name: "data-audit", testMatch: /data-audit\.teardown\.ts/ },
     // End-to-end user journeys (e2e/journeys). Each journey signs up or seeds
     // its own owner, so it needs no shared session, and runs once on a
-    // desktop-width window and once on a phone-width one.
+    // desktop-width window and once on a phone-width one. They depend on
+    // "setup" only so the data-audit teardown runs after them.
     {
       name: "journeys-desktop",
       testMatch: /journeys\/.*\.spec\.ts/,
+      dependencies: ["setup"],
       timeout: 180_000,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 }, actionTimeout: 15_000 },
     },
     {
       name: "journeys-phone",
       testMatch: /journeys\/.*\.spec\.ts/,
+      dependencies: ["setup"],
       timeout: 180_000,
       use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, hasTouch: true, actionTimeout: 15_000 },
     },

@@ -409,6 +409,7 @@ const PDF_RATE_LIMIT = 30; // per minute
 const PDF_RATE_WINDOW = 60_000;
 
 function checkPdfRateLimit(ip: string): boolean {
+  if (rateLimitDisabled) return true;
   const now = Date.now();
   const entry = pdfRateMap.get(ip);
   if (!entry || now > entry.reset) {
