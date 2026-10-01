@@ -1,4 +1,4 @@
-import { eq, and, gt, lte, isNull, desc } from "drizzle-orm";
+import { eq, and, gt, lte, isNull, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
@@ -92,6 +92,11 @@ function isDesktopClient(req: Request): boolean {
 function isBearerClient(req: Request): boolean {
   const client = getClientKind(req.headers);
   return client === "mobile" || client === "desktop";
+}
+
+/** Case-insensitive match on users.email (sign-up stores it lowercase). */
+function emailMatches(emailLower: string) {
+  return sql`lower(${users.email}) = ${emailLower}`;
 }
 
 // ── Shared helper: self-hosted tenant assignment ─────────────────────
@@ -303,7 +308,9 @@ export const authRouter = router({
       }
     }
 
-    const existing = await controlDb.select({ id: users.id }).from(users).where(eq(users.email, input.email)).limit(1);
+    // Emails are stored lowercase; older rows may not be, so match case-insensitively.
+    const email = input.email.trim().toLowerCase();
+    const existing = await controlDb.select({ id: users.id }).from(users).where(emailMatches(email)).limit(1);
     if (existing.length > 0) {
       throw new TRPCError({ code: "CONFLICT", message: "Email already registered" });
     }
@@ -324,7 +331,7 @@ export const authRouter = router({
     // invitation peek is a dirty read — confirmed inside the tx below. If the
     // peek is wrong (invitation accepted mid-flight), withProvisionedTenantCleanup
     // drops the unused DB on its way out.
-    const emailLower = input.email.toLowerCase();
+    const emailLower = email;
     const [pendingInvitePeek] = await controlDb.select({ id: invitations.id })
       .from(invitations)
       .where(and(
@@ -353,7 +360,7 @@ export const authRouter = router({
       async (markUsed) =>
         controlDb.transaction(async (tx) => {
           const [user] = await tx.insert(users).values({
-            email: input.email,
+            email,
             name: displayName,
             referralCode: input.referralCode?.trim() || null,
             passwordHash,
@@ -431,7 +438,7 @@ export const authRouter = router({
   // ── Password login ───────────────────────────────────────────
   login: publicProcedure.input(loginSchema).mutation(async ({ input, ctx }) => {
     // Per-email rate limiting: block after too many failed attempts
-    const emailKey = input.email.toLowerCase();
+    const emailKey = input.email.trim().toLowerCase();
     const attempts = failedLoginAttempts.get(emailKey);
     if (attempts && attempts.count >= LOGIN_MAX_ATTEMPTS && Date.now() - attempts.firstAttempt < LOGIN_WINDOW_MS) {
       throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many failed login attempts. Please try again later." });
@@ -440,7 +447,7 @@ export const authRouter = router({
     const [user] = await controlDb
       .select({ id: users.id, email: users.email, name: users.name, passwordHash: users.passwordHash })
       .from(users)
-      .where(eq(users.email, input.email))
+      .where(emailMatches(emailKey))
       .limit(1);
 
     if (!user) {
