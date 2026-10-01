@@ -8,6 +8,7 @@ import {
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { trpc, setBusinessId, queryClient } from "@/lib/trpc";
 import { canAccess } from "@/lib/permissions";
+import { needsPlanSelection } from "@/lib/plan-selection";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useIndiaTimeTheme } from "@/hooks/useTheme";
 import { CommandPalette } from "@/components/ui/CommandPalette";
@@ -1037,13 +1038,13 @@ function RootLayout() {
     }
   }, [currentBusinessId]);
 
-  const selectedTenantPlan = session?.tenantId
-    ? (tenantList?.find((tenant) => tenant.tenantId === session.tenantId)
-      ?.tenantPlan ?? null)
-    : null;
+  // A new organisation's owner chooses a plan first (planSelectedAt is null
+  // until they do); other roles are never held up by it.
+  const selectedTenant = session?.tenantId
+    ? tenantList?.find((tenant) => tenant.tenantId === session.tenantId)
+    : undefined;
 
-  const hasCompletedPlanSelection =
-    selectedTenantPlan !== null && selectedTenantPlan !== undefined;
+  const hasCompletedPlanSelection = !needsPlanSelection(selectedTenant);
 
   // Single consolidated redirect — priority order matters
   const publicPaths = AUTH_PUBLIC_PATHS;
