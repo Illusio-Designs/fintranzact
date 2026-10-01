@@ -112,6 +112,7 @@ test.describe("J10 dashboard & reports", () => {
     const [{ total: expenseTotal }] = await db()`select coalesce(sum(amount), 0)::float as total from expenses where business_id = ${owner.businessId} and deleted_at is null`;
     const F = {
       sales: sum(saleInvoices.map((d) => Number(d.total_amount))), // 1,47,040
+      salesTaxable: sum(saleInvoices.map(taxableOf)), // 1,25,500 (Item-wise Sales is excl. GST)
       notes: sum(creditNotes.map((d) => Number(d.total_amount))), // 14,160
       purchases: sum(bills.map((d) => Number(d.total_amount))), // 1,20,960
       received, // 10,000
@@ -224,17 +225,17 @@ test.describe("J10 dashboard & reports", () => {
 
     await openReport(page, "Item-wise Sales");
     await lastMonth(page);
-    await expect(statCard(page, "Total Revenue")).toHaveText(inr(F.sales));
+    await expect(statCard(page, "Total Revenue (excl. GST)")).toHaveText(inr(F.salesTaxable));
     // (the phone hides some columns: cells are found by their header)
     const sold = async (name: string, header: string) =>
       page.getByRole("row").filter({ hasText: name }).getByRole("cell").nth(await columnOf(page, header));
     await expect(await sold(m.bracket.name, "Qty Sold")).toHaveText("110 pcs");
-    await expect(await sold(m.bracket.name, "Revenue")).toHaveText(inr(129800));
+    await expect(await sold(m.bracket.name, "Revenue (excl. GST)")).toHaveText(inr(110000));
     await expect(await sold(m.tonic.name, "Qty Sold")).toHaveText("24 btl");
-    await expect(await sold(m.tonic.name, "Revenue")).toHaveText(inr(12880));
+    await expect(await sold(m.tonic.name, "Revenue (excl. GST)")).toHaveText(inr(11500));
     await expect(await sold(m.rice.name, "Qty Sold")).toHaveText("40 kg");
-    await expect(await sold(m.rice.name, "Revenue")).toHaveText(inr(2000));
-    await expect(await sold(m.install.name, "Revenue")).toHaveText(inr(2360));
+    await expect(await sold(m.rice.name, "Revenue (excl. GST)")).toHaveText(inr(2000));
+    await expect(await sold(m.install.name, "Revenue (excl. GST)")).toHaveText(inr(2000));
 
     await openReport(page, "Tax Summary");
     // Net of the credit notes, as GSTR-3B
