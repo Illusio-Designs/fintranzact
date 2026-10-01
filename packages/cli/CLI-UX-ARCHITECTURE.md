@@ -64,7 +64,7 @@ packages/cli/
 
 `src/bin/fintranzact.ts` creates one `commander` `Command` named `fintranzact` and calls 26 registrar functions in order (`registerAuthCommands`, `registerDashboardCommands`, … `registerBackupCommands`). Each registrar in `src/bin/registrars/` adds its commands with `program.command(...)`, declares options, and in `.action()` calls a handler from `src/commands/`. Several registrars load their handler with a dynamic `import()` so unused commands are not evaluated at start-up.
 
-Totals (counted from the registrars): **26 registrars, 38 top-level commands, 184 runnable commands.** Not every registrar adds one group: `auth.ts` adds five top-level commands, `backup.ts` adds two, and `document.ts` adds eight (seven document types plus `document`).
+Totals (counted from the registrars): **26 registrars, 38 top-level commands, 185 runnable commands.** Not every registrar adds one group: `auth.ts` adds five top-level commands, `backup.ts` adds two, and `document.ts` adds eight (seven document types plus `document`).
 
 ---
 
@@ -163,7 +163,7 @@ One table per registrar, in the order they are registered. Arguments in `<>` are
 
 **`expense.ts`** — `expense`: `list`, `create`, `delete <id>`, `update <id>`, `categories`.
 
-**`gst.ts`** — `gst`: `r1`, `r3b`, `r1-csv`, `gstr9 <fy>`, `gstr2b-uploads`.
+**`gst.ts`** — `gst`: `r1`, `r3b`, `r1-csv`, `gstr9 <fy>`, `cmp08 <fy> <quarter>`, `gstr2b-uploads`.
 
 **`report.ts`** — `report`: `daybook`, `outstanding`, `tax-summary`, `item-sales`, `stock`, `sales-register`, `purchase-register`, `party-statement <partyId>`, `payment-summary`, `cash-flow`, `collection-efficiency`, `trial-balance`, `balance-sheet`, `cash-flow-statement`, `general-ledger <accountId>`.
 
@@ -379,7 +379,7 @@ Colour: `NO_COLOR` or `FORCE_COLOR=0` turns it off.
 
 ### 8.1 API communication (`src/client.ts`)
 
-`FintranzactClient` is a hand-written client for the API's tRPC HTTP endpoints. It does not import the API's types; each method declares its own return type. It has 254 methods in 35 namespaces (`auth`, `business`, `invoice`, … `selfImport`).
+`FintranzactClient` is a hand-written client for the API's tRPC HTTP endpoints. It does not import the API's types; each method declares its own return type. It has 255 methods in 35 namespaces (`auth`, `business`, `invoice`, … `selfImport`).
 
 - Queries: `GET {apiUrl}/api/trpc/<path>?input=<superjson>`.
 - Mutations: `POST {apiUrl}/api/trpc/<path>` with a superjson body.

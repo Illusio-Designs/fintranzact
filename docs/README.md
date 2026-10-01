@@ -7,7 +7,7 @@ This folder contains **internal architecture documents, audit reports, and desig
 ## Contents
 
 ### Architecture
-- [`architecture/cli-mcp-design.md`](architecture/cli-mcp-design.md) — CLI tool + MCP server architecture (ADRs, package structure, tool schemas). As built: the CLI (`packages/cli`) has 26 command registrars in `src/bin/registrars/` (38 top-level commands, 184 runnable commands) over a 254-method API client; the MCP server (`packages/mcp`) registers 186 tools from 26 tool files in `src/tools/`, plus 9 resources and 6 prompts. See [`packages/cli/CLI-UX-ARCHITECTURE.md`](../packages/cli/CLI-UX-ARCHITECTURE.md) for the CLI as built
+- [`architecture/cli-mcp-design.md`](architecture/cli-mcp-design.md) — CLI tool + MCP server architecture (ADRs, package structure, tool schemas). As built: the CLI (`packages/cli`) has 26 command registrars in `src/bin/registrars/` (38 top-level commands, 185 runnable commands) over a 255-method API client; the MCP server (`packages/mcp`) registers 187 tools from 26 tool files in `src/tools/`, plus 9 resources and 6 prompts. See [`packages/cli/CLI-UX-ARCHITECTURE.md`](../packages/cli/CLI-UX-ARCHITECTURE.md) for the CLI as built
 - [`architecture/testing-plan.md`](architecture/testing-plan.md) — Test infrastructure design (Vitest/Jest setup, coverage strategy, CI integration)
 - [`architecture/ai-features-roadmap.md`](architecture/ai-features-roadmap.md) — AI feature implementation plans (HSN auto-fill, photo-to-item, product photography)
 - [`architecture/online-store.md`](architecture/online-store.md) — Online store design (storefront, catalogue, order flow); built as `apps/store` plus the `/store/:slug/*` API routes

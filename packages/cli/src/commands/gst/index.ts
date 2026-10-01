@@ -192,3 +192,35 @@ export async function gstr2bUploadsCommand(opts: GstOpts): Promise<void> {
     fatalError(String(e instanceof Error ? e.message : e));
   }
 }
+
+export async function gstCmp08Command(financialYear: string, quarter: string, opts: GstOpts): Promise<void> {
+  const fy = /^(\d{4})-\d{2}$/.exec(financialYear);
+  const q = Number(quarter);
+  if (!fy || !Number.isInteger(q) || q < 1 || q > 4) {
+    fatalError("Usage: fintranzact gst cmp08 <YYYY-YY> <1-4>  (Q1 = Apr–Jun … Q4 = Jan–Mar)", EXIT.USAGE);
+  }
+  const cfg = requireAuth();
+  const client = new FintranzactClient(cfg);
+
+  try {
+    const report = await client.gst.cmp08({ year: Number(fy![1]), quarter: q });
+
+    if (opts.json) {
+      outputJSON(report);
+      return;
+    }
+
+    console.log(`\n CMP-08 — FY ${financialYear} Q${q}`);
+    console.log(` ${"═".repeat(60)}\n`);
+    console.log(`  Outward supplies:  ${formatAmount(report.taxableValue)}`);
+    console.log(`  Tax payable:       ${formatAmount(report.taxPayable)}`);
+    console.log();
+  } catch (e) {
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
+      if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
+    }
+    fatalError(String(e instanceof Error ? e.message : e));
+  }
+}
