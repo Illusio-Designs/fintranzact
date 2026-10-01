@@ -27,6 +27,8 @@ export type BusinessProfileRow = {
   pos_enabled: boolean;
   e_way_bill_enabled: boolean;
   e_way_bill_threshold: string | null;
+  invoice_template: string;
+  thermal_width: number;
 };
 
 export async function businessProfile(businessId: string) {
@@ -36,7 +38,7 @@ export async function businessProfile(businessId: string) {
            signature_mime_type, signature_data is not null as signature_has_data,
            invoice_prefix, next_invoice_number, default_terms_and_conditions, custom_shipping_methods,
            barcodes_enabled, barcode_type, barcode_mode, barcode_setup_locked_at, pos_enabled,
-           e_way_bill_enabled, e_way_bill_threshold
+           e_way_bill_enabled, e_way_bill_threshold, invoice_template, thermal_width
     from businesses where id = ${businessId}`;
   return row as unknown as BusinessProfileRow;
 }
