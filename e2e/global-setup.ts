@@ -35,6 +35,13 @@ setup("authenticate", async ({ page, request }) => {
   const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
   const apiUrl = process.env.API_URL ?? "http://localhost:3000";
 
+  // A new organisation's owner chooses a plan first (J1 covers that page).
+  const planRes = await request.post(`${apiUrl}/api/trpc/tenant.updatePlan`, {
+    headers: { "Content-Type": "application/json", "X-Requested-With": "fintranzact", Cookie: cookieHeader },
+    data: { json: { plan: "forever_free" } },
+  });
+  expect(planRes.ok(), `tenant.updatePlan failed: ${await planRes.text()}`).toBeTruthy();
+
   const createBizRes = await request.post(`${apiUrl}/api/trpc/business.create`, {
     headers: {
       "Content-Type": "application/json",
