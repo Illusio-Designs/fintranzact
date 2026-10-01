@@ -1,14 +1,15 @@
 /**
  * J1 — Sign-up & onboarding, as a new customer does it in the browser.
  *
- *   A. Password sign-up: /register → plan selection (Forever Free) → the
+ *   A. Password sign-up: /register → plan selection: the paid Business plan
+ *      → the demo checkout (test mode, paid with the test card) → the
  *      "Set up your business" wizard with a GSTIN (pincode fills city/state,
  *      GSTIN fills PAN and the state code) → dashboard. Then sign out, a wrong
  *      password is refused, and the right one lands the owner on the dashboard.
  *   B. Magic-link sign-up (dark theme): "Email me a sign-in link" for a new
- *      address → open the emailed link → complete profile → onboarding (the
- *      organisation already starts on Forever Free, so no plan step)
- *      (owner without a business lands there) → an unregistered business.
+ *      address → open the emailed link → complete profile → plan selection
+ *      (Forever Free) → onboarding (owner without a business lands there) →
+ *      an unregistered business.
  *      The spent link and an expired link are both refused; a fresh link signs
  *      the now-established owner straight into the dashboard.
  *
@@ -16,9 +17,12 @@
  * mailer and the API stores only a hash. The journey reads "the email" by
  * re-keying the newest token row for the address (db.claimLatestMagicLink).
  * Turnstile is stubbed at the network layer; nothing external is called.
+ * The checkout is the demo one (no gateway, no money): Business is given a
+ * listed price for the journey, since by default it is priced on request.
  */
 import type { Page } from "@playwright/test";
 import {
+  API_URL,
   test,
   expect,
   expectNoHorizontalScroll,
@@ -32,11 +36,16 @@ import {
   expireMagicLinkToken,
   magicLinkTokens,
   membershipsOf,
+  offerBusinessPlanAt,
   userByEmail,
+  withdrawPlanPrice,
 } from "../../helpers/db";
 
 const PASSWORD = "Journey@1234";
 const DASHBOARD_HEADING = /Good (morning|afternoon|evening)/;
+/** Business at ₹2,499 a month: + 18% GST (₹449.82) = ₹2,948.82. */
+const BUSINESS_PRICE_INR = 2499;
+const BUSINESS_TOTAL = "₹2,948.82";
 
 async function choosePlan(page: Page, planName: RegExp) {
   await expect(page).toHaveURL(/\/auth\/plan-selection/, { timeout: 15_000 });
@@ -44,6 +53,40 @@ async function choosePlan(page: Page, planName: RegExp) {
   await expectNoHorizontalScroll(page, "plan selection");
   await page.getByRole("button", { name: planName }).first().click();
   await page.getByRole("button", { name: "Continue to dashboard" }).click();
+}
+
+/** Pick the paid Business plan and pay for it with the test card in the demo checkout. */
+async function payForBusinessPlan(page: Page) {
+  await expect(page).toHaveURL(/\/auth\/plan-selection/, { timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "Select the plan that fits your business" })).toBeVisible();
+  await expectNoHorizontalScroll(page, "plan selection");
+  await page.getByRole("button", { name: /Business.*₹2,499/ }).first().click();
+  await page.getByRole("button", { name: "Continue to payment" }).click();
+
+  const checkout = page.getByRole("dialog", { name: "Pay for Business" });
+  await expect(checkout).toBeVisible();
+  await expect(checkout.getByText("Test mode — no money is taken")).toBeVisible();
+  await expect(checkout.getByTestId("checkout-total")).toHaveText(BUSINESS_TOTAL);
+  await expectNoHorizontalScroll(page, "demo checkout");
+
+  await checkout.getByRole("tab", { name: "Card" }).click();
+  const pay = checkout.getByRole("button", { name: `Pay ${BUSINESS_TOTAL}` });
+  await checkout.getByLabel("Card number").fill("4111111111111112");
+  await checkout.getByLabel("Card number").blur();
+  await expect(checkout.getByText("Enter a valid card number")).toBeVisible();
+  await checkout.getByLabel("Card number").fill("4111111111111111");
+  await expect(checkout.getByLabel("Card number")).toHaveValue("4111 1111 1111 1111");
+  await checkout.getByLabel("Expiry (MM/YY)").fill("1230");
+  await checkout.getByLabel("CVV").fill("123");
+  await expect(pay).toBeDisabled(); // no name on the card yet
+  await checkout.getByLabel("Name on card").fill("J1 Owner");
+  await expectNoHorizontalScroll(page, "demo checkout: card");
+  await pay.click();
+  await expect(checkout.getByRole("button", { name: "Processing…" })).toBeDisabled();
+
+  await expect(checkout.getByText("Payment successful")).toBeVisible({ timeout: 15_000 });
+  await expect(checkout.getByTestId("payment-id")).toHaveText(/^pay_demo_[\w-]{14}$/);
+  await checkout.getByRole("button", { name: "Continue to set up your business" }).click();
 }
 
 /** The wizard's current step title (the big heading above the fields). */
@@ -131,7 +174,20 @@ async function expectDashboard(page: Page, businessName: string) {
 }
 
 test.describe("J1 sign-up & onboarding", () => {
-  test("password sign-up → plan → business with GSTIN → dashboard; logout; wrong and right password", async ({
+  test.beforeEach(async ({ page }) => {
+    // Business is priced on request by default; give it a price to pay.
+    await offerBusinessPlanAt(BUSINESS_PRICE_INR);
+    // The API caches the plan catalogue for up to 30 seconds.
+    await expect
+      .poll(async () => (await page.request.get(`${API_URL}/api/trpc/plan.list`)).text(), { timeout: 45_000, intervals: [1_000] })
+      .toContain(`"monthlyPriceInr":${BUSINESS_PRICE_INR}`);
+  });
+
+  test.afterEach(async () => {
+    await withdrawPlanPrice("business");
+  });
+
+  test("password sign-up → paid plan (demo checkout) → business with GSTIN → dashboard; logout; wrong and right password", async ({
     page,
     guard,
   }) => {
@@ -153,8 +209,12 @@ test.describe("J1 sign-up & onboarding", () => {
     await page.getByLabel("Retype password").fill(PASSWORD);
     await page.locator("form").getByRole("button", { name: "Create free account" }).click();
 
-    // ── Plan (as implemented: Forever Free is self-serve) ───────
-    await choosePlan(page, /Forever Free/);
+    // ── Plan: Business, paid in the demo checkout ───────────────
+    await expect(page).toHaveURL(/\/auth\/plan-selection/, { timeout: 15_000 });
+    const fresh = await userByEmail(email);
+    const [freshOrg] = await membershipsOf(fresh!.id);
+    expect(freshOrg, "a new organisation has not chosen a plan").toMatchObject({ plan: "forever_free", plan_selected_at: null });
+    await payForBusinessPlan(page);
 
     // ── Owner without a business lands on onboarding ────────────
     await expect(page).toHaveURL(/\/onboarding/, { timeout: 15_000 });
@@ -179,7 +239,8 @@ test.describe("J1 sign-up & onboarding", () => {
     expect(user!.has_password).toBe(true);
     const orgs = await membershipsOf(user!.id);
     expect(orgs).toHaveLength(1);
-    expect(orgs[0]).toMatchObject({ role: "owner", plan: "forever_free" });
+    expect(orgs[0]).toMatchObject({ role: "owner", plan: "business" });
+    expect(orgs[0].plan_selected_at, "plan choice recorded").toBeInstanceOf(Date);
     const [biz] = await businessesCreatedBy(user!.id);
     expect(biz).toMatchObject({
       name: bizName,
@@ -254,8 +315,8 @@ test.describe("J1 sign-up by magic link (dark theme)", () => {
     await page.getByLabel("Your name").fill(name);
     await page.getByRole("button", { name: "Continue" }).click();
 
-    // As implemented, a magic-link sign-up's organisation starts on Forever
-    // Free, so there is no plan step: the owner goes straight to onboarding.
+    // A new organisation's owner chooses a plan first, however they signed up.
+    await choosePlan(page, /Forever Free/);
     await expect(page).toHaveURL(/\/onboarding/, { timeout: 15_000 });
     await expectTheme(page, "dark");
 
@@ -287,7 +348,7 @@ test.describe("J1 sign-up by magic link (dark theme)", () => {
       state_code: "29",
     });
     const orgs = await membershipsOf(user!.id);
-    expect(orgs).toEqual([expect.objectContaining({ role: "owner", plan: "forever_free" })]);
+    expect(orgs).toEqual([expect.objectContaining({ role: "owner", plan: "forever_free", plan_selected_at: expect.any(Date) })]);
 
     // ── Spent link: refused ─────────────────────────────────────
     await signOut(page);

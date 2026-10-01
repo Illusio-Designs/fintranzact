@@ -117,6 +117,8 @@ async function createTenantForUser(
       name: tenantName,
       slug,
       plan: "forever_free",
+      // Self sign-up: the owner still has to choose a plan.
+      planSelectedAt: null,
       referralCode: normalizeReferralCode(referralCode),
       partnerId: await partnerForReferralCode(tx, referralCode),
     }).returning({ id: tenants.id });
@@ -240,6 +242,7 @@ async function writeNewTenantRows(
     dbUser: provisioned.dbConfig.dbUser,
     dbPassword: provisioned.dbConfig.dbPassword,
     plan: "forever_free",
+    planSelectedAt: null,
     referralCode: normalizeReferralCode(referralCode),
     // A partner's code links the organisation to that partner (referrals,
     // badge and commission). Any other code is kept as typed.

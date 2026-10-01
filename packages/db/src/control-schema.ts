@@ -31,6 +31,12 @@ export const tenants = pgTable("tenants", {
   partnerId: uuid("partner_id").references((): AnyPgColumn => partners.id, { onDelete: "set null" }),
   plan: tenantPlanEnum("plan").default("free").notNull(),
   status: tenantStatusEnum("status").default("active").notNull(),
+  /**
+   * When the owner chose a plan (free or paid). NULL means "not chosen yet"
+   * and sends the owner to the plan page. Defaults to now() so existing rows,
+   * seeds and admin-created orgs count as chosen; only self sign-up inserts NULL.
+   */
+  planSelectedAt: timestamp("plan_selected_at", { withTimezone: true }).defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [

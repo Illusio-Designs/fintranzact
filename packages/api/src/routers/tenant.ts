@@ -8,6 +8,7 @@ import { router, publicProcedure, protectedProcedure, tenantProcedure } from "..
 import { invalidateSessionCache, getSessionIdFromRequest } from "../context.js";
 import { emailService } from "../lib/email.js";
 import { isPaidPlan, isSelfServePlan } from "../lib/plan-catalog.js";
+import { requirePlanManagerTenant } from "../lib/plan-manager.js";
 import { effectiveOwnerPlan, enforceTeamMemberLimit, enforceOrgCreationLimit, getLimits } from "../lib/plan-limits.js";
 import { backfillLegacyBusinessMembers, grantTenantBusinessesToMember } from "../lib/business-membership.js";
 
@@ -18,9 +19,6 @@ async function openTenantBusinessesFor(tenantId: string, userId: string, role: s
   await backfillLegacyBusinessMembers(db, tenantId);
   await grantTenantBusinessesToMember(db, tenantId, userId, role);
 }
-
-/** Tenant roles that manage billing, and so may change the organisation's plan. */
-const PLAN_MANAGER_ROLES: string[] = ["owner", "superadmin"];
 
 function hashInvitationToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -51,35 +49,18 @@ export const tenantRouter = router({
       plan: z.enum(["forever_free", "free", "pro", "business", "enterprise"]),
     }))
     .mutation(async ({ input, ctx }) => {
-      const tenantId = ctx.tenantId ?? (
-        await controlDb.select({ tenantId: tenantMembers.tenantId })
-          .from(tenantMembers)
-          .where(and(
-            eq(tenantMembers.userId, ctx.user.id),
-            eq(tenantMembers.role, "owner"),
-          ))
-          .limit(1)
-      )[0]?.tenantId ?? null;
-
-      if (!tenantId) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "No organization selected to update." });
-      }
-
-      // The plan is billing: only the organisation's owner may change it.
-      const [membership] = await controlDb.select({ role: tenantMembers.role })
-        .from(tenantMembers)
-        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, ctx.user.id)))
-        .limit(1);
-      if (!membership || !PLAN_MANAGER_ROLES.includes(membership.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only the organization owner can change the plan." });
-      }
+      const tenantId = await requirePlanManagerTenant(ctx);
 
       const [current] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
       if (!current) {
         throw new TRPCError({ code: "NOT_FOUND", message: "No organization selected to update." });
       }
-      // Keeping the current plan changes nothing.
+      // Keeping the current plan changes nothing, but still records that the
+      // owner has made their choice (new sign-ups start on Forever Free).
       if (current.plan === input.plan) {
+        await controlDb.update(tenants)
+          .set({ planSelectedAt: new Date(), updatedAt: new Date() })
+          .where(eq(tenants.id, tenantId));
         return { plan: current.plan };
       }
 
@@ -95,7 +76,7 @@ export const tenantRouter = router({
       }
 
       await controlDb.update(tenants)
-        .set({ plan: input.plan, updatedAt: new Date() })
+        .set({ plan: input.plan, planSelectedAt: new Date(), updatedAt: new Date() })
         .where(eq(tenants.id, tenantId));
 
       return { plan: input.plan };
@@ -133,6 +114,7 @@ export const tenantRouter = router({
             dbUser: dbConfig.dbUser,
             dbPassword: dbConfig.dbPassword,
             plan: "forever_free",
+            planSelectedAt: null,
           }).returning({ id: tenants.id });
 
           await tx.insert(tenantMembers).values({
@@ -165,6 +147,7 @@ export const tenantRouter = router({
         name: tenantName,
         slug,
         plan: "forever_free",
+        planSelectedAt: null,
       }).returning({ id: tenants.id });
 
       await controlDb.insert(tenantMembers).values({
@@ -204,6 +187,7 @@ export const tenantRouter = router({
       tenantName: tenants.name,
       tenantSlug: tenants.slug,
       tenantPlan: tenants.plan,
+      planSelectedAt: tenants.planSelectedAt,
     })
       .from(tenantMembers)
       .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
@@ -211,7 +195,7 @@ export const tenantRouter = router({
         eq(tenantMembers.userId, ctx.user.id),
         eq(tenants.status, "active"),
       ));
-    return memberships;
+    return memberships.map((m) => ({ ...m, planSelectedAt: m.planSelectedAt?.toISOString() ?? null }));
   }),
 
   // Pending invitations for the authenticated user's email.

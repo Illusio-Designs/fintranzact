@@ -43,6 +43,7 @@ import { systemRouter } from "./routers/system.js";
 import { partnerRouter } from "./routers/partner.js";
 import { platformRouter } from "./routers/platform.js";
 import { planRouter } from "./routers/plan.js";
+import { billingRouter } from "./routers/billing.js";
 import { selfExportRouter } from "./routers/selfExport.js";
 import { selfImportRouter } from "./routers/selfImport.js";
 import { posRouter } from "./routers/pos.js";
@@ -101,6 +102,7 @@ export const appRouter = router({
   platform: platformRouter,
   partner: partnerRouter,
   plan: planRouter,
+  billing: billingRouter,
   selfExport: selfExportRouter,
   selfImport: selfImportRouter,
   pos: posRouter,

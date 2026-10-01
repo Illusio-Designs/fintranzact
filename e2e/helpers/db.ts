@@ -53,10 +53,47 @@ export async function userByEmail(email: string) {
 /** Tenants (organisations) the user belongs to, with their role there. */
 export async function membershipsOf(userId: string) {
   return (await db()`
-    select tm.tenant_id, tm.role, t.name as tenant_name, t.plan
+    select tm.tenant_id, tm.role, t.name as tenant_name, t.plan, t.plan_selected_at
     from tenant_members tm join tenants t on t.id = tm.tenant_id
     where tm.user_id = ${userId}
-    order by tm.created_at`) as unknown as Array<{ tenant_id: string; role: string; tenant_name: string; plan: string | null }>;
+    order by tm.created_at`) as unknown as Array<{
+    tenant_id: string;
+    role: string;
+    tenant_name: string;
+    plan: string | null;
+    /** When the owner chose a plan; null until they do. */
+    plan_selected_at: Date | null;
+  }>;
+}
+
+/**
+ * Test plumbing (no UI for it outside the admin console, which J13 owns):
+ * offer the built-in Business plan at a listed monthly price, so a sign-up
+ * can pay for it in the demo checkout. Undo with withdrawPlanPrice.
+ */
+export async function offerBusinessPlanAt(monthlyPriceInr: number) {
+  const features = ["Multi-tenant controls", "Premium reporting", "Dedicated onboarding"];
+  const limits = {
+    maxOwnedOrgs: null,
+    maxBusinesses: null,
+    maxTeamMembers: null,
+    maxConcurrentSessions: null,
+    maxApiKeys: null,
+    recurringRunsPerMonth: null,
+    auditRetentionDays: null,
+    dataExport: true,
+    onlineStore: true,
+    pdfBranding: false,
+  };
+  await db()`
+    insert into plan_settings (plan, name, tagline, monthly_price_inr, features, highlight, visible, limits)
+    values ('business', 'Business', 'Scale without limits', ${monthlyPriceInr}, ${db().json(features)}, false, true, ${db().json(limits)})
+    on conflict (plan) do update set monthly_price_inr = excluded.monthly_price_inr, visible = true`;
+}
+
+/** Back to the built-in plan definition (priced on request). */
+export async function withdrawPlanPrice(plan: string) {
+  await db()`delete from plan_settings where plan = ${plan}`;
 }
 
 export async function businessesCreatedBy(userId: string) {

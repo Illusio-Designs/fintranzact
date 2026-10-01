@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { usePlans, type PlanId } from "@/lib/plans";
 import { planSelectionMode } from "@/lib/plan-selection";
+import { DemoCheckout } from "@/components/billing/DemoCheckout";
 
 import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/Icon";
@@ -23,20 +24,25 @@ function PlanSelectionPage() {
     [plans, selectedPlan],
   );
 
-  const updatePlanMutation = trpc.tenant.updatePlan.useMutation({
-    onSuccess: async () => {
-      // DB is the source of truth.
-      // Refresh tenant data so __root.tsx sees the saved plan.
-      await utils.auth.me.refetch();
-      await utils.tenant.list.refetch();
+  // DB is the source of truth: refresh tenant data so __root.tsx sees the
+  // saved plan, then let its guards take the owner on (onboarding next).
+  async function goOn() {
+    await utils.auth.me.refetch();
+    await utils.tenant.list.refetch();
+    navigate({ to: "/" });
+  }
 
-      navigate({ to: "/" });
-    },
-  });
+  const updatePlanMutation = trpc.tenant.updatePlan.useMutation({ onSuccess: goOn });
 
-  // Owners can choose a free plan themselves; paid plans are switched on by
-  // the Fintranzact team (platform admin), so they start on Forever Free.
+  // Owners choose a free plan themselves. A paid plan with a listed price is
+  // paid for in the (demo) checkout when it is switched on; otherwise paid
+  // plans are set up by the Fintranzact team and the owner starts free.
+  const selectedOption = plans.find((plan) => plan.id === selectedPlan);
   const selectedIsFree = selectedPlan === "forever_free" || selectedPlan === "free";
+  const { data: billingConfig } = trpc.billing.config.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const selectedPrice = selectedOption?.monthlyPriceInr ?? null;
+  const canPayOnline = !selectedIsFree && !!billingConfig?.demoPayments && selectedPrice !== null && selectedPrice > 0;
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   // Only the owner changes the plan, and an organisation already on a paid
   // plan keeps it — picking here must never reset it to Forever Free.
@@ -52,6 +58,10 @@ function PlanSelectionPage() {
   function handleContinue() {
     if (keepsCurrentPlan) {
       navigate({ to: "/" });
+      return;
+    }
+    if (canPayOnline) {
+      setCheckoutOpen(true);
       return;
     }
     updatePlanMutation.mutate({ plan: selectedIsFree ? selectedPlan : "forever_free" });
@@ -134,6 +144,10 @@ function PlanSelectionPage() {
                   ? `Your organization is on ${currentPlanLabel}, set up by the Fintranzact team. Contact us to change it.`
                   : `Your organization is on ${currentPlanLabel}. Only the organization owner can change the plan.`}
               </p>
+            ) : canPayOnline ? (
+              <p className="mt-4 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm text-brand-700 dark:border-brand-900 dark:bg-brand-950 dark:text-brand-300">
+                {selectedOption!.price} a month + GST, paid now. Then you'll set up your business.
+              </p>
             ) : !selectedIsFree && (
               <p className="mt-4 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm text-brand-700 dark:border-brand-900 dark:bg-brand-950 dark:text-brand-300">
                 {selectedLabel} is set up by the Fintranzact team. You'll start on Forever Free, and we'll switch you
@@ -151,11 +165,24 @@ function PlanSelectionPage() {
                 ? "Saving plan..."
                 : keepsCurrentPlan || selectedIsFree
                   ? "Continue to dashboard"
-                  : "Start free for now"}
+                  : canPayOnline
+                    ? "Continue to payment"
+                    : "Start free for now"}
             </button>
           </div>
         </div>
       </div>
+
+      {canPayOnline && selectedOption && (
+        <DemoCheckout
+          open={checkoutOpen}
+          plan={{ id: selectedOption.id, name: selectedOption.name, monthlyPriceInr: selectedPrice! }}
+          // Plans carry a monthly price only, so there is no yearly choice yet.
+          cycle="monthly"
+          onClose={() => setCheckoutOpen(false)}
+          onContinue={goOn}
+        />
+      )}
     </div>
   );
 }

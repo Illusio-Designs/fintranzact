@@ -29,3 +29,19 @@ export function planSelectionMode(tenant: CurrentTenantPlan | null | undefined):
   if (!FREE_PLAN_IDS.includes(tenant.tenantPlan)) return "managed";
   return "choose";
 }
+
+export interface TenantPlanChoice {
+  role: string;
+  /** When the owner chose a plan; null until they do (new sign-ups). */
+  planSelectedAt: string | null;
+}
+
+/**
+ * Whether the signed-in user must choose a plan before going on: only the
+ * owner (or a superadmin) of an organisation that has not chosen one yet.
+ * Other roles are never held up by it.
+ */
+export function needsPlanSelection(tenant: TenantPlanChoice | null | undefined): boolean {
+  if (!tenant) return false;
+  return tenant.planSelectedAt === null && PLAN_MANAGER_ROLES.includes(tenant.role);
+}
