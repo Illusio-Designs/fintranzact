@@ -316,6 +316,56 @@ describe("bankAccount.addTransaction", () => {
 
 // ── Transfer ───────────────────────────────────────────────────────────────────
 
+// Regressions (J8 journey): the running balance followed transaction
+// timestamps, so a transfer (stamped "now") and a cash receipt entered after
+// it for the same day (stamped that day's midnight) showed in reverse order
+// with a balance that never existed; and it summed only the rows of the
+// period filter, so a month's first row ignored every earlier month.
+describe("bankAccount.listTransactions running balance", () => {
+  it("follows entry order within a day and carries earlier periods into a filtered one", async () => {
+    const caller = createTestCaller({
+      userId: world.ramesh.id,
+      email: world.ramesh.email,
+      name: world.ramesh.name,
+      tenantId: world.tenant1.id,
+      businessId: world.business1.id,
+    });
+    const till = await caller.bankAccount.create({
+      accountName: "Counter Cash", accountType: "cash", openingBalance: "100.00", isDefault: false,
+    });
+    const bank = await caller.bankAccount.create({
+      accountName: "Running Balance Bank", accountType: "current", openingBalance: "10000.00", isDefault: false,
+    });
+    const id = till!.id;
+    const daysAgo = (n: number) => {
+      // That day's midnight in India, as a date picked in a form arrives.
+      const ist = new Date(Date.now() + 330 * 60_000 - n * 86_400_000);
+      return new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()) - 330 * 60_000).toISOString();
+    };
+    await caller.bankAccount.addTransaction({ bankAccountId: id, type: "deposit", amount: "1000.00", description: "Old receipt", transactionDate: daysAgo(40) });
+    await caller.bankAccount.transfer({ fromAccountId: bank!.id, toAccountId: id, amount: "5000.00" });
+    await caller.bankAccount.addTransaction({ bankAccountId: id, type: "deposit", amount: "2000.00", description: "Counter sales", transactionDate: daysAgo(0) });
+    await caller.bankAccount.addTransaction({ bankAccountId: id, type: "withdrawal", amount: "350.00", description: "Courier", transactionDate: daysAgo(0) });
+
+    const all = await caller.bankAccount.listTransactions({ bankAccountId: id, page: 1, limit: 50 });
+    expect(all.data.map((t) => [t.description, Number(t.balanceAfter)])).toEqual([
+      ["Courier", 7750],
+      ["Counter sales", 8100],
+      ["Transfer from Running Balance Bank", 6100],
+      ["Old receipt", 1100],
+    ]);
+
+    const recent = await caller.bankAccount.listTransactions({ bankAccountId: id, fromDate: daysAgo(10), page: 1, limit: 50 });
+    expect(recent.data.map((t) => [t.description, Number(t.balanceAfter)])).toEqual([
+      ["Courier", 7750],
+      ["Counter sales", 8100],
+      ["Transfer from Running Balance Bank", 6100],
+    ]);
+    const out = await caller.bankAccount.listTransactions({ bankAccountId: bank!.id, page: 1, limit: 50 });
+    expect(out.data.map((t) => t.description)).toEqual(["Transfer to Counter Cash"]);
+  });
+});
+
 describe("bankAccount.transfer", () => {
   it("transfer between two accounts updates both balances correctly — net zero for the business", async () => {
     const caller = createTestCaller({

@@ -88,8 +88,21 @@ export function useInfiniteList<T extends { id: string }>({
         // expenses, shipments, accounts in this app). If a list is ascending, a new item
         // may briefly appear out of order at the top — transient and strictly better than
         // the record being invisible until a page refresh.
+        // Everything there is fits on page 1: the fresh page is the list
+        // (a deleted record is gone from it).
+        if (total <= data.length) {
+          setLastBatchSize(data.filter((d) => !prev.some((p) => p.id === d.id)).length);
+          return data;
+        }
         const freshById = new Map(data.map((item) => [item.id, item]));
-        const updated = prev.map((p) => freshById.get(p.id) ?? p);
+        // Records page 1 now runs past that it no longer has were deleted
+        // (or moved out of it): drop them rather than keep showing them.
+        let anchor = -1;
+        prev.forEach((p, i) => {
+          if (freshById.has(p.id)) anchor = i;
+        });
+        const kept = prev.filter((p, i) => i > anchor || freshById.has(p.id));
+        const updated = kept.map((p) => freshById.get(p.id) ?? p);
         const prevIds = new Set(prev.map((p) => p.id));
         const newItems = data.filter((d) => !prevIds.has(d.id));
         if (newItems.length > 0) setLastBatchSize(newItems.length);
@@ -107,7 +120,7 @@ export function useInfiniteList<T extends { id: string }>({
       setLastBatchSize(newItems.length);
       return [...merged, ...newItems];
     });
-  }, [data, page]);
+  }, [data, page, total]);
 
   // Restore scroll position after data loads
   useEffect(() => {

@@ -189,7 +189,9 @@ function AutomatedInvoicesPage() {
   const { data: planUsage } = trpc.recurringInvoice.planUsage.useQuery();
   const { data: suggestions } = trpc.recurringInvoice.suggestions.useQuery();
   // Party search handled by PartyCombobox component
-  const { data: items } = trpc.item.list.useQuery({ page: 1, limit: 500 });
+  // item.list pages at most 100 rows; asking for more is refused (400) and
+  // the line-item picker never appears.
+  const { data: items } = trpc.item.list.useQuery({ page: 1, limit: 100 });
 
   const utils = trpc.useUtils();
 
@@ -764,6 +766,7 @@ function AutomatedInvoicesPage() {
                 Type <span className="text-red-500">*</span>
               </label>
               <Listbox
+                ariaLabel="Type"
                 value={form.type}
                 onChange={(val) => setForm((f) => ({ ...f, type: val }))}
                 options={TYPE_OPTIONS}
@@ -777,6 +780,7 @@ function AutomatedInvoicesPage() {
                 Frequency <span className="text-red-500">*</span>
               </label>
               <Listbox
+                ariaLabel="Frequency"
                 value={form.frequency}
                 onChange={(val) => setForm((f) => ({ ...f, frequency: val }))}
                 options={FREQUENCY_OPTIONS}
@@ -856,6 +860,7 @@ function AutomatedInvoicesPage() {
                             Item (optional)
                           </label>
                           <Listbox
+                            ariaLabel="Item"
                             value={li.itemId || ""}
                             onChange={(val) => {
                               updateLineItem(idx, "itemId", val);
@@ -878,6 +883,7 @@ function AutomatedInvoicesPage() {
                         <input
                           className="input text-sm"
                           placeholder="Item name"
+                          aria-label="Item name"
                           maxLength={200}
                           value={li.itemName}
                           onChange={(e) => updateLineItem(idx, "itemName", e.target.value)}
@@ -894,6 +900,7 @@ function AutomatedInvoicesPage() {
                             min="0"
                             step="0.01"
                             placeholder="1"
+                            aria-label="Qty"
                             value={li.quantity}
                             onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
                           />
@@ -908,6 +915,7 @@ function AutomatedInvoicesPage() {
                             min="0"
                             step="0.01"
                             placeholder="0.00"
+                            aria-label="Unit Price"
                             value={li.unitPrice}
                             onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
                           />
@@ -922,6 +930,7 @@ function AutomatedInvoicesPage() {
                             min="0"
                             step="0.01"
                             placeholder="0"
+                            aria-label="Tax %"
                             value={li.taxPercent}
                             onChange={(e) => updateLineItem(idx, "taxPercent", e.target.value)}
                           />
@@ -936,6 +945,7 @@ function AutomatedInvoicesPage() {
                             min="0"
                             step="0.01"
                             placeholder="0"
+                            aria-label="Discount %"
                             value={li.discountPercent}
                             onChange={(e) => updateLineItem(idx, "discountPercent", e.target.value)}
                           />

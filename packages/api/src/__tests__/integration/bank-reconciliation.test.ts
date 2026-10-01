@@ -31,6 +31,7 @@ import { money, ofxToRows, qifToRows, rowsToCsv, sheetToRows } from "@fintranzac
 import {
   createTestWorld,
   createBankAccount,
+  createExpense,
   createPayment,
   type TestWorld,
   type TestBankAccount,
@@ -443,6 +444,64 @@ describe("Bank Reconciliation — CSV Import", () => {
     const matched = lines.find((l) => l.matchStatus === "auto_matched");
     expect(matched).toBeDefined();
     expect(matched!.matchedPaymentId).not.toBeNull();
+  });
+
+  // Regression (J8 journey): a cash expense or receipt — or one through
+  // another account — with the statement line's amount and date was offered
+  // as its match, so a card purchase on the bank statement "matched" a cash
+  // purchase of the same amount and could not be booked as its own expense.
+  it("matches only payments and expenses that went through the statement's account", async () => {
+    const db = getTenantTestDb();
+    const caller = callerForRamesh();
+    const day = new Date("2026-05-10T06:00:00Z");
+    const savings = await createBankAccount(db, world.business1.id, {
+      accountName: "SBI Savings", accountType: "savings", isDefault: false,
+    });
+    // Not on this statement: cash, and another account.
+    await createExpense(db, world.business1.id, { amount: "450.00", mode: "cash", expenseDate: day });
+    await createPayment(db, world.business1.id, party.id, { amount: "700.00", mode: "cash", paymentDate: day });
+    await createExpense(db, world.business1.id, {
+      amount: "300.00", mode: "bank", bankAccountId: savings.id, expenseDate: day,
+    });
+    await createPayment(db, world.business1.id, party.id, {
+      amount: "820.00", mode: "upi", bankAccountId: savings.id, paymentDate: day,
+    });
+    // On it: paid from this account, and a bank expense with no account named.
+    const fromHdfc = await createExpense(db, world.business1.id, {
+      amount: "610.00", mode: "bank", bankAccountId: account.id, expenseDate: day,
+    });
+    const unnamed = await createExpense(db, world.business1.id, { amount: "999.00", mode: "bank", expenseDate: day });
+    const received = await createPayment(db, world.business1.id, party.id, {
+      amount: "1234.00", mode: "upi", bankAccountId: account.id, paymentDate: day,
+    });
+
+    const csv = [
+      "Date,Description,Debit,Credit,Balance",
+      "10/05/2026,POS STATIONERY,450.00,,1.00",
+      "10/05/2026,UPI CR,,700.00,1.00",
+      "10/05/2026,ACH DEBIT,300.00,,1.00",
+      "10/05/2026,NEFT CR,,820.00,1.00",
+      "10/05/2026,CHQ PAID,610.00,,1.00",
+      "10/05/2026,ECS ELECTRICITY,999.00,,1.00",
+      "10/05/2026,IMPS CR,,1234.00,1.00",
+    ].join("\n");
+    const upload = await caller.bankRecon.uploadCSV({ bankAccountId: account.id, fileName: "scope.csv", csvContent: csv });
+    await caller.bankRecon.confirmMapping({
+      importId: upload.importId,
+      csvContent: csv,
+      columnMapping: { date: 0, narration: 1, debit: 2, credit: 3, balance: 4, dateFormat: "DD/MM/YYYY", skipRows: 1 },
+    });
+    const lines = await db.select().from(bankStatementLines)
+      .where(eq(bankStatementLines.importId, upload.importId)).orderBy(bankStatementLines.lineNumber);
+    expect(lines.map((l) => [l.narration, l.matchStatus, l.matchedExpenseId ?? l.matchedPaymentId])).toEqual([
+      ["POS STATIONERY", "unmatched", null],
+      ["UPI CR", "unmatched", null],
+      ["ACH DEBIT", "unmatched", null],
+      ["NEFT CR", "unmatched", null],
+      ["CHQ PAID", "auto_matched", fromHdfc.id],
+      ["ECS ELECTRICITY", "auto_matched", unnamed.id],
+      ["IMPS CR", "auto_matched", received.id],
+    ]);
   });
 
   it("creates an expense from an unmatched debit line and marks it as created", async () => {

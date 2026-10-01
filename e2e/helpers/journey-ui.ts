@@ -103,6 +103,22 @@ export async function pickDateMonthsAhead(page: Page, trigger: Locator, months: 
   await expect(page.getByRole("dialog", { name: "Choose date" })).toBeHidden();
 }
 
+/**
+ * Choose a date `days` days from today (negative: in the past) in one of the
+ * app's date pickers, by keyboard: arrows move a week (up/down) or a day
+ * (left/right) from the focused day, Enter picks it.
+ */
+export async function pickDateDaysAhead(page: Page, trigger: Locator, days: number) {
+  await trigger.click();
+  await expect(page.getByRole("dialog", { name: "Choose date" })).toBeVisible();
+  const weeks = Math.trunc(days / 7);
+  const rest = days - weeks * 7;
+  for (let i = 0; i < Math.abs(weeks); i++) await trigger.press(weeks < 0 ? "ArrowUp" : "ArrowDown");
+  for (let i = 0; i < Math.abs(rest); i++) await trigger.press(rest < 0 ? "ArrowLeft" : "ArrowRight");
+  await trigger.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Choose date" })).toBeHidden();
+}
+
 /** Close a side panel by its close button. */
 export async function closePanel(panel: Locator) {
   await panel.getByRole("button", { name: "Close", exact: true }).click();

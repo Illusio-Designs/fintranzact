@@ -116,6 +116,38 @@ async function assertMatchTarget(
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
+/**
+ * Payments a statement of `accountId` can be matched against: those received
+ * into that account, or with no account recorded that were not cash (a cash
+ * receipt never reaches a bank statement).
+ */
+function paidThroughAccount(accountId: string) {
+  return or(
+    eq(payments.bankAccountId, accountId),
+    and(isNull(payments.bankAccountId), sql`${payments.mode} <> 'cash'`),
+  )!;
+}
+
+/**
+ * Expenses a statement of `accountId` can be matched against: those paid
+ * from that account (named on the expense, or where its withdrawal was
+ * booked), or with no account at all that were not paid in cash. An
+ * expense paid from the cash box or another account is not on this
+ * statement, however close its amount and date.
+ */
+function spentFromAccount(accountId: string) {
+  const withdrawalOn = (account: ReturnType<typeof sql> | null) => sql`EXISTS (
+    SELECT 1 FROM ${bankTransactions} bt
+    WHERE bt.reference_type = 'expense' AND bt.reference_id = ${expenses.id}
+    ${account ? sql`AND bt.bank_account_id = ${account}` : sql``}
+  )`;
+  return or(
+    eq(expenses.bankAccountId, accountId),
+    withdrawalOn(sql`${accountId}::uuid`),
+    and(isNull(expenses.bankAccountId), sql`${expenses.mode} <> 'cash'`, sql`NOT ${withdrawalOn(null)}`),
+  )!;
+}
+
 export const bankReconRouter = router({
   /**
    * Step 1: Upload CSV content.
@@ -341,6 +373,7 @@ export const bankReconRouter = router({
           .where(and(
             eq(payments.businessId, ctx.businessId),
             isNull(payments.deletedAt),
+            paidThroughAccount(importRecord.bankAccountId),
             ...buildBusinessDateFilter(payments, { from: fromDate, to: toDate }),
           )),
         ctx.db
@@ -356,6 +389,7 @@ export const bankReconRouter = router({
           .where(and(
             eq(expenses.businessId, ctx.businessId),
             isNull(expenses.deletedAt),
+            spentFromAccount(importRecord.bankAccountId),
             ...buildBusinessDateFilter(expenses, { from: fromDate, to: toDate }),
           )),
         ctx.db

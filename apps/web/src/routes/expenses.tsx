@@ -136,6 +136,10 @@ function ExpensesPage() {
       utils.expense.categories.invalidate();
       utils.expense.summary.invalidate();
       utils.dashboard.summary.invalidate();
+      // The expense's withdrawal moved a bank or cash balance, and a
+      // statement line reconciled against it may have reopened.
+      utils.bankAccount.invalidate();
+      utils.bankRecon.invalidate();
       toast.success("Expense added");
       setShowAddModal(false);
       setForm({ ...EMPTY_FORM, expenseDate: todayISODate() });
@@ -149,6 +153,10 @@ function ExpensesPage() {
       utils.expense.categories.invalidate();
       utils.expense.summary.invalidate();
       utils.dashboard.summary.invalidate();
+      // The expense's withdrawal moved a bank or cash balance, and a
+      // statement line reconciled against it may have reopened.
+      utils.bankAccount.invalidate();
+      utils.bankRecon.invalidate();
       toast.success("Expense updated");
       setShowAddModal(false);
       setEditExpenseId(null);
@@ -163,6 +171,10 @@ function ExpensesPage() {
       utils.expense.categories.invalidate();
       utils.expense.summary.invalidate();
       utils.dashboard.summary.invalidate();
+      // The expense's withdrawal moved a bank or cash balance, and a
+      // statement line reconciled against it may have reopened.
+      utils.bankAccount.invalidate();
+      utils.bankRecon.invalidate();
       toast.success("Expense deleted");
       deleteConfirm.cancelDelete();
     },
@@ -478,6 +490,7 @@ function ExpensesPage() {
                 Payment Mode
               </label>
               <Listbox
+                ariaLabel="Payment Mode"
                 value={form.mode}
                 onChange={(val) => setForm((f) => ({ ...f, mode: val }))}
                 options={MODE_OPTIONS}
