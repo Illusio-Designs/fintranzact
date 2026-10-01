@@ -940,6 +940,17 @@ describe("Bank Reconciliation — converted statement formats", () => {
     expect(lines[0]!.transactionDate.getMonth()).toBe(3);
   });
 
+  it("doesn't force the bank's template on a file without its headers", async () => {
+    // HDFC IFSC and bank name on the account, but an OFX export's columns.
+    const csvContent = rowsToCsv(
+      ofxToRows("<OFX><STMTTRN><DTPOSTED>20260405<TRNAMT>-750<FITID>OFX009<NAME>Courier</STMTTRN></OFX>"),
+    );
+    const upload = await callerForRamesh().bankRecon.uploadCSV({ bankAccountId: account.id, fileName: "hdfc.ofx", csvContent });
+
+    expect(upload.detectedTemplate).toBeNull();
+    expect(upload.detectedMapping).toMatchObject({ date: 0, narration: 1, reference: 2, debit: 3, credit: 4 });
+  });
+
   it("imports a QIF statement", async () => {
     const csv = rowsToCsv(qifToRows("!Type:Bank\nD1/4'26\nT-2,000.00\nPATM WDL\nN000123\n^\n"));
     const { upload, lines } = await importConverted("april.qif", csv);
