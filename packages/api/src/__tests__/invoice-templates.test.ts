@@ -242,6 +242,32 @@ describe("automatic layouts", () => {
     expect(r.text).not.toContain("Description of Goods");
   });
 
+  it("runs a 45-line simple A5 invoice over a few pages, not one per drawn line", async () => {
+    const data = { ...sampleInvoiceData({ lines: 45 }), notes: "Goods once sold will not be taken back.", termsAndConditions: "Interest @18% p.a. after the due date." };
+    const r = await invoice(data, "a5");
+    expect(r.width).toBeCloseTo(595.28, 1);
+    expect(r.pages).toBeGreaterThan(1);
+    expect(r.pages).toBeLessThan(8);
+    expect(r.text).toContain(`Page 1 of ${r.pages}`);
+    expect(r.text).toContain(`Page ${r.pages} of ${r.pages}`);
+    // The column headings repeat on every page, and every line is drawn once.
+    expect(count(r, "DESCRIPTION")).toBeGreaterThanOrEqual(r.pages - 1);
+    expect(r.text).toContain("(continued)");
+    for (let i = 1; i <= 45; i++) expect(count(r, String(i)), `line ${i}`).toBeGreaterThanOrEqual(1);
+    expect(r.text).toContain("Solar LED Lantern with USB charging — lot 11");
+    expect(count(r, "TOTAL")).toBe(1);
+    expect(count(r, "Authorized Signatory")).toBe(1);
+    expect(r.text).toContain("Interest @18% p.a. after the due date.");
+    expect(count(r, "This is a computer-generated invoice.")).toBe(1);
+  });
+
+  it("keeps a short simple A5 invoice on one page", async () => {
+    const data = sampleInvoiceData({ lines: 2 }, { bankAccountNumber: undefined, upiId: undefined, termsAndConditions: undefined, notes: undefined });
+    const r = await invoice(data, "a5");
+    expect(r.pages).toBe(1);
+    expect(r.text).not.toContain("Page 1 of");
+  });
+
   it("prints landscape and compact A5 on their own paper sizes", async () => {
     const l = await invoice(withTemplate("landscape", sampleInvoiceData()));
     expect(l.width).toBeGreaterThan(l.height);

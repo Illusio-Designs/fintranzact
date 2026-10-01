@@ -961,6 +961,25 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   const gstMode  = isGstRegistered(data);
   const titleLabel = getInvoiceTitle(data);
 
+  // Every position below is set by hand, so PDFKit's own page breaking is
+  // switched off (it would start a new page for each text call that ends
+  // inside the bottom margin). Long invoices continue on new pages through
+  // `ensure`, with the table headings repeated.
+  doc.page.margins.bottom = 0;
+  const pageBottom = pageH - margin;
+  let onTableRows = false;
+  const ensure = (h: number): void => {
+    if (y + h <= pageBottom) return;
+    doc.addPage();
+    doc.page.margins.bottom = 0;
+    filledRect(doc, 0, 0, pageW, 3, cAccent);
+    y = margin;
+    doc.fontSize(7).fillColor(cMuted).font("NotoSans")
+      .text(`${titleLabel} ${data.invoiceNumber} (continued)`, margin, y, { width: contentW, lineBreak: false });
+    y += 14;
+    if (onTableRows) drawTableHeader();
+  };
+
   // ── Thin accent stripe at the very top ───────────────────
   filledRect(doc, 0, 0, pageW, 3, cAccent);
 
@@ -989,10 +1008,12 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
       .text(data.businessLegalName, a5TextX, y + 16, { width: a5TextW });
   }
 
-  // Address lines — start below the logo when present so nothing overlaps.
+  // Address lines — start below the logo and the legal name so nothing overlaps.
+  const a5HasLegalName = !!data.businessLegalName && data.businessLegalName !== data.businessName;
+  const a5NameBottom = y + 16 + (a5HasLegalName ? 10 : 0);
   let leftY = a5HasLogo
-    ? Math.max(y + 16, y + A5_LOGO_H + 4)
-    : y + 16;
+    ? Math.max(a5NameBottom, y + A5_LOGO_H + 4)
+    : a5NameBottom;
   const addrLine = [data.businessAddress].filter(Boolean).join("");
   const cityLine = [data.businessCity, data.businessState, data.businessPincode].filter(Boolean).join(", ");
   if (addrLine) {
@@ -1118,26 +1139,36 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   const C_QTY   = C_RATE - 36;
   const C_DESCW = C_QTY - C_DESC - 6;
 
-  // Table header
+  // Table header (repeated at the top of every continuation page)
   const tableHdrH = 18;
-  filledRect(doc, margin, y, contentW, tableHdrH, cBg);
+  function drawTableHeader() {
+    filledRect(doc, margin, y, contentW, tableHdrH, cBg);
 
-  doc.fontSize(6.5).fillColor(cMuted).font("NotoSans-Bold");
-  doc.text("#", C_IDX, y + 5, { width: 14 });
-  if (showHsn) doc.text("HSN/SAC", C_HSN, y + 5, { width: 40 });
-  doc.text("DESCRIPTION", C_DESC, y + 5, { width: C_DESCW });
-  doc.text("QTY", C_QTY, y + 5, { width: 34, align: "right" });
-  doc.text("RATE", C_RATE, y + 5, { width: 62, align: "right" });
-  doc.text("TAX", C_TAX, y + 5, { width: 34, align: "right" });
-  doc.text("AMOUNT", C_AMT, y + 5, { width: 60, align: "right" });
+    doc.fontSize(6.5).fillColor(cMuted).font("NotoSans-Bold");
+    doc.text("#", C_IDX, y + 5, { width: 14 });
+    if (showHsn) doc.text("HSN/SAC", C_HSN, y + 5, { width: 40 });
+    doc.text("DESCRIPTION", C_DESC, y + 5, { width: C_DESCW });
+    doc.text("QTY", C_QTY, y + 5, { width: 34, align: "right" });
+    doc.text("RATE", C_RATE, y + 5, { width: 62, align: "right" });
+    doc.text("TAX", C_TAX, y + 5, { width: 34, align: "right" });
+    doc.text("AMOUNT", C_AMT, y + 5, { width: 60, align: "right" });
 
-  y += tableHdrH;
-  hLine(doc, margin, y, contentW, cBorder);
+    y += tableHdrH;
+    hLine(doc, margin, y, contentW, cBorder);
+  }
+  ensure(tableHdrH + 17);
+  drawTableHeader();
+  onTableRows = true;
 
   data.lineItems.forEach((item, i) => {
     const hasNote = !!(item.description && item.description.trim().length > 0);
-    const noteH = hasNote ? 9 : 0;
-    const rowH = 17 + noteH;
+    // Long names and notes wrap; the row grows to fit them.
+    const nameH = doc.fontSize(8).font("NotoSans").heightOfString(item.itemName, { width: C_DESCW });
+    const noteH = hasNote
+      ? doc.fontSize(6.5).font("NotoSans").heightOfString(item.description!, { width: C_DESCW - 4 }) + 1
+      : 0;
+    const rowH = Math.max(17, nameH + 6) + noteH;
+    ensure(rowH);
     if (i % 2 === 1) {
       filledRect(doc, margin, y, contentW, rowH, "#fafafc");
     }
@@ -1159,18 +1190,25 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
 
     if (hasNote) {
       doc.fontSize(6.5).fillColor(cMuted).font("NotoSans")
-        .text(item.description!, C_DESC + 4, rowY + 10, { width: C_DESCW - 4 });
+        .text(item.description!, C_DESC + 4, rowY + Math.max(10, nameH + 1), { width: C_DESCW - 4 });
     }
 
     y += rowH;
     hLine(doc, margin, y, contentW, cBorder, 0.3);
   });
+  onTableRows = false;
 
   hLine(doc, margin, y, contentW, cBorder, 0.75);
   y += 8;
 
   // ── SECTION 4: Totals (right column) + Amount in words (left column) ──
-  // Both sit side-by-side so they never overlap
+  // Both sit side-by-side so they never overlap. Kept together on one page.
+  const totRows = 2
+    + (parseFloat(data.discountAmount) > 0 ? 1 : 0)
+    + (parseFloat(data.additionalCharges || "0") > 0 ? 1 : 0)
+    + (parseFloat(data.taxAmount) > 0 ? 1 : 0)
+    + (parseFloat(data.amountPaid) > 0 ? 2 : 0);
+  ensure(totRows * 13 + 16);
   const totBlockStartY = y;
 
   // Right column: totals
@@ -1226,6 +1264,7 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
 
   // ── SECTION 5: Payment details + Signatory ───────────────
   const hasPaymentInfo = data.type === "sale" && (data.bankAccountNumber || data.upiId);
+  ensure(hasPaymentInfo ? 76 : 54);
 
   // Three sub-columns: payment text | QR code | signatory
   const hasQr  = hasPaymentInfo && !!data.upiQrDataUrl;
@@ -1321,9 +1360,11 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
 
   // ── SECTION 6: Notes / Terms ─────────────────────────────
   if (data.notes || data.termsAndConditions) {
+    const notesW = contentW * 0.7;
+    const blockH = (text: string) => 9 + doc.fontSize(7).font("NotoSans").heightOfString(text, { width: notesW }) + 4;
+    ensure(6 + (data.termsAndConditions ? blockH(data.termsAndConditions) : blockH(data.notes!)));
     hLine(doc, margin, y, contentW, cBorder);
     y += 6;
-    const notesW = contentW * 0.7;
     if (data.termsAndConditions) {
       doc.fontSize(6.5).fillColor(cMuted).font("NotoSans-Bold")
         .text("Terms & Conditions", margin, y, { width: notesW });
@@ -1333,6 +1374,7 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
       y += doc.heightOfString(data.termsAndConditions, { width: notesW }) + 4;
     }
     if (data.notes) {
+      ensure(blockH(data.notes));
       doc.fontSize(6.5).fillColor(cMuted).font("NotoSans-Bold")
         .text("Notes", margin, y, { width: notesW });
       y += 9;
@@ -1343,7 +1385,8 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   }
 
   // ── Footer ────────────────────────────────────────────────
-  const footerY = Math.min(y + 4, pageH - 10);
+  ensure(data.isPaidPlan ? 18 : 26);
+  const footerY = y + 4;
   hLine(doc, margin, footerY, contentW, cBorder, 0.5);
   doc.fontSize(6.5).fillColor(cLight).font("NotoSans")
     .text("This is a computer-generated invoice.", margin, footerY + 4,
