@@ -6,6 +6,12 @@ export interface LineItemInput {
   taxPercent: string;
   discountPercent: string;
   taxInclusive?: boolean; // if true, unitPrice includes tax
+  /**
+   * Intra-state supply: the tax is CGST + SGST, each at half the rate and
+   * rounded to the paisa on its own, so the two are always equal. Unset or
+   * false: one amount at the full rate (IGST, or the historical behaviour).
+   */
+  intraState?: boolean;
 }
 
 export interface LineItemResult {
@@ -14,6 +20,21 @@ export interface LineItemResult {
   afterDiscount: string;  // subtotal - discountAmount
   taxAmount: string;      // tax on afterDiscount
   total: string;          // afterDiscount + taxAmount (or original amount if tax-inclusive)
+}
+
+/**
+ * Tax on `amount` at `rate` percent. Intra-state it is CGST + SGST: each half
+ * is amount × rate/2 % rounded to the paisa, and the tax is twice that, so
+ * CGST = SGST always (tax is an even number of paise). Otherwise it is one
+ * amount at the full rate, rounded to the paisa (IGST).
+ */
+export function taxOn(amount: string | number, rate: string | number, intraState?: boolean): string {
+  if (!intraState) return money.percent(amount, rate);
+  const a = Math.round(Number(amount || 0) * 100);
+  const r = typeof rate === "string" ? parseFloat(rate) : rate;
+  if (!r || Number.isNaN(r) || a === 0) return "0.00";
+  const half = Math.round((a * r) / 200);
+  return money.add((2 * half) / 100, 0);
 }
 
 export function calcLineItem(item: LineItemInput): LineItemResult {
@@ -28,7 +49,7 @@ export function calcLineItem(item: LineItemInput): LineItemResult {
     const subtotal = money.mul(basePrice, item.quantity);
     const discountAmount = money.percent(subtotal, item.discountPercent);
     const afterDiscount = money.sub(subtotal, discountAmount);
-    const taxAmount = money.percent(afterDiscount, item.taxPercent);
+    const taxAmount = taxOn(afterDiscount, item.taxPercent, item.intraState);
     const total = money.add(afterDiscount, taxAmount);
 
     return { subtotal, discountAmount, afterDiscount, taxAmount, total };
@@ -38,7 +59,7 @@ export function calcLineItem(item: LineItemInput): LineItemResult {
   const subtotal = money.mul(item.unitPrice, item.quantity);
   const discountAmount = money.percent(subtotal, item.discountPercent);
   const afterDiscount = money.sub(subtotal, discountAmount);
-  const taxAmount = money.percent(afterDiscount, item.taxPercent);
+  const taxAmount = taxOn(afterDiscount, item.taxPercent, item.intraState);
   const total = money.add(afterDiscount, taxAmount);
 
   return { subtotal, discountAmount, afterDiscount, taxAmount, total };
@@ -50,6 +71,12 @@ export interface InvoiceTotalsInput {
   roundOff?: string;
   invoiceDiscount?: string;
   invoiceDiscountType?: "amount" | "percent";
+  /**
+   * Intra-state supply (CGST + SGST): every line's tax and the charges' tax
+   * are two equal halves, each rounded at half the rate (see taxOn). A line's
+   * own intraState, when set, wins. Unset: one amount at the full rate.
+   */
+  intraState?: boolean;
 }
 
 /** A line after its share of the document-level discount. */
@@ -135,11 +162,14 @@ export function chargeTaxRateFor(lineRates: Array<string | number | null | undef
  *   taxable values (paise-exact) and each line's tax is taken on what is
  *   left. A percent discount is a percent of the pre-tax subtotal.
  * - Charges are taxed at chargeTaxRateFor(line rates).
+ * - intraState: each tax is CGST + SGST rounded separately at half the rate,
+ *   so the two heads are equal (taxOn).
  *
  * total = subtotal − document discount + charges + tax + round-off
  */
 export function calcInvoiceTotals(input: InvoiceTotalsInput): InvoiceTotals {
-  const results = input.lineItems.map((li) => calcLineItem(li));
+  const intraOf = (li: LineItemInput) => li.intraState ?? input.intraState;
+  const results = input.lineItems.map((li) => calcLineItem({ ...li, intraState: intraOf(li) }));
 
   const subtotal = money.sum(results.map((r) => r.afterDiscount));
   const lineDiscountTotal = money.sum(results.map((r) => r.discountAmount));
@@ -154,13 +184,13 @@ export function calcInvoiceTotals(input: InvoiceTotalsInput): InvoiceTotals {
   const lines: AllocatedLine[] = results.map((r, i) => {
     const share = shares[i] ?? 0;
     const taxableValue = rupees(paise(r.afterDiscount) - share);
-    const taxAmount = share === 0 ? r.taxAmount : money.percent(taxableValue, input.lineItems[i]!.taxPercent || "0");
+    const taxAmount = share === 0 ? r.taxAmount : taxOn(taxableValue, input.lineItems[i]!.taxPercent || "0", intraOf(input.lineItems[i]!));
     return { taxableValue, discountShare: rupees(share), taxAmount, total: money.add(taxableValue, taxAmount) };
   });
 
   const chargesTotal = input.charges ? money.sum(input.charges.map((c) => c.amount)) : "0.00";
   const chargeTaxRate = chargeTaxRateFor(input.lineItems.map((li) => li.taxPercent));
-  const chargeTax = money.percent(chargesTotal, chargeTaxRate);
+  const chargeTax = taxOn(chargesTotal, chargeTaxRate, input.intraState);
   const taxTotal = money.add(money.sum(lines.map((l) => l.taxAmount)), chargeTax);
   const taxableValue = money.add(money.sub(subtotal, invoiceDiscountAmount), chargesTotal);
   const roundOff = input.roundOff || "0.00";

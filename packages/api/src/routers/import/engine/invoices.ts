@@ -1,6 +1,6 @@
-import { parties, items, invoices, invoiceItems, payments, shipments } from "@fintranzact/db";
+import { businesses, parties, items, invoices, invoiceItems, payments, shipments } from "@fintranzact/db";
 import { and, eq, isNull } from "drizzle-orm";
-import { calcLineItem, money } from "@fintranzact/shared";
+import { calcLineItem, isIntraStateSupply, money } from "@fintranzact/shared";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalInvoice } from "../types.js";
 import { postNewDocumentsStock } from "../../../lib/inventory-service.js";
@@ -30,9 +30,14 @@ export async function runInvoicesImport(
   const errors: string[] = [];
 
   // Pre-fetch reference data
-  const allParties = await db.select({ id: parties.id, name: parties.name })
-    .from(parties).where(eq(parties.businessId, businessId));
+  const allParties = await db.select({
+    id: parties.id, name: parties.name, stateCode: parties.stateCode, state: parties.state, gstin: parties.gstin,
+  }).from(parties).where(eq(parties.businessId, businessId));
   const partyByName = new Map(allParties.map(p => [p.name.toLowerCase(), p.id]));
+  // Intra-state lines are taxed as CGST + SGST, each rounded at half the rate.
+  const [biz] = await db.select({ stateCode: businesses.stateCode, state: businesses.state, gstin: businesses.gstin })
+    .from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  const intraStateParty = new Map(allParties.map(p => [p.id, isIntraStateSupply(biz ?? {}, p)]));
 
   // Active items only — soft-deleted items should not be matched during
   // import. If an imported invoice references a name that matches a
@@ -115,6 +120,7 @@ export async function runInvoicesImport(
           unitPrice: li.unitPrice || "0",
           taxPercent: li.taxPercent || "0",
           discountPercent: li.discountPercent || "0",
+          intraState: intraStateParty.get(partyId) ?? true,
         });
 
         const cf = li.conversionFactor || "1";

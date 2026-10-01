@@ -6,6 +6,10 @@ import type { CartItem } from "./types";
  * gets its GST added on top; a tax-inclusive one is split back into taxable
  * value and GST.
  *
+ * Store orders are billed to the Walk-in Customer (no state), so they are
+ * intra-state: CGST and SGST are each taken at half the rate and rounded to
+ * the paisa on their own, and the line's GST is the two together.
+ *
  * The cart and checkout used to show the bare price sum as the total, so a
  * customer saw ₹800 on "Place Order" for an item at ₹800 + 5% GST and was
  * then charged ₹840.
@@ -20,7 +24,7 @@ export function cartTotals(cart: CartItem[]): { subtotal: number; tax: number; t
     const unitBase = entry.item.taxInclusive ? round2(price / (1 + rate / 100)) : price;
     const lineSubtotal = round2(unitBase * entry.quantity);
     subtotal += lineSubtotal;
-    tax += round2((lineSubtotal * rate) / 100);
+    tax += 2 * round2((lineSubtotal * rate) / 200);
   }
   subtotal = round2(subtotal);
   tax = round2(tax);

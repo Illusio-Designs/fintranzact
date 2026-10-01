@@ -8,7 +8,7 @@ import { Combobox } from "@/components/ui/Combobox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
-import { calcLineItem, calcInvoiceTotals, money, freeQuantityDocumentTypes, rejectionReasons } from "@fintranzact/shared";
+import { calcLineItem, calcInvoiceTotals, isIntraStateSupply, money, freeQuantityDocumentTypes, rejectionReasons, type GstStateParty } from "@fintranzact/shared";
 import { QuickPartyCreate } from "@/components/QuickPartyCreate";
 import { QuickItemCreate, type QuickItemCreateResult } from "@/components/QuickItemCreate";
 import { DateInput } from "@/components/ui/DateInput";
@@ -176,12 +176,13 @@ function newLineItem(): LineItem {
 
 const positive = (v: string | null | undefined) => (parseFloat(v || "0") || 0) > 0;
 
-function calcLine(li: LineItem) {
+function calcLine(li: LineItem, intraState: boolean) {
   const result = calcLineItem({
     quantity: li.quantity || "0",
     unitPrice: li.unitPrice || "0",
     taxPercent: li.taxPercent || "0",
     discountPercent: li.discountPercent || "0",
+    intraState,
   });
   return {
     subtotal: money.toNumber(result.subtotal),
@@ -599,6 +600,23 @@ export function DocumentCreator({
   const createMutation = mutationMap[documentType];
   const activeMutation = isEditing ? updateMutation : createMutation;
 
+  // The picked party's state, kept while a party search hides it from the
+  // list. With the business's state it decides intra-state (CGST + SGST,
+  // each rounded at half the rate) the way the server does when it saves.
+  const [partyGst, setPartyGst] = useState<(GstStateParty & { id: string }) | null>(null);
+  useEffect(() => {
+    const p = partiesData?.data.find((x) => x.id === partyId)
+      ?? (editData?.party?.id === partyId ? editData.party : undefined);
+    if (!p) return;
+    // Keep the same object while nothing changed, so a refetch (or a list
+    // rebuilt on every render) does not re-render the form.
+    setPartyGst((prev) =>
+      prev && prev.id === p.id && prev.stateCode === p.stateCode && prev.state === p.state && prev.gstin === p.gstin
+        ? prev
+        : { id: p.id, stateCode: p.stateCode, state: p.state, gstin: p.gstin });
+  }, [partyId, partiesData, editData]);
+  const intraState = isIntraStateSupply(activeBusiness ?? {}, partyGst?.id === partyId ? partyGst : {});
+
   // Computed totals using fixed-point arithmetic
   const totals = useMemo(() => {
     const activeCharges = charges.filter((c) => c.amount && parseFloat(c.amount) > 0);
@@ -613,6 +631,7 @@ export function DocumentCreator({
       invoiceDiscount: invoiceDiscount || "0",
       invoiceDiscountType,
       roundOff: roundOff || "0",
+      intraState,
     });
     return {
       subtotal: money.toNumber(result.subtotal),
@@ -622,7 +641,7 @@ export function DocumentCreator({
       chargesTotal: money.toNumber(result.chargesTotal),
       total: money.toNumber(result.total),
     };
-  }, [items, charges, invoiceDiscount, invoiceDiscountType, roundOff]);
+  }, [items, charges, invoiceDiscount, invoiceDiscountType, roundOff, intraState]);
 
   // Auto-fill round-off so the grand total floors to a whole rupee, when the
   // business has "round down to integer" enabled. Stops as soon as the user
@@ -1127,7 +1146,7 @@ export function DocumentCreator({
           <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">Line Items</p>
 
           {items.map((li) => {
-            const calc = calcLine(li);
+            const calc = calcLine(li, intraState);
             return (
               <div key={li.id} data-testid="document-line" className="rounded-xl border border-border-light bg-surface-1/50 px-4 py-3 space-y-2">
                 {/* Row 1: Product (searchable combobox) + unit selector + delete */}

@@ -1,4 +1,5 @@
 import { POSStore, usePOSSelector, computeCartTotals } from "./state";
+import { useIntraState } from "./useIntraState";
 import { Icon } from "@/components/ui/Icon";
 import { Delete02Icon } from "@hugeicons/core-free-icons";
 
@@ -21,9 +22,10 @@ function fmt(n: number): string {
  */
 export function Cart({ store }: Props) {
   const activeCart = usePOSSelector(store, (s) => s.carts.find((c) => c.id === s.activeCartId));
+  const intraState = useIntraState(activeCart?.partyId ?? "");
   if (!activeCart) return null;
 
-  const totals = computeCartTotals(activeCart.lineItems);
+  const totals = computeCartTotals(activeCart.lineItems, intraState);
 
   return (
     <div className="flex flex-col h-full bg-surface-1 border-l border-border">

@@ -49,6 +49,17 @@ export function lineTaxable(li: string): string {
   return `(${lineGross(li)} - ROUND(${lineGross(li)} * ${li}.discount_percent::numeric / 100, 2))`;
 }
 
+/**
+ * Whether `tax` is the GST on `taxable` at `rate` % as calc.ts taxOn computes
+ * it: one amount at the full rate rounded to the paisa (inter-state, and
+ * every document saved before intra-state tax was halved), or — intra-state —
+ * CGST + SGST each at half the rate rounded on its own (2 × the half).
+ */
+export function taxMatchesSql(tax: string, taxable: string, rate: string): string {
+  return `(ABS(${tax} - ROUND(${taxable} * ${rate} / 100, 2)) <= ${MONEY_TOLERANCE}
+     OR ABS(${tax} - 2 * ROUND(${taxable} * ${rate} / 200, 2)) <= ${MONEY_TOLERANCE})`;
+}
+
 /** 2-digit GST state code of a party/business row: saved code, else GSTIN prefix (gstStateCode). */
 export function gstStateCodeSql(alias: string): string {
   return `COALESCE(NULLIF(trim(${alias}.state_code), ''), CASE WHEN LEFT(${alias}.gstin, 2) ~ '^[0-9]{2}$' THEN LEFT(${alias}.gstin, 2) END)`;

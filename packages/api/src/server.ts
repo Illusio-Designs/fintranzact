@@ -8,6 +8,7 @@ import { eq, and, gt, lt, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { escapeLike } from "./lib/escape-like.js";
 import { buildBusinessDateFilter } from "./lib/business-date.js";
+import { documentIsIntraState } from "./lib/document-totals.js";
 import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import { Worker } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
@@ -1646,8 +1647,11 @@ app.post("/store/:slug/order", async (c) => {
     });
   }
 
-  // Calculate totals using shared library
-  const totals = calcInvoiceTotals({
+  // Calculate totals using shared library. The order goes to the Walk-in
+  // Customer — no state, so the place of supply is the store's own: intra-state,
+  // CGST and SGST each rounded at half the rate (re-checked against the
+  // walk-in party below).
+  const totalsFor = (intraState: boolean) => calcInvoiceTotals({
     lineItems: lineItemInputs.map((li) => ({
       quantity: li.quantity,
       unitPrice: li.unitPrice,
@@ -1655,7 +1659,9 @@ app.post("/store/:slug/order", async (c) => {
       discountPercent: li.discountPercent,
       taxInclusive: li.taxInclusive,
     })),
+    intraState,
   });
+  let totals = totalsFor(true);
 
   // Check minimum order amount
   if (biz.storeMinOrderAmount) {
@@ -1716,6 +1722,9 @@ app.post("/store/:slug/order", async (c) => {
         walkinPartyId = newWalkin.id;
       }
 
+      const intraState = await documentIsIntraState(tx, resolved.businessId, walkinPartyId);
+      if (!intraState) totals = totalsFor(false);
+
       // Create unfulfilled invoice (online store order awaiting fulfillment)
       const [invoice] = await tx.insert(invoices).values({
         businessId: resolved.businessId,
@@ -1757,6 +1766,7 @@ app.post("/store/:slug/order", async (c) => {
           taxPercent: li.taxPercent,
           discountPercent: li.discountPercent,
           taxInclusive: li.taxInclusive,
+          intraState,
         });
         return {
           invoiceId: invoice.id,

@@ -21,12 +21,16 @@
  * ₹1,000.40 document discount reduces the taxable value, spread over the
  * lines pro rata and paise-exact (₹709.50 / ₹290.90 — or, once the challan
  * splits the syrup by batch, ₹709.50 / ₹181.81 / ₹109.09), and each line is
- * taxed on what is left: 18% of ₹9,290.50 = ₹1,672.29; 12% of ₹3,809.10 =
- * ₹457.09 (by batch: 12% of ₹2,380.69 = ₹285.68 and of ₹1,428.41 = ₹171.41).
- * The ₹500 shipping is part of the value of supply and is taxed at the
- * highest line rate, 18% = ₹90. Taxable value ₹14,100 − ₹1,000.40 + ₹500 =
- * ₹13,599.60; tax ₹1,672.29 + ₹457.09 + ₹90 = ₹2,219.38; ₹15,818.98 before
- * round-off. Intra-state, CGST = SGST = ₹1,109.69.
+ * taxed on what is left. Intra-state, CGST and SGST are each taken at half
+ * the rate and rounded on their own, so a line's tax is twice the half:
+ * 9% of ₹9,290.50 = ₹836.15 → ₹1,672.30; 6% of ₹3,809.10 = ₹228.55 →
+ * ₹457.10 (by batch: 6% of ₹2,380.69 = ₹142.84 → ₹285.68 and of ₹1,428.41 =
+ * ₹85.70 → ₹171.40). The ₹500 shipping is part of the value of supply and is
+ * taxed at the highest line rate, 18% = ₹90. Taxable value ₹14,100 −
+ * ₹1,000.40 + ₹500 = ₹13,599.60; the quotation's tax is ₹1,672.30 + ₹457.10
+ * + ₹90 = ₹2,219.40 (₹15,819.00 before round-off); split by batch from the
+ * challan on it is ₹1,672.30 + ₹285.68 + ₹171.40 + ₹90 = ₹2,219.38
+ * (₹15,818.98), CGST = SGST = ₹1,109.69.
  *
  * Tax split: GSTR-1's B2B table shows CGST + SGST for the Maharashtra buyer
  * and IGST for the Karnataka one (the split is worked out from the business's
@@ -217,13 +221,14 @@ test.describe("J4 sales cycle", () => {
     await form.getByLabel("Shipping amount").fill("500");
     await expect(form.getByTestId("document-subtotal")).toHaveText(inr(14100));
     // Tax after the discount, plus 18% on the shipping (see the header).
-    await expect(form.getByTestId("document-tax")).toHaveText(inr(2219.38));
-    // The business rounds totals down by default (₹15,818.98 → ₹15,818.00);
-    // this quotation rounds up instead.
-    await expect(form.getByLabel("Round off")).toHaveValue("-0.98");
-    await expect(form.getByTestId("document-total")).toHaveText(inr(15818));
-    await form.getByLabel("Round off").fill("0.02");
+    await expect(form.getByTestId("document-tax")).toHaveText(inr(2219.4));
+    // The business rounds totals down by default — ₹15,819.00 is already
+    // whole; this quotation adds two paise by hand (the challan's batch split
+    // later takes its tax two paise lower, back to a whole ₹15,819).
+    await expect(form.getByLabel("Round off")).toHaveValue(/^0(\.00)?$/);
     await expect(form.getByTestId("document-total")).toHaveText(inr(15819));
+    await form.getByLabel("Round off").fill("0.02");
+    await expect(form.getByTestId("document-total")).toHaveText(inr(15819.02));
     await form.getByLabel("Notes", { exact: true }).fill("Deliver to the back gate");
     await expectNoHorizontalScroll(page, "new quotation");
     await form.getByRole("button", { name: "Create Quotation" }).click();
@@ -234,19 +239,19 @@ test.describe("J4 sales cycle", () => {
     expect(quotation).toMatchObject({
       status: "draft",
       subtotal: "14100.00",
-      tax_amount: "2219.38",
+      tax_amount: "2219.40",
       discount_amount: "1000.40",
       additional_charges: "500.00",
       charges: [{ label: "Shipping", amount: "500.00" }],
       round_off: "0.02",
-      total_amount: "15819.00",
+      total_amount: "15819.02",
       delivery_method: "porter_tempo",
       stock_mode: "none",
     });
     // Each line carries its share of the discount: tax on what is left.
     expect(await documentLines(quotation.id)).toMatchObject([
-      { item_id: m.bracket.id, quantity: "10.000", free_quantity: "0.000", unit_price: "1000.00", tax_amount: "1672.29", total_amount: "10962.79" },
-      { item_id: m.syrup.id, quantity: "8.000", free_quantity: "2.000", unit_price: "512.50", tax_amount: "457.09", total_amount: "4266.19", batch_number: null },
+      { item_id: m.bracket.id, quantity: "10.000", free_quantity: "0.000", unit_price: "1000.00", tax_amount: "1672.30", total_amount: "10962.80" },
+      { item_id: m.syrup.id, quantity: "8.000", free_quantity: "2.000", unit_price: "512.50", tax_amount: "457.10", total_amount: "4266.20", batch_number: null },
     ]);
     // A quotation moves no stock and owes nothing.
     expect((await itemStock(m.bracket.id)).total).toBe(100);
@@ -254,7 +259,7 @@ test.describe("J4 sales cycle", () => {
 
     let row = listRow(page, quotation.invoice_number);
     await expect(row).toContainText(customer);
-    await expect(row).toContainText(inr(15819));
+    await expect(row).toContainText(inr(15819.02));
     await row.click();
     let detail = panel(page, quotation.invoice_number);
     await expect(detail.getByText("+ 2 free")).toBeVisible();
@@ -264,7 +269,7 @@ test.describe("J4 sales cycle", () => {
     await expect.poll(async () => (await documentById(quotation.id))!.status).toBe("sent");
     // The panel adds up: round-off shows with the rest.
     await expect(detail.getByText("Round Off")).toBeVisible();
-    await expect(detail.getByText(inr(15819))).toBeVisible();
+    await expect(detail.getByText(inr(15819.02))).toBeVisible();
 
     // ── Quotation → sales order ─────────────────────────────────
     await detail.getByRole("button", { name: "Convert to Sales Order" }).click();
@@ -277,7 +282,7 @@ test.describe("J4 sales cycle", () => {
       discount_amount: "1000.40",
       charges: [{ label: "Shipping", amount: "500.00" }],
       round_off: "0.02",
-      total_amount: "15819.00",
+      total_amount: "15819.02",
       delivery_method: "porter_tempo",
       stock_mode: "none",
     });
@@ -302,15 +307,15 @@ test.describe("J4 sales cycle", () => {
     await expect(convertDialog).toBeHidden();
 
     const [challan] = await documentsOf(m.localCustomer.id, "delivery_challan");
-    // Split by batch, the discount is re-spread over three lines; the tax
-    // still adds up to ₹2,219.38.
+    // Split by batch, the discount is re-spread over three lines and each is
+    // taxed in halves on its own: ₹2,219.38, two paise under the order's.
     expect(challan).toMatchObject({ reference_document_id: order.id, tax_amount: "2219.38", round_off: "0.02", total_amount: "15819.00", stock_mode: "tracked", delivery_method: "porter_tempo" });
     // First expiry first out: all 5 of batch SOON, then 5 of LATE (billed
     // goods first, the free ones after).
     expect(await documentLines(challan.id)).toMatchObject([
-      { item_id: m.bracket.id, quantity: "10.000", free_quantity: "0.000", batch_number: null, tax_amount: "1672.29", total_amount: "10962.79" },
+      { item_id: m.bracket.id, quantity: "10.000", free_quantity: "0.000", batch_number: null, tax_amount: "1672.30", total_amount: "10962.80" },
       { item_id: m.syrup.id, quantity: "5.000", free_quantity: "0.000", batch_number: "SOON", tax_amount: "285.68", total_amount: "2666.37" },
-      { item_id: m.syrup.id, quantity: "3.000", free_quantity: "2.000", batch_number: "LATE", tax_amount: "171.41", total_amount: "1599.82" },
+      { item_id: m.syrup.id, quantity: "3.000", free_quantity: "2.000", batch_number: "LATE", tax_amount: "171.40", total_amount: "1599.81" },
     ]);
     expect(await documentStockMoves(challan.id)).toEqual(
       expect.arrayContaining([
@@ -480,7 +485,7 @@ test.describe("J4 sales cycle", () => {
     await expect(guest.getByText("Paid", { exact: true }).first()).toBeVisible();
     // (a table on a wide screen, a list on a phone)
     await expect(guest.getByText(/3 btl.*\+ 2 free/).filter({ visible: true })).toHaveCount(1);
-    await expect(guest.getByText(inr(1599.82)).filter({ visible: true })).toHaveCount(1);
+    await expect(guest.getByText(inr(1599.81)).filter({ visible: true })).toHaveCount(1);
     for (const [term, value] of [
       ["Subtotal", inr(14100)],
       ["Discount", `-${inr(1000.4)}`],

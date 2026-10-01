@@ -52,7 +52,8 @@ afterAll(async () => {
 });
 
 describe("totals parity: invoice.create = invoice.update = document factory create", () => {
-  const expected = calcInvoiceTotals({ lineItems: LINES, charges: EXTRAS.charges, invoiceDiscount: "5", invoiceDiscountType: "percent", roundOff: "-0.37" });
+  // party1 is in the business's state (Maharashtra): intra-state.
+  const expected = calcInvoiceTotals({ lineItems: LINES, charges: EXTRAS.charges, invoiceDiscount: "5", invoiceDiscountType: "percent", roundOff: "-0.37", intraState: true });
   const expectedRow = {
     subtotal: Number(expected.subtotal),
     taxAmount: Number(expected.taxTotal),
@@ -302,7 +303,7 @@ describe("value of supply: document discount and charges (CGST Act s.15)", () =>
     expect(e.lines.filter((l) => l.accountCode === "2100" || l.accountCode === "2101").map((l) => l.credit)).toEqual(["101.25", "101.25"]);
   });
 
-  it("a walk-in buyer (no state, no GSTIN) is intra-state; odd paisa: CGST = rounded half, SGST = the rest", async () => {
+  it("a walk-in buyer (no state, no GSTIN) is intra-state; CGST and SGST are each 9% rounded on its own", async () => {
     const walkIn = await createParty(getTenantTestDb(), world.business1.id, {
       name: "Counter sale", gstin: null, stateCode: null, state: null,
     });
@@ -310,8 +311,80 @@ describe("value of supply: document discount and charges (CGST Act s.15)", () =>
       partyId: walkIn.id, type: "sale", invoiceDate: new Date("2025-12-10T06:30:00.000Z").toISOString(),
       lineItems: [{ itemName: "Odd", quantity: "1", unitPrice: "0.25", taxPercent: "18", discountPercent: "0" }],
     } as never);
-    expect(inv.taxAmount).toBe("0.05");
+    // 9% of ₹0.25 = 0.0225 → 0.02 each (18% in one go would be 0.045 → 0.05,
+    // split 0.03 / 0.02).
+    expect(inv.taxAmount).toBe("0.04");
     const r = await generateGSTR1(world.business1.id, 2025, 12, getTenantTestDb() as never);
-    expect(r.b2cSmall).toEqual([expect.objectContaining({ supplyType: "INTRA", pos: "27", cgst: 0.03, sgst: 0.02, igst: 0 })]);
+    expect(r.b2cSmall).toEqual([expect.objectContaining({ supplyType: "INTRA", pos: "27", cgst: 0.02, sgst: 0.02, igst: 0 })]);
+  });
+});
+
+describe("intra-state: CGST and SGST each rounded at half the rate, so they are equal", () => {
+  // Business1 is in Maharashtra (27); party1 is registered in Maharashtra.
+  // 5% of ₹135 is ₹6.75 — an odd paisa that used to split 3.38 / 3.37.
+  // Each half is 2.5% of 135 = 3.375 → 3.38, so the tax is ₹6.76.
+  const ODD = [{ itemName: "Odd", quantity: "1", unitPrice: "135", taxPercent: "5", discountPercent: "0" }];
+
+  it("invoice.create saves an even-paisa tax and GSTR-1 B2B shows CGST = SGST", async () => {
+    const date = new Date("2025-12-10T06:30:00.000Z");
+    const inv = await caller().invoice.create({
+      partyId: world.party1.id, type: "sale", invoiceDate: date.toISOString(), lineItems: ODD,
+    } as never);
+    expect(inv.taxAmount).toBe("6.76");
+    expect(inv.totalAmount).toBe("141.76");
+    const [line] = await getTenantTestDb()
+      .select({ taxAmount: invoiceItems.taxAmount }).from(invoiceItems).where(eq(invoiceItems.invoiceId, inv.id));
+    expect(line!.taxAmount).toBe("6.76");
+
+    const r = await generateGSTR1(world.business1.id, 2025, 12, getTenantTestDb() as never);
+    const row = r.b2b.find((b) => b.invoiceNumber === inv.invoiceNumber)!;
+    expect(row).toMatchObject({ cgst: 3.38, sgst: 3.38, igst: 0 });
+    expect(row.rateItems).toEqual([{ rate: 5, taxableValue: 135, cgst: 3.38, sgst: 3.38, igst: 0 }]);
+  });
+
+  it("B2CS (unregistered, no state): lines and charges are taxed in equal halves", async () => {
+    const walkIn = await createParty(getTenantTestDb(), world.business1.id, {
+      name: "Counter walk-in", gstin: null, stateCode: null, state: null,
+    });
+    const date = new Date("2026-01-10T06:30:00.000Z");
+    const inv = await caller().invoice.create({
+      partyId: walkIn.id, type: "sale", invoiceDate: date.toISOString(),
+      charges: [{ label: "Packing", amount: "45" }],
+      lineItems: [...ODD, { itemName: "Odd 2", quantity: "1", unitPrice: "45", taxPercent: "5", discountPercent: "0" }],
+    } as never);
+    // 135 → 2 × 3.38; 45 → 2 × 1.13; packing 45 → 2 × 1.13. Old: 6.75 + 2.25 + 2.25 = 11.25.
+    expect(inv.taxAmount).toBe("11.28");
+    const r = await generateGSTR1(world.business1.id, 2026, 1, getTenantTestDb() as never);
+    expect(r.b2cSmall).toEqual([expect.objectContaining({ supplyType: "INTRA", pos: "27", taxableValue: 225, cgst: 5.64, sgst: 5.64, igst: 0 })]);
+    const b3 = await generateGSTR3B(world.business1.id, 2026, 1, getTenantTestDb() as never);
+    expect(b3.outwardSupplies.taxable.cgst).toBe(b3.outwardSupplies.taxable.sgst);
+  });
+
+  it("invoice.update re-taxes the lines in halves, and a move to another state re-taxes as IGST", async () => {
+    const karnataka = await createParty(getTenantTestDb(), world.business1.id, {
+      name: "KA Buyer (re-tax)", gstin: "29AABCK2222R1ZP", stateCode: "29", state: "Karnataka",
+    });
+    const inv = await caller().invoice.create({
+      partyId: world.party1.id, type: "sale",
+      lineItems: [{ itemName: "X", quantity: "1", unitPrice: "1", taxPercent: "0", discountPercent: "0" }],
+    } as never);
+    const updated = await caller().invoice.update({ id: inv.id, lineItems: ODD } as never);
+    expect(updated.taxAmount).toBe("6.76");
+    const moved = await caller().invoice.update({ id: inv.id, partyId: karnataka.id });
+    expect(moved.taxAmount).toBe("6.75");
+    expect(moved.totalAmount).toBe("141.75");
+  });
+
+  it("an inter-state invoice keeps one IGST amount at the full rate", async () => {
+    const karnataka = await createParty(getTenantTestDb(), world.business1.id, {
+      name: "KA Buyer (IGST)", gstin: "29AABCK3333R1ZP", stateCode: "29", state: "Karnataka",
+    });
+    const inv = await caller().invoice.create({ partyId: karnataka.id, type: "sale", lineItems: ODD } as never);
+    expect(inv.taxAmount).toBe("6.75");
+  });
+
+  it("the document factory (quotation) taxes intra-state lines in halves too", async () => {
+    const q = await caller().quotation.create({ partyId: world.party1.id, type: "sale", lineItems: ODD } as never);
+    expect(q.taxAmount).toBe("6.76");
   });
 });

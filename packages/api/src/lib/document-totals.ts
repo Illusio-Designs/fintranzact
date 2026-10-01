@@ -1,6 +1,37 @@
-import { asc, eq } from "drizzle-orm";
-import { invoiceItems, type TenantDatabase } from "@fintranzact/db";
-import type { AllocatedLine } from "@fintranzact/shared";
+import { and, asc, eq } from "drizzle-orm";
+import { businesses, invoiceItems, parties, type TenantDatabase } from "@fintranzact/db";
+import { isIntraStateSupply, type AllocatedLine, type GstStateParty } from "@fintranzact/shared";
+
+/**
+ * Whether a document between the business and `party` (a party id, or its
+ * state fields already in hand) is an intra-state supply — CGST + SGST, so
+ * its totals take calcInvoiceTotals' intraState (each half rounded on its
+ * own). Same place-of-supply rule as the GST returns, ledger and PDFs
+ * (isIntraStateSupply: an unknown buyer state is intra-state).
+ */
+export async function documentIsIntraState(
+  tx: Pick<TenantDatabase, "select">,
+  businessId: string,
+  party: string | GstStateParty | null | undefined,
+): Promise<boolean> {
+  const [biz] = await tx
+    .select({ stateCode: businesses.stateCode, state: businesses.state, gstin: businesses.gstin })
+    .from(businesses)
+    .where(eq(businesses.id, businessId))
+    .limit(1);
+  let buyer: GstStateParty = {};
+  if (typeof party === "string") {
+    const [row] = await tx
+      .select({ stateCode: parties.stateCode, state: parties.state, gstin: parties.gstin })
+      .from(parties)
+      .where(and(eq(parties.id, party), eq(parties.businessId, businessId)))
+      .limit(1);
+    buyer = row ?? {};
+  } else if (party) {
+    buyer = party;
+  }
+  return isIntraStateSupply(biz ?? {}, buyer);
+}
 
 /**
  * Line rows carry their share of the document discount: taxAmount is the tax
