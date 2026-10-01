@@ -453,3 +453,12 @@ input, select, textarea {
   background-image: radial-gradient(rgba(255, 255, 255, 0.075) 1px, transparent 1px);
   background-size: 22px 22px;
 }
+
+/* goey-toast action buttons: readable white text on a solid fill in both
+   themes (goey's own dark theme uses dark red on red). */
+.gooey-actionButton.gooey-actionButton { font-weight: 600; color: #fff !important; }
+.gooey-actionButton.gooey-actionError { background: var(--danger) !important; }
+.gooey-actionButton.gooey-actionSuccess { background: var(--success) !important; }
+.gooey-actionButton.gooey-actionWarning { background: var(--warning) !important; }
+.gooey-actionButton.gooey-actionInfo, .gooey-actionButton.gooey-actionDefault { background: var(--brand-600) !important; }
+.gooey-actionButton.gooey-actionButton:hover { filter: brightness(1.08); }

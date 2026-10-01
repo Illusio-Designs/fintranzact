@@ -53,10 +53,10 @@ test.describe("Payments — Interaction", () => {
     await payments.goto();
   });
 
-  test("date preset buttons switch the date range", async () => {
-    await payments.clickTypeTab("Last Month");
+  test("date menu switches the date range", async () => {
+    await payments.chooseDate("Last Month");
 
-    await payments.clickTypeTab("This Month");
+    await payments.chooseDate("This Month");
   });
 
   test("search input filters payments", async () => {

@@ -15,19 +15,39 @@ function useResolvedTheme(): "light" | "dark" {
   return theme;
 }
 
+function usePrefersReducedMotion(): boolean {
+  const query = "(prefers-reduced-motion: reduce)";
+  const supported = typeof window !== "undefined" && typeof window.matchMedia === "function";
+  const [reduce, setReduce] = useState(() => supported && window.matchMedia(query).matches);
+  useEffect(() => {
+    if (!supported) return;
+    const mq = window.matchMedia(query);
+    const on = () => setReduce(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [supported]);
+  return reduce;
+}
+
 /**
  * App-wide toast host. Mount once (main.tsx); trigger toasts with
  * `toast()` from "@/hooks/useToast".
  */
 export function ToastContainer(): React.JSX.Element {
   const theme = useResolvedTheme();
+  const reduceMotion = usePrefersReducedMotion();
   return (
     <GooeyToaster
       position="top-right"
+      // Sit below the 64px top bar so toasts never cover the bell or
+      // "New invoice" button.
+      offset={76}
       theme={theme}
       duration={4000}
+      visibleToasts={3}
       closeButton="top-right"
-      preset="smooth"
+      preset={reduceMotion ? "subtle" : "smooth"}
+      spring={!reduceMotion}
       showTimestamp={false}
     />
   );

@@ -3,7 +3,7 @@
  *
  * Verifies the owner/admin experience on the "/" route:
  *   - Greeting heading ("Good morning/afternoon/evening, <name>")
- *   - DateRangeBar preset buttons (This Month, Last Month, etc.)
+ *   - DateRangeBar date menu (This Month, Last Month, etc.)
  *   - "+ New Invoice" link in the actions area
  *   - Profit indicator cards (Gross Profit, Net Profit)
  *   - Chart sections render without crashing
@@ -26,15 +26,16 @@ test.describe("Dashboard Flow", () => {
     await expect(page.locator("h1").first()).toContainText(DASHBOARD_HEADING);
   });
 
-  test("dashboard shows DateRangeBar with preset buttons", async ({ page }) => {
-    // DateRangeBar renders buttons for each DATE_PRESET: "This Month",
-    // "Last Month", "Last 30 Days", "This FY", "Last FY", "Custom", "All"
-    await expect(
-      page.getByRole("button", { name: "This Month" }).first()
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Last Month" }).first()
-    ).toBeVisible();
+  test("dashboard shows the date menu with every preset", async ({ page }) => {
+    // One button shows the period; it opens "This Month", "Last Month",
+    // "Last 30 Days", "This FY", "Last FY", "Custom", "All".
+    const dateBtn = page.getByRole("button", { name: /^Date range:/ }).first();
+    await expect(dateBtn).toBeVisible();
+    await dateBtn.click();
+    for (const label of ["This Month", "Last Month", "Last 30 Days", "This FY", "Last FY", "Custom", "All"]) {
+      await expect(page.getByRole("menuitemradio", { name: label })).toBeVisible();
+    }
+    await page.keyboard.press("Escape");
   });
 
   test("dashboard shows + New Invoice link", async ({ page }) => {
@@ -66,8 +67,9 @@ test.describe("Dashboard Flow", () => {
   });
 
   test("switching date preset to Last Month refetches data", async ({ page }) => {
-    // Click "Last Month" preset and verify the button becomes active (no crash)
-    await page.getByRole("button", { name: "Last Month" }).first().click();
+    // Choose "Last Month" from the date menu and verify nothing breaks
+    await page.getByRole("button", { name: /^Date range:/ }).first().click();
+    await page.getByRole("menuitemradio", { name: "Last Month" }).click();
 
     // Page should still show the dashboard heading — no error state
     await expect(page.locator("h1").first()).toContainText(DASHBOARD_HEADING);
@@ -76,7 +78,8 @@ test.describe("Dashboard Flow", () => {
   });
 
   test("switching date preset to This FY refetches data", async ({ page }) => {
-    await page.getByRole("button", { name: "This FY" }).first().click();
+    await page.getByRole("button", { name: /^Date range:/ }).first().click();
+    await page.getByRole("menuitemradio", { name: "This FY" }).click();
 
     await expect(page.locator("h1").first()).toContainText(DASHBOARD_HEADING);
     await expect(page.getByText("Net Profit").first()).toBeVisible();

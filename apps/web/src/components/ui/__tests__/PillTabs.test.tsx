@@ -62,10 +62,11 @@ describe("PillTabs — pill-style tab bar used across all list pages", () => {
     );
 
     const activeTab = screen.getByRole("button", { name: "Paid" });
-    // The active tab must carry brand styling: a solid brand pill with white
-    // text in md (default) size.
-    expect(activeTab.className).toMatch(/bg-brand-600/);
-    expect(activeTab.className).toMatch(/text-white/);
+    // The active chip carries a soft brand fill and brand text, and says it is
+    // pressed for screen readers.
+    expect(activeTab.className).toMatch(/bg-brand-50/);
+    expect(activeTab.className).toMatch(/text-brand-700/);
+    expect(activeTab).toHaveAttribute("aria-pressed", "true");
   });
 
   it("does NOT apply active styling to inactive tabs, preventing visual confusion", () => {
@@ -147,13 +148,12 @@ describe("PillTabs — pill-style tab bar used across all list pages", () => {
       <PillTabs tabs={TABS_WITH_COUNTS} value="unpaid" onChange={vi.fn()} />
     );
 
-    // Active tab badge (unpaid — value 12) sits on the solid brand pill, so it
-    // uses a translucent white chip; inactive badges use the neutral surface.
+    // Active count takes the brand colour; inactive counts stay muted.
     const badges = screen.getAllByText(/^\d+$/);
     const unpaidBadge = badges.find((el) => el.textContent === "12")!;
-    expect(unpaidBadge.className).toMatch(/bg-white\/25/);
+    expect(unpaidBadge.className).toMatch(/text-brand-700/);
     const inactiveBadge = badges.find((el) => el.textContent !== "12")!;
-    expect(inactiveBadge.className).toMatch(/bg-surface-3/);
+    expect(inactiveBadge.className).toMatch(/text-text-tertiary/);
   });
 
   // ─── Accessibility ──────────────────────────────────────────────────────────
