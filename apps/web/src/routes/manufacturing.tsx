@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Add01Icon, ArrowRight01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
 import { formatCurrency, formatDate, todayISODate, toISOString, cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -130,8 +131,7 @@ function ManufacturingPage() {
         onPosted={async () => {
           await Promise.all([
             utils.manufacturing.journals.invalidate(),
-            utils.stock.balances.invalidate(),
-            utils.stock.warehouses.invalidate(),
+            invalidateStockViews(utils),
           ]);
           setFormOpen(false);
         }}
@@ -367,6 +367,7 @@ function ManufactureForm({
                   <div key={l.key}>
                     <div className="grid grid-cols-[minmax(0,1fr)_110px_90px_36px] items-center gap-2">
                       <UnitCombobox
+                        ariaLabel={`Component, line ${i + 1}`}
                         value={l.unitKey}
                         known={l.info}
                         onChange={(key, info) => updateLine(setLines, l.key, { unitKey: key, info: info ?? l.info, standard: null })}
@@ -415,6 +416,7 @@ function ManufactureForm({
               {byLines.map((l, i) => (
                 <div key={l.key} className="grid grid-cols-[minmax(0,1fr)_110px_36px] items-center gap-2">
                   <UnitCombobox
+                    ariaLabel={`By-product, line ${i + 1}`}
                     value={l.unitKey}
                     known={l.info}
                     onChange={(key, info) => updateLine(setByLines, l.key, { unitKey: key, info: info ?? l.info })}
@@ -513,8 +515,7 @@ function JournalDetail({ id, onClose }: { id: string | null; onClose: () => void
       await Promise.all([
         utils.manufacturing.journals.invalidate(),
         utils.manufacturing.journal.invalidate(),
-        utils.stock.balances.invalidate(),
-        utils.stock.warehouses.invalidate(),
+        invalidateStockViews(utils),
       ]);
       toast({ title: "Journal cancelled", description: "The stock movements were reversed.", variant: "success" });
       setConfirm(false);

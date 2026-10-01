@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef, useCallback } from "react";
+import { Fragment, useState, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { badgeColor } from "@/lib/badge-colors";
@@ -204,7 +204,7 @@ function UploadHistorySection({ onSelectUpload }: { onSelectUpload: (id: string)
   }
 
   return (
-    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border-light bg-surface-1">
@@ -361,7 +361,7 @@ function ReconciliationSection({
 
       {!isLoading && !!records?.records.length && (
         <>
-          <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+          <div className="rounded-2xl border border-border-light bg-surface-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border-light bg-surface-1">
@@ -383,7 +383,7 @@ function ReconciliationSection({
                   const badge = matchBadge(r.matchStatus);
                   const expanded = expandedId === r.id;
                   return (
-                    <>
+                    <Fragment key={r.id}>
                       <tr
                         key={r.id}
                         className={cn(
@@ -458,7 +458,7 @@ function ReconciliationSection({
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -534,7 +534,7 @@ function MissingInBooksSection({ year, month }: { year: number; month: number })
         Create a purchase invoice to claim the ITC.
       </p>
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-light bg-surface-1">
@@ -617,7 +617,7 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
         supplier to ensure they file their return correctly.
       </p>
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-light bg-surface-1">
@@ -633,7 +633,12 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
               <tr key={r.id} className="border-b border-border-light last:border-0 hover:bg-surface-1 transition-colors">
                 <td className="px-4 py-3 font-mono text-xs text-text-secondary">{r.partyGstin ?? "—"}</td>
                 <td className="px-4 py-3 text-text-primary">{r.partyName ?? "—"}</td>
-                <td className="px-4 py-3 font-medium text-text-primary">{r.invoiceNumber}</td>
+                <td className="px-4 py-3 font-medium text-text-primary">
+                  {r.supplierInvoiceNumber ?? r.invoiceNumber}
+                  {r.supplierInvoiceNumber && (
+                    <span className="block text-xs font-normal text-text-tertiary">{r.invoiceNumber}</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-text-secondary text-xs">
                   {r.invoiceDate ? formatDate(r.invoiceDate) : "—"}
                 </td>
@@ -689,17 +694,19 @@ function GSTR2BPage() {
         description="Reconcile supplier-reported inward supplies against your purchase records to verify ITC"
       />
 
-      {/* Tab bar */}
-      <div className="mb-6">
+      {/* Tab bar — five tabs don't fit a phone: the bar scrolls sideways on
+          its own instead of the page. */}
+      <div className="mb-6 overflow-x-auto" data-testid="gstr2b-tabs">
         <PillTabs
           tabs={tabs}
           value={activeTab}
           onChange={(v) => setActiveTab(v as G2BTab)}
+          className="w-max"
         />
       </div>
 
       {/* Period selector */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         <Select
           className="input w-40"
           value={month}

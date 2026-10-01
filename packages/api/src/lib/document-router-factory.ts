@@ -32,6 +32,7 @@ import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
 import { assertLineExtras, lineExtras } from "./line-extras.js";
 import { resolveDeliveryMethod } from "./delivery-methods.js";
 import { recomputeReferencedInvoice } from "./invoice-status.js";
+import { syncReversingItc } from "./itc-reversal.js";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 
@@ -553,6 +554,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
           // The invoice it adjusts: adjusted, paid, partial... from what now settles it.
           await recomputeReferencedInvoice(tx, ctx.businessId, result);
+          // A return, note or debit note to a supplier takes its ITC back.
+          await syncReversingItc(tx, ctx.businessId, result.id);
 
           return result;
         });
@@ -630,6 +633,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           // A cancelled or reinstated note or return changes what settles its invoice.
           if (wasCancelled !== isCancelled) {
             await recomputeReferencedInvoice(tx, ctx.businessId, updated);
+            await syncReversingItc(tx, ctx.businessId, input.id);
           }
           return { doc: updated, fromStatus: before?.status ?? null };
         });
@@ -706,6 +710,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
           // A deleted note or return no longer settles its invoice.
           await recomputeReferencedInvoice(tx, ctx.businessId, doc);
+          await syncReversingItc(tx, ctx.businessId, input.id);
 
           return { success: true, invoiceNumber: doc.invoiceNumber, deleted: true };
         });

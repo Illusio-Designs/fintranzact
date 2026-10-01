@@ -2,6 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+// Where the dev proxy sends store API calls: the API's dev port unless
+// API_PROXY_TARGET says otherwise (e.g. an e2e run on other ports).
+const API_TARGET = process.env.API_PROXY_TARGET || "http://localhost:3000";
+
 export default defineConfig({
   plugins: [tailwindcss(), react()],
   base: "/",
@@ -16,9 +20,9 @@ export default defineConfig({
       // Proxy API calls to the backend — store runs on its own subdomain,
       // so the slug is at the root: /<slug>/catalog.json (not /store/<slug>/...)
       // But the API endpoints still use /store/ prefix on the backend
-      "^/[^/]+/catalog\\.json": { target: "http://localhost:3000", changeOrigin: true, rewrite: (path) => `/store${path}` },
-      "^/[^/]+/order$": { target: "http://localhost:3000", changeOrigin: true, rewrite: (path) => `/store${path}` },
-      "^/[^/]+/identify$": { target: "http://localhost:3000", changeOrigin: true, rewrite: (path) => `/store${path}` },
+      "^/[^/]+/catalog\\.json": { target: API_TARGET, changeOrigin: true, rewrite: (path) => `/store${path}` },
+      "^/[^/]+/order$": { target: API_TARGET, changeOrigin: true, rewrite: (path) => `/store${path}` },
+      "^/[^/]+/identify$": { target: API_TARGET, changeOrigin: true, rewrite: (path) => `/store${path}` },
     },
   },
 });

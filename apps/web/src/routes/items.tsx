@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { formatCurrency, formatDate, cn, downloadCSV, todayISODate, toISOString } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "@/hooks/useToast";
@@ -642,6 +643,9 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
     onSuccess: () => {
       utils.item.list.invalidate();
       toast.success("Item created");
+      // The panel stays mounted: the next item starts blank instead of
+      // inheriting this one's barcode, stock, batches and variants.
+      resetForm();
       onClose();
     },
     onError: (err) => {
@@ -2669,7 +2673,8 @@ function AdjustStockModal({
   const adjustMutation = trpc.item.adjustStock.useMutation({
     onSuccess: () => {
       utils.item.getById.invalidate({ id: itemId });
-      utils.item.list.invalidate();
+      void invalidateStockViews(utils);
+      utils.item.stockAdjustmentHistory.invalidate();
       utils.item.lowStockCount.invalidate();
       toast.success("Stock adjusted");
       onClose();

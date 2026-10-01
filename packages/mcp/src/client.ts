@@ -395,6 +395,10 @@ export class FintranzactClient {
       gstr9(input: { financialYear: string }) {
         return c.query<any>("gst.gstr9", input);
       },
+      /** CMP-08 for a composition dealer: `year` is the FY start year (2025 for FY 2025-26). */
+      cmp08(input: { year: number; quarter: number }) {
+        return c.query<{ taxableValue: string; taxPayable: string; quarterStart: string; quarterEnd: string }>("gst.cmp08", input);
+      },
     };
   }
 

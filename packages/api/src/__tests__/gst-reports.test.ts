@@ -1423,7 +1423,7 @@ describe("gstr1ToPortalJson — B2CS section", () => {
 });
 
 describe("gstr1ToPortalJson — B2CS supply type and place of supply", () => {
-  it("uses the row's supply type and place of supply (0% intra-state stays INTRA)", () => {
+  it("uses the row's supply type and place of supply; 0% supplies go to nil (Table 8), not b2cs", () => {
     const json = gstr1ToPortalJson(
       makePortalReport({
         b2cSmall: [
@@ -1435,9 +1435,10 @@ describe("gstr1ToPortalJson — B2CS supply type and place of supply", () => {
     );
     type B2CSEntry = { sply_ty: string; pos: string; rt: number };
     expect((json.b2cs as B2CSEntry[]).map(({ sply_ty, pos, rt }) => ({ sply_ty, pos, rt }))).toEqual([
-      { sply_ty: "INTRA", pos: "27", rt: 0 },
       { sply_ty: "INTER", pos: "29", rt: 18 },
     ]);
+    // The 0% intra-state supply is nil-rated to unregistered persons, intra-state
+    expect(json.nil).toEqual({ inv: [{ sply_ty: "INTRAB2C", nil_amt: 1000, expt_amt: 0, ngsup_amt: 0 }] });
   });
 });
 

@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { trpc, setBusinessId, queryClient } from "@/lib/trpc";
+import { canAccess } from "@/lib/permissions";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useIndiaTimeTheme } from "@/hooks/useTheme";
 import { CommandPalette } from "@/components/ui/CommandPalette";
@@ -110,64 +111,6 @@ function RootError({ error }: { error: Error }) {
       </div>
     </div>
   );
-}
-
-// ── Role-based access control ──────────────────────────────────
-
-const ROLE_ABILITIES: Record<string, Set<string>> = {
-  owner: new Set(["*"]),
-  admin: new Set(["*"]),
-  seller_manager: new Set([
-    "Invoice:read",
-    "Invoice:create",
-    "Party:read",
-    "Item:read",
-    "Payment:read",
-    "Store:read",
-    "RecurringInvoice:read",
-    "Business:read",
-  ]),
-  seller: new Set([
-    "Invoice:read",
-    "Invoice:create",
-    "Party:read",
-    "Item:read",
-    "Payment:read",
-    "Store:read",
-    "Business:read",
-    "RecurringInvoice:read",
-  ]),
-  accountant: new Set([
-    "Payment:read",
-    "Expense:read",
-    "BankAccount:read",
-    "Invoice:read",
-    "Party:read",
-    "Item:read",
-    "Store:read",
-    "RecurringInvoice:read",
-    "Report:read",
-    "GstReport:read",
-    "Business:read",
-    // Mirrors the API: accountants manage the books and read compliance docs
-    "Account:read",
-    "BankReconciliation:read",
-    "ITC:read",
-    "EInvoice:read",
-    "EWayBill:read",
-  ]),
-};
-
-function canAccess(
-  role: string | null | undefined,
-  resource: string,
-  action: string,
-): boolean {
-  if (!role) return true; // graceful degradation while loading
-  const abilities = ROLE_ABILITIES[role];
-  if (!abilities) return true; // unknown role — show all
-  if (abilities.has("*")) return true;
-  return abilities.has(`${resource}:${action}`);
 }
 
 const NAV_COLLAPSED_KEY = "fintranzact:nav-collapsed";
@@ -1264,7 +1207,8 @@ function RootLayout() {
       if (
         pathname !== "/onboarding" &&
         !pathname.startsWith("/auth/plan-selection") &&
-        !pathname.startsWith("/business/create")
+        !pathname.startsWith("/business/create") &&
+        !pathname.startsWith("/invite")
       ) {
         navigate({ to: "/onboarding" });
       }
@@ -1417,20 +1361,27 @@ function RootLayout() {
     );
   }
 
-  // Tenant selected but businesses still loading — show spinner, don't render
-  // the main layout yet (prevents flash of /settings "Set up your business")
-  if (session.tenantId && businessesLoading) return loadingSpinner;
-
   // Tenant-level routes are independent of business context.
   // They must render without waiting for the business list and
-  // must not use the business dashboard shell.
+  // must not use the business dashboard shell. Checked before the
+  // business-list spinner: swapping the page for a spinner (and then the
+  // shell) while the list loads remounted it and wiped what the user had
+  // already typed, e.g. their name on the complete-profile page.
   if (
+    pathname.startsWith("/auth/complete-profile") ||
+    // The invite page shows "You've joined …" and lets the member choose how
+    // to continue; the company picker must not replace it once they join.
+    pathname.startsWith("/invite") ||
     pathname.startsWith("/auth/plan-selection") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/business/create")
   ) {
     return <Outlet />;
   }
+
+  // Tenant selected but businesses still loading — show spinner, don't render
+  // the main layout yet (prevents flash of /settings "Set up your business")
+  if (session.tenantId && businessesLoading) return loadingSpinner;
 
   // Business-level routes require business context.
   if (session.tenantId && businessesLoading) {
@@ -1550,6 +1501,7 @@ function RootLayout() {
         {/* Sidebar — hidden during onboarding (no business context yet) */}
         {!isOnboarding && (
           <aside
+            data-testid="app-sidebar"
             className={cn(
               // Navy brand sidebar in both themes (light text on #0f1b3d).
               "w-60 shrink-0 border-r border-white/5 flex flex-col overflow-hidden bg-[#0f1b3d] text-[#c3cee6] dark:border-white/10",
@@ -1617,10 +1569,18 @@ function RootLayout() {
                         ? `GSTIN ${activeBusiness.gstin}`
                         : activeBusiness?.city || "Not GST registered"
                     }
-                    onSwitch={handleBusinessSwitch}
+                    // On a phone the switcher sits in the nav drawer: close it,
+                    // as following a nav link does, to show the new business
+                    onSwitch={(id) => {
+                      setSidebarOpen(false);
+                      handleBusinessSwitch(id);
+                    }}
                     onCreateNew={
                       canCreateBiz && canAccess(session?.role, "Business", "manage")
-                        ? () => navigate({ to: "/business/create" })
+                        ? () => {
+                            setSidebarOpen(false);
+                            navigate({ to: "/business/create" });
+                          }
                         : undefined
                     }
                   />
@@ -1643,6 +1603,7 @@ function RootLayout() {
 
             {/* Nav sections */}
             <nav
+              data-testid="app-sidebar-nav"
               className="flex-1 overflow-y-auto pb-2"
               onClick={() => setSidebarOpen(false)}
             >
@@ -1980,7 +1941,7 @@ function RootLayout() {
           </div>
 
           {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto">
+          <div data-testid="app-content" className="flex-1 overflow-y-auto">
             <div className="max-w-[1400px] mx-auto px-6 py-6">
               <Outlet />
             </div>

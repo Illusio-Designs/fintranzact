@@ -30,6 +30,9 @@ describe("contact.submit", () => {
 
   beforeEach(() => {
     resetEnquiryRateLimit();
+    // Test files share one process; another file may have left the e2e
+    // switch on, which turns this limiter off.
+    delete process.env.DISABLE_RATE_LIMIT;
     delete process.env.TURNSTILE_SECRET_KEY;
     delete process.env.CONTACT_INBOX;
     send = vi.spyOn(emailService, "sendEnquiry").mockResolvedValue(undefined);
@@ -98,6 +101,20 @@ describe("contact.submit", () => {
     await expect(caller.contact.submit(CONTACT)).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
     // A different IP is unaffected.
     await expect(anonymousCaller("198.51.100.21").contact.submit(CONTACT)).resolves.toEqual({ success: true });
+  });
+
+  // The e2e harness's DISABLE_RATE_LIMIT=1 (ignored in production) covers
+  // this limiter too: repeated e2e runs of the contact form (J15) were refused.
+  it("is not limited under DISABLE_RATE_LIMIT outside production", async () => {
+    process.env.DISABLE_RATE_LIMIT = "1";
+    try {
+      const caller = anonymousCaller("198.51.100.30");
+      for (let i = 0; i <= ENQUIRY_LIMIT; i++) {
+        await expect(caller.contact.submit(CONTACT)).resolves.toEqual({ success: true });
+      }
+    } finally {
+      delete process.env.DISABLE_RATE_LIMIT;
+    }
   });
 
   it("requires a Turnstile token when a secret is configured", async () => {

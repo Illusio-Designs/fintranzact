@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { gstR1Command, gstR3bCommand, gstR1CsvCommand, gstR9Command, gstr2bUploadsCommand } from "../../commands/gst/index.js";
+import { gstR1Command, gstR3bCommand, gstR1CsvCommand, gstR9Command, gstCmp08Command, gstr2bUploadsCommand } from "../../commands/gst/index.js";
 
 export function registerGstCommands(program: Command): void {
   // ── gst ───────────────────────────────────────────────────────────────────
@@ -45,6 +45,14 @@ export function registerGstCommands(program: Command): void {
     .option("--json", "JSON output")
     .action(async (fy: string, opts) => {
       await gstR9Command(fy, { json: opts.json });
+    });
+
+  gst
+    .command("cmp08 <fy> <quarter>")
+    .description("CMP-08 quarterly return for composition dealers (e.g. 2025-26 1)")
+    .option("--json", "JSON output")
+    .action(async (fy: string, quarter: string, opts) => {
+      await gstCmp08Command(fy, quarter, { json: opts.json });
     });
 
   gst

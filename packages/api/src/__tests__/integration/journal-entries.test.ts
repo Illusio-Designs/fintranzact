@@ -58,6 +58,25 @@ function callerForRamesh() {
   });
 }
 
+// Regression (J8 journey): the list's amount and line count read ₹0 and 0 —
+// their subqueries compared the line's own id instead of the entry's.
+describe("Journal Entry list", () => {
+  it("shows each entry's amount (its debits) and line count", async () => {
+    const caller = callerForRamesh();
+    const entry = await caller.journal.create({
+      entryDate: new Date().toISOString(),
+      narration: "List totals",
+      lines: [
+        { accountId: depreciationAccountId, debit: "12000.00", credit: "0" },
+        { accountId: fixedAssetsAccountId, debit: "0", credit: "7000.00" },
+        { accountId: cashAccountId, debit: "0", credit: "5000.00" },
+      ],
+    });
+    const list = await caller.journal.list({});
+    expect(list.find((e) => e.id === entry.id)).toMatchObject({ totalAmount: "12000.00", lineCount: 3 });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // 1. Journal Entry Update
 // ---------------------------------------------------------------------------

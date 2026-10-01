@@ -8,6 +8,7 @@ import { Cart } from "./components/Cart";
 import { Checkout } from "./components/Checkout";
 import { PhoneVerify } from "./components/PhoneVerify";
 import { OrderConfirmation } from "./components/OrderConfirmation";
+import { cartTotals } from "./pricing";
 import { Footer } from "./components/Footer";
 
 // Cart persistence key
@@ -448,12 +449,7 @@ export function App() {
                 {catalog.business.currency === "INR"
                   ? "\u20B9"
                   : catalog.business.currency}
-                {cart
-                  .reduce(
-                    (s, c) => s + parseFloat(c.effectivePrice) * c.quantity,
-                    0
-                  )
-                  .toFixed(0)}
+                {cartTotals(cart).total.toFixed(0)}
               </span>
               <svg
                 xmlns="http://www.w3.org/2000/svg"

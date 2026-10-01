@@ -137,8 +137,9 @@ function ProfileCard() {
   return (
     <div className="card px-6 py-5">
       <h3 className="text-sm font-semibold text-text-primary mb-4">Your Profile</h3>
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <div>
+      {/* One column on a phone, so a long email wraps instead of pushing the page sideways. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+        <div className="min-w-0">
           <span className="text-xs text-text-tertiary">Name</span>
           {editingName ? (
             <div className="flex items-center gap-2 mt-1">
@@ -174,9 +175,9 @@ function ProfileCard() {
             </div>
           )}
         </div>
-        <div>
+        <div className="min-w-0">
           <span className="text-xs text-text-tertiary">Email</span>
-          <p className="text-text-primary">{session?.user?.email || "—"}</p>
+          <p className="text-text-primary break-words">{session?.user?.email || "—"}</p>
           {!changingEmail && !emailSent && (
             <button
               className="text-xs text-brand-600 hover:text-brand-700 mt-1"

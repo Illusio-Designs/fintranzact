@@ -1,13 +1,102 @@
 import { eq, and, sql, desc, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { invoices, invoiceItems, items, payments, expenses, parties, businesses } from "@fintranzact/db";
+import { invoices, invoiceItems, items, payments, expenses, parties, businesses, type TenantDatabase } from "@fintranzact/db";
 import { financialYearOf, istDateParts, istPeriodRange, istStartOfDay, money } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { valueStock } from "../lib/stock-valuation.js";
-import { notOrderDocument } from "../lib/order-fulfilment.js";
+import { billDocument, reducingDocument } from "../lib/order-fulfilment.js";
+import { outstandingConditions, outstandingOnRow, outstandingTotal } from "../lib/outstanding.js";
 
+
+/**
+ * Profit and loss for a period (both ends optional): sales and purchases at
+ * their taxable value, net of credit notes and returns; cost of goods sold
+ * from opening and closing stock. The P&L report and the dashboard's profit
+ * cards both read it, so they always agree.
+ */
+async function profitAndLossFor(
+  db: TenantDatabase,
+  businessId: string,
+  range: { fromDate?: string; toDate?: string },
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const invConditions: any[] = [eq(invoices.businessId, businessId)];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const expConditions: any[] = [eq(expenses.businessId, businessId), isNull(expenses.deletedAt)];
+
+  invConditions.push(...buildBusinessDateFilter(invoices, { from: range.fromDate, to: range.toDate }));
+  expConditions.push(...buildBusinessDateFilter(expenses, { from: range.fromDate, to: range.toDate }));
+
+  // GST collected or paid is not income or cost, so both sides use the
+  // taxable value (invoice total less its tax). Sales are net of the
+  // credit notes and sales returns issued to customers (debit notes add);
+  // purchases net of what went back to suppliers — purchase returns, our
+  // debit notes and the supplier's credit notes — as in the ledger.
+  const signedTaxable = sql<string>`COALESCE(SUM(CASE WHEN ${reducingDocument()} THEN -1 ELSE 1 END
+    * (${invoices.totalAmount}::numeric - ${invoices.taxAmount}::numeric)), 0)::text`;
+  const [
+    [sales],
+    [purchases],
+    [expenseTotal],
+    expenseBreakdown,
+    stock,
+  ] = await Promise.all([
+    db.select({
+      total: signedTaxable,
+    }).from(invoices)
+      .where(and(...invConditions, eq(invoices.type, "sale"), billDocument(), sql`${invoices.status} != 'cancelled'`, isNull(invoices.deletedAt))),
+
+    db.select({
+      total: signedTaxable,
+    }).from(invoices)
+      .where(and(...invConditions, eq(invoices.type, "purchase"), billDocument(), sql`${invoices.status} != 'cancelled'`, isNull(invoices.deletedAt))),
+
+    db.select({
+      total: sql<string>`COALESCE(SUM(${expenses.amount}::numeric), 0)::text`,
+    }).from(expenses)
+      .where(and(...expConditions)),
+
+    db.select({
+      category: expenses.category,
+      total: sql<string>`SUM(${expenses.amount}::numeric)::text`,
+    }).from(expenses)
+      .where(and(...expConditions))
+      .groupBy(expenses.category)
+      .orderBy(sql`SUM(${expenses.amount}::numeric) DESC`),
+
+    // Stock on hand before the period and at its end.
+    Promise.all([
+      range.fromDate
+        ? valueStock(db, businessId, new Date(new Date(range.fromDate).getTime() - 1))
+        : null,
+      valueStock(db, businessId, range.toDate ? new Date(range.toDate) : new Date()),
+    ]),
+  ]);
+
+  const openingStock = stock[0]?.total ?? "0.00";
+  const closingStock = stock[1].total;
+  const revenue = sales.total;
+  // Cost of goods sold = opening stock + purchases - closing stock.
+  const cogs = money.sub(money.add(openingStock, purchases.total), closingStock);
+  const grossProfit = money.sub(revenue, cogs);
+  const totalExpenses = expenseTotal.total;
+  const netProfit = money.sub(grossProfit, totalExpenses);
+
+  return {
+    revenue,
+    purchases: purchases.total,
+    openingStock,
+    closingStock,
+    valuationMethod: stock[1].method,
+    cogs,
+    grossProfit,
+    expenseBreakdown,
+    totalExpenses,
+    netProfit,
+  };
+}
 
 export const dashboardRouter = router({
   summary: viewerProcedure
@@ -87,31 +176,11 @@ export const dashboardRouter = router({
           dateCondition(expenses),
         )),
 
-      // Receivable = current outstanding balance (balance sheet metric, NOT period-scoped)
-      // Credit notes and sales returns reduce the receivable balance; invoices and debit notes add to it.
-      ctx.db.select({
-        total: sql<string>`coalesce(sum(CASE WHEN ${invoices.documentType} IN ('credit_note', 'sales_return') THEN -(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric) ELSE (${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric) END), 0)::text`,
-      }).from(invoices)
-        .where(and(
-          eq(invoices.businessId, ctx.businessId),
-          eq(invoices.type, "sale"),
-          notOrderDocument(),
-          isNull(invoices.deletedAt),
-          sql`${invoices.status} NOT IN ('paid', 'cancelled')`,
-        )),
-
-      // Payable = current outstanding balance (balance sheet metric, NOT period-scoped)
-      // Purchase returns reduce the payable balance; invoices and debit notes add to it.
-      ctx.db.select({
-        total: sql<string>`coalesce(sum(CASE WHEN ${invoices.documentType} IN ('purchase_return') THEN -(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric) ELSE (${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric) END), 0)::text`,
-      }).from(invoices)
-        .where(and(
-          eq(invoices.businessId, ctx.businessId),
-          eq(invoices.type, "purchase"),
-          notOrderDocument(),
-          isNull(invoices.deletedAt),
-          sql`${invoices.status} NOT IN ('paid', 'cancelled')`,
-        )),
+      // Receivable / payable = what is outstanding today (not period-scoped),
+      // worked out as the Outstanding report does: each bill less its
+      // payments and the notes against it, other notes and returns off
+      outstandingTotal(ctx.db, ctx.businessId, "sale", { includeDrafts: true }).then((total) => [{ total }]),
+      outstandingTotal(ctx.db, ctx.businessId, "purchase", { includeDrafts: true }).then((total) => [{ total }]),
 
       // Recent invoices
       ctx.db.select({
@@ -159,6 +228,11 @@ export const dashboardRouter = router({
       expenseResult.total || "0",
     );
 
+    // Profit the way the P&L report works it out (taxable value, net of
+    // notes and returns, cost of goods sold from stock) — not invoice totals
+    // with their GST — so the dashboard and the report never disagree.
+    const pnl = await profitAndLossFor(ctx.db, ctx.businessId, hasDateFilter ? { fromDate: input?.fromDate, toDate: input?.toDate } : {});
+
     return {
       totalSales: salesResult.total,
       totalPurchases: purchaseResult.total,
@@ -166,6 +240,8 @@ export const dashboardRouter = router({
       receivable: receivableResult.total,
       payable: payableResult.total,
       cashInHand,
+      grossProfit: pnl.grossProfit,
+      netProfit: pnl.netProfit,
       fyStart: fyStart.toISOString(),
       recentInvoices: recentInvoices.map((inv) => ({
         ...inv,
@@ -414,6 +490,7 @@ export const dashboardRouter = router({
         eq(invoices.type, "sale"),
         eq(invoices.documentType, sql`'invoice'`),
         sql`${invoices.status} NOT IN ('draft', 'cancelled')`,
+        isNull(invoices.deletedAt),
       ];
       conditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
 
@@ -448,6 +525,7 @@ export const dashboardRouter = router({
         eq(invoices.type, "sale"),
         eq(invoices.documentType, sql`'invoice'`),
         sql`${invoices.status} NOT IN ('draft', 'cancelled')`,
+        isNull(invoices.deletedAt),
       ];
       conditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
       if (input.itemType) conditions.push(eq(items.itemType, input.itemType));
@@ -486,7 +564,7 @@ export const dashboardRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Report");
-      const conditions = [eq(expenses.businessId, ctx.businessId)];
+      const conditions = [eq(expenses.businessId, ctx.businessId), isNull(expenses.deletedAt)];
       conditions.push(...buildBusinessDateFilter(expenses, { from: input.fromDate, to: input.toDate }));
 
       return ctx.db
@@ -508,9 +586,13 @@ export const dashboardRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Report");
+      // The business's sale invoices: purchase bills are not invoices it
+      // raised, and deleted ones are gone
       const conditions = [
         eq(invoices.businessId, ctx.businessId),
+        eq(invoices.type, "sale"),
         eq(invoices.documentType, sql`'invoice'`),
+        isNull(invoices.deletedAt),
       ];
       conditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
 
@@ -534,70 +616,15 @@ export const dashboardRouter = router({
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Report");
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const invConditions: any[] = [eq(invoices.businessId, ctx.businessId)];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const expConditions: any[] = [eq(expenses.businessId, ctx.businessId)];
-
-      invConditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
-      expConditions.push(...buildBusinessDateFilter(expenses, { from: input.fromDate, to: input.toDate }));
-
-      // GST collected or paid is not income or cost, so both sides use the
-      // taxable value (invoice total less its tax).
-      const [
-        [sales],
-        [purchases],
-        [expenseTotal],
-        expenseBreakdown,
-        stock,
-      ] = await Promise.all([
-        ctx.db.select({
-          total: sql<string>`COALESCE(SUM(${invoices.totalAmount}::numeric - ${invoices.taxAmount}::numeric), 0)::text`,
-        }).from(invoices)
-          .where(and(...invConditions, eq(invoices.type, "sale"), eq(invoices.documentType, "invoice"), sql`${invoices.status} != 'cancelled'`, isNull(invoices.deletedAt))),
-
-        ctx.db.select({
-          total: sql<string>`COALESCE(SUM(${invoices.totalAmount}::numeric - ${invoices.taxAmount}::numeric), 0)::text`,
-        }).from(invoices)
-          .where(and(...invConditions, eq(invoices.type, "purchase"), eq(invoices.documentType, "invoice"), sql`${invoices.status} != 'cancelled'`, isNull(invoices.deletedAt))),
-
-        ctx.db.select({
-          total: sql<string>`COALESCE(SUM(${expenses.amount}::numeric), 0)::text`,
-        }).from(expenses)
-          .where(and(...expConditions)),
-
-        ctx.db.select({
-          category: expenses.category,
-          total: sql<string>`SUM(${expenses.amount}::numeric)::text`,
-        }).from(expenses)
-          .where(and(...expConditions))
-          .groupBy(expenses.category)
-          .orderBy(sql`SUM(${expenses.amount}::numeric) DESC`),
-
-        // Stock on hand before the period and at its end.
-        Promise.all([
-          input.fromDate
-            ? valueStock(ctx.db, ctx.businessId, new Date(new Date(input.fromDate).getTime() - 1))
-            : null,
-          valueStock(ctx.db, ctx.businessId, input.toDate ? new Date(input.toDate) : new Date()),
-        ]),
-      ]);
-
-      const openingStock = stock[0]?.total ?? "0.00";
-      const closingStock = stock[1].total;
-      const revenue = sales.total;
-      // Cost of goods sold = opening stock + purchases - closing stock.
-      const cogs = money.sub(money.add(openingStock, purchases.total), closingStock);
-      const grossProfit = money.sub(revenue, cogs);
-      const totalExpenses = expenseTotal.total;
-      const netProfit = money.sub(grossProfit, totalExpenses);
+      const { revenue, purchases, openingStock, closingStock, valuationMethod, cogs, grossProfit, expenseBreakdown, totalExpenses, netProfit } =
+        await profitAndLossFor(ctx.db, ctx.businessId, input);
 
       return {
         revenue,
-        purchases: purchases.total,
+        purchases,
         openingStock,
         closingStock,
-        valuationMethod: stock[1].method,
+        valuationMethod,
         cogs,
         grossProfit,
         grossMarginPercent: money.toNumber(revenue) > 0
@@ -622,16 +649,11 @@ export const dashboardRouter = router({
         invoiceNumber: invoices.invoiceNumber,
         invoiceDate: invoices.invoiceDate,
         dueDate: invoices.dueDate,
-        totalAmount: invoices.totalAmount,
-        amountPaid: invoices.amountPaid,
+        // Less payments and the credit notes against it (see lib/outstanding)
+        outstanding: sql<string>`(${outstandingOnRow})::text`,
       }).from(invoices)
         .innerJoin(parties, eq(parties.id, invoices.partyId))
-        .where(and(
-          eq(invoices.businessId, ctx.businessId),
-          eq(invoices.type, "sale"),
-          eq(invoices.documentType, "invoice"),
-          sql`${invoices.status} NOT IN ('paid', 'cancelled', 'draft')`,
-        ))
+        .where(outstandingConditions(ctx.businessId, "sale", { includeDrafts: false }))
         .orderBy(invoices.invoiceDate);
 
       const now = new Date();
@@ -646,8 +668,7 @@ export const dashboardRouter = router({
       }>();
 
       for (const inv of unpaidInvoices) {
-        const outstanding = parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid);
-        if (outstanding <= 0) continue;
+        const outstanding = parseFloat(inv.outstanding);
 
         const refDate = inv.dueDate || inv.invoiceDate;
         const daysOld = Math.floor((now.getTime() - new Date(refDate).getTime()) / (1000 * 60 * 60 * 24));
@@ -714,9 +735,13 @@ export const dashboardRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Report");
+      // Money received only: a payment made to a supplier is not a receipt.
+      // Its side is the invoice's it settles, else the party's (as when it
+      // was recorded).
       const conditions = [
         eq(payments.businessId, ctx.businessId),
         sql`${payments.deletedAt} IS NULL`,
+        sql`COALESCE(${invoices.type} = 'sale', ${parties.type} <> 'supplier')`,
       ];
       conditions.push(...buildBusinessDateFilter(payments, { from: input.fromDate, to: input.toDate }));
 
@@ -727,6 +752,8 @@ export const dashboardRouter = router({
           count: sql<number>`COUNT(*)::int`,
         })
         .from(payments)
+        .innerJoin(parties, eq(parties.id, payments.partyId))
+        .leftJoin(invoices, eq(invoices.id, payments.invoiceId))
         .where(and(...conditions))
         .groupBy(payments.mode)
         .orderBy(sql`SUM(${payments.amount}::numeric) DESC`);
@@ -876,6 +903,7 @@ export const dashboardRouter = router({
           eq(invoices.type, "sale"),
           eq(invoices.documentType, "invoice"),
           sql`${invoices.status} NOT IN ('draft', 'cancelled')`,
+          isNull(invoices.deletedAt),
           ...buildBusinessDateFilter(invoices, { from: currMonthStart, to: currMonthEnd }),
         )),
 
@@ -886,6 +914,7 @@ export const dashboardRouter = router({
           eq(invoices.type, "sale"),
           eq(invoices.documentType, "invoice"),
           sql`${invoices.status} NOT IN ('draft', 'cancelled')`,
+          isNull(invoices.deletedAt),
           ...buildBusinessDateFilter(invoices, { from: prevMonthStart, to: prevMonthEnd }),
         )),
 
@@ -893,6 +922,7 @@ export const dashboardRouter = router({
           total: sql<string>`COALESCE(SUM(${expenses.amount}::numeric), 0)::text`,
         }).from(expenses).where(and(
           eq(expenses.businessId, ctx.businessId),
+          isNull(expenses.deletedAt),
           ...buildBusinessDateFilter(expenses, { from: currMonthStart, to: currMonthEnd }),
         )),
 
@@ -900,6 +930,7 @@ export const dashboardRouter = router({
           total: sql<string>`COALESCE(SUM(${expenses.amount}::numeric), 0)::text`,
         }).from(expenses).where(and(
           eq(expenses.businessId, ctx.businessId),
+          isNull(expenses.deletedAt),
           ...buildBusinessDateFilter(expenses, { from: prevMonthStart, to: prevMonthEnd }),
         )),
 
@@ -910,6 +941,7 @@ export const dashboardRouter = router({
           eq(invoices.type, "purchase"),
           eq(invoices.documentType, "invoice"),
           sql`${invoices.status} NOT IN ('draft', 'cancelled')`,
+          isNull(invoices.deletedAt),
           ...buildBusinessDateFilter(invoices, { from: currMonthStart, to: currMonthEnd }),
         )),
 
@@ -920,6 +952,7 @@ export const dashboardRouter = router({
           eq(invoices.type, "purchase"),
           eq(invoices.documentType, "invoice"),
           sql`${invoices.status} NOT IN ('draft', 'cancelled')`,
+          isNull(invoices.deletedAt),
           ...buildBusinessDateFilter(invoices, { from: prevMonthStart, to: prevMonthEnd }),
         )),
       ]);
@@ -931,8 +964,13 @@ export const dashboardRouter = router({
         return Math.round(((c - p) / p) * 100);
       }
 
-      const currMonthName = currMonthStart.toLocaleString("en-IN", { month: "short", year: "2-digit" });
-      const prevMonthName = prevMonthStart.toLocaleString("en-IN", { month: "short", year: "2-digit" });
+      // Name the months as the Indian calendar has them: the instant a month
+      // starts in India (18:30 UTC the day before) read in the server's time
+      // zone is the previous month's last day — every label was a month early.
+      const monthName = (year: number, month: number) =>
+        new Date(Date.UTC(year, month - 1, 15)).toLocaleString("en-IN", { month: "short", year: "2-digit", timeZone: "UTC" });
+      const currMonthName = monthName(today.year, today.month);
+      const prevMonthName = monthName(today.month === 1 ? today.year - 1 : today.year, today.month === 1 ? 12 : today.month - 1);
 
       return {
         currMonth: currMonthName,

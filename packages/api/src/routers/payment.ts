@@ -12,6 +12,26 @@ import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { processGatewayPayment, reverseGatewayPayment } from "../lib/gateway.js";
 
+/**
+ * A payment can't settle more than was received: what it is allocated across
+ * invoices may not add up to more than its amount (and any settlement
+ * discount given with it).
+ */
+function assertAllocationsWithinPayment(
+  allocations: Array<{ amount: string }>,
+  amount: string,
+  discount: string | null | undefined,
+) {
+  const allocated = money.sum(allocations.map((a) => a.amount));
+  const available = money.add(amount, discount || "0");
+  if (money.compare(allocated, available) > 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Allocations (${allocated}) add up to more than the payment (${available})`,
+    });
+  }
+}
+
 export const paymentRouter = router({
   list: viewerProcedure
     .input(z.object({
@@ -253,6 +273,8 @@ export const paymentRouter = router({
         : input.invoiceId
           ? [{ invoiceId: input.invoiceId, amount: input.amount }]
           : [];
+
+      assertAllocationsWithinPayment(effectiveAllocations, input.amount, input.discount);
 
       for (const alloc of effectiveAllocations) {
         // Overpayment guard: lock invoice row with FOR UPDATE to prevent
@@ -552,6 +574,8 @@ export const paymentRouter = router({
         : primaryInvoiceId
           ? [{ invoiceId: primaryInvoiceId, amount: newAmount }]
           : [];
+
+      assertAllocationsWithinPayment(newAllocations, newAmount, input.discount ?? existing.discount);
 
       for (const alloc of newAllocations) {
         // Overpayment guard: lock invoice row with FOR UPDATE to prevent

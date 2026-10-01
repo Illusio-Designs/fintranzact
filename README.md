@@ -460,7 +460,6 @@ fintranzact/
 │   ├── cli/          # Terminal CLI (@fintranzact/cli on npm)
 │   └── mcp/          # MCP server for AI agents (@fintranzact/mcp on npm)
 ├── docs/             # Architecture docs, research, roadmaps
-├── nginx/            # Production nginx configuration
 ├── docker-compose.yml        # Local development
 ├── docker-compose.prod.yml   # Production deployment
 ├── Dockerfile                # API container image

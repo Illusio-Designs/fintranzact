@@ -563,6 +563,11 @@ export const createInvoiceSchema = z.object({
   documentType: z.enum(documentTypes).default("invoice"),
   invoiceDate: z.string().datetime().optional(),
   dueDate: z.string().datetime().optional(),
+  /**
+   * Purchase invoices: the supplier's own bill number, as it appears in the
+   * supplier's GSTR-1 and so in our GSTR-2B. Ignored on sales.
+   */
+  supplierInvoiceNumber: z.string().trim().max(50).optional(),
   notes: z.string().max(2000).optional(),
   termsAndConditions: z.string().max(2000).optional(),
   additionalCharges: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0"),
@@ -1022,7 +1027,9 @@ export const eInvoiceConfigSchema = z.object({
   clientId: z.string().max(200).optional().or(z.literal("")),
   clientSecret: z.string().max(500).optional().or(z.literal("")),
   username: z.string().min(1).max(100),
-  password: z.string().min(1).max(200),
+  // Blank on a re-save keeps the stored password (the settings form never
+  // shows it back); a first save must include it.
+  password: z.string().max(200).optional().or(z.literal("")),
   isSandbox: z.boolean().default(true),
   isEnabled: z.boolean().default(false),
   thresholdCrore: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/).default("5"),

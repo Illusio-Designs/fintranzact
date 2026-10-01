@@ -140,7 +140,7 @@ describe("DocumentsTab — SequenceEditor", () => {
   });
 
   function getChangeButtons() {
-    return screen.getAllByRole("button", { name: /^change$/i });
+    return screen.getAllByRole("button", { name: /^change next .+ number$/i });
   }
 
   it("clicking Change on the Invoice row reveals the warning panel", () => {

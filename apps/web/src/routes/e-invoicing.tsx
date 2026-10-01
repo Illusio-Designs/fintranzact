@@ -440,10 +440,11 @@ function SettingsTab() {
             maxLength={15}
           />
           <div>
-            <label className="text-xs font-medium text-text-secondary block mb-1">
+            <label htmlFor="einvoice-threshold" className="text-xs font-medium text-text-secondary block mb-1">
               Threshold (crore)
             </label>
             <input
+              id="einvoice-threshold"
               type="number"
               min="0"
               step="0.01"

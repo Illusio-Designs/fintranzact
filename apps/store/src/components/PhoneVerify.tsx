@@ -175,6 +175,7 @@ export function PhoneVerify({ slug, accentColor, onVerified, onBack }: PhoneVeri
           value={name}
           onChange={(e) => { setName(e.target.value); setError(""); }}
           placeholder="Your name"
+          aria-label="Your name"
           autoFocus
           className="store-input w-full mb-3"
           onKeyDown={(e) => e.key === "Enter" && handleNameSubmit()}
@@ -235,6 +236,7 @@ export function PhoneVerify({ slug, accentColor, onVerified, onBack }: PhoneVeri
             setError("");
           }}
           placeholder="9876543210"
+          aria-label="Mobile number"
           inputMode="numeric"
           autoFocus
           className="store-input rounded-l-none flex-1"

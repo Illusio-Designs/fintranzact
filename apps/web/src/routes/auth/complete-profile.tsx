@@ -148,8 +148,9 @@ function CompleteProfilePage() {
 
             <form onSubmit={handleNameSubmit} className="space-y-4">
               <div>
-                <label className="label">Your name</label>
+                <label className="label" htmlFor="profile-name">Your name</label>
                 <input
+                  id="profile-name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}

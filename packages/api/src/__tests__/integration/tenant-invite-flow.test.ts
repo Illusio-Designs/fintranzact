@@ -16,18 +16,19 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { sessions, tenantMembers, invitations, magicLinkTokens } from "@fintranzact/db";
+import { sessions, tenantMembers, invitations, magicLinkTokens, businessMembers } from "@fintranzact/db";
 import { createHash, randomUUID } from "crypto";
 import {
   createUser,
   createTenant,
   addMember,
   createSession,
+  createBusiness,
   type TestUser,
   type TestTenant,
   type TestSession,
 } from "../helpers/fixtures.js";
-import { getControlDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
+import { getControlDb, getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createTestContext } from "../helpers/test-context.js";
 import { createCallerFactory } from "../../trpc.js";
 import { appRouter } from "../../router.js";
@@ -1187,5 +1188,53 @@ describe("tenant.acceptById", () => {
     await expect(
       caller.tenant.acceptById({ invitationId: invite.id }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Joining through an invitation opens the organisation's businesses
+// Regression: business access is per business and nothing in the app lets an
+// owner grant it, so invited members joined and then saw no business at all.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("accepting an invitation grants the organisation's businesses", () => {
+  it("gives a seller member access and an admin admin access to every business, keeping existing rows", async () => {
+    const tdb = getTenantTestDb();
+    const owner = await createUser({ email: `owner.${randomUUID().slice(0, 8)}@biz.in`, name: "Owner" });
+    const tenant = await createTenant({ name: "Business Access Traders" });
+    await addMember(tenant.id, owner.id, "owner");
+    const shop = await createBusiness(tdb, owner.id, { name: "Shop One" });
+    const depot = await createBusiness(tdb, owner.id, { name: "Depot Two" });
+    await tdb.insert(businessMembers).values([
+      { businessId: shop.id, userId: owner.id, role: "admin" },
+      { businessId: depot.id, userId: owner.id, role: "admin" },
+    ]);
+    // Someone else's business must stay closed.
+    const stranger = await createUser({ email: `stranger.${randomUUID().slice(0, 8)}@else.in` });
+    const elsewhere = await createBusiness(tdb, stranger.id, { name: "Elsewhere" });
+
+    const accessOf = async (userId: string) =>
+      (await tdb.select({ businessId: businessMembers.businessId, role: businessMembers.role })
+        .from(businessMembers).where(eq(businessMembers.userId, userId)))
+        .sort((a, b) => a.businessId.localeCompare(b.businessId));
+    const expected = (role: "admin" | "member") =>
+      [{ businessId: shop.id, role }, { businessId: depot.id, role }].sort((a, b) => a.businessId.localeCompare(b.businessId));
+
+    for (const [role, bizRole] of [["seller", "member"], ["admin", "admin"]] as const) {
+      const email = `${role}.${randomUUID().slice(0, 8)}@biz.in`;
+      const user = await createUser({ email });
+      const session = await createSession(user.id);
+      const rawToken = randomUUID();
+      await insertInvitation({ tenantId: tenant.id, email, role, invitedBy: owner.id, rawToken });
+
+      await callerNoTenant(session.id, user).tenant.acceptInvitation({ token: rawToken });
+
+      const access = await accessOf(user.id);
+      expect(access).toEqual(expected(bizRole));
+      expect(access.map((a) => a.businessId)).not.toContain(elsewhere.id);
+    }
+
+    // The owner's own memberships are untouched.
+    expect(await accessOf(owner.id)).toEqual(expected("admin"));
   });
 });

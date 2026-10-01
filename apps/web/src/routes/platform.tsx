@@ -384,6 +384,7 @@ function OrganisationsView({ onOpen }: { onOpen: (id: string) => void }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search organisation, owner or email"
+              aria-label="Search organisations"
               className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-tertiary"
             />
           </label>
@@ -524,7 +525,7 @@ function PlansView() {
                 <p className="text-xs text-text-tertiary">
                   {plan.monthlyPriceInr === 0 && plan.visible ? "Owners can pick this themselves" : "Set up by a platform admin"}
                 </p>
-                <button type="button" className="btn-secondary" onClick={() => setEditing(plan)}>
+                <button type="button" className="btn-secondary" onClick={() => setEditing(plan)} aria-label={`Edit plan ${plan.name}`}>
                   Edit plan
                 </button>
               </div>
@@ -702,6 +703,7 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
                       checked={unlimited}
                       onChange={(e) => setLimit(field.key, e.target.checked ? null : field.key === "maxConcurrentSessions" ? 1 : 0)}
                       className="h-4 w-4 accent-brand-600"
+                      aria-label={`${field.label}: unlimited`}
                     />
                     Unlimited
                   </label>

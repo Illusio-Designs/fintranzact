@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
-import { useState, useRef, useEffect } from "react";
+import { Fragment, useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn, formatDateInput, todayISODate } from "@/lib/utils";
 import { StatCard } from "@/components/ui/StatCard";
@@ -31,6 +31,7 @@ import {
 } from "@/components/reports/OrderReports";
 import { StockGroupFilter } from "@/components/inventory/StockGroups";
 import { PriceListReport } from "@/components/reports/PriceListReport";
+import { paymentModeLabel } from "@/lib/payment-modes";
 export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
@@ -330,7 +331,7 @@ function DaybookReport({
               const dayDebit = dayEntries.reduce((s, e) => s + parseFloat(e.debit), 0).toFixed(2);
               const dayCredit = dayEntries.reduce((s, e) => s + parseFloat(e.credit), 0).toFixed(2);
               return (
-                <>
+                <Fragment key={dateKey}>
                   {/* Date header row */}
                   <tr key={`day-${dateKey}`} className="bg-surface-2/30 border-b border-border/50">
                     <td colSpan={6} className="px-4 py-2 text-[12px] font-semibold text-text-secondary">
@@ -399,7 +400,7 @@ function DaybookReport({
                       </span>
                     </td>
                   </tr>
-                </>
+                </Fragment>
               );
             })}
           </tbody>
@@ -1700,7 +1701,7 @@ function StockSummaryReport() {
                 const isExpanded = expandedVariants.has(item.itemId);
                 const hasLowStock = item.variantDetails.some((v) => v.isLowStock);
                 return (
-                  <>
+                  <Fragment key={item.itemId}>
                     {/* Parent summary row */}
                     <tr
                       key={item.itemId}
@@ -1811,7 +1812,7 @@ function StockSummaryReport() {
                         </td>
                       </tr>
                     ))}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -2043,7 +2044,7 @@ function PaymentSummaryReport({
                 {data.byMode.map((row, i) => (
                   <tr key={i} className="border-b border-border/40 last:border-0 hover:bg-surface-2/40 transition-colors">
                     <td className="px-4 py-2.5">
-                      <span className="text-text-primary text-[13px] capitalize">{row.mode}</span>
+                      <span className="text-text-primary text-[13px]">{paymentModeLabel(row.mode)}</span>
                     </td>
                     <td className="px-4 py-2.5 hidden md:table-cell">
                       <span className="text-text-tertiary text-[12px]">{row.bankAccountName ?? "—"}</span>
@@ -2311,7 +2312,7 @@ function ItemSalesReport({
       "Unit",
       "Qty Sold",
       "Free Qty",
-      "Revenue",
+      "Revenue (excl. GST)",
       "Avg Price",
       "Invoices",
       "Customers",
@@ -2341,7 +2342,7 @@ function ItemSalesReport({
     <div>
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
-        <SummaryCard label="Total Revenue" value={formatCurrency(data.totalRevenue)} accent="green" />
+        <SummaryCard label="Total Revenue (excl. GST)" value={formatCurrency(data.totalRevenue)} accent="green" />
         <SummaryCard label="Items" value={String(data.count)} />
         {compareToPrevious && <SummaryCard label="Comparison Period" value="Enabled" accent="blue" />}
       </div>
@@ -2386,7 +2387,7 @@ function ItemSalesReport({
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Item</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Category</th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Qty Sold</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Revenue</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Revenue (excl. GST)</th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Avg Price</th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Invoices</th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Customers</th>

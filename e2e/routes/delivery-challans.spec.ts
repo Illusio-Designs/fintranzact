@@ -85,10 +85,12 @@ test.describe("Delivery Challans — Interaction", () => {
   test("creator closes on Escape", async ({ page }) => {
     await page.getByRole("button", { name: /new.*challan/i }).first().click();
     await expect(page.locator('[role="dialog"]').first()).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(
-      page.locator('[role="dialog"]').first(),
-    ).not.toBeVisible();
+    // The customer picker may have opened its list on focus: Escape closes
+    // that first (and only that), the next one the creator.
+    await expect(async () => {
+      await page.keyboard.press("Escape");
+      await expect(page.locator('[role="dialog"]').first()).not.toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 10_000 });
   });
 
   test("status tabs filter the list", async ({ page }) => {

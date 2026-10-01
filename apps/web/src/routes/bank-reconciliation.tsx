@@ -135,7 +135,7 @@ function BankReconciliationPage() {
         description="Match bank statement imports with payments and expenses"
       />
 
-      <div className="mb-5">
+      <div className="mb-5 overflow-x-auto">
         <PillTabs
           tabs={TABS}
           value={activeTab}
@@ -790,9 +790,10 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
         <div>
           <label className="block text-sm font-medium text-text-secondary mb-1">Bank Account *</label>
           <Listbox
+            ariaLabel="Bank Account"
             value={selectedAccountId}
             onChange={setSelectedAccountId}
-            options={accounts?.map((a) => ({ value: a.id, label: `${a.accountName} — ${a.bankName ?? ""}` })) ?? []}
+            options={accounts?.map((a) => ({ value: a.id, label: a.bankName ? `${a.accountName} — ${a.bankName}` : a.accountName })) ?? []}
             placeholder="Select account"
           />
         </div>
@@ -973,7 +974,7 @@ function ReviewTab({ importId }: { importId: string | null }) {
       )}
 
       {/* Filter */}
-      <div>
+      <div className="overflow-x-auto">
         <PillTabs
           tabs={MATCH_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           value={statusFilter}
@@ -1216,6 +1217,7 @@ function ManualMatchSlideOver({
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">Select Payment</label>
             <Listbox
+              ariaLabel="Select Payment"
               value={paymentId}
               onChange={setPaymentId}
               options={[
@@ -1232,6 +1234,7 @@ function ManualMatchSlideOver({
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">Select Expense</label>
             <Listbox
+              ariaLabel="Select Expense"
               value={expenseId}
               onChange={setExpenseId}
               options={[
@@ -1272,13 +1275,23 @@ function CreateExpenseFromLineSlideOver({
 }) {
   const [category, setCategory] = useState(line.autoCategory ?? "");
   const [description, setDescription] = useState(line.narration ?? "");
+  // Set on the first click, before the mutation's pending state reaches the
+  // button: a double click must not send the line a second time.
+  const submitted = useRef(false);
 
+  const utils = trpc.useUtils();
   const createMutation = trpc.bankRecon.createExpense.useMutation({
     onSuccess: () => {
       toast.success("Expense created and linked");
+      // Its withdrawal moved the account's balance; the expense is listed.
+      utils.bankAccount.invalidate();
+      utils.expense.invalidate();
       onSuccess();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      submitted.current = false;
+      toast.error(err.message);
+    },
   });
 
   function handleSubmit() {
@@ -1286,6 +1299,8 @@ function CreateExpenseFromLineSlideOver({
       toast.error("Category is required");
       return;
     }
+    if (submitted.current) return;
+    submitted.current = true;
     createMutation.mutate({
       lineId: line.id,
       expense: {
@@ -1355,9 +1370,10 @@ function SummaryTab({ accountId }: { accountId: string | null }) {
       <div>
         <label className="block text-sm font-medium text-text-secondary mb-1">Bank Account</label>
         <Listbox
+          ariaLabel="Bank Account"
           value={selectedId}
           onChange={setSelectedId}
-          options={accounts?.map((a) => ({ value: a.id, label: `${a.accountName} — ${a.bankName ?? ""}` })) ?? []}
+          options={accounts?.map((a) => ({ value: a.id, label: a.bankName ? `${a.accountName} — ${a.bankName}` : a.accountName })) ?? []}
           placeholder="Select account"
         />
       </div>

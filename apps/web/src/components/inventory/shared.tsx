@@ -142,6 +142,7 @@ export function StockLinesEditor({
           <div key={line.key} className="grid grid-cols-[minmax(0,1fr)_120px_36px] items-end gap-2">
             <Combobox
               label={index === 0 ? "Item" : undefined}
+              ariaLabel={`Item, line ${index + 1}`}
               value={line.unitKey}
               onChange={(v) => update(line.key, { unitKey: v })}
               options={lineOptions}

@@ -108,7 +108,7 @@ export function Cart({ store }: Props) {
       <div className="border-t border-border p-4 space-y-1.5 bg-surface-0 text-sm">
         <div className="flex items-center justify-between text-text-secondary">
           <span>Subtotal</span>
-          <span className="tabular-nums">₹{fmt(totals.subtotal)}</span>
+          <span className="tabular-nums" data-testid="pos-cart-subtotal">₹{fmt(totals.subtotal)}</span>
         </div>
         {totals.discount > 0 && (
           <div className="flex items-center justify-between text-text-secondary">
@@ -118,11 +118,11 @@ export function Cart({ store }: Props) {
         )}
         <div className="flex items-center justify-between text-text-secondary">
           <span>Tax</span>
-          <span className="tabular-nums">₹{fmt(totals.tax)}</span>
+          <span className="tabular-nums" data-testid="pos-cart-tax">₹{fmt(totals.tax)}</span>
         </div>
         <div className="flex items-center justify-between text-lg font-bold text-text-primary pt-2 border-t border-border">
           <span>Total</span>
-          <span className="tabular-nums">₹{fmt(totals.total)}</span>
+          <span className="tabular-nums" data-testid="pos-cart-total">₹{fmt(totals.total)}</span>
         </div>
       </div>
     </div>

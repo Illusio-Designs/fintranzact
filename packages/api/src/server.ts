@@ -2,7 +2,6 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
-import { secureHeaders } from "hono/secure-headers";
 import type { Context, Next } from "hono";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { eq, and, gt, lt, inArray, isNull, sql } from "drizzle-orm";
@@ -38,6 +37,7 @@ import { assertAllowedStoreOrigin } from "./lib/store-origin.js";
 import { registerExportRoute } from "./http/exportStream.js";
 import { registerImportRoute } from "./http/importStream.js";
 import { listPublicPlansJson } from "./lib/public-plans.js";
+import { apiSecureHeaders } from "./lib/security-headers.js";
 
 // ── Process crash handlers ────────────────────────────────────
 process.on("unhandledRejection", (reason) => {
@@ -65,7 +65,7 @@ function escapeHtml(str: string): string {
 const app = new Hono();
 
 // ── Security headers ───────────────────────────────────────────
-app.use("*", secureHeaders());
+app.use("*", ...apiSecureHeaders());
 
 // ── Request ID tracing ────────────────────────────────────────
 app.use("*", async (c: Context, next: Next) => {
@@ -409,6 +409,7 @@ const PDF_RATE_LIMIT = 30; // per minute
 const PDF_RATE_WINDOW = 60_000;
 
 function checkPdfRateLimit(ip: string): boolean {
+  if (rateLimitDisabled) return true;
   const now = Date.now();
   const entry = pdfRateMap.get(ip);
   if (!entry || now > entry.reset) {
@@ -1461,9 +1462,13 @@ app.post("/store/:slug/order", async (c) => {
     deliveryAddress,
     deliveryCity,
     deliveryPincode,
-    notes,
+    deliveryNotes,
+    notes: legacyNotes,
     items: orderItems,
   } = body as Record<string, unknown>;
+  // The storefront sends the customer's order notes as `deliveryNotes`
+  // (apps/store api.ts); only `notes` was read, so they were dropped.
+  const notes = deliveryNotes ?? legacyNotes;
 
   // Validate Turnstile for order submission
   const orderIp = getClientIp(c) || null;

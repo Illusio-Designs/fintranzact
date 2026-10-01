@@ -6,15 +6,17 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
 import { DEFAULT_SITE_URL, buildSitemap, resolveSiteUrl } from "./src/lib/seo";
 import { helpPlugins } from "./vite-help";
+import { cspDirectives, inlineScriptHashes } from "./src/lib/csp-hash";
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8"));
 
-// SHA-256 hash of the inline theme-detection script in index.html (lines 36-40).
-// Recompute with: node -e "const c=require('crypto'),f=require('fs');
-//   const h=f.readFileSync('index.html','utf-8');
-//   const s=h.slice(h.indexOf('<script>\n',h.indexOf('fintranzact-theme'))+8, h.indexOf('</script>',h.indexOf('fintranzact-theme')));
-//   console.log('sha256-'+c.createHash('sha256').update(s).digest('base64'));"
-const THEME_SCRIPT_HASH = "sha256-7v6Dh3op5YztyC/jZCheSbtL3NqCrnIjQcllTk6J6Ug=";
+// CSP hashes of index.html's inline scripts (the theme-detection script),
+// computed from the file so they can never drift from it.
+const INLINE_SCRIPT_SOURCES = inlineScriptHashes(
+  readFileSync(path.resolve(__dirname, "index.html"), "utf-8"),
+)
+  .map((h) => `'${h}'`)
+  .join(" ");
 
 /** Normalise API_URL to a bare origin for CSP (e.g. "http://localhost:3000"). */
 function toOrigin(value: string | undefined): string | null {
@@ -33,27 +35,7 @@ function cspPlugin(apiOrigin: string | null): Plugin {
       order: "pre",
       handler(html, ctx) {
         const isDev = ctx.server !== undefined;
-        // When API_URL is set the app calls the API directly (not via the
-        // /api proxy), so its origin must be allowed in dev as well as prod.
-        const connectSrc = isDev
-          ? `connect-src 'self' ws:${apiOrigin ? ` ${apiOrigin}` : ""}`
-          : apiOrigin
-            ? `connect-src 'self' ${apiOrigin}`
-            : "connect-src 'self'";
-
-        const directives = [
-          "default-src 'self'",
-          `script-src 'self' '${THEME_SCRIPT_HASH}' https://challenges.cloudflare.com`,
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-          "font-src 'self' https://fonts.gstatic.com",
-          "img-src 'self' data: blob:",
-          connectSrc,
-          "frame-src https://challenges.cloudflare.com",
-          "object-src 'none'",
-          "base-uri 'self'",
-        ];
-
-        const cspContent = directives.join("; ");
+        const cspContent = cspDirectives({ isDev, apiOrigin, inlineScriptSources: INLINE_SCRIPT_SOURCES }).join("; ");
         const metaTag = `<meta http-equiv="Content-Security-Policy" content="${cspContent}">`;
 
         return html.replace("<head>", `<head>\n    ${metaTag}`);

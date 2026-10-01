@@ -1,10 +1,12 @@
 import { renderHook, act } from "@testing-library/react";
 import { getDatePreset, getGranularity, useDateRange } from "@/hooks/useDateRange";
 
-// Pin "now" to 2025-07-15 (month index 6, i.e. July) for all date arithmetic.
-// July is after April so mm >= 3 is true → FY year = 2025, last-FY year = 2024.
+// Pin "now" to 2025-07-15 05:30 IST (00:00 UTC): July, after April, so the
+// current FY starts in 2025 and the last one in 2024.
 const FIXED_NOW = new Date("2025-07-15T00:00:00.000Z");
 
+// Periods are cut at 00:00 IST (18:30 UTC the day before), the way the API
+// stores business dates and reads GST periods.
 describe("getDatePreset (pure helper)", () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: FIXED_NOW });
@@ -14,60 +16,32 @@ describe("getDatePreset (pure helper)", () => {
     vi.useRealTimers();
   });
 
-  it("this-month: returns calendar month 1st to last day in UTC", () => {
-    const { fromDate, toDate } = getDatePreset("this-month");
-    const from = new Date(fromDate);
-    const to = new Date(toDate);
-
-    expect(from.getUTCFullYear()).toBe(2025);
-    expect(from.getUTCMonth()).toBe(6);
-    expect(from.getUTCDate()).toBe(1);
-
-    expect(to.getUTCFullYear()).toBe(2025);
-    expect(to.getUTCMonth()).toBe(6);
-    expect(to.getUTCDate()).toBe(31);
-    expect(to.getUTCHours()).toBe(23);
-    expect(to.getUTCMinutes()).toBe(59);
+  it("this-month: 1st 00:00 IST to the last instant of the month in India", () => {
+    expect(getDatePreset("this-month")).toEqual({
+      fromDate: "2025-06-30T18:30:00.000Z",
+      toDate: "2025-07-31T18:29:59.999Z",
+    });
   });
 
-  it("last-month: returns previous calendar month boundaries in UTC", () => {
-    const { fromDate, toDate } = getDatePreset("last-month");
-    const from = new Date(fromDate);
-    const to = new Date(toDate);
-
-    expect(from.getUTCFullYear()).toBe(2025);
-    expect(from.getUTCMonth()).toBe(5);
-    expect(from.getUTCDate()).toBe(1);
-
-    expect(to.getUTCFullYear()).toBe(2025);
-    expect(to.getUTCMonth()).toBe(5);
-    expect(to.getUTCDate()).toBe(30);
-    expect(to.getUTCHours()).toBe(23);
+  it("last-month: the previous calendar month in India", () => {
+    expect(getDatePreset("last-month")).toEqual({
+      fromDate: "2025-05-31T18:30:00.000Z",
+      toDate: "2025-06-30T18:29:59.999Z",
+    });
   });
 
-  it("this-fy: starts April 1 of current FY in UTC", () => {
-    const { fromDate } = getDatePreset("this-fy");
-    const from = new Date(fromDate);
-
-    expect(from.getUTCFullYear()).toBe(2025);
-    expect(from.getUTCMonth()).toBe(3); // April
-    expect(from.getUTCDate()).toBe(1);
-    expect(from.getUTCHours()).toBe(0);
+  it("this-fy: from 1 April 00:00 IST of the current FY to now", () => {
+    expect(getDatePreset("this-fy")).toEqual({
+      fromDate: "2025-03-31T18:30:00.000Z",
+      toDate: FIXED_NOW.toISOString(),
+    });
   });
 
-  it("last-fy: April 1 to March 31 of previous FY in UTC", () => {
-    const { fromDate, toDate } = getDatePreset("last-fy");
-    const from = new Date(fromDate);
-    const to = new Date(toDate);
-
-    expect(from.getUTCFullYear()).toBe(2024);
-    expect(from.getUTCMonth()).toBe(3);
-    expect(from.getUTCDate()).toBe(1);
-
-    expect(to.getUTCFullYear()).toBe(2025);
-    expect(to.getUTCMonth()).toBe(2); // March
-    expect(to.getUTCDate()).toBe(31);
-    expect(to.getUTCHours()).toBe(23);
+  it("last-fy: 1 April to 31 March of the previous FY, in India", () => {
+    expect(getDatePreset("last-fy")).toEqual({
+      fromDate: "2024-03-31T18:30:00.000Z",
+      toDate: "2025-03-31T18:29:59.999Z",
+    });
   });
 
   it("all: returns empty strings", () => {
@@ -78,21 +52,10 @@ describe("getDatePreset (pure helper)", () => {
 
   it("last-30: fromDate is exactly 30 days before 'now', toDate is 'now'", () => {
     const { fromDate, toDate } = getDatePreset("last-30");
-
-    // toDate === fixed "now"
     expect(toDate).toBe(FIXED_NOW.toISOString());
-
-    // fromDate === now - 30 days (UTC)
     const expectedFrom = new Date(FIXED_NOW);
     expectedFrom.setUTCDate(expectedFrom.getUTCDate() - 30);
     expect(fromDate).toBe(expectedFrom.toISOString());
-  });
-
-  it("last-30: fromDate-to-toDate spans exactly 30 days", () => {
-    const { fromDate, toDate } = getDatePreset("last-30");
-    const spanMs = new Date(toDate).getTime() - new Date(fromDate).getTime();
-    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-    expect(spanMs).toBe(thirtyDaysMs);
   });
 
   it("unknown preset: falls back to empty strings (default branch)", () => {
@@ -101,52 +64,58 @@ describe("getDatePreset (pure helper)", () => {
     expect(toDate).toBe("");
   });
 
-  // ── TIMEZONE REGRESSION TESTS ─────────────────────────────────────────
-  // Bug: using local-time Date constructor caused April 1 IST → March 31 UTC,
-  // making FY charts include the previous March. These tests ensure all
-  // boundaries are in UTC regardless of the runtime's local timezone.
+  // ── MONTH-BOUNDARY REGRESSION TESTS ────────────────────────────────────
+  // Bug: presets were cut at UTC midnight. An invoice dated the 1st in an
+  // Indian browser is stored at 18:30 UTC the day before, so "This Month"
+  // left it out (and took in the next month's 1st).
 
-  it("REGRESSION: this-fy fromDate ISO string contains April, never March", () => {
-    const { fromDate } = getDatePreset("this-fy");
-    // The raw ISO string must show month 04, not 03
-    expect(fromDate).toMatch(/2025-04-01T00:00:00/);
+  it("REGRESSION: an invoice dated the 1st (stored 18:30 UTC the day before) is in that month", () => {
+    const firstOfJuly = new Date("2025-06-30T18:30:00.000Z"); // 1 Jul 00:00 IST
+    const firstOfAugust = new Date("2025-07-31T18:30:00.000Z"); // 1 Aug 00:00 IST
+    const { fromDate, toDate } = getDatePreset("this-month");
+    expect(firstOfJuly >= new Date(fromDate) && firstOfJuly <= new Date(toDate)).toBe(true);
+    expect(firstOfAugust <= new Date(toDate)).toBe(false);
   });
 
-  it("REGRESSION: last-fy fromDate ISO string contains April of the previous year", () => {
-    const { fromDate } = getDatePreset("last-fy");
-    expect(fromDate).toMatch(/2024-04-01T00:00:00/);
+  it("REGRESSION: at 00:05 IST on the 1st it is already the new month (UTC still says the 31st)", () => {
+    vi.setSystemTime(new Date("2025-07-31T18:35:00.000Z")); // 1 Aug 00:05 IST
+    expect(getDatePreset("this-month").fromDate).toBe("2025-07-31T18:30:00.000Z");
+    expect(getDatePreset("last-month")).toEqual({
+      fromDate: "2025-06-30T18:30:00.000Z",
+      toDate: "2025-07-31T18:29:59.999Z",
+    });
   });
 
-  it("REGRESSION: this-month fromDate ISO string is 1st of current month in UTC", () => {
-    const { fromDate } = getDatePreset("this-month");
-    expect(fromDate).toMatch(/2025-07-01T00:00:00/);
+  it("REGRESSION: a date stored at UTC midnight (a UTC browser) still falls in its month", () => {
+    const firstOfJulyUtc = new Date("2025-07-01T00:00:00.000Z"); // 05:30 IST, 1 Jul
+    const { fromDate, toDate } = getDatePreset("this-month");
+    expect(firstOfJulyUtc >= new Date(fromDate) && firstOfJulyUtc <= new Date(toDate)).toBe(true);
   });
 
-  it("REGRESSION: last-month fromDate ISO string is 1st of previous month in UTC", () => {
-    const { fromDate } = getDatePreset("last-month");
-    expect(fromDate).toMatch(/2025-06-01T00:00:00/);
-  });
-
-  // Edge case: "now" is in January (before April) — FY starts previous year
   it("this-fy when month < April: FY starts previous calendar year", () => {
     vi.setSystemTime(new Date("2026-01-15T00:00:00.000Z"));
-    const { fromDate } = getDatePreset("this-fy");
-    expect(fromDate).toMatch(/2025-04-01T00:00:00/);
+    expect(getDatePreset("this-fy").fromDate).toBe("2025-03-31T18:30:00.000Z");
   });
 
-  // Edge case: "now" is exactly April 1 — FY starts same year
-  it("this-fy on April 1: FY starts same year", () => {
-    vi.setSystemTime(new Date("2025-04-01T00:00:00.000Z"));
-    const { fromDate } = getDatePreset("this-fy");
-    expect(fromDate).toMatch(/2025-04-01T00:00:00/);
+  it("this-fy at 00:05 IST on 1 April: the new FY has started", () => {
+    vi.setSystemTime(new Date("2025-03-31T18:35:00.000Z"));
+    expect(getDatePreset("this-fy").fromDate).toBe("2025-03-31T18:30:00.000Z");
   });
 
-  // Edge case: last-fy while in Jan-Mar — previous FY ran two calendar years ago
   it("last-fy when month < April: last FY starts two calendar years back", () => {
     vi.setSystemTime(new Date("2026-02-15T00:00:00.000Z"));
-    const { fromDate, toDate } = getDatePreset("last-fy");
-    expect(fromDate).toMatch(/2024-04-01T00:00:00/);
-    expect(toDate).toMatch(/2025-03-31T23:59:59/);
+    expect(getDatePreset("last-fy")).toEqual({
+      fromDate: "2024-03-31T18:30:00.000Z",
+      toDate: "2025-03-31T18:29:59.999Z",
+    });
+  });
+
+  it("last-month in January: December of the previous year", () => {
+    vi.setSystemTime(new Date("2026-01-10T06:00:00.000Z"));
+    expect(getDatePreset("last-month")).toEqual({
+      fromDate: "2025-11-30T18:30:00.000Z",
+      toDate: "2025-12-31T18:29:59.999Z",
+    });
   });
 });
 

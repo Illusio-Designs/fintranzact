@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
@@ -30,6 +30,9 @@ export function SlideOver({
   onCloseAttempt,
 }: SlideOverProps): React.JSX.Element | null {
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Unique per instance: two open at once (a panel over a panel) must
+  // each be named by their own title.
+  const titleId = useId();
 
   useFocusTrap(dialogRef, open);
 
@@ -74,7 +77,7 @@ export function SlideOver({
       className="fixed inset-0 z-50"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="slideover-title"
+      aria-labelledby={titleId}
     >
       <div
         className="fixed inset-0 bg-black/40 animate-fade-in"
@@ -87,7 +90,7 @@ export function SlideOver({
         <div className="flex items-start justify-between px-6 py-4 shrink-0 border-b border-border-light">
           <div>
             <h2
-              id="slideover-title"
+              id={titleId}
               className="text-base font-semibold text-text-primary"
             >
               {title}

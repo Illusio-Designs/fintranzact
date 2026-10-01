@@ -260,6 +260,13 @@
       "when": 1790799840261,
       "tag": "0036_roadmap_items",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790847334384,
+      "tag": "0037_supplier_invoice_number",
+      "breakpoints": true
     }
   ]
 }

@@ -90,6 +90,31 @@ export interface BusinessStepValues {
   responsiblePersonDesignation: string;
 }
 
+/**
+ * The GST state code saved with a business. A valid GSTIN carries it in its
+ * first two digits; without one (not GST registered) it comes from the state
+ * picked in the address. Without this, businesses that are not registered
+ * were saved with no state code at all, so place of supply, ITC and e-way
+ * bill checks had nothing to compare against.
+ */
+export function resolveBusinessStateCode(values: {
+  gstRegType: string;
+  gstin: string;
+  stateName: string;
+}): string | undefined {
+  const gstin = values.gstin.trim();
+  if (values.gstRegType !== "unregistered" && /^[0-9]{2}/.test(gstin) && gstin.length === 15) {
+    return gstin.slice(0, 2);
+  }
+  const name = values.stateName.trim().toLowerCase();
+  return INDIAN_STATES.find((s) => s.name.toLowerCase() === name)?.code;
+}
+
+/** Errors of several wizard steps at once (editing shows them together). */
+export function validateSteps(steps: number[], values: BusinessStepValues) {
+  return Object.assign({}, ...steps.map((step) => validateBusinessStep(step, values))) as Record<string, string>;
+}
+
 export function validateBusinessStep(
   step: number,
   values: BusinessStepValues,
@@ -189,6 +214,15 @@ export function BusinessTab({ biz }: BusinessTabProps) {
         logoUpdatedAt={biz.logoUpdatedAt}
         hasLogo={!!biz.logoMimeType}
       />
+
+      {/* The edit form skips the branding step (prefixes live on the
+          Documents tab), so the signature is changed here, like the logo. */}
+      <LogoUploader
+        kind="signature"
+        businessId={biz.id}
+        logoUpdatedAt={biz.signatureUpdatedAt}
+        hasLogo={!!biz.signatureMimeType}
+      />
     </div>
   );
 }
@@ -232,15 +266,18 @@ function BusinessCard({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+      {/* One column on a phone; long values (emails, legal names) wrap
+          instead of pushing the page sideways. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
         {fields.map(([label, value]) => (
-          <div key={label}>
+          <div key={label} className="min-w-0">
             <span className="text-xs text-text-tertiary">{label}</span>
 
             <p
-              className={
-                value ? "text-text-primary" : "text-text-tertiary"
-              }
+              className={cn(
+                "break-words",
+                value ? "text-text-primary" : "text-text-tertiary",
+              )}
             >
               {value || "—"}
             </p>
@@ -631,8 +668,8 @@ export function BusinessForm({
     </>
   );
 
-  const stepContent = (() => {
-    switch (currentStep) {
+  const renderStep = (step: number) => {
+    switch (step) {
       // ==========================================================
       // STEP 1 — BUSINESS DETAILS
       // ==========================================================
@@ -827,7 +864,11 @@ export function BusinessForm({
                     setGstin(val);
 
                     if (val.length === 15) {
-                      setStateCode(val.slice(0, 2));
+                      const code = val.slice(0, 2);
+                      setStateCode(code);
+                      // The GSTIN names the state of registration: fill it in.
+                      const state = INDIAN_STATES.find((s) => s.code === code);
+                      if (state) setStateName(state.name);
                     }
                   }}
                   onPanDetected={(detectedPan) => {
@@ -1020,10 +1061,11 @@ export function BusinessForm({
                   </p>
 
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-text-primary">
+                    <label htmlFor="business-ewb-threshold" className="text-sm font-medium text-text-primary">
                       E-Way Bill Threshold (₹)
                     </label>
                     <input
+                      id="business-ewb-threshold"
                       type="number"
                       min="0"
                       step="0.01"
@@ -1444,12 +1486,27 @@ export function BusinessForm({
           </div>
         );
     }
-  })();
+  };
+
+  // Onboarding walks through the steps one at a time. Editing an existing
+  // business shows its details, statutory & compliance settings (GSTIN,
+  // e-invoice, e-way bill and its threshold) and corporate tax details on
+  // one form, so all of them stay editable after setup.
+  const editSteps = [0, 1, 2];
+  const stepContent = onboardingMode ? (
+    renderStep(currentStep)
+  ) : (
+    <div className="space-y-8">
+      {editSteps.map((step) => (
+        <div key={step}>{renderStep(step)}</div>
+      ))}
+    </div>
+  );
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const stepErrors = validateBusinessStep(currentStep, {
+    const stepErrors = validateSteps(onboardingMode ? [currentStep] : editSteps, {
       name,
       legalName,
       businessType,
@@ -1534,7 +1591,10 @@ export function BusinessForm({
       landmark: landmark || undefined,
       city: city || undefined,
       state: stateName || undefined,
-      stateCode: stateCode || undefined,
+      stateCode:
+        resolveBusinessStateCode({ gstRegType, gstin, stateName }) ||
+        stateCode ||
+        undefined,
       pincode: pincode || undefined,
       countryOfOperations: countryOfOperations || undefined,
       financialYearStartDate: financialYearStartDate || undefined,

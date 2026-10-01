@@ -12,8 +12,10 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="flex items-start justify-between mb-6">
-      <div>
+    // Wraps on narrow screens: the actions drop below the title (and wrap
+    // among themselves) instead of pushing the page sideways.
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 mb-6">
+      <div className="min-w-0 flex-1 basis-60">
         <h1 className={PAGE_TITLE_CLASS}>
           {title}
         </h1>
@@ -23,7 +25,7 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
           </p>
         )}
       </div>
-      {actions && <div className="flex items-center gap-2 ml-4">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 [&>div]:flex-wrap">{actions}</div>}
     </div>
   );
 }

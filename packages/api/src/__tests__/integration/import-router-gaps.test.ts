@@ -57,6 +57,32 @@ describe("import.importParties", () => {
     await expectCode(caller().import.importParties({ source: "tally-9", parties: [{ name: "X" }] }), "BAD_REQUEST");
   });
 
+  // Regression (J11 settings journey): the wizard's "Tally" and "Generic CSV"
+  // sources send source "tally" / "generic", which had no adapter, so every
+  // such import was refused with "Unknown import source".
+  it("accepts the wizard's Tally and Generic CSV sources", async () => {
+    for (const source of ["generic", "tally"]) {
+      const res = await caller().import.importParties({ source, parties: [{ name: `CSV ${source} Party`, state: "Gujarat" }] });
+      expect(res).toEqual({ created: 1, skipped: 0, total: 1 });
+      const items = await caller().import.importItems({ source, items: [{ name: `CSV ${source} Item`, unit: "Pieces", taxPercent: "12", salePrice: "899" }] });
+      expect(items.created).toBe(1);
+      const invoicesRes = await caller().import.importInvoices({
+        source,
+        invoices: [{ invoiceNumber: `CSV-${source}-1`, invoiceDate: "2026-04-01", partyName: `CSV ${source} Party`, totalAmount: "1120", subtotal: "1000", taxAmount: "120" }],
+      });
+      expect(invoicesRes.created).toBe(1);
+    }
+    const [row] = await getTenantTestDb().select().from(parties).where(and(eq(parties.businessId, b1()), eq(parties.name, "CSV generic Party")));
+    expect(row).toMatchObject({ source: "generic", state: "Gujarat" });
+    const [item] = await getTenantTestDb().select().from(items).where(and(eq(items.businessId, b1()), eq(items.name, "CSV tally Item")));
+    expect(item).toMatchObject({ source: "tally", unit: "pcs", taxPercent: "12.00" });
+    // Regression: the one line of an invoice imported without lines carries
+    // its taxable value and tax (it was priced at the total, at 0%), so GST
+    // reports built from lines agree with the invoice.
+    const inv = await caller().invoice.getById({ id: (await invoiceByNumber("CSV-generic-1"))!.id });
+    expect(inv!.lineItems).toMatchObject([{ quantity: "1.000", unitPrice: "1000.00", taxPercent: "12.00", taxAmount: "120.00", totalAmount: "1120.00" }]);
+  });
+
   it("is refused to a seller and never touches another business", async () => {
     await expectCode(seller().import.importParties({ parties: [{ name: "Seller import" }] }), "FORBIDDEN");
     const res = await other().import.importParties({ parties: [{ name: "Imported Traders" }] });

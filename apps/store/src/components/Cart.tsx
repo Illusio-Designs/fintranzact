@@ -1,5 +1,6 @@
 import type { CartItem, StoreConfig } from "../types";
 import { cartItemKey } from "../types";
+import { cartTotals } from "../pricing";
 
 interface CartProps {
   cart: CartItem[];
@@ -27,15 +28,14 @@ export function Cart({
   const symbol = business.currency === "INR" ? "\u20B9" : business.currency;
   const accent = business.accentColor || "var(--store-accent)";
 
-  const subtotal = cart.reduce(
-    (s, c) => s + parseFloat(c.effectivePrice) * c.quantity,
-    0
-  );
+  // GST included: the minimum order and the total are what the order is
+  // charged at (see pricing.ts).
+  const { subtotal, tax, total } = cartTotals(cart);
 
   const minOrder = business.minOrderAmount
     ? parseFloat(business.minOrderAmount)
     : 0;
-  const belowMin = minOrder > 0 && subtotal < minOrder;
+  const belowMin = minOrder > 0 && total < minOrder;
 
   if (inline) {
     // Desktop sidebar: full-height inline panel, no backdrop
@@ -80,6 +80,8 @@ export function Cart({
         {cart.length > 0 && (
           <CartFooter
             subtotal={subtotal}
+            tax={tax}
+            total={total}
             symbol={symbol}
             minOrder={minOrder}
             belowMin={belowMin}
@@ -101,9 +103,13 @@ export function Cart({
         onClick={onClose}
       />
 
-      {/* Drawer */}
+      {/* Drawer: above the backdrop (.modal-backdrop, z-index 50) — below it,
+          every tap on the cart landed on the backdrop and closed it. */}
       <div
-        className="fixed z-40 flex flex-col
+        role="dialog"
+        aria-modal="true"
+        aria-label="Your Cart"
+        className="fixed z-[60] flex flex-col
           bottom-0 left-0 right-0 rounded-t-2xl max-h-[85dvh]
           sm:top-0 sm:right-0 sm:bottom-0 sm:left-auto sm:w-[400px] sm:rounded-none sm:rounded-l-2xl sm:max-h-full
           animate-slide-up sm:animate-slide-in-right"
@@ -164,6 +170,8 @@ export function Cart({
         {cart.length > 0 && (
           <CartFooter
             subtotal={subtotal}
+            tax={tax}
+            total={total}
             symbol={symbol}
             minOrder={minOrder}
             belowMin={belowMin}
@@ -254,6 +262,8 @@ function CartItemList({
 
 function CartFooter({
   subtotal,
+  tax,
+  total,
   symbol,
   minOrder,
   belowMin,
@@ -262,6 +272,8 @@ function CartFooter({
   onCheckout,
 }: {
   subtotal: number;
+  tax: number;
+  total: number;
   symbol: string;
   minOrder: number;
   belowMin: boolean;
@@ -300,25 +312,44 @@ function CartFooter({
           <span className="font-medium">
             Minimum order: {symbol}
             {minOrder.toFixed(0)} &mdash; add {symbol}
-            {(minOrder - subtotal).toFixed(0)} more
+            {Math.ceil(minOrder - total)} more
           </span>
         </div>
       )}
 
-      {/* Subtotal */}
+      {/* Subtotal, GST and the total charged */}
+      {tax > 0 && (
+        <dl className="space-y-1 text-sm" style={{ color: "var(--store-text-secondary)" }}>
+          <div className="flex justify-between">
+            <dt>Subtotal</dt>
+            <dd className="tabular-nums" data-testid="cart-subtotal">
+              {symbol}
+              {subtotal.toFixed(2)}
+            </dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>GST</dt>
+            <dd className="tabular-nums" data-testid="cart-tax">
+              {symbol}
+              {tax.toFixed(2)}
+            </dd>
+          </div>
+        </dl>
+      )}
       <div className="flex justify-between items-center">
         <span
           className="text-sm"
           style={{ color: "var(--store-text-secondary)" }}
         >
-          Subtotal
+          Total
         </span>
         <span
           className="text-lg font-bold tabular-nums"
           style={{ color: "var(--store-text)" }}
+          data-testid="cart-total"
         >
           {symbol}
-          {subtotal.toFixed(2)}
+          {total.toFixed(2)}
         </span>
       </div>
 

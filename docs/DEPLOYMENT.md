@@ -14,7 +14,7 @@
                                     |
                                     v
                   +-------------------------------+
-                  | api.fintranzact.com (nginx)        |
+                  | api.fintranzact.com           |
                   | - /api/*   -> tRPC            |
                   | - /store/* -> public catalog  |
                   | - /health  -> health check    |
@@ -132,18 +132,6 @@ The `docker-compose.prod.yml` is compatible with Kamal's deploy model:
 - Graceful shutdown: entrypoint uses `exec` so Node receives SIGTERM directly
 - Image is tagged with both `latest` and the commit SHA for rollback
 
-## Nginx Reverse Proxy
-
-The `nginx/nginx.conf` provides:
-
-- Upstream keepalive connections to the API container
-- Security headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy)
-- Gzip compression for JSON responses
-- Path-based routing (`/api/*`, `/store/*`, `/health`)
-- Appropriate timeouts for PDF generation endpoints (30s) and tRPC (120s)
-- 10MB request body limit for bulk import operations
-- Catalog response caching (60s) for store routes
-
 ### TLS Termination
 
-TLS is expected to be terminated upstream (Cloudflare Tunnel, Caddy, or a cloud load balancer). The nginx config listens on port 80 only. If you need nginx to handle TLS directly, add an `ssl` server block with your certificate paths.
+TLS is terminated by the hosting platform (Railway, Vercel) or upstream (Cloudflare Tunnel, Caddy, or a cloud load balancer). The API container listens on plain HTTP on port 3000.

@@ -27,13 +27,17 @@ type OrderStatus =
   | "delivered"
   | "cancelled";
 
+// Shapes as store.getOrder returns them (store_orders row + its invoice and
+// invoice lines). These were hand-written to other names (amount,
+// invoiceNumber, notes, cancelReason), so the panel showed ₹NaN per line and
+// never the invoice, delivery notes or cancel reason.
 interface LineItem {
   id: string;
   itemName: string;
   description?: string | null;
   quantity: string | number;
   unitPrice: string;
-  amount: string;
+  totalAmount: string;
   unit?: string | null;
   selectedUnit?: string | null;
   conversionFactor?: string | null;
@@ -47,11 +51,14 @@ interface OrderDetail {
   status: OrderStatus;
   totalAmount: string;
   createdAt: Date;
-  notes: string | null;
-  cancelReason: string | null;
+  deliveryAddress: string | null;
+  deliveryCity: string | null;
+  deliveryPincode: string | null;
+  deliveryNotes: string | null;
+  cancellationReason: string | null;
   lineItems: LineItem[];
   invoiceId: string | null;
-  invoiceNumber: string | null;
+  invoice: { invoiceNumber: string } | null;
 }
 
 interface OrderRow {
@@ -361,9 +368,9 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                 Order Progress
               </p>
               <StatusTimeline current={o.status} />
-              {o.status === "cancelled" && o.cancelReason && (
+              {o.status === "cancelled" && o.cancellationReason && (
                 <p className="mt-2 text-xs text-text-tertiary">
-                  Reason: {o.cancelReason}
+                  Reason: {o.cancellationReason}
                 </p>
               )}
             </div>
@@ -391,11 +398,11 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                     {formatDate(o.createdAt)}
                   </span>
                 </div>
-                {o.invoiceNumber && (
+                {o.invoice?.invoiceNumber && (
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] text-text-tertiary">Invoice</span>
                     <span className="text-xs font-mono text-brand-600">
-                      {o.invoiceNumber}
+                      {o.invoice.invoiceNumber}
                     </span>
                   </div>
                 )}
@@ -446,7 +453,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                           {formatCurrency(item.unitPrice)}
                         </td>
                         <td className="px-4 py-3 text-right font-medium tabular-nums">
-                          {formatCurrency(item.amount)}
+                          {formatCurrency(item.totalAmount)}
                         </td>
                       </tr>
                     ))}
@@ -468,14 +475,28 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
               </div>
             </div>
 
+            {/* Where it goes */}
+            {(o.deliveryAddress || o.deliveryCity || o.deliveryPincode) && (
+              <div>
+                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">
+                  Deliver to
+                </p>
+                <p className="text-sm text-text-secondary whitespace-pre-wrap" data-testid="store-order-address">
+                  {[o.deliveryAddress, [o.deliveryCity, o.deliveryPincode].filter(Boolean).join(" ")]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              </div>
+            )}
+
             {/* Notes */}
-            {o.notes && (
+            {o.deliveryNotes && (
               <div>
                 <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-1">
                   Notes
                 </p>
                 <p className="text-sm text-text-secondary whitespace-pre-wrap">
-                  {o.notes}
+                  {o.deliveryNotes}
                 </p>
               </div>
             )}
@@ -485,17 +506,21 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
 
       {/* Cancel confirm dialog */}
       {cancelOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="card max-w-sm w-full mx-4 p-6">
-            <p className="text-sm font-semibold text-text-primary">Cancel Order</p>
+        // Above the order panel: the SlideOver portals to <body> at z-50, so at
+        // the same z-index it covered this dialog and "Cancel Order" could not
+        // be clicked.
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="card max-w-sm w-full mx-4 p-6" role="dialog" aria-modal="true" aria-labelledby="cancel-order-title">
+            <p id="cancel-order-title" className="text-sm font-semibold text-text-primary">Cancel Order</p>
             <p className="text-sm text-text-secondary mt-1">
               Cancel order {o?.orderNumber ?? ""}? This action cannot be undone.
             </p>
             <div className="mt-3">
-              <label className="block text-xs font-medium text-text-secondary mb-1">
+              <label htmlFor="cancel-order-reason" className="block text-xs font-medium text-text-secondary mb-1">
                 Reason (optional)
               </label>
               <textarea
+                id="cancel-order-reason"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 rows={2}
@@ -622,7 +647,9 @@ function StoreOrdersPage() {
             }
           />
         ) : (
-          <div>
+          // Scrolls sideways on a phone: the card around it clips, which hid the
+          // Total, Status and action columns.
+          <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>

@@ -22,6 +22,7 @@ export function PillTabs({ tabs, value, onChange, size = "md", className }: Pill
         <button
           key={tab.value}
           type="button"
+          aria-pressed={tab.value === value}
           onClick={() => tab.value !== value && onChange(tab.value)}
           className={cn(
             "font-medium transition-colors inline-flex items-center gap-1.5 rounded-md",

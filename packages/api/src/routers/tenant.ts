@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { controlDb, tenants, tenantMembers, invitations, users, sessions, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
+import { controlDb, getTenantDb, tenants, tenantMembers, invitations, users, sessions, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
 import { eq, and, gt, isNull, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { createHash } from "node:crypto";
@@ -9,6 +9,15 @@ import { invalidateSessionCache, getSessionIdFromRequest } from "../context.js";
 import { emailService } from "../lib/email.js";
 import { isPaidPlan, isSelfServePlan } from "../lib/plan-catalog.js";
 import { effectiveOwnerPlan, enforceTeamMemberLimit, enforceOrgCreationLimit, getLimits } from "../lib/plan-limits.js";
+import { backfillLegacyBusinessMembers, grantTenantBusinessesToMember } from "../lib/business-membership.js";
+
+/** A member who joins through an invitation can open the organisation's businesses. */
+async function openTenantBusinessesFor(tenantId: string, userId: string, role: string): Promise<void> {
+  const db = await getTenantDb(tenantId);
+  // Legacy businesses (no members yet) first get the whole team, as on first use.
+  await backfillLegacyBusinessMembers(db, tenantId);
+  await grantTenantBusinessesToMember(db, tenantId, userId, role);
+}
 
 /** Tenant roles that manage billing, and so may change the organisation's plan. */
 const PLAN_MANAGER_ROLES: string[] = ["owner", "superadmin"];
@@ -270,6 +279,7 @@ export const tenantRouter = router({
           .set({ acceptedAt: new Date() })
           .where(eq(invitations.id, invitation.id));
       });
+      await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
 
       const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
       return { tenantId: invitation.tenantId, tenantName };
@@ -522,6 +532,7 @@ export const tenantRouter = router({
           invitedBy: invitation.invitedBy ?? undefined,
           acceptedAt: new Date(),
         });
+        await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
         const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
         return { tenantId: invitation.tenantId, tenantName };
       }
@@ -556,6 +567,7 @@ export const tenantRouter = router({
           .set({ acceptedAt: new Date() })
           .where(eq(invitations.id, invitation.id));
       });
+      await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
 
       const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
       return { tenantId: invitation.tenantId, tenantName };

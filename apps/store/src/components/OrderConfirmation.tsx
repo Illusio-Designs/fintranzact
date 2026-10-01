@@ -104,6 +104,7 @@ export function OrderConfirmation({
             <span
               className="text-sm font-bold tabular-nums"
               style={{ color: accent }}
+              data-testid="order-number"
             >
               {result.orderNumber}
             </span>
@@ -122,6 +123,7 @@ export function OrderConfirmation({
             <span
               className="text-sm font-bold tabular-nums"
               style={{ color: "var(--store-text)" }}
+              data-testid="order-total"
             >
               {symbol}
               {parseFloat(result.totalAmount).toFixed(2)}

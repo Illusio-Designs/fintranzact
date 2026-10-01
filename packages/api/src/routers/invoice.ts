@@ -33,6 +33,7 @@ import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 import { assertLineExtras, lineExtras } from "../lib/line-extras.js";
 import { resolveDeliveryMethod } from "../lib/delivery-methods.js";
 import { recomputeInvoiceStatus, recomputeReferencedInvoice } from "../lib/invoice-status.js";
+import { syncReversingItc } from "../lib/itc-reversal.js";
 
 /**
  * Keep a purchase invoice's live ITC entry equal to the invoice after an edit:
@@ -498,6 +499,7 @@ export const invoiceRouter = router({
         type: input.type,
         documentType: "invoice",
         invoiceNumber,
+        supplierInvoiceNumber: input.type === "purchase" ? input.supplierInvoiceNumber || null : null,
         invoiceDate,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         subtotal: totals.subtotal,
@@ -856,6 +858,7 @@ export const invoiceRouter = router({
           });
           // A cancelled or reinstated note or return changes what settles its invoice.
           await recomputeReferencedInvoice(tx, ctx.businessId, updated);
+          await syncReversingItc(tx, ctx.businessId, input.id);
         }
         return updated;
       });
@@ -890,6 +893,8 @@ export const invoiceRouter = router({
       partyId: z.string().uuid().optional(),
       invoiceDate: z.string().datetime().optional(),
       dueDate: z.string().datetime().optional().nullable(),
+      /** Purchase invoices: the supplier's bill number (null clears it). */
+      supplierInvoiceNumber: z.string().trim().max(50).optional().nullable(),
       notes: z.string().max(2000).optional().nullable(),
       termsAndConditions: z.string().max(2000).optional().nullable(),
       charges: z.array(invoiceChargeSchema).optional(),
@@ -997,6 +1002,9 @@ export const invoiceRouter = router({
         if (input.dueDate !== undefined) updates.dueDate = input.dueDate ? new Date(input.dueDate) : null;
         if (input.notes !== undefined) updates.notes = input.notes;
         if (input.termsAndConditions !== undefined) updates.termsAndConditions = input.termsAndConditions;
+        if (input.supplierInvoiceNumber !== undefined && existing.type === "purchase") {
+          updates.supplierInvoiceNumber = input.supplierInvoiceNumber || null;
+        }
         // Keeping the saved method is always fine, even one since removed
         // from Settings → Shipping; a change must be one the business offers.
         if (input.deliveryMethod !== undefined && input.deliveryMethod !== existing.deliveryMethod) {
@@ -1163,6 +1171,8 @@ export const invoiceRouter = router({
 
         // 5. Apply update
         const [result] = await tx.update(invoices).set(updates).where(eq(invoices.id, input.id)).returning();
+        // An edited return or note to a supplier takes back its new tax.
+        await syncReversingItc(tx, ctx.businessId, result.id);
 
         // A new total changes how much of it is settled: for a note or return,
         // on the invoice it adjusts; for an invoice, on itself.
@@ -1251,6 +1261,7 @@ export const invoiceRouter = router({
         const [deleted] = await tx.select({ documentType: invoices.documentType, referenceDocumentId: invoices.referenceDocumentId })
           .from(invoices).where(eq(invoices.id, input.id)).limit(1);
         if (deleted) await recomputeReferencedInvoice(tx, ctx.businessId, deleted);
+        await syncReversingItc(tx, ctx.businessId, input.id);
       });
 
       await logAudit(ctx.db, {

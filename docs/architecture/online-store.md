@@ -1,8 +1,39 @@
 # Online Store Architecture for Fintranzact
 
-**Status**: Proposed
-**Date**: 2026-03-25
+**Status**: Built (the sections below are the original proposal; see "As built" for where the code differs)
+**Date**: 2026-03-25 (proposal); as-built note 2026-10-01
 **Author**: Architecture Review
+
+## As built
+
+Where it lives:
+
+| Part | Location |
+|---|---|
+| Storefront SPA | `apps/store` (React 19 + Vite + Tailwind; `src/App.tsx`, `src/api.ts`, `src/components/` — Header, ItemGrid, ItemCard, Cart, Checkout, PhoneVerify, OrderConfirmation, Footer) |
+| Public store API | Plain Hono routes in `packages/api/src/server.ts`: `GET /store/:slug/catalog.json`, `GET /store/:slug/logo`, `POST /store/:slug/identify`, `POST /store/:slug/order` |
+| Store origin check | `packages/api/src/lib/store-origin.ts` |
+| Admin API | tRPC `store` router, `packages/api/src/routers/store.ts`: `checkSlug`, `getSettings`, `updateSettings`, `listStoreItems`, `bulkToggleItems`, `updateItemStoreSettings`, `updateVariantStoreSettings`, `listOrders`, `getOrder`, `confirmOrder`, `cancelOrder`, `updateOrderStatus` |
+| Schema | `packages/db/src/tenant-schema.ts`: `store_*` columns on `businesses` (`store_enabled`, `store_slug`, `store_tagline`, `store_accent_color`, `store_min_order_amount`, `store_delivery_note`, `store_whatsapp_number`, `store_allow_negative_stock`, `store_order_prefix`, `next_store_order_number`), on `items` (`store_enabled`, `store_price`, `store_sort_order`, `store_category`, `store_description`) and on `item_variants` (`store_enabled`, `store_price`); table `store_orders` with enum `store_order_status` (`pending`, `confirmed`, `preparing`, `ready`, `delivered`, `cancelled`) |
+| Admin UI | `apps/web`: Settings → Online Store (`src/components/settings/StoreTab.tsx`) and the `/store-orders` route (`src/routes/store-orders.tsx`) |
+| Other clients | CLI `store` group (`packages/cli/src/bin/registrars/store.ts`), MCP store tools (`packages/mcp/src/tools/store.ts`, 7 tools) |
+| Help | `apps/web/src/content/help/online-store/` (served at `/help`) |
+
+How it differs from the proposal:
+
+- **Order → invoice**: an order creates a sale invoice with status `unfulfilled` (not `draft`) and `source = 'online_store'`, plus a `store_orders` row. Stock is taken when the order is placed (batch-tracked items first-expiry-first-out). `confirmOrder` moves the invoice to `sent`; `cancelOrder` cancels it and returns the stock.
+- **Customer party**: orders are billed to a shared "Walk-in Customer" party per business. Customer name, phone, email and address are kept on `store_orders`, not as a new party.
+- **Customer check**: `POST /store/:slug/identify` takes a phone number plus a Cloudflare Turnstile token and returns `{ known, name }` — the first name of a party with a matching phone, if any. There is no OTP.
+- **Abuse protection**: Turnstile on identify and order, 5 orders per minute per phone, 20 requests per minute per IP per endpoint, and an Origin/Referer allow-list. `/store/*` is exempt from the CSRF middleware.
+- **Caching**: `catalog.json` is sent with `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`; slug lookups are cached in memory.
+- **Storefront URL**: the SPA reads the slug from the first path segment (`/<slug>`) and calls `${API_URL}/store/<slug>/…`.
+
+Not built (proposed above, not found in the code):
+
+- A `store_categories` table — categories come from `items.store_category` or `items.category`.
+- Item images in the catalogue.
+- Notifications to the business for new store orders (push or email); new orders show up in the `/store-orders` list.
+- Online payment at checkout (Razorpay/Cashfree), Shopify/WooCommerce integration, subdomains or custom domains per store, and store themes beyond the accent colour and tagline.
 
 ---
 
@@ -42,7 +73,7 @@ The online store is a public-facing storefront that lets Fintranzact businesses 
 
 ### ADR-001: Store as a Separate Hono App (Not a Separate Deployment)
 
-**Status**: Proposed
+**Status**: Accepted, built (`/store/*` routes in `packages/api/src/server.ts`)
 
 **Context**: The store needs public, unauthenticated access to item catalogs and order placement. The main app's tRPC is designed around authenticated sessions (`protectedProcedure`, `businessProcedure`). We need public endpoints, but creating a second deployment doubles infrastructure cost and operational complexity.
 
@@ -66,7 +97,7 @@ For the cloud tier, a CDN (Cloudflare) sits in front and caches catalog response
 
 ### ADR-002: Path-Based Routing (`store.fintranzact.com/:slug`) Over Subdomain Routing
 
-**Status**: Proposed
+**Status**: Accepted, built (storefront at `/<slug>`, API at `/store/:slug/*`; no per-store subdomains)
 
 **Context**: The original request asks for `business-slug.store.fintranzact.com`. Wildcard subdomains require wildcard TLS certificates, DNS configuration, and custom domain support is complex (per-domain TLS via SNI). Self-hosters typically cannot set up wildcard DNS.
 
@@ -92,7 +123,7 @@ Custom domains (Phase 2) are handled via a CNAME to `store.fintranzact.com` plus
 
 ### ADR-003: Orders Create Draft Invoices (Not a Separate Orders Table)
 
-**Status**: Proposed
+**Status**: Accepted, built with a change: the invoice is created as `unfulfilled`, not `draft`
 
 **Context**: We could model orders as a separate entity with their own lifecycle, or funnel them directly into the existing invoice pipeline. A separate `store_orders` table means duplicating line item logic, totals calculation, and status management.
 
@@ -120,7 +151,7 @@ This means:
 
 ### ADR-004: Store Frontend as a Lightweight SPA Embedded in the Monorepo
 
-**Status**: Proposed
+**Status**: Accepted, built (`apps/store`, `GET /store/:slug/catalog.json`)
 
 **Context**: The store page must be SEO-friendly and load fast. Options range from a fully server-rendered page to a separate SPA.
 
@@ -150,7 +181,7 @@ For Phase 2, this can be upgraded to full SSR (Hono + React server components or
 
 ### ADR-005: Store Item Visibility as Columns on the Items Table (Not a Separate Junction Table)
 
-**Status**: Proposed
+**Status**: Accepted, built (`store_*` columns on `items` and `item_variants`)
 
 **Context**: We need to track which items are visible on the online store, their store-specific price, sort order, and store category. This could be a separate `item_store_settings` junction table or columns on the existing `items` table.
 

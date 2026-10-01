@@ -12,6 +12,8 @@ import { items, recurringInvoiceTemplates } from "@fintranzact/db";
 import { getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createInvoiceWithItems, createParty, createTestWorld, type TestWorld } from "../helpers/fixtures.js";
 import { callerFor, expectCode, waitForAudit } from "../helpers/assertions.js";
+import { istDateParts, istStartOfDay } from "@fintranzact/shared";
+import { firstRunDate } from "../../routers/recurringInvoice.js";
 
 let world: TestWorld;
 const UNKNOWN = "00000000-0000-4000-8000-000000000000";
@@ -48,6 +50,20 @@ describe("recurringInvoice.create", () => {
     const t = await caller().recurringInvoice.create(input({ name: "Future start", startDate: start.toISOString() }));
     expect(new Date(t.nextRunDate).toISOString()).toBe(start.toISOString());
     expect(await waitForAudit(world.business1.id, "recurringInvoice.create", t.id)).toHaveLength(1);
+  });
+
+  // Regression (J8 journey): a template starting today (the form's default,
+  // sent as that day's midnight) skipped today and first ran a month later.
+  it("runs a template that starts today today, and one that started earlier a period from now", async () => {
+    const now = new Date();
+    const { year, month, day } = istDateParts(now);
+    const midnight = istStartOfDay(year, month, day);
+    const t = await caller().recurringInvoice.create(input({ name: "Starts today", startDate: midnight.toISOString() }));
+    expect(new Date(t.nextRunDate).toISOString()).toBe(midnight.toISOString());
+
+    const lastWeek = new Date(midnight.getTime() - 7 * 86_400_000);
+    expect(firstRunDate(lastWeek, "monthly", null, now).getTime()).toBeGreaterThan(now.getTime());
+    expect(firstRunDate(midnight, "monthly", null, now).toISOString()).toBe(midnight.toISOString());
   });
 
   it("validates input", async () => {

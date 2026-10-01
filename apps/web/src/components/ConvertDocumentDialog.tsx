@@ -6,6 +6,7 @@
  */
 import { Fragment, useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { cn, getDocumentTypeLabel } from "@/lib/utils";
 import { Modal } from "@/components/ui/Modal";
 import { Spinner } from "@/components/ui/Spinner";
@@ -72,7 +73,8 @@ export function ConvertDocumentDialog({
       utils.salesOrder.list.invalidate();
       utils.goodsReceiptNote.list.invalidate();
       utils.orders.invalidate();
-      utils.item.list.invalidate();
+      void invalidateStockViews(utils);
+      utils.party.invalidate();
       onClose();
     },
     onError: (err) => toast.error("Failed to convert", err.message),
@@ -133,6 +135,7 @@ export function ConvertDocumentDialog({
                 <button
                   key={t.type}
                   type="button"
+                  aria-pressed={target === t.type}
                   onClick={() => setTarget(t.type)}
                   className={cn(
                     "flex-1 py-1.5 px-3 rounded-lg text-sm font-medium transition-colors border",

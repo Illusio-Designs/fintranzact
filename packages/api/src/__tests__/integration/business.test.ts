@@ -218,6 +218,25 @@ describe("business.list", () => {
     expect(found!.name).toBe("List Test Biz");
   });
 
+  // Regression (J11 settings journey): signatureData (bytea) came back in the
+  // list as a superjson Buffer the browser cannot rebuild, so once a business
+  // had a signature its business list stopped loading in the web app.
+  it("never sends logo or signature bytes — only their MIME type and timestamp", async () => {
+    const caller = tenantLevelCaller(owner, tenant.id);
+    const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAIAAAA8r+mnAAAAEUlEQVR4nGMQkYvCihioJwEAYtERgXCh6XsAAAAASUVORK5CYII=";
+    await caller.business.uploadLogo({ id: createdBizId, data: { dataUrl: png, width: 8, height: 4 } });
+    await caller.business.uploadSignature({ id: createdBizId, data: { dataUrl: png, width: 8, height: 4 } });
+
+    const found = (await caller.business.list()).find((b) => b.id === createdBizId)!;
+    expect(found).toMatchObject({ logoMimeType: "image/png", signatureMimeType: "image/png" });
+    expect(found).not.toHaveProperty("logoData");
+    expect(found).not.toHaveProperty("signatureData");
+
+    const one = await caller.business.getById({ id: createdBizId });
+    expect(one).toMatchObject({ signatureMimeType: "image/png" });
+    expect(one).not.toHaveProperty("signatureData");
+  });
+
   it("seller sees only businesses they are assigned to — listing requires only tenantProcedure (not admin)", async () => {
     const caller = tenantLevelCaller(seller, tenant.id);
     const before = await caller.business.list();
@@ -307,6 +326,22 @@ describe("business.update", () => {
     expect(updated).toBeDefined();
     expect(updated!.name).toBe("Updated Test Biz");
     expect(updated!.address).toBe("55, New Road");
+  });
+
+  // Regression (J11 settings journey): update returned the whole row, logo
+  // and signature bytes included. Those travel as a superjson Buffer the
+  // browser cannot rebuild, so once a business had a logo every Settings save
+  // (prefixes, terms, shipping) was stored but never confirmed in the app.
+  it("does not send the logo or signature bytes back", async () => {
+    const caller = businessLevelCaller(owner, tenant.id, bizId);
+    const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAIAAAA8r+mnAAAAEUlEQVR4nGMQkYvCihioJwEAYtERgXCh6XsAAAAASUVORK5CYII=";
+    await caller.business.uploadLogo({ id: bizId, data: { dataUrl: png, width: 8, height: 4 } });
+    await caller.business.uploadSignature({ id: bizId, data: { dataUrl: png, width: 8, height: 4 } });
+
+    const updated = await caller.business.update({ id: bizId, data: { invoicePrefix: "UTX" } });
+    expect(updated).toMatchObject({ invoicePrefix: "UTX", logoMimeType: "image/png", signatureMimeType: "image/png" });
+    expect(updated).not.toHaveProperty("logoData");
+    expect(updated).not.toHaveProperty("signatureData");
   });
 
   it("persists custom shipping methods (Settings → Shipping) and clears them with an empty list", async () => {

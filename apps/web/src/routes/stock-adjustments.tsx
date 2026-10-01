@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
 import { formatDate, todayISODate, toISOString, cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -56,7 +57,7 @@ function StockAdjustmentsPage() {
 
   const adjust = trpc.stock.adjust.useMutation({
     onSuccess: async () => {
-      await Promise.all([utils.stock.adjustments.invalidate(), utils.stock.warehouses.invalidate(), utils.stock.balances.invalidate()]);
+      await invalidateStockViews(utils);
       toast({ title: "Stock adjusted", variant: "success" });
       setOpen(false);
       setLines([newLine()]);

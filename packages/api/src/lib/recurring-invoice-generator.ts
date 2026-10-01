@@ -44,13 +44,22 @@ interface TemplateRow {
   createdByUserId: string | null;
 }
 
-/** Advance a date by N months, clamping to the last day of the target month. */
+const IST_OFFSET_MS = 330 * 60_000;
+
+/**
+ * Advance a date by N months on the Indian calendar, clamping to the last day
+ * of the target month. The calendar is India's whatever the server's time
+ * zone: a run due 1 Oct 00:00 IST (30 Sep 18:30 UTC) is next due on 1 Nov,
+ * not on 31 Oct as the UTC calendar would have it.
+ */
 function addMonthsClamped(d: Date, months: number): void {
-  const originalDay = d.getDate();
-  d.setDate(1); // avoid day overflow skipping months
-  d.setMonth(d.getMonth() + months);
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  d.setDate(Math.min(originalDay, lastDay));
+  const ist = new Date(d.getTime() + IST_OFFSET_MS);
+  const originalDay = ist.getUTCDate();
+  ist.setUTCDate(1); // avoid day overflow skipping months
+  ist.setUTCMonth(ist.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth() + 1, 0)).getUTCDate();
+  ist.setUTCDate(Math.min(originalDay, lastDay));
+  d.setTime(ist.getTime() - IST_OFFSET_MS);
 }
 
 /** Calculate the next run date after a given date based on frequency. */

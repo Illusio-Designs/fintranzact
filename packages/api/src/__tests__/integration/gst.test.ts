@@ -1039,7 +1039,7 @@ describe("GSTR-3B — credit/debit notes adjust outward tax (3.1) and ITC (4)", 
     await doc("7000.00", "sale", "sales_order", "NT-SO-1");
     await doc("7000.00", "sale", "delivery_challan", "NT-DC-1");
 
-    // Inward: 10,000 invoice + 500 supplier debit note − 1,000 supplier credit note − 2,000 returned
+    // Inward: 10,000 invoice − 500 our debit note − 1,000 supplier credit note − 2,000 returned
     await doc("10000.00", "purchase", "invoice", "NT-PI-1");
     await doc("500.00", "purchase", "debit_note", "NT-PDN-1");
     await doc("1000.00", "purchase", "credit_note", "NT-PCN-1");
@@ -1069,15 +1069,17 @@ describe("GSTR-3B — credit/debit notes adjust outward tax (3.1) and ITC (4)", 
     expect(report.taxPayable.sgst).toBeCloseTo(1350, 2);
   });
 
-  it("table 4 ITC adds supplier debit notes and takes back credit notes and returns", async () => {
+  it("table 4 ITC takes back our debit notes, the supplier's credit notes and returns", async () => {
     const report = await caller().gst.gstr3b({ year: NOTE_YEAR, month: NOTE_MONTH });
 
-    // 1,800 + 90 − 180 − 360 = 1,350 ITC → 675 CGST + 675 SGST
-    expect(report.itc.cgst).toBeCloseTo(675, 2);
-    expect(report.itc.sgst).toBeCloseTo(675, 2);
+    // A purchase-side debit note is ours to the supplier, claiming value back
+    // (it reduces what we owe, as the ledger and derived journal post it):
+    // 1,800 − 90 − 180 − 360 = 1,170 ITC → 585 CGST + 585 SGST
+    expect(report.itc.cgst).toBeCloseTo(585, 2);
+    expect(report.itc.sgst).toBeCloseTo(585, 2);
     expect(report.itc.igst).toBeCloseTo(0, 2);
-    expect(report.itc.total).toBeCloseTo(1350, 2);
-    expect(report.netTax.total).toBeCloseTo(2700 - 1350, 2);
+    expect(report.itc.total).toBeCloseTo(1170, 2);
+    expect(report.netTax.total).toBeCloseTo(2700 - 1170, 2);
   });
 });
 
@@ -1186,10 +1188,11 @@ describe("GSTR-1 portal JSON — b2cl and b2cs follow the GSTN schema", () => {
       .map(({ sply_ty, pos, rt, txval, iamt, camt, samt }) => ({ sply_ty, pos, rt, txval, iamt, camt, samt }))
       .sort((a, b) => a.rt - b.rt || a.sply_ty.localeCompare(b.sply_ty));
     expect(rows).toEqual([
-      { sply_ty: "INTRA", pos: "27", rt: 0, txval: 1000, iamt: 0, camt: 0, samt: 0 },
       { sply_ty: "INTER", pos: "29", rt: 18, txval: 10000, iamt: 1800, camt: 0, samt: 0 },
       { sply_ty: "INTRA", pos: "27", rt: 18, txval: 10000, iamt: 0, camt: 900, samt: 900 },
     ]);
+    // The 0% supply is nil-rated: Table 8 (`nil`), not B2CS
+    expect(json.nil).toEqual({ inv: [{ sply_ty: "INTRAB2C", nil_amt: 1000, expt_amt: 0, ngsup_amt: 0 }] });
   });
 });
 

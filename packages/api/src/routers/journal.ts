@@ -42,12 +42,12 @@ export const journalRouter = router({
           createdAt: journalEntries.createdAt,
           updatedAt: journalEntries.updatedAt,
           lineCount: sql<number>`(
-            SELECT COUNT(*) FROM journal_entry_lines
-            WHERE journal_entry_id = ${journalEntries.id}
+            SELECT COUNT(*)::int FROM journal_entry_lines
+            WHERE journal_entry_lines.journal_entry_id = journal_entries.id
           )`,
           totalAmount: sql<string>`(
             SELECT COALESCE(SUM(debit::numeric), 0)::text FROM journal_entry_lines
-            WHERE journal_entry_id = ${journalEntries.id}
+            WHERE journal_entry_lines.journal_entry_id = journal_entries.id
           )`,
         })
         .from(journalEntries)

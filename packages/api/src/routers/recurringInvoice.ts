@@ -5,7 +5,7 @@ import {
   recurringInvoiceTemplates, recurringInvoiceRuns, parties, invoices, items, shipments,
 } from "@fintranzact/db";
 import {
-  createRecurringInvoiceSchema, updateRecurringInvoiceSchema, paginationSchema,
+  createRecurringInvoiceSchema, updateRecurringInvoiceSchema, paginationSchema, istDateParts, istStartOfDay,
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -41,6 +41,18 @@ async function assertLineItems(db: any, businessId: string, lineItems: Array<{ i
   if (owned.length !== ids.length) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "One or more items were not found in this business" });
   }
+}
+
+/**
+ * When a new template first runs: on its start date if that is today (in
+ * India) or later — a template starting today raises today's invoice —
+ * otherwise (a start date already gone by) one period from now, without
+ * back-filling the missed periods.
+ */
+export function firstRunDate(startDate: Date, frequency: string, customIntervalDays?: number | null, now = new Date()): Date {
+  const today = istDateParts(now);
+  if (startDate >= istStartOfDay(today.year, today.month, today.day)) return startDate;
+  return computeNextRunDate(now, frequency, customIntervalDays);
 }
 
 export const recurringInvoiceRouter = router({
@@ -139,7 +151,7 @@ export const recurringInvoiceRouter = router({
     await assertTemplateRefs(ctx.db, ctx.businessId, input);
 
     const startDate = new Date(input.startDate);
-    const nextRunDate = startDate > new Date() ? startDate : computeNextRunDate(new Date(), input.frequency, input.customIntervalDays);
+    const nextRunDate = firstRunDate(startDate, input.frequency, input.customIntervalDays);
 
     const [template] = await ctx.db.insert(recurringInvoiceTemplates).values({
       businessId: ctx.businessId,

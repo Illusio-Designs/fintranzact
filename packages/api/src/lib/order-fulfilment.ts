@@ -35,6 +35,37 @@ export function notOrderDocument() {
   return sql`${invoices.documentType} NOT IN ('sales_order', 'purchase_order', 'goods_receipt_note')`;
 }
 
+/**
+ * Documents a party's balance is made of: bills (invoices, debit notes) and
+ * what adjusts them (credit notes, returns). Quotations, proformas and
+ * delivery challans are not bills — a challan's goods are billed on the
+ * invoice made from it — and orders and GRNs move no money either.
+ */
+export const BILL_DOCUMENT_TYPES = ["invoice", "debit_note", "credit_note", "sales_return", "purchase_return"] as const;
+
+/** Condition that keeps only documents that count toward what a party owes. */
+export function billDocument() {
+  return sql`${invoices.documentType} IN ('invoice', 'debit_note', 'credit_note', 'sales_return', 'purchase_return')`;
+}
+
+/**
+ * Whether a bill document takes off what a party owes (or is owed) rather
+ * than adding to it: credit notes and returns on either side, and on the
+ * purchase side a debit note — ours to the supplier, claiming value back
+ * (made from goods rejected on a GRN). A sale debit note charges the
+ * customer more, like an invoice. The derived journal (derive-ledger) posts
+ * them the same way.
+ */
+export function reducesBalance(documentType: string, type: string): boolean {
+  return ["credit_note", "sales_return", "purchase_return"].includes(documentType)
+    || (documentType === "debit_note" && type === "purchase");
+}
+
+/** SQL form of {@link reducesBalance} on the invoices table. */
+export function reducingDocument() {
+  return sql`(${invoices.documentType} IN ('credit_note', 'sales_return', 'purchase_return') OR (${invoices.documentType} = 'debit_note' AND ${invoices.type} = 'purchase'))`;
+}
+
 /** What each pending-tracked document can be converted into, and so is fulfilled by. */
 export const FULFILLED_BY: Record<PendingTrackedDocumentType, DocumentType[]> = {
   sales_order: ["delivery_challan", "invoice"],

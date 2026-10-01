@@ -712,6 +712,10 @@ export const invoices = pgTable("invoices", {
   status: invoiceStatusEnum("status").default("draft").notNull(),
   documentType: documentTypeEnum("document_type").default("invoice").notNull(),
   invoiceNumber: text("invoice_number").notNull(),
+  // Purchase documents: the supplier's own number for the bill (what the
+  // supplier reports in GSTR-1, so what GSTR-2B shows). Our invoiceNumber is
+  // the business's internal sequence and never appears in the 2B.
+  supplierInvoiceNumber: text("supplier_invoice_number"),
   invoiceDate: timestamp("invoice_date", { withTimezone: true }).defaultNow().notNull(),
   dueDate: timestamp("due_date", { withTimezone: true }),
   subtotal: numeric("subtotal", { precision: 15, scale: 2 }).default("0").notNull(),

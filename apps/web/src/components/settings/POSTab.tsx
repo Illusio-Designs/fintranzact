@@ -40,7 +40,7 @@ export function POSTab({ biz }: POSTabProps) {
       <div className="card p-6">
         <div className="flex items-start justify-between gap-6">
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-text-primary">
+            <h3 id="pos-mode-heading" className="text-base font-semibold text-text-primary">
               Point-of-Sale mode
             </h3>
             <p className="text-sm text-text-secondary mt-1 leading-relaxed">
@@ -56,6 +56,7 @@ export function POSTab({ biz }: POSTabProps) {
             disabled={mutation.isPending}
             role="switch"
             aria-checked={enabled}
+            aria-labelledby="pos-mode-heading"
             className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors ${
               enabled ? "bg-brand-600" : "bg-surface-3"
             } ${mutation.isPending ? "opacity-50 cursor-wait" : "cursor-pointer"}`}

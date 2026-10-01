@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from "react";
 import { z } from "zod";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
+import { useCan } from "@/lib/permissions";
 import { getBusinessId } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn } from "@/lib/utils";
 import { apiUrl } from "@/lib/api-url";
@@ -501,6 +503,8 @@ function InvoiceDetailPanel({
     onSuccess: () => {
       utils.invoice.list.invalidate();
       utils.dashboard.summary.invalidate();
+      // Cancelling puts the stock back.
+      void invalidateStockViews(utils);
       if (invoiceId) utils.invoice.getById.invalidate({ id: invoiceId });
       toast.success("Invoice status updated");
     },
@@ -938,22 +942,24 @@ function InvoicesPage() {
   // the Dashboard "+ New Invoice" CTA so users land directly in the form
   // rather than just on the list).
   const { id: idFromSearch, create: createFromSearch } = useSearch({ from: "/invoices" });
+  // Accountants read invoices but cannot raise them: no way in to the form.
+  const canCreate = useCan("Invoice", "create");
   useEffect(() => {
     if (idFromSearch) {
       setSelectedInvoiceId(idFromSearch);
     }
   }, [idFromSearch]);
   useEffect(() => {
-    if (createFromSearch) {
+    if (createFromSearch && canCreate) {
       setShowCreate(true);
     }
-  }, [createFromSearch]);
+  }, [createFromSearch, canCreate]);
 
   const debouncedSearch = useDebounce(search, 300);
 
   // Keyboard shortcut: N to create new invoice
   useHotkeys([
-    { key: "n", handler: () => setShowCreate(true), description: "New invoice", scope: "invoices" },
+    { key: "n", handler: () => canCreate && setShowCreate(true), description: "New invoice", scope: "invoices" },
   ]);
 
   // Reset to page 1 whenever filters or sort change
@@ -1077,13 +1083,15 @@ function InvoicesPage() {
                 Switch to POS
               </a>
             )}
-            <button
-              className="btn-primary inline-flex items-center gap-2"
-              onClick={() => setShowCreate(true)}
-            >
-              + New Invoice
-              <KbdShortcut keys={["N"]} className="opacity-60" />
-            </button>
+            {canCreate && (
+              <button
+                className="btn-primary inline-flex items-center gap-2"
+                onClick={() => setShowCreate(true)}
+              >
+                + New Invoice
+                <KbdShortcut keys={["N"]} className="opacity-60" />
+              </button>
+            )}
           </div>
         }
       />
@@ -1130,12 +1138,14 @@ function InvoicesPage() {
             description={`No ${type === "sale" ? "sales" : "purchase"} invoices${status ? ` with status "${status}"` : ""}.`}
             encouragement={!search && !status ? "Create your first invoice — it only takes a minute." : undefined}
             action={
-              <button
-                className="btn-primary"
-                onClick={() => setShowCreate(true)}
-              >
-                + New Invoice
-              </button>
+              canCreate ? (
+                <button
+                  className="btn-primary"
+                  onClick={() => setShowCreate(true)}
+                >
+                  + New Invoice
+                </button>
+              ) : undefined
             }
           />
         ) : (

@@ -58,7 +58,6 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: typecheck-lint
 
     services:
       postgres:
@@ -110,7 +109,6 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: typecheck-lint
     steps:
       - uses: actions/checkout@v4
 
@@ -127,11 +125,28 @@ jobs:
       - name: Build all packages
         run: pnpm build
 
-  e2e:
-    name: E2E Tests
+  # E2E runs in parallel jobs (each with its own database and servers),
+  # then "E2E Tests" reports the combined result. The long journeys get
+  # their own jobs (4 per screen size) so they don't pile into one shard.
+  e2e-shard:
+    name: E2E (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: [typecheck-lint]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "routes 1/3", project: chromium, shard: 1/3 }
+          - { name: "routes 2/3", project: chromium, shard: 2/3 }
+          - { name: "routes 3/3", project: chromium, shard: 3/3 }
+          - { name: "journeys desktop 1/4", project: journeys-desktop, shard: 1/4 }
+          - { name: "journeys desktop 2/4", project: journeys-desktop, shard: 2/4 }
+          - { name: "journeys desktop 3/4", project: journeys-desktop, shard: 3/4 }
+          - { name: "journeys desktop 4/4", project: journeys-desktop, shard: 4/4 }
+          - { name: "journeys phone 1/4", project: journeys-phone, shard: 1/4 }
+          - { name: "journeys phone 2/4", project: journeys-phone, shard: 2/4 }
+          - { name: "journeys phone 3/4", project: journeys-phone, shard: 3/4 }
+          - { name: "journeys phone 4/4", project: journeys-phone, shard: 4/4 }
 
     services:
       postgres:
@@ -153,6 +168,12 @@ jobs:
       DATABASE_URL: postgresql://test:test@localhost:5433/fintranzact_test
       PORT: 3000
       CORS_ORIGINS: http://localhost:5173
+      # Throwaway platform admin for the J13/J14 journeys. It exists only in
+      # this job's temporary database; not a real account.
+      PLATFORM_ADMIN_EMAIL: ci-admin@e2e.fintranzact.test
+      PLATFORM_ADMIN_PASSWORD: ci-e2e-throwaway-Admin-2026
+      E2E_PLATFORM_ADMIN_EMAIL: ci-admin@e2e.fintranzact.test
+      E2E_PLATFORM_ADMIN_PASSWORD: ci-e2e-throwaway-Admin-2026
 
     steps:
       - uses: actions/checkout@v4
@@ -167,28 +188,57 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
       - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Push schema to test DB
         run: pnpm db:push
 
       - name: Run E2E tests
-        run: pnpm test:e2e
+        run: pnpm test:e2e --project=${{ matrix.project }} --shard=${{ matrix.shard }}
 
       - name: Upload Playwright traces
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces
+          name: playwright-traces-${{ matrix.project }}-${{ strategy.job-index }}
           path: e2e/test-results/
           retention-days: 7
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: e2e-shard
+    if: ${{ !cancelled() }}
+    steps:
+      - name: All shards passed
+        run: |
+          if [ "${{ needs.e2e-shard.result }}" != "success" ]; then
+            echo "E2E shards: ${{ needs.e2e-shard.result }}"
+            exit 1
+          fi
 
   docker-build:
     name: Docker Build (dry run)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: typecheck-lint
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4

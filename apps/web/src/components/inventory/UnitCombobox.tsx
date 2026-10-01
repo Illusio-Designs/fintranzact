@@ -17,8 +17,11 @@ export function UnitCombobox({
   onChange,
   known,
   placeholder = "Search items",
+  ariaLabel,
 }: {
   label?: string;
+  /** Accessible name for a picker without a visible label (a row of a list). */
+  ariaLabel?: string;
   value: string;
   onChange: (key: string, info: UnitChoice | null) => void;
   known?: UnitChoice | null;
@@ -43,6 +46,7 @@ export function UnitCombobox({
   return (
     <Combobox
       label={label}
+      ariaLabel={ariaLabel}
       value={value}
       onChange={(v) => {
         const u = units.find((x) => unitKey(x.itemId, x.variantId) === v);

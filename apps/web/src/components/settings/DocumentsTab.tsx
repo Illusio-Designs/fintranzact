@@ -121,17 +121,19 @@ export function DocumentsTab({ biz }: DocumentsTabProps) {
                     value={prefixes[doc.prefixField]}
                     onChange={(e) => handlePrefixChange(doc.prefixField, e.target.value.toUpperCase())}
                     placeholder="e.g. INV"
+                    aria-label={`${doc.label} prefix`}
                     maxLength={10}
                   />
                 </div>
                 <span className="text-sm text-text-tertiary flex-1">
                   Next #:{" "}
-                  <span className="font-mono text-text-primary">
+                  <span className="font-mono text-text-primary" data-testid={`next-number-${doc.key}`}>
                     {biz[doc.counterField] ?? 1}
                   </span>
                 </span>
                 <button
                   className="btn-ghost text-xs px-2 py-1"
+                  aria-label={`Change next ${doc.label} number`}
                   onClick={() =>
                     setEditingSeq(editingSeq === doc.counterField ? null : doc.counterField)
                   }

@@ -5,6 +5,7 @@
  *   gst_report     — generate GSTR1 or GSTR3B summary data for a given month/year
  *   gst_report_csv — get GSTR-1 data in CSV format ready for portal upload
  *   gst_gstr9      — GSTR-9 annual return summary
+ *   gst_cmp08      — CMP-08 quarterly return for composition dealers
  *
  * Note: PDF generation is intentionally excluded. AI agents cannot consume
  * binary content in tool responses. The JSON report is designed to let agents
@@ -103,6 +104,29 @@ export function registerGstTools(server: McpServer, client: FintranzactClient) {
     },
     wrapTool(async (input) => {
       const result = await client.gst.gstr9({ financialYear: input.financial_year });
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(result, null, 2),
+        }],
+      };
+    })
+  );
+
+  server.tool(
+    "gst_cmp08",
+    [
+      "Get the CMP-08 quarterly statement for a composition-scheme business:",
+      "outward supplies (sales net of credit notes and returns) and the tax payable for the quarter.",
+      "Quarters follow the financial year: Q1 = Apr–Jun, Q2 = Jul–Sep, Q3 = Oct–Dec, Q4 = Jan–Mar.",
+    ].join(" "),
+    {
+      financial_year: z.string().regex(/^\d{4}-\d{2}$/)
+        .describe("Financial year in YYYY-YY format, e.g. '2025-26'."),
+      quarter: z.number().int().min(1).max(4).describe("Financial-year quarter, 1–4."),
+    },
+    wrapTool(async (input) => {
+      const result = await client.gst.cmp08({ year: Number(input.financial_year.slice(0, 4)), quarter: input.quarter });
       return {
         content: [{
           type: "text" as const,

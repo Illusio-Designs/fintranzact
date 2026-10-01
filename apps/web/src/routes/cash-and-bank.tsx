@@ -261,7 +261,7 @@ function CashAndBankPage() {
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatCard
           size="md"
           label="Total Balance"
@@ -281,9 +281,9 @@ function CashAndBankPage() {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left: Account list */}
-        <div className="col-span-4">
+        <div className="min-w-0 md:col-span-4">
           <div className="card overflow-hidden">
             <div
               className="px-4 py-3 flex items-center justify-between border-b border-border-light"
@@ -310,7 +310,7 @@ function CashAndBankPage() {
                   <div key={account.id} className="relative group">
                     <button
                       className={cn(
-                        "w-full px-4 py-3 text-left transition-colors",
+                        "w-full px-4 py-3 text-left transition-colors [@media(hover:none)]:pr-10",
                         selectedAccountId === account.id
                           ? "bg-brand-600/[0.08] border-l-2 border-brand-600"
                           : "hover:bg-surface-1"
@@ -343,12 +343,12 @@ function CashAndBankPage() {
                     </button>
                     {/* Edit button — always available on hover */}
                     <button
-                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition-all"
+                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition-all"
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditAccountId(account.id);
                       }}
-                      aria-label="Edit account"
+                      aria-label={`Edit ${account.accountName}`}
                     >
                       <Icon icon={PencilEdit02Icon} size={14} />
                     </button>
@@ -360,7 +360,7 @@ function CashAndBankPage() {
         </div>
 
         {/* Right: Transactions */}
-        <div className="col-span-8">
+        <div className="min-w-0 md:col-span-8">
           {selectedAccountId ? (
             <div className="card overflow-hidden">
               <div
@@ -1028,6 +1028,7 @@ function EditAccountSlideOver({
           <div>
             <p className="label">Account Type</p>
             <Listbox
+              ariaLabel="Account Type"
               value={accountType}
               onChange={(val) => setAccountType(val)}
               options={ACCOUNT_TYPE_OPTIONS}
@@ -1360,6 +1361,7 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
         <div>
           <p className="label">Account Type</p>
           <Listbox
+            ariaLabel="Account Type"
             value={accountType}
             onChange={(val) => setAccountType(val)}
             options={ACCOUNT_TYPE_OPTIONS}
