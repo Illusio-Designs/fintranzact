@@ -488,6 +488,7 @@ const BEFORE_LAUNCH: RoadmapSeedItem[] = [
 
 ### TCS on sales (s.206C)
 - TCS on specified goods and cases under s.206C, by item or party setting
+- TCS on sale of goods (old s.206C(1H)) was removed from 1 April 2025; the Income-tax Act, 2025 renumbers sections from 1 April 2026 — confirm every section with the CA
 - TCS shown on the invoice and collected with it
 
 ### Ledgers, challans and returns
@@ -1563,6 +1564,124 @@ Update the public pricing page for the paid-only plans.
   ),
 ];
 
+// ── Added after the first seed ────────────────────────────────────────
+// Boards seeded before a batch existed get it once (see lib/roadmap.ts);
+// a new board gets these with the rest of the seed. Never rename a key.
+
+const GOVERNMENT_FILING: RoadmapSeedItem[] = [
+  {
+    title: "Connect e-invoice, e-way bill and GST returns through a GSP",
+    category: "GST",
+    status: "planned",
+    launchStage: "before_launch",
+    priority: "high",
+    phase: null,
+    billing: "included",
+    priceNote: "Customers pay per e-invoice / e-way bill, billed monthly after use (no advance). Our GSP cost ~₹0.25–₹1 per document; NIC and GSTN charge nothing",
+    description: `Send e-invoices, e-way bills and GST returns to the government through a GSP (GST Suvidha Provider) instead of calling NIC and GSTN directly.
+
+### Why a GSP and not direct
+- **E-invoice (NIC IRP):** direct API access is for a taxpayer filing its **own** GSTIN (large-turnover taxpayers), GSPs and e-commerce operators. Fintranzact files for many businesses, so one direct login can't serve them. Becoming a GSP ourselves needs GSTN empanelment and is estimated at ~₹5 lakh plus yearly cost — not worth it now.
+- **E-way bill (NIC EWB):** same model — direct API for the taxpayer's own GSTIN, or through a GSP the taxpayer picks in the e-way bill portal (Registration → GSP).
+- **GST returns (GSTN — GSTR-1, GSTR-3B, 2A/2B, IMS):** the GST common portal's APIs are open only to GSPs. Software like ours is an ASP that files through a GSP.
+- The GSP handles NIC's RSA/AES encryption and public keys, so we no longer need the NIC public key in irp-client.ts.
+
+### How it works for a customer
+1. In the e-invoice / e-way bill portal: create an API user and pick our GSP (one time)
+2. Enter that API username and password in Fintranzact (stored encrypted, per GSTIN)
+3. Fintranzact sends the invoice to the GSP → IRN, QR and e-way bill come back
+4. Returns: GSTR-1 saved and filed with EVC/OTP, GSTR-3B prepared, 2B pulled for ITC match
+
+### Choosing the GSP (check current prices before signing)
+- Adaequare: ~₹0.25 per IRN, ~₹0.40 with e-way bill
+- MasterGST: ~₹1 per IRN
+- WhiteBooks: ~₹5,999–₹24,999+ a year
+- ClearTax, Masters India, GSTZen, IRIS, Cygnet: price on request
+- Prefer one GSP for all three (e-invoice, e-way bill, returns), with a sandbox and an SLA
+
+### Cost to us
+- About ₹75–₹300 a month for a customer issuing 300 e-invoices a month
+
+### Charging customers per document, no advance (owner's decision)
+- Customers pay **per e-invoice / e-way bill they generate**, billed after the month ends with their plan — no prepaid credits, no advance
+- Most GSPs are prepaid (wallet top-up, packs or subscription): Fintranzact keeps one small balance with the GSP, topped up automatically, and the cost is recovered on customers' monthly bills
+- Ask GSPs for postpaid or monthly-arrears billing before choosing; prefer pure per-call with no minimum
+- Usage page for the customer: documents this month, rate, amount so far
+- Failed or cancelled-by-error calls are not charged; only successful IRN / EWB generation counts`,
+    checklist: [
+      "Pick a GSP (e-invoice + e-way bill + returns, sandbox, SLA, price)",
+      "Sign the GSP agreement and get sandbox credentials",
+      "Replace direct NIC calls in irp-client.ts with the GSP API",
+      "E-way bill generate / update vehicle / cancel through the GSP",
+      "Per-GSTIN API username and password, stored encrypted",
+      "Customer setup guide: create API user and select our GSP",
+      "GSTR-1 save and file with EVC/OTP",
+      "GSTR-3B prepare and file",
+      "GSTR-2A / 2B pull for ITC matching",
+      "Sandbox test run, then production go-live",
+      "Ask GSPs for postpaid / no-minimum per-call billing",
+      "Per-document usage metering (successful IRN / EWB only)",
+      "Per-document charge on the customer's monthly bill (no advance)",
+      "Customer usage page: count, rate, amount this month",
+      "Auto top-up and low-balance alert for our GSP wallet",
+      "Set the per-document price (cost plus margin)",
+    ],
+  },
+  feature(
+    "after_launch",
+    "high",
+    "Accounting",
+    "TDS & TCS return filing: Protean FVU file and certificates",
+    `File the quarterly income-tax TDS/TCS returns from the data in "TDS & TCS on transactions".
+
+### How filing works (no public filing API)
+- Returns 24Q (salary), 26Q (non-salary), 27Q (non-residents) and 27EQ (TCS) are a text file in Protean's (formerly NSDL) format
+- The file is checked with Protean's File Validation Utility (FVU), which makes the .fvu file
+- The .fvu file is uploaded on the income-tax e-filing portal with the TAN login (DSC or EVC), or through a TIN facilitation centre
+- Form 16 / 16A / 27D certificates are downloaded from TRACES — there is no open API for these either
+- So: Fintranzact makes the return file and a step-by-step upload guide; the CA or business uploads it. Direct upload would need a tie-up with an authorised intermediary later
+
+### Law changes to check with the CA before building
+- The Income-tax Act, 2025 replaces the 1961 Act from 1 April 2026 — section numbers and form names may change
+- TCS on sale of goods (old s.206C(1H)) was removed from 1 April 2025; TDS on purchase of goods (old s.194Q) stays
+- GST TDS/TCS (GSTR-7 for government deductors, GSTR-8 for e-commerce operators) is separate from income-tax TDS/TCS — see "GST TDS & TCS credits"`,
+    [
+      "Return file in Protean format for 24Q, 26Q, 27Q and 27EQ",
+      "Run the file through Protean FVU and show its errors",
+      "Upload guide for the e-filing portal (TAN login, DSC/EVC)",
+      "Correction returns for earlier quarters",
+      "Track filing status, token number and late-filing fee",
+      "Form 16 / 16A / 27D: guide to download from TRACES",
+      "Check section numbers and forms under the Income-tax Act, 2025 with the CA",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "medium",
+    "GST",
+    "GST TDS & TCS credits (GSTR-2X)",
+    `Account for GST deducted or collected by others when the business sells to them.
+
+- **GST TDS:** government departments and notified bodies deduct 2% GST TDS (1% CGST + 1% SGST, or 2% IGST) on payments above the limit
+- **GST TCS:** e-commerce operators (Amazon, Flipkart, etc.) collect GST TCS on the seller's net sales through them
+- Both show in the seller's GSTR-2X; accepting them adds the amount to the electronic cash ledger
+- Record the deduction on the receipt so the invoice is fully settled, and match it with GSTR-2X through the GSP
+- Rates and limits to verify with the CA before building`,
+    [
+      "Record GST TDS deducted by a customer on receipts",
+      "Record GST TCS from marketplace settlements",
+      "GST TDS / TCS receivable ledgers",
+      "Pull GSTR-2X through the GSP and match",
+      "Report of credits to accept or reject",
+    ],
+  ),
+];
+
+/** Batches added after the first seed, each put on an older board once. */
+export const ROADMAP_ADDITIONS: { key: string; items: RoadmapSeedItem[] }[] = [
+  { key: "2026-10-government-filing", items: GOVERNMENT_FILING },
+];
+
 /** Titles pulled to the front of their stage/priority group, in build order. */
 const BUILD_ORDER_TITLES = [
   "AI business assistant — Phase 1",
@@ -1574,7 +1693,14 @@ const BUILD_ORDER_TITLES = [
   "Store themes",
 ];
 
-const REST = [...BEFORE_LAUNCH, ...PAYROLL_INVENTORY_AND_DOMAINS, ...AFTER_LAUNCH, ...ONLINE_STORE, ...AI];
+const REST = [
+  ...BEFORE_LAUNCH,
+  ...PAYROLL_INVENTORY_AND_DOMAINS,
+  ...AFTER_LAUNCH,
+  ...ONLINE_STORE,
+  ...AI,
+  ...ROADMAP_ADDITIONS.flatMap((batch) => batch.items),
+];
 const buildOrderIndex = (item: RoadmapSeedItem) => {
   const i = BUILD_ORDER_TITLES.findIndex((t) => item.title.startsWith(t));
   return i < 0 ? BUILD_ORDER_TITLES.length : i;

@@ -4,13 +4,13 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 import { roadmapItems, systemConfig } from "@fintranzact/db";
 import { getControlDb, getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createUser, createTenant, addMember, createBusiness, type TestUser, type TestTenant, type TestBusiness } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
-import { ensureRoadmapSeeded, resetRoadmapSeedCache, ROADMAP_SEEDED_KEY } from "../../lib/roadmap.js";
-import { ROADMAP_SEED } from "../../lib/roadmap-seed.js";
+import { ensureRoadmapSeeded, resetRoadmapSeedCache, roadmapAdditionKey } from "../../lib/roadmap.js";
+import { ROADMAP_ADDITIONS, ROADMAP_SEED } from "../../lib/roadmap-seed.js";
 import { roadmapRank } from "@fintranzact/shared";
 
 const ADMIN_EMAIL = "roadmap.admin@fintranzact.com";
@@ -28,7 +28,7 @@ const adminCaller = () => callerFor(admin);
 async function forgetSeed() {
   const db = getControlDb();
   await db.delete(roadmapItems);
-  await db.delete(systemConfig).where(eq(systemConfig.key, ROADMAP_SEEDED_KEY));
+  await db.delete(systemConfig).where(like(systemConfig.key, "roadmap_%"));
   resetRoadmapSeedCache();
 }
 
@@ -55,10 +55,10 @@ describe("starting roadmap", () => {
   it("fills an empty board the first time it is opened", async () => {
     const list = await adminCaller().platform.roadmapList();
     expect(list.data).toHaveLength(ROADMAP_SEED.length);
-    expect(ROADMAP_SEED.length).toBe(58);
+    expect(ROADMAP_SEED.length).toBe(61);
     expect(new Set(list.data.map((i) => i.title))).toEqual(new Set(ROADMAP_SEED.map((s) => s.title)));
     expect(list.counts.planned).toBe(ROADMAP_SEED.length);
-    expect(list.stageCounts).toEqual({ before_launch: 15, after_launch: 43 });
+    expect(list.stageCounts).toEqual({ before_launch: 16, after_launch: 45 });
     expect(list.categories).toEqual(expect.arrayContaining(["Payroll", "Inventory", "GST", "Mobile", "Platform", "Accounting"]));
     for (const item of list.data) {
       expect(item.description.length, item.title).toBeGreaterThan(80);
@@ -129,10 +129,10 @@ describe("starting roadmap", () => {
 
   it("filters by launch stage", async () => {
     const before = await adminCaller().platform.roadmapList({ launchStage: "before_launch" });
-    expect(before.data).toHaveLength(15);
+    expect(before.data).toHaveLength(16);
     expect(before.data.every((i) => i.launchStage === "before_launch")).toBe(true);
-    expect(before.counts.planned).toBe(15);
-    expect(before.stageCounts).toEqual({ before_launch: 15, after_launch: 43 });
+    expect(before.counts.planned).toBe(16);
+    expect(before.stageCounts).toEqual({ before_launch: 16, after_launch: 45 });
   });
 
   it("seeds only once, even if the board is emptied later", async () => {
@@ -141,6 +141,37 @@ describe("starting roadmap", () => {
     resetRoadmapSeedCache();
     expect(await ensureRoadmapSeeded()).toBe(0);
     expect((await adminCaller().platform.roadmapList()).data).toEqual([]);
+  });
+
+  it("adds a later batch once to a board seeded before it existed", async () => {
+    await forgetSeed();
+    await adminCaller().platform.roadmapList();
+    const batch = ROADMAP_ADDITIONS.find((b) => b.key === "2026-10-government-filing")!;
+    const titles = batch.items.map((i) => i.title);
+    expect(titles).toEqual([
+      "Connect e-invoice, e-way bill and GST returns through a GSP",
+      "TDS & TCS return filing: Protean FVU file and certificates",
+      "GST TDS & TCS credits (GSTR-2X)",
+    ]);
+    // An older board: seeded, but without this batch and its marker.
+    const db = getControlDb();
+    await db.delete(roadmapItems).where(inArray(roadmapItems.title, titles.slice(1)));
+    await db.delete(systemConfig).where(eq(systemConfig.key, roadmapAdditionKey(batch.key)));
+    resetRoadmapSeedCache();
+
+    expect(await ensureRoadmapSeeded()).toBe(2);
+    const list = (await adminCaller().platform.roadmapList()).data;
+    expect(list).toHaveLength(ROADMAP_SEED.length);
+    expect(list.filter((i) => titles.includes(i.title))).toHaveLength(3);
+    const gsp = list.find((i) => i.title === titles[0])!;
+    expect(gsp).toMatchObject({ category: "GST", launchStage: "before_launch", priority: "high" });
+    expect(gsp.description).toContain("GSP");
+
+    // Deleting an added item later sticks.
+    await db.delete(roadmapItems).where(eq(roadmapItems.title, titles[2]!));
+    resetRoadmapSeedCache();
+    expect(await ensureRoadmapSeeded()).toBe(0);
+    expect((await adminCaller().platform.roadmapList()).data).toHaveLength(ROADMAP_SEED.length - 1);
   });
 
   it("does not seed over a board that already has items", async () => {
