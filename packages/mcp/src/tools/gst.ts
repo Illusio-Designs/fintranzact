@@ -6,6 +6,8 @@
  *   gst_report_csv — get GSTR-1 data in CSV format ready for portal upload
  *   gst_gstr9      — GSTR-9 annual return summary
  *   gst_cmp08      — CMP-08 quarterly return for composition dealers
+ *   gst_hsn_search — find HSN / SAC codes by code prefix or description words
+ *   gst_hsn_check  — check an HSN / SAC code and get what it stands for
  *
  * Note: PDF generation is intentionally excluded. AI agents cannot consume
  * binary content in tool responses. The JSON report is designed to let agents
@@ -133,6 +135,40 @@ export function registerGstTools(server: McpServer, client: FintranzactClient) {
           text: JSON.stringify(result, null, 2),
         }],
       };
+    })
+  );
+
+  server.tool(
+    "gst_hsn_search",
+    [
+      "Find HSN (goods) and SAC (services) codes in the CBIC HSN / SAC list.",
+      "Pass digits to match codes starting with them (e.g. '3004'), or words that must all appear in the description (e.g. 'paracetamol tablets').",
+      "Use it to pick the right code for an item before creating or updating it.",
+    ].join(" "),
+    {
+      query: z.string().min(1).max(50).describe("Code prefix or description words."),
+      type: z.enum(["goods", "services"]).optional().describe("Only HSN goods codes or only SAC service codes."),
+      limit: z.number().int().min(1).max(50).optional().describe("How many results (default 20)."),
+    },
+    wrapTool(async (input) => {
+      const result = await client.gst.hsnSearch(input);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "gst_hsn_check",
+    [
+      "Check whether an HSN / SAC code is a real GST code (4–8 digits: a listed code or the heading of listed codes)",
+      "and return what it stands for: goods or services, and its description.",
+      "Item create and update refuse codes that fail this check.",
+    ].join(" "),
+    {
+      hsn: z.string().min(2).max(8).describe("The HSN or SAC code, e.g. '30041010' or '998713'."),
+    },
+    wrapTool(async (input) => {
+      const result = await client.gst.hsnValidate(input);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     })
   );
 }

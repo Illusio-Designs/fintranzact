@@ -224,3 +224,59 @@ export async function gstCmp08Command(financialYear: string, quarter: string, op
     fatalError(String(e instanceof Error ? e.message : e));
   }
 }
+
+export async function gstHsnSearchCommand(query: string, opts: GstOpts & { limit?: string; type?: string }): Promise<void> {
+  const limit = opts.limit ? Number(opts.limit) : 20;
+  const type = opts.type === "goods" || opts.type === "services" ? opts.type : undefined;
+  if (!query.trim() || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+    fatalError("Usage: fintranzact gst hsn <code or words> [--type goods|services] [--limit 1-50]", EXIT.USAGE);
+  }
+  const client = new FintranzactClient(requireAuth());
+  try {
+    const rows = await client.gst.hsnSearch({ query, type, limit });
+    if (opts.json) {
+      outputJSON(rows);
+      return;
+    }
+    if (rows.length === 0) {
+      console.log("\n  No HSN / SAC code matches. Try fewer words or the first digits of the code.\n");
+      return;
+    }
+    console.log();
+    for (const r of rows) console.log(`  ${r.hsn.padEnd(9)} ${r.type === "services" ? "SAC" : "HSN"}  ${r.description}`);
+    console.log();
+  } catch (e) {
+    handleError(e);
+  }
+}
+
+export async function gstHsnCheckCommand(code: string, opts: GstOpts): Promise<void> {
+  if (!/^\d{2,8}$/.test(code)) fatalError("Usage: fintranzact gst hsn-check <4–8 digit code>", EXIT.USAGE);
+  const client = new FintranzactClient(requireAuth());
+  try {
+    const result = await client.gst.hsnValidate({ hsn: code });
+    if (opts.json) {
+      outputJSON(result);
+      return;
+    }
+    if (!result.valid) {
+      console.log(`\n  ${code} is not in the GST HSN / SAC list.\n`);
+      return;
+    }
+    const d = result.details;
+    const kind = d.type === "services" ? "Service (SAC)" : "Goods (HSN)";
+    const heading = d.match === "heading" ? ` · heading of ${d.subCodes} codes` : "";
+    console.log(`\n  ${d.code} · ${kind}${heading}\n  ${d.description}\n`);
+  } catch (e) {
+    handleError(e);
+  }
+}
+
+function handleError(e: unknown): never {
+  if (e instanceof FintranzactApiError) {
+    const err = e.fintranzactError;
+    if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
+    if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
+  }
+  fatalError(String(e instanceof Error ? e.message : e));
+}
