@@ -336,7 +336,11 @@ export const authRouter = router({
     // By default, create a tenant for brand-new signups unless there's a
     // pending invite for this email. This makes interactive sign-up
     // tenant-first instead of creating a member on an existing org.
-    const needsAutoTenant = !pendingInvitePeek;
+    // Only multi-tenant servers get a database per organisation; a
+    // single-database server creates the tenant inside the transaction below
+    // and must not need CREATE DATABASE rights (managed Postgres usually
+    // refuses them).
+    const needsAutoTenant = !pendingInvitePeek && process.env.MULTI_TENANT === "true";
     const provisioned: ProvisionedTenant | null = needsAutoTenant
       ? await provisionNewTenantForUser(displayName)
       : null;
