@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useId, useRef } from "react";
 import { trpc, getBusinessId } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { formatCurrency, cn, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
 import dayjs from "dayjs";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -454,7 +455,8 @@ export function DocumentCreator({
     // Party balances and ledgers include what was just saved.
     utils.party.invalidate();
     utils.dashboard.shippingSummary.invalidate();
-    utils.item.list.invalidate();
+    // Stock moved: warehouses, batches and inventory reports show it now.
+    void invalidateStockViews(utils);
     if (editInvoiceId) {
       utils.invoice.getById.invalidate({ id: editInvoiceId });
     }

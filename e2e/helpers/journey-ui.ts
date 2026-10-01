@@ -30,7 +30,7 @@ export async function openBusiness(page: Page, owner: SeededOwner) {
 }
 
 /** A sidebar page, its heading, and (on a phone) no sideways scroll. */
-export async function openPage(page: Page, label: string, heading: string = label) {
+export async function openPage(page: Page, label: string, heading: string | RegExp = label) {
   await navTo(page, label);
   await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
   await expectNoHorizontalScroll(page, label);
@@ -83,13 +83,14 @@ export function isoMonthsAhead(months: number, from = new Date()) {
 
 /**
  * Choose a date `months` months from today in one of the app's date pickers,
- * by keyboard: open the calendar, PageDown a month at a time, Enter.
+ * by keyboard: open the calendar, PageDown a month at a time (PageUp for a
+ * negative `months`, a date in the past), Enter.
  */
 export async function pickDateMonthsAhead(page: Page, trigger: Locator, months: number) {
   await trigger.click();
   await expect(page.getByRole("dialog", { name: "Choose date" })).toBeVisible();
-  // Each PageDown moves a month from the focused day (today when empty).
-  for (let i = 0; i < months; i++) await trigger.press("PageDown");
+  // Each PageDown / PageUp moves a month from the focused day (today when empty).
+  for (let i = 0; i < Math.abs(months); i++) await trigger.press(months < 0 ? "PageUp" : "PageDown");
   await trigger.press("Enter");
   await expect(page.getByRole("dialog", { name: "Choose date" })).toBeHidden();
 }

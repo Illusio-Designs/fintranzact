@@ -12,7 +12,7 @@ export interface PricedLine {
   discountPercent: string;
 }
 
-type Seen = {
+export type Seen = {
   /** item|unit the line last had. */
   sig: string;
   /** The price we (or the item pick) filled in; null = the user owns the price. */
@@ -20,6 +20,33 @@ type Seen = {
   /** The discount a price level filled in, so it can be taken back. */
   autoDiscount: string | null;
 };
+
+type Resolved = { unitPrice: string | null; discountPercent: string | null };
+
+/**
+ * Puts resolved level prices on the lines whose price was filled in
+ * automatically (`seen[id].auto` still matches): a price the user typed is
+ * kept. Pure: returns the new lines and what is now filled in per line.
+ */
+export function applyResolvedPrices<L extends PricedLine>(
+  lines: L[],
+  resolved: Map<string, Resolved | undefined>,
+  seen: Map<string, Seen>,
+): { lines: L[]; seen: Map<string, Seen> } {
+  const filled = new Map<string, Seen>();
+  const next = lines.map((li) => {
+    const r = resolved.get(li.id);
+    const s = seen.get(li.id);
+    if (!r || !s || r.unitPrice == null || s.auto === null || li.unitPrice !== s.auto) return li;
+    let discountPercent = li.discountPercent;
+    if (r.discountPercent) discountPercent = String(parseFloat(r.discountPercent));
+    else if (s.autoDiscount !== null && li.discountPercent === s.autoDiscount) discountPercent = "0";
+    const unitPrice = String(parseFloat(r.unitPrice));
+    filled.set(li.id, { ...s, auto: unitPrice, autoDiscount: r.discountPercent ? discountPercent : null });
+    return unitPrice === li.unitPrice && discountPercent === li.discountPercent ? li : { ...li, unitPrice, discountPercent };
+  });
+  return { lines: next, seen: filled };
+}
 
 /**
  * Prices sale lines from the party's price level (Tally price levels):
@@ -87,19 +114,15 @@ export function useLevelPricing<L extends PricedLine>({
       const byLine = new Map(priced.map((li, i) => [li.id, res.lines[i]]));
       setPriceLevelName(res.priceLevel?.name ?? null);
       setMrpByLine(Object.fromEntries(priced.map((li, i) => [li.id, res.lines[i]?.mrp ?? null])));
-      setLines((prev) =>
-        prev.map((li) => {
-          const r = byLine.get(li.id);
-          const s = seen.current.get(li.id);
-          if (!r || !s || r.unitPrice == null || s.auto === null || li.unitPrice !== s.auto) return li;
-          let discountPercent = li.discountPercent;
-          if (r.discountPercent) discountPercent = String(parseFloat(r.discountPercent));
-          else if (s.autoDiscount !== null && li.discountPercent === s.autoDiscount) discountPercent = "0";
-          const unitPrice = String(parseFloat(r.unitPrice));
-          seen.current.set(li.id, { ...s, auto: unitPrice, autoDiscount: r.discountPercent ? discountPercent : null });
-          return unitPrice === li.unitPrice && discountPercent === li.discountPercent ? li : { ...li, unitPrice, discountPercent };
-        }),
-      );
+      // React may run a state updater twice (StrictMode, concurrent
+      // rebases), so it works from this snapshot of what was filled in and
+      // gives the same answer every time.
+      const before = new Map(seen.current);
+      setLines((prev) => {
+        const { lines: next, seen: filled } = applyResolvedPrices(prev, byLine, before);
+        for (const [id, entry] of filled) seen.current.set(id, entry);
+        return next;
+      });
     }, 250);
   }, [enabled, partyId, date, lines, setLines, utils]);
 

@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
 import { Alert02Icon, Delete02Icon } from "@hugeicons/core-free-icons";
@@ -27,8 +28,17 @@ export function ConfirmDialog({
   variant = "default",
   loading = false,
 }: ConfirmDialogProps) {
+  // The question names the dialog for assistive tech (and tests).
+  const titleId = useId();
+  const descriptionId = useId();
   return (
-    <Modal open={open} onClose={onCancel} className="max-w-sm">
+    <Modal
+      open={open}
+      onClose={onCancel}
+      className="max-w-sm"
+      labelledBy={titleId}
+      describedBy={description ? descriptionId : undefined}
+    >
       <div className="flex items-start gap-3 pb-2">
         <IconCircle
           icon={variant === "danger" ? Delete02Icon : Alert02Icon}
@@ -36,11 +46,11 @@ export function ConfirmDialog({
           size="lg"
         />
         <div className="min-w-0 pt-0.5">
-          <p className="text-sm font-semibold text-text-primary">
+          <p id={titleId} className="text-sm font-semibold text-text-primary">
             {title}
           </p>
           {description && (
-            <p className="text-sm mt-1.5 text-text-secondary">
+            <p id={descriptionId} className="text-sm mt-1.5 text-text-secondary">
               {description}
             </p>
           )}

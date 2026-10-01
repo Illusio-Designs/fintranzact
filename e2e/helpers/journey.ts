@@ -201,6 +201,9 @@ export async function navTo(page: Page, label: string | RegExp) {
     // rests on them (where the last tap was). Lift the pointer off so they
     // time out, as they do for a finger.
     await page.mouse.move(1, (page.viewportSize()?.height ?? 800) - 1);
+    // A finger waits for a toast covering the menu button to go (4s each,
+    // longer when they stack) rather than tapping the toast.
+    await expect(page.getByLabel(/^Notifications/).locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
     await page.getByRole("button", { name: "Open navigation menu" }).click();
   }
   await sidebar.getByRole("link", { name: label, exact: typeof label === "string" }).click();

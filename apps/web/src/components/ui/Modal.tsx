@@ -11,9 +11,13 @@ interface ModalProps {
   title?: string;
   children: ReactNode;
   className?: string;
+  /** Untitled modals: the id of the element inside that names the dialog. */
+  labelledBy?: string;
+  /** Untitled modals: the id of the element inside that describes it. */
+  describedBy?: string;
 }
 
-export function Modal({ open, onClose, title, children, className }: ModalProps): React.JSX.Element | null {
+export function Modal({ open, onClose, title, children, className, labelledBy, describedBy }: ModalProps): React.JSX.Element | null {
   const dialogRef = useRef<HTMLDivElement>(null);
   // Unique per instance: two open at once (a panel over a panel) must
   // each be named by their own title.
@@ -42,7 +46,8 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-labelledby={title ? titleId : undefined}
+      aria-labelledby={title ? titleId : labelledBy}
+      aria-describedby={describedBy}
     >
       <div
         className="fixed inset-0 bg-black/40 animate-fade-in"

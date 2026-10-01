@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
-import { useState, useRef, useEffect } from "react";
+import { Fragment, useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn, formatDateInput, todayISODate } from "@/lib/utils";
 import { StatCard } from "@/components/ui/StatCard";
@@ -330,7 +330,7 @@ function DaybookReport({
               const dayDebit = dayEntries.reduce((s, e) => s + parseFloat(e.debit), 0).toFixed(2);
               const dayCredit = dayEntries.reduce((s, e) => s + parseFloat(e.credit), 0).toFixed(2);
               return (
-                <>
+                <Fragment key={dateKey}>
                   {/* Date header row */}
                   <tr key={`day-${dateKey}`} className="bg-surface-2/30 border-b border-border/50">
                     <td colSpan={6} className="px-4 py-2 text-[12px] font-semibold text-text-secondary">
@@ -399,7 +399,7 @@ function DaybookReport({
                       </span>
                     </td>
                   </tr>
-                </>
+                </Fragment>
               );
             })}
           </tbody>
@@ -1700,7 +1700,7 @@ function StockSummaryReport() {
                 const isExpanded = expandedVariants.has(item.itemId);
                 const hasLowStock = item.variantDetails.some((v) => v.isLowStock);
                 return (
-                  <>
+                  <Fragment key={item.itemId}>
                     {/* Parent summary row */}
                     <tr
                       key={item.itemId}
@@ -1811,7 +1811,7 @@ function StockSummaryReport() {
                         </td>
                       </tr>
                     ))}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>

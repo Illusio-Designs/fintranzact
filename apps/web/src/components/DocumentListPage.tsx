@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { formatCurrency, formatDate, cn, getDocumentTypeLabel } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { usePageSearch } from "@/lib/page-search";
@@ -228,7 +229,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
       // This document's panel; and a cancelled return or note changes its
       // invoice, the stock and the party's balance.
       utils.invoice.invalidate();
-      utils.item.list.invalidate();
+      void invalidateStockViews(utils);
       utils.party.invalidate();
       utils.orders.invalidate();
       if (vars.status === "cancelled") setCancelDoc(null);
@@ -242,6 +243,9 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
     onSuccess: () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (utils as any)[trpcRouter].list.invalidate();
+      // Deleting a document puts back the stock it moved.
+      void invalidateStockViews(utils);
+      utils.party.invalidate();
       toast.success(`Deleted successfully`);
       setDeleteId(null);
     },

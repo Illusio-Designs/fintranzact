@@ -3,6 +3,7 @@ import { useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
 import { formatDate, todayISODate, toISOString, cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -50,7 +51,7 @@ function StockTransfersPage() {
 
   const transfer = trpc.stock.transfer.useMutation({
     onSuccess: async () => {
-      await Promise.all([utils.stock.transfers.invalidate(), utils.stock.warehouses.invalidate(), utils.stock.balances.invalidate()]);
+      await invalidateStockViews(utils);
       toast({ title: "Stock transferred", variant: "success" });
       setOpen(false);
       reset();

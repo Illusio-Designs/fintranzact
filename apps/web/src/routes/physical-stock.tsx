@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -614,12 +615,8 @@ function LiveReport({
 
   const finish = trpc.stock.countFinish.useMutation({
     onSuccess: async (res, vars) => {
-      await Promise.all([
-        utils.stock.counts.invalidate(),
-        utils.stock.balances.invalidate(),
-        utils.stock.warehouses.invalidate(),
-        utils.stock.adjustments.invalidate(),
-      ]);
+      // Counts, adjustments, balances: all of stock.
+      await invalidateStockViews(utils);
       toast({
         title: vars.post ? "Count posted" : "Report saved",
         description: vars.post ? `${res.adjusted} adjustments made at ${warehouseName}.` : "No stock was changed.",
@@ -689,10 +686,7 @@ function SavedReport({ id, onBack }: { id: string; onBack: () => void }) {
       setConfirmPost(false);
       await Promise.all([
         utils.stock.count.invalidate({ id }),
-        utils.stock.counts.invalidate(),
-        utils.stock.balances.invalidate(),
-        utils.stock.warehouses.invalidate(),
-        utils.stock.adjustments.invalidate(),
+        invalidateStockViews(utils),
       ]);
       toast({ title: "Count posted", description: `${res.adjusted} adjustments made.`, variant: "success" });
     },

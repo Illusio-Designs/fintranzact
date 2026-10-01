@@ -194,7 +194,7 @@ function WarehousesPage() {
       ) : (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {(warehouses ?? []).map((w) => (
-            <div key={w.id} className={cn("card p-5", w.status !== "active" && "opacity-60")}>
+            <div key={w.id} data-testid="warehouse-card" className={cn("card min-w-0 p-5", w.status !== "active" && "opacity-60")}>
               <div className="flex items-start gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300">
                   <Icon icon={Building03Icon} size={19} />

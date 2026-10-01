@@ -483,6 +483,144 @@ export async function supplierBookBalance(partyId: string): Promise<number> {
   return Number((row as { balance: string }).balance);
 }
 
+// ── Inventory ────────────────────────────────────────────────────
+
+export async function warehousesOf(businessId: string) {
+  return (await db()`
+    select id, name, code, warehouse_type, status from warehouses
+    where business_id = ${businessId} order by created_at`) as unknown as Array<{
+    id: string;
+    name: string;
+    code: string;
+    warehouse_type: string;
+    status: string;
+  }>;
+}
+
+/**
+ * Where an item's stock is: the stored warehouse balances and item total the
+ * app keeps, next to the net quantity per warehouse and batch worked out from
+ * its movements (zero rows dropped).
+ */
+export async function stockByWarehouse(itemId: string) {
+  const moves = (await db()`
+    select w.name as warehouse, coalesce(b.batch_number, '(unbatched)') as batch, sum(sm.quantity)::text as qty
+    from stock_movements sm join warehouses w on w.id = sm.warehouse_id
+    left join item_batches b on b.id = sm.batch_id
+    where sm.item_id = ${itemId} group by 1, 2 having sum(sm.quantity) <> 0 order by 1, 2`) as unknown as Array<{
+    warehouse: string;
+    batch: string;
+    qty: string;
+  }>;
+  const balances = (await db()`
+    select w.name as warehouse, sum(sb.quantity)::text as qty
+    from stock_balances sb join warehouses w on w.id = sb.warehouse_id
+    where sb.item_id = ${itemId} group by 1 having sum(sb.quantity) <> 0 order by 1`) as unknown as Array<{ warehouse: string; qty: string }>;
+  const [item] = await db()`select stock_quantity from items where id = ${itemId}`;
+  return {
+    total: Number((item as { stock_quantity: string }).stock_quantity),
+    byWarehouse: Object.fromEntries(balances.map((b) => [b.warehouse, Number(b.qty)])),
+    byBatch: moves.map((m) => ({ warehouse: m.warehouse, batch: m.batch, qty: Number(m.qty) })),
+  };
+}
+
+/** An item's movements (optionally of one reference type), oldest first, with the warehouse and batch each touched. */
+export async function itemMovements(itemId: string, referenceType?: string) {
+  const rows = (await db()`
+    select sm.reference_type, sm.movement_type, sm.reference_id, sm.quantity::numeric::float8 as qty,
+           sm.unit_cost, w.name as warehouse, b.batch_number
+    from stock_movements sm join warehouses w on w.id = sm.warehouse_id
+    left join item_batches b on b.id = sm.batch_id
+    where sm.item_id = ${itemId}
+    order by sm.created_at, sm.quantity`) as unknown as Array<{
+    reference_type: string;
+    movement_type: string;
+    reference_id: string | null;
+    qty: number;
+    unit_cost: string | null;
+    warehouse: string;
+    batch_number: string | null;
+  }>;
+  return referenceType ? rows.filter((r) => r.reference_type === referenceType) : rows;
+}
+
+export async function stockAdjustmentsOf(itemId: string) {
+  return (await db()`
+    select quantity::numeric::float8 as qty, previous_stock::numeric::float8 as previous,
+           new_stock::numeric::float8 as next, reason
+    from stock_adjustments where item_id = ${itemId} order by created_at, quantity`) as unknown as Array<{
+    qty: number;
+    previous: number;
+    next: number;
+    reason: string | null;
+  }>;
+}
+
+export async function batchesOf(itemId: string) {
+  return (await db()`
+    select batch_number, expiry_date::text as expiry_date from item_batches
+    where item_id = ${itemId} order by batch_number`) as unknown as Array<{ batch_number: string; expiry_date: string | null }>;
+}
+
+export async function physicalCountsOf(businessId: string) {
+  return (await db()`
+    select c.status, c.scan_count, c.adjusted_count, c.note, c.lines, c.unknown_codes, w.name as warehouse
+    from physical_stock_counts c join warehouses w on w.id = c.warehouse_id
+    where c.business_id = ${businessId} order by c.created_at`) as unknown as Array<{
+    status: string;
+    scan_count: number;
+    adjusted_count: number;
+    note: string | null;
+    lines: Array<{ itemId: string; books: string; scanned: string }>;
+    unknown_codes: Array<{ code: string; count: number }>;
+    warehouse: string;
+  }>;
+}
+
+export async function bomsOf(itemId: string) {
+  return (await db()`
+    select b.id, b.name, b.output_quantity, b.is_default, b.is_active,
+           (select json_agg(json_build_object('itemId', c.item_id, 'quantity', c.quantity::text, 'wastage', c.wastage_percent::text)
+                            order by c.sort_order)
+            from bom_components c where c.bom_id = b.id) as components
+    from boms b where b.item_id = ${itemId} order by b.created_at`) as unknown as Array<{
+    id: string;
+    name: string;
+    output_quantity: string;
+    is_default: boolean;
+    is_active: boolean;
+    components: Array<{ itemId: string; quantity: string; wastage: string }>;
+  }>;
+}
+
+export async function manufacturingJournalsOf(itemId: string) {
+  return (await db()`
+    select j.id, j.journal_number, j.bom_id, j.quantity, j.components_cost, j.additional_costs,
+           j.additional_cost_total, j.total_cost, j.unit_cost, j.status, sw.name as source, dw.name as destination,
+           (select json_agg(json_build_object('itemId', l.item_id, 'kind', l.kind, 'standard', l.standard_quantity::text,
+                                              'quantity', l.quantity::text, 'unitCost', l.unit_cost::text, 'amount', l.amount::text)
+                            order by l.sort_order)
+            from manufacturing_journal_lines l where l.journal_id = j.id) as lines
+    from manufacturing_journals j
+    join warehouses sw on sw.id = j.source_warehouse_id
+    join warehouses dw on dw.id = j.destination_warehouse_id
+    where j.item_id = ${itemId} order by j.created_at`) as unknown as Array<{
+    id: string;
+    journal_number: string;
+    bom_id: string | null;
+    quantity: string;
+    components_cost: string;
+    additional_costs: Array<{ label: string; amount: string }>;
+    additional_cost_total: string;
+    total_cost: string;
+    unit_cost: string;
+    status: string;
+    source: string;
+    destination: string;
+    lines: Array<{ itemId: string; kind: string; standard: string | null; quantity: string; unitCost: string; amount: string }>;
+  }>;
+}
+
 // ── Test plumbing (no UI exists for these) ───────────────────────
 
 /** Make an invoice look `hours` old (role rules depend on its age). */

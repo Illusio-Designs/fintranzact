@@ -346,7 +346,7 @@ function RowsEditor({
         )}
         {rows.map((r, i) => (
           <div key={r.key} className={cn("grid items-center gap-2", cols)}>
-            <UnitCombobox value={r.unitKey} known={r.info} onChange={(key, info) => update(r.key, { unitKey: key, info: info ?? r.info })} />
+            <UnitCombobox ariaLabel={`${title} item, line ${i + 1}`} value={r.unitKey} known={r.info} onChange={(key, info) => update(r.key, { unitKey: key, info: info ?? r.info })} />
             <div className="relative">
               <input
                 className="input tabular-nums"

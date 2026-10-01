@@ -39,6 +39,9 @@ export interface ComboboxProps {
   createNewLabel?: string;
   /** Mark the combobox input as the dialog's preferred autofocus target. */
   autoFocus?: boolean;
+  /** Accessible name when there is no visible label (or a more specific one,
+   *  e.g. "Item, line 2" in a list of rows); takes precedence over `label`. */
+  ariaLabel?: string;
 }
 
 export function Combobox({
@@ -56,6 +59,7 @@ export function Combobox({
   onCreateNew,
   createNewLabel = "Create new",
   autoFocus,
+  ariaLabel,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -273,7 +277,8 @@ export function Combobox({
           aria-controls={listboxId}
           aria-activedescendant={activeDescendant}
           aria-autocomplete="list"
-          aria-labelledby={label ? labelId : undefined}
+          aria-label={ariaLabel}
+          aria-labelledby={label && !ariaLabel ? labelId : undefined}
           autoComplete="off"
           type="text"
           value={displayValue}

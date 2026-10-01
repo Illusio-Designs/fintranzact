@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { z } from "zod";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { useCan } from "@/lib/permissions";
 import { getBusinessId } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn } from "@/lib/utils";
@@ -502,6 +503,8 @@ function InvoiceDetailPanel({
     onSuccess: () => {
       utils.invoice.list.invalidate();
       utils.dashboard.summary.invalidate();
+      // Cancelling puts the stock back.
+      void invalidateStockViews(utils);
       if (invoiceId) utils.invoice.getById.invalidate({ id: invoiceId });
       toast.success("Invoice status updated");
     },
