@@ -174,7 +174,8 @@ const { document, business, lineItems } = await res.json();`,
       auth: "public",
       input: [
         { name: "token", type: "string (path)", required: true, description: "Share token" },
-        { name: "format", type: "string (query)", required: false, description: "Page size — `a5`; anything else gives A4", default: "a4", enumValues: ["a4", "a5"] },
+        { name: "format", type: "string (query)", required: false, description: "Page size — `a5`; anything else gives A4, in the business's chosen invoice design", default: "a4", enumValues: ["a4", "a5"] },
+        { name: "copies", type: "string (query)", required: false, description: "A4 only: comma-separated copies to print, each on its own pages with its label (`original`, `duplicate`, `triplicate`, or `all`). Service invoices print original and duplicate only. Default: one copy" },
       ],
       output: {
         description: "`application/pdf` bytes. 404 JSON `{ error: \"This link is not valid any more\" }` for invalid links; 429 when rate limited.",

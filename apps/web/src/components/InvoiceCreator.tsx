@@ -634,22 +634,27 @@ export function DownloadPDFButton({ invoiceId, invoiceNumber }: { invoiceId: str
 
   // Format options: GST businesses get A4 + A5 + Thermal; non-GST get A5 + Thermal
   type Format = "a4" | "a5" | "thermal";
-  const options: { format: Format; label: string }[] = hasGstin
+  // A4 prints in the business's chosen design (Settings → Documents); the
+  // copies option prints Original, Duplicate and Triplicate in one PDF.
+  const design = activeBusiness?.invoiceTemplate ?? "classic";
+  const options: { format: Format; label: string; copies?: boolean }[] = hasGstin
     ? [
         { format: "a4", label: "GST Invoice (A4)" },
+        { format: "a4", label: "GST Invoice, all copies", copies: true },
         { format: "a5", label: "Simple Invoice (A5)" },
         { format: "thermal", label: "Thermal Receipt" },
       ]
     : [
+        ...(design !== "classic" ? [{ format: "a4" as const, label: "Invoice (A4)" }] : []),
         { format: "a5", label: "Invoice (A5)" },
         { format: "thermal", label: "Thermal Receipt" },
       ];
 
-  async function download(format: Format) {
+  async function download(format: Format, copies = false) {
     setOpen(false);
     setLoading(true);
     try {
-      const res = await fetch(apiUrl(`/api/invoices/${invoiceId}/pdf?format=${format}`), {
+      const res = await fetch(apiUrl(`/api/invoices/${invoiceId}/pdf?format=${format}${copies ? "&copies=all" : ""}`), {
         credentials: "include",
         headers: {
           "x-business-id": getBusinessId() || "",
@@ -660,7 +665,7 @@ export function DownloadPDFButton({ invoiceId, invoiceNumber }: { invoiceId: str
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${invoiceNumber}_${format}.pdf`;
+      a.download = `${invoiceNumber}_${format}${copies ? "_copies" : ""}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -691,8 +696,8 @@ export function DownloadPDFButton({ invoiceId, invoiceNumber }: { invoiceId: str
           <div className="absolute right-0 mt-1 z-20 min-w-[160px] rounded-lg border border-border-light bg-surface-1 shadow-lg py-1">
             {options.map((opt) => (
               <button
-                key={opt.format}
-                onClick={() => download(opt.format)}
+                key={opt.label}
+                onClick={() => download(opt.format, opt.copies)}
                 className="w-full text-left text-xs px-3 py-2 text-text-primary hover:bg-surface-2 transition-colors"
               >
                 {opt.label}

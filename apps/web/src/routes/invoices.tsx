@@ -8,6 +8,7 @@ import { useCan } from "@/lib/permissions";
 import { getBusinessId } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn } from "@/lib/utils";
 import { apiUrl } from "@/lib/api-url";
+import { openPdf } from "@/lib/open-pdf";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -94,11 +95,14 @@ function DownloadPDFButton({
   invoiceNumber,
   invoiceStatus,
   onShared,
+  menuAbove = false,
 }: {
   invoiceId: string;
   invoiceNumber: string;
   invoiceStatus: string;
   onShared?: () => void;
+  /** Open the format menu upwards (the button sits at the bottom of a panel). */
+  menuAbove?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -109,23 +113,28 @@ function DownloadPDFButton({
   const hasGstin = !!(activeBusiness?.gstin && activeBusiness.gstRegistrationType !== "unregistered");
 
   type Format = "a4" | "a5" | "thermal";
-  const options: { format: Format; label: string }[] = hasGstin
+  // A4 prints in the business's chosen design (Settings → Documents); the
+  // copies option prints Original, Duplicate and Triplicate in one PDF.
+  const design = activeBusiness?.invoiceTemplate ?? "classic";
+  const options: { format: Format; label: string; copies?: boolean }[] = hasGstin
     ? [
         { format: "a4", label: "GST Invoice (A4)" },
+        { format: "a4", label: "GST Invoice, all copies", copies: true },
         { format: "a5", label: "Simple Invoice (A5)" },
         { format: "thermal", label: "Thermal Receipt" },
       ]
     : [
+        ...(design !== "classic" ? [{ format: "a4" as const, label: "Invoice (A4)" }] : []),
         { format: "a5", label: "Invoice (A5)" },
         { format: "thermal", label: "Thermal Receipt" },
       ];
 
-  async function download(format: Format) {
+  async function download(format: Format, copies = false) {
     setOpen(false);
     setLoading(true);
     try {
       const res = await fetch(
-        apiUrl(`/api/invoices/${invoiceId}/pdf?format=${format}`),
+        apiUrl(`/api/invoices/${invoiceId}/pdf?format=${format}${copies ? "&copies=all" : ""}`),
         {
           credentials: "include",
           headers: { "x-business-id": getBusinessId() || "" },
@@ -136,7 +145,7 @@ function DownloadPDFButton({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${invoiceNumber}_${format}.pdf`;
+      a.download = `${invoiceNumber}_${format}${copies ? "_copies" : ""}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       if (invoiceStatus === "draft") {
@@ -165,11 +174,11 @@ function DownloadPDFButton({
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-20 min-w-[172px] rounded-lg border border-border-light bg-surface-1 shadow-lg py-1">
+          <div className={cn("absolute right-0 z-20 min-w-[172px] rounded-lg border border-border-light bg-surface-1 shadow-lg py-1", menuAbove ? "bottom-full mb-1" : "top-full mt-1")}>
             {options.map((opt) => (
               <button
-                key={opt.format}
-                onClick={() => download(opt.format)}
+                key={opt.label}
+                onClick={() => download(opt.format, opt.copies)}
                 className="w-full text-left text-xs px-3 py-2 text-text-primary hover:bg-surface-2 transition-colors"
               >
                 {opt.label}
@@ -626,6 +635,7 @@ function InvoiceDetailPanel({
                 invoiceNumber={invoice.invoiceNumber}
                 invoiceStatus={invoice.status}
                 onShared={() => onStatusChange(invoice.id, "sent")}
+                menuAbove
               />
               {canRecordPayment && (
                 <button
@@ -657,6 +667,20 @@ function InvoiceDetailPanel({
               {invoice.governmentLock.kind === "e_invoice"
                 ? "This invoice has an e-invoice (IRN), so it can't be edited, deleted or cancelled. Cancel the e-invoice first."
                 : `This invoice has an active e-way bill${invoice.governmentLock.ewbNumber ? ` (${invoice.governmentLock.ewbNumber})` : ""}, so it can't be edited, deleted or cancelled. Cancel the e-way bill first.`}
+              {invoice.governmentLock.kind === "eway_bill" && invoice.governmentLock.ewbNumber && (
+                <button
+                  type="button"
+                  className="ml-2 font-medium text-brand-600 hover:underline"
+                  onClick={() => {
+                    const lock = invoice.governmentLock;
+                    if (lock?.kind !== "eway_bill") return;
+                    openPdf(`/api/eway-bills/${lock.ewayBillId}/pdf`, `eway-bill-${(lock.ewbNumber ?? "").replace(/[^0-9A-Za-z]/g, "")}.pdf`)
+                      .catch(() => toast.error("Could not open the e-way bill"));
+                  }}
+                >
+                  Print e-way bill
+                </button>
+              )}
             </p>
           )}
           {/* Header info */}

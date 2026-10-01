@@ -15,6 +15,7 @@ import { InputField } from "@/components/ui/FormField";
 import { Spinner } from "@/components/ui/Spinner";
 import { Combobox } from "@/components/ui/Combobox";
 import { useDebounce } from "@/hooks/useDebounce";
+import { openPdf } from "@/lib/open-pdf";
 
 export const Route = createFileRoute("/eway-bills")({
   component: EWayBillsPage,
@@ -85,6 +86,15 @@ const STATUS_OPTIONS = [
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Open the e-way bill (EWB-01 layout) as a PDF for printing. */
+async function printEwayBill(id: string, ewbNumber: string | null) {
+  try {
+    await openPdf(`/api/eway-bills/${id}/pdf`, `eway-bill-${(ewbNumber ?? id).replace(/[^0-9A-Za-z]/g, "")}.pdf`);
+  } catch {
+    toast.error("Could not open the e-way bill");
+  }
+}
 
 function statusBadgeColor(status: string): string {
   switch (status) {
@@ -746,7 +756,17 @@ function DashboardTab({
                         </Badge>
                       </td>
                       <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
+                          {row.ewbNumber && (
+                            <button
+                              className="p-1.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors text-xs"
+                              onClick={() => printEwayBill(row.id, row.ewbNumber)}
+                              title="Print e-way bill"
+                              aria-label={`Print e-way bill ${row.ewbNumber}`}
+                            >
+                              Print
+                            </button>
+                          )}
                           {row.invoiceId && (
                             <button
                               className="p-1.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors text-xs"
@@ -1000,7 +1020,12 @@ function EWBDetailModal({
             )}
           </div>
         )}
-        <div className="flex justify-end pt-2 border-t border-border-light">
+        <div className="flex justify-end gap-2 pt-2 border-t border-border-light">
+          {data?.ewbNumber && (
+            <button className="btn-primary" onClick={() => printEwayBill(data.id, data.ewbNumber)}>
+              Print e-way bill
+            </button>
+          )}
           <button className="btn-secondary" onClick={onClose}>Close</button>
         </div>
       </div>
