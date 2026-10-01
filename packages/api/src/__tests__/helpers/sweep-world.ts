@@ -21,7 +21,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { businessMembers } from "@fintranzact/db";
 import { createUser, createTenant, addMember, createSession, type TestUser, type TestTenant } from "./fixtures.js";
 import { createTestCaller } from "./create-test-caller.js";
@@ -109,7 +109,9 @@ export async function buildSweepWorld(): Promise<SweepWorld> {
   const a2Id = await createSweepBusiness(usersA.owner, tenantA.id, "Business A2");
   const b1Id = await createSweepBusiness(ownerB, tenantB.id, `Business ${CANARY}`);
 
-  // A1: everyone. A2: only its creator (added by business.create).
+  // A1: everyone. A2: only its creator. business.create also opens a new
+  // business to the org's admins, so take A's admin off A2 to keep a member
+  // of A1 who has no access to A2.
   const db = getTenantTestDb();
   for (const [role, u] of Object.entries(usersA)) {
     if (role === "owner") continue;
@@ -117,8 +119,12 @@ export async function buildSweepWorld(): Promise<SweepWorld> {
       businessId: a1Id,
       userId: u.id,
       role: role === "admin" ? "admin" : "member",
-    });
+    }).onConflictDoNothing();
   }
+  await db.delete(businessMembers).where(and(
+    eq(businessMembers.businessId, a2Id),
+    ne(businessMembers.userId, usersA.owner.id),
+  ));
   const a2Members = await db.select().from(businessMembers).where(eq(businessMembers.businessId, a2Id));
   if (a2Members.length !== 1) throw new Error("A2 must only have its creator as a member");
 

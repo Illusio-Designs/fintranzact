@@ -563,6 +563,13 @@ export const tenantRouter = router({
 
   // List pending invitations for the current tenant
   pendingInvitations: tenantProcedure.query(async ({ ctx }) => {
+    // Invitee emails are shown to owners and admins only.
+    const [caller] = await controlDb.select({ role: tenantMembers.role })
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, ctx.tenantId), eq(tenantMembers.userId, ctx.user.id)))
+      .limit(1);
+    if (!caller || !["owner", "superadmin", "admin"].includes(caller.role)) return [];
+
     const pending = await controlDb.select({
       id: invitations.id,
       email: invitations.email,
