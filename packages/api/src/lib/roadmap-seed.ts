@@ -1285,16 +1285,16 @@ const AI: RoadmapSeedItem[] = [
     launchStage: "after_launch",
     phase: 1,
     billing: "paid_add_on",
-    priceNote: "AI Assistant ₹299/month (300 questions); AI Plus ₹799/month (1,500); extra ₹99 per 100 (ex-GST)",
+    priceNote: "AI Assistant ₹399/month (150 questions); AI Plus ₹999/month (500); extra ₹199 per 100 (ex-GST)",
     description: `**Build order: 2** — first after 1 Plans, trial & billing.
 
 "Ask Fintranzact AI": a chat panel that answers questions about the business from its live data.
 
 ### Pricing (per organisation, ex-18% GST, editable in admin)
-- AI Assistant: ₹299/month including 300 questions
-- AI Plus: ₹799/month including 1,500 questions
-- Extra pack: ₹99 per 100 questions
-- Full Access Trial: up to 100 questions
+- AI Assistant: ₹399/month including 150 questions
+- AI Plus: ₹999/month including 500 questions
+- Extra pack: ₹199 per 100 questions
+- Full Access Trial: up to 50 questions
 
 ### Where and how
 - Opens from the dashboard and the header: a right-hand panel on desktop, full screen on phones
@@ -1330,7 +1330,7 @@ const AI: RoadmapSeedItem[] = [
       "Conversation history per user",
       "Audit log entries “via AI assistant”",
       "Owner switch per organisation and per role",
-      "Question quotas: AI Assistant 300, AI Plus 1,500, ₹99 packs of 100, trial 100",
+      "Question quotas: AI Assistant 150, AI Plus 500, ₹199 packs of 100, trial 50",
       "Admin: usage and cost per organisation",
       "Privacy policy: data not used for training",
     ],
@@ -1450,7 +1450,7 @@ Every new organisation starts on a Full Access Trial instead of a free plan.
 
 ### Trial
 - 14 days (length editable in admin; owner to confirm 14 vs 30)
-- Unlocks the Business plan and all add-ons, with caps: AI 100 questions, Payroll up to 10 employees, Store Pro including domain connect
+- Unlocks the Business plan and all add-ons, with caps: AI 50 questions, Payroll up to 10 employees, Store Pro including domain connect
 - No card needed to start
 - Countdown banner in the app ("9 days left — choose a plan")
 - Reminders on day 7, 12 and 14 by email and in-app (WhatsApp later)
@@ -1469,7 +1469,7 @@ Every new organisation starts on a Full Access Trial instead of a free plan.
       "Confirm 30-day partner referral trial (owner)",
       "Trial fields on organisations (start, end, source)",
       "Start trial on sign-up; trial length setting in admin",
-      "Trial unlocks Business plan + add-ons with caps (AI 100, Payroll 10 employees, Store Pro)",
+      "Trial unlocks Business plan + add-ons with caps (AI 50, Payroll 10 employees, Store Pro)",
       "Countdown banner",
       "Reminders day 7 / 12 / 14 (email + in-app)",
       "Read-only mode at expiry (view, search, download, export only)",

@@ -24,6 +24,7 @@ import { documentStockDirection, resolveDocumentWarehouseId, resolveInvoiceWareh
 import { resolveLineBatches } from "./batches.js";
 import { lineBatchDetails } from "./batch-display.js";
 import { requireCan } from "./permissions.js";
+import { assertNotLockedByGovernment } from "./government-lock.js";
 import { assertInBusiness } from "./business-scope.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
@@ -578,6 +579,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
       )
       .mutation(async ({ input, ctx }) => {
         requireCan(ctx.ability, "update", "Invoice");
+        if (input.status === "cancelled") {
+          await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "cancel");
+        }
         const { doc, fromStatus } = await ctx.db.transaction(async (tx) => {
           const [before] = await tx
             .select({ status: invoices.status })
@@ -647,6 +651,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ input, ctx }) => {
         requireCan(ctx.ability, "delete", "Invoice");
+        await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "delete");
         const deleteResult = await ctx.db.transaction(async (tx) => {
           const [doc] = await tx
             .select()

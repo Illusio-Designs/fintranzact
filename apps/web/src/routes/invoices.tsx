@@ -548,7 +548,7 @@ function InvoiceDetailPanel({
         invoice ? (
           <div className="flex items-center justify-between gap-3">
             <div className="flex gap-2">
-              {invoice.status !== "paid" && (
+              {invoice.status !== "paid" && !invoice.governmentLock && (
                 <button
                   onClick={() => {
                     onClose();
@@ -645,6 +645,13 @@ function InvoiceDetailPanel({
         <p className="text-text-tertiary text-sm">Invoice not found.</p>
       ) : (
         <div className="space-y-5">
+          {invoice.governmentLock && (
+            <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-text-secondary">
+              {invoice.governmentLock.kind === "e_invoice"
+                ? "This invoice has an e-invoice (IRN), so it can't be edited, deleted or cancelled. Cancel the e-invoice first."
+                : `This invoice has an active e-way bill${invoice.governmentLock.ewbNumber ? ` (${invoice.governmentLock.ewbNumber})` : ""}, so it can't be edited, deleted or cancelled. Cancel the e-way bill first.`}
+            </p>
+          )}
           {/* Header info */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-3">
