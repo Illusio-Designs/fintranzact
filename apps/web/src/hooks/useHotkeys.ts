@@ -115,6 +115,8 @@ export function useHotkeys(hotkeys: HotkeyDef[]): void {
     defs.forEach((d) => hotkeyRegistry.push(d));
 
     const handler = (e: KeyboardEvent) => {
+      // Browser autofill fires keydown events with no key.
+      if (typeof e.key !== "string") return;
       const bare = !e.ctrlKey && !e.metaKey && !e.altKey;
       const typing = isTypingTarget(e.target);
       const pressed = e.key.toLowerCase();
