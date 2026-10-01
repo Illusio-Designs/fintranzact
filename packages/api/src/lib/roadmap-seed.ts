@@ -495,7 +495,8 @@ const BEFORE_LAUNCH: RoadmapSeedItem[] = [
 - TDS payable and TCS payable ledgers per section
 - Challan entry (ITNS 281 / challan number, BSR code, date) to mark tax as paid; due-date reminders (by the 7th of the next month, verify with CA)
 - Form 26Q data (TDS on non-salary payments) and Form 27EQ data (TCS), quarterly
-- Form 16A / 27D certificates to download and share`,
+- Form 16A / 27D certificates to download and share
+- Filing, certificates and PAN/TAN checks through Sandbox.co.in — see "TDS & TCS return filing and certificates through Sandbox.co.in"`,
     [
       "TDS section master with rates and thresholds per financial year",
       "TDS section on parties and expense ledgers",
@@ -1568,90 +1569,104 @@ Update the public pricing page for the paid-only plans.
 // Boards seeded before a batch existed get it once (see lib/roadmap.ts);
 // a new board gets these with the rest of the seed. Never rename a key.
 
+const SANDBOX_NOTE = `### Provider: Sandbox.co.in (owner's choice)
+- API platform by Quicko (Ahmedabad, Rainmatter-funded); connects to NIC and GSTN through licensed GSP partners, with primary / secondary / tertiary routes for fallback
+- One subscription covers all 200+ APIs (GST, e-invoice, e-way bill, TDS, income tax, KYC); plans differ only in calls per month
+- Plans (verify before signing): Startup ₹999/month for 1,000 calls; Growth ₹9,999 for 30,000; Unicorn ₹16,999 for 1,00,000; Enterprise on request
+- Only successful (2xx) calls count; unused calls expire monthly; some APIs also charge per call from a prepaid wallet (wallet money never expires)
+- Free test environment (test-api.sandbox.co.in, key_test_ keys, 25 calls/min); production 500 calls/min, more on request
+- Start on test, Startup plan at launch, Growth as customers grow; revisit Adaequare (~₹0.25 per IRN) only at high e-invoice volume
+- Keep the provider behind one adapter in our code so it can be switched
+
+### Ask Sandbox before signing
+1. Which APIs carry wallet charges, and how much per call
+2. What happens past the monthly quota — billed per call, or blocked (a blocked e-invoice stops a customer's billing)
+3. Is GST extra on plan prices
+4. Is TCS (27EQ) return filing supported
+5. Is there an ASP / partner plan for software serving many GSTINs`;
+
 const GOVERNMENT_FILING: RoadmapSeedItem[] = [
   {
-    title: "Connect e-invoice, e-way bill and GST returns through a GSP",
+    title: "Connect e-invoice, e-way bill and GST returns through Sandbox.co.in",
     category: "GST",
     status: "planned",
     launchStage: "before_launch",
     priority: "high",
     phase: null,
     billing: "included",
-    priceNote: "Customers pay per e-invoice / e-way bill, billed monthly after use (no advance). Our GSP cost ~₹0.25–₹1 per document; NIC and GSTN charge nothing",
-    description: `Send e-invoices, e-way bills and GST returns to the government through a GSP (GST Suvidha Provider) instead of calling NIC and GSTN directly.
+    priceNote: "Customers pay ~₹2–3 per e-invoice / e-way bill, billed monthly after use (no advance). Our cost: Sandbox ₹999–₹16,999/month by volume (~₹0.35–₹2 per e-invoice); NIC and GSTN charge nothing",
+    description: `Send e-invoices, e-way bills and GST returns to the government through Sandbox.co.in instead of calling NIC and GSTN directly.
 
-### Why a GSP and not direct
-- **E-invoice (NIC IRP):** direct API access is for a taxpayer filing its **own** GSTIN (large-turnover taxpayers), GSPs and e-commerce operators. Fintranzact files for many businesses, so one direct login can't serve them. Becoming a GSP ourselves needs GSTN empanelment and is estimated at ~₹5 lakh plus yearly cost — not worth it now.
-- **E-way bill (NIC EWB):** same model — direct API for the taxpayer's own GSTIN, or through a GSP the taxpayer picks in the e-way bill portal (Registration → GSP).
-- **GST returns (GSTN — GSTR-1, GSTR-3B, 2A/2B, IMS):** the GST common portal's APIs are open only to GSPs. Software like ours is an ASP that files through a GSP.
-- The GSP handles NIC's RSA/AES encryption and public keys, so we no longer need the NIC public key in irp-client.ts.
+### Why not direct
+- **E-invoice (NIC IRP):** direct API access is for a taxpayer filing its **own** GSTIN (large-turnover taxpayers), GSPs and e-commerce operators. Fintranzact files for many businesses, so one direct login can't serve them. Becoming a GSP ourselves needs GSTN empanelment (~₹5 lakh plus yearly cost) — not worth it now.
+- **E-way bill (NIC EWB):** same model — direct for the taxpayer's own GSTIN, otherwise through a GSP.
+- **GST returns (GSTN):** the GST common portal's APIs are open only to GSPs.
+- Sandbox handles NIC's RSA/AES encryption, so the NIC public key in irp-client.ts is no longer needed.
 
-### How it works for a customer
-1. In the e-invoice / e-way bill portal: create an API user and pick our GSP (one time)
-2. Enter that API username and password in Fintranzact (stored encrypted, per GSTIN)
-3. Fintranzact sends the invoice to the GSP → IRN, QR and e-way bill come back
-4. Returns: GSTR-1 saved and filed with EVC/OTP, GSTR-3B prepared, 2B pulled for ITC match
+${SANDBOX_NOTE}
 
-### Choosing the GSP (check current prices before signing)
-- Adaequare: ~₹0.25 per IRN, ~₹0.40 with e-way bill
-- MasterGST: ~₹1 per IRN
-- WhiteBooks: ~₹5,999–₹24,999+ a year
-- ClearTax, Masters India, GSTZen, IRIS, Cygnet: price on request
-- Prefer one GSP for all three (e-invoice, e-way bill, returns), with a sandbox and an SLA
-
-### Cost to us
-- About ₹75–₹300 a month for a customer issuing 300 e-invoices a month
+### How it works
+1. Fintranzact signs in to Sandbox with our API key and secret (stored in env, never in code) → token valid 24 hours
+2. Customer, one time: on the e-invoice portal create an API user and password; enter them in Fintranzact (stored encrypted, per GSTIN). The same login works for e-way bills
+3. E-invoice: session per GSTIN → generate IRN → IRN, ack and signed QR back; cancel within the allowed window
+4. E-way bill: generate from the IRN or standalone (challans, stock transfers), update vehicle, cancel
+5. GST returns: taxpayer session with OTP from the GST portal → GSTR-1 sections saved → filed with EVC OTP; GSTR-3B prepared and filed; GSTR-2B pulled for ITC matching
+6. GSTIN verification when a party is added
 
 ### Charging customers per document, no advance (owner's decision)
 - Customers pay **per e-invoice / e-way bill they generate**, billed after the month ends with their plan — no prepaid credits, no advance
-- Most GSPs are prepaid (wallet top-up, packs or subscription): Fintranzact keeps one small balance with the GSP, topped up automatically, and the cost is recovered on customers' monthly bills
-- Ask GSPs for postpaid or monthly-arrears billing before choosing; prefer pure per-call with no minimum
+- Fintranzact pays Sandbox's monthly plan and keeps a small wallet balance, topped up automatically
 - Usage page for the customer: documents this month, rate, amount so far
-- Failed or cancelled-by-error calls are not charged; only successful IRN / EWB generation counts`,
+- Only successful generation is charged; failed calls are not`,
     checklist: [
-      "Pick a GSP (e-invoice + e-way bill + returns, sandbox, SLA, price)",
-      "Sign the GSP agreement and get sandbox credentials",
-      "Replace direct NIC calls in irp-client.ts with the GSP API",
-      "E-way bill generate / update vehicle / cancel through the GSP",
-      "Per-GSTIN API username and password, stored encrypted",
-      "Customer setup guide: create API user and select our GSP",
-      "GSTR-1 save and file with EVC/OTP",
+      "Send Sandbox the 5 questions and get a written quote",
+      "Sandbox test account; key_test_ keys in env (never in code)",
+      "Provider adapter so Sandbox can be swapped later",
+      "Replace direct NIC calls in irp-client.ts with Sandbox e-invoice APIs",
+      "E-invoice: generate IRN, fetch, cancel through Sandbox",
+      "E-way bill: generate (from IRN and standalone), update vehicle, cancel",
+      "Per-GSTIN e-invoice API username and password, stored encrypted",
+      "Customer setup guide: create API user on the e-invoice portal",
+      "GSTR-1 save and file with EVC OTP",
       "GSTR-3B prepare and file",
-      "GSTR-2A / 2B pull for ITC matching",
-      "Sandbox test run, then production go-live",
-      "Ask GSPs for postpaid / no-minimum per-call billing",
-      "Per-document usage metering (successful IRN / EWB only)",
+      "GSTR-2B pull for ITC matching",
+      "GSTIN verification on party create",
+      "Quota and wallet balance alerts for our Sandbox account",
+      "Per-document usage metering (successful calls only)",
       "Per-document charge on the customer's monthly bill (no advance)",
       "Customer usage page: count, rate, amount this month",
-      "Auto top-up and low-balance alert for our GSP wallet",
-      "Set the per-document price (cost plus margin)",
+      "Test environment run, then Startup plan and production go-live",
     ],
   },
   feature(
     "after_launch",
     "high",
     "Accounting",
-    "TDS & TCS return filing: Protean FVU file and certificates",
-    `File the quarterly income-tax TDS/TCS returns from the data in "TDS & TCS on transactions".
+    "TDS & TCS return filing and certificates through Sandbox.co.in",
+    `File the quarterly income-tax TDS/TCS returns from the data in "TDS & TCS on transactions", using Sandbox's TDS APIs — same Sandbox subscription as e-invoice and GST.
 
-### How filing works (no public filing API)
-- Returns 24Q (salary), 26Q (non-salary), 27Q (non-residents) and 27EQ (TCS) are a text file in Protean's (formerly NSDL) format
-- The file is checked with Protean's File Validation Utility (FVU), which makes the .fvu file
-- The .fvu file is uploaded on the income-tax e-filing portal with the TAN login (DSC or EVC), or through a TIN facilitation centre
-- Form 16 / 16A / 27D certificates are downloaded from TRACES — there is no open API for these either
-- So: Fintranzact makes the return file and a step-by-step upload guide; the CA or business uploads it. Direct upload would need a tie-up with an authorised intermediary later
+### Through Sandbox
+- Prepare the return (24Q salary, 26Q non-salary, 27Q non-residents; 27EQ TCS to confirm with Sandbox) from our TDS/TCS data
+- Download the CSI file, generate the Protean FVU file and Form 27A (job-based: submit, then poll)
+- **E-file the return** through Sandbox's e-file API — no manual upload by the CA
+- Form 16 / 16A (and 27D) certificates
+- PAN and TAN verification before deducting, so the higher no-PAN rate is applied correctly
+- Fallback if an API isn't available: produce the file and a step-by-step upload guide for the e-filing portal (TAN login, DSC/EVC)
 
 ### Law changes to check with the CA before building
 - The Income-tax Act, 2025 replaces the 1961 Act from 1 April 2026 — section numbers and form names may change
 - TCS on sale of goods (old s.206C(1H)) was removed from 1 April 2025; TDS on purchase of goods (old s.194Q) stays
-- GST TDS/TCS (GSTR-7 for government deductors, GSTR-8 for e-commerce operators) is separate from income-tax TDS/TCS — see "GST TDS & TCS credits"`,
+- GST TDS/TCS (GSTR-7, GSTR-8) is separate from income-tax TDS/TCS — see "GST TDS & TCS credits"`,
     [
-      "Return file in Protean format for 24Q, 26Q, 27Q and 27EQ",
-      "Run the file through Protean FVU and show its errors",
-      "Upload guide for the e-filing portal (TAN login, DSC/EVC)",
+      "Prepare 24Q, 26Q and 27Q through Sandbox TDS APIs",
+      "Confirm 27EQ (TCS) support with Sandbox",
+      "CSI download and FVU + Form 27A generation (submit and poll job)",
+      "E-file the return through Sandbox",
+      "Form 16 / 16A / 27D certificates",
+      "PAN and TAN verification before deduction",
       "Correction returns for earlier quarters",
       "Track filing status, token number and late-filing fee",
-      "Form 16 / 16A / 27D: guide to download from TRACES",
+      "Fallback: return file and upload guide when an API is unavailable",
       "Check section numbers and forms under the Income-tax Act, 2025 with the CA",
     ],
   ),
@@ -1665,13 +1680,13 @@ const GOVERNMENT_FILING: RoadmapSeedItem[] = [
 - **GST TDS:** government departments and notified bodies deduct 2% GST TDS (1% CGST + 1% SGST, or 2% IGST) on payments above the limit
 - **GST TCS:** e-commerce operators (Amazon, Flipkart, etc.) collect GST TCS on the seller's net sales through them
 - Both show in the seller's GSTR-2X; accepting them adds the amount to the electronic cash ledger
-- Record the deduction on the receipt so the invoice is fully settled, and match it with GSTR-2X through the GSP
+- Record the deduction on the receipt so the invoice is fully settled, and match it with GSTR-2X pulled through Sandbox.co.in (confirm the API with Sandbox)
 - Rates and limits to verify with the CA before building`,
     [
       "Record GST TDS deducted by a customer on receipts",
       "Record GST TCS from marketplace settlements",
       "GST TDS / TCS receivable ledgers",
-      "Pull GSTR-2X through the GSP and match",
+      "Pull GSTR-2X through Sandbox and match",
       "Report of credits to accept or reject",
     ],
   ),

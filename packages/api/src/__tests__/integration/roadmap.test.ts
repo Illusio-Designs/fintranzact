@@ -149,8 +149,8 @@ describe("starting roadmap", () => {
     const batch = ROADMAP_ADDITIONS.find((b) => b.key === "2026-10-government-filing")!;
     const titles = batch.items.map((i) => i.title);
     expect(titles).toEqual([
-      "Connect e-invoice, e-way bill and GST returns through a GSP",
-      "TDS & TCS return filing: Protean FVU file and certificates",
+      "Connect e-invoice, e-way bill and GST returns through Sandbox.co.in",
+      "TDS & TCS return filing and certificates through Sandbox.co.in",
       "GST TDS & TCS credits (GSTR-2X)",
     ]);
     // An older board: seeded, but without this batch and its marker.
@@ -165,7 +165,7 @@ describe("starting roadmap", () => {
     expect(list.filter((i) => titles.includes(i.title))).toHaveLength(3);
     const gsp = list.find((i) => i.title === titles[0])!;
     expect(gsp).toMatchObject({ category: "GST", launchStage: "before_launch", priority: "high" });
-    expect(gsp.description).toContain("GSP");
+    expect(gsp.description).toContain("Sandbox.co.in");
 
     // Deleting an added item later sticks.
     await db.delete(roadmapItems).where(eq(roadmapItems.title, titles[2]!));
