@@ -98,9 +98,9 @@ export function generateEwayBillPDF(d: EwayBillPDFData): Doc {
   // ── Part A ───────────────────────────────────────────────
   y = sectionTitle(doc, "Part - A", y);
   const taxes = [
-    d.cgst && parseFloat(d.cgst) ? `CGST ${inr(Math.round(parseFloat(d.cgst) * 100))}` : "",
-    d.sgst && parseFloat(d.sgst) ? `SGST ${inr(Math.round(parseFloat(d.sgst) * 100))}` : "",
-    d.igst && parseFloat(d.igst) ? `IGST ${inr(Math.round(parseFloat(d.igst) * 100))}` : "",
+    d.cgst && parseFloat(d.cgst) ? `CGST ₹${inr(Math.round(parseFloat(d.cgst) * 100))}` : "",
+    d.sgst && parseFloat(d.sgst) ? `SGST ₹${inr(Math.round(parseFloat(d.sgst) * 100))}` : "",
+    d.igst && parseFloat(d.igst) ? `IGST ₹${inr(Math.round(parseFloat(d.igst) * 100))}` : "",
   ].filter(Boolean).join(" · ");
   const partA: Array<[string, string]> = [
     ["GSTIN of Supplier", `${d.supplier.gstin || "URP"} - ${d.supplier.name}`],
