@@ -267,6 +267,13 @@
       "when": 1790847334384,
       "tag": "0037_supplier_invoice_number",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790868999562,
+      "tag": "0038_repair_skipped_migrations",
+      "breakpoints": true
     }
   ]
 }
