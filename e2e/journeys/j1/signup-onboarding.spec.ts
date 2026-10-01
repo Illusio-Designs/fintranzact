@@ -263,7 +263,7 @@ test.describe("J1 sign-up & onboarding", () => {
     await page.getByLabel("Email address").fill(email);
     await page.getByLabel("Password", { exact: true }).fill("Wrong@12345");
     await page.locator("form").getByRole("button", { name: "Log in" }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "Invalid email or password" })).toBeVisible();
+    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Invalid email or password" })).toBeVisible();
     await expect(page).toHaveURL(/\/login/);
 
     await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
@@ -294,7 +294,7 @@ test.describe("J1 sign-up by magic link (dark theme)", () => {
     await expectNoHorizontalScroll(page, "login");
     await page.getByLabel("Email address").fill(email);
     await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "We sent a sign-in link to" })).toContainText(email);
+    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Sign-in link sent" })).toContainText(email);
     await expect(page.getByRole("button", { name: /Resend link in \d+s/ })).toBeDisabled();
 
     const [issued] = await magicLinkTokens(email);
@@ -362,7 +362,7 @@ test.describe("J1 sign-up by magic link (dark theme)", () => {
     // ── Expired link: refused ───────────────────────────────────
     await page.getByLabel("Email address").fill(email);
     await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "We sent a sign-in link to" })).toBeVisible();
+    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Sign-in link sent" })).toBeVisible();
     const expired = await claimLatestMagicLink(email);
     await expireMagicLinkToken(expired);
     await page.goto(`/auth/verify?token=${encodeURIComponent(expired)}`);
@@ -372,7 +372,7 @@ test.describe("J1 sign-up by magic link (dark theme)", () => {
     await page.goto("/login");
     await page.getByLabel("Email address").fill(email);
     await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "We sent a sign-in link to" })).toBeVisible();
+    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Sign-in link sent" })).toBeVisible();
     const fresh = await claimLatestMagicLink(email);
     await page.goto(`/auth/verify?token=${encodeURIComponent(fresh)}`);
     await openCompany(page, bizName);

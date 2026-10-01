@@ -34,6 +34,7 @@ import {
   ZA,
 } from "country-flag-icons/react/3x2";
 import { cn } from "@/lib/utils";
+import { useFieldErrorToast } from "@/lib/field-error-toast";
 import { useAnchoredPopover } from "@/hooks/useAnchoredPopover";
 import { Icon } from "./Icon";
 
@@ -157,6 +158,7 @@ export function PhoneInput({
   "aria-label": ariaLabel,
   onKeyDown,
 }: PhoneInputProps) {
+  useFieldErrorToast(label || ariaLabel || "Phone number", error);
   const [selected, setSelected] = useState<Country | undefined>(undefined);
   const { country, digits } = parsePhone(value, selected);
   const autoId = useId();
@@ -283,6 +285,7 @@ export function PhoneInput({
           required={required}
           aria-label={label ? undefined : (ariaLabel ?? "Phone number")}
           aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${inputId}-error` : undefined}
           value={digits}
           maxLength={maxDigitsFor(country)}
           placeholder={placeholder ?? (country.code === "IN" ? "98765 43210" : "Phone number")}
@@ -292,7 +295,7 @@ export function PhoneInput({
         />
       </div>
       {error ? (
-        <p className="mt-1 text-xs text-red-500">{error}</p>
+        <p id={`${inputId}-error`} className="sr-only">{error}</p>
       ) : hint ? (
         <p className="mt-1 text-xs text-text-tertiary">{hint}</p>
       ) : null}

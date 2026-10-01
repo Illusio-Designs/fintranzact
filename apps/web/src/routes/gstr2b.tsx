@@ -180,9 +180,6 @@ function UploadSection({
         )}
       </div>
 
-      {uploadMutation.isError && (
-        <p className="mt-3 text-sm text-red-600 dark:text-red-400">{uploadMutation.error.message}</p>
-      )}
     </div>
   );
 }

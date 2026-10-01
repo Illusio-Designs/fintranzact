@@ -466,3 +466,9 @@ input, select, textarea {
 .gooey-actionButton.gooey-actionWarning { background: var(--warning) !important; }
 .gooey-actionButton.gooey-actionInfo, .gooey-actionButton.gooey-actionDefault { background: var(--brand-600) !important; }
 .gooey-actionButton.gooey-actionButton:hover { filter: brightness(1.08); }
+
+/* Invalid fields: red outline + soft ring. The message itself is a goey toast. */
+.input[aria-invalid="true"], [aria-invalid="true"].input, textarea[aria-invalid="true"], select[aria-invalid="true"] {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgb(220 38 38 / 0.15);
+}

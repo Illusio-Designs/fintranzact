@@ -8,6 +8,9 @@ import { cvvValid, expiryValid, formatCardNumber, formatExpiry, luhnValid, upiId
 
 const { mutateAsync } = vi.hoisted(() => ({ mutateAsync: vi.fn() }));
 
+const toastError = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks/useToast", () => ({ toast: Object.assign(vi.fn(), { error: toastError, success: vi.fn(), info: vi.fn(), warning: vi.fn() }) }));
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     billing: { demoCheckout: { useMutation: () => ({ mutateAsync, isPending: false }) } },
@@ -130,13 +133,15 @@ describe("DemoCheckout", () => {
     await waitFor(() => expect(onContinue).toHaveBeenCalledTimes(1));
   });
 
-  it("shows a failed payment inline and lets the owner try again", async () => {
+  it("shows a failed payment as a toast and lets the owner try again", async () => {
     mutateAsync.mockRejectedValue(new Error("Only the organization owner can change the plan."));
     renderCheckout();
     fireEvent.change(screen.getByLabelText("UPI ID"), { target: { value: "anjali@okhdfcbank" } });
     fireEvent.click(payButton());
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Only the organization owner can change the plan.");
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Payment didn't go through", "Only the organization owner can change the plan."),
+    );
     expect(payButton()).toBeEnabled();
     expect(screen.queryByText("Payment successful")).not.toBeInTheDocument();
   });

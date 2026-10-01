@@ -615,6 +615,10 @@ function FeatureForm({ feature, categories, onClose }: { feature: Feature | "new
   const utils = trpc.useUtils();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
+  // Problems show as a goey toast.
+  useEffect(() => {
+    if (error) toast.error(error);
+  }, [error]);
   const existing = feature && feature !== "new" ? feature : null;
 
   useEffect(() => {
@@ -767,11 +771,6 @@ function FeatureForm({ feature, categories, onClose }: { feature: Feature | "new
           onChange={(e) => set("checklist", e.target.value)}
           placeholder={"Employee master\nPayslip PDF\nBank file"}
         />
-        {error ? (
-          <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-            {error}
-          </p>
-        ) : null}
       </div>
     </SlideOver>
   );

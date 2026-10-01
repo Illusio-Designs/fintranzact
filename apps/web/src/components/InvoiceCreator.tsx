@@ -81,6 +81,7 @@ export function InvoiceCreator({ type, onClose }: Props) {
       utils.item.list.invalidate();
       onClose();
     },
+    onError: (err) => toast.error("Couldn't save the invoice", err.message),
   });
 
   // Computed totals
@@ -553,9 +554,6 @@ export function InvoiceCreator({ type, onClose }: Props) {
 
           {/* Footer */}
           <div className="px-6 py-4 flex items-center justify-between border-t" style={{ borderColor: "var(--border-light)", background: "var(--surface-1)" }}>
-            {createMutation.error && (
-              <p className="text-xs text-red-600">{createMutation.error.message}</p>
-            )}
             <div className="flex-1" />
             <div className="flex gap-2">
               <button

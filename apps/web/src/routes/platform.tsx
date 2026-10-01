@@ -566,6 +566,10 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
   const [form, setForm] = useState<PlanSettings | null>(null);
   const [featuresText, setFeaturesText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Problems show as a goey toast.
+  useEffect(() => {
+    if (error) toast.error(error);
+  }, [error]);
   const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
@@ -716,12 +720,6 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
               ))}
             </div>
           </section>
-
-          {error ? (
-            <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-              {error}
-            </p>
-          ) : null}
         </div>
       </SlideOver>
       <ConfirmDialog

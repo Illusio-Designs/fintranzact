@@ -7,6 +7,7 @@ import {
   useId,
 } from "react";
 import { cn } from "@/lib/utils";
+import { useFieldErrorToast } from "@/lib/field-error-toast";
 import { Select } from "./Select";
 import { DateInput } from "./DateInput";
 import { PasswordInput } from "./PasswordInput";
@@ -22,6 +23,9 @@ interface FormFieldProps {
 }
 
 export function FormField({ label, error, required, children, className, htmlFor }: FormFieldProps) {
+  // The message is shown as a goey toast; the field keeps a red outline and
+  // screen readers still read the message here.
+  useFieldErrorToast(label, error);
   return (
     <div className={cn("flex flex-col", className)}>
       <label htmlFor={htmlFor} className="label">
@@ -30,10 +34,19 @@ export function FormField({ label, error, required, children, className, htmlFor
       </label>
       {children}
       {error && (
-        <p className="text-xs mt-1 text-red-500">{error}</p>
+        <p id={htmlFor ? errorId(htmlFor) : undefined} className="sr-only">
+          {error}
+        </p>
       )}
     </div>
   );
+}
+
+const errorId = (fieldId: string) => `${fieldId}-error`;
+
+/** Points the control at its (screen-reader-only) error message. */
+function describedBy(fieldId: string, error: string | undefined, own: string | undefined) {
+  return [own, error ? errorId(fieldId) : undefined].filter(Boolean).join(" ") || undefined;
 }
 
 interface InputFieldProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -67,7 +80,7 @@ export function InputField({ label, error, required, className, id, ...props }: 
           autoFocus={autoFocus}
           placeholder={placeholder}
           aria-invalid={error ? true : undefined}
-          aria-describedby={props["aria-describedby"]}
+          aria-describedby={describedBy(fieldId, error, props["aria-describedby"])}
           data-testid={(props as { "data-testid"?: string })["data-testid"]}
         />
       </FormField>
@@ -78,13 +91,25 @@ export function InputField({ label, error, required, className, id, ...props }: 
     const { type: _type, ...rest } = props;
     return (
       <FormField label={label} error={error} required={required} htmlFor={fieldId}>
-        <PasswordInput id={fieldId} className={className} {...rest} />
+        <PasswordInput
+          id={fieldId}
+          className={className}
+          aria-invalid={error ? true : undefined}
+          {...rest}
+          aria-describedby={describedBy(fieldId, error, rest["aria-describedby"])}
+        />
       </FormField>
     );
   }
   return (
     <FormField label={label} error={error} required={required} htmlFor={fieldId}>
-      <input id={fieldId} className={cn("input", className)} {...props} />
+      <input
+        id={fieldId}
+        className={cn("input", className)}
+        aria-invalid={error ? true : undefined}
+        {...props}
+        aria-describedby={describedBy(fieldId, error, props["aria-describedby"])}
+      />
     </FormField>
   );
 }
@@ -119,7 +144,7 @@ export function SelectField({
         disabled={props.disabled}
         required={required}
         aria-invalid={error ? true : undefined}
-        aria-describedby={props["aria-describedby"]}
+        aria-describedby={describedBy(fieldId, error, props["aria-describedby"])}
         data-testid={(props as { "data-testid"?: string })["data-testid"]}
       >
         {children}
@@ -146,7 +171,13 @@ export function TextareaField({
   const fieldId = id ?? autoId;
   return (
     <FormField label={label} error={error} required={required} htmlFor={fieldId}>
-      <textarea id={fieldId} className={cn("input", className)} {...props} />
+      <textarea
+        id={fieldId}
+        className={cn("input", className)}
+        aria-invalid={error ? true : undefined}
+        {...props}
+        aria-describedby={describedBy(fieldId, error, props["aria-describedby"])}
+      />
     </FormField>
   );
 }
