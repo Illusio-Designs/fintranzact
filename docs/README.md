@@ -7,14 +7,14 @@ This folder contains **internal architecture documents, audit reports, and desig
 ## Contents
 
 ### Architecture
-- [`architecture/cli-mcp-design.md`](architecture/cli-mcp-design.md) — CLI tool + MCP server architecture (ADRs, package structure, tool schemas); CLI covers ~140 methods across 22 domain groups, MCP exposes 96 tools across 16 tool files including tenant, document types, apiKey, store, shipment, reports, and bank account domains
+- [`architecture/cli-mcp-design.md`](architecture/cli-mcp-design.md) — CLI tool + MCP server architecture (ADRs, package structure, tool schemas). As built: the CLI (`packages/cli`) has 26 command registrars in `src/bin/registrars/` (38 top-level commands, 184 runnable commands) over a 254-method API client; the MCP server (`packages/mcp`) registers 186 tools from 26 tool files in `src/tools/`, plus 9 resources and 6 prompts. See [`packages/cli/CLI-UX-ARCHITECTURE.md`](../packages/cli/CLI-UX-ARCHITECTURE.md) for the CLI as built
 - [`architecture/testing-plan.md`](architecture/testing-plan.md) — Test infrastructure design (Vitest/Jest setup, coverage strategy, CI integration)
 - [`architecture/ai-features-roadmap.md`](architecture/ai-features-roadmap.md) — AI feature implementation plans (HSN auto-fill, photo-to-item, product photography)
-- [`architecture/online-store.md`](architecture/online-store.md) — Online store design proposal (storefront, catalogue, order flow)
+- [`architecture/online-store.md`](architecture/online-store.md) — Online store design (storefront, catalogue, order flow); built as `apps/store` plus the `/store/:slug/*` API routes
 - [`architecture/role-based-ui.md`](architecture/role-based-ui.md) — Role-based UI access patterns (permission matrix, nav filtering, route guards)
 - [`architecture/workflow-optimizations.md`](architecture/workflow-optimizations.md) — UX workflow optimizations identified from usability audits
 - [`architecture/workflow-map.md`](architecture/workflow-map.md) — Complete workflow index (all WF-nn flows, triggers, roles, branch conditions)
-- [`architecture/analytics-design.md`](architecture/analytics-design.md) — Analytics and reporting design (dashboard widgets, reports router, data model)
+- [`architecture/analytics-design.md`](architecture/analytics-design.md) — Analytics and reporting design (dashboard widgets, reports router, data model); mostly built, with an "As built" note on what was not
 
 ### Audits
 - [`compliance-audit.md`](compliance-audit.md) — Indian regulatory compliance assessment (GST, DPDPA, financial accuracy)
@@ -24,7 +24,7 @@ This folder contains **internal architecture documents, audit reports, and desig
 
 ### Deployment
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — Production deployment guide (Docker, ONCE, Vercel)
-- [`ROLLBACK.md`](ROLLBACK.md) — Migration rollback procedures (reverse SQL per Drizzle migration, backup-based recovery)
+- [`ROLLBACK.md`](ROLLBACK.md) — Rollback procedures (app rollback, forward-fix migrations, backup restore, reverse SQL for every migration in the unified, control and tenant sets)
 
 ### Testing & Workflows
 - [`INTEGRATION-TEST-WORKFLOWS.md`](INTEGRATION-TEST-WORKFLOWS.md) — Integration test workflow tree (every testable API workflow, grouped by test file)
@@ -34,7 +34,7 @@ This folder contains **internal architecture documents, audit reports, and desig
 
 ### Reports System
 
-24 report types, accessible at the `/reports` route in the web app, served by the `reports`, `inventoryReports`, `orders` (pending order reports) and `priceLevel` (Price List) tRPC routers. All reports are scoped to the active business.
+27 report types, accessible at the `/reports` route in the web app, served by the `reports`, `inventoryReports`, `orders` (pending order reports) and `priceLevel` (Price List) tRPC routers. All reports are scoped to the active business.
 
 | Report | Description |
 |---|---|
@@ -56,6 +56,9 @@ This folder contains **internal architecture documents, audit reports, and desig
 | Godown Summary | Stock held and its value per warehouse |
 | Stock Ageing | Current stock by age bucket (0–30 … 180+ days) |
 | Reorder Status | Items at or below reorder level, with suggested order |
+| Batch-wise Stock | Stock per batch and warehouse, with expiry dates |
+| Expiring Soon | Batches that expire in the next N days |
+| Expired Stock | Batches past expiry that are still in stock |
 | Dead Stock | Stock with no outward movement in N days |
 | Price List | Each item's price on every price level, with MRP |
 | Pending Sales Orders | Ordered by customers and not yet delivered |
@@ -82,7 +85,7 @@ Seller performance tracking, managed under Settings → Sales Targets (admin onl
 
 ### Bank Accounts
 
-A `bankAccount` tRPC router with 9 endpoints, all scoped to the active business via `businessProcedure`.
+A `bankAccount` tRPC router with 12 endpoints, all scoped to the active business via `businessProcedure`.
 
 | Endpoint | Description |
 |---|---|
@@ -95,10 +98,13 @@ A `bankAccount` tRPC router with 9 endpoints, all scoped to the active business 
 | `addTransaction` | Record a manual debit or credit |
 | `transfer` | Transfer between two accounts (creates paired entries) |
 | `summary` | Aggregate balance and transaction counts across all accounts |
+| `getGatewayConfig` | Read the gateway charge settings for one account |
+| `upsertGatewayConfig` | Create or update those settings |
+| `deleteGatewayConfig` | Remove those settings |
 
 ### Document Types
 
-Seven additional invoice-like document types, each with its own tRPC router generated by `document-router-factory.ts` (list, getById, create, update, delete, convert).
+Seven additional invoice-like document types, each with its own tRPC router generated by `document-router-factory.ts` (`list`, `getById`, `create`, `updateStatus`, `delete`).
 
 | Type | Router key | Use case |
 |---|---|---|
@@ -110,7 +116,7 @@ Seven additional invoice-like document types, each with its own tRPC router gene
 | Sales Return | `salesReturn` | Record returned goods from a customer |
 | Purchase Return | `purchaseReturn` | Record goods returned to a vendor |
 
-The shared `document.convert` mutation handles converting any document type to a final tax invoice.
+The shared `document.convert` mutation converts one document type into another (for example a quotation into an invoice, or a GRN's rejected goods into a purchase return).
 
 ### Shipments
 
@@ -160,7 +166,7 @@ Automated invoice generation from recurring templates. Templates define a party,
 
 **Schema**: `recurring_invoice_templates` (template config) + `recurring_invoice_runs` (execution history).
 
-**Router**: `recurringInvoice` — 12 endpoints:
+**Router**: `recurringInvoice` — 11 endpoints:
 
 | Endpoint | Description |
 |---|---|
@@ -184,7 +190,7 @@ Automated invoice generation from recurring templates. Templates define a party,
 
 ### Import
 
-A `import` tRPC router powering the MyBillBook import wizard (`ImportWizard.tsx`). All four endpoints operate under `businessProcedure` and accept CSV/JSON payloads parsed client-side.
+An `import` tRPC router (`packages/api/src/routers/import/`) powering the import wizard (`ImportWizard.tsx`). It has six endpoints; MyBillBook files are handled by an adapter in `routers/import/adapters/mybillbook/`.
 
 | Endpoint | Description |
 |---|---|
@@ -192,6 +198,8 @@ A `import` tRPC router powering the MyBillBook import wizard (`ImportWizard.tsx`
 | `importItems` | Bulk-create inventory items (`normalizeUnit()` maps 45+ unit codes) |
 | `importInvoices` | Bulk-create sale and purchase invoices |
 | `importPayments` | Bulk-create payment records linked to imported invoices |
+| `reconcileDirectPayments` | Create payment records for imported invoices that show an amount paid but have no payment |
+| `importTransfers` | Bulk-create transfers between payment modes / accounts |
 
 Unmapped unit codes are collected and returned in the response so no data is silently dropped.
 
