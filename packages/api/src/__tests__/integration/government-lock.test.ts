@@ -109,3 +109,15 @@ describe("delivery challan with a live e-way bill", () => {
     await expect(owner().deliveryChallan.delete({ id: challan.id })).rejects.toThrow(/e-way bill/);
   });
 });
+
+describe("sellers", () => {
+  it("can't edit invoices; owners can", async () => {
+    const id = await newInvoice();
+    const seller = createTestCaller({
+      userId: world.suresh.id, email: world.suresh.email, name: world.suresh.name ?? null,
+      tenantId: world.tenant1.id, businessId: world.business1.id,
+    });
+    await expect(seller.invoice.update({ id, notes: "seller edit" })).rejects.toThrow(/Sellers can't edit invoices/);
+    await expect(owner().invoice.update({ id, notes: "owner edit" })).resolves.toBeTruthy();
+  });
+});

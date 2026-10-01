@@ -537,6 +537,7 @@ function InvoiceDetailPanel({
     balance > 0.01;
 
   const isDraftLike = invoice?.status === "draft" || invoice?.status === "unfulfilled";
+  const { data: me } = trpc.auth.me.useQuery();
 
   return (
     <SlideOver
@@ -548,7 +549,7 @@ function InvoiceDetailPanel({
         invoice ? (
           <div className="flex items-center justify-between gap-3">
             <div className="flex gap-2">
-              {invoice.status !== "paid" && !invoice.governmentLock && (
+              {invoice.status !== "paid" && !invoice.governmentLock && me?.role !== "seller" && (
                 <button
                   onClick={() => {
                     onClose();

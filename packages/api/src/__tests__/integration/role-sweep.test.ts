@@ -107,6 +107,8 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   "stock.verify": { allow: ADMINS, why: "non-admins need a warehouse adjust grant" },
   "stock.countPost": { allow: ADMINS, why: "non-admins need a warehouse adjust grant" },
   "manufacturing.cancel": { allow: ADMINS, why: "non-admins need a warehouse adjust grant" },
+  // Owner decision: sellers create documents but never edit them.
+  "invoice.update": { allow: ["owner", "admin", "seller_manager"], why: "sellers can't edit invoices" },
   "selfExport.request": { allow: ["owner"], why: "org owner only" },
   "selfImport.request": { allow: ["owner"], why: "org owner only" },
 };

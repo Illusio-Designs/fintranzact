@@ -258,10 +258,10 @@ Payroll is sold separately from plans: any paid plan can add Payroll. Build alon
 ### Partners
 - Optional partner commission on Payroll, and credit towards partner badges
 
-### Owner decision pending
-- Partner commission on Payroll yes/no`,
+### Owner decision (1 Oct 2026)
+- Partners earn commission on Payroll, like on plans, and it counts towards their badge`,
     checklist: [
-      "Decide partner commission on Payroll yes/no (owner)",
+      "Partner commission on Payroll (decided: yes) — include add-on revenue in payouts and badges",
       "Add-on on/off per organisation in admin",
       "Trial (up to 10 employees) and free grant per organisation",
       "Add-on pricing editable in admin (₹49/employee, ₹499 minimum, yearly 2 months free)",
@@ -1423,10 +1423,10 @@ No free plan. Three paid plans; prices are ex-18% GST, yearly = 2 months free, a
 - Migrate the current plan ids and limits (forever_free / free / pro / business / enterprise) to Starter / Growth / Business, including stored plan_settings and tenants.plan
 - Add yearly prices to plan settings
 
-### Owner decision pending
-- Existing Forever Free organisations: grandfather them (unlimited) or move them to trial → paid`,
+### Owner decision (1 Oct 2026)
+- Existing Forever Free organisations are grandfathered: they keep unlimited access. Only new sign-ups get the trial → paid flow`,
     [
-      "Decide what happens to existing Forever Free organisations (owner)",
+      "Grandfather existing Forever Free organisations (decided: keep unlimited)",
       "New plan ids: starter, growth, business (enum + migration)",
       "Migrate tenants and plan_settings from forever_free/free/pro/business/enterprise",
       "Starter limits and features (1 business, 3 users, no PDF branding)",
@@ -1449,7 +1449,7 @@ No free plan. Three paid plans; prices are ex-18% GST, yearly = 2 months free, a
 Every new organisation starts on a Full Access Trial instead of a free plan.
 
 ### Trial
-- 14 days (length editable in admin; owner to confirm 14 vs 30)
+- 14 days (decided; length editable in admin)
 - Unlocks the Business plan and all add-ons, with caps: AI 50 questions, Payroll up to 10 employees, Store Pro including domain connect
 - No card needed to start
 - Countdown banner in the app ("9 days left — choose a plan")
@@ -1463,10 +1463,10 @@ Every new organisation starts on a Full Access Trial instead of a free plan.
 ### Rules and admin
 - One trial per business: checked by phone, email and GSTIN
 - Admin can extend a trial or grant a custom trial
-- Partner referrals get a 30-day trial (owner to confirm)`,
+- Partner referrals get a 30-day trial (decided)`,
     [
-      "Confirm trial length 14 vs 30 days (owner)",
-      "Confirm 30-day partner referral trial (owner)",
+      "Trial length 14 days (decided), editable in admin",
+      "30-day trial for partner referral sign-ups (decided)",
       "Trial fields on organisations (start, end, source)",
       "Start trial on sign-up; trial length setting in admin",
       "Trial unlocks Business plan + add-ons with caps (AI 50, Payroll 10 employees, Store Pro)",

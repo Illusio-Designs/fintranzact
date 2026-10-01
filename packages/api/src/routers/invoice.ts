@@ -903,6 +903,11 @@ export const invoiceRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Invoice");
+      // Owner decision: sellers create documents but never edit them; a
+      // manager or admin makes corrections.
+      if (ctx.role === "seller") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sellers can't edit invoices. Ask a sales manager or admin to make the change." });
+      }
       await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "edit");
       const updated = await ctx.db.transaction(async (tx) => {
         // 1. Fetch existing invoice
