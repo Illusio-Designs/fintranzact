@@ -334,6 +334,29 @@ describe("auth.login", () => {
     expect(session!.userId).toBe(loginUserId);
   });
 
+  it("matches email case-insensitively — stored lowercase, login and duplicate check ignore case", async () => {
+    const caller = unauthCaller();
+    const reg = await caller.auth.register({
+      email: "Case.Mixed@Vyapar.in",
+      name: "Case Tester",
+      password: "Test@1234!",
+      confirmPassword: "Test@1234!",
+    });
+    expect(reg.user.email).toBe("case.mixed@vyapar.in");
+
+    const login = await unauthCaller().auth.login({ email: "CASE.MIXED@vyapar.in", password: "Test@1234!" });
+    expect(login.user.id).toBe(reg.user.id);
+
+    await expect(
+      unauthCaller().auth.register({
+        email: "case.mixed@VYAPAR.in",
+        name: "Case Tester",
+        password: "Test@1234!",
+        confirmPassword: "Test@1234!",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
   it("login with wrong password returns UNAUTHORIZED — does not leak whether email exists", async () => {
     const caller = unauthCaller();
     await expect(
