@@ -33,6 +33,7 @@
     "prismjs": "^1.29.0",
     "react": "^19.0.0",
     "react-dom": "^19.2.4",
+    "read-excel-file": "^9.3.10",
     "recharts": "^3.8.1",
     "superjson": "^2.2.0",
     "zod": "^3.24.0"

@@ -61,8 +61,9 @@ function scoreTemplate(
   sampleText: string,
   columnCount: number,
   hints?: { bankName?: string; ifsc?: string },
-): { confidence: number; reasons: string[] } {
+): { confidence: number; reasons: string[]; headerMismatch: boolean } {
   const rules = template.detectionRules;
+  let headerMismatch = false;
   let confidence = 0;
   const reasons: string[] = [];
 
@@ -95,6 +96,8 @@ function scoreTemplate(
     if (matchedAll) {
       confidence += 0.3;
       reasons.push("header patterns");
+    } else {
+      headerMismatch = true;
     }
   }
 
@@ -117,7 +120,7 @@ function scoreTemplate(
     }
   }
 
-  return { confidence: Math.min(confidence, 1), reasons };
+  return { confidence: Math.min(confidence, 1), reasons, headerMismatch };
 }
 
 /**
@@ -204,9 +207,13 @@ export function detectBankTemplate(
   }> = [];
 
   for (const template of templates) {
-    const { confidence, reasons } = scoreTemplate(
+    const { confidence, reasons, headerMismatch } = scoreTemplate(
       template, headerText, sampleText, columnCount, hints,
     );
+    // The account's IFSC and bank name alone must not pick a template whose
+    // headers the file doesn't have (an OFX/QIF/Excel export from that same
+    // bank, or another layout): its column positions would be wrong.
+    if (headerMismatch) continue;
     if (confidence > 0) {
       scored.push({ template, confidence, reason: reasons.join(", ") });
     }

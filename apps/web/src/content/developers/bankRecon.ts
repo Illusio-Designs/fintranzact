@@ -93,6 +93,7 @@ print(f"Detected {result['totalRows']} rows, template: {result.get('detectedTemp
       },
       gotchas: [
         "CSV content is sent as a string in the JSON body, not as a file upload. Max size is 10 MB.",
+        "The API takes CSV only. The web app converts Excel (.xlsx), OFX/QFX, QIF and PDF statements to CSV in the browser before calling this; the converters (`ofxToRows`, `qifToRows`, `sheetToRows`, `pdfItemsToRows`, `rowsToCsv`) are in `@fintranzact/shared`.",
         "The first row is treated as headers. A CSV with fewer than 2 rows (header + 1 data row) returns BAD_REQUEST.",
         "Bank templates are lazily seeded on first upload for each business. The first upload may be slightly slower.",
         "Template detection uses IFSC prefix and header patterns. If the bank account's IFSC does not match the CSV format, a `detectionWarning` is returned.",

@@ -1,6 +1,6 @@
 ---
 title: Bank Reconciliation
-description: Import a bank statement CSV, auto-match its lines against your payments, expenses, and bank transactions, review the matches, and compare your book balance with the statement balance.
+description: Import a bank statement (CSV, Excel, OFX, QIF or PDF), auto-match its lines against your payments, expenses, and bank transactions, review the matches, and compare your book balance with the statement balance.
 sidebar:
   order: 3
 ---
@@ -8,7 +8,7 @@ sidebar:
 import { ForCA } from "@/components/help/mdx";
 import { ForBusiness } from "@/components/help/mdx";
 
-Bank reconciliation checks that what Fintranzact has recorded agrees with what actually went through your bank. You upload the statement your bank gives you as a CSV file. Fintranzact reads every line and tries to match it to a payment, expense, or bank transaction you have already recorded. You then review the lines it could not match.
+Bank reconciliation checks that what Fintranzact has recorded agrees with what actually went through your bank. You upload the statement your bank gives you: CSV, Excel, OFX, QFX, QIF or PDF. Fintranzact reads every line and tries to match it to a payment, expense, or bank transaction you have already recorded. You then review the lines it could not match.
 
 :::note
 Bank Reconciliation is available in the web and desktop app only. The mobile app does not have it yet.
@@ -21,7 +21,7 @@ In the sidebar, go to **Accounts → Bank Reconciliation**. The page is titled *
 | Tab | What it is for |
 |---|---|
 | **Reconciliation Hub** | Your bank accounts and a history of statement imports |
-| **Upload & Map** | Upload a statement CSV and map its columns |
+| **Upload & Map** | Upload a statement file and map its columns |
 | **Review Matches** | Go through each statement line and confirm, match, or ignore it |
 | **Summary (BRS)** | Compare the book balance with the statement balance for one account |
 | **Rules** | Categorisation rules for recurring narrations |
@@ -50,7 +50,7 @@ If you have no bank accounts yet, the hub shows **Add bank account**, which take
 
 | Column | Meaning |
 |---|---|
-| **File** | The name of the CSV you uploaded |
+| **File** | The name of the file you uploaded |
 | **Status** | `pending` (uploaded, but columns not confirmed yet) or `review` (lines parsed and matched) |
 | **Lines** | Number of transaction lines read from the file |
 | **Matched** | Lines that are auto-matched, manually matched, or turned into an expense |
@@ -65,10 +65,20 @@ Click **Review** on a row to open that import in the **Review Matches** tab.
 
 1. Open the **Upload & Map** tab, or click **Import statement** on the hub.
 2. Choose the account under **Bank Account \***.
-3. Drag the file onto the **CSV File \*** box, or click it to browse.
+3. Drag the file onto the **Statement File \*** box, or click it to browse.
 4. Click **Upload & Detect Columns**.
 
-Only `.csv` files are accepted, up to about 10 MB. Download the statement as CSV from your bank's internet banking site. If your bank only gives you Excel or PDF, open it in a spreadsheet program and save it as CSV first.
+These formats are accepted:
+
+| Format | Notes |
+|---|---|
+| **CSV** (`.csv`) | Read as it is. |
+| **Excel** (`.xlsx`) | The first sheet is read. Title and account rows above the column headings are dropped. Old `.xls` files are not supported: save them as `.xlsx` or download CSV instead. |
+| **OFX / QFX** (`.ofx`, `.qfx`) | Each transaction becomes a line with **Date**, **Description**, **Reference**, **Debit** and **Credit** columns. |
+| **QIF** (`.qif`) | Bank, cash and card registers. Dates are read day first, like `01/04/2026` or `1/4'26`. |
+| **PDF** (`.pdf`) | Text is read into columns from the heading row onward. If the PDF is password protected, enter its password when asked (banks often use your date of birth or customer ID). Scanned PDFs have no text and can't be read: download the Excel or CSV statement instead. |
+
+Excel, OFX, QIF and PDF files are converted to CSV in your browser before upload, so the next step works the same for every format. The converted file can be up to about 10 MB. PDF reading is best effort, so check the preview on the mapping screen.
 
 The CSV reader deals with the usual problems in Indian bank exports:
 
@@ -217,7 +227,7 @@ The **Summary (BRS)** tab shows a **Bank Reconciliation Statement** for one acco
 The unmatched totals are shown to help you explain the difference. They are not subtracted from it.
 
 :::caution
-- **Statement Balance** is read from the last row in the file. If your bank lists transactions newest first, the last row is the oldest one, so its balance is not your closing balance. Re-save the CSV oldest first before importing.
+- **Statement Balance** is read from the last row in the file. If your bank lists transactions newest first, the last row is the oldest one, so its balance is not your closing balance. Re-save the statement oldest first before importing.
 - **Book Balance** is today's balance, not the balance on the statement's last date. Anything you recorded after the statement period, such as payments or expenses, will show up in the difference.
 :::
 
@@ -289,7 +299,7 @@ Custom templates saved from the mapping screen have no detection rules, so they 
 <ForBusiness>
 **A simple monthly routine**
 
-1. At the start of each month, download last month's statement as CSV from net banking.
+1. At the start of each month, download last month's statement from net banking. CSV or Excel works best.
 2. Import it and click **Use Template** if your bank is detected.
 3. On the **Unmatched** filter, click **+ Expense** for bank charges, SMS charges, and similar debits. Use **Match** for any customer payments that were not picked up.
 4. Check **Summary (BRS)**. If the difference is not zero, look for payments or expenses you have not recorded yet.
@@ -306,10 +316,10 @@ Custom templates saved from the mapping screen have no detection rules, so they 
 ## Frequently asked questions
 
 **Does Fintranzact connect to my bank directly?**
-No. There is no live bank feed. You download the statement as a CSV from your bank and import it on the **Upload & Map** tab.
+No. There is no live bank feed. You download the statement from your bank and import it on the **Upload & Map** tab.
 
 **Can I import a PDF or Excel statement?**
-No. The upload accepts `.csv` files only. Open the statement in Excel or Google Sheets and save it as CSV first.
+Yes. The upload accepts `.xlsx` and PDF files as well as CSV, OFX, QFX and QIF. For PDFs, a CSV or Excel download from the same bank usually gives cleaner columns. Password-protected PDFs work; scanned PDFs don't.
 
 **My bank is not in the built-in list. Can I still import?**
 Yes. Map the columns yourself on the mapping screen, then click **Save as Template** so the layout is ready for next month.
