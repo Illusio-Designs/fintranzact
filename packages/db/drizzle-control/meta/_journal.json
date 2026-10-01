@@ -64,6 +64,13 @@
       "when": 1790799841738,
       "tag": "0008_roadmap_items",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790878996345,
+      "tag": "0009_tenant_plan_selected_at",
+      "breakpoints": true
     }
   ]
 }
