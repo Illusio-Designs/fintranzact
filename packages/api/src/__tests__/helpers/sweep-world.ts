@@ -231,6 +231,12 @@ const today = () => new Date().toISOString();
 const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
 const uniq = () => randomUUID().slice(0, 8);
 
+// Account codes must be unique per business. Codes made from the digits of
+// a random id repeat often (few digits survive, the rest is padding), so
+// count instead: 7 digits, clear of the 4-digit default chart.
+let accountSeq = 0;
+const accountCode = (prefix: "8" | "9") => `${prefix}${String(++accountSeq).padStart(6, "0")}`;
+
 type Seeder = (b: SweepBusiness, c: Caller) => Promise<string | undefined>;
 
 /** Seeder that calls `path` with a generated input plus `override`. */
@@ -313,8 +319,8 @@ export const SEEDERS: Array<[string, Seeder]> = [
   ["expense", async (b, c) => firstId(await c.expense.create({
     category: `Rent ${b.tag}`, description: `Expense ${b.tag}`, amount: "10.00", mode: "cash",
   } as never))],
-  ["account", async (b, c) => firstId(await c.account.create({ code: `9${uniq().replace(/\D/g, "").padEnd(4, "1").slice(0, 4)}`, name: `Account ${b.tag} ${uniq()}`, accountType: "asset" } as never))],
-  ["account2", async (b, c) => firstId(await c.account.create({ code: `8${uniq().replace(/\D/g, "").padEnd(4, "1").slice(0, 4)}`, name: `Account2 ${b.tag} ${uniq()}`, accountType: "liability" } as never))],
+  ["account", async (b, c) => firstId(await c.account.create({ code: accountCode("9"), name: `Account ${b.tag} ${uniq()}`, accountType: "asset" } as never))],
+  ["account2", async (b, c) => firstId(await c.account.create({ code: accountCode("8"), name: `Account2 ${b.tag} ${uniq()}`, accountType: "liability" } as never))],
   ["journal", async (b, c) => firstId(await c.journal.create({
     entryDate: today(),
     narration: `Journal ${b.tag}`,
