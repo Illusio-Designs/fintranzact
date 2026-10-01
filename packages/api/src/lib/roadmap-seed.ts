@@ -488,13 +488,15 @@ const BEFORE_LAUNCH: RoadmapSeedItem[] = [
 
 ### TCS on sales (s.206C)
 - TCS on specified goods and cases under s.206C, by item or party setting
+- TCS on sale of goods (old s.206C(1H)) was removed from 1 April 2025; the Income-tax Act, 2025 renumbers sections from 1 April 2026 — confirm every section with the CA
 - TCS shown on the invoice and collected with it
 
 ### Ledgers, challans and returns
 - TDS payable and TCS payable ledgers per section
 - Challan entry (ITNS 281 / challan number, BSR code, date) to mark tax as paid; due-date reminders (by the 7th of the next month, verify with CA)
 - Form 26Q data (TDS on non-salary payments) and Form 27EQ data (TCS), quarterly
-- Form 16A / 27D certificates to download and share`,
+- Form 16A / 27D certificates to download and share
+- Filing, certificates and PAN/TAN checks through Sandbox.co.in — see "TDS & TCS return filing and certificates through Sandbox.co.in"`,
     [
       "TDS section master with rates and thresholds per financial year",
       "TDS section on parties and expense ledgers",
@@ -1563,6 +1565,267 @@ Update the public pricing page for the paid-only plans.
   ),
 ];
 
+// ── Added after the first seed ────────────────────────────────────────
+// Boards seeded before a batch existed get it once (see lib/roadmap.ts);
+// a new board gets these with the rest of the seed. Never rename a key.
+
+const SANDBOX_NOTE = `### Provider: Sandbox.co.in (owner's choice)
+- API platform by Quicko (Ahmedabad, Rainmatter-funded); connects to NIC and GSTN through licensed GSP partners, with primary / secondary / tertiary routes for fallback
+- One subscription covers all 200+ APIs (GST, e-invoice, e-way bill, TDS, income tax, KYC); plans differ only in calls per month
+- Plans (verify before signing): Startup ₹999/month for 1,000 calls; Growth ₹9,999 for 30,000; Unicorn ₹16,999 for 1,00,000; Enterprise on request
+- Only successful (2xx) calls count; unused calls expire monthly; some APIs also charge per call from a prepaid wallet (wallet money never expires)
+- Free test environment (test-api.sandbox.co.in, key_test_ keys, 25 calls/min); production 500 calls/min, more on request
+- Start on test, Startup plan at launch, Growth as customers grow; revisit Adaequare (~₹0.25 per IRN) only at high e-invoice volume
+- Keep the provider behind one adapter in our code so it can be switched
+
+### Ask Sandbox before signing
+1. Which APIs carry wallet charges, and how much per call
+2. What happens past the monthly quota — billed per call, or blocked (a blocked e-invoice stops a customer's billing)
+3. Is GST extra on plan prices
+4. Is TCS (27EQ) return filing supported
+5. Is there an ASP / partner plan for software serving many GSTINs`;
+
+const GOVERNMENT_FILING: RoadmapSeedItem[] = [
+  {
+    title: "Connect e-invoice, e-way bill and GST returns through Sandbox.co.in",
+    category: "GST",
+    status: "planned",
+    launchStage: "before_launch",
+    priority: "high",
+    phase: null,
+    billing: "included",
+    priceNote: "Customers pay ~₹2–3 per e-invoice / e-way bill, billed monthly after use (no advance). Our cost: Sandbox ₹999–₹16,999/month by volume (~₹0.35–₹2 per e-invoice); NIC and GSTN charge nothing",
+    description: `Send e-invoices, e-way bills and GST returns to the government through Sandbox.co.in instead of calling NIC and GSTN directly.
+
+### Why not direct
+- **E-invoice (NIC IRP):** direct API access is for a taxpayer filing its **own** GSTIN (large-turnover taxpayers), GSPs and e-commerce operators. Fintranzact files for many businesses, so one direct login can't serve them. Becoming a GSP ourselves needs GSTN empanelment (~₹5 lakh plus yearly cost) — not worth it now.
+- **E-way bill (NIC EWB):** same model — direct for the taxpayer's own GSTIN, otherwise through a GSP.
+- **GST returns (GSTN):** the GST common portal's APIs are open only to GSPs.
+- Sandbox handles NIC's RSA/AES encryption, so the NIC public key in irp-client.ts is no longer needed.
+
+${SANDBOX_NOTE}
+
+### How it works
+1. Fintranzact signs in to Sandbox with our API key and secret (stored in env, never in code) → token valid 24 hours
+2. Customer, one time: on the e-invoice portal create an API user and password; enter them in Fintranzact (stored encrypted, per GSTIN). The same login works for e-way bills
+3. E-invoice: session per GSTIN → generate IRN → IRN, ack and signed QR back; cancel within the allowed window
+4. E-way bill: generate from the IRN or standalone (challans, stock transfers), update vehicle, cancel
+5. GST returns: taxpayer session with OTP from the GST portal → GSTR-1 sections saved → filed with EVC OTP; GSTR-3B prepared and filed; GSTR-2B pulled for ITC matching
+6. GSTIN verification when a party is added
+
+### Charging customers per document, no advance (owner's decision)
+- Customers pay **per e-invoice / e-way bill they generate**, billed after the month ends with their plan — no prepaid credits, no advance
+- Fintranzact pays Sandbox's monthly plan and keeps a small wallet balance, topped up automatically
+- Usage page for the customer: documents this month, rate, amount so far
+- Only successful generation is charged; failed calls are not`,
+    checklist: [
+      "Send Sandbox the 5 questions and get a written quote",
+      "Sandbox test account; key_test_ keys in env (never in code)",
+      "Provider adapter so Sandbox can be swapped later",
+      "Replace direct NIC calls in irp-client.ts with Sandbox e-invoice APIs",
+      "E-invoice: generate IRN, fetch, cancel through Sandbox",
+      "E-way bill: generate (from IRN and standalone), update vehicle, cancel",
+      "Per-GSTIN e-invoice API username and password, stored encrypted",
+      "Customer setup guide: create API user on the e-invoice portal",
+      "GSTR-1 save and file with EVC OTP",
+      "GSTR-3B prepare and file",
+      "GSTR-2B pull for ITC matching",
+      "GSTIN verification on party create",
+      "Quota and wallet balance alerts for our Sandbox account",
+      "Per-document usage metering (successful calls only)",
+      "Per-document charge on the customer's monthly bill (no advance)",
+      "Customer usage page: count, rate, amount this month",
+      "Test environment run, then Startup plan and production go-live",
+    ],
+  },
+  feature(
+    "after_launch",
+    "high",
+    "Accounting",
+    "TDS & TCS return filing and certificates through Sandbox.co.in",
+    `File the quarterly income-tax TDS/TCS returns from the data in "TDS & TCS on transactions", using Sandbox's TDS APIs — same Sandbox subscription as e-invoice and GST.
+
+### Through Sandbox
+- Prepare the return (24Q salary, 26Q non-salary, 27Q non-residents; 27EQ TCS to confirm with Sandbox) from our TDS/TCS data
+- Download the CSI file, generate the Protean FVU file and Form 27A (job-based: submit, then poll)
+- **E-file the return** through Sandbox's e-file API — no manual upload by the CA
+- Form 16 / 16A (and 27D) certificates
+- PAN and TAN verification before deducting, so the higher no-PAN rate is applied correctly
+- Fallback if an API isn't available: produce the file and a step-by-step upload guide for the e-filing portal (TAN login, DSC/EVC)
+
+### Law changes to check with the CA before building
+- The Income-tax Act, 2025 replaces the 1961 Act from 1 April 2026 — section numbers and form names may change
+- TCS on sale of goods (old s.206C(1H)) was removed from 1 April 2025; TDS on purchase of goods (old s.194Q) stays
+- GST TDS/TCS (GSTR-7, GSTR-8) is separate from income-tax TDS/TCS — see "GST TDS & TCS credits"`,
+    [
+      "Prepare 24Q, 26Q and 27Q through Sandbox TDS APIs",
+      "Confirm 27EQ (TCS) support with Sandbox",
+      "CSI download and FVU + Form 27A generation (submit and poll job)",
+      "E-file the return through Sandbox",
+      "Form 16 / 16A / 27D certificates",
+      "PAN and TAN verification before deduction",
+      "Correction returns for earlier quarters",
+      "Track filing status, token number and late-filing fee",
+      "Fallback: return file and upload guide when an API is unavailable",
+      "Check section numbers and forms under the Income-tax Act, 2025 with the CA",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "medium",
+    "GST",
+    "GST TDS & TCS credits (GSTR-2X)",
+    `Account for GST deducted or collected by others when the business sells to them.
+
+- **GST TDS:** government departments and notified bodies deduct 2% GST TDS (1% CGST + 1% SGST, or 2% IGST) on payments above the limit
+- **GST TCS:** e-commerce operators (Amazon, Flipkart, etc.) collect GST TCS on the seller's net sales through them
+- Both show in the seller's GSTR-2X; accepting them adds the amount to the electronic cash ledger
+- Record the deduction on the receipt so the invoice is fully settled, and match it with GSTR-2X pulled through Sandbox.co.in (confirm the API with Sandbox)
+- Rates and limits to verify with the CA before building`,
+    [
+      "Record GST TDS deducted by a customer on receipts",
+      "Record GST TCS from marketplace settlements",
+      "GST TDS / TCS receivable ledgers",
+      "Pull GSTR-2X through Sandbox and match",
+      "Report of credits to accept or reject",
+    ],
+  ),
+];
+
+const BANK_FEEDS: RoadmapSeedItem[] = [
+  feature(
+    "before_launch",
+    "high",
+    "Banking",
+    "Bank statement import: Excel, OFX/QIF and PDF",
+    `Bank reconciliation accepts CSV only today. Accept whatever net banking gives the customer, so reconciliation works with every bank from day one.
+
+- Excel (.xlsx), OFX/QFX and QIF converted in the browser to the same rows as CSV, then the usual bank detection and column mapping
+- PDF statements: text read page by page into rows; password-protected PDFs (DOB / customer ID) ask for the password; scanned image-only PDFs get a clear "download Excel or CSV instead" message
+- Title and account-info rows above the real header are skipped automatically
+- Same 10 MB limit; the customer still confirms the column mapping before import`,
+    [
+      "Excel (.xlsx) import",
+      "OFX / QFX import",
+      "QIF import",
+      "PDF import with password support",
+      "Skip title rows above the header",
+      "Clear message for scanned PDFs",
+      "Help pages list the formats",
+      "Tests for each format",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "high",
+    "Banking",
+    "ICICI Connected Banking: daily statement feed and auto-reconciliation",
+    `Fetch the customer's ICICI current-account statement and balance automatically, the way Zoho Books and Tally do — no file upload.
+
+- ICICI Connected Banking is free for the business; Fintranzact must be listed as a partner in ICICI's connected-banking library (partnership agreement)
+- Customer links the account once from Fintranzact (approved in ICICI's corporate net banking)
+- Statement lines pulled daily (and on demand), then the existing auto-match and categorisation rules run
+- Live balance on the bank account screen and dashboard
+- Later on the same rails: vendor payments from Fintranzact, approved in ICICI
+
+### Why not Account Aggregator
+- RBI's Account Aggregator data can only be received by entities regulated by RBI, SEBI, IRDAI or PFRDA; software companies can't, without a licence or a regulated partner — see "Account Aggregator bank data"`,
+    [
+      "Apply for ICICI connected-banking partnership",
+      "Sign agreement and get UAT access",
+      "Link account flow (customer approves in ICICI net banking)",
+      "Daily statement pull and manual refresh",
+      "Run auto-match and rules on fetched lines",
+      "Live balance on bank account and dashboard",
+      "Disconnect / re-link and error states",
+      "Go-live checklist with ICICI",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "medium",
+    "Banking",
+    "Direct bank feeds: Axis, Kotak, SBI, HDFC and Yes Bank",
+    `Repeat the ICICI connected-banking pattern with the next banks, one partnership each — there is no single API for all Indian banks.
+
+- Order by customer demand (count of linked bank accounts per bank)
+- Axis first (Zoho Books already runs the same tie-up: feeds, balance, vendor payments), then Kotak, SBI, HDFC, Yes Bank
+- One bank-feed adapter in our code so each bank plugs into the same import and matching flow
+- Banks without a tie-up keep using statement import`,
+    [
+      "Rank banks by customer accounts",
+      "Bank-feed adapter shared by all banks",
+      "Axis Bank partnership and integration",
+      "Kotak Bank partnership and integration",
+      "SBI partnership and integration",
+      "HDFC / Yes Bank partnership and integration",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "medium",
+    "Banking",
+    "Bank account verification (penny drop) and IFSC lookup through Sandbox.co.in",
+    `Check that a vendor's or employee's bank account is real and in the right name before paying them — part of the same Sandbox.co.in subscription.
+
+- Verify account number + IFSC; show the name the bank returns next to the name we have, with a match / mismatch flag
+- IFSC lookup fills bank name and branch when an IFSC is typed
+- Used on parties (vendors), employees (payroll) and our own bank accounts
+- Each verification is one Sandbox call (may carry a wallet charge — confirm)`,
+    [
+      "IFSC lookup fills bank and branch",
+      "Verify vendor bank accounts",
+      "Verify employee bank accounts for payroll",
+      "Name match / mismatch flag",
+      "Store verification date and result",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "medium",
+    "Banking",
+    "Vendor and salary payouts through RazorpayX",
+    `Pay vendors and salaries from inside Fintranzact.
+
+- RazorpayX current account (partner banks ICICI, Axis, RBL, Yes) — free account, no minimum balance
+- Payouts by IMPS / NEFT / RTGS / UPI at about ₹2–5 each, charged by RazorpayX (verify current rates)
+- Pay a purchase bill or a payroll run; the payment is recorded and reconciled automatically
+- Maker-checker approval for payouts; only to verified bank accounts`,
+    [
+      "Connect RazorpayX account",
+      "Pay a purchase bill",
+      "Bulk salary payout from a payroll run",
+      "Maker-checker approval",
+      "Record and reconcile payouts automatically",
+      "Payout status and failure handling",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "low",
+    "Banking",
+    "Account Aggregator bank data (only with a regulated partner)",
+    `RBI's Account Aggregator (Setu, Finvu, OneMoney, FinBox) shares bank data with the customer's consent — but only to Financial Information Users regulated by RBI, SEBI, IRDAI or PFRDA.
+
+- Fintranzact is not regulated, so it can't receive AA data directly
+- Possible only by partnering with a regulated entity (for example an NBFC) that acts as the FIU, with Fintranzact as its technology provider
+- AA is built for consent-based pulls (lending, wealth), not daily accounting feeds — direct bank feeds fit better
+- Revisit if lending or credit features are added`,
+    [
+      "Keep direct bank feeds as the main route",
+      "Revisit if a lending partner (NBFC) is signed",
+      "If pursued: FIU partner, AA provider, consent flow",
+      "Legal review of data use",
+    ],
+  ),
+];
+
+/** Batches added after the first seed, each put on an older board once. */
+export const ROADMAP_ADDITIONS: { key: string; items: RoadmapSeedItem[] }[] = [
+  { key: "2026-10-government-filing", items: GOVERNMENT_FILING },
+  { key: "2026-10-bank-feeds", items: BANK_FEEDS },
+];
+
 /** Titles pulled to the front of their stage/priority group, in build order. */
 const BUILD_ORDER_TITLES = [
   "AI business assistant — Phase 1",
@@ -1574,7 +1837,14 @@ const BUILD_ORDER_TITLES = [
   "Store themes",
 ];
 
-const REST = [...BEFORE_LAUNCH, ...PAYROLL_INVENTORY_AND_DOMAINS, ...AFTER_LAUNCH, ...ONLINE_STORE, ...AI];
+const REST = [
+  ...BEFORE_LAUNCH,
+  ...PAYROLL_INVENTORY_AND_DOMAINS,
+  ...AFTER_LAUNCH,
+  ...ONLINE_STORE,
+  ...AI,
+  ...ROADMAP_ADDITIONS.flatMap((batch) => batch.items),
+];
 const buildOrderIndex = (item: RoadmapSeedItem) => {
   const i = BUILD_ORDER_TITLES.findIndex((t) => item.title.startsWith(t));
   return i < 0 ? BUILD_ORDER_TITLES.length : i;
