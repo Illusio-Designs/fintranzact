@@ -12,3 +12,4 @@ export * from "./roadmap.js";
 export * from "./dates.js";
 export * from "./gst.js";
 export * from "./bank-statement-formats.js";
+export * from "./invoice-templates.js";

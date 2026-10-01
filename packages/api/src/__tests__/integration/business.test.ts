@@ -372,6 +372,38 @@ describe("business.update", () => {
     expect(cleared!.customShippingMethods).toEqual([]);
   });
 
+  // Settings → Documents → Invoice design
+  it("defaults the invoice design to classic and the thermal roll to 80 mm", async () => {
+    const caller = tenantLevelCaller(owner, tenant.id);
+    const list = await caller.business.list();
+    const biz = list.find((b) => b.id === bizId)!;
+    expect(biz).toMatchObject({ invoiceTemplate: "classic", thermalWidth: 80 });
+  });
+
+  it("saves the invoice design and thermal width, and an unrelated update leaves them alone", async () => {
+    const caller = businessLevelCaller(owner, tenant.id, bizId);
+    const updated = await caller.business.update({ id: bizId, data: { invoiceTemplate: "tally", thermalWidth: 58 } });
+    expect(updated).toMatchObject({ invoiceTemplate: "tally", thermalWidth: 58 });
+
+    await caller.business.update({ id: bizId, data: { name: "Updated Test Biz" } });
+    const db = getTenantTestDb();
+    const [row] = await db
+      .select({ invoiceTemplate: businesses.invoiceTemplate, thermalWidth: businesses.thermalWidth })
+      .from(businesses)
+      .where(eq(businesses.id, bizId));
+    expect(row).toEqual({ invoiceTemplate: "tally", thermalWidth: 58 });
+  });
+
+  it("rejects an unknown invoice design or roll width", async () => {
+    const caller = businessLevelCaller(owner, tenant.id, bizId);
+    await expect(
+      caller.business.update({ id: bizId, data: { invoiceTemplate: "fancy" as never } }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.business.update({ id: bizId, data: { thermalWidth: 72 as never } }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("seller cannot update a business — FORBIDDEN due to insufficient tenant admin role", async () => {
     const caller = businessLevelCaller(seller, tenant.id, bizId);
     await expect(
