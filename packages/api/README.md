@@ -160,6 +160,27 @@ Every mutation (create, update, delete) is logged via `logAudit()` in `src/lib/a
 - Client IP address
 - Timestamp
 
+Stock adjustments/transfers/counts, manufacturing, journals, the chart of accounts, warehouses, ITC, e-invoice / e-way bill, bank reconciliation and batch mutations log through `audited()` / `withAudit()` in the same file, which write one entry per entity once the mutation has succeeded. The data audit below checks the trail per table (`<table>.audit-trail` rules).
+
+---
+
+## Data completeness audit (Layer 4)
+
+`src/lib/data-audit/` holds SQL rules that check what the app saved is complete per business logic, not just per NOT NULL: invoice totals = lines + charges − discount + round-off, line tax = taxable × rate, amount paid = live allocations, stock = sum of movements (items, variants, warehouse balances), documents hold exactly their lines' stock, bank balances = opening + postings, payments post one bank transaction in the right direction, ITC = purchase tax split by state, e-invoice/e-way bill fields per status, GSTIN ⇄ state code, audit entries for user-entered rows, and more. `registry.ts` has an entry for every tenant table — rules, or the reason the table needs none (`registry.test.ts` fails when a new table has neither). Each rule names the procedures/screens that write its rows.
+
+```bash
+pnpm data:audit                          # whole DATABASE_URL (repo-root .env is loaded)
+pnpm data:audit --business <uuid>        # one or more businesses (comma-separated)
+pnpm data:audit --only invoices,payments # rule-id prefixes
+pnpm data:audit --strict --json          # warnings fail too; machine-readable output
+pnpm data:audit --list                   # the rule catalogue
+```
+
+Exit code 0 = clean, 1 = violations (errors; warnings too with `--strict`), 2 = a rule query failed. In multi-tenant mode point `TENANT_DATABASE_URL` at one tenant's database.
+
+- `src/__tests__/integration/data-audit.test.ts` builds a business through the tRPC procedures the web calls (onboarding, masters, quotation → order → challan → invoice, PO → GRN → bill, returns, notes, POS, payments, expenses, banking, reconciliation, stock, manufacturing, journals, recurring invoices, edits, merges) and expects zero violations; it also corrupts rows and checks the rules fire.
+- The Playwright suite runs the audit over the e2e business after all web journeys (`e2e/data-audit.teardown.ts`, the setup project's teardown). `pnpm test:e2e` runs it; `E2E_SKIP_DATA_AUDIT=1` skips it, `E2E_DATA_AUDIT_STRICT=1` fails on warnings, `E2E_DATA_AUDIT_DATABASE_URL` overrides the database. To run only the audit against an existing e2e run: `pnpm exec playwright test --config e2e/playwright.config.ts --project data-audit`.
+
 ---
 
 ## Environment variables
