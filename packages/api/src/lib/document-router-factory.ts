@@ -1,4 +1,5 @@
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
+import { documentIsIntraState, withAllocatedLines } from "./document-totals.js";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -8,6 +9,7 @@ import {
   itemVariants,
   businesses,
   parties,
+  shipments,
 } from "@fintranzact/db";
 import {
   createInvoiceSchema,
@@ -18,7 +20,19 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { logAudit } from "./audit.js";
+import { documentStockDirection, resolveDocumentWarehouseId, resolveInvoiceWarehouse, syncDocumentStock } from "./inventory-service.js";
+import { resolveLineBatches } from "./batches.js";
+import { lineBatchDetails } from "./batch-display.js";
+import { requireCan } from "./permissions.js";
+import { assertNotLockedByGovernment } from "./government-lock.js";
+import { assertInBusiness } from "./business-scope.js";
 import { buildBusinessDateFilter } from "./business-date.js";
+import { escapeLike } from "./escape-like.js";
+import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
+import { assertLineExtras, lineExtras } from "./line-extras.js";
+import { resolveDeliveryMethod } from "./delivery-methods.js";
+import { recomputeReferencedInvoice } from "./invoice-status.js";
+import { syncReversingItc } from "./itc-reversal.js";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 
@@ -31,6 +45,8 @@ export interface DocumentRouterConfig {
   allowedStatuses: string[];
   /** whether creating this document type affects item stock */
   stockEffect: "none" | "decrement" | "increment";
+  /** Sale or purchase regardless of what the client sends (orders, GRNs). */
+  fixedType?: "sale" | "purchase";
 }
 
 // Map document type to prefix/counter columns on businesses table
@@ -70,7 +86,49 @@ const bizColumns = {
     counter: businesses.nextPurchaseReturnNumber,
     setCounter: (n: number) => ({ nextPurchaseReturnNumber: n }),
   },
+  purchase_order: {
+    prefix: businesses.purchaseOrderPrefix,
+    counter: businesses.nextPurchaseOrderNumber,
+    setCounter: (n: number) => ({ nextPurchaseOrderNumber: n }),
+  },
+  sales_order: {
+    prefix: businesses.salesOrderPrefix,
+    counter: businesses.nextSalesOrderNumber,
+    setCounter: (n: number) => ({ nextSalesOrderNumber: n }),
+  },
+  goods_receipt_note: {
+    prefix: businesses.goodsReceiptNotePrefix,
+    counter: businesses.nextGoodsReceiptNoteNumber,
+    setCounter: (n: number) => ({ nextGoodsReceiptNoteNumber: n }),
+  },
 } as const;
+
+/**
+ * A challan or GRN whose goods were billed on an invoice made from it can't be
+ * cancelled or deleted while that invoice stands: the invoice was saved
+ * without moving stock, so taking the challan's movement back would lose it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function assertNotBilled(tx: any, businessId: string, doc: { id: string; documentType: string }) {
+  if (doc.documentType !== "goods_receipt_note" && doc.documentType !== "delivery_challan") return;
+  const [bill] = await tx
+    .select({ invoiceNumber: invoices.invoiceNumber })
+    .from(invoices)
+    .where(and(
+      eq(invoices.businessId, businessId),
+      eq(invoices.referenceDocumentId, doc.id),
+      eq(invoices.documentType, "invoice"),
+      isNull(invoices.deletedAt),
+      sql`${invoices.status} <> 'cancelled'`,
+    ))
+    .limit(1);
+  if (bill) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Invoice ${bill.invoiceNumber} was billed from this document. Cancel or delete that invoice first.`,
+    });
+  }
+}
 
 type KnownDocType = keyof typeof bizColumns;
 
@@ -89,10 +147,13 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           toDate: z.string().datetime().optional(),
           search: z.string().optional(),
           itemId: z.string().uuid().optional(),
+          /** Orders, challans and GRNs: filter by how much is still pending. */
+          fulfilment: z.enum(["open", "partial", "fulfilled", "closed"]).optional(),
           ...paginationSchema.shape,
         })
       )
       .query(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "read", "Invoice");
         const conditions = [
           eq(invoices.businessId, ctx.businessId),
           eq(invoices.documentType, docType as DocumentType),
@@ -109,6 +170,14 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
         }
         if (input.partyId) conditions.push(eq(invoices.partyId, input.partyId));
         conditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
+        if (input.search) {
+          const term = `%${escapeLike(input.search)}%`;
+          conditions.push(
+            sql`(${invoices.invoiceNumber} ILIKE ${term} OR EXISTS (
+              SELECT 1 FROM ${parties} WHERE ${parties.id} = ${invoices.partyId} AND ${parties.name} ILIKE ${term}
+            ))`
+          );
+        }
 
         const offset = (input.page - 1) * input.limit;
 
@@ -119,22 +188,48 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           );
         }
 
-        const [data, [{ count }]] = await Promise.all([
+        const tracked = isPendingTracked(docType);
+        const columns = {
+          id: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+          type: invoices.type,
+          status: invoices.status,
+          documentType: invoices.documentType,
+          invoiceDate: invoices.invoiceDate,
+          dueDate: invoices.dueDate,
+          totalAmount: invoices.totalAmount,
+          amountPaid: invoices.amountPaid,
+          referenceDocumentId: invoices.referenceDocumentId,
+          closedAt: invoices.closedAt,
+          deletedAt: invoices.deletedAt,
+          partyName: parties.name,
+          partyId: parties.id,
+        };
+
+        // The fulfilment filter is worked out from the documents' lines, so
+        // find the matching ids first and page over those.
+        if (tracked && input.fulfilment) {
+          const candidates = await ctx.db
+            .select({ id: invoices.id, status: invoices.status, deletedAt: invoices.deletedAt, closedAt: invoices.closedAt })
+            .from(invoices)
+            .where(and(...conditions))
+            .orderBy(desc(invoices.createdAt));
+          const statuses = await fulfilmentStatuses(ctx.db, ctx.businessId, candidates);
+          const matching = candidates.filter((c) => statuses.get(c.id) === input.fulfilment).map((c) => c.id);
+          const pageIds = matching.slice(offset, offset + input.limit);
+          const rows = pageIds.length === 0 ? [] : await ctx.db
+            .select(columns)
+            .from(invoices)
+            .innerJoin(parties, eq(parties.id, invoices.partyId))
+            .where(and(eq(invoices.businessId, ctx.businessId), inArray(invoices.id, pageIds)))
+            .orderBy(desc(invoices.createdAt));
+          const data = rows.map(({ deletedAt: _deletedAt, ...r }) => ({ ...r, fulfilmentStatus: statuses.get(r.id) ?? null }));
+          return { data, total: matching.length, page: input.page, limit: input.limit };
+        }
+
+        const [rows, [{ count }]] = await Promise.all([
           ctx.db
-            .select({
-              id: invoices.id,
-              invoiceNumber: invoices.invoiceNumber,
-              type: invoices.type,
-              status: invoices.status,
-              documentType: invoices.documentType,
-              invoiceDate: invoices.invoiceDate,
-              dueDate: invoices.dueDate,
-              totalAmount: invoices.totalAmount,
-              amountPaid: invoices.amountPaid,
-              referenceDocumentId: invoices.referenceDocumentId,
-              partyName: parties.name,
-              partyId: parties.id,
-            })
+            .select(columns)
             .from(invoices)
             .innerJoin(parties, eq(parties.id, invoices.partyId))
             .where(and(...conditions))
@@ -147,12 +242,16 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             .where(and(...conditions)),
         ]);
 
+        const statuses = tracked ? await fulfilmentStatuses(ctx.db, ctx.businessId, rows) : null;
+        const data = rows.map(({ deletedAt: _deletedAt, ...r }) => ({ ...r, fulfilmentStatus: statuses?.get(r.id) ?? null }));
+
         return { data, total: count, page: input.page, limit: input.limit };
       }),
 
     getById: viewerProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "read", "Invoice");
         const [invoice] = await ctx.db
           .select()
           .from(invoices)
@@ -167,7 +266,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
         if (!invoice) return null;
 
-        const [lineItems, [party]] = await Promise.all([
+        const [lineRows, [party]] = await Promise.all([
           ctx.db
             .select()
             .from(invoiceItems)
@@ -175,6 +274,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             .orderBy(invoiceItems.sortOrder),
           ctx.db.select().from(parties).where(eq(parties.id, invoice.partyId)).limit(1),
         ]);
+        const batchDetails = await lineBatchDetails(ctx.db, ctx.businessId, lineRows);
+        const lineItems = lineRows.map((li) => ({ ...li, batch: li.batchId ? batchDetails.get(li.batchId) ?? null : null }));
 
         return { ...invoice, lineItems, party: party ?? null };
       }),
@@ -182,6 +283,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
     create: memberProcedure
       .input(createInvoiceSchema)
       .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "create", "Invoice");
         const doc = await ctx.db.transaction(async (tx) => {
           // Security: validate that partyId belongs to the current business.
           const [partyCheck] = await tx.select({ id: parties.id })
@@ -206,6 +308,25 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               .where(and(inArray(items.id, createLineItemIds), eq(items.businessId, ctx.businessId)));
             if (ownedItems.length !== new Set(createLineItemIds).size) {
               throw new TRPCError({ code: "BAD_REQUEST", message: "One or more items do not belong to this business" });
+            }
+          }
+
+          // Stored references must be this business's records, for every
+          // document type (the credit-note check below also caps amounts).
+          await assertInBusiness(tx, invoices, input.referenceDocumentId, ctx.businessId, "Referenced document");
+          await assertInBusiness(tx, shipments, (input.charges ?? []).map((c) => c.shipmentId), ctx.businessId, "Shipment");
+
+          // Security: validate variantIds belong to items in this business.
+          const variantIds = input.lineItems
+            .map((li) => li.variantId)
+            .filter((id): id is string => Boolean(id));
+          if (variantIds.length > 0) {
+            const ownedVariants = await tx.select({ id: itemVariants.id })
+              .from(itemVariants)
+              .innerJoin(items, eq(items.id, itemVariants.itemId))
+              .where(and(inArray(itemVariants.id, variantIds), eq(items.businessId, ctx.businessId)));
+            if (ownedVariants.length !== new Set(variantIds).size) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: "One or more variants do not belong to this business" });
             }
           }
 
@@ -249,13 +370,40 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             docNumber = `${prefix}-${String(nextNum).padStart(5, "0")}`;
           }
 
+          assertLineExtras(docType, input.lineItems);
+          // Check a picked warehouse before anything reads stock in it.
+          const movesStock = config.stockEffect !== "none" && !input.skipStockAdjustment;
+          if (input.warehouseId && movesStock) {
+            await resolveInvoiceWarehouse(tx, {
+              businessId: ctx.businessId,
+              operation: "sale",
+              warehouseId: input.warehouseId,
+            });
+          }
+
+          // Lines of batch-tracked items get their batch (see lib/batches).
+          const stockDoc = { documentType: docType, type: config.fixedType ?? input.type, warehouseId: input.warehouseId ?? null };
+          const docDate = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
+          const direction = movesStock ? documentStockDirection(stockDoc) : 0;
+          const lineItems = await resolveLineBatches(tx, {
+            businessId: ctx.businessId,
+            lines: input.lineItems,
+            direction,
+            warehouseId: direction === 0 ? null : await resolveDocumentWarehouseId(tx, { businessId: ctx.businessId, doc: stockDoc }),
+            documentDate: docDate,
+            strict: true,
+          });
+
+          // Intra-state: CGST and SGST are each rounded at half the rate.
+          const intraState = await documentIsIntraState(tx, ctx.businessId, input.partyId);
           // Calculate line item totals using fixed-point arithmetic
-          const processedItems = input.lineItems.map((li, idx) => {
+          const processedItems = lineItems.map((li, idx) => {
             const calc = calcLineItem({
               quantity: li.quantity,
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent || "0",
               discountPercent: li.discountPercent || "0",
+              intraState,
             });
             return {
               itemId: li.itemId || null,
@@ -269,34 +417,52 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               totalAmount: calc.total,
               sortOrder: idx,
               selectedUnit: li.selectedUnit || null,
-              conversionFactor: li.conversionFactor || "1",
+              conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
+              variantId: li.variantId || null,
+              ...lineExtras(li),
+              batchId: li.batchId,
             };
           });
 
           const charges = input.charges ?? [];
+          // A flat additionalCharges (no itemised charges) is part of the total too —
+          // it used to be stored but left out of totalAmount.
+          const flatCharges = charges.length > 0 ? charges : [{ amount: input.additionalCharges || "0" }];
           const totals = calcInvoiceTotals({
-            lineItems: input.lineItems.map((li) => ({
+            lineItems: lineItems.map((li) => ({
               quantity: li.quantity,
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent || "0",
               discountPercent: li.discountPercent || "0",
             })),
-            charges: charges.length > 0 ? charges : undefined,
-            roundOff: charges.length > 0 ? (input.roundOff || "0") : undefined,
+            charges: flatCharges,
+            invoiceDiscount: input.invoiceDiscount || "0",
+            invoiceDiscountType: input.invoiceDiscountType || "amount",
+            roundOff: input.roundOff || "0",
+            intraState,
           });
-          const additionalCharges = charges.length > 0
-            ? totals.chargesTotal
-            : (input.additionalCharges || "0");
+          const additionalCharges = totals.chargesTotal;
           const roundOff = input.roundOff || "0";
+
+          // A return or note made from a goods receipt note sends back goods
+          // rejected on receipt: the GRN is not a bill, so there is no bill
+          // total to hold it to or to mark adjusted.
+          let adjustsBill = !!input.referenceDocumentId
+            && ["credit_note", "sales_return", "purchase_return"].includes(docType);
+          if (adjustsBill) {
+            const [ref] = await tx
+              .select({ documentType: invoices.documentType })
+              .from(invoices)
+              .where(and(eq(invoices.id, input.referenceDocumentId!), eq(invoices.businessId, ctx.businessId)))
+              .limit(1);
+            if (ref?.documentType === "goods_receipt_note") adjustsBill = false;
+          }
 
           // Server-side guard: CN/SR/PR total must not exceed the referenced invoice's total.
           // This prevents over-crediting or over-returning against a single invoice.
-          if (
-            input.referenceDocumentId &&
-            ["credit_note", "sales_return", "purchase_return"].includes(docType)
-          ) {
+          if (adjustsBill && input.referenceDocumentId) {
             const [refInvoice] = await tx
-              .select({ totalAmount: invoices.totalAmount })
+              .select({ totalAmount: invoices.totalAmount, type: invoices.type })
               .from(invoices)
               .where(and(
                 eq(invoices.id, input.referenceDocumentId),
@@ -306,6 +472,18 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
             if (!refInvoice) {
               throw new TRPCError({ code: "BAD_REQUEST", message: "Referenced invoice not found" });
+            }
+
+            // Goods go back the way they came: a sales return is against a
+            // sale, a purchase return against a purchase. Anything else would
+            // move stock and GST the wrong way.
+            if (config.fixedType && refInvoice.type !== config.fixedType) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: refInvoice.type === "purchase"
+                  ? "A purchase invoice is returned with a purchase return, not a sales return"
+                  : "A sale invoice is returned with a sales return, not a purchase return",
+              });
             }
 
             // Sum all existing CN/SR/PR already issued against this invoice
@@ -331,20 +509,23 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             }
           }
 
+          // A built-in delivery method, or one of the business's own.
+          const deliveryMethod = await resolveDeliveryMethod(tx, ctx.businessId, input.deliveryMethod || "self_pickup");
+
           const [result] = await tx
             .insert(invoices)
             .values({
               businessId: ctx.businessId,
               partyId: input.partyId,
-              type: input.type,
+              type: config.fixedType ?? input.type,
               // ALWAYS use config.documentType — never trust client-supplied value
               documentType: docType as DocumentType,
               invoiceNumber: docNumber,
-              invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
+              invoiceDate: docDate,
               dueDate: input.dueDate ? new Date(input.dueDate) : null,
               subtotal: totals.subtotal,
               taxAmount: totals.taxTotal,
-              discountAmount: "0.00",
+              discountAmount: totals.invoiceDiscountAmount,
               charges: charges.length > 0 ? charges : null,
               additionalCharges,
               roundOff,
@@ -352,6 +533,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               notes: input.notes,
               termsAndConditions: input.termsAndConditions,
               referenceDocumentId: input.referenceDocumentId || null,
+              deliveryMethod,
+              stockMode: config.stockEffect === "none" || input.skipStockAdjustment ? "none" : "tracked",
+              warehouseId: config.stockEffect === "none" || input.skipStockAdjustment ? null : input.warehouseId ?? null,
               createdByUserId: ctx.user!.id,
               createdByName: ctx.user!.name,
             })
@@ -360,75 +544,22 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           if (processedItems.length > 0) {
             await tx
               .insert(invoiceItems)
-              .values(processedItems.map((li) => ({ ...li, invoiceId: result.id })));
+              .values(withAllocatedLines(processedItems, totals.lines).map((li) => ({ ...li, invoiceId: result.id })));
           }
 
-          // Stock effects (adjusted for unit conversion)
-          // Group by itemId and sum quantities to avoid redundant per-row updates.
-          // skipStockAdjustment lets callers (e.g. challan→invoice conversion) opt out.
-          // Stock effects — one UPDATE per line item using PostgreSQL NUMERIC
-          // arithmetic to avoid JS floating-point drift in accumulation
-          if (config.stockEffect !== "none" && !input.skipStockAdjustment) {
-            for (const li of input.lineItems) {
-              if (li.variantId) {
-                await tx
-                  .update(itemVariants)
-                  .set({
-                    stockQuantity: config.stockEffect === "decrement"
-                      ? sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`
-                      : sql`${itemVariants.stockQuantity}::numeric + ${li.quantity}::numeric`,
-                    updatedAt: new Date(),
-                  })
-                  .where(and(
-                    eq(itemVariants.id, li.variantId),
-                    sql`EXISTS (SELECT 1 FROM items WHERE items.id = item_variants.item_id AND items.business_id = ${ctx.businessId})`
-                  ));
-              } else if (li.itemId) {
-                const cf = li.conversionFactor || "1";
-                await tx
-                  .update(items)
-                  .set({
-                    stockQuantity: config.stockEffect === "decrement"
-                      ? sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`
-                      : sql`${items.stockQuantity}::numeric + (${li.quantity}::numeric * ${cf}::numeric)`,
-                    updatedAt: new Date(),
-                  })
-                  .where(and(eq(items.id, li.itemId), eq(items.businessId, ctx.businessId)));
-              }
-            }
-          }
+          // Stock effect, recorded per warehouse.
+          await syncDocumentStock(tx, {
+            businessId: ctx.businessId,
+            documentId: result.id,
+            event: "CREATE",
+            enforceStock: true,
+            actorUserId: ctx.user!.id,
+          });
 
-          // Auto-update referenced invoice status to "adjusted" when fully covered
-          if (
-            input.referenceDocumentId &&
-            ["credit_note", "sales_return", "purchase_return"].includes(docType)
-          ) {
-            const [{ totalAdj }] = await tx
-              .select({
-                totalAdj: sql<string>`COALESCE(SUM(${invoices.totalAmount}::numeric), 0)`,
-              })
-              .from(invoices)
-              .where(and(
-                eq(invoices.referenceDocumentId, input.referenceDocumentId),
-                eq(invoices.businessId, ctx.businessId),
-                sql`${invoices.documentType} IN ('credit_note', 'sales_return', 'purchase_return')`,
-                sql`${invoices.status} NOT IN ('cancelled')`,
-                isNull(invoices.deletedAt),
-              ));
-
-            const [{ refTotal }] = await tx
-              .select({ refTotal: invoices.totalAmount })
-              .from(invoices)
-              .where(eq(invoices.id, input.referenceDocumentId))
-              .limit(1);
-
-            if (parseFloat(totalAdj) >= parseFloat(refTotal) - 0.01) {
-              await tx
-                .update(invoices)
-                .set({ status: "adjusted", updatedAt: new Date() })
-                .where(eq(invoices.id, input.referenceDocumentId));
-            }
-          }
+          // The invoice it adjusts: adjusted, paid, partial... from what now settles it.
+          await recomputeReferencedInvoice(tx, ctx.businessId, result);
+          // A return, note or debit note to a supplier takes its ITC back.
+          await syncReversingItc(tx, ctx.businessId, result.id);
 
           return result;
         });
@@ -454,24 +585,62 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
         })
       )
       .mutation(async ({ input, ctx }) => {
-        const [doc] = await ctx.db
-          .update(invoices)
-          .set({
-            status: input.status as InvoiceStatus,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(invoices.id, input.id),
-              eq(invoices.businessId, ctx.businessId),
-              eq(invoices.documentType, docType as DocumentType)
-            )
-          )
-          .returning();
-
-        if (!doc) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
+        requireCan(ctx.ability, "update", "Invoice");
+        if (input.status === "cancelled") {
+          await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "cancel");
         }
+        const { doc, fromStatus } = await ctx.db.transaction(async (tx) => {
+          const [before] = await tx
+            .select({ status: invoices.status })
+            .from(invoices)
+            .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
+            .limit(1);
+
+          if (input.status === "cancelled" && before && before.status !== "cancelled") {
+            await assertNotBilled(tx, ctx.businessId, { id: input.id, documentType: docType });
+          }
+
+          const [updated] = await tx
+            .update(invoices)
+            .set({
+              status: input.status as InvoiceStatus,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(invoices.id, input.id),
+                eq(invoices.businessId, ctx.businessId),
+                eq(invoices.documentType, docType as DocumentType),
+                // A deleted document stays deleted: reinstating it here
+                // would put its stock back while it's still hidden.
+                isNull(invoices.deletedAt),
+              )
+            )
+            .returning();
+
+          if (!updated) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
+          }
+
+          // Cancelling gives the stock effect back; reinstating re-applies it.
+          const wasCancelled = before?.status === "cancelled";
+          const isCancelled = input.status === "cancelled";
+          if (wasCancelled !== isCancelled) {
+            await syncDocumentStock(tx, {
+              businessId: ctx.businessId,
+              documentId: input.id,
+              event: isCancelled ? "CANCEL" : "REINSTATE",
+              enforceStock: !isCancelled,
+              actorUserId: ctx.user!.id,
+            });
+          }
+          // A cancelled or reinstated note or return changes what settles its invoice.
+          if (wasCancelled !== isCancelled) {
+            await recomputeReferencedInvoice(tx, ctx.businessId, updated);
+            await syncReversingItc(tx, ctx.businessId, input.id);
+          }
+          return { doc: updated, fromStatus: before?.status ?? null };
+        });
 
         logAudit(ctx.db, {
           businessId: ctx.businessId,
@@ -479,7 +648,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           action: `${config.documentType}.updateStatus`,
           entityType: config.documentType,
           entityId: input.id,
-          metadata: { invoiceNumber: doc.invoiceNumber, fromStatus: input.status },
+          metadata: { invoiceNumber: doc.invoiceNumber, fromStatus, toStatus: input.status },
           ipAddress: ctx.ipAddress,
         });
 
@@ -489,6 +658,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
     delete: adminProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ input, ctx }) => {
+        requireCan(ctx.ability, "delete", "Invoice");
+        await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "delete");
         const deleteResult = await ctx.db.transaction(async (tx) => {
           const [doc] = await tx
             .select()
@@ -509,36 +680,18 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           // Already soft-deleted — return early
           if (doc.deletedAt) return { success: true, invoiceNumber: doc.invoiceNumber, deleted: false };
 
-          // Reverse stock effects on delete (using stored conversionFactor)
-          if (config.stockEffect !== "none") {
-            const lineItems = await tx
-              .select()
-              .from(invoiceItems)
-              .where(eq(invoiceItems.invoiceId, input.id));
-
-            // Reverse stock per line item using PostgreSQL NUMERIC arithmetic
-            for (const li of lineItems) {
-              if (li.variantId) {
-                await tx.update(itemVariants).set({
-                  stockQuantity: config.stockEffect === "decrement"
-                    ? sql`${itemVariants.stockQuantity}::numeric + ${li.quantity}::numeric`
-                    : sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`,
-                  updatedAt: new Date(),
-                }).where(and(
-                  eq(itemVariants.id, li.variantId),
-                  sql`EXISTS (SELECT 1 FROM items WHERE items.id = item_variants.item_id AND items.business_id = ${ctx.businessId})`
-                ));
-              } else if (li.itemId) {
-                const cf = li.conversionFactor ?? "1";
-                await tx.update(items).set({
-                  stockQuantity: config.stockEffect === "decrement"
-                    ? sql`${items.stockQuantity}::numeric + (${li.quantity}::numeric * ${cf}::numeric)`
-                    : sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`,
-                  updatedAt: new Date(),
-                }).where(and(eq(items.id, li.itemId), eq(items.businessId, ctx.businessId)));
-              }
+          // seller_manager: same limit as invoice.delete — unpaid, within 2 hours of creation
+          if (ctx.role === "seller_manager") {
+            if (doc.status === "paid") {
+              throw new TRPCError({ code: "FORBIDDEN", message: "Cannot delete paid documents" });
+            }
+            const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+            if (doc.createdAt < twoHoursAgo) {
+              throw new TRPCError({ code: "FORBIDDEN", message: "Can only delete documents within 2 hours of creation" });
             }
           }
+
+          await assertNotBilled(tx, ctx.businessId, doc);
 
           // Soft delete: set deletedAt + cancel the document
           await tx
@@ -550,6 +703,18 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
                 eq(invoices.businessId, ctx.businessId)
               )
             );
+
+          // A deleted document holds no stock.
+          await syncDocumentStock(tx, {
+            businessId: ctx.businessId,
+            documentId: input.id,
+            event: "DELETE",
+            actorUserId: ctx.user!.id,
+          });
+
+          // A deleted note or return no longer settles its invoice.
+          await recomputeReferencedInvoice(tx, ctx.businessId, doc);
+          await syncReversingItc(tx, ctx.businessId, input.id);
 
           return { success: true, invoiceNumber: doc.invoiceNumber, deleted: true };
         });

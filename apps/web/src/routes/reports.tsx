@@ -1,18 +1,37 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef, useEffect } from "react";
+import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
+import { Fragment, useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn, formatDateInput, todayISODate } from "@/lib/utils";
 import { StatCard } from "@/components/ui/StatCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { PartyCombobox } from "@/components/ui/PartyCombobox";
-import { Combobox } from "@/components/ui/Combobox";
 import { Select } from "@/components/ui/Select";
 import { useDateRange } from "@/hooks/useDateRange";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Analytics01Icon, ArrowRight01Icon, Cash01Icon, Download04Icon, FileEmpty01Icon, InformationCircleIcon, Invoice01Icon, Menu01Icon, MoneySend01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
+import {
+  BatchStockReport,
+  DeadStockReport,
+  GodownSummaryReport,
+  MovementSummaryReport,
+  ReorderStatusReport,
+  StockAgeingReport,
+  StockLedgerReport,
+  StockGroupSummaryReport,
+} from "@/components/reports/InventoryReports";
+import {
+  PendingDeliveryChallansReport,
+  PendingGrnReport,
+  PendingPurchaseOrdersReport,
+  PendingSalesOrdersReport,
+} from "@/components/reports/OrderReports";
+import { StockGroupFilter } from "@/components/inventory/StockGroups";
+import { PriceListReport } from "@/components/reports/PriceListReport";
+import { paymentModeLabel } from "@/lib/payment-modes";
 export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
@@ -27,6 +46,21 @@ type ReportId =
   | "msme-payables"
   | "party-statement"
   | "stock-summary"
+  | "stock-ledger"
+  | "stock-movement"
+  | "godown-summary"
+  | "batch-stock"
+  | "expiring-batches"
+  | "expired-stock"
+  | "stock-group-summary"
+  | "stock-ageing"
+  | "reorder-status"
+  | "dead-stock"
+  | "pending-sales-orders"
+  | "pending-purchase-orders"
+  | "pending-grns"
+  | "pending-delivery-challans"
+  | "price-list"
   | "item-wise-sales"
   | "payment-summary"
   | "tax-summary"
@@ -61,7 +95,27 @@ const REPORT_GROUPS: Array<{ label: string; reports: ReportDef[] }> = [
     label: "Inventory",
     reports: [
       { id: "stock-summary", label: "Stock Summary", description: "Current stock levels by item", tabular: true },
+      { id: "stock-ledger", label: "Stock Ledger", description: "Every movement of an item with its running balance", tabular: true },
+      { id: "stock-movement", label: "Movement Summary", description: "Opening, inward, outward and closing stock per item", tabular: true },
+      { id: "stock-group-summary", label: "Stock Group Summary", description: "Stock quantity and value per stock group, with drill-down to items", tabular: true },
+      { id: "godown-summary", label: "Godown Summary", description: "Stock held and its value in each warehouse", tabular: true },
+      { id: "batch-stock", label: "Batch-wise Stock", description: "Stock per batch and warehouse, with expiry dates", tabular: true },
+      { id: "expiring-batches", label: "Expiring Soon", description: "Batches that expire in the next N days", tabular: true },
+      { id: "expired-stock", label: "Expired Stock", description: "Batches past their expiry that are still in stock", tabular: true },
+      { id: "stock-ageing", label: "Stock Ageing", description: "How long current stock has been held", tabular: true },
+      { id: "reorder-status", label: "Reorder Status", description: "Items at or below their reorder level, with a suggested order", tabular: true },
+      { id: "dead-stock", label: "Dead Stock", description: "Stock that hasn't sold in a while", tabular: true },
+      { id: "price-list", label: "Price List", description: "Each item's price on every price level, with MRP", tabular: true },
       { id: "item-wise-sales", label: "Item-wise Sales", description: "Sales quantity and value per item", tabular: true },
+    ],
+  },
+  {
+    label: "Orders",
+    reports: [
+      { id: "pending-sales-orders", label: "Pending Sales Orders", description: "Ordered by customers and not yet delivered", tabular: true },
+      { id: "pending-purchase-orders", label: "Pending Purchase Orders", description: "Ordered from suppliers and not yet received", tabular: true },
+      { id: "pending-grns", label: "Pending GRNs", description: "Goods received and not yet billed", tabular: true },
+      { id: "pending-delivery-challans", label: "Pending Delivery Challans", description: "Goods delivered and not yet billed", tabular: true },
     ],
   },
   {
@@ -277,7 +331,7 @@ function DaybookReport({
               const dayDebit = dayEntries.reduce((s, e) => s + parseFloat(e.debit), 0).toFixed(2);
               const dayCredit = dayEntries.reduce((s, e) => s + parseFloat(e.credit), 0).toFixed(2);
               return (
-                <>
+                <Fragment key={dateKey}>
                   {/* Date header row */}
                   <tr key={`day-${dateKey}`} className="bg-surface-2/30 border-b border-border/50">
                     <td colSpan={6} className="px-4 py-2 text-xs font-semibold text-text-secondary">
@@ -346,7 +400,7 @@ function DaybookReport({
                       </span>
                     </td>
                   </tr>
-                </>
+                </Fragment>
               );
             })}
           </tbody>
@@ -699,6 +753,8 @@ interface SaleRegisterRow {
   amountPaid: string;
   status: string;
   taxBreakdown: TaxBreakdownItem[];
+  /** Free goods ("10 + 1") on the bill, summed over its lines. */
+  freeQuantity?: number;
 }
 
 interface PurchaseRegisterRow {
@@ -714,6 +770,8 @@ interface PurchaseRegisterRow {
   amountPaid: string;
   status: string;
   taxBreakdown: TaxBreakdownItem[];
+  /** Free goods ("10 + 1") on the bill, summed over its lines. */
+  freeQuantity?: number;
 }
 
 interface RegisterSummary {
@@ -721,6 +779,7 @@ interface RegisterSummary {
   totalTax: string;
   totalAmount: string;
   count: number;
+  totalFreeQuantity?: number;
 }
 
 interface SaleRegisterData {
@@ -800,6 +859,7 @@ function RegisterReport({
         "Customer",
         "GSTIN",
         "State",
+        "Free Qty",
         "Subtotal",
         "Discount",
         "Tax",
@@ -814,6 +874,7 @@ function RegisterReport({
         r.customerName,
         r.customerGstin ?? "",
         r.customerState ?? "",
+        r.freeQuantity ?? 0,
         r.subtotal,
         r.discountAmount,
         r.taxAmount,
@@ -829,6 +890,7 @@ function RegisterReport({
         "Invoice #",
         "Supplier",
         "GSTIN",
+        "Free Qty",
         "Subtotal",
         "Discount",
         "Tax",
@@ -841,6 +903,7 @@ function RegisterReport({
         r.invoiceNumber,
         r.supplierName,
         r.supplierGstin ?? "",
+        r.freeQuantity ?? 0,
         r.subtotal,
         r.discountAmount,
         r.taxAmount,
@@ -885,6 +948,18 @@ function RegisterReport({
   }
 
   const { summary } = data;
+  // Free goods are not priced, so the column only shows when there are some.
+  const showFree = (summary.totalFreeQuantity ?? 0) > 0;
+  const freeHeader = showFree && (
+    <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell" title="Given or received free on top of the billed quantity; not part of the taxable value">
+      Free Qty
+    </th>
+  );
+  const freeCell = (q?: number) => showFree && (
+    <td className="px-4 py-3 text-right hidden lg:table-cell">
+      <span className="text-text-secondary text-ui tabular-nums">{q ? q : "—"}</span>
+    </td>
+  );
 
   return (
     <div>
@@ -927,6 +1002,7 @@ function RegisterReport({
                   <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
                     GSTIN
                   </th>
+                  {freeHeader}
                   <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
                     Subtotal
                   </th>
@@ -977,6 +1053,7 @@ function RegisterReport({
                         {row.customerGstin ?? "—"}
                       </span>
                     </td>
+                    {freeCell(row.freeQuantity)}
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
                       <span className="text-text-secondary text-ui tabular-nums">
                         {formatCurrency(row.subtotal)}
@@ -1029,6 +1106,7 @@ function RegisterReport({
                   <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
                     GSTIN
                   </th>
+                  {freeHeader}
                   <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
                     Subtotal
                   </th>
@@ -1071,6 +1149,7 @@ function RegisterReport({
                         {row.supplierGstin ?? "—"}
                       </span>
                     </td>
+                    {freeCell(row.freeQuantity)}
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
                       <span className="text-text-secondary text-ui tabular-nums">
                         {formatCurrency(row.subtotal)}
@@ -1426,11 +1505,11 @@ interface StockSummaryData {
 
 function StockSummaryReport() {
   const [showZeroStock, setShowZeroStock] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
   const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
 
   const { data, isLoading, error } = (trpc as any).reports.stockSummary.useQuery(
-    { showZeroStock, category: categoryFilter || undefined }
+    { showZeroStock, stockGroupId: groupFilter || undefined }
   ) as { data: StockSummaryData | undefined; isLoading: boolean; error: unknown };
 
   function toggleVariant(itemId: string) {
@@ -1490,14 +1569,6 @@ function StockSummaryReport() {
     downloadCSV("stock-summary", headers, rows);
   }
 
-  // Collect unique categories from loaded data for the filter dropdown
-  const categories = data
-    ? Array.from(new Set([
-        ...(data.simpleItems.map((i) => i.category).filter(Boolean) as string[]),
-        ...(data.variantItems.map((i) => i.category).filter(Boolean) as string[]),
-      ])).sort()
-    : [];
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -1540,19 +1611,7 @@ function StockSummaryReport() {
 
       {/* Filters + Export */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {categories.length > 0 && (
-          <div className="w-48">
-            <Combobox
-              value={categoryFilter}
-              onChange={setCategoryFilter}
-              options={[
-                { value: "", label: "All Categories" },
-                ...categories.map((cat) => ({ value: cat, label: cat })),
-              ]}
-              placeholder="Filter category…"
-            />
-          </div>
-        )}
+        <StockGroupFilter value={groupFilter} onChange={setGroupFilter} className="w-48" />
         <button
           onClick={() => setShowZeroStock((v) => !v)}
           className={cn(
@@ -1642,7 +1701,7 @@ function StockSummaryReport() {
                 const isExpanded = expandedVariants.has(item.itemId);
                 const hasLowStock = item.variantDetails.some((v) => v.isLowStock);
                 return (
-                  <>
+                  <Fragment key={item.itemId}>
                     {/* Parent summary row */}
                     <tr
                       key={item.itemId}
@@ -1753,7 +1812,7 @@ function StockSummaryReport() {
                         </td>
                       </tr>
                     ))}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -1834,6 +1893,8 @@ interface ItemSalesRow {
   category: string | null;
   unit: string | null;
   soldQty: string;
+  /** Given free on top of what was sold ("10 + 1"), in base units. */
+  freeQty?: string | null;
   totalRevenue: string;
   avgUnitPrice: string | null;
   invoiceCount: number;
@@ -1983,7 +2044,7 @@ function PaymentSummaryReport({
                 {data.byMode.map((row, i) => (
                   <tr key={i} className="border-b border-border/40 last:border-0 hover:bg-surface-2/40 transition-colors">
                     <td className="px-4 py-2.5">
-                      <span className="text-text-primary text-ui capitalize">{row.mode}</span>
+                      <span className="text-text-primary text-ui">{paymentModeLabel(row.mode)}</span>
                     </td>
                     <td className="px-4 py-2.5 hidden md:table-cell">
                       <span className="text-text-tertiary text-xs">{row.bankAccountName ?? "—"}</span>
@@ -2250,7 +2311,8 @@ function ItemSalesReport({
       "Category",
       "Unit",
       "Qty Sold",
-      "Revenue",
+      "Free Qty",
+      "Revenue (excl. GST)",
       "Avg Price",
       "Invoices",
       "Customers",
@@ -2262,6 +2324,7 @@ function ItemSalesReport({
       r.category ?? "",
       r.unit ?? "",
       r.soldQty,
+      r.freeQty ?? "0",
       r.totalRevenue,
       r.avgUnitPrice ?? "",
       r.invoiceCount,
@@ -2279,7 +2342,7 @@ function ItemSalesReport({
     <div>
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
-        <SummaryCard label="Total Revenue" value={formatCurrency(data.totalRevenue)} accent="green" />
+        <SummaryCard label="Total Revenue (excl. GST)" value={formatCurrency(data.totalRevenue)} accent="green" />
         <SummaryCard label="Items" value={String(data.count)} />
         {compareToPrevious && <SummaryCard label="Comparison Period" value="Enabled" accent="blue" />}
       </div>
@@ -2324,7 +2387,7 @@ function ItemSalesReport({
                 <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Item</th>
                 <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Category</th>
                 <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Qty Sold</th>
-                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Revenue</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Revenue (excl. GST)</th>
                 <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Avg Price</th>
                 <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Invoices</th>
                 <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Customers</th>
@@ -2354,6 +2417,11 @@ function ItemSalesReport({
                         {parseFloat(parseFloat(row.soldQty).toFixed(2))}
                         {row.unit ? ` ${row.unit}` : ""}
                       </span>
+                      {parseFloat(row.freeQty ?? "0") > 0 && (
+                        <span className="block text-2xs text-text-tertiary tabular-nums">
+                          + {parseFloat(parseFloat(row.freeQty!).toFixed(2))} free
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-text-primary text-ui font-semibold tabular-nums">
@@ -2826,7 +2894,7 @@ function CashFlowReport({
 
 // ── Sticky-period hint (shows once per session on first tab switch) ──
 
-const HINT_SESSION_KEY = "hisaabo_reports_sticky_hint_shown";
+const HINT_SESSION_KEY = "fintranzact_reports_sticky_hint_shown";
 
 function StickyPeriodHint({ visible }: { visible: boolean }) {
   const [show, setShow] = useState(false);
@@ -2852,14 +2920,14 @@ function StickyPeriodHint({ visible }: { visible: boolean }) {
 
 function ReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportId>(
-    () => (localStorage.getItem("hisaabo_reports_tab") as ReportId) || "daybook"
+    () => (localStorage.getItem("fintranzact_reports_tab") as ReportId) || "daybook"
   );
   const [showStickyHint, setShowStickyHint] = useState(false);
   const hasInteracted = useRef(false);
 
   const selectReport = (id: ReportId) => {
     setActiveReport(id);
-    localStorage.setItem("hisaabo_reports_tab", id);
+    localStorage.setItem("fintranzact_reports_tab", id);
 
     // Show sticky-period hint on first tab switch (once per session)
     if (!hasInteracted.current && !sessionStorage.getItem(HINT_SESSION_KEY)) {
@@ -2895,6 +2963,36 @@ function ReportsPage() {
         return <PartyStatementReport partyId={partyStatementPartyId || null} fromDate={fromDate} toDate={toDate} />;
       case "stock-summary":
         return <StockSummaryReport />;
+      case "stock-ledger":
+        return <StockLedgerReport fromDate={fromDate} toDate={toDate} />;
+      case "stock-movement":
+        return <MovementSummaryReport fromDate={fromDate} toDate={toDate} />;
+      case "stock-group-summary":
+        return <StockGroupSummaryReport toDate={toDate} />;
+      case "godown-summary":
+        return <GodownSummaryReport />;
+      case "batch-stock":
+        return <BatchStockReport status="all" />;
+      case "expiring-batches":
+        return <BatchStockReport status="expiring" />;
+      case "expired-stock":
+        return <BatchStockReport status="expired" />;
+      case "stock-ageing":
+        return <StockAgeingReport />;
+      case "reorder-status":
+        return <ReorderStatusReport />;
+      case "dead-stock":
+        return <DeadStockReport />;
+      case "pending-sales-orders":
+        return <PendingSalesOrdersReport />;
+      case "pending-purchase-orders":
+        return <PendingPurchaseOrdersReport />;
+      case "pending-grns":
+        return <PendingGrnReport />;
+      case "pending-delivery-challans":
+        return <PendingDeliveryChallansReport />;
+      case "price-list":
+        return <PriceListReport asOf={toDate} />;
       case "payment-summary":
         return <PaymentSummaryReport fromDate={fromDate} toDate={toDate} />;
       case "tax-summary":
@@ -2978,7 +3076,7 @@ function ReportsPage() {
             </button>
 
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-semibold text-text-primary">{currentReport.label}</h1>
+              <h1 className={PAGE_TITLE_CLASS}>{currentReport.label}</h1>
               <p className="text-sm text-text-tertiary mt-0.5">{currentReport.description}</p>
             </div>
           </div>

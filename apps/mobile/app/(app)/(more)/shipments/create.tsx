@@ -242,10 +242,10 @@ export default function CreateShipmentScreen() {
         {/* Header */}
         <View style={styles.headerBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.screenTitle}>New Shipment</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
 
         <ScrollView
@@ -425,10 +425,10 @@ export default function CreateShipmentScreen() {
             activeOpacity={0.8}
           >
             {createMutation.isPending ? (
-              <ActivityIndicator color={colors.textPrimary} size="small" />
+              <ActivityIndicator color={colors.onBrand} size="small" />
             ) : (
               <>
-                <Ionicons name="cube-outline" size={18} color={colors.textPrimary} />
+                <Ionicons name="cube-outline" size={18} color={colors.onBrand} />
                 <Text style={styles.submitBtnText}>Create Shipment</Text>
               </>
             )}
@@ -470,9 +470,9 @@ const useStyles = makeStyles((colors) => ({
     marginBottom: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -534,7 +534,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
   },
   pillTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   input: {
     backgroundColor: colors.surface,
@@ -568,7 +568,7 @@ const useStyles = makeStyles((colors) => ({
     marginTop: 24,
   },
   submitBtnText: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "700",
   },

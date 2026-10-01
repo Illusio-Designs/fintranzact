@@ -21,7 +21,8 @@ import path from "node:path";
 import type { Hono } from "hono";
 import tarStream from "tar-stream";
 import { sql, getTableColumns } from "drizzle-orm";
-import { controlDb, getTenantDb, tenants, businesses } from "@fintranzact/db";
+import { controlDb, getTenantDb, tenants } from "@fintranzact/db";
+import { tenantBusinessIds } from "../lib/business-membership.js";
 import { TABLE_REGISTRY } from "../lib/tableRegistry.js";
 import type { Manifest } from "@fintranzact/shared/selfExport";
 import { verifyExportToken } from "../lib/exportToken.js";
@@ -172,7 +173,7 @@ export function registerExportRoute(app: Hono): void {
 
     const tenantSlug = tenant.slug;
     const exportDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const filename = `hisaabo-${tenantSlug}-${exportDate}.tar.gz`;
+    const filename = `fintranzact-${tenantSlug}-${exportDate}.tar.gz`;
 
     logger.info(
       { tenantId, userId: tokenPayload.userId },
@@ -180,7 +181,7 @@ export function registerExportRoute(app: Hono): void {
     );
 
     // ── Temp directory ────────────────────────────────────────────────────────
-    const tmpDir = await mkdtemp(path.join(tmpdir(), "hisaabo-export-"));
+    const tmpDir = await mkdtemp(path.join(tmpdir(), "fintranzact-export-"));
 
     async function cleanup(): Promise<void> {
       await rm(tmpDir, { recursive: true, force: true }).catch((err: unknown) => {
@@ -199,8 +200,9 @@ export function registerExportRoute(app: Hono): void {
     }
 
     // ── Get business IDs for this tenant ──────────────────────────────────────
-    const bizRows = await db.select({ id: businesses.id }).from(businesses);
-    const businessIds = bizRows.map((b) => b.id);
+    // Only this organisation's businesses: in self-hosted mode the tenant
+    // DB is shared by every organisation on the server.
+    const businessIds = await tenantBusinessIds(db, tenantId);
 
     // ── Page through each table and write NDJSON files ─────────────────────────
     const PAGE_SIZE = 5000;
@@ -237,14 +239,18 @@ export function registerExportRoute(app: Hono): void {
       const snakeToCamel = buildSnakeToCamelMap(drizzleTable as object);
 
       try {
-        if (scope.type === "businesses") {
-          // Businesses table — export all rows for this tenant (no WHERE filter)
+        if (businessIds.length === 0) {
+          // Empty tenant — write empty NDJSON file
+        } else if (scope.type === "businesses") {
+          // Businesses table — only this organisation's businesses
+          const bizIdList = businessIds.map((id) => `'${id}'`).join(", ");
+          const whereClause = sql.raw(`id IN (${bizIdList})`);
           let offset = 0;
           let done = false;
 
           while (!done) {
             const rows = (await db.execute(
-              sql`SELECT * FROM ${sql.raw(tableName)} ORDER BY id LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+              sql`SELECT * FROM ${sql.raw(tableName)} WHERE ${whereClause} ORDER BY id LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
             )) as Array<Record<string, unknown>>;
 
             for (const row of rows) {
@@ -262,8 +268,6 @@ export function registerExportRoute(app: Hono): void {
               offset += PAGE_SIZE;
             }
           }
-        } else if (businessIds.length === 0) {
-          // Empty tenant — write empty NDJSON file
         } else if (scope.type === "direct") {
           // Table has a direct business_id column
           const bizIdList = businessIds.map((id) => `'${id}'`).join(", ");
@@ -360,7 +364,7 @@ export function registerExportRoute(app: Hono): void {
     }
 
     const manifest: Manifest = {
-      format: "hisaabo-export",
+      format: "fintranzact-export",
       formatVersion: 1,
       appVersion: APP_VERSION,
       schemaChecksum: SCHEMA_CHECKSUM,

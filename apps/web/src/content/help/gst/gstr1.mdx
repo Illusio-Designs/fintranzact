@@ -1,0 +1,182 @@
+---
+title: GSTR-1 Report
+description: Generate and export your GSTR-1 report in Fintranzact. Understand the B2B, B2CS, B2CL, and HSN summary sections and how to prepare for GST portal filing.
+sidebar:
+  order: 2
+---
+
+import { ForCA } from "@/components/help/mdx";
+import { ForBusiness } from "@/components/help/mdx";
+
+GSTR-1 is the monthly return you file with the GST portal listing all your outward supplies (sales). Fintranzact generates this report automatically from your invoice data.
+
+## Generating the report
+
+1. Click **GST** in the left navigation.
+2. Select **GSTR-1** from the tabs.
+3. Choose the **Year** and **Month**.
+4. Click **Generate**.
+
+The report loads immediately — it is computed in real time from your invoice data. There is no caching, so it always reflects the latest state of your invoices.
+
+<ForBusiness>
+Your CA will ask for this report every month. Generate it, click **Export CSV**, and email or WhatsApp the file — they'll take it from there. You don't need to understand every section below; skip to [Filing workflow](/help/gst) if you just want the handover checklist.
+</ForBusiness>
+
+<ForCA>
+:::tip[Before you file]
+Two sanity checks before exporting: (1) confirm no invoices are still in `draft` status for the period — drafts **are** counted in the report and are the most common source of post-filing amendments, and (2) spot-check a B2B row against the original invoice PDF for GSTIN and taxable value accuracy.
+:::
+</ForCA>
+
+## Report sections
+
+### B2B — Outward supplies to registered persons
+
+This section lists every sale invoice to a party that has a **GSTIN** in Fintranzact.
+
+| Column | Meaning |
+|---|---|
+| Party GSTIN | Buyer's GST registration number |
+| Party Name | Buyer's name |
+| Invoice Number | Your invoice number |
+| Invoice Date | Date of the invoice |
+| Invoice Type | "Regular" for standard invoices |
+| Taxable Value | Value of supply: line amounts less the invoice-level discount, plus additional charges (before tax) |
+| CGST | Central GST amount |
+| SGST | State GST amount |
+| IGST | Integrated GST amount |
+| Total Invoice Value | Full invoice amount including tax |
+
+One row per invoice. Intra-state invoices have CGST and SGST values; inter-state invoices have an IGST value. Additional charges are reported under the rate they were taxed at (the invoice's highest rate) and in the HSN summary under the HSN of that line. A party with no state code uses the first two digits of its GSTIN; one with neither (a walk-in customer) is intra-state.
+
+### B2CL — B2C Large
+
+Inter-state sale invoices to **unregistered parties** (no GSTIN) where the invoice total exceeds ₹1,00,000 (Notification 12/2024-Central Tax). Invoices dated before 1 August 2024 keep the earlier limit of ₹2,50,000, so returns for those periods don't change.
+
+Shown aggregated by state:
+
+| Column | Meaning |
+|---|---|
+| State | Destination state of the buyer |
+| Taxable Value | Total taxable value for that state |
+| IGST | Total IGST for that state |
+
+### B2CS — B2C Small
+
+All other sales to unregistered parties — intra-state sales of any amount, and inter-state sales up to the B2CL limit (₹1,00,000, or ₹2,50,000 for invoices dated before 1 August 2024).
+
+Shown aggregated by tax rate and place of supply: intra-state sales form one row per rate, and inter-state sales one row per rate for each destination state (the portal needs them apart).
+
+Credit and debit notes issued to these customers are netted into the same rows, as the portal expects: a credit note reduces its rate's row and a debit note adds to it. (Notes to unregistered customers on a B2CL invoice are reported separately — see **Credit Notes** below.)
+
+| Column | Meaning |
+|---|---|
+| Tax Rate % | GST rate (0, 5, 12, 18, or 28) |
+| Taxable Value | Total taxable value at this rate |
+| CGST | Total CGST |
+| SGST | Total SGST |
+| IGST | Total IGST |
+
+### HSN Summary
+
+This section aggregates total quantity sold and value, broken down by HSN code, tax rate and unit. The GST portal requires HSN-wise data for businesses above certain turnover thresholds, with one row for each rate an HSN was sold at.
+
+| Column | Meaning |
+|---|---|
+| HSN | HSN or SAC code |
+| Description | Item description for context (from the first item with this HSN) |
+| Rate | GST rate of the sales in this row |
+| Unit (UQC) | The item's unit as a GST unit code — `KGS` for kg, `PCS` for pieces, `DOZ` for dozen, and so on. Units without a GST code of their own (feet, inches) are reported as `OTH`. Services (SAC codes starting with `99`) are reported as `NA`. |
+| Quantity | Total quantity sold, in the item's base unit. A line billed in an alternate unit (say, a box of 12) is converted through its conversion factor. Services show 0. |
+| Taxable Value | Total taxable value |
+| CGST / SGST / IGST | Tax amounts |
+| Total Value | Total including tax |
+
+:::note
+Items without an HSN code are reported under HSN `0000`. To get accurate HSN summaries, ensure every item in your catalogue has an HSN or SAC code set.
+:::
+
+### Credit Notes
+
+Sale credit notes and sales returns issued to customers during the period. Credit notes from suppliers and purchase returns are not outward supplies: they reduce ITC in GSTR-3B instead.
+
+| Column | Meaning |
+|---|---|
+| Invoice Number | Credit note number |
+| Original Invoice Number | The original invoice being corrected (if linked via Reference Document) |
+| Invoice Date | Date of the credit note |
+| Party Name | Customer's name |
+| Party GSTIN | Customer's GSTIN |
+| Total Amount | Full credit note value |
+| Taxable Amount | Taxable value (subtotal) |
+| Tax Amount | Total GST on the credit note |
+
+Where each note goes in the portal GSTR-1 JSON depends on the customer:
+
+| Customer | Portal table |
+|---|---|
+| Has a GSTIN | **CDNR**, grouped by the customer's GSTIN |
+| No GSTIN, and the note is on a B2CL invoice (inter-state, invoice total above the B2CL limit for the invoice's date; for a note not linked to an invoice, the note's own total and date are used) | **CDNUR**, type `B2CL` |
+| Any other customer without a GSTIN | Netted into the **B2CS** rows (see above) |
+
+### Debit Notes
+
+Sale debit notes issued to customers during the period. Same structure as credit notes, and they go to the same portal tables. A supplier's debit note adds to ITC in GSTR-3B instead.
+
+### Dates
+
+Dates in the portal JSON are the invoice's calendar date in India (`DD-MM-YYYY`), whatever the server's timezone. An invoice dated 25 August 2025 is reported as `25-08-2025`, never as the previous day.
+
+## Summary totals
+
+At the bottom of the report:
+
+| Field | Meaning |
+|---|---|
+| Total Invoices | Number of sale invoices in the period |
+| Total Taxable Value | Sum of all invoice subtotals |
+| Total CGST | Sum of all CGST |
+| Total SGST | Sum of all SGST |
+| Total IGST | Sum of all IGST |
+| Total Tax | CGST + SGST + IGST |
+| Total Invoice Value | Sum of all invoice totals |
+
+## Exporting as CSV
+
+Click **Export CSV** to download the report as a comma-separated values file named `GSTR1_Apr_2025.csv` (month and year in the filename).
+
+The CSV includes all sections (B2B, B2CS, B2CL, HSN summary) separated by blank lines and section headers.
+
+**To upload to the GST portal:**
+1. Download the CSV from Fintranzact.
+2. Open the GST Offline Utility (available from the GST portal).
+3. Import the CSV (or manually enter the data from the CSV into the utility).
+4. Validate and generate the JSON file.
+5. Upload the JSON to the GST portal.
+
+## What invoices are included
+
+The GSTR-1 report includes all sale invoices (`type = sale`, `documentType = invoice`) where:
+- The invoice date is within the selected month and year (the calendar month in India, from midnight IST on the 1st)
+- The invoice status is **not** `cancelled`
+
+Excluded:
+- Cancelled invoices
+- Purchase invoices
+- Quotations, proformas, delivery challans (non-invoice document types)
+
+:::note
+Draft invoices **are** included in the GSTR-1 report if their date falls within the reporting period. If you have draft invoices that should not appear in the report, either change their date or cancel them before generating the report.
+:::
+
+## Frequently asked questions
+
+**I filed GSTR-1 but then found a mistake. Can I amend it?**
+GSTR-1 amendments are handled on the GST portal directly. Correct the invoice in Fintranzact, re-generate the GSTR-1, and use the amended figures when filing your next month's return or an amendment return on the portal.
+
+**Why is my total in Fintranzact's GSTR-1 different from my GSTR-2A/2B on the portal?**
+GSTR-2A/2B reflects your suppliers' filings, not your own. The discrepancy is normal if your suppliers are yet to file or if there are timing differences. Fintranzact's GSTR-1 only covers your outward supplies.
+
+**A large B2C invoice is not appearing in B2CL. Why?**
+Check that the party's state code is different from your business's state code (it must be inter-state) and that the party has no GSTIN (unregistered). Also confirm the invoice total exceeds ₹1,00,000 (₹2,50,000 for invoices dated before 1 August 2024).

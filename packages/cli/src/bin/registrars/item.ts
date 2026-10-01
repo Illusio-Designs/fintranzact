@@ -1,11 +1,12 @@
 import { Command } from "commander";
 import { requireAuth } from "../../config.js";
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { fatalError, EXIT, outputJSON } from "../../output.js";
 import { itemListCommand } from "../../commands/item/list.js";
 import { itemCreateCommand } from "../../commands/item/create.js";
 import { itemDeleteCommand } from "../../commands/item/delete.js";
 import { itemStockCommand } from "../../commands/item/stock.js";
+import { itemBatchesCommand, itemExpiringCommand } from "../../commands/item/batches.js";
 
 export function registerItemCommands(program: Command): void {
   // ── item ──────────────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ export function registerItemCommands(program: Command): void {
     .option("--json", "JSON output")
     .action(async (id, opts) => {
       const cfg = requireAuth();
-      const client = new HisaaboClient(cfg);
+      const client = new FintranzactClient(cfg);
       try {
         const it = await client.item.get(id);
         if (opts.json) { outputJSON(it); return; }
@@ -57,7 +58,7 @@ export function registerItemCommands(program: Command): void {
         if (it.itemType === "product") console.log(`  Stock:    ${it.stockQuantity}`);
         console.log();
       } catch (e) {
-        if (e instanceof HisaaboApiError && e.hisaaboError.code === "not_found") fatalError(`Item not found: ${id}`, EXIT.NOT_FOUND);
+        if (e instanceof FintranzactApiError && e.fintranzactError.code === "not_found") fatalError(`Item not found: ${id}`, EXIT.NOT_FOUND);
         fatalError(String(e instanceof Error ? e.message : e));
       }
     });
@@ -108,5 +109,26 @@ export function registerItemCommands(program: Command): void {
     .option("--reason <text>", "Reason for adjustment")
     .action(async (id, adjustment, opts) => {
       await itemStockCommand(id, adjustment, { json: opts.json, reason: opts.reason });
+    });
+
+  item
+    .command("batches <id>")
+    .description("List an item's batches with stock and expiry (items that track batches)")
+    .option("--json", "JSON output")
+    .option("--warehouse <id>", "Only stock in this warehouse")
+    .option("--all", "Include batches with no stock")
+    .action(async (id, opts) => {
+      await itemBatchesCommand(id, { json: opts.json, warehouse: opts.warehouse, all: opts.all });
+    });
+
+  item
+    .command("expiring")
+    .description("Batches expiring soon, or expired stock still on hand")
+    .option("--json", "JSON output")
+    .option("--days <n>", "Days ahead to look (default 30)", parseInt)
+    .option("--expired", "Show expired stock instead")
+    .option("--warehouse <id>", "Only this warehouse")
+    .action(async (opts) => {
+      await itemExpiringCommand({ json: opts.json, days: opts.days, expired: opts.expired, warehouse: opts.warehouse });
     });
 }

@@ -1,0 +1,159 @@
+---
+title: Inventory Reports
+description: Stock Summary, Stock Ledger, Movement Summary, Godown Summary, Batch-wise Stock, Expiring Soon, Expired Stock, Stock Ageing, Reorder Status, Dead Stock, Stock Group Summary, Price List and the pending order reports in Fintranzact.
+sidebar:
+  order: 12
+---
+
+import { ForCA } from "@/components/help/mdx";
+import { ForBusiness } from "@/components/help/mdx";
+
+All inventory reports are on the **Reports** page (sidebar **Reports**), in the **Inventory** and **Orders** groups. Every report has an **Export CSV** button.
+
+The date range bar at the top is shared by all reports, but not every inventory report uses it:
+
+| Uses | Reports |
+|---|---|
+| The full date range | Stock Ledger, Movement Summary |
+| Only the end date ("as on") | Stock Group Summary, Price List |
+| Today's stock (date range ignored) | Stock Summary, Godown Summary, Batch-wise Stock, Expiring Soon, Expired Stock, Stock Ageing, Reorder Status, Dead Stock, all pending order reports |
+
+Stock values follow your [valuation method](/help/inventory/stock-valuation) (Average cost or FIFO).
+
+<ForBusiness>
+A good weekly routine: **Reorder Status** to decide what to buy, **Pending Sales Orders** to see who's waiting, and once a month **Dead Stock** to find money stuck on your shelves.
+</ForBusiness>
+
+## Stock Summary
+
+Current stock of every product.
+
+- **Cards:** Total Cost Value, Total Sale Value (stock × sale price), SKU Count, Low Stock (items at or below their alert level).
+- **Filters:** a stock group (includes its sub-groups) and **Show Zero Stock**.
+- **Columns:** Item (with a **Low** badge), Category, HSN, Unit, Stock, Purchase Price, Sale Price, Stock Value.
+- Items with variants are a row you can expand to see each variant.
+
+Stock Value uses the valuation method. The Purchase Price column shows the price from the item form, for reference.
+
+## Stock Ledger
+
+Every movement of one item, with a running balance. Like Tally's stock item vouchers.
+
+1. Choose an **Item** (and a **Variant**, for items with variants).
+2. Optionally pick a warehouse (shown when you have two or more), or keep **All warehouses**.
+3. Set the date range.
+
+- **Cards:** Opening, Inward, Outward, Closing.
+- **Columns:** Date, Particulars, Warehouse, Inward, Outward, Balance.
+- **Particulars** says what caused each movement, for example "Sale INV-104", a delivery challan or goods receipt note, "Transfer in", "Transfer out", an adjustment with its reason, a physical stock count, opening stock, or a manufacturing journal. The party name is shown underneath.
+
+Up to 2,000 movements are shown. Narrow the date range to see the rest. The CSV includes opening and closing rows.
+
+## Movement Summary
+
+Opening, inward, outward and closing stock for every item over the date range.
+
+- **Filter:** warehouse.
+- **Columns:** Item, Opening, Inward, Outward, Closing, Value (closing value). The total value is shown at the top.
+- Items with no movement and no closing stock are hidden.
+- With **All warehouses**, transfers between your own warehouses are left out, since they don't change your total.
+
+## Godown Summary
+
+Stock held and its value in each warehouse, today.
+
+- **Columns:** Warehouse (with code and premises; inactive warehouses greyed), Items, Quantity, Value, and a total value.
+- [Unplaced stock](/help/inventory/warehouses) is counted in your sales default warehouse.
+
+## Batch-wise Stock, Expiring Soon and Expired Stock
+
+For items that [track batches](/help/inventory/batches-and-expiry): the stock of every batch in every warehouse, earliest expiry first.
+
+- **Columns:** Item, Batch, Expiry (with days to go, or days since it expired), Warehouse, Quantity, Value.
+- **Expiring Soon** shows only batches that expire in the next 7, 15, 30, 60, 90 or 180 days and haven't expired yet. **Expired Stock** shows batches past their expiry that are still in stock.
+- Filter by warehouse (when you have more than one) and search by item name, SKU or batch number.
+- Only batches holding stock are listed. Stock of a batch-tracked item that isn't in any batch doesn't appear here.
+
+## Stock Ageing
+
+How long your current stock has been sitting.
+
+- **Buckets:** 0–30 days, 31–60 days, 61–90 days, 91–180 days, Over 180 days. Each bucket has a value card; the two oldest are highlighted in amber.
+- The table shows the quantity in each bucket per item, oldest stock first. The CSV shows values.
+- Stock is aged first in, first out: what you still hold is taken to be what arrived most recently. Stock older than your recorded history falls into **Over 180 days**.
+
+## Reorder Status
+
+Items at or below their reorder level (the item's **Low Stock Alert**), with a suggested quantity to order.
+
+- **Order for:** 15, 30 (default), 45, 60 or 90 days.
+- **Suggested order** = the shortfall to the reorder level + that many days of sales at the last 30 days' pace, rounded up. Sales here means invoices and delivery challans, net of returns.
+- **Columns:** Item (SKU), On hand, Reorder level, Sold / day, Days left, Suggested order.
+- Only items with a Low Stock Alert set can appear. If nothing needs ordering, you see "Nothing to reorder".
+
+## Dead Stock
+
+Stock you hold that hasn't gone out in a while.
+
+- **Not sold in:** 30, 60, 90 (default), 180 or 365 days.
+- An item counts as sold if it went out on an invoice, delivery challan or purchase return in that time.
+- **Columns:** Item, Category, Quantity, Value, Last sold ("Never" if it never has). The header shows how many items and how much value is stuck. Sorted by value, highest first.
+
+## Stock Group Summary
+
+Quantity and value per [stock group](/help/inventory/stock-groups), as on the end date of the range.
+
+- Starts at **All groups**. Click a group to drill into its sub-groups, then its items. A **Not in a group** row collects ungrouped items.
+- **Columns:** Particulars (with item count), Quantity, Rate (item rows), Value.
+- A group's totals include all its sub-groups.
+
+Quantities are added up across items even when units differ, so rely on the Value column for groups that mix units.
+
+## Price List
+
+Every item's price on each [price level](/help/inventory/price-levels), as on the end date of the range, for one unit.
+
+- **Filter:** Category (type the exact category name).
+- **Columns:** Item (with category), Unit, Sale price, MRP, then one column per price level. The default level is marked **(default)**.
+- Where a level has no price for an item, the sale price is shown greyed. Level prices shown are for the first quantity slab.
+- Items with variants show a row per variant. Services are included.
+
+## Orders reports
+
+Four reports in the **Orders** group show what's still pending, line by line:
+
+| Report | Shows |
+|---|---|
+| **Pending Sales Orders** | Ordered by customers and not yet delivered |
+| **Pending Purchase Orders** | Ordered from suppliers and not yet received |
+| **Pending GRNs** | Goods received and not yet billed |
+| **Pending Delivery Challans** | Goods delivered and not yet billed |
+
+- **Filters:** a party. The order reports also have **Past delivery date only**.
+- **Columns:** Date, number, Party, Item, Ordered, Delivered / Received / Billed, Pending, Value. The order reports add **Delivery by**, in red when it has passed.
+- A summary line shows the number of documents and the pending value before tax (pending quantity × rate after line discount).
+- Short-closed, cancelled and deleted documents are left out. Drafts are included. Oldest first.
+
+See [Orders & GRN](/help/inventory/orders-and-grn).
+
+## Item-wise Sales
+
+Also in the Inventory group: sales quantity and revenue per item for the date range. See [Business Reports](/help/reports).
+
+<ForCA>
+For a year-end stock statement, run **Stock Group Summary** with the date range ending on 31 March. It gives closing quantity and value by group, matching the closing stock used in the P&L and Balance Sheet for that date. **Movement Summary** for the full year gives the quantity reconciliation (opening + inward − outward = closing) per item.
+</ForCA>
+
+## Frequently asked questions
+
+**Why doesn't changing the date range change the Stock Summary?**
+Stock Summary, Godown Summary, Stock Ageing, Reorder Status, Dead Stock and the pending order reports always show today's position. For stock on a past date, use Stock Group Summary (as on the end date) or Movement Summary.
+
+**Why is an item missing from Reorder Status?**
+Only items with a **Low Stock Alert** set, and at or below it, appear.
+
+**Why doesn't Movement Summary show my transfers?**
+With **All warehouses**, transfers are left out because they don't change your total stock. Pick a warehouse to see transfers in and out of it.
+
+**Can I see stock by rack or bin?**
+No. Reports work at warehouse level.

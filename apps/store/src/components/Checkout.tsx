@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
 import type { CartItem, StoreConfig, OrderResult } from "../types";
 import { cartItemKey } from "../types";
 import { placeOrder } from "../api";
+import { cartTotals } from "../pricing";
 
 interface CheckoutProps {
   cart: CartItem[];
@@ -122,10 +123,8 @@ export function Checkout({
     }
   }, []);
 
-  const subtotal = cart.reduce(
-    (s, c) => s + parseFloat(c.effectivePrice) * c.quantity,
-    0
-  );
+  // What the order is charged at, GST included (see pricing.ts).
+  const { subtotal, tax, total } = cartTotals(cart);
   const totalItems = cart.reduce((s, c) => s + c.quantity, 0);
 
   function set(field: keyof FormValues, value: string) {
@@ -236,7 +235,7 @@ export function Checkout({
                 >
                   {totalItems} {totalItems === 1 ? "item" : "items"} &middot;{" "}
                   {symbol}
-                  {subtotal.toFixed(2)}
+                  {total.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -298,11 +297,18 @@ export function Checkout({
                 style={{ borderColor: "var(--store-border-light)" }}
               >
                 <span style={{ color: "var(--store-text)" }}>Total</span>
-                <span style={{ color: accent }}>
+                <span style={{ color: accent }} data-testid="checkout-total">
                   {symbol}
-                  {subtotal.toFixed(2)}
+                  {total.toFixed(2)}
                 </span>
               </div>
+              {tax > 0 && (
+                <p className="text-xs text-right" style={{ color: "var(--store-muted)" }} data-testid="checkout-tax">
+                  incl. GST {symbol}
+                  {tax.toFixed(2)} on {symbol}
+                  {subtotal.toFixed(2)}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -460,7 +466,7 @@ export function Checkout({
               ) : (
                 <span className="flex items-center gap-2">
                   Place Order &middot; {symbol}
-                  {subtotal.toFixed(2)}
+                  {total.toFixed(2)}
                 </span>
               )}
             </button>
@@ -482,9 +488,14 @@ function Field({
   error?: string;
   children: React.ReactNode;
 }) {
+  // Tie the label to its input so it is the input's accessible name.
+  const autoId = useId();
+  const inputId = isValidElement<{ id?: string }>(children) ? (children.props.id ?? autoId) : undefined;
+  const field = isValidElement<{ id?: string }>(children) ? cloneElement(children, { id: inputId }) : children;
   return (
     <div className="space-y-1.5">
       <label
+        htmlFor={inputId}
         className="block text-sm font-medium"
         style={{ color: "var(--store-text)" }}
       >
@@ -495,7 +506,7 @@ function Field({
           </span>
         )}
       </label>
-      {children}
+      {field}
       {error && (
         <p className="text-xs font-medium" style={{ color: "var(--store-danger)" }}>
           {error}

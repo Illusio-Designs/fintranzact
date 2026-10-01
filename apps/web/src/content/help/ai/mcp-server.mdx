@@ -1,0 +1,1774 @@
+---
+title: MCP Server
+description: Connect Fintranzact to Claude Desktop, OpenClaw, or any MCP-compatible AI agent. 5-minute setup, zero config, 130+ tools covering every business operation.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from "@/components/help/mdx";
+
+The Fintranzact MCP server implements the [Model Context Protocol](https://modelcontextprotocol.io/) — an open standard for connecting AI assistants to external tools and data sources. Once configured, any MCP-compatible AI agent can create invoices, query party ledgers, generate GST reports, manage inventory, track shipments, and run business reports through natural conversation.
+
+Works with **Claude Desktop** · Works with **OpenClaw** · Works with **any MCP client**
+
+---
+
+## 5-Minute Quickstart
+
+This is the fastest path from zero to a working AI agent that understands your business.
+
+**Step 1: Get your credentials**
+
+Log in to your Fintranzact dashboard and run the CLI `whoami` command to get all the values you need at once:
+
+```bash
+# Install the CLI first (one-time)
+npm install -g @fintranzact/cli
+
+# Authenticate
+fintranzact login
+
+# Print all credential values in JSON — copy these for Step 3
+fintranzact whoami --json
+```
+
+Expected output:
+```json
+{
+  "email": "owner@yourshop.in",
+  "apiUrl": "https://fintranzact-web.vercel.app",
+  "token": "sess_VbK2mQ9xP4nR7wA1...",
+  "tenantId": "tenant-uuid-here",
+  "businessId": "business-uuid-here",
+  "businessName": "Sharma Traders"
+}
+```
+
+**Step 2: Add to Claude Desktop**
+
+Open your Claude Desktop config file:
+
+<Tabs>
+  <TabItem label="macOS">
+    ```
+    ~/Library/Application Support/Claude/claude_desktop_config.json
+    ```
+  </TabItem>
+  <TabItem label="Windows">
+    ```
+    %APPDATA%\Claude\claude_desktop_config.json
+    ```
+  </TabItem>
+  <TabItem label="Linux">
+    ```
+    ~/.config/claude/claude_desktop_config.json
+    ```
+  </TabItem>
+</Tabs>
+
+Add the `fintranzact` entry using the values from `fintranzact whoami --json`:
+
+```json
+{
+  "mcpServers": {
+    "fintranzact": {
+      "command": "npx",
+      "args": ["@fintranzact/mcp"],
+      "env": {
+        "FINTRANZACT_API_URL": "https://fintranzact-web.vercel.app",
+        "FINTRANZACT_API_KEY": "sess_VbK2mQ9xP4nR7wA1...",
+        "FINTRANZACT_TENANT_ID": "tenant-uuid-here",
+        "FINTRANZACT_BUSINESS_ID": "business-uuid-here"
+      }
+    }
+  }
+}
+```
+
+**Step 3: Restart Claude Desktop and test**
+
+Restart Claude Desktop — you will see "fintranzact" appear in the tools list. Then try:
+
+```
+"What is my business's total outstanding receivables?"
+```
+
+Claude calls `dashboard_summary` and returns your live business data. That's it. You now have an AI that knows your business.
+
+---
+
+## The WOW Moment
+
+Here is what the experience actually looks like once connected. These are real conversation flows using the tools described in this document.
+
+**Checking what a party owes you:**
+
+```
+You: "How much does Montu Arora owe me?"
+
+Claude: [calls party_get tool with name search "Montu Arora"]
+
+Claude: "Montu Arora has ₹12,450 outstanding across 3 invoices.
+         The oldest is INV-12890 from 15 days ago (₹5,000).
+         The other two are INV-12901 (₹4,200, 8 days ago) and
+         INV-12934 (₹3,250, 2 days ago).
+
+         Should I draft a payment reminder for the older invoices,
+         or would you like to see the full ledger first?"
+```
+
+**Creating an invoice in seconds:**
+
+```
+You: "Bill Gupta Enterprises for 20 bags of Basmati Rice at ₹1,250 each,
+      due in 15 days"
+
+Claude: [calls item_list to resolve "Basmati Rice" to item ID]
+        [calls party_list to resolve "Gupta Enterprises" to party ID]
+        [calls invoice_create with all resolved IDs and calculated amounts]
+
+Claude: "Done. Invoice BB-14821 created:
+         Gupta Enterprises — ₹25,000 + GST
+         20 × Basmati Rice 25kg @ ₹1,250 = ₹25,000
+         GST (5% — HSN 1006): ₹1,250
+         Total: ₹26,250
+         Due: April 12, 2026
+
+         PDF is ready. Want me to note any delivery instructions?"
+```
+
+**Morning business briefing:**
+
+```
+You: "Give me this morning's numbers"
+
+Claude: [calls dashboard_summary with period: "this-month"]
+        [calls invoice_list with status: "overdue"]
+        [calls item_list with lowStock: true]
+
+Claude: "Good morning. Here's where things stand:
+
+         This month: ₹4,82,500 revenue · ₹1,23,400 expenses
+         Receivable: ₹2,34,000 across 18 open invoices
+         Critical: Vinod & Sons — ₹45,000 overdue for 63 days
+
+         3 items need restocking:
+         — Mustard Oil 15L: 2 cans left (min: 10)
+         — Basmati Rice 25kg: 4 bags left (min: 15)
+         — Refined Sugar 50kg: 1 bag left (min: 5)
+
+         GSTR-3B is due in 4 days. Should I pull the GST summary?"
+```
+
+**GST filing prep — done in one message:**
+
+```
+You: "Prepare my GSTR-1 data for March"
+
+Claude: [calls gst_report with report_type: "gstr1", month: 3, year: 2026]
+        [calls gst_report with report_type: "gstr3b", month: 3, year: 2026]
+
+Claude: "March 2026 GSTR-1 summary:
+
+         B2B invoices: 47 (₹8,42,500 taxable)
+         B2C invoices: 183 (₹3,21,000 taxable)
+         HSN summary: 6 HSN codes, full detail attached
+
+         Net GST liability: ₹90,024
+         (CGST: ₹37,912 | SGST: ₹37,912 | IGST: ₹14,200)
+
+         The full GSTR-1 JSON is ready to forward to your CA.
+         Filing deadline: April 11, 2026 — 14 days away."
+```
+
+**Create a quotation and convert it to an invoice:**
+
+```
+You: "Send Sharma Textiles a quote for 500 meters of silk at ₹320/m,
+      valid for 15 days"
+
+Claude: [calls party_list to resolve "Sharma Textiles"]
+        [calls item_list to resolve "silk" to item ID]
+        [calls quotation_create with resolved IDs]
+
+Claude: "Done. Quotation QT-0041 created for Sharma Textiles:
+         500m Silk Fabric @ ₹320/m = ₹1,60,000 + 5% GST
+         Total: ₹1,68,000 | Valid until: April 16, 2026
+
+         Let me know when they confirm and I'll convert it to an invoice."
+
+You: "They confirmed — convert it"
+
+Claude: [calls document_convert with source_id: QT-0041's UUID, target_type: "invoice"]
+
+Claude: "Invoice BB-15109 created from QT-0041.
+         Sharma Textiles — ₹1,68,000 | Due: May 1, 2026
+         Stock updated: 500m Silk Fabric deducted."
+```
+
+**Invite a team member and set their role:**
+
+```
+You: "Add priya@sharmatraders.in as an accountant"
+
+Claude: [calls tenant_invite_member with email, role: "accountant"]
+
+Claude: "Done. Invitation sent to priya@sharmatraders.in.
+         She'll have read-only access to reports and ledgers.
+         The invitation link expires in 7 days."
+```
+
+**Record an incoming payment and apply it across invoices:**
+
+```
+You: "Gupta Enterprises paid ₹50,000 by bank transfer — 
+      apply it to their oldest invoices"
+
+Claude: [calls payment_unpaid_invoices with Gupta Enterprises' UUID]
+        [calls payment_create with allocations across oldest invoices]
+
+Claude: "Payment recorded — ₹50,000 bank transfer from Gupta Enterprises:
+         — INV-12801 (63 days): ₹28,000 — now paid in full
+         — INV-12880 (31 days): ₹19,500 — now paid in full
+         — INV-12934 (2 days):  ₹2,500 partial (₹750 remaining)
+         
+         Remaining balance: ₹750"
+```
+
+---
+
+## What You Can Build
+
+The MCP server is not just for answering questions. It gives AI agents the ability to take action. Here is what becomes possible:
+
+**WhatsApp invoice bot** — A customer sends a voice note on WhatsApp. A bot transcribes it, passes the text to Claude via MCP, and Claude creates the invoice. The customer gets a PDF link in under 30 seconds. No app, no form, no manual entry.
+
+**Automated payment follow-up** — An OpenClaw agent runs daily, identifies overdue invoices, drafts personalized reminders in Hindi or English based on party preference, and queues them for one-click sending. Your accountant reviews and approves the batch in two minutes.
+
+**CA reconciliation assistant** — Your CA connects their Claude Desktop to your Fintranzact instance (read-only mode). They can ask questions, pull GSTR data, and cross-reference ledgers without you exporting a single file or being on a call.
+
+**Multi-business dashboard agent** — An agent that spans all three of your businesses, pulling `dashboard_summary` for each, and generating a consolidated morning report comparing performance across businesses.
+
+**Stock reorder agent** — An agent that checks `item_list` with `lowStock: true` every morning, identifies items below threshold, checks your supplier's catalog, and creates draft purchase orders for your review.
+
+See [Integrations](/help/ai/integrations) for detailed implementation guides for each of these patterns.
+
+---
+
+## Prerequisites
+
+- A Fintranzact account ([sign up](/register))
+- Node.js 20+ on the machine where the MCP client (Claude Desktop) runs
+- The Fintranzact CLI installed (`npm install -g @fintranzact/cli`) for getting credentials
+
+---
+
+## Configuration
+
+The MCP server is configured entirely through environment variables passed in the MCP client config. There are no command-line flags — the server runs over stdio, which is managed by your MCP client (Claude Desktop, OpenClaw, etc.).
+
+### Environment variables
+
+| Variable | Where to find it | Description |
+|---|---|---|
+| `FINTRANZACT_API_URL` | Your Fintranzact web address | Base URL of your Fintranzact account, e.g. `https://fintranzact-web.vercel.app` |
+| `FINTRANZACT_API_KEY` | `fintranzact whoami --json` → `token` | Session token (same as Bearer token used by the mobile app) |
+| `FINTRANZACT_TENANT_ID` | `fintranzact whoami --json` → `tenantId` | Your organization/tenant UUID |
+| `FINTRANZACT_BUSINESS_ID` | `fintranzact whoami --json` → `businessId` | The business to operate on |
+
+The fastest way to get all four values at once:
+
+```bash
+fintranzact whoami --json
+```
+
+If the `token` field is missing or expired, log in again:
+
+```bash
+fintranzact login
+```
+
+---
+
+## Connecting to Claude Desktop
+
+1. Run `fintranzact whoami --json` to get your credentials (see Configuration above).
+
+2. Open your Claude Desktop configuration file:
+
+<Tabs>
+  <TabItem label="macOS">
+    ```
+    ~/Library/Application Support/Claude/claude_desktop_config.json
+    ```
+  </TabItem>
+  <TabItem label="Windows">
+    ```
+    %APPDATA%\Claude\claude_desktop_config.json
+    ```
+  </TabItem>
+  <TabItem label="Linux">
+    ```
+    ~/.config/claude/claude_desktop_config.json
+    ```
+  </TabItem>
+</Tabs>
+
+3. Add the Fintranzact MCP server to the `mcpServers` section:
+
+```json
+{
+  "mcpServers": {
+    "fintranzact": {
+      "command": "npx",
+      "args": ["@fintranzact/mcp"],
+      "env": {
+        "FINTRANZACT_API_URL": "https://fintranzact-web.vercel.app",
+        "FINTRANZACT_API_KEY": "sess_VbK2mQ9xP4nR7wA1...",
+        "FINTRANZACT_TENANT_ID": "tenant-uuid-here",
+        "FINTRANZACT_BUSINESS_ID": "business-uuid-here"
+      }
+    }
+  }
+}
+```
+
+The MCP server runs as a child process of Claude Desktop over stdio — Claude Desktop starts and stops it automatically. You do not need to keep a separate server process running.
+
+4. Restart Claude Desktop. You will see "fintranzact" appear in the tools list in Claude's interface.
+
+5. Test the connection:
+
+```
+"What is my business's total outstanding receivables?"
+```
+
+Claude will call the `dashboard_summary` tool and return a structured response with your current data.
+
+**If Claude reports it cannot connect:** Check that the `FINTRANZACT_API_KEY` is not expired (`fintranzact login` to refresh it) and that `FINTRANZACT_API_URL` is reachable from the machine running Claude Desktop.
+
+---
+
+## Connecting to OpenClaw
+
+OpenClaw agents connect to stdio-based MCP servers by launching them as a subprocess. Configure the Fintranzact MCP server in your OpenClaw agent definition with the same environment variables used for Claude Desktop:
+
+```yaml
+# openclaw-agent.yaml
+mcp_servers:
+  - name: fintranzact
+    command: npx
+    args: ["@fintranzact/mcp"]
+    env:
+      FINTRANZACT_API_URL: "https://fintranzact-web.vercel.app"
+      FINTRANZACT_API_KEY: "sess_VbK2mQ9xP4nR7wA1..."
+      FINTRANZACT_TENANT_ID: "tenant-uuid-here"
+      FINTRANZACT_BUSINESS_ID: "business-uuid-here"
+    description: "Fintranzact business management — invoices, parties, inventory, GST, shipping, banking"
+```
+
+OpenClaw starts and stops the MCP server process as needed. No separate server daemon is required.
+
+For long-running OpenClaw deployments, store credentials in your secrets manager and inject them as environment variables rather than hardcoding them in the agent definition file.
+
+---
+
+## Available Tools
+
+The MCP server exposes 130+ tools organized by business domain.
+
+---
+
+### Invoicing
+
+#### `invoice_list`
+
+List invoices with optional filters. Results are paginated (max 100 per call).
+
+**Input:**
+```typescript
+{
+  type?: "sale" | "purchase";
+  status?: "draft" | "sent" | "paid" | "overdue" | "cancelled";
+  partyId?: string;
+  fromDate?: string;
+  toDate?: string;
+  limit?: number; // default 50, max 100
+  cursor?: string;
+}
+```
+
+#### `invoice_create`
+
+Create a sale or purchase invoice.
+
+**Input:**
+```typescript
+{
+  type: "sale" | "purchase";
+  partyId: string;
+  date: string; // ISO 8601, e.g. "2026-03-26"
+  items: Array<{
+    itemId: string;
+    quantity: number;
+    unit: string;
+    pricePerUnit: string; // e.g. "65.00"
+    discountPercent?: string;
+  }>;
+  notes?: string;
+  dueDate?: string;
+  deliveryMethod?: "self_pickup" | "hand_delivery" | "courier" | "bus" | "transport" | "post";
+}
+```
+
+**Output:**
+```typescript
+{
+  id: string;
+  invoiceNumber: string; // e.g. "BB-12948"
+  totalAmount: string;
+  taxAmount: string;
+  status: "draft" | "sent" | "paid" | "overdue";
+  pdfUrl: string;
+}
+```
+
+#### `invoice_get`
+
+Get a single invoice with all line items and payment history.
+
+**Input:** `{ id: string }`
+
+#### `invoice_update`
+
+Edit an existing invoice — update line items, dates, notes, or discount. Only provide the fields you want to change; omitted fields are not modified.
+
+**Input:**
+```typescript
+{
+  invoice_id: string;
+  line_items?: Array<{
+    description: string;
+    quantity: string;       // decimal string e.g. "2.000"
+    unit_price: string;     // decimal string e.g. "500.00"
+    tax_percent?: string;   // default "0"
+    discount_percent?: string;
+    item_id?: string;
+  }>;
+  invoice_date?: string;
+  due_date?: string;
+  notes?: string;
+  terms_and_conditions?: string;
+  invoice_discount?: string;
+  invoice_discount_type?: "amount" | "percent";
+  round_off?: string;
+}
+```
+
+> **Warning:** Updating a paid invoice recalculates totals and may affect payment status. Changing the party after creation is not supported.
+
+#### `invoice_update_status`
+
+Advance an invoice through its lifecycle.
+
+**Input:** `{ id: string; status: "sent" | "paid" | "cancelled" }`
+
+#### `invoice_pdf_url`
+
+Get a URL to download or view the invoice PDF.
+
+**Input:** `{ id: string; format?: "a4" | "thermal" }`
+
+#### `invoice_delete`
+
+Delete a draft invoice. Only drafts can be deleted; sent or paid invoices must be cancelled.
+
+**Input:** `{ id: string }`
+
+---
+
+### Parties
+
+#### `party_list`
+
+List customers and suppliers. Includes outstanding balance for each party.
+
+**Input:**
+```typescript
+{
+  type?: "customer" | "supplier" | "both";
+  search?: string;
+  hasOutstanding?: boolean;
+  limit?: number;
+  cursor?: string;
+}
+```
+
+#### `party_create`
+
+Create a new customer or supplier.
+
+**Input:**
+```typescript
+{
+  name: string;
+  type: "customer" | "supplier" | "both";
+  phone?: string;
+  email?: string;
+  gstin?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+}
+```
+
+#### `party_get`
+
+Get a party's full profile and running ledger.
+
+**Input:**
+```typescript
+{
+  id: string;
+  includeLedger?: boolean; // default false — ledger adds response size
+  fromDate?: string;
+  toDate?: string;
+}
+```
+
+#### `party_update`
+
+Update a party's details.
+
+**Input:** `{ id: string; name?: string; phone?: string; email?: string; gstin?: string; address?: string; city?: string; state?: string; pincode?: string }`
+
+#### `party_delete`
+
+Delete a party. Fails if the party has invoices or payments on record.
+
+**Input:** `{ id: string }`
+
+#### `party_ledger`
+
+Get a party's complete transaction ledger (invoices, payments, and running balance).
+
+**Input:**
+```typescript
+{
+  id: string;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  limit?: number;
+}
+```
+
+The `balance` field is positive when the party owes you (receivable) and negative when you owe them (payable).
+
+#### `party_ledger_report`
+
+Get a detailed aggregated ledger report for a party with date range filtering. Returns party details, all entries (invoices and payments) in chronological order with running balance, and a closing summary. Suitable for generating an account statement to share with the party.
+
+**Input:**
+```typescript
+{
+  party_id: string;
+  from_date?: string; // ISO 8601
+  to_date?: string;
+}
+```
+
+#### `party_get_stats`
+
+Get aggregate statistics for a party — total invoice count and total payment count. Use this to quickly understand the transaction volume with a customer or supplier.
+
+**Input:** `{ party_id: string }`
+
+#### `party_top_items`
+
+Get the top 5 items most frequently transacted with a specific party. Returns item name, total quantity, total amount, and invoice count. Useful for understanding what a customer typically buys or what a supplier typically sells.
+
+**Input:** `{ party_id: string }`
+
+#### `party_merge`
+
+Merge two party records into one — moves all invoices and payments from the source party to the target, then deletes the source. Opening balances are combined. Use this to deduplicate parties that were created twice with slightly different names. Requires admin role.
+
+**Input:**
+```typescript
+{
+  source_id: string; // party to merge FROM (deleted after merging)
+  target_id: string; // party to merge INTO (kept)
+}
+```
+
+---
+
+### Items & Inventory
+
+#### `item_list`
+
+List items in your catalog with current stock levels.
+
+**Input:**
+```typescript
+{
+  search?: string;
+  lowStock?: boolean;
+  category?: string;
+  limit?: number;
+  cursor?: string;
+}
+```
+
+#### `item_create`
+
+Create a new item in your catalog.
+
+**Input:**
+```typescript
+{
+  name: string;
+  unit: string;
+  salePrice: string;
+  purchasePrice?: string;
+  hsnCode?: string;
+  gstRate?: number; // 0, 5, 12, 18, or 28
+  category?: string;
+  openingStock?: number;
+  lowStockThreshold?: number;
+}
+```
+
+#### `item_get`
+
+Get a single item with full pricing and stock history.
+
+**Input:** `{ id: string }`
+
+#### `item_update`
+
+Update an item's details, price, or GST rate.
+
+**Input:** `{ id: string; name?: string; salePrice?: string; purchasePrice?: string; hsnCode?: string; gstRate?: number; category?: string; lowStockThreshold?: number }`
+
+#### `item_delete`
+
+Delete an item. Fails if the item appears on any invoice.
+
+**Input:** `{ id: string }`
+
+#### `item_adjust_stock`
+
+Manually adjust stock for an item (for corrections, write-offs, physical counts, etc.).
+
+**Input:**
+```typescript
+{
+  item_id: string;
+  adjustment: string; // signed decimal string: "+50", "-3.500", "10"
+  reason?: string;    // recorded in audit log
+}
+```
+
+#### `item_categories`
+
+List all item categories used in your catalog.
+
+**Input:** `{}` (no parameters)
+
+#### `item_list_variants`
+
+List all variants for a variant-mode inventory item. Each variant has its own attribute values (e.g. size, color), SKU, prices, and stock quantity.
+
+**Input:** `{ item_id: string }`
+
+#### `item_create_variant`
+
+Add a new variant to a variant-mode inventory item. The parent item must already be in variants mode. Attribute values define what makes this variant distinct, e.g. `{ size: "L", color: "Red" }`.
+
+**Input:**
+```typescript
+{
+  item_id: string;
+  attribute_values: Record<string, string>;
+  sku?: string;
+  sale_price?: string;
+  purchase_price?: string;
+  stock_quantity?: string;
+  low_stock_alert?: string;
+}
+```
+
+#### `item_update_variant`
+
+Update an existing variant's price, stock, or attributes. Only provide the fields you want to change.
+
+**Input:**
+```typescript
+{
+  variant_id: string;
+  attribute_values?: Record<string, string>;
+  sku?: string;
+  sale_price?: string;
+  purchase_price?: string;
+  stock_quantity?: string;
+  low_stock_alert?: string;
+}
+```
+
+#### `item_delete_variant`
+
+Permanently delete an item variant. Requires admin role. Existing invoice line items that referenced this variant retain their data.
+
+**Input:** `{ variant_id: string }`
+
+#### `item_merge`
+
+Merge two inventory items — moves all invoice history from the source item to the target, then deletes the source. Cannot merge variant-mode items. Requires admin role.
+
+**Input:**
+```typescript
+{
+  source_id: string; // item to merge FROM (deleted)
+  target_id: string; // item to merge INTO (kept)
+  stock_conversion_factor?: number; // how many target units equal 1 source unit (default 1)
+}
+```
+
+#### `item_switch_base_unit`
+
+Change the base unit of measure for an item (e.g. switch from `kg` to `g`). Converts existing stock and prices using the conversion factor provided.
+
+**Input:**
+```typescript
+{
+  item_id: string;
+  new_unit: string;           // e.g. "g", "ml"
+  conversion_factor: number;  // how many NEW units equal 1 OLD unit (e.g. kg → g: 1000)
+}
+```
+
+#### `item_rename_unit`
+
+Rename a unit (base or alt unit) for an item, cascading the rename across all linked invoice line items. Use this to correct typos in unit names. Requires admin role.
+
+**Input:**
+```typescript
+{
+  item_id: string;
+  old_unit: string;
+  new_unit: string;
+}
+```
+
+#### `item_stock_adjustment_history`
+
+View the audit log of manual stock adjustments for an inventory item. Each entry shows the adjustment quantity, reason, user, and timestamp.
+
+**Input:**
+```typescript
+{
+  item_id: string;
+  variant_id?: string; // filter by variant (for variant-mode items)
+  page?: number;
+}
+```
+
+#### `item_low_stock_count`
+
+Get the total count of items (and variants) that are below their low-stock alert threshold. Use this as a quick dashboard metric. For the full list, use `item_list` with `low_stock: true`.
+
+**Input:** `{}` (no parameters)
+
+#### `item_batches`
+
+List the batches (lots) of an item that [tracks batches](/help/inventory/batches-and-expiry), earliest expiry first, with each batch's stock, expiry date, days to expiry and whether it has expired. `unbatched` is the item's stock that isn't in any batch.
+
+**Input:**
+```typescript
+{
+  item_id: string;
+  variant_id?: string;    // one variant of a variant item
+  warehouse_id?: string;  // only stock in this warehouse
+  include_empty?: boolean; // also list batches with no stock (default false)
+}
+```
+
+#### `report_batch_stock`
+
+Batch-wise stock for items that track batches: quantity and value of every batch in every warehouse, with its expiry. Use `status: "expiring"` for batches that expire within `days`, or `status: "expired"` for expired stock still on hand — "What medicines expire this month?"
+
+**Input:**
+```typescript
+{
+  status?: "all" | "expiring" | "expired"; // default "all"
+  days?: number;          // window for "expiring", default 30
+  warehouse_id?: string;
+  item_id?: string;
+  search?: string;        // item name, SKU or batch number
+}
+```
+
+---
+
+### Payments
+
+#### `payment_list`
+
+List payments with optional filters.
+
+**Input:**
+```typescript
+{
+  party_id?: string;
+  invoice_id?: string;
+  from_date?: string;
+  to_date?: string;
+  page?: number;
+}
+```
+
+#### `payment_create`
+
+Record a payment from a customer or to a supplier.
+
+**Input:**
+```typescript
+{
+  party_id: string;
+  amount: string;
+  mode: "cash" | "bank" | "upi" | "cheque" | "other";
+  payment_date?: string;  // ISO 8601, defaults to today
+  invoice_id?: string;    // allocate to a specific invoice
+  reference_number?: string;
+  notes?: string;
+}
+```
+
+#### `payment_get`
+
+Get the details of a single payment record.
+
+**Input:** `{ id: string }`
+
+#### `payment_update`
+
+Update a payment's notes or reference number.
+
+**Input:** `{ id: string; reference_number?: string; notes?: string }`
+
+#### `payment_delete`
+
+Delete a payment record. Use with care — this affects party outstanding balances.
+
+**Input:** `{ id: string }`
+
+#### `payment_unpaid_invoices`
+
+List all unpaid or partially-paid invoices for a specific party. Returns invoices with status `sent`, `partial`, or `overdue` — excludes paid and cancelled. Each result includes the remaining balance (`totalAmount - amountPaid`). Use this before recording a payment to find which invoices to allocate it against.
+
+**Input:** `{ party_id: string }`
+
+#### `payment_untracked`
+
+List payments that have not been linked to a bank account. Use this to find payments that need to be assigned to an account for accurate cash flow tracking.
+
+**Input:**
+```typescript
+{
+  search?: string;
+  mode?: "cash" | "bank" | "upi" | "cheque" | "other";
+  from_date?: string;
+  to_date?: string;
+  page?: number;
+}
+```
+
+#### `payment_default_account`
+
+Get the recommended bank or cash account to use when recording a payment. Priority: most recently used account for this party → most common recent account → business default account. Use this to pre-fill the `bank_account_id` field in `payment_create`.
+
+**Input:** `{ party_id?: string }`
+
+---
+
+### Expenses
+
+#### `expense_list`
+
+List expenses with filters.
+
+**Input:**
+```typescript
+{
+  category?: string;
+  fromDate?: string;
+  toDate?: string;
+  limit?: number;
+  cursor?: string;
+}
+```
+
+#### `expense_create`
+
+Record a business expense.
+
+**Input:**
+```typescript
+{
+  amount: string;
+  category: string;
+  date: string;
+  description: string;
+  bankAccountId?: string;
+  attachmentUrl?: string;
+}
+```
+
+#### `expense_update`
+
+Update an expense record.
+
+**Input:** `{ id: string; amount?: string; category?: string; description?: string; date?: string }`
+
+#### `expense_delete`
+
+Delete an expense record.
+
+**Input:** `{ id: string }`
+
+#### `expense_categories`
+
+List all expense categories used in your records.
+
+**Input:** `{}` (no parameters)
+
+---
+
+### GST
+
+#### `gst_report`
+
+Generate a GST report for a specific month. Returns structured JSON — use this to answer GST liability questions, check ITC, or prepare data for your CA.
+
+**Input:**
+```typescript
+{
+  report_type: "gstr1" | "gstr3b";
+  month: number; // 1–12 (1 = January)
+  year: number;  // e.g. 2026
+}
+```
+
+- `gstr1` — outward supplies (sales) report: B2B invoices, B2C invoices, HSN summary
+- `gstr3b` — monthly return summary: sales + purchases + ITC
+
+**Example:**
+```
+"Prepare my GSTR-1 data for March 2026"
+→ gst_report({ report_type: "gstr1", month: 3, year: 2026 })
+```
+
+#### `gst_report_csv`
+
+Same as `gst_report` but returns a downloadable CSV URL suitable for upload to the GST portal or forwarding to your CA.
+
+**Input:**
+```typescript
+{
+  report_type: "gstr1" | "gstr3b";
+  month: number;
+  year: number;
+}
+```
+
+**Output:** `{ url: string; filename: string; expiresAt: string }`
+
+---
+
+### Dashboard
+
+#### `dashboard_summary`
+
+Get the business's financial summary: total sales, purchases, expenses, receivables, payables, and cash position.
+
+**Input:**
+```typescript
+{
+  period?: "this-fy" | "this-month" | "last-month" | "this-quarter" | "this-year" | "custom";
+  // "this-fy" = current Indian financial year (April–March) — this is the default
+  from_date?: string; // ISO 8601, required when period = "custom"
+  to_date?: string;
+}
+```
+
+**Output:**
+```typescript
+{
+  totalSales: string;
+  totalPurchases: string;
+  totalExpenses: string;
+  receivable: string;
+  payable: string;
+  cashInHand: string;
+  recentInvoices: Array<{ invoiceNumber: string; partyName: string; totalAmount: string; status: string }>;
+}
+```
+
+---
+
+### Recurring Invoices
+
+#### `automated_invoice_list`
+
+List recurring invoice templates. Filterable by status (`active`, `paused`, `completed`, `expired`). Paginated.
+
+#### `automated_invoice_get`
+
+Get full details of a recurring template including line items, schedule, and run counts.
+
+#### `automated_invoice_create`
+
+Create a new recurring invoice template. Required: `party_id`, `name`, `type` (sale/purchase), `frequency`, `line_items` (JSON array), `start_date`. Optional: `end_date`, `max_runs`, `notes`, `custom_interval_days` (when frequency=custom).
+
+#### `automated_invoice_update`
+
+Update an existing template. All fields optional except `template_id`.
+
+#### `automated_invoice_delete`
+
+Permanently delete a template and all execution history.
+
+#### `automated_invoice_pause`
+
+Pause an active template. No invoices will be auto-generated until resumed.
+
+#### `automated_invoice_resume`
+
+Resume a paused template. Next run date is recalculated from now.
+
+#### `automated_invoice_run_now`
+
+Manually trigger immediate invoice generation from a template.
+
+#### `automated_invoice_history`
+
+Get paginated execution history for a template. Shows each run's status (success/failed/skipped_limit), generated invoice number, and timestamp.
+
+#### `automated_invoice_plan_usage`
+
+Check how many automated runs have been used this month (free plan: 5/month).
+
+#### `automated_invoice_suggestions`
+
+Get AI-detected recurring billing patterns based on recent invoices (last 2 months). Returns parties with regular intervals, suggested frequency, and median amount.
+
+---
+
+### Shipments
+
+#### `shipment_list`
+
+List shipments with optional filters.
+
+**Input:**
+```typescript
+{
+  status?: "pending" | "dispatched" | "in_transit" | "delivered" | "returned";
+  invoiceId?: string;
+  fromDate?: string;
+  toDate?: string;
+  limit?: number;
+  cursor?: string;
+}
+```
+
+#### `shipment_get`
+
+Get a single shipment with full tracking event history.
+
+**Input:** `{ id: string }`
+
+#### `shipment_create`
+
+Create a shipment record linked to an invoice.
+
+**Input:**
+```typescript
+{
+  invoiceId: string;
+  mode: string;          // carrier name or custom shipping method ID
+  trackingNumber?: string;
+  dispatchDate?: string; // ISO 8601
+  estimatedDelivery?: string;
+  notes?: string;
+}
+```
+
+#### `shipment_update`
+
+Update a shipment's tracking number, status, or delivery date.
+
+**Input:** `{ id: string; trackingNumber?: string; status?: string; estimatedDelivery?: string; notes?: string }`
+
+#### `shipment_delete`
+
+Delete a shipment record.
+
+**Input:** `{ id: string }`
+
+---
+
+### Bank Accounts
+
+#### `bank_account_list`
+
+List all bank accounts and cash accounts for the business.
+
+**Input:** `{ includeBalance?: boolean }` (default true)
+
+#### `bank_account_get`
+
+Get a single account with current balance.
+
+**Input:** `{ id: string }`
+
+#### `bank_account_create`
+
+Add a new bank account or cash account.
+
+**Input:**
+```typescript
+{
+  name: string;
+  type: "bank" | "cash" | "upi";
+  accountNumber?: string;
+  ifscCode?: string;
+  bankName?: string;
+  openingBalance?: string;
+}
+```
+
+#### `bank_account_transfer`
+
+Record a fund transfer between accounts.
+
+**Input:**
+```typescript
+{
+  fromAccountId: string;
+  toAccountId: string;
+  amount: string;
+  date?: string;
+  notes?: string;
+}
+```
+
+#### `bank_account_transactions`
+
+List transactions for an account.
+
+**Input:**
+```typescript
+{
+  accountId: string;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  limit?: number;
+}
+```
+
+#### `bank_account_summary`
+
+Get a summary of account balances and cash flow for a period.
+
+**Input:**
+```typescript
+{
+  period?: "this-month" | "last-month" | "this-fy" | "custom";
+  from_date?: string;
+  to_date?: string;
+}
+```
+
+#### `bank_account_gateway_config`
+
+Get the payment gateway configuration for a bank account, including charge rates per payment mode, settlement account, and expense category.
+
+**Input:** `{ bank_account_id: string }` — UUID of the payment gateway account.
+
+#### `bank_account_update_gateway`
+
+Create or update gateway charge configuration for a payment gateway bank account.
+
+**Input:**
+```typescript
+{
+  bank_account_id: string;
+  settlement_account_id?: string;
+  charge_config?: {
+    credit_card?: { type: "percentage" | "flat"; value: string };
+    debit_card?: { type: "percentage" | "flat"; value: string };
+    // ... per-mode rates
+  };
+  expense_category?: string;
+  auto_settle?: boolean;
+}
+```
+
+---
+
+### Reports
+
+#### `report_daybook`
+
+All transactions (invoices, payments, expenses) for a date range, ordered by date.
+
+**Input:** `{ fromDate: string; toDate: string; page?: number; limit?: number }`
+
+#### `report_outstanding`
+
+Outstanding receivables and payables with aging buckets (0–30, 31–60, 61–90, 90+ days).
+
+**Input:** `{ type?: "receivable" | "payable" | "both"; asOfDate?: string }`
+
+#### `report_tax_summary`
+
+Taxable turnover and GST collected/paid, broken down by tax rate and state.
+
+**Input:** `{ fromDate: string; toDate: string }`
+
+#### `report_item_sales`
+
+Sales quantity and revenue for each item over a period, sorted by revenue.
+
+**Input:** `{ fromDate: string; toDate: string; limit?: number }`
+
+#### `report_stock_summary`
+
+Current stock value across all items, with opening/closing stock comparison.
+
+**Input:** `{ asOfDate?: string }`
+
+#### `report_party_statement`
+
+Full transaction statement for a party: invoices raised, payments received, balance movement.
+
+**Input:** `{ partyId: string; fromDate?: string; toDate?: string }`
+
+#### `report_payment_summary`
+
+Payment totals grouped by mode (cash, UPI, bank, cheque) for a period.
+
+**Input:** `{ fromDate: string; toDate: string }`
+
+---
+
+### Store
+
+#### `store_settings`
+
+Get the online store configuration: name, description, active status, payment methods, and delivery options.
+
+**Input:** `{}` (no parameters)
+
+#### `store_update_settings`
+
+Update store settings.
+
+**Input:**
+```typescript
+{
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+  acceptOnlinePayments?: boolean;
+}
+```
+
+#### `store_orders`
+
+List online store orders.
+
+**Input:**
+```typescript
+{
+  status?: "pending" | "confirmed" | "dispatched" | "delivered" | "cancelled";
+  fromDate?: string;
+  toDate?: string;
+  limit?: number;
+  cursor?: string;
+}
+```
+
+#### `store_order_get`
+
+Get a single order with line items, customer details, and current status.
+
+**Input:** `{ id: string }`
+
+#### `store_order_update`
+
+Update a confirmed order's status to `preparing`, `ready`, or `delivered`. Use this after an order has been confirmed to track fulfillment progress.
+
+**Input:** `{ order_id: string; status: "preparing" | "ready" | "delivered" }`
+
+#### `store_confirm_order`
+
+Confirm a pending store order, activating it for fulfillment. Moves the order from `pending` to `confirmed`. If a draft invoice was linked to the order, it is automatically updated to `sent`.
+
+**Input:** `{ order_id: string }`
+
+#### `store_cancel_order`
+
+Cancel an order. Can be applied to any order that is not already delivered or cancelled. The linked invoice (if any) is also cancelled automatically.
+
+**Input:**
+```typescript
+{
+  order_id: string;
+  reason?: string; // e.g. "Customer requested cancellation", "Out of stock"
+}
+```
+
+---
+
+### Sales Targets
+
+#### `target_list`
+
+List all sales targets for the business.
+
+**Input:** `{ period?: "daily" | "weekly" | "monthly" | "quarterly" | "custom"; status?: "active" | "completed" | "expired" }`
+
+#### `target_create`
+
+Create a new sales target.
+
+**Input:**
+```typescript
+{
+  name: string;
+  type: "order_count" | "order_value" | "item_quantity";
+  targetValue: string;
+  period: "daily" | "weekly" | "monthly" | "quarterly" | "custom";
+  startDate?: string;
+  endDate?: string;
+  itemId?: string; // for item_quantity targets
+}
+```
+
+#### `target_progress`
+
+Get progress data for a specific target: current value, target value, percentage achieved, and trend.
+
+**Input:** `{ id: string }`
+
+#### `target_my`
+
+Get all active targets assigned to the currently authenticated user.
+
+**Input:** `{}` (no parameters)
+
+---
+
+### Import
+
+#### `import_parties`
+
+Bulk-import parties from a CSV or JSON payload.
+
+**Input:**
+```typescript
+{
+  format: "json" | "csv";
+  data: string; // JSON array string or CSV content
+  skipDuplicates?: boolean; // default true
+}
+```
+
+#### `import_items`
+
+Bulk-import items from a CSV or JSON payload.
+
+**Input:**
+```typescript
+{
+  format: "json" | "csv";
+  data: string;
+  skipDuplicates?: boolean;
+}
+```
+
+#### `import_invoices`
+
+Bulk-import historical invoices. Useful for migrating from Tally, Vyapar, or spreadsheets.
+
+**Input:**
+```typescript
+{
+  format: "json";
+  data: string; // JSON array of invoice objects
+  createMissingParties?: boolean;
+  createMissingItems?: boolean;
+}
+```
+
+#### `import_payments`
+
+Bulk-import historical payment records.
+
+**Input:**
+```typescript
+{
+  format: "json" | "csv";
+  data: string;
+}
+```
+
+---
+
+### Documents
+
+Business documents other than invoices — quotations, credit/debit notes, challans, proforma invoices, and returns. Each type has a standard set of five tools: `list`, `get`, `create`, `update_status`, and `delete`.
+
+#### `document_convert`
+
+Convert a document to a different type — for example, a quotation to an invoice, or a proforma to a delivery challan. Copies all line items from the source document and creates a new linked document. The original document is not modified.
+
+Common conversion flows:
+- `quotation → invoice` (customer accepts the quote)
+- `proforma → invoice` (proforma confirmed)
+- `delivery_challan → invoice` (challan converted to bill)
+
+**Input:**
+```typescript
+{
+  source_id: string;   // UUID of the document to convert from
+  target_type: "quotation" | "credit_note" | "debit_note" | "delivery_challan"
+             | "proforma" | "sales_return" | "purchase_return";
+}
+```
+
+#### Quotations (`quotation_*`)
+
+Price quotes sent to customers before an order is confirmed. Status flow: `draft → sent → cancelled`. Once accepted, convert to an invoice with `document_convert`.
+
+| Tool | What it does |
+|---|---|
+| `quotation_list` | List quotations with filters (party, date range, status) |
+| `quotation_get` | Get a single quotation with all line items |
+| `quotation_create` | Create a new quotation |
+| `quotation_update_status` | Advance status: `draft → sent → cancelled` |
+| `quotation_delete` | Soft-delete a quotation |
+
+#### Credit Notes (`credit_note_*`)
+
+Issued to reverse or reduce a previous sale invoice. Status flow: `draft → sent → paid → cancelled`.
+
+| Tool | What it does |
+|---|---|
+| `credit_note_list` | List credit notes |
+| `credit_note_get` | Get a single credit note |
+| `credit_note_create` | Create a new credit note |
+| `credit_note_update_status` | Advance status |
+| `credit_note_delete` | Soft-delete |
+
+#### Debit Notes (`debit_note_*`)
+
+Issued to increase a previous purchase bill or to request additional payment. Status flow: `draft → sent → paid → cancelled`.
+
+| Tool | What it does |
+|---|---|
+| `debit_note_list` | List debit notes |
+| `debit_note_get` | Get a single debit note |
+| `debit_note_create` | Create a new debit note |
+| `debit_note_update_status` | Advance status |
+| `debit_note_delete` | Soft-delete |
+
+#### Delivery Challans (`delivery_challan_*`)
+
+Accompanying documents for goods in transit, before an invoice is raised. Status flow: `draft → sent → cancelled`.
+
+| Tool | What it does |
+|---|---|
+| `delivery_challan_list` | List delivery challans |
+| `delivery_challan_get` | Get a single challan |
+| `delivery_challan_create` | Create a new challan |
+| `delivery_challan_update_status` | Advance status |
+| `delivery_challan_delete` | Soft-delete |
+
+#### Proforma Invoices (`proforma_*`)
+
+Pre-invoice documents used to request advance payment or as a formal quotation. Status flow: `draft → sent → cancelled`.
+
+| Tool | What it does |
+|---|---|
+| `proforma_list` | List proforma invoices |
+| `proforma_get` | Get a single proforma |
+| `proforma_create` | Create a new proforma invoice |
+| `proforma_update_status` | Advance status |
+| `proforma_delete` | Soft-delete |
+
+#### Sales Returns (`sales_return_*`)
+
+Documents recording goods returned by customers. Status flow: `draft → sent → cancelled`.
+
+| Tool | What it does |
+|---|---|
+| `sales_return_list` | List sales returns |
+| `sales_return_get` | Get a single sales return |
+| `sales_return_create` | Create a new sales return |
+| `sales_return_update_status` | Advance status |
+| `sales_return_delete` | Soft-delete |
+
+#### Purchase Returns (`purchase_return_*`)
+
+Documents recording goods returned to suppliers. Status flow: `draft → sent → cancelled`.
+
+| Tool | What it does |
+|---|---|
+| `purchase_return_list` | List purchase returns |
+| `purchase_return_get` | Get a single purchase return |
+| `purchase_return_create` | Create a new purchase return |
+| `purchase_return_update_status` | Advance status |
+| `purchase_return_delete` | Soft-delete |
+
+**Common `create` input** (same schema for all document types):
+```typescript
+{
+  party_id: string;                // customer or supplier UUID
+  type: "sale" | "purchase";
+  line_items: Array<{
+    description: string;
+    quantity: string;              // decimal string e.g. "5.000"
+    unit_price: string;            // decimal string e.g. "200.00"
+    tax_percent?: string;          // default "0"
+    discount_percent?: string;
+    item_id?: string;              // optional link to inventory item
+  }>;
+  document_date?: string;          // ISO 8601, defaults to today
+  due_date?: string;
+  notes?: string;
+  terms_and_conditions?: string;
+  reference_document_id?: string;  // source document UUID (e.g. when converting)
+}
+```
+
+---
+
+### Tenant / Team Management
+
+Manage the organization (tenant) and its members. Tenant tools operate at the organization level, above individual businesses. The `FINTRANZACT_TENANT_ID` environment variable determines which tenant is active.
+
+#### `tenant_list`
+
+List all organizations the current user belongs to. Returns each tenant's UUID, name, slug, plan, and the user's role in it.
+
+**Input:** `{}` (no parameters)
+
+#### `tenant_members`
+
+List all members of the current tenant. Returns each member's user ID, name, email, role, and when they joined.
+
+**Input:** `{}` (no parameters)
+
+#### `tenant_invite_member`
+
+Invite a user to join the current tenant by email address. Requires admin or owner role. The invitation link is valid for 7 days.
+
+Available roles:
+- `admin` — full access to all businesses and settings
+- `seller_manager` — manage the sales team and see all invoices
+- `seller` — create invoices and record payments
+- `accountant` — read-only access to reports and ledgers
+
+**Input:**
+```typescript
+{
+  email: string; // email address to invite
+  role: "admin" | "seller_manager" | "seller" | "accountant"; // default "seller"
+}
+```
+
+#### `tenant_remove_member`
+
+Remove a member from the current tenant. Requires admin or owner role. The removed user loses access to all businesses within this tenant immediately. You cannot remove yourself or a superadmin/owner.
+
+**Input:** `{ user_id: string }` — use `tenant_members` to find user UUIDs.
+
+#### `tenant_update_member_role`
+
+Change the role of an existing tenant member. Requires admin or owner role.
+
+**Input:**
+```typescript
+{
+  user_id: string;
+  role: "admin" | "seller_manager" | "seller" | "accountant";
+}
+```
+
+#### `tenant_pending_invitations`
+
+List pending (unaccepted, non-expired) invitations for the current tenant. Returns email, role, inviter name, creation date, and expiry date for each.
+
+**Input:** `{}` (no parameters)
+
+#### `tenant_revoke_invitation`
+
+Revoke a pending invitation by its UUID. Only owners and admins can revoke invitations.
+
+**Input:** `{ invitation_id: string }` — UUID of the invitation to revoke.
+
+---
+
+### Sessions
+
+Manage active user sessions. Useful for security audits and revoking suspicious sessions.
+
+#### `session_list`
+
+List active (or expired) sessions for the current user. Returns session ID, IP address, user agent, creation time, last activity time, expiry, and whether it is the current session.
+
+**Input:** `{ expired?: boolean }` — set `true` to list expired/old sessions instead of active ones. Defaults to `false`.
+
+#### `session_revoke`
+
+Terminate a specific session by ID. Cannot revoke the current session (use logout instead).
+
+**Input:** `{ session_id: string }` — the session ID to revoke.
+
+---
+
+### Business
+
+List and create businesses. These tools operate at the account level — they are not scoped to the active `FINTRANZACT_BUSINESS_ID`. Use them when building agents that manage multiple businesses or that onboard new ones.
+
+#### `business_list`
+
+List all businesses associated with the authenticated account.
+
+**Input:** `{}` (no parameters)
+
+**Output:** Array of business objects, each containing `id`, `name`, `gstin`, `currency`, and `financialYearStart`.
+
+#### `business_create`
+
+Create a new business under the authenticated account.
+
+**Input:**
+```typescript
+{
+  name: string;              // business display name
+  gstin?: string;            // 15-character GST Identification Number
+  address?: string;          // registered address
+  city?: string;
+  state?: string;
+  pincode?: string;
+  phone?: string;
+  email?: string;
+  financialYearStart?: string; // "april" (default) or "january"
+}
+```
+
+**Output:** The newly created business object including its `id`. Pass this `id` as `FINTRANZACT_BUSINESS_ID` to operate on the new business in subsequent tool calls.
+
+**Creating a second business via conversation:**
+```
+You: "I want to set up a second business — Sharma Exports Pvt Ltd, GSTIN 27AABCS1234A1Z9"
+Claude: "Done. Sharma Exports Pvt Ltd has been created (ID: biz_xxxxx).
+         To operate on this business, update FINTRANZACT_BUSINESS_ID in your
+         MCP config and restart the server, or ask me to pass the business
+         ID directly in any tool call."
+```
+
+#### `business_audit_trail`
+
+Query the activity/audit log for the current business. Returns recent actions (invoice creation, payment recording, party updates, etc.) with the user who performed each action and timestamps.
+
+**Input:**
+```typescript
+{
+  page?: number;       // page number, starts at 1 (default: 1)
+  limit?: number;      // items per page, max 100 (default: 50)
+  from_date?: string;  // ISO 8601 datetime — only entries after this time
+  to_date?: string;    // ISO 8601 datetime — only entries before this time
+}
+```
+
+---
+
+### API Keys
+
+Manage long-lived programmatic access credentials (as opposed to session tokens). API keys are suitable for CI/CD pipelines, integrations, and automation bots. Available on paid plans only.
+
+#### `api_key_list`
+
+List all API keys belonging to the current user in the active tenant. Returns display-safe metadata only — never the full key. Check `expiresAt` to find keys that need renewal.
+
+**Input:** `{}` (no parameters)
+
+#### `api_key_create`
+
+Create a new API key. The full key is returned **exactly once** in this response — it is never stored in plain text and cannot be retrieved again. Save it immediately.
+
+**Input:**
+```typescript
+{
+  name: string;         // descriptive name, e.g. "CI/CD Pipeline", "Accounting Bot"
+  expires_at?: string;  // ISO 8601 expiry date — omit for a non-expiring key
+}
+```
+
+**Output:** includes `key` (the full key), `keyPrefix` (for identification), `name`, `expiresAt`, and a `warning` field reminding you to save the key.
+
+#### `api_key_revoke`
+
+Permanently revoke an API key by its ID. Revoked keys stop working immediately. This action cannot be undone.
+
+**Input:** `{ key_id: string }` — use `api_key_list` to find key IDs.
+
+---
+
+## Available Resources
+
+MCP resources are read-only data snapshots that AI agents can load into their context window without making a tool call. Fintranzact exposes the following resources:
+
+| Resource URI | Description |
+|---|---|
+| `business://current` | Active business profile: name, GSTIN, GST registration type, currency, financial year start |
+| `parties://customers` | Top 50 customers sorted by name (includes id, name, phone, outstanding balance) |
+| `parties://suppliers` | Top 50 suppliers sorted by name |
+| `items://inventory` | Up to 100 inventory items with current stock levels, prices, and HSN codes |
+| `invoices://recent` | Last 10 sale invoices (quick status overview) |
+| `dashboard://summary` | Current financial year summary: total sales, receivables, payables, cash position |
+| `bank://accounts` | All bank and cash accounts with current balances |
+| `shipments://recent` | Last 20 shipments with tracking status |
+| `targets://active` | All active sales targets with current progress |
+
+**Tip for AI agent developers:** Load `parties://customers` and `items://inventory` at the start of a conversation to seed the agent's context. This lets Claude resolve "Gupta Enterprises" to the correct party UUID and "Basmati Rice 25kg" to the correct item UUID before calling `invoice_create` — without an extra round-trip tool call.
+
+---
+
+## Security Considerations
+
+**Use a limited-privilege account** — Create a dedicated Fintranzact user account for MCP access with the lowest role needed (e.g. `accountant` for read-only reporting, `seller` for invoice creation). The MCP server inherits the permissions of the authenticated user.
+
+**Token rotation** — The `FINTRANZACT_API_KEY` is a session token with a 30-day expiry. Set a calendar reminder to refresh it before it expires: `fintranzact login && fintranzact whoami --json` to get a new token.
+
+**Do not share tokens** — Each Claude Desktop instance or OpenClaw agent should use its own session token tied to a purpose-specific user account. This makes it possible to revoke one agent's access without affecting others.
+
+**Audit log** — All tool calls made through the MCP server are recorded in Fintranzact's audit log under `x-client-type: mcp`. You can review them under **Settings > Audit Log**.
+
+---
+
+## Related Documentation
+
+- [AI & Automation overview](/help/ai)
+- [CLI Tool](/help/ai/cli)
+- [Integrations](/help/ai/integrations) — WhatsApp, Slack, Google Sheets, Shiprocket, and more
+- [API Reference](/developers)

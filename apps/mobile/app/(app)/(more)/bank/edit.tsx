@@ -102,10 +102,10 @@ export default function BankAccountEditScreen() {
       <SafeAreaView style={s.container} edges={["top"]}>
         <View style={s.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={s.topBarTitle}>Edit Account</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
         <View style={s.centered}>
           <ActivityIndicator color={colors.brand} size="large" />
@@ -119,10 +119,10 @@ export default function BankAccountEditScreen() {
       <SafeAreaView style={s.container} edges={["top"]}>
         <View style={s.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={s.topBarTitle}>Edit Account</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
         <View style={s.centered}>
           <Text style={s.notFoundText}>Account not found.</Text>
@@ -135,10 +135,10 @@ export default function BankAccountEditScreen() {
     <SafeAreaView style={s.container} edges={["top"]}>
       <View style={s.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={s.topBarTitle}>Edit Account</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -268,9 +268,9 @@ const useS = makeStyles((colors) => ({
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

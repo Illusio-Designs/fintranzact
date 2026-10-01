@@ -1,0 +1,138 @@
+---
+title: How Stock Moves
+description: Which Fintranzact documents change your stock and when — invoices, delivery challans, GRNs and returns — what happens on edit, cancel and delete, the warehouse picker, and the negative stock setting.
+sidebar:
+  order: 6
+---
+
+import { ForCA } from "@/components/help/mdx";
+import { ForBusiness } from "@/components/help/mdx";
+
+You never type stock numbers by hand. Stock goes up and down as you create documents. This page explains exactly which documents move stock, when, and how Fintranzact stops you from selling what you don't have.
+
+## Which documents move stock
+
+| Document | Stock | Warehouse used by default |
+|---|---|---|
+| **Sale invoice** (including POS, online store orders and automated invoices) | Goes **out** | Sales & delivery challans |
+| **Delivery challan** | Goes **out** | Sales & delivery challans |
+| **Purchase return** | Goes **out** | Purchase returns |
+| **Purchase invoice** (bill) | Comes **in** | Purchases |
+| **Goods receipt note (GRN)** | Comes **in** | Purchases |
+| **Sales return** | Comes **in** | Sales returns |
+| **Credit note**, **debit note** | No change | — |
+| **Quotation**, **proforma invoice**, **sales order**, **purchase order** | No change | — |
+
+Other screens that move stock are [stock transfers](/help/inventory/stock-transfers), [stock adjustments](/help/inventory/stock-adjustments), [physical stock counts](/help/inventory/physical-stock) and [manufacturing](/help/inventory/manufacturing).
+
+A few details:
+
+- **Stock moves as soon as the document is saved, including drafts.** A new document starts as a draft, and a draft invoice or challan already takes the goods out. Marking it Sent doesn't move stock again.
+- **Units are converted.** Selling 2 boxes of an item tracked in pieces (1 box = 12 pcs) takes out 24 pcs. See [Units & Conversions](/help/items/units-and-conversions).
+- **Lines without an item** (typed-in descriptions) don't move stock.
+- **Free goods move stock.** A line of 10 + 1 free moves 11, though only 10 are billed. See [Free goods](/help/inventory/orders-and-grn).
+- **Goods rejected on a GRN don't.** Only the accepted (and free) quantity comes in; rejected goods stay pending on the purchase order. See [Rejections on goods receipt](/help/inventory/orders-and-grn).
+- **Batches.** For items that [track batches](/help/inventory/batches-and-expiry), each line also names its batch: incoming documents record it, outgoing ones take the batch that expires first unless you pick one. Cancelling, editing and deleting put batch stock back exactly like the rest of your stock.
+
+:::note[Credit and debit notes don't move stock]
+Credit and debit notes are money-only documents, for price corrections, discounts or extra charges. When goods physically come back from a customer, create a **sales return**. When you send goods back to a supplier, create a **purchase return**. Returns move the stock; notes don't.
+:::
+
+### Challans and GRNs are not counted twice
+
+A delivery challan takes stock out when the goods leave. When you later convert that challan into an invoice, the **invoice does not take the stock out again**. In the same way, a GRN brings stock in when goods arrive, and the purchase invoice made from it doesn't add them again.
+
+This only works when the invoice is made **from** the challan or GRN, using **Convert**. If you type a fresh invoice for goods that already went out on a challan, the stock is taken out twice. See [Orders & GRN](/help/inventory/orders-and-grn).
+
+A challan or GRN that has been billed can't be cancelled or deleted while its invoice stands. You see "Invoice … was billed from this document. Cancel or delete that invoice first."
+
+## Editing, cancelling and deleting
+
+Fintranzact always keeps a document's stock in line with its current lines and status.
+
+| You... | Stock |
+|---|---|
+| **Edit** the quantities, items or warehouse | Only the difference is posted. Change 10 to 12 and 2 more go out. Change the warehouse and the stock moves from the old warehouse to the new one. |
+| **Cancel** a document | The stock comes back, as if the document never happened. |
+| **Reinstate** a cancelled document | The stock moves again. |
+| **Delete** a document | The stock comes back. Deleting a document that was already cancelled doesn't return it twice. |
+
+A paid invoice can't be edited ("Cannot edit a paid invoice. Remove payments first."). In the web app, **Delete** is available on draft (and unfulfilled) documents, and only owners and admins can delete. A seller manager can delete an unpaid invoice within 2 hours of creating it.
+
+:::note
+The web app doesn't have a **Cancel** button on documents today. Documents can be cancelled and reinstated through the Fintranzact API.
+:::
+
+<ForCA>
+Stock movements from edits, cancellations and deletions are dated on the day the change is made, not on the document date. When you review stock for a past date, a correction made later shows up on the day it was made.
+</ForCA>
+
+## Choosing the warehouse on a document
+
+Once your business has **two or more active warehouses**, documents that move stock show a warehouse picker below the party and date:
+
+- **Dispatch from** on sale invoices, delivery challans and purchase returns.
+- **Receive into** on purchase invoices, GRNs and sales returns.
+
+A new document starts with the [default warehouse](/help/inventory/warehouses) for its type, marked **(default)**. Change it if the goods are going from, or to, a different place. The warehouse applies to the whole document, not line by line. If you need goods from two godowns on one bill, first [transfer](/help/inventory/stock-transfers) them into one.
+
+With only one active warehouse there's no picker; everything uses that warehouse. Inactive warehouses can't be picked.
+
+When you convert an order into a challan, GRN or invoice, the **Convert pending items** dialog has the same picker. If you leave it blank, the default is used.
+
+## Selling more than you have
+
+What should happen when a bill would take stock below zero? You decide, on **Inventory → Warehouses**, in the settings card under **Selling more than you have**. Only owners and admins can change it.
+
+| Option | What happens |
+|---|---|
+| **Allow** | Stock can go below zero without a warning. |
+| **Warn** (default) | Entry forms flag a shortfall, but saving still works. |
+| **Block** | Documents that would take a warehouse below zero can't be saved. |
+
+The check is **per warehouse**. Having 50 in the godown doesn't help a bill dispatched from the shop, which has 5.
+
+### The shortfall warning
+
+On sale invoices, delivery challans and purchase returns, if any line needs more than the chosen warehouse has, a box appears above the lines:
+
+- **Warn**: an amber box, "Not enough stock — saving will take it below zero".
+- **Block**: a red box, "Not enough stock — this can't be saved until the quantities fit".
+
+When there are several warehouses, the box names the warehouse ("… at Pune godown"). Below it, one line per item shows what's available and what's needed, for example "Basmati Rice 25 kg: 8 available, 10 needed". Quantities are in the item's base unit. When you edit a document, the stock it already holds is counted as available.
+
+Under **Block**, trying to save shows an error listing each short item, and nothing is saved. Reduce the quantity, pick another warehouse, or record the purchase first.
+
+The **Block** setting applies to documents you create, edit or reinstate, and to [manufacturing](/help/inventory/manufacturing). It doesn't apply to:
+
+- online store orders, automated (recurring) invoices and imports. These record what happened even if stock goes negative.
+- cancelling or deleting a purchase invoice, GRN or sales return.
+
+:::note[Transfers and adjustments never go below zero]
+Separately from this setting, [stock transfers](/help/inventory/stock-transfers) and the [Stock Adjustments](/help/inventory/stock-adjustments) page never let a warehouse go below zero, even with **Allow**.
+:::
+
+<ForBusiness>
+**Warn** suits most shops: billing never stops at the counter, and the amber warning tells you that your stock records need attention (a purchase not yet entered, or a count that's off). Choose **Block** once your stock is accurate and you want to be sure no one bills goods you don't have.
+</ForBusiness>
+
+## Service items
+
+Services (installation, delivery charges, consulting) have no stock. They're left out of the shortfall warning, the Block check, stock reports and valuation.
+
+## Frequently asked questions
+
+**I deleted an invoice. Did the stock come back?**
+Yes. Deleting or cancelling a document returns its stock, and reinstating a cancelled document takes it again.
+
+**Why didn't my invoice reduce stock?**
+Check whether it was made from a delivery challan. The challan already took the stock out, so the invoice doesn't do it again. Also check that the lines are linked to items and are not just typed descriptions.
+
+**Why did stock drop when I only saved a draft?**
+Drafts move stock the same way as sent documents. If you're only quoting a price, use a quotation, which never moves stock.
+
+**Why don't I see the warehouse picker?**
+It appears only when you have two or more active warehouses, and only on documents that move stock.
+
+**Does a credit note for returned goods add the stock back?**
+No. Use a sales return for goods coming back. Credit notes only adjust the amount.

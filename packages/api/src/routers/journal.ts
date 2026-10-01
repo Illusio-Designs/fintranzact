@@ -12,6 +12,7 @@ import {
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
+import { withAudit } from "../lib/audit.js";
 
 export const journalRouter = router({
   list: viewerProcedure
@@ -41,12 +42,12 @@ export const journalRouter = router({
           createdAt: journalEntries.createdAt,
           updatedAt: journalEntries.updatedAt,
           lineCount: sql<number>`(
-            SELECT COUNT(*) FROM journal_entry_lines
-            WHERE journal_entry_id = ${journalEntries.id}
+            SELECT COUNT(*)::int FROM journal_entry_lines
+            WHERE journal_entry_lines.journal_entry_id = journal_entries.id
           )`,
           totalAmount: sql<string>`(
             SELECT COALESCE(SUM(debit::numeric), 0)::text FROM journal_entry_lines
-            WHERE journal_entry_id = ${journalEntries.id}
+            WHERE journal_entry_lines.journal_entry_id = journal_entries.id
           )`,
         })
         .from(journalEntries)
@@ -97,7 +98,7 @@ export const journalRouter = router({
 
   create: adminProcedure
     .input(createJournalEntrySchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "Account");
 
       // Verify all account IDs belong to this business
@@ -160,11 +161,11 @@ export const journalRouter = router({
       });
 
       return entry;
-    }),
+    }, (r) => ({ action: "journal.create", entityType: "journalEntry", entityId: r.id, metadata: { entryNumber: r.entryNumber } }))),
 
   update: adminProcedure
     .input(updateJournalEntrySchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Account");
 
       const [existing] = await ctx.db
@@ -259,11 +260,11 @@ export const journalRouter = router({
       });
 
       return updated;
-    }),
+    }, (_r, input) => ({ action: "journal.update", entityType: "journalEntry", entityId: input.id }))),
 
   void: adminProcedure
     .input(voidJournalEntrySchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Account");
 
       const [existing] = await ctx.db
@@ -355,11 +356,11 @@ export const journalRouter = router({
       });
 
       return result;
-    }),
+    }, (r, input) => [{ action: "journal.void", entityType: "journalEntry", entityId: input.id, metadata: { reversingEntryId: r.reversingEntry.id } }, { action: "journal.create", entityType: "journalEntry", entityId: r.reversingEntry.id, metadata: { entryNumber: r.reversingEntry.entryNumber, reverses: input.id } }])),
 
   delete: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "Account");
 
       const [existing] = await ctx.db
@@ -388,7 +389,7 @@ export const journalRouter = router({
         );
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "journal.delete", entityType: "journalEntry", entityId: input.id }))),
 
   // ── Template endpoints ──────────────────────────────────────
 
@@ -418,7 +419,7 @@ export const journalRouter = router({
 
   templateCreate: adminProcedure
     .input(createJournalEntryTemplateSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "Account");
 
       // Verify all account IDs belong to this business
@@ -450,11 +451,11 @@ export const journalRouter = router({
         .returning();
 
       return template;
-    }),
+    }, (r) => ({ action: "journal.templateCreate", entityType: "journalEntryTemplate", entityId: r.id, metadata: { name: r.name } }))),
 
   templateDelete: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "Account");
 
       const [existing] = await ctx.db
@@ -482,7 +483,7 @@ export const journalRouter = router({
         );
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "journal.templateDelete", entityType: "journalEntryTemplate", entityId: input.id }))),
 
   createFromTemplate: adminProcedure
     .input(z.object({
@@ -496,7 +497,7 @@ export const journalRouter = router({
         narration: z.string().max(500).optional(),
       })).optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "Account");
 
       // Fetch template
@@ -593,5 +594,5 @@ export const journalRouter = router({
       });
 
       return entry;
-    }),
+    }, (r, input) => ({ action: "journal.create", entityType: "journalEntry", entityId: r.id, metadata: { entryNumber: r.entryNumber, templateId: input.templateId } }))),
 });

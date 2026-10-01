@@ -1,0 +1,57 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { cspDirectives, inlineScriptHashes } from "@/lib/csp-hash";
+
+const sha = (s: string) => `sha256-${createHash("sha256").update(s).digest("base64")}`;
+
+describe("inlineScriptHashes", () => {
+  it("hashes the exact body of inline scripts and skips external ones", () => {
+    const html = `<head><script src="https://x.test/a.js" async></script><script>
+  var a = 1;
+</script><script type="module">b()</script></head>`;
+    expect(inlineScriptHashes(html)).toEqual([sha("\n  var a = 1;\n"), sha("b()")]);
+  });
+
+  // Regression: the CSP hash was hard-coded in vite.config.ts and went stale,
+  // so browsers blocked the theme script on every page.
+  it("covers the theme script in index.html", () => {
+    const html = readFileSync(path.resolve(__dirname, "../../index.html"), "utf-8");
+    const start = html.indexOf("<script>", html.indexOf("turnstile")) + "<script>".length;
+    const body = html.slice(start, html.indexOf("</script>", start));
+    expect(body).toContain("fintranzact-theme");
+    expect(inlineScriptHashes(html)).toContain(sha(body));
+  });
+});
+
+describe("cspDirectives", () => {
+  const directive = (name: string, isDev: boolean) =>
+    cspDirectives({ isDev, apiOrigin: "https://api.example.test", inlineScriptSources: "'sha256-x'" }).find((d) =>
+      d.startsWith(`${name} `),
+    );
+
+  // Regression: frame-src allowed only Turnstile, so the POS receipt (a PDF
+  // loaded into a hidden iframe from a blob: URL) was refused and never printed.
+  it("lets the POS receipt PDF load in a blob: iframe, in dev and in a build", () => {
+    for (const isDev of [true, false]) {
+      expect(directive("frame-src", isDev)?.split(" ")).toEqual(expect.arrayContaining(["blob:", "https://challenges.cloudflare.com"]));
+    }
+  });
+
+  it("allows the API origin to be called directly", () => {
+    expect(directive("connect-src", false)).toBe("connect-src 'self' https://api.example.test");
+    expect(directive("connect-src", true)).toBe("connect-src 'self' ws: https://api.example.test");
+  });
+
+  // Regression: img-src allowed only 'self', so with the API on its own
+  // origin the business logo / signature images (served by the API) were
+  // refused and Settings showed a broken image.
+  it("lets images served by the API origin load", () => {
+    for (const isDev of [true, false]) {
+      expect(directive("img-src", isDev)).toBe("img-src 'self' data: blob: https://api.example.test");
+    }
+    const sameOrigin = cspDirectives({ isDev: false, apiOrigin: null, inlineScriptSources: "" });
+    expect(sameOrigin).toContain("img-src 'self' data: blob:");
+  });
+});

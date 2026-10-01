@@ -55,7 +55,7 @@ const paymentMode = z.enum(["cash", "bank", "upi", "cheque", "other", "credit_ca
 const unit = z.enum(["pcs", "kg", "g", "l", "ml", "m", "cm", "ft", "in", "box", "dozen", "pair", "set", "pkt", "bun", "pouch", "jar", "btl", "bag", "ton", "pack", "pet", "person", "other"]);
 const itemType = z.enum(["product", "service"]);
 const itemMode = z.enum(["simple", "alt_units", "variants"]);
-const documentType = z.enum(["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return"]);
+const documentType = z.enum(["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return", "purchase_order", "sales_order", "goods_receipt_note"]);
 const bankAccountType = z.enum(["savings", "current", "cash", "upi", "credit_card", "payment_gateway"]);
 const bankTransactionType = z.enum(["deposit", "withdrawal", "transfer"]);
 const gstRegistrationType = z.enum(["regular", "composition", "unregistered"]);
@@ -112,6 +112,13 @@ export const businessRowSchema = z.object({
   nextPurchaseReturnNumber: z.number().int(),
   deliveryChallanPrefix: z.string(),
   nextDeliveryChallanNumber: z.number().int(),
+  // Added with purchase/sales orders and GRNs; older exports lack them.
+  purchaseOrderPrefix: z.string().optional(),
+  nextPurchaseOrderNumber: z.number().int().optional(),
+  salesOrderPrefix: z.string().optional(),
+  nextSalesOrderNumber: z.number().int().optional(),
+  goodsReceiptNotePrefix: z.string().optional(),
+  nextGoodsReceiptNoteNumber: z.number().int().optional(),
   proformaPrefix: z.string(),
   nextProformaNumber: z.number().int(),
   financialYearStart: z.number().int(),
@@ -158,6 +165,18 @@ export const partyRowSchema = z.object({
   pan: z.string().nullable(),
   billingAddress: z.string().nullable(),
   shippingAddress: z.string().nullable(),
+  // Optional so backups made before extra shipping addresses still import.
+  additionalShippingAddresses: z
+    .array(z.object({
+      label: z.string().optional(),
+      address: z.string(),
+      city: z.string().optional(),
+      state: z.string().optional(),
+      stateCode: z.string().optional(),
+      pincode: z.string().optional(),
+    }))
+    .nullable()
+    .optional(),
   city: z.string().nullable(),
   state: z.string().nullable(),
   stateCode: z.string().nullable(),
@@ -242,6 +261,15 @@ export const eInvoiceConfigRowSchema = z.object({
   updatedAt: isoDatetime,
 });
 
+export const stockGroupRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  name: z.string(),
+  parentId: uuidNullable,
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
 export const itemRowSchema = z.object({
   id: uuid,
   businessId: uuid,
@@ -260,7 +288,12 @@ export const itemRowSchema = z.object({
   description: z.string().nullable(),
   itemType: itemType,
   category: z.string().nullable(),
+  // Absent in archives exported before stock groups existed.
+  stockGroupId: uuidNullable.optional(),
   taxInclusive: z.boolean(),
+  // Absent in archives exported before batch tracking existed.
+  trackBatches: z.boolean().optional(),
+  trackExpiry: z.boolean().optional(),
   source: z.string().nullable(),
   storeEnabled: z.boolean(),
   storePrice: money2Nullable,
@@ -286,6 +319,19 @@ export const itemVariantRowSchema = z.object({
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
   deletedAt: isoDatetimeNullable,
+});
+
+export const itemBatchRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  itemId: uuid,
+  variantId: uuidNullable,
+  batchNumber: z.string(),
+  mfgDate: z.string().nullable(),
+  expiryDate: z.string().nullable(),
+  mrp: money2Nullable,
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
 });
 
 export const salesTargetRowSchema = z.object({
@@ -360,6 +406,13 @@ export const invoiceItemRowSchema = z.object({
   selectedUnit: z.string().nullable(),
   conversionFactor: factor104Nullable,
   variantId: uuidNullable,
+  // Added with free quantities and GRN rejections; archives from before
+  // them have neither.
+  freeQuantity: money3.default("0"),
+  rejectedQuantity: money3.default("0"),
+  rejectionReason: z.string().nullable().default(null),
+  // Absent in archives exported before batch tracking existed.
+  batchId: uuidNullable.optional(),
 });
 
 export const paymentRowSchema = z.object({
@@ -751,8 +804,10 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   bank_statement_templates: bankStatementTemplateRowSchema,
   payment_gateway_configs: paymentGatewayConfigRowSchema,
   e_invoice_configs: eInvoiceConfigRowSchema,
+  stock_groups: stockGroupRowSchema,
   items: itemRowSchema,
   item_variants: itemVariantRowSchema,
+  item_batches: itemBatchRowSchema,
   sales_targets: salesTargetRowSchema,
   invoices: invoiceRowSchema,
   invoice_items: invoiceItemRowSchema,

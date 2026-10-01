@@ -3,13 +3,17 @@
  * Used by both the scheduler (automatic) and the "runNow" manual trigger.
  */
 
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
+import { withAllocatedLines } from "./document-totals.js";
 import {
-  invoices, invoiceItems, items, itemVariants, businesses, parties,
+  invoices, invoiceItems, items, businesses, parties,
   recurringInvoiceTemplates, recurringInvoiceRuns,
 } from "@fintranzact/db";
 import { calcLineItem, calcInvoiceTotals } from "@fintranzact/shared";
+import { documentIsIntraState } from "./document-totals.js";
 import type { TenantDatabase } from "../trpc.js";
+import { documentStockDirection, resolveDocumentWarehouseId, syncDocumentStock } from "./inventory-service.js";
+import { resolveLineBatches } from "./batches.js";
 
 interface TemplateRow {
   id: string;
@@ -41,13 +45,22 @@ interface TemplateRow {
   createdByUserId: string | null;
 }
 
-/** Advance a date by N months, clamping to the last day of the target month. */
+const IST_OFFSET_MS = 330 * 60_000;
+
+/**
+ * Advance a date by N months on the Indian calendar, clamping to the last day
+ * of the target month. The calendar is India's whatever the server's time
+ * zone: a run due 1 Oct 00:00 IST (30 Sep 18:30 UTC) is next due on 1 Nov,
+ * not on 31 Oct as the UTC calendar would have it.
+ */
 function addMonthsClamped(d: Date, months: number): void {
-  const originalDay = d.getDate();
-  d.setDate(1); // avoid day overflow skipping months
-  d.setMonth(d.getMonth() + months);
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  d.setDate(Math.min(originalDay, lastDay));
+  const ist = new Date(d.getTime() + IST_OFFSET_MS);
+  const originalDay = ist.getUTCDate();
+  ist.setUTCDate(1); // avoid day overflow skipping months
+  ist.setUTCMonth(ist.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth() + 1, 0)).getUTCDate();
+  ist.setUTCDate(Math.min(originalDay, lastDay));
+  d.setTime(ist.getTime() - IST_OFFSET_MS);
 }
 
 /** Calculate the next run date after a given date based on frequency. */
@@ -119,13 +132,27 @@ export async function generateInvoiceFromTemplate(
       .set({ nextInvoiceNumber: biz.nextNum + 1 })
       .where(eq(businesses.id, template.businessId));
 
+    // Lines of batch-tracked items take stock first-expiry-first-out.
+    const stockDoc = { documentType: "invoice", type: template.type };
+    const lineItems = await resolveLineBatches(tx, {
+      businessId: template.businessId,
+      lines: template.lineItems,
+      direction: documentStockDirection(stockDoc),
+      warehouseId: await resolveDocumentWarehouseId(tx, { businessId: template.businessId, doc: stockDoc }),
+      documentDate: new Date(),
+      strict: false,
+    });
+
+    // Intra-state: CGST and SGST are each rounded at half the rate.
+    const intraState = await documentIsIntraState(tx, template.businessId, template.partyId);
     // Calculate line item totals
-    const processedItems = template.lineItems.map((li, idx) => {
+    const processedItems = lineItems.map((li, idx) => {
       const calc = calcLineItem({
         quantity: li.quantity,
         unitPrice: li.unitPrice,
         taxPercent: li.taxPercent || "0",
         discountPercent: li.discountPercent || "0",
+        intraState,
       });
       return {
         itemId: li.itemId || null,
@@ -141,25 +168,27 @@ export async function generateInvoiceFromTemplate(
         selectedUnit: li.selectedUnit || null,
         conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
         variantId: li.variantId || null,
+        batchId: li.batchId,
       };
     });
 
     const charges = template.charges ?? [];
+    // A flat additionalCharges (no itemised charges) counts in the total too.
+    const flatCharges = charges.length > 0 ? charges : [{ amount: template.additionalCharges || "0" }];
     const totals = calcInvoiceTotals({
-      lineItems: template.lineItems.map((li) => ({
+      lineItems: lineItems.map((li) => ({
         quantity: li.quantity,
         unitPrice: li.unitPrice,
         taxPercent: li.taxPercent || "0",
         discountPercent: li.discountPercent || "0",
       })),
-      charges: charges.length > 0 ? charges : undefined,
+      charges: flatCharges,
       invoiceDiscount: "0",
       invoiceDiscountType: "amount",
       roundOff: "0",
+      intraState,
     });
-    const additionalCharges = charges.length > 0
-      ? totals.chargesTotal
-      : (template.additionalCharges || "0");
+    const additionalCharges = totals.chargesTotal;
 
     // Create invoice
     const [invoice] = await tx.insert(invoices).values({
@@ -180,34 +209,21 @@ export async function generateInvoiceFromTemplate(
       termsAndConditions: template.termsAndConditions,
       createdByUserId: template.createdByUserId,
       source: "recurring",
+      stockMode: "tracked",
     }).returning();
 
     if (processedItems.length > 0) {
       await tx.insert(invoiceItems).values(
-        processedItems.map((li) => ({ ...li, invoiceId: invoice.id }))
+        withAllocatedLines(processedItems, totals.lines).map((li) => ({ ...li, invoiceId: invoice.id }))
       );
     }
 
-    // Update stock per line item using PostgreSQL NUMERIC arithmetic
-    // to avoid JS floating-point drift in intermediate accumulation
-    for (const li of template.lineItems) {
-      if (li.variantId) {
-        await tx.update(itemVariants).set({
-          stockQuantity: template.type === "sale"
-            ? sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`
-            : sql`${itemVariants.stockQuantity}::numeric + ${li.quantity}::numeric`,
-          updatedAt: new Date(),
-        }).where(eq(itemVariants.id, li.variantId));
-      } else if (li.itemId) {
-        const cf = li.conversionFactor || "1";
-        await tx.update(items).set({
-          stockQuantity: template.type === "sale"
-            ? sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`
-            : sql`${items.stockQuantity}::numeric + (${li.quantity}::numeric * ${cf}::numeric)`,
-          updatedAt: new Date(),
-        }).where(eq(items.id, li.itemId));
-      }
-    }
+    await syncDocumentStock(tx, {
+      businessId: template.businessId,
+      documentId: invoice.id,
+      event: "CREATE",
+      actorUserId: template.createdByUserId,
+    });
 
     // Record execution
     const [run] = await tx.insert(recurringInvoiceRuns).values({

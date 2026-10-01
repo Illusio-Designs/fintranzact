@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { trpc } from "../../../src/lib/trpc";
+import { useIntraState } from "../../../src/hooks/useIntraState";
 import { formatCurrency } from "../../../src/lib/utils";
 import { calcInvoiceTotals } from "@fintranzact/shared";
 import { makeStyles } from "../../../src/lib/makeStyles";
@@ -343,6 +344,8 @@ export default function InvoiceEditScreen() {
   );
 
   const [selectedParty, setSelectedParty] = useState<{ id: string; name: string } | null>(null);
+  // Intra-state: CGST and SGST each rounded at half the rate, as the server saves it.
+  const intraState = useIntraState(selectedParty?.id);
   const [invoiceDate, setInvoiceDate] = useState(new Date());
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [notes, setNotes] = useState("");
@@ -413,8 +416,9 @@ export default function InvoiceEditScreen() {
         taxPercent: li.taxPercent || "0",
         discountPercent: li.discountPercent || "0",
       })),
+      intraState,
     });
-  }, [lineItems]);
+  }, [lineItems, intraState]);
 
   const handleLineChange = useCallback(
     (index: number, field: keyof LineItem, value: string) => {
@@ -532,7 +536,7 @@ export default function InvoiceEditScreen() {
       {/* Header */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.topBarCenter}>
           <Text style={styles.topBarTitle}>Edit Invoice</Text>
@@ -545,7 +549,7 @@ export default function InvoiceEditScreen() {
           activeOpacity={0.8}
         >
           {updateMutation.isPending ? (
-            <ActivityIndicator size="small" color={colors.textPrimary} />
+            <ActivityIndicator size="small" color={colors.onBrand} />
           ) : (
             <Text style={styles.saveBtnText}>Save</Text>
           )}
@@ -694,9 +698,9 @@ const useStyles = makeStyles((colors) => ({
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -715,7 +719,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: "center",
   },
   saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
+  saveBtnText: { fontSize: 15, fontWeight: "700", color: colors.onBrand },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
   sectionLabel: {

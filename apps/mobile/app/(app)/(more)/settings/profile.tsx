@@ -216,10 +216,10 @@ export default function ProfileScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Profile</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         </View>
         <QueryError message="Failed to load profile" onRetry={refetch} />
       </SafeAreaView>
@@ -230,10 +230,10 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Profile</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView
@@ -285,7 +285,7 @@ export default function ProfileScreen() {
               activeOpacity={0.8}
             >
               {updateNameMutation.isPending ? (
-                <ActivityIndicator color={colors.textPrimary} size="small" />
+                <ActivityIndicator color={colors.onBrand} size="small" />
               ) : (
                 <Text style={styles.actionBtnText}>Update Name</Text>
               )}
@@ -340,7 +340,7 @@ export default function ProfileScreen() {
                   activeOpacity={0.8}
                 >
                   {requestEmailChangeMutation.isPending ? (
-                    <ActivityIndicator color={colors.textPrimary} size="small" />
+                    <ActivityIndicator color={colors.onBrand} size="small" />
                   ) : (
                     <Text style={styles.actionBtnText}>Send Verification</Text>
                   )}
@@ -506,7 +506,16 @@ const useStyles = makeStyles((colors) => ({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: { fontSize: 20, fontWeight: "700", color: colors.textPrimary },
   content: { padding: 16, paddingBottom: 48 },
 
@@ -596,7 +605,7 @@ const useStyles = makeStyles((colors) => ({
     flex: 1,
   },
   actionBtnText: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
     fontWeight: "700",
     fontSize: 14,
   },

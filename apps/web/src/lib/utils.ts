@@ -109,6 +109,9 @@ export function getDocumentTypeLabel(type: string): string {
     proforma: "Proforma Invoice",
     sales_return: "Sales Return",
     purchase_return: "Purchase Return",
+    purchase_order: "Purchase Order",
+    sales_order: "Sales Order",
+    goods_receipt_note: "Goods Receipt Note",
   };
   return labels[type] || type;
 }
@@ -123,6 +126,9 @@ export function getDocumentTypeColor(type: string): string {
     proforma: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400",
     sales_return: "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-400",
     purchase_return: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400",
+    purchase_order: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-400",
+    sales_order: "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-400",
+    goods_receipt_note: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
   };
   return colors[type] || "bg-surface-2 text-text-secondary";
 }

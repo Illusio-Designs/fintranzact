@@ -5,6 +5,9 @@
  *   gst_report     — generate GSTR1 or GSTR3B summary data for a given month/year
  *   gst_report_csv — get GSTR-1 data in CSV format ready for portal upload
  *   gst_gstr9      — GSTR-9 annual return summary
+ *   gst_cmp08      — CMP-08 quarterly return for composition dealers
+ *   gst_hsn_search — find HSN / SAC codes by code prefix or description words
+ *   gst_hsn_check  — check an HSN / SAC code and get what it stands for
  *
  * Note: PDF generation is intentionally excluded. AI agents cannot consume
  * binary content in tool responses. The JSON report is designed to let agents
@@ -13,12 +16,12 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { HisaaboClient } from "../client.js";
+import type { FintranzactClient } from "../client.js";
 import { wrapTool } from "../lib/errors.js";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-export function registerGstTools(server: McpServer, client: HisaaboClient) {
+export function registerGstTools(server: McpServer, client: FintranzactClient) {
 
   server.tool(
     "gst_report_csv",
@@ -109,6 +112,63 @@ export function registerGstTools(server: McpServer, client: HisaaboClient) {
           text: JSON.stringify(result, null, 2),
         }],
       };
+    })
+  );
+
+  server.tool(
+    "gst_cmp08",
+    [
+      "Get the CMP-08 quarterly statement for a composition-scheme business:",
+      "outward supplies (sales net of credit notes and returns) and the tax payable for the quarter.",
+      "Quarters follow the financial year: Q1 = Apr–Jun, Q2 = Jul–Sep, Q3 = Oct–Dec, Q4 = Jan–Mar.",
+    ].join(" "),
+    {
+      financial_year: z.string().regex(/^\d{4}-\d{2}$/)
+        .describe("Financial year in YYYY-YY format, e.g. '2025-26'."),
+      quarter: z.number().int().min(1).max(4).describe("Financial-year quarter, 1–4."),
+    },
+    wrapTool(async (input) => {
+      const result = await client.gst.cmp08({ year: Number(input.financial_year.slice(0, 4)), quarter: input.quarter });
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(result, null, 2),
+        }],
+      };
+    })
+  );
+
+  server.tool(
+    "gst_hsn_search",
+    [
+      "Find HSN (goods) and SAC (services) codes in the CBIC HSN / SAC list.",
+      "Pass digits to match codes starting with them (e.g. '3004'), or words that must all appear in the description (e.g. 'paracetamol tablets').",
+      "Use it to pick the right code for an item before creating or updating it.",
+    ].join(" "),
+    {
+      query: z.string().min(1).max(50).describe("Code prefix or description words."),
+      type: z.enum(["goods", "services"]).optional().describe("Only HSN goods codes or only SAC service codes."),
+      limit: z.number().int().min(1).max(50).optional().describe("How many results (default 20)."),
+    },
+    wrapTool(async (input) => {
+      const result = await client.gst.hsnSearch(input);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "gst_hsn_check",
+    [
+      "Check whether an HSN / SAC code is a real GST code (4–8 digits: a listed code or the heading of listed codes)",
+      "and return what it stands for: goods or services, and its description.",
+      "Item create and update refuse codes that fail this check.",
+    ].join(" "),
+    {
+      hsn: z.string().min(2).max(8).describe("The HSN or SAC code, e.g. '30041010' or '998713'."),
+    },
+    wrapTool(async (input) => {
+      const result = await client.gst.hsnValidate(input);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     })
   );
 }

@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { cn, formatCurrency, formatDate, formatDateInput, toISOString, toISOStringEndOfDay, todayISODate } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
@@ -16,7 +17,6 @@ import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Download04Icon, PencilEdit02Icon, StarIcon } from "@hugeicons/core-free-icons";
 import { Pagination } from "@/components/ui/Pagination";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { useDebounce } from "@/hooks/useDebounce";
 import { toast } from "@/hooks/useToast";
 import { getDatePreset } from "@/hooks/useDateRange";
@@ -38,7 +38,7 @@ function CashAndBankPage() {
   const [selectedUntracked, setSelectedUntracked] = useState<Set<string>>(new Set());
   const [selectAllMatching, setSelectAllMatching] = useState(false); // true = all across ALL pages
   const [assignAccountId, setAssignAccountId] = useState<string | null>(null);
-  const [untrackedSearch, setUntrackedSearch] = useState("");
+  const [untrackedSearch] = usePageSearch("Search party or payment #…");
   const [untrackedMode, setUntrackedMode] = useState("");
   const [untrackedPage, setUntrackedPage] = useState(1);
   const debouncedUntrackedSearch = useDebounce(untrackedSearch, 300);
@@ -261,7 +261,7 @@ function CashAndBankPage() {
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatCard
           size="md"
           label="Total Balance"
@@ -281,9 +281,9 @@ function CashAndBankPage() {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left: Account list */}
-        <div className="col-span-4">
+        <div className="min-w-0 md:col-span-4">
           <div className="card overflow-hidden">
             <div
               className="px-4 py-3 flex items-center justify-between border-b border-border-light"
@@ -310,7 +310,7 @@ function CashAndBankPage() {
                   <div key={account.id} className="relative group">
                     <button
                       className={cn(
-                        "w-full px-4 py-3 text-left transition-colors",
+                        "w-full px-4 py-3 text-left transition-colors [@media(hover:none)]:pr-10",
                         selectedAccountId === account.id
                           ? "bg-brand-600/[0.08] border-l-2 border-brand-600"
                           : "hover:bg-surface-1"
@@ -343,12 +343,12 @@ function CashAndBankPage() {
                     </button>
                     {/* Edit button — always available on hover */}
                     <button
-                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition"
+                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition"
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditAccountId(account.id);
                       }}
-                      aria-label="Edit account"
+                      aria-label={`Edit ${account.accountName}`}
                     >
                       <Icon icon={PencilEdit02Icon} size={14} />
                     </button>
@@ -360,7 +360,7 @@ function CashAndBankPage() {
         </div>
 
         {/* Right: Transactions */}
-        <div className="col-span-8">
+        <div className="min-w-0 md:col-span-8">
           {selectedAccountId ? (
             <div className="card overflow-hidden">
               <div
@@ -578,12 +578,6 @@ function CashAndBankPage() {
 
           {/* Filters row */}
           <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <SearchInput
-              value={untrackedSearch}
-              onChange={setUntrackedSearch}
-              placeholder="Search party or payment #..."
-              className="max-w-xs"
-            />
             <PillTabs
               tabs={[
                 { value: "cash", label: "Cash" },
@@ -1034,6 +1028,7 @@ function EditAccountSlideOver({
           <div>
             <p className="label">Account Type</p>
             <Listbox
+              ariaLabel="Account Type"
               value={accountType}
               onChange={(val) => setAccountType(val)}
               options={ACCOUNT_TYPE_OPTIONS}
@@ -1366,6 +1361,7 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
         <div>
           <p className="label">Account Type</p>
           <Listbox
+            ariaLabel="Account Type"
             value={accountType}
             onChange={(val) => setAccountType(val)}
             options={ACCOUNT_TYPE_OPTIONS}

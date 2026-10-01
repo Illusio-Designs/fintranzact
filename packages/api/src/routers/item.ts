@@ -6,10 +6,85 @@ import { createItemSchema, updateItemSchema, paginationSchema, itemTypes, itemMo
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
-import { logAudit } from "../lib/audit.js";
+import { audited, logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
-import { ensureDefaultWarehouse } from "../lib/inventory-service.js";
+import { documentStockDirection, ensureDefaultWarehouse, recordOpeningStock, updateStockBalance } from "../lib/inventory-service.js";
 import { applyStockAdjustment } from "./stock.js";
+import { findOrCreateBatch } from "../lib/batches.js";
+import { groupSubtreeSql, resolveItemGroup } from "../lib/stock-groups.js";
+import { hsnProblem } from "../lib/hsn-data.js";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Tx = any;
+
+type NewVariant = z.infer<typeof itemVariantSchema>;
+
+/**
+ * Insert variants with zero stock, then record each one's opening stock as a
+ * movement so the warehouse balance and the variant total agree.
+ */
+async function insertVariants(
+  tx: Tx,
+  input: { businessId: string; itemId: string; variants: NewVariant[]; actorUserId: string },
+) {
+  const created: Array<typeof itemVariants.$inferSelect> = [];
+  for (const v of input.variants) {
+    const [variant] = await tx.insert(itemVariants).values({
+      itemId: input.itemId,
+      attributeValues: v.attributeValues,
+      sku: v.sku || null,
+      barcode: v.barcode?.trim() || null,
+      salePrice: v.salePrice || null,
+      purchasePrice: v.purchasePrice || null,
+      mrp: v.mrp || null,
+      stockQuantity: "0",
+      lowStockAlert: v.lowStockAlert || null,
+    }).returning();
+    await recordOpeningStock(tx, {
+      businessId: input.businessId,
+      itemId: input.itemId,
+      variantId: variant.id,
+      quantity: v.stockQuantity,
+      actorUserId: input.actorUserId,
+    });
+    created.push({ ...variant, stockQuantity: v.stockQuantity || "0" });
+  }
+  return created;
+}
+
+/**
+ * Set an item's or variant's stock to a new total by posting the difference
+ * as a stock adjustment, so editing the number on the item form still leaves
+ * a trail and keeps warehouse balances in step.
+ */
+async function setStockTotal(
+  tx: Tx,
+  input: {
+    businessId: string;
+    itemId: string;
+    variantId?: string | null;
+    current: string;
+    target: string;
+    user: { id: string; name: string | null };
+    /** Receives the ids of the stock adjustments written (for the audit log). */
+    collect?: string[];
+  },
+) {
+  const delta = Math.round((parseFloat(input.target) - parseFloat(input.current)) * 1000) / 1000;
+  if (delta === 0) return;
+  const settings = await ensureDefaultWarehouse(tx, input.businessId);
+  await applyStockAdjustment(tx, {
+    businessId: input.businessId,
+    warehouseId: (settings.stockAdjustmentWarehouseId ?? settings.salesWarehouseId) as string,
+    itemId: input.itemId,
+    variantId: input.variantId,
+    quantity: delta,
+    reason: "Stock edited on item",
+    date: new Date(),
+    user: input.user,
+    collect: input.collect,
+  });
+}
 
 export const itemRouter = router({
   list: viewerProcedure
@@ -19,6 +94,8 @@ export const itemRouter = router({
       itemType: z.enum(itemTypes).nullish(),
       itemMode: z.enum(itemModes).nullish(),
       category: z.string().nullish(),
+      // A group and everything under it, or "none" for items in no group.
+      stockGroupId: z.union([z.string().uuid(), z.literal("none")]).nullish(),
       ...paginationSchema.shape,
     }))
     .query(async ({ input, ctx }) => {
@@ -42,6 +119,11 @@ export const itemRouter = router({
       }
       if (input.category) {
         conditions.push(eq(items.category, input.category));
+      }
+      if (input.stockGroupId === "none") {
+        conditions.push(isNull(items.stockGroupId));
+      } else if (input.stockGroupId) {
+        conditions.push(sql`${items.stockGroupId} IN ${groupSubtreeSql(input.stockGroupId)}`);
       }
 
       const offset = (input.page - 1) * input.limit;
@@ -151,9 +233,13 @@ export const itemRouter = router({
 
   create: memberProcedure.input(createItemSchema).mutation(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "Item");
-    const { variants: initialVariants, ...itemData } = input;
+    const { variants: initialVariants, stockGroupId, category, openingBatch, ...itemData } = input;
+    // Expiry is tracked per batch, so it only means something with batches.
+    itemData.trackExpiry = !!itemData.trackBatches && !!itemData.trackExpiry;
+    assertHsn(itemData.hsn);
 
     return ctx.db.transaction(async (tx) => {
+      const group = await resolveItemGroup(tx, ctx.businessId, { stockGroupId, category });
       // A code scans to exactly one item, variant or extra code.
       const newCodes = [itemData.barcode, ...(initialVariants ?? []).map((v) => v.barcode)]
         .map((c) => c?.trim())
@@ -163,28 +249,44 @@ export const itemRouter = router({
       }
       for (const code of newCodes) await assertCodeFree(tx, ctx.businessId, code, {});
 
-      const [item] = await tx.insert(items).values({
+      const [inserted] = await tx.insert(items).values({
         ...itemData,
+        ...group,
+        // Opening stock is recorded as a movement below, which sets the total.
+        stockQuantity: "0",
         // Blank means "no barcode". Storing "" instead of NULL would make
         // every barcode-less item collide on the partial unique index.
         barcode: itemData.barcode?.trim() || null,
         businessId: ctx.businessId,
       }).returning();
 
+      // Opening stock of a batch-tracked item goes into the batch given for it.
+      const opening = inserted.trackBatches && openingBatch && parseFloat(itemData.stockQuantity || "0") > 0
+        ? await findOrCreateBatch(tx, {
+            businessId: ctx.businessId,
+            itemId: inserted.id,
+            itemName: inserted.name,
+            ...openingBatch,
+            requireExpiry: inserted.trackExpiry,
+          })
+        : null;
+      await recordOpeningStock(tx, {
+        businessId: ctx.businessId,
+        itemId: inserted.id,
+        batchId: opening?.id ?? null,
+        quantity: itemData.stockQuantity,
+        actorUserId: ctx.user.id,
+      });
+      const item = { ...inserted, stockQuantity: itemData.stockQuantity || "0" };
+
       // Create initial variants if provided
       if (input.itemMode === "variants" && initialVariants && initialVariants.length > 0) {
-        await tx.insert(itemVariants).values(
-          initialVariants.map((v) => ({
-            itemId: item.id,
-            attributeValues: v.attributeValues,
-            sku: v.sku || null,
-            barcode: v.barcode || null,
-            salePrice: v.salePrice || null,
-            purchasePrice: v.purchasePrice || null,
-            stockQuantity: v.stockQuantity || "0",
-            lowStockAlert: v.lowStockAlert || null,
-          }))
-        );
+        await insertVariants(tx, {
+          businessId: ctx.businessId,
+          itemId: item.id,
+          variants: initialVariants,
+          actorUserId: ctx.user.id,
+        });
       }
 
       if (input.itemMode === "variants") {
@@ -262,14 +364,18 @@ export const itemRouter = router({
 
         // Move old base unit to variants (with reverse conversion factor)
         const existingVariants = (item.unitVariants as any[] || []);
+        // A unit variant's conversionFactor is how many BASE units one of it
+        // holds (UnitVariantEditor "Direction A"; stock = qty × factor). One
+        // old base unit is `factor` new base units, so every alternate unit
+        // now holds `factor` times as many base units as before.
         // Remove the new unit from variants if it was already there
-        const filteredVariants = existingVariants.filter(
-          (v: any) => v.unit.toLowerCase() !== input.newUnit.toLowerCase()
-        );
+        const filteredVariants = existingVariants
+          .filter((v: any) => v.unit.toLowerCase() !== input.newUnit.toLowerCase())
+          .map((v: any) => ({ ...v, conversionFactor: v.conversionFactor * factor }));
         // Add old base unit as a variant
         const oldBaseAsVariant = {
           unit: oldUnit,
-          conversionFactor: 1 / factor, // 1 old unit = 1/factor of the new base
+          conversionFactor: factor, // 1 old unit = factor new base units
           salePrice: oldSalePrice || "0",
           purchasePrice: oldPurchasePrice || undefined,
         };
@@ -286,15 +392,26 @@ export const itemRouter = router({
           updatedAt: new Date(),
         }).where(eq(items.id, input.id)).returning();
 
-        // Update conversionFactor on all existing invoice line items for this item
-        // Old line items were in the old unit. Now base is new unit.
-        // If a line item had conversionFactor=1 (was in old base), it should now be 1/factor
-        // If it had a custom factor, multiply by 1/factor
+        // Existing invoice lines keep their quantity in the unit they were
+        // billed in; their conversion factor (base units per that unit) grows
+        // by `factor` like the unit variants above, and a line billed in the
+        // old base unit now names it. Warehouse balances and movement history
+        // are in base units too.
+        await tx.execute(sql`
+          UPDATE stock_balances SET quantity = ROUND(quantity::numeric * ${factor}, 3), updated_at = NOW()
+          WHERE business_id = ${ctx.businessId} AND item_id = ${input.id} AND variant_id IS NULL
+        `);
+        await tx.execute(sql`
+          UPDATE stock_movements SET quantity = ROUND(quantity::numeric * ${factor}, 3)
+          WHERE business_id = ${ctx.businessId} AND item_id = ${input.id} AND variant_id IS NULL
+        `);
+
         await tx.execute(sql`
           UPDATE invoice_items SET
-            conversion_factor = COALESCE(conversion_factor, 1) * ${(1 / factor).toFixed(6)}
+            conversion_factor = COALESCE(conversion_factor, 1)::numeric * ${factor},
+            selected_unit = COALESCE(selected_unit, ${oldUnit})
           WHERE item_id = ${input.id}
-            AND (selected_unit IS NULL OR selected_unit = ${oldUnit})
+            AND variant_id IS NULL
             AND invoice_id IN (SELECT id FROM invoices WHERE business_id = ${ctx.businessId})
         `);
 
@@ -324,25 +441,55 @@ export const itemRouter = router({
       // Active-mutation contract: a soft-deleted item cannot be edited via
       // the public API. Re-activation would require an explicit restore
       // endpoint, which is deferred per FIXES.md.
-      const [item] = await ctx.db.update(items)
-        .set({
-          ...input.data,
-          // Same NULL-vs-"" rule as create; only touched when supplied.
-          ...(input.data.barcode !== undefined
-            ? { barcode: input.data.barcode?.trim() || null }
-            : {}),
-          updatedAt: new Date(),
-        })
-        .where(and(
-          eq(items.id, input.id),
-          eq(items.businessId, ctx.businessId),
-          isNull(items.deletedAt),
-        ))
-        .returning();
+      const { stockQuantity, stockGroupId, category, openingBatch: _openingBatch, ...data } = input.data;
+      const adjustmentIds: string[] = [];
+      const item = await ctx.db.transaction(async (tx) => {
+        const [before] = await tx.select({ stockQuantity: items.stockQuantity, trackBatches: items.trackBatches, hsn: items.hsn })
+          .from(items)
+          .where(and(
+            eq(items.id, input.id),
+            eq(items.businessId, ctx.businessId),
+            isNull(items.deletedAt),
+          ))
+          .for("update")
+          .limit(1);
+        if (!before) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Item not found" });
+        }
+        // Only a changed code is checked, so items saved before HSN checks
+        // existed stay editable.
+        if (data.hsn !== undefined && data.hsn.trim() !== (before.hsn ?? "").trim()) assertHsn(data.hsn);
 
-      if (!item) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Item not found" });
-      }
+        if (stockQuantity !== undefined) {
+          await setStockTotal(tx, {
+            businessId: ctx.businessId,
+            itemId: input.id,
+            current: before.stockQuantity,
+            target: stockQuantity,
+            user: { id: ctx.user.id, name: ctx.user.name },
+            collect: adjustmentIds,
+          });
+        }
+
+        // Expiry is tracked per batch, so it only means something with batches.
+        if (data.trackBatches === false) data.trackExpiry = false;
+        else if (data.trackExpiry && !(data.trackBatches ?? before.trackBatches)) data.trackExpiry = false;
+
+        const group = await resolveItemGroup(tx, ctx.businessId, { stockGroupId, category });
+        const [updated] = await tx.update(items)
+          .set({
+            ...data,
+            ...group,
+            // Same NULL-vs-"" rule as create; only touched when supplied.
+            ...(data.barcode !== undefined
+              ? { barcode: data.barcode?.trim() || null }
+              : {}),
+            updatedAt: new Date(),
+          })
+          .where(and(eq(items.id, input.id), eq(items.businessId, ctx.businessId)))
+          .returning();
+        return updated;
+      });
 
       logAudit(ctx.db, {
         businessId: ctx.businessId,
@@ -350,7 +497,7 @@ export const itemRouter = router({
         action: "item.update",
         entityType: "item",
         entityId: item.id,
-        metadata: { name: item.name },
+        metadata: { name: item.name, ...(adjustmentIds.length ? { adjustmentIds } : {}) },
         ipAddress: ctx.ipAddress,
       });
 
@@ -574,6 +721,7 @@ export const itemRouter = router({
             eq(invoiceItems.itemId, input.id),
             eq(invoices.businessId, ctx.businessId),
             eq(invoices.documentType, "invoice"),
+            isNull(invoices.deletedAt),
           )
         )
         .orderBy(desc(invoices.invoiceDate))
@@ -606,18 +754,15 @@ export const itemRouter = router({
             eq(invoiceItems.itemId, input.id),
             eq(invoices.businessId, ctx.businessId),
             sql`${invoices.status} NOT IN ('draft', 'cancelled')`,
-            sql`${invoices.documentType} NOT IN ('credit_note', 'quotation', 'proforma', 'debit_note')`,
+            sql`${invoices.documentType} NOT IN ('credit_note', 'quotation', 'proforma', 'debit_note', 'sales_order', 'purchase_order')`,
           )
         )
         .orderBy(desc(invoices.invoiceDate))
         .limit(50);
 
-      // Annotate direction: returns reverse the normal flow
-      // sale → out, purchase → in, but sales_return/purchase_return flip it
+      // Annotate direction the same way the document moves stock.
       return rows.map((r) => {
-        const isReturn = ["sales_return", "purchase_return"].includes(r.documentType);
-        const baseSaleOutflow = r.invoiceType === "sale" || r.documentType === "delivery_challan";
-        const isOutflow = isReturn ? !baseSaleOutflow : baseSaleOutflow;
+        const isOutflow = documentStockDirection({ documentType: r.documentType, type: r.invoiceType }) === -1;
         return {
           ...r,
           direction: isOutflow ? "out" as const : "in" as const,
@@ -650,6 +795,7 @@ export const itemRouter = router({
             and(
               eq(invoiceItems.itemId, input.id),
               eq(invoices.businessId, ctx.businessId),
+              isNull(invoices.deletedAt),
             )
           )
           .orderBy(invoices.id, desc(invoices.invoiceDate))
@@ -662,6 +808,7 @@ export const itemRouter = router({
             and(
               eq(invoiceItems.itemId, input.id),
               eq(invoices.businessId, ctx.businessId),
+              isNull(invoices.deletedAt),
             )
           ),
       ]);
@@ -690,7 +837,10 @@ export const itemRouter = router({
             eq(invoiceItems.itemId, input.id),
             eq(invoices.businessId, ctx.businessId),
             eq(invoices.documentType, "invoice"),
+            // Buyers: what the party bought from us, not what it sold us.
+            eq(invoices.type, "sale"),
             sql`${invoices.status} != 'cancelled'`,
+            isNull(invoices.deletedAt),
           )
         )
         .groupBy(invoices.partyId, parties.name, parties.type)
@@ -741,16 +891,12 @@ export const itemRouter = router({
       if (input.variant.barcode?.trim()) {
         await assertCodeFree(ctx.db, ctx.businessId, input.variant.barcode.trim(), {});
       }
-      const [variant] = await ctx.db.insert(itemVariants).values({
+      const [variant] = await ctx.db.transaction((tx) => insertVariants(tx, {
+        businessId: ctx.businessId,
         itemId: input.itemId,
-        attributeValues: input.variant.attributeValues,
-        sku: input.variant.sku || null,
-        barcode: input.variant.barcode || null,
-        salePrice: input.variant.salePrice || null,
-        purchasePrice: input.variant.purchasePrice || null,
-        stockQuantity: input.variant.stockQuantity || "0",
-        lowStockAlert: input.variant.lowStockAlert || null,
-      }).returning();
+        variants: [input.variant],
+        actorUserId: ctx.user.id,
+      }));
 
       logAudit(ctx.db, {
         businessId: ctx.businessId,
@@ -778,6 +924,7 @@ export const itemRouter = router({
         variantId: itemVariants.id,
         itemId: itemVariants.itemId,
         businessId: items.businessId,
+        stockQuantity: itemVariants.stockQuantity,
       }).from(itemVariants)
         .innerJoin(items, eq(items.id, itemVariants.itemId))
         .where(and(
@@ -803,13 +950,28 @@ export const itemRouter = router({
       }
       if (input.data.salePrice !== undefined) updates.salePrice = input.data.salePrice || null;
       if (input.data.purchasePrice !== undefined) updates.purchasePrice = input.data.purchasePrice || null;
-      if (input.data.stockQuantity !== undefined) updates.stockQuantity = input.data.stockQuantity;
+      if (input.data.mrp !== undefined) updates.mrp = input.data.mrp || null;
       if (input.data.lowStockAlert !== undefined) updates.lowStockAlert = input.data.lowStockAlert || null;
 
-      const [variant] = await ctx.db.update(itemVariants)
-        .set(updates)
-        .where(and(eq(itemVariants.id, input.variantId), isNull(itemVariants.deletedAt)))
-        .returning();
+      const adjustmentIds: string[] = [];
+      const variant = await ctx.db.transaction(async (tx) => {
+        if (input.data.stockQuantity !== undefined) {
+          await setStockTotal(tx, {
+            businessId: ctx.businessId,
+            itemId: existing.itemId,
+            variantId: input.variantId,
+            current: existing.stockQuantity,
+            target: input.data.stockQuantity,
+            user: { id: ctx.user.id, name: ctx.user.name },
+            collect: adjustmentIds,
+          });
+        }
+        const [updated] = await tx.update(itemVariants)
+          .set(updates)
+          .where(and(eq(itemVariants.id, input.variantId), isNull(itemVariants.deletedAt)))
+          .returning();
+        return updated;
+      });
 
       logAudit(ctx.db, {
         businessId: ctx.businessId,
@@ -817,7 +979,7 @@ export const itemRouter = router({
         action: "item.updateVariant",
         entityType: "itemVariant",
         entityId: input.variantId,
-        metadata: { variantId: input.variantId },
+        metadata: { variantId: input.variantId, ...(adjustmentIds.length ? { adjustmentIds } : {}) },
         ipAddress: ctx.ipAddress,
       });
 
@@ -904,19 +1066,12 @@ export const itemRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "The same barcode is used twice" });
       }
       for (const code of bulkCodes) await assertCodeFree(ctx.db, ctx.businessId, code, {});
-      const created = await ctx.db.insert(itemVariants).values(
-        input.variants.map((v) => ({
-          itemId: input.itemId,
-          attributeValues: v.attributeValues,
-          sku: v.sku || null,
-          barcode: v.barcode || null,
-          salePrice: v.salePrice || null,
-          purchasePrice: v.purchasePrice || null,
-          stockQuantity: v.stockQuantity || "0",
-          lowStockAlert: v.lowStockAlert || null,
-        }))
-      ).returning();
-      return created;
+      return ctx.db.transaction((tx) => insertVariants(tx, {
+        businessId: ctx.businessId,
+        itemId: input.itemId,
+        variants: input.variants,
+        actorUserId: ctx.user.id,
+      }));
     }),
 
   // Suggest potential merge candidates — items with similar name prefixes
@@ -1057,6 +1212,7 @@ export const itemRouter = router({
         if (!target.hsn && source.hsn) updates.hsn = source.hsn;
         if (!target.sku && source.sku) updates.sku = source.sku;
         if (!target.category && source.category) updates.category = source.category;
+        if (!target.stockGroupId && source.stockGroupId) updates.stockGroupId = source.stockGroupId;
         if (!target.description && source.description) updates.description = source.description;
         if (!target.purchasePrice && source.purchasePrice) updates.purchasePrice = source.purchasePrice;
         if (!target.lowStockAlert && source.lowStockAlert) updates.lowStockAlert = source.lowStockAlert;
@@ -1071,6 +1227,34 @@ export const itemRouter = router({
         }
 
         await tx.update(items).set(updates).where(eq(items.id, input.targetId));
+
+        // Warehouse stock and movement history follow the invoice lines to the
+        // target, converted to its units, so documents re-linked above still
+        // net correctly against their movements.
+        const factor = input.stockConversionFactor;
+        const sourceBalances = await tx.execute(sql`
+          SELECT warehouse_id, location_id, ROUND(quantity::numeric * ${factor}, 3)::text AS quantity
+          FROM stock_balances
+          WHERE business_id = ${ctx.businessId} AND item_id = ${input.sourceId} AND variant_id IS NULL
+        `) as unknown as Array<{ warehouse_id: string; location_id: string | null; quantity: string }>;
+        for (const b of sourceBalances) {
+          await updateStockBalance(tx, {
+            businessId: ctx.businessId,
+            warehouseId: b.warehouse_id,
+            locationId: b.location_id,
+            itemId: input.targetId,
+            variantId: null,
+          }, b.quantity);
+        }
+        await tx.execute(sql`
+          DELETE FROM stock_balances
+          WHERE business_id = ${ctx.businessId} AND item_id = ${input.sourceId} AND variant_id IS NULL
+        `);
+        await tx.execute(sql`
+          UPDATE stock_movements
+          SET item_id = ${input.targetId}, quantity = ROUND(quantity::numeric * ${factor}, 3)
+          WHERE business_id = ${ctx.businessId} AND item_id = ${input.sourceId} AND variant_id IS NULL
+        `);
 
         // Soft-delete the source item. Any invoice line item that was
         // re-linked above now points at the target; anything that wasn't
@@ -1092,6 +1276,8 @@ export const itemRouter = router({
     .input(z.object({
       itemId: z.string().uuid(),
       variantId: z.string().uuid().nullish(),
+      // Batch the stock goes into or comes out of (items that track batches).
+      batchId: z.string().uuid().nullish(),
       quantity: z.string().regex(/^-?\d+(\.\d{1,3})?$/).refine((v) => parseFloat(v) !== 0, { message: "Quantity cannot be zero" }),
       reason: z.string().max(500).optional(),
       adjustmentDate: z.string().datetime().optional(),
@@ -1101,19 +1287,25 @@ export const itemRouter = router({
 
       // Goes through the warehouse-aware path so the item total, the default
       // adjustment warehouse's balance and the adjustment log stay in step.
-      return ctx.db.transaction(async (tx) => {
+      const adjustmentIds: string[] = [];
+      return audited(ctx, () => ctx.db.transaction(async (tx) => {
         const settings = await ensureDefaultWarehouse(tx, ctx.businessId);
         return applyStockAdjustment(tx, {
           businessId: ctx.businessId,
           warehouseId: (settings.stockAdjustmentWarehouseId ?? settings.salesWarehouseId) as string,
           itemId: input.itemId,
           variantId: input.variantId,
+          batchId: input.batchId,
           quantity: parseFloat(input.quantity),
           reason: input.reason || null,
           date: input.adjustmentDate ? new Date(input.adjustmentDate) : new Date(),
           user: { id: ctx.user!.id, name: ctx.user!.name },
+          collect: adjustmentIds,
         });
-      });
+      }), () => adjustmentIds.map((id) => ({
+        action: "item.adjustStock", entityType: "stockAdjustment", entityId: id,
+        metadata: { itemId: input.itemId, quantity: input.quantity, reason: input.reason ?? null },
+      })));
     }),
 
   stockAdjustmentHistory: viewerProcedure
@@ -1175,3 +1367,9 @@ export const itemRouter = router({
     return itemResult.count + variantResult.count;
   }),
 });
+
+/** Refuse an HSN / SAC code that is malformed or not a real GST code. */
+function assertHsn(code: string | null | undefined): void {
+  const problem = code ? hsnProblem(code) : null;
+  if (problem) throw new TRPCError({ code: "BAD_REQUEST", message: problem });
+}

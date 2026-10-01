@@ -2,7 +2,7 @@ import { eq, and, sql, desc, gte, lte, inArray, count, getTableColumns } from "d
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { ensureDefaultWarehouse } from "../lib/inventory-service.js";
-import { backfillLegacyBusinessMembers } from "../lib/business-membership.js";
+import { backfillLegacyBusinessMembers, verifyBusinessAccess } from "../lib/business-membership.js";
 import {
   businesses,
   businessMembers,
@@ -22,7 +22,7 @@ import {
   ewayBillConfigs,
 } from "@fintranzact/db";
 import { createBusinessSchema, updateBusinessSchema, updateSequenceNumberSchema, uploadBusinessLogoSchema, uploadBusinessSignatureSchema } from "@fintranzact/shared";
-import { router, tenantProcedure, viewerProcedure, adminProcedure } from "../trpc.js";
+import { router, tenantProcedure, viewerProcedure, adminProcedure, type TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { validateLogoDataUrl } from "../lib/validate-logo.js";
@@ -35,6 +35,20 @@ import {
   encryptEwbConfig,
 } from "../lib/field-encryption.js";
 
+
+/**
+ * A business row as the client may receive it: the logo and signature bytes
+ * (bytea) are served by /api/businesses/:id/{logo,signature}, never in JSON.
+ * A bytea column travels as a superjson Buffer, which the browser cannot
+ * rebuild, so a response carrying one fails on the client — once a business
+ * had a logo, every Settings save looked like it did nothing.
+ */
+function withoutImageBytes<T extends { logoData?: unknown; signatureData?: unknown }>(
+  biz: T,
+): Omit<T, "logoData" | "signatureData"> {
+  const { logoData: _logoData, signatureData: _signatureData, ...rest } = biz;
+  return rest;
+}
 
 /**
  * Persist the per-business compliance portal credentials captured during
@@ -159,10 +173,33 @@ async function requireTenantAdmin(userId: string, tenantId: string) {
   }
 }
 
+/**
+ * Tenant-level procedures take the business id from their input, so the
+ * hasBusinessAccess middleware never saw it. Apply the same rule here: the
+ * business must belong to the caller's organisation and the caller must be a
+ * member of it. "Exists in ctx.db" is not enough — in self-hosted mode every
+ * organisation shares one database, so that alone reaches other orgs'
+ * businesses.
+ */
+async function requireBusinessAccess(
+  ctx: { db: TenantDatabase; tenantId: string; user: { id: string } },
+  businessId: string,
+) {
+  const access = await verifyBusinessAccess(ctx.db, businessId, ctx.tenantId, ctx.user.id);
+  if (!access.ok) {
+    // One answer for "no such business" and "not yours" (as getById always
+    // gave), so other organisations' business ids can't be probed.
+    throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this business" });
+  }
+}
+
 export const businessRouter = router({
   list: tenantProcedure.query(async ({ ctx }) => {
     await backfillLegacyBusinessMembers(ctx.db, ctx.tenantId);
-    const { logoData: _logoData, ...cols } = getTableColumns(businesses);
+    // Image bytes are served by /api/businesses/:id/{logo,signature}, never in
+    // JSON: a bytea column goes over the wire as a superjson Buffer, which the
+    // browser cannot rebuild, so the whole list failed to load on the client.
+    const { logoData: _logoData, signatureData: _signatureData, ...cols } = getTableColumns(businesses);
 
     const rows = await ctx.db
       .select(cols)
@@ -183,6 +220,7 @@ export const businessRouter = router({
     .input(z.object({ businessId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await requireBusinessAccess(ctx, input.businessId);
 
       const rows = await ctx.db
         .select({
@@ -211,20 +249,7 @@ export const businessRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
-
-      // Verify the business exists in this tenant.
-      const [business] = await ctx.db
-        .select({ id: businesses.id })
-        .from(businesses)
-        .where(eq(businesses.id, input.businessId))
-        .limit(1);
-
-      if (!business) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Business not found",
-        });
-      }
+      await requireBusinessAccess(ctx, input.businessId);
 
       // User must already belong to the tenant.
       const [tenantMembership] = await controlDb
@@ -280,6 +305,7 @@ export const businessRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await requireBusinessAccess(ctx, input.businessId);
 
       const [membership] = await ctx.db
         .update(businessMembers)
@@ -307,6 +333,7 @@ export const businessRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await requireBusinessAccess(ctx, input.businessId);
 
       // Prevent removing the last company admin.
       const [target] = await ctx.db
@@ -355,7 +382,7 @@ export const businessRouter = router({
   // Check if more businesses can be created in this tenant (plan limit).
   canCreate: tenantProcedure.query(async ({ ctx }) => {
     const [row] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
-    const limits = getLimits(row?.plan ?? "free");
+    const limits = await getLimits(row?.plan ?? "free");
     if (limits.maxBusinesses === Infinity) return true;
     const [{ count: bizCount }] = await ctx.db.select({ count: count() }).from(businesses);
     return bizCount < limits.maxBusinesses;
@@ -364,26 +391,11 @@ export const businessRouter = router({
   getById: tenantProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
-      await backfillLegacyBusinessMembers(ctx.db, ctx.tenantId);
-      const [membership] = await ctx.db
-        .select({ userId: businessMembers.userId })
-        .from(businessMembers)
-        .where(
-          and(
-            eq(businessMembers.businessId, input.id),
-            eq(businessMembers.userId, ctx.user.id),
-          ),
-        )
-        .limit(1);
+      // Membership alone is not enough in self-hosted mode (one shared
+      // database): the business must also belong to this organisation.
+      await requireBusinessAccess(ctx, input.id);
 
-      if (!membership) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You do not have access to this business",
-        });
-      }
-
-      const { logoData: _logoData, ...cols } = getTableColumns(businesses);
+      const { logoData: _logoData, signatureData: _signatureData, ...cols } = getTableColumns(businesses);
 
       const [biz] = await ctx.db
         .select(cols)
@@ -431,12 +443,19 @@ export const businessRouter = router({
         createdByUserId: ctx.user.id,
       }).returning();
 
-      // Automatically assign the creator as an admin of the new business.
-      await tx.insert(businessMembers).values({
-        businessId: biz.id,
-        userId: ctx.user.id,
-        role: "admin",
-      });
+      // The creator, and every owner/admin of the organisation, can open the
+      // new business. Other members get access only when it is granted.
+      const orgAdmins = await controlDb
+        .select({ userId: tenantMembers.userId })
+        .from(tenantMembers)
+        .where(and(
+          eq(tenantMembers.tenantId, ctx.tenantId),
+          inArray(tenantMembers.role, ["owner", "superadmin", "admin"]),
+        ));
+      const adminIds = new Set([ctx.user.id, ...orgAdmins.map((m) => m.userId)]);
+      await tx.insert(businessMembers).values(
+        [...adminIds].map((userId) => ({ businessId: biz.id, userId, role: "admin" as const })),
+      );
 
       // Every business starts with one "Main" warehouse built from the
       // address given at registration, used for all stock movements.
@@ -458,10 +477,14 @@ export const businessRouter = router({
       // partyId for anonymous retail sales, but cheap enough to always create
       // so offices that later enable POS don't need a separate seeding step.
       // `ensureWalkInParty` mutation covers existing businesses lazily.
+      // Its state is the business's own: an over-the-counter sale is supplied
+      // where the shop is, so GST on it is CGST+SGST, not IGST.
       await tx.insert(parties).values({
         businessId: biz.id,
         type: "customer",
         name: "Walk-in Customer",
+        state: biz.state,
+        stateCode: biz.stateCode,
         openingBalance: "0",
       });
 
@@ -501,6 +524,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), data: updateBusinessSchema }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await requireBusinessAccess(ctx, input.id);
 
       // Encrypt carrier credentials if present in the update payload
       const data = { ...input.data } as Record<string, unknown>;
@@ -560,7 +584,7 @@ export const businessRouter = router({
         ipAddress: ctx.ipAddress,
       });
 
-      return biz;
+      return withoutImageBytes(biz);
     }),
 
   // Upload a business logo. Stored as bytea on the businesses row so it
@@ -576,6 +600,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), data: uploadBusinessLogoSchema }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await requireBusinessAccess(ctx, input.id);
 
       const { bytes, mime: actualMime } = validateLogoDataUrl(input.data.dataUrl);
 
@@ -614,6 +639,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), data: uploadBusinessSignatureSchema }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await requireBusinessAccess(ctx, input.id);
 
       const { bytes, mime: actualMime } = validateLogoDataUrl(input.data.dataUrl);
 
@@ -649,6 +675,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await requireBusinessAccess(ctx, input.id);
 
       const [biz] = await ctx.db
         .update(businesses)
@@ -681,6 +708,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await requireBusinessAccess(ctx, input.id);
 
       const [biz] = await ctx.db
         .update(businesses)
@@ -716,6 +744,7 @@ export const businessRouter = router({
     .input(z.object({ id: z.string().uuid(), enabled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       await requireTenantAdmin(ctx.user.id, ctx.tenantId!);
+      await requireBusinessAccess(ctx, input.id);
 
       const [biz] = await ctx.db
         .update(businesses)
@@ -751,6 +780,10 @@ export const businessRouter = router({
   ensureWalkInParty: tenantProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
+      // tenantProcedure does not check the business; the id comes from the
+      // input, so apply the same rule as getById.
+      await requireBusinessAccess(ctx, input.id);
+
       const [existing] = await ctx.db
         .select({ id: parties.id })
         .from(parties)
@@ -763,12 +796,21 @@ export const businessRouter = router({
 
       if (existing) return { id: existing.id, created: false };
 
+      const [biz] = await ctx.db
+        .select({ state: businesses.state, stateCode: businesses.stateCode })
+        .from(businesses)
+        .where(eq(businesses.id, input.id))
+        .limit(1);
+
       const [created] = await ctx.db
         .insert(parties)
         .values({
           businessId: input.id,
           type: "customer",
           name: "Walk-in Customer",
+          // Over-the-counter sales are supplied in the business's own state.
+          state: biz?.state ?? null,
+          stateCode: biz?.stateCode ?? null,
           openingBalance: "0",
         })
         .returning({ id: parties.id });
@@ -789,6 +831,9 @@ export const businessRouter = router({
         credit_note: "next_credit_note_number",
         delivery_challan: "next_delivery_challan_number",
         proforma: "next_proforma_number",
+        purchase_order: "next_purchase_order_number",
+        sales_order: "next_sales_order_number",
+        goods_receipt_note: "next_goods_receipt_note_number",
       };
 
       const column = counterColumns[input.documentType];

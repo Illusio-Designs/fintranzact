@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, EXIT, success } from "../../output.js";
 
@@ -11,7 +11,7 @@ interface PdfOpts {
 
 export async function invoicePdfCommand(id: string, opts: PdfOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   // First fetch the invoice to get the invoice number
   let invoiceNumber = id;
@@ -64,10 +64,10 @@ export async function invoicePdfCommand(id: string, opts: PdfOpts): Promise<void
     }
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
       if (err.code === "not_found") fatalError(`Invoice not found: ${id}`, EXIT.NOT_FOUND);
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));

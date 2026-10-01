@@ -22,7 +22,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { ewayBills, ewayBillVehicleUpdates } from "@fintranzact/db";
+import { ewayBills, ewayBillVehicleUpdates, businesses } from "@fintranzact/db";
 import {
   createTestWorld,
   createParty,
@@ -38,6 +38,7 @@ import {
   truncateAllTables,
   closeTestDb,
 } from "../helpers/test-db.js";
+import { mapInvoiceToEWB } from "../../lib/invoice-to-ewb.js";
 
 // ── Mock the EWB client ───────────────────────────────────────────────────────
 
@@ -270,6 +271,58 @@ describe("EWB generation", () => {
         distance: 50,
       }),
     ).rejects.toThrow("50,000");
+  });
+
+  describe("business-configured threshold", () => {
+    async function setThreshold(value: string | null) {
+      await getTenantTestDb()
+        .update(businesses)
+        .set({ eWayBillThreshold: value })
+        .where(eq(businesses.id, world.business1.id));
+    }
+
+    afterAll(async () => {
+      await setThreshold(null);
+    });
+
+    // Regression: the router hard-coded ₹50,000 and ignored
+    // businesses.e_way_bill_threshold set from Settings.
+    it("allows EWB below ₹50,000 when the business threshold is lower", async () => {
+      await setThreshold("10000.00");
+      const db = getTenantTestDb();
+      // 200 kg × ₹100 = ₹20,000 (+18% GST) — below ₹50K, above ₹10K
+      const { invoice } = await createInvoiceWithItems(db, world.business1.id, customerParty.id, [
+        { itemId: goodsItem.id, description: "Mid shipment", quantity: "200", unitPrice: "100.00", taxPercent: "18" },
+      ]);
+
+      const ewb = await callerForRamesh().ewayBill.generate({
+        invoiceId: invoice.id,
+        vehicleNumber: "MH12AB7777",
+        vehicleType: "regular",
+        transportMode: "road",
+        distance: 50,
+      });
+      expect(ewb.status).toBe("generated");
+    });
+
+    it("rejects EWB above ₹50,000 when the business threshold is higher", async () => {
+      await setThreshold("100000.00");
+      const db = getTenantTestDb();
+      // 600 kg × ₹100 = ₹60,000 (+18% GST) — above ₹50K, below ₹1L
+      const { invoice } = await createInvoiceWithItems(db, world.business1.id, customerParty.id, [
+        { itemId: goodsItem.id, description: "Big-ish shipment", quantity: "600", unitPrice: "100.00", taxPercent: "18" },
+      ]);
+
+      await expect(
+        callerForRamesh().ewayBill.generate({
+          invoiceId: invoice.id,
+          vehicleNumber: "MH12AB6666",
+          vehicleType: "regular",
+          transportMode: "road",
+          distance: 50,
+        }),
+      ).rejects.toThrow("₹1,00,000 threshold");
+    });
   });
 
   it("prevents duplicate EWB generation for the same invoice", async () => {
@@ -691,5 +744,47 @@ describe("getByInvoice", () => {
 
     const detail = await caller.ewayBill.getByInvoice({ invoiceId: invoice.id });
     expect(detail).toBeNull();
+  });
+});
+
+// ── 7. Payload dates ──────────────────────────────────────────────────────────
+
+describe("mapInvoiceToEWB — document date", () => {
+  // Regression: docDate was read with the server's local-time getters. On a
+  // UTC server an invoice dated 3 Apr (entered in India, so stored as
+  // 2026-04-02T18:30Z) went to NIC as 02/04/2026.
+  it("sends the invoice date as the calendar day in India", () => {
+    const payload = mapInvoiceToEWB(
+      {
+        id: "inv-1",
+        invoiceNumber: "INV-EWB-IST",
+        invoiceDate: new Date("2026-04-03T00:00:00+05:30"),
+        type: "sale",
+        documentType: "invoice",
+        subtotal: "70000.00",
+        taxAmount: "12600.00",
+        totalAmount: "82600.00",
+        isReverseCharge: false,
+        partyGstin: "29AABCG0000R1ZM",
+        partyName: "Buyer",
+        partyAddress: "1 MG Road",
+        partyCity: "Bengaluru",
+        partyPincode: "560001",
+        partyStateCode: "29",
+        businessGstin: "27AABCU9603R1ZM",
+        businessName: "Seller",
+        businessAddress: "2 FC Road",
+        businessCity: "Pune",
+        businessPincode: "411001",
+        businessStateCode: "27",
+      },
+      [{
+        itemName: "Steel", description: null, quantity: "700", unitPrice: "100.00",
+        taxPercent: "18", taxAmount: "12600.00", totalAmount: "82600.00",
+        hsn: "7306", unit: "kg", itemType: "product",
+      }],
+      { vehicleNumber: "MH12AB1234", vehicleType: "regular", transportMode: "road", distance: 800 },
+    );
+    expect(payload.docDate).toBe("03/04/2026");
   });
 });

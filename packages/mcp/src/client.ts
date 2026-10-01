@@ -1,9 +1,9 @@
 /**
- * HisaaboClient — thin fetch wrapper over the tRPC HTTP API.
+ * FintranzactClient — thin fetch wrapper over the tRPC HTTP API.
  *
  * This is an inline copy of the client designed in packages/client (ADR-001).
  * When packages/client is built, this file should be replaced with:
- *   import { HisaaboClient } from "@fintranzact/client";
+ *   import { FintranzactClient } from "@fintranzact/client";
  *
  * The tRPC wire format used here:
  *   - Queries: GET /api/trpc/<path>?input=<superjson-encoded>
@@ -16,34 +16,34 @@ import superjson from "superjson";
 export interface ClientConfig {
   /** Base API URL, e.g. "http://localhost:3000" or the public API URL. */
   apiUrl: string;
-  /** Session ID used as Bearer token — from HISAABO_API_KEY env var */
+  /** Session ID used as Bearer token — from FINTRANZACT_API_KEY env var */
   token: string;
-  /** Tenant (organization) UUID — from HISAABO_TENANT_ID env var */
+  /** Tenant (organization) UUID — from FINTRANZACT_TENANT_ID env var */
   tenantId: string;
-  /** Active business UUID — from HISAABO_BUSINESS_ID env var */
+  /** Active business UUID — from FINTRANZACT_BUSINESS_ID env var */
   businessId: string;
 }
 
 // ── Structured error types ──────────────────────────────────────────────────
 
-export type HisaaboError =
+export type FintranzactError =
   | { code: "unauthorized"; message: string }
   | { code: "forbidden"; message: string }
   | { code: "not_found"; resource: string }
   | { code: "validation_failed"; fields: Record<string, string[]> }
   | { code: "api_error"; message: string };
 
-export class HisaaboApiError extends Error {
-  constructor(public readonly hisaaboError: HisaaboError) {
-    super(formatHisaaboError(hisaaboError));
-    this.name = "HisaaboApiError";
+export class FintranzactApiError extends Error {
+  constructor(public readonly fintranzactError: FintranzactError) {
+    super(formatFintranzactError(fintranzactError));
+    this.name = "FintranzactApiError";
   }
 }
 
-export function formatHisaaboError(err: HisaaboError): string {
+export function formatFintranzactError(err: FintranzactError): string {
   switch (err.code) {
     case "unauthorized":
-      return `Authentication required: ${err.message}. Check that HISAABO_API_KEY is set and not expired.`;
+      return `Authentication required: ${err.message}. Check that FINTRANZACT_API_KEY is set and not expired.`;
     case "forbidden":
       return `Permission denied: ${err.message}`;
     case "not_found":
@@ -62,7 +62,7 @@ export function formatHisaaboError(err: HisaaboError): string {
 
 // ── tRPC error normalization ────────────────────────────────────────────────
 
-function normalizeTrpcError(raw: unknown): HisaaboError {
+function normalizeTrpcError(raw: unknown): FintranzactError {
   if (!raw || typeof raw !== "object") {
     return { code: "api_error", message: "Unknown error from API" };
   }
@@ -91,7 +91,7 @@ function normalizeTrpcError(raw: unknown): HisaaboError {
 
 // ── HTTP client ────────────────────────────────────────────────────────────
 
-export class HisaaboClient {
+export class FintranzactClient {
   /** Base API URL, exposed for tools that need to construct URLs (e.g. PDF download). */
   readonly apiUrl: string;
 
@@ -112,18 +112,18 @@ export class HisaaboClient {
     const body = await res.json() as unknown;
 
     if (typeof body !== "object" || body === null) {
-      throw new HisaaboApiError({ code: "api_error", message: "Unexpected response format from API" });
+      throw new FintranzactApiError({ code: "api_error", message: "Unexpected response format from API" });
     }
 
     const envelope = body as Record<string, unknown>;
 
     if (!res.ok || "error" in envelope) {
-      throw new HisaaboApiError(normalizeTrpcError(envelope["error"] ?? { code: "api_error", message: `HTTP ${res.status}` }));
+      throw new FintranzactApiError(normalizeTrpcError(envelope["error"] ?? { code: "api_error", message: `HTTP ${res.status}` }));
     }
 
     const result = (envelope["result"] as Record<string, unknown> | undefined);
     if (!result) {
-      throw new HisaaboApiError({ code: "api_error", message: "Missing result in API response" });
+      throw new FintranzactApiError({ code: "api_error", message: "Missing result in API response" });
     }
 
     // tRPC batch format wraps in { data: <superjson-value> }
@@ -227,6 +227,12 @@ export class HisaaboClient {
   get item() {
     const c = this;
     return {
+      batches(input: { itemId: string; variantId?: string | null; warehouseId?: string | null; includeEmpty?: boolean }) {
+        return c.query<unknown>("batch.list", input);
+      },
+      batchStock(input: { status?: "all" | "expiring" | "expired"; days?: number; warehouseId?: string | null; itemId?: string | null; search?: string | null }) {
+        return c.query<unknown>("inventoryReports.batchStock", input);
+      },
       list(input: ItemListInput) {
         return c.query<PaginatedResult<ItemSummary>>("item.list", input);
       },
@@ -388,6 +394,21 @@ export class HisaaboClient {
       },
       gstr9(input: { financialYear: string }) {
         return c.query<any>("gst.gstr9", input);
+      },
+      /** CMP-08 for a composition dealer: `year` is the FY start year (2025 for FY 2025-26). */
+      cmp08(input: { year: number; quarter: number }) {
+        return c.query<{ taxableValue: string; taxPayable: string; quarterStart: string; quarterEnd: string }>("gst.cmp08", input);
+      },
+      /** HSN / SAC codes matching a code prefix or description words. */
+      hsnSearch(input: { query: string; type?: "goods" | "services"; limit?: number }) {
+        return c.query<Array<{ hsn: string; description: string; type: "goods" | "services" }>>("hsn.search", input);
+      },
+      /** Whether a code is a real HSN / SAC code, and what it stands for. */
+      hsnValidate(input: { hsn: string }) {
+        return c.query<
+          | { valid: true; details: { code: string; type: "goods" | "services"; description: string; match: "code" | "heading"; subCodes?: number } }
+          | { valid: false }
+        >("hsn.validate", input);
       },
     };
   }

@@ -26,7 +26,7 @@ function VerifyPage() {
     new URLSearchParams(window.location.search).get("source")
   );
   // When the sign-in was initiated from a desktop or mobile client, the
-  // verify page hands off to the native app via the `hisaabo://` scheme
+  // verify page hands off to the native app via the `fintranzact://` scheme
   // instead of consuming the token in the browser. Emails ship the HTTPS
   // URL as the clickable CTA because email clients strip custom URL
   // schemes — see the rationale in packages/api/src/routers/auth.ts
@@ -76,7 +76,7 @@ function VerifyPage() {
     // Tauri/Expo app, which is what they wanted.
     if (source === "desktop" || source === "mobile") {
       setHandoffMode(source);
-      window.location.href = `hisaabo://verify?token=${encodeURIComponent(token)}`;
+      window.location.href = `fintranzact://verify?token=${encodeURIComponent(token)}`;
       return;
     }
 
@@ -85,7 +85,7 @@ function VerifyPage() {
 
   function retryHandoff() {
     if (!token) return;
-    window.location.href = `hisaabo://verify?token=${encodeURIComponent(token)}`;
+    window.location.href = `fintranzact://verify?token=${encodeURIComponent(token)}`;
   }
 
   function verifyInBrowser() {

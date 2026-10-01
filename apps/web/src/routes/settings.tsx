@@ -27,7 +27,9 @@ function SettingsPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState(() => sessionStorage.getItem("settings-tab") || "business");
   const handleTabChange = (t: string) => { setTab(t); sessionStorage.setItem("settings-tab", t); };
-  const { data: businesses, isLoading } = trpc.business.list.useQuery();
+  // Always refetched on opening Settings: the document counters ("Next #")
+  // move with every invoice, payment or order saved elsewhere in the app.
+  const { data: businesses, isLoading } = trpc.business.list.useQuery(undefined, { refetchOnMount: "always" });
   const { data: session } = trpc.auth.me.useQuery();
   const [showWhatsNext, setShowWhatsNext] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -245,7 +247,7 @@ function SettingsPage() {
   return (
     <div>
       <PageHeader title="Settings" description="Manage your business and preferences" />
-      <div className="flex gap-8 mt-2">
+      <div className="flex flex-col gap-2 mt-2 md:flex-row md:gap-8">
         <SettingsNav value={tab} onChange={handleTabChange} role={session?.role} />
         <div className="flex-1 min-w-0">
           {tab === "business" && <BusinessTab biz={biz} />}

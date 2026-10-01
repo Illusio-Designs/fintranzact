@@ -21,6 +21,7 @@ import {
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
+import { LEGAL_ENTITY_NAME, REGISTERED_CITY } from "@/lib/legal";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/about")({
@@ -66,7 +67,10 @@ const WHY: Array<[IconSvgElement, string, string]> = [
 
 function AboutPage() {
   return (
-    <MarketingLayout title="About us">
+    <MarketingLayout
+      title="About us"
+      description="Fintranzact builds GST billing, inventory and accounting software for Indian businesses. Learn who we are and what we believe."
+    >
       <PageHero
         eyebrow="About us"
         title="Your trustable accounting partner"
@@ -90,6 +94,9 @@ function AboutPage() {
                 Today Fintranzact covers the full cycle: quotations and invoices, e-invoicing and e-way bills,
                 payments and bank reconciliation, inventory, reports and an online store. It runs on the web, the
                 desktop and your phone.
+              </p>
+              <p>
+                Fintranzact is built and run by {LEGAL_ENTITY_NAME}, a team based in {REGISTERED_CITY}.
               </p>
             </div>
           </div>

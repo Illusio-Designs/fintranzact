@@ -20,7 +20,7 @@
  */
 
 import type { TenantDatabase } from "@fintranzact/db";
-import { generateGSTR1, generateGSTR3B, type GSTR1Report, type GSTR3BReport } from "./gst-reports.js";
+import { generateGSTR1, generateGSTR3B, type GSTR1Report, type GSTR3BReport, type GstRateLine } from "./gst-reports.js";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -173,31 +173,35 @@ function addRow(a: TaxRow, b: TaxRow): TaxRow {
   };
 }
 
-/** Sum credit notes from a GSTR-1 report into a TaxRow */
-function sumCreditNotes(gstr1: GSTR1Report): TaxRow {
+/** Taxable value of the nil-rated / exempt (0%) lines in a per-rate breakdown. */
+function nilRatedValue(rows: GstRateLine[] | undefined): number {
+  return (rows ?? []).reduce((s, r) => (r.rate === 0 ? s + r.taxableValue : s), 0);
+}
+
+/**
+ * Sum credit or debit notes from a GSTR-1 report into a TaxRow, with the
+ * note's own CGST/SGST/IGST split (an inter-state note is all IGST). Their
+ * 0% lines belong with the nil-rated supplies of Table 5, not Table 4.
+ */
+function sumNotes(notes: GSTR1Report["creditNotes"]): TaxRow {
   const row = zeroRow();
-  for (const cn of gstr1.creditNotes) {
-    const tax = parseFloat(cn.taxAmount);
-    const taxable = parseFloat(cn.taxableAmount);
-    // We don't have per-note CGST/SGST/IGST split stored — use half each as approximation
-    row.taxableValue += taxable;
-    row.cgst += tax / 2;
-    row.sgst += tax / 2;
+  for (const n of notes) {
+    // Notes to small unregistered buyers are already netted into B2CS (4B)
+    if (n.section === "b2cs") continue;
+    row.taxableValue += parseFloat(n.taxableAmount) - nilRatedValue(n.rateItems);
+    row.cgst += n.cgst ?? 0;
+    row.sgst += n.sgst ?? 0;
+    row.igst += n.igst ?? 0;
   }
   return row;
 }
 
-/** Sum debit notes from a GSTR-1 report into a TaxRow */
+function sumCreditNotes(gstr1: GSTR1Report): TaxRow {
+  return sumNotes(gstr1.creditNotes);
+}
+
 function sumDebitNotes(gstr1: GSTR1Report): TaxRow {
-  const row = zeroRow();
-  for (const dn of gstr1.debitNotes) {
-    const tax = parseFloat(dn.taxAmount);
-    const taxable = parseFloat(dn.taxableAmount);
-    row.taxableValue += taxable;
-    row.cgst += tax / 2;
-    row.sgst += tax / 2;
-  }
-  return row;
+  return sumNotes(gstr1.debitNotes);
 }
 
 /** Build GSTR-9 portal JSON (simplified structure for upload) */
@@ -289,7 +293,7 @@ export function gstr9ToPortalJson(
     table4: t4,
     table5: {
       "5A": { txval: 0, iamt: 0, csamt: 0 },
-      "5B": { txval: 0 },
+      "5B": { txval: fmtAmt(report.table5.nilRated.taxableValue) },
       "5D": { txval: 0 },
     },
     table6: t6,
@@ -356,7 +360,8 @@ export async function generateGSTR9(
     // B2B: sum all b2b entries
     for (const inv of gstr1.b2b) {
       t4B2B = addRow(t4B2B, {
-        taxableValue: inv.taxableValue,
+        // Table 4 is taxable supplies: 0% lines are nil-rated (Table 5)
+        taxableValue: inv.taxableValue - nilRatedValue(inv.rateItems),
         cgst: inv.cgst,
         sgst: inv.sgst,
         igst: inv.igst,
@@ -366,8 +371,9 @@ export async function generateGSTR9(
 
     // B2C large: sum by state entries
     for (const entry of gstr1.b2cLarge) {
+      const nil = (entry.invoices ?? []).reduce((s, i) => s + nilRatedValue(i.rateItems), 0);
       t4B2C = addRow(t4B2C, {
-        taxableValue: entry.taxableValue,
+        taxableValue: entry.taxableValue - nil,
         cgst: entry.cgst,
         sgst: entry.sgst,
         igst: entry.igst,
@@ -377,6 +383,7 @@ export async function generateGSTR9(
 
     // B2C small: sum across all tax-rate buckets
     for (const entry of gstr1.b2cSmall) {
+      if (entry.taxRate === 0) continue; // nil-rated: Table 5
       t4B2C = addRow(t4B2C, {
         taxableValue: entry.taxableValue,
         cgst: entry.cgst,
@@ -400,10 +407,16 @@ export async function generateGSTR9(
     debitNotes: t4DebitNotes,
   };
 
-  // Table 5: Tax-exempt supplies — not tracked in current invoice model
+  // Table 5: supplies on which no tax is payable. The invoice model keeps no
+  // exempt / non-GST flag, so 0% supplies — GSTR-3B 3.1(c), net of notes —
+  // are reported as nil-rated.
+  let nilRated = zeroRow();
+  for (const { gstr3b } of monthlyData) {
+    nilRated = addRow(nilRated, { ...zeroRow(), taxableValue: gstr3b.outwardSupplies.exempt.taxableValue });
+  }
   const table5: GSTR9Table5 = {
     zeroRatedWithoutTax: zeroRow(),
-    nilRated: zeroRow(),
+    nilRated,
     nonGst: zeroRow(),
   };
 

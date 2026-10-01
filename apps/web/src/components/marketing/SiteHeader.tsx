@@ -4,21 +4,28 @@ import { IN } from "country-flag-icons/react/3x2";
 import {
   Analytics01Icon,
   ApiIcon,
+  ArrowDataTransferHorizontalIcon,
   ArrowDown01Icon,
   ArrowRight02Icon,
   BankIcon,
+  BarCode01Icon,
   BookOpen01Icon,
   Briefcase01Icon,
+  Bug01Icon,
   Building03Icon,
   Cancel01Icon,
+  ChartIncreaseIcon,
+  CheckListIcon,
   CheckmarkCircle02Icon,
   ComputerIcon,
+  DashboardSquare01Icon,
   DeliveryTruck01Icon,
   DocumentValidationIcon,
   Factory01Icon,
   FileValidationIcon,
   HeadphonesIcon,
   Invoice01Icon,
+  Layers01Icon,
   Legal01Icon,
   Mail01Icon,
   Medicine02Icon,
@@ -36,14 +43,17 @@ import {
   ShoppingCart01Icon,
   SmartPhone01Icon,
   Store01Icon,
+  Tag01Icon,
   TaxesIcon,
   TShirtIcon,
   TvSmartIcon,
   UserGroupIcon,
   Wallet01Icon,
+  WarehouseIcon,
 } from "@hugeicons/core-free-icons";
 import { Logo } from "@/components/ui/Logo";
 import { Icon, type IconSvgElement } from "@/components/ui/Icon";
+import type { FeatureSlug } from "@/lib/feature-slugs";
 import { cn } from "@/lib/utils";
 
 /**
@@ -54,21 +64,27 @@ import { cn } from "@/lib/utils";
 
 export const CONTACT_EMAIL = "support@fintranzact.com";
 export const SECURITY_EMAIL = "security@fintranzact.com";
-export const DOCS_URL = "https://docs.fintranzact.com";
+/** The help centre and API reference, part of this site (they replaced docs.fintranzact.com and api-docs.fintranzact.com). */
+export const DOCS_URL = "/help";
+export const API_DOCS_URL = "/developers";
 
-type MenuLink = {
+export type MenuLink = {
   label: string;
   icon: IconSvgElement;
-  /** Internal route, optionally with a hash (section on that page). */
+  /** Internal page on this site. Every item opens its own page, never a section of another one. */
   to?: string;
-  hash?: string;
   /** External link or mailto. */
   href?: string;
 };
 
-type MenuColumn = { title: string; links: MenuLink[] };
+export type MenuColumn = {
+  title: string;
+  links: MenuLink[];
+  /** On wide screens, give this column its own grid column instead of stacking it under the second. */
+  ownColumn?: boolean;
+};
 
-type MegaMenu = {
+export type MegaMenu = {
   id: "features" | "solutions" | "resources";
   label: string;
   columns: MenuColumn[];
@@ -77,9 +93,10 @@ type MegaMenu = {
   promo?: "devices" | "talk";
 };
 
-const f = (label: string, icon: IconSvgElement, hash: string): MenuLink => ({ label, icon, to: "/features", hash });
+/** A Features menu item: each feature has its own page at /features/<slug>. */
+const f = (label: string, icon: IconSvgElement, slug: FeatureSlug): MenuLink => ({ label, icon, to: `/features/${slug}` });
 
-const MENUS: MegaMenu[] = [
+export const MENUS: MegaMenu[] = [
   {
     id: "features",
     label: "Features",
@@ -87,35 +104,49 @@ const MENUS: MegaMenu[] = [
       {
         title: "Core features",
         links: [
-          f("Invoicing", Invoice01Icon, "sales-billing"),
-          f("Quotations & proforma", QuoteDownIcon, "sales-billing"),
-          f("Delivery challans", DeliveryTruck01Icon, "sales-billing"),
-          f("Credit notes & returns", Note01Icon, "sales-billing"),
-          f("Point of sale", ShoppingCart01Icon, "sales-billing"),
-          f("Payments", Money03Icon, "accounting-banking"),
-          f("Expenses", Wallet01Icon, "accounting-banking"),
-          f("Banking", BankIcon, "accounting-banking"),
-          f("Inventory", PackageIcon, "inventory-fulfilment"),
-          f("Online store", Store01Icon, "inventory-fulfilment"),
-          f("Reporting", Analytics01Icon, "accounting-banking"),
+          f("Invoicing", Invoice01Icon, "invoicing"),
+          f("Quotations & proforma", QuoteDownIcon, "quotations"),
+          f("Delivery challans", DeliveryTruck01Icon, "delivery-challans"),
+          f("Credit notes & returns", Note01Icon, "credit-notes-returns"),
+          f("Point of sale", ShoppingCart01Icon, "point-of-sale"),
+          f("Payments", Money03Icon, "payments"),
+          f("Expenses", Wallet01Icon, "expenses"),
+          f("Banking", BankIcon, "banking"),
+          f("Inventory", PackageIcon, "inventory"),
+          f("Online store", Store01Icon, "online-store"),
+          f("Reporting", Analytics01Icon, "reporting"),
         ],
       },
       {
         title: "GST & compliance",
         links: [
-          f("GST filing", TaxesIcon, "gst-compliance"),
-          f("e-Invoicing", QrCodeIcon, "gst-compliance"),
-          f("e-Way bills", Route01Icon, "gst-compliance"),
-          f("GSTR-2B & ITC", DocumentValidationIcon, "gst-compliance"),
+          f("GST filing", TaxesIcon, "gst-filing"),
+          f("e-Invoicing", QrCodeIcon, "e-invoicing"),
+          f("e-Way bills", Route01Icon, "e-way-bills"),
+          f("GSTR-2B & ITC", DocumentValidationIcon, "gstr-2b-itc"),
         ],
       },
       {
         title: "Effortless accounting",
         links: [
-          f("Mobile & desktop apps", SmartPhone01Icon, "teams-platform"),
-          f("Recurring invoices", RepeatIcon, "sales-billing"),
-          f("Team roles & access", UserGroupIcon, "teams-platform"),
-          f("API & integrations", ApiIcon, "teams-platform"),
+          f("Mobile & desktop apps", SmartPhone01Icon, "mobile-desktop-apps"),
+          f("Recurring invoices", RepeatIcon, "recurring-invoices"),
+          f("Team roles & access", UserGroupIcon, "team-roles"),
+          f("API & integrations", ApiIcon, "api-integrations"),
+        ],
+      },
+      {
+        title: "Inventory & manufacturing",
+        ownColumn: true,
+        links: [
+          f("Warehouses & godowns", WarehouseIcon, "warehouses"),
+          f("Stock transfers & adjustments", ArrowDataTransferHorizontalIcon, "stock-transfers"),
+          f("Physical stock & barcodes", BarCode01Icon, "physical-stock-barcodes"),
+          f("Stock valuation & groups", Layers01Icon, "stock-valuation"),
+          f("Price levels & MRP", Tag01Icon, "price-levels"),
+          f("Orders & goods receipts", CheckListIcon, "orders-goods-receipts"),
+          f("Bill of materials & manufacturing", Factory01Icon, "manufacturing"),
+          f("Inventory reports", ChartIncreaseIcon, "inventory-reports"),
         ],
       },
     ],
@@ -129,27 +160,27 @@ const MENUS: MegaMenu[] = [
       {
         title: "By industry",
         links: [
-          { label: "Retail & kirana", icon: ShoppingBasket01Icon, to: "/", hash: "industries" },
-          { label: "Wholesale & distribution", icon: DeliveryTruck01Icon, to: "/", hash: "industries" },
-          { label: "Manufacturing", icon: Factory01Icon, to: "/", hash: "industries" },
-          { label: "Services & agencies", icon: Briefcase01Icon, to: "/", hash: "industries" },
-          { label: "Pharmacy", icon: Medicine02Icon, to: "/", hash: "industries" },
-          { label: "Restaurants & cafés", icon: Restaurant01Icon, to: "/", hash: "industries" },
-          { label: "Electronics", icon: TvSmartIcon, to: "/", hash: "industries" },
-          { label: "Apparel & textiles", icon: TShirtIcon, to: "/", hash: "industries" },
+          { label: "Retail & kirana", icon: ShoppingBasket01Icon, to: "/solutions/retail" },
+          { label: "Wholesale & distribution", icon: DeliveryTruck01Icon, to: "/solutions/wholesale" },
+          { label: "Manufacturing", icon: Factory01Icon, to: "/solutions/manufacturing" },
+          { label: "Services & agencies", icon: Briefcase01Icon, to: "/solutions/services" },
+          { label: "Pharmacy", icon: Medicine02Icon, to: "/solutions/pharmacy" },
+          { label: "Restaurants & cafés", icon: Restaurant01Icon, to: "/solutions/restaurants" },
+          { label: "Electronics", icon: TvSmartIcon, to: "/solutions/electronics" },
+          { label: "Apparel & textiles", icon: TShirtIcon, to: "/solutions/apparel" },
         ],
       },
       {
         title: "By business size",
         links: [
-          { label: "Freelancers & small shops", icon: Store01Icon, to: "/pricing" },
-          { label: "Growing businesses", icon: Analytics01Icon, to: "/pricing" },
-          { label: "Multi-branch & multi-GSTIN", icon: Building03Icon, to: "/pricing" },
-          { label: "Accountants & CAs", icon: FileValidationIcon, to: "/pricing" },
+          { label: "Freelancers & small shops", icon: Store01Icon, to: "/solutions/freelancers" },
+          { label: "Growing businesses", icon: Analytics01Icon, to: "/solutions/growing-businesses" },
+          { label: "Multi-branch & multi-GSTIN", icon: Building03Icon, to: "/solutions/multi-branch" },
+          { label: "Accountants & CAs", icon: FileValidationIcon, to: "/solutions/accountants" },
         ],
       },
     ],
-    footer: { label: "Compare plans", to: "/pricing" },
+    footer: { label: "See all solutions", to: "/solutions" },
     promo: "talk",
   },
   {
@@ -159,17 +190,22 @@ const MENUS: MegaMenu[] = [
       {
         title: "Learn",
         links: [
-          { label: "Help & docs", icon: BookOpen01Icon, href: DOCS_URL },
+          { label: "Help & docs", icon: BookOpen01Icon, to: DOCS_URL },
           { label: "About Fintranzact", icon: Building03Icon, to: "/about" },
           { label: "Contact us", icon: HeadphonesIcon, to: "/contact" },
           { label: "Partner with us", icon: UserGroupIcon, to: "/partners" },
+          { label: "Find a partner", icon: UserGroupIcon, to: "/find-a-partner" },
+          { label: "Partner login", icon: UserGroupIcon, to: "/partner-portal" },
+          { label: "Widget gallery", icon: DashboardSquare01Icon, to: "/widgets" },
+          { label: "API docs", icon: ApiIcon, to: API_DOCS_URL },
           { label: "Email us", icon: Mail01Icon, href: `mailto:${CONTACT_EMAIL}` },
         ],
       },
       {
         title: "Trust & legal",
         links: [
-          { label: "Security", icon: Shield01Icon, href: `mailto:${SECURITY_EMAIL}` },
+          { label: "Security", icon: Shield01Icon, to: "/security" },
+          { label: "Report a vulnerability", icon: Bug01Icon, to: "/security/report" },
           { label: "Privacy policy", icon: Legal01Icon, to: "/privacy" },
           { label: "Terms of service", icon: Legal01Icon, to: "/terms" },
           { label: "Refund policy", icon: Legal01Icon, to: "/refund-policy" },
@@ -214,7 +250,7 @@ function MenuItemLink({ link, onNavigate }: { link: MenuLink; onNavigate: () => 
     );
   }
   return (
-    <Link to={link.to!} hash={link.hash} className={LINK_ROW} onClick={onNavigate}>
+    <Link to={link.to!} className={LINK_ROW} onClick={onNavigate}>
       {content}
     </Link>
   );
@@ -307,7 +343,9 @@ function TalkPromo({ onNavigate }: { onNavigate: () => void }) {
 
 function MegaPanel({ menu, onNavigate }: { menu: MegaMenu; onNavigate: () => void }) {
   const hasPromo = Boolean(menu.promo);
-  const [first, ...rest] = menu.columns;
+  const [first, ...others] = menu.columns;
+  const rest = others.filter((column) => !column.ownColumn);
+  const separate = others.filter((column) => column.ownColumn);
   return (
     <div className="mx-auto max-w-7xl px-4 md:px-6">
       <div
@@ -317,7 +355,12 @@ function MegaPanel({ menu, onNavigate }: { menu: MegaMenu; onNavigate: () => voi
         )}
       >
         <div className="p-8">
-          <div className={cn("grid gap-x-10 gap-y-8", hasPromo ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:max-w-2xl")}>
+          <div
+            className={cn(
+              "grid gap-x-10 gap-y-8",
+              separate.length > 0 ? "sm:grid-cols-2 xl:grid-cols-3" : hasPromo ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:max-w-2xl",
+            )}
+          >
             <MenuColumnBlock column={first} onNavigate={onNavigate} />
             {/* Remaining columns stack in the second column, like Zoho's
                 "Compliance" over "Effortless Accounting". */}
@@ -328,6 +371,9 @@ function MegaPanel({ menu, onNavigate }: { menu: MegaMenu; onNavigate: () => voi
                 ))}
               </div>
             )}
+            {separate.map((column) => (
+              <MenuColumnBlock key={column.title} column={column} onNavigate={onNavigate} />
+            ))}
           </div>
           {menu.footer && (
             <Link
@@ -495,7 +541,7 @@ export function SiteHeader() {
       className="sticky top-0 z-20 border-b border-border-light bg-surface-0/95 backdrop-blur"
       onMouseLeave={scheduleClose}
     >
-      <div className="mx-auto flex h-[72px] max-w-7xl items-center gap-4 px-4 md:px-6">
+      <div className="mx-auto flex h-[72px] max-w-7xl items-center gap-2 px-4 sm:gap-4 md:px-6">
         <Link to="/" className="flex shrink-0 items-center gap-2.5" onMouseEnter={() => hoverOpen(null)}>
           <Logo className="h-[34px] w-[34px]" />
           <span className="font-display text-[19px] font-extrabold tracking-tight text-[#0f1b3d] dark:text-white">
@@ -540,7 +586,7 @@ export function SiteHeader() {
           </Link>
           <Link
             to="/register"
-            className="inline-flex h-11 items-center whitespace-nowrap rounded-[10px] bg-brand-600 px-5 text-[15px] font-semibold text-white shadow-[0_6px_16px_-6px_rgba(59,94,170,.6)] transition hover:bg-brand-700"
+            className="inline-flex h-11 items-center whitespace-nowrap rounded-[10px] bg-brand-600 px-3.5 text-[15px] sm:px-5 font-semibold text-white shadow-[0_6px_16px_-6px_rgba(59,94,170,.6)] transition hover:bg-brand-700"
           >
             Start free
           </Link>

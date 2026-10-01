@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { trpc } from "../../../../src/lib/trpc";
+import { useIntraState } from "../../../../src/hooks/useIntraState";
 import { formatCurrency } from "../../../../src/lib/utils";
 import { calcInvoiceTotals } from "@fintranzact/shared";
 import { makeStyles } from "../../../../src/lib/makeStyles";
@@ -193,6 +194,8 @@ export default function CreditNoteCreateScreen() {
   const router = useRouter();
   const { prefillFromInvoiceId } = useLocalSearchParams<{ prefillFromInvoiceId?: string }>();
   const [selectedParty, setSelectedParty] = useState<{ id: string; name: string } | null>(null);
+  // Intra-state: CGST and SGST each rounded at half the rate, as the server saves it.
+  const intraState = useIntraState(selectedParty?.id);
   const [invoiceDate, setInvoiceDate] = useState(todayDate());
   const [notes, setNotes] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([newLineItem()]);
@@ -248,8 +251,8 @@ export default function CreditNoteCreateScreen() {
   const totals = useMemo(() => {
     const validItems = lineItems.filter((li) => li.itemName.trim().length > 0);
     if (validItems.length === 0) return { subtotal: "0", taxTotal: "0", lineDiscountTotal: "0", invoiceDiscountAmount: "0", chargesTotal: "0", roundOff: "0", total: "0" };
-    return calcInvoiceTotals({ lineItems: validItems.map((li) => ({ quantity: li.quantity || "1", unitPrice: li.unitPrice || "0", taxPercent: li.taxPercent || "0", discountPercent: li.discountPercent || "0" })) });
-  }, [lineItems]);
+    return calcInvoiceTotals({ lineItems: validItems.map((li) => ({ quantity: li.quantity || "1", unitPrice: li.unitPrice || "0", taxPercent: li.taxPercent || "0", discountPercent: li.discountPercent || "0" })), intraState });
+  }, [lineItems, intraState]);
 
   const handleLineChange = useCallback((index: number, field: keyof LineItem, value: string) => {
     setLineItems((prev) => { const next = [...prev]; next[index] = { ...next[index], [field]: value }; return next; });
@@ -292,10 +295,10 @@ export default function CreditNoteCreateScreen() {
     <SafeAreaView style={s.container} edges={["top"]}>
       <View style={s.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={s.topBarTitle}>New Credit Note</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <View style={s.infoBox}>

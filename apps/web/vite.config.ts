@@ -2,17 +2,21 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import path from "path";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
+import { DEFAULT_SITE_URL, buildSitemap, resolveSiteUrl } from "./src/lib/seo";
+import { helpPlugins } from "./vite-help";
+import { cspDirectives, inlineScriptHashes } from "./src/lib/csp-hash";
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8"));
 
-// SHA-256 hash of the inline theme-detection script in index.html (lines 36-40).
-// Recompute with: node -e "const c=require('crypto'),f=require('fs');
-//   const h=f.readFileSync('index.html','utf-8');
-//   const s=h.slice(h.indexOf('<script>\n',h.indexOf('hisaabo-theme'))+8, h.indexOf('</script>',h.indexOf('hisaabo-theme')));
-//   console.log('sha256-'+c.createHash('sha256').update(s).digest('base64'));"
-const THEME_SCRIPT_HASH = "sha256-7v6Dh3op5YztyC/jZCheSbtL3NqCrnIjQcllTk6J6Ug=";
+// CSP hashes of index.html's inline scripts (the theme-detection script),
+// computed from the file so they can never drift from it.
+const INLINE_SCRIPT_SOURCES = inlineScriptHashes(
+  readFileSync(path.resolve(__dirname, "index.html"), "utf-8"),
+)
+  .map((h) => `'${h}'`)
+  .join(" ");
 
 /** Normalise API_URL to a bare origin for CSP (e.g. "http://localhost:3000"). */
 function toOrigin(value: string | undefined): string | null {
@@ -31,31 +35,48 @@ function cspPlugin(apiOrigin: string | null): Plugin {
       order: "pre",
       handler(html, ctx) {
         const isDev = ctx.server !== undefined;
-        // When API_URL is set the app calls the API directly (not via the
-        // /api proxy), so its origin must be allowed in dev as well as prod.
-        const connectSrc = isDev
-          ? `connect-src 'self' ws:${apiOrigin ? ` ${apiOrigin}` : ""}`
-          : apiOrigin
-            ? `connect-src 'self' ${apiOrigin}`
-            : "connect-src 'self'";
-
-        const directives = [
-          "default-src 'self'",
-          `script-src 'self' '${THEME_SCRIPT_HASH}' https://challenges.cloudflare.com`,
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-          "font-src 'self' https://fonts.gstatic.com",
-          "img-src 'self' data: blob:",
-          connectSrc,
-          "frame-src https://challenges.cloudflare.com",
-          "object-src 'none'",
-          "base-uri 'self'",
-        ];
-
-        const cspContent = directives.join("; ");
+        const cspContent = cspDirectives({ isDev, apiOrigin, inlineScriptSources: INLINE_SCRIPT_SOURCES }).join("; ");
         const metaTag = `<meta http-equiv="Content-Security-Policy" content="${cspContent}">`;
 
         return html.replace("<head>", `<head>\n    ${metaTag}`);
       },
+    },
+  };
+}
+
+/**
+ * Search-engine files, built from the same list of public pages the app uses
+ * (src/lib/public-paths.ts) so they cannot drift:
+ *   - sitemap.xml is generated for "/" plus every indexable list in seo.ts
+ *     (marketing, solutions, every /help article and every /developers page;
+ *     served live in dev);
+ *   - index.html, public/robots.txt and public/.well-known/security.txt carry
+ *     the production URL, swapped for VITE_SITE_URL when that is set.
+ */
+function seoPlugin(siteUrl: string): Plugin {
+  let outDir = "";
+  const swapUrl = (text: string) =>
+    siteUrl === DEFAULT_SITE_URL ? text : text.split(DEFAULT_SITE_URL).join(siteUrl);
+  return {
+    name: "fintranzact-seo",
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    transformIndexHtml: swapUrl,
+    configureServer(server) {
+      server.middlewares.use("/sitemap.xml", (_req, res) => {
+        res.setHeader("Content-Type", "application/xml; charset=utf-8");
+        res.end(buildSitemap(siteUrl));
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "sitemap.xml", source: buildSitemap(siteUrl) });
+    },
+    writeBundle() {
+      for (const file of ["robots.txt", ".well-known/security.txt"]) {
+        const target = path.join(outDir, file);
+        if (existsSync(target)) writeFileSync(target, swapUrl(readFileSync(target, "utf-8")));
+      }
     },
   };
 }
@@ -76,6 +97,7 @@ export default defineConfig(({ mode }) => {
   // files), so the CSP always allows the origin the app will call.
   const fileEnv = loadEnv(mode, __dirname, ["VITE_", "API_URL"]);
   const apiOrigin = toOrigin(process.env.API_URL ?? fileEnv.API_URL);
+  const siteUrl = resolveSiteUrl(process.env.VITE_SITE_URL ?? fileEnv.VITE_SITE_URL);
 
   return {
   // Vite only exposes VITE_* vars to client code by default; the app reads
@@ -88,6 +110,9 @@ export default defineConfig(({ mode }) => {
   },
   plugins: [
     cspPlugin(apiOrigin),
+    seoPlugin(siteUrl),
+    // Help centre articles (src/content/help/**.mdx, served at /help).
+    ...helpPlugins(),
     TanStackRouterVite(),
     react(),
   ],

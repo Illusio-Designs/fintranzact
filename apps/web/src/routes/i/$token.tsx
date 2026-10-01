@@ -50,6 +50,8 @@ interface SharedDocument {
     description: string | null;
     hsn: string | null;
     quantity: string;
+    /** Free goods on top of the billed quantity ("10 + 1"). */
+    freeQuantity?: string | null;
     unit: string | null;
     unitPrice: string;
     discountPercent: string | null;
@@ -220,6 +222,7 @@ function SharedDocumentView({ token, data }: { token: string; data: SharedDocume
                   <p className="text-text-primary">{li.name}</p>
                   <p className="text-xs text-text-tertiary">
                     {parseFloat(li.quantity)} {li.unit ?? ""} × {formatCurrency(li.unitPrice)}
+                    {li.freeQuantity ? ` + ${parseFloat(li.freeQuantity)} free` : ""}
                     {li.taxPercent && parseFloat(li.taxPercent) ? ` · ${parseFloat(li.taxPercent)}% tax` : ""}
                   </p>
                 </div>
@@ -252,6 +255,9 @@ function SharedDocumentView({ token, data }: { token: string; data: SharedDocume
                     </td>
                     <td className="py-2.5 px-2 text-right tabular-nums text-text-secondary">
                       {parseFloat(li.quantity)} {li.unit ?? ""}
+                      {li.freeQuantity && (
+                        <span className="block text-xs text-emerald-700 dark:text-emerald-400">+ {parseFloat(li.freeQuantity)} free</span>
+                      )}
                     </td>
                     <td className="py-2.5 px-2 text-right tabular-nums text-text-secondary">{formatCurrency(li.unitPrice)}</td>
                     <td className="py-2.5 px-2 text-right tabular-nums text-text-secondary">

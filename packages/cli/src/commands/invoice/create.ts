@@ -1,5 +1,5 @@
 import * as readline from "readline";
-import { HisaaboClient, HisaaboApiError, type InvoiceLineItemInput } from "../../client.js";
+import { FintranzactClient, FintranzactApiError, type InvoiceLineItemInput } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT, success } from "../../output.js";
 import { formatAmount, formatINR, todayISO } from "../../format.js";
@@ -24,7 +24,7 @@ async function prompt(rl: readline.Interface, question: string): Promise<string>
 
 export async function invoiceCreateCommand(opts: CreateOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   const isNonInteractive = !process.stdin.isTTY || opts.yes;
 
@@ -48,7 +48,7 @@ export async function invoiceCreateCommand(opts: CreateOpts): Promise<void> {
 
         if (parties.data.length === 0) {
           rl.close();
-          fatalError("No parties found. Create one with: hisaabo party create", EXIT.NOT_FOUND);
+          fatalError("No parties found. Create one with: fintranzact party create", EXIT.NOT_FOUND);
         }
 
         parties.data.forEach((p, i) => {
@@ -247,13 +247,13 @@ export async function invoiceCreateCommand(opts: CreateOpts): Promise<void> {
     }
 
     success(`Created: ${invoice.invoiceNumber} for ${formatINR(invoice.totalAmount)}`);
-    console.log(`  View:    hisaabo invoice get ${invoice.invoiceNumber}`);
-    console.log(`  PDF:     hisaabo invoice pdf ${invoice.invoiceNumber}\n`);
+    console.log(`  View:    fintranzact invoice get ${invoice.invoiceNumber}`);
+    console.log(`  PDF:     fintranzact invoice pdf ${invoice.invoiceNumber}\n`);
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }

@@ -17,7 +17,7 @@ function matches(e: KeyboardEvent, combo: string): boolean {
   if (needsCtrl !== (e.ctrlKey || e.metaKey)) return false;
   if (needsAlt !== e.altKey) return false;
   if (needsShift !== e.shiftKey) return false;
-  return e.key.toLowerCase() === key;
+  return typeof e.key === "string" && e.key.toLowerCase() === key;
 }
 
 /**

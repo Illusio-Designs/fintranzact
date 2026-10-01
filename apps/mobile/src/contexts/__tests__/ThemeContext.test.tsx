@@ -47,7 +47,7 @@ import { darkColors, lightColors } from "../../lib/theme";
 // expo-secure-store mock — the provider persists the chosen mode here on
 // setMode() and reads it back on mount. We replace every exported function
 // with a jest.fn() so we can control return values per test and assert the
-// right key ("hisaabo_theme") is used.
+// right key ("fintranzact_theme") is used.
 // ---------------------------------------------------------------------------
 jest.mock("expo-secure-store", () => ({
   getItemAsync: jest.fn(),
@@ -154,7 +154,7 @@ describe("ThemeContext — mode, palette, and persistence", () => {
     // WHY: Respecting the system setting is the default on install (mode
     //      starts as "system") and is what most Android 10+/iOS 13+ users
     //      expect. A broken "system" branch means the user's OS-level dark
-    //      mode choice is silently ignored by Hisaabo.
+    //      mode choice is silently ignored by Fintranzact.
     mockUseColorScheme.mockReturnValue("light");
 
     const { result } = renderHook(() => useTheme(), {
@@ -171,7 +171,7 @@ describe("ThemeContext — mode, palette, and persistence", () => {
   // -------------------------------------------------------------------------
   it("initialMode=\"system\" with useColorScheme()=\"dark\" resolves to darkColors", () => {
     // WHAT: Same as above but for the dark OS appearance.
-    // WHY: Dark mode is the historical default for Hisaabo mobile. If the
+    // WHY: Dark mode is the historical default for Fintranzact mobile. If the
     //      system branch fails here, OS-level dark mode feels broken on
     //      devices where the light-mode branch works — a confusing bug class.
     mockUseColorScheme.mockReturnValue("dark");
@@ -216,9 +216,9 @@ describe("ThemeContext — mode, palette, and persistence", () => {
   });
 
   // -------------------------------------------------------------------------
-  it("without initialMode, hydrates the stored mode from SecureStore under key \"hisaabo_theme\"", async () => {
+  it("without initialMode, hydrates the stored mode from SecureStore under key \"fintranzact_theme\"", async () => {
     // WHAT: The production path — no initialMode prop — must read
-    //       SecureStore.getItemAsync("hisaabo_theme") and apply the returned
+    //       SecureStore.getItemAsync("fintranzact_theme") and apply the returned
     //       mode. Here the user previously chose "light".
     // WHY: This is the core persistence contract. If SecureStore is not read,
     //      every cold start resets the user's theme to "system", which is a
@@ -237,7 +237,7 @@ describe("ThemeContext — mode, palette, and persistence", () => {
     // Flush the microtask queue so the useEffect's async IIFE resolves.
     await act(async () => {});
 
-    expect(mockGet).toHaveBeenCalledWith("hisaabo_theme");
+    expect(mockGet).toHaveBeenCalledWith("fintranzact_theme");
     expect(result.current.isHydrated).toBe(true);
     expect(result.current.mode).toBe("light");
     expect(result.current.colors).toBe(lightColors);
@@ -296,7 +296,7 @@ describe("ThemeContext — mode, palette, and persistence", () => {
   });
 
   // -------------------------------------------------------------------------
-  it("setMode(\"dark\") updates the palette synchronously AND persists via SecureStore under \"hisaabo_theme\"", () => {
+  it("setMode(\"dark\") updates the palette synchronously AND persists via SecureStore under \"fintranzact_theme\"", () => {
     // WHAT: Calling setMode from a consumer must flip the scheme/colors
     //       immediately (for a smooth in-session swap) AND call
     //       SecureStore.setItemAsync once with the correct key + value.
@@ -304,7 +304,7 @@ describe("ThemeContext — mode, palette, and persistence", () => {
     //      palette to apply instantly (no loading spinner). They also expect
     //      their choice to survive a restart — if setItemAsync is not called,
     //      the choice is lost. The key must match the read key exactly
-    //      ("hisaabo_theme") or the reader will never find it.
+    //      ("fintranzact_theme") or the reader will never find it.
     mockSet.mockResolvedValue(undefined);
 
     const { result } = renderHook(() => useTheme(), {
@@ -327,7 +327,7 @@ describe("ThemeContext — mode, palette, and persistence", () => {
 
     // Persisted to SecureStore — exactly once, with the right key/value.
     expect(mockSet).toHaveBeenCalledTimes(1);
-    expect(mockSet).toHaveBeenCalledWith("hisaabo_theme", "dark");
+    expect(mockSet).toHaveBeenCalledWith("fintranzact_theme", "dark");
   });
 
   // -------------------------------------------------------------------------
@@ -382,6 +382,6 @@ describe("ThemeContext — mode, palette, and persistence", () => {
 
     // Palette flipped despite the write failure.
     expect(screen.getByTestId("scheme").props.children).toBe("dark");
-    expect(mockSet).toHaveBeenCalledWith("hisaabo_theme", "dark");
+    expect(mockSet).toHaveBeenCalledWith("fintranzact_theme", "dark");
   });
 });

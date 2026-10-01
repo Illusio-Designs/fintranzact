@@ -22,6 +22,8 @@ export interface ListboxProps {
   options: ListboxOption[];
   placeholder?: string;
   label?: string;
+  /** Accessible name when the visible label sits outside the component. */
+  ariaLabel?: string;
   required?: boolean;
   error?: string;
   className?: string;
@@ -33,6 +35,7 @@ export function Listbox({
   options,
   placeholder = "Select an option",
   label,
+  ariaLabel,
   required,
   error,
   className,
@@ -138,8 +141,12 @@ export function Listbox({
         if (open) setActiveIndex(options.length - 1);
         break;
       case "Escape":
-        e.preventDefault();
-        closeDropdown();
+        // An open list closes on its own; the dialog it sits in stays open.
+        if (open) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeDropdown();
+        }
         break;
       case "Tab":
         if (open) closeDropdown();
@@ -192,6 +199,7 @@ export function Listbox({
         aria-expanded={open}
         aria-controls={listboxId}
         aria-labelledby={label ? labelId : undefined}
+        aria-label={label ? undefined : ariaLabel}
         aria-activedescendant={activeDescendant}
         onClick={() => (open ? closeDropdown() : openDropdown())}
         onKeyDown={handleTriggerKeyDown}
@@ -228,6 +236,7 @@ export function Listbox({
           id={listboxId}
           role="listbox"
           aria-labelledby={label ? labelId : undefined}
+          aria-label={label ? undefined : ariaLabel}
           className="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-border shadow-dropdown bg-surface-0 max-h-60 overflow-y-auto animate-scale-in"
         >
           {options.map((option, index) => {

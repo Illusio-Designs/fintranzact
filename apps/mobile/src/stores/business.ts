@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import * as SecureStore from "expo-secure-store";
 
-const BIZ_KEY = "hisaabo_business";
+const BIZ_KEY = "fintranzact_business";
 
 interface BusinessState {
   businessId: string | null;

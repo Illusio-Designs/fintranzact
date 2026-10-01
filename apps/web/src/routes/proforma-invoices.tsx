@@ -4,6 +4,7 @@ import { z } from "zod";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { DocumentListPage } from "@/components/DocumentListPage";
+import type { DocumentType } from "@/components/DocumentCreator";
 
 import { FileValidationIcon } from "@hugeicons/core-free-icons";
 export const Route = createFileRoute("/proforma-invoices")({
@@ -37,7 +38,7 @@ function ProformaInvoicesPage() {
     },
   });
 
-  function handleConvert(id: string) {
+  function handleConvert(id: string, _target?: DocumentType) {
     setConvertingId(id);
     convertMutation.mutate({ sourceDocumentId: id, targetDocumentType: "invoice" });
   }

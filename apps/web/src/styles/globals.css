@@ -109,10 +109,14 @@ input, select, textarea {
 @layer components {
   /* Buttons */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium transition duration-150 active:scale-[0.97] hover:bg-brand-700 active:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold transition duration-150 active:scale-[0.97] hover:bg-brand-700 active:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+    box-shadow: 0 8px 18px -8px rgba(59, 94, 170, 0.7);
+  }
+  .btn-primary:disabled {
+    box-shadow: none;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition duration-150 active:scale-[0.97] border disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition duration-150 active:scale-[0.97] border disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
     background: var(--surface-0);
     color: var(--text-secondary);
     border-color: var(--border-color);
@@ -122,7 +126,7 @@ input, select, textarea {
     color: var(--text-primary);
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition duration-150 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-none;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition duration-150 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-none;
     color: var(--text-secondary);
   }
   .btn-ghost:hover {
@@ -130,7 +134,7 @@ input, select, textarea {
     color: var(--text-primary);
   }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium transition duration-150 active:scale-[0.97] hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold transition duration-150 active:scale-[0.97] hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none;
   }
   .btn-icon {
     @apply inline-flex items-center justify-center p-2 rounded-lg transition-colors duration-150;
@@ -293,13 +297,13 @@ input, select, textarea {
 
   /* Cards */
   .card {
-    @apply rounded-xl;
+    @apply rounded-2xl;
     background: var(--surface-0);
     border: 1px solid var(--border-light);
   }
   /* Subtle lift on hover — opt-in via .card-interactive */
   .card-interactive {
-    @apply rounded-xl transition duration-200;
+    @apply rounded-2xl transition duration-200;
     background: var(--surface-0);
     border: 1px solid var(--border-light);
   }

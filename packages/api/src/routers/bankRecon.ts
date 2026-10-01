@@ -11,7 +11,7 @@
  * Permission checks use requireCan() from @casl-based permissions.
  */
 
-import { eq, and, sql, desc, isNull, or, ilike, asc } from "drizzle-orm";
+import { eq, and, sql, desc, isNull, or, ilike, asc, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -24,6 +24,7 @@ import {
   payments,
   expenses,
   bankTransactions,
+  parties,
 } from "@fintranzact/db";
 import {
   bankReconColumnMappingSchema,
@@ -55,6 +56,7 @@ import {
   type DetectionResult,
   type DetectionWarning,
 } from "../lib/bank-templates/index.js";
+import { withAudit } from "../lib/audit.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -74,7 +76,77 @@ function toColumnMapping(raw: z.infer<typeof bankReconColumnMappingSchema>): Col
   };
 }
 
+/** Throw NOT_FOUND unless the bank account / party is this business's. */
+async function assertRuleRefs(
+  db: TenantDatabase,
+  businessId: string,
+  refs: { bankAccountId?: string | null; partyId?: string | null },
+) {
+  if (refs.bankAccountId) {
+    const [account] = await db.select({ id: bankAccounts.id }).from(bankAccounts)
+      .where(and(eq(bankAccounts.id, refs.bankAccountId), eq(bankAccounts.businessId, businessId))).limit(1);
+    if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Bank account not found" });
+  }
+  if (refs.partyId) {
+    const [party] = await db.select({ id: parties.id }).from(parties)
+      .where(and(eq(parties.id, refs.partyId), eq(parties.businessId, businessId))).limit(1);
+    if (!party) throw new TRPCError({ code: "NOT_FOUND", message: "Party not found" });
+  }
+}
+
+/** Throw NOT_FOUND unless the payment / expense / bank transaction is a live one of this business. */
+async function assertMatchTarget(
+  db: TenantDatabase,
+  businessId: string,
+  t: { paymentId?: string; expenseId?: string; bankTransactionId?: string },
+) {
+  let found: unknown[] = [];
+  if (t.paymentId) {
+    found = await db.select({ id: payments.id }).from(payments)
+      .where(and(eq(payments.id, t.paymentId), eq(payments.businessId, businessId), isNull(payments.deletedAt))).limit(1);
+  } else if (t.expenseId) {
+    found = await db.select({ id: expenses.id }).from(expenses)
+      .where(and(eq(expenses.id, t.expenseId), eq(expenses.businessId, businessId), isNull(expenses.deletedAt))).limit(1);
+  } else if (t.bankTransactionId) {
+    found = await db.select({ id: bankTransactions.id }).from(bankTransactions)
+      .where(and(eq(bankTransactions.id, t.bankTransactionId), eq(bankTransactions.businessId, businessId))).limit(1);
+  }
+  if (found.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Record to match not found" });
+}
+
 // ── Router ────────────────────────────────────────────────────────────────────
+
+/**
+ * Payments a statement of `accountId` can be matched against: those received
+ * into that account, or with no account recorded that were not cash (a cash
+ * receipt never reaches a bank statement).
+ */
+function paidThroughAccount(accountId: string) {
+  return or(
+    eq(payments.bankAccountId, accountId),
+    and(isNull(payments.bankAccountId), sql`${payments.mode} <> 'cash'`),
+  )!;
+}
+
+/**
+ * Expenses a statement of `accountId` can be matched against: those paid
+ * from that account (named on the expense, or where its withdrawal was
+ * booked), or with no account at all that were not paid in cash. An
+ * expense paid from the cash box or another account is not on this
+ * statement, however close its amount and date.
+ */
+function spentFromAccount(accountId: string) {
+  const withdrawalOn = (account: ReturnType<typeof sql> | null) => sql`EXISTS (
+    SELECT 1 FROM ${bankTransactions} bt
+    WHERE bt.reference_type = 'expense' AND bt.reference_id = ${expenses.id}
+    ${account ? sql`AND bt.bank_account_id = ${account}` : sql``}
+  )`;
+  return or(
+    eq(expenses.bankAccountId, accountId),
+    withdrawalOn(sql`${accountId}::uuid`),
+    and(isNull(expenses.bankAccountId), sql`${expenses.mode} <> 'cash'`, sql`NOT ${withdrawalOn(null)}`),
+  )!;
+}
 
 export const bankReconRouter = router({
   /**
@@ -88,7 +160,7 @@ export const bankReconRouter = router({
       fileName: z.string().min(1).max(255),
       csvContent: z.string().min(1).max(10_000_000), // 10 MB max
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankReconciliation");
 
       // Verify bank account belongs to this business
@@ -179,7 +251,7 @@ export const bankReconRouter = router({
         detectionWarning,
         totalRows: rows.length - 1,
       };
-    }),
+    }, (r, input) => ({ action: "bankRecon.uploadCSV", entityType: "bankStatementImport", entityId: r.importId, metadata: { fileName: input.fileName, bankAccountId: input.bankAccountId } }))),
 
   /**
    * Step 2: Confirm column mapping.
@@ -190,7 +262,7 @@ export const bankReconRouter = router({
       csvContent: z.string().min(1).max(10_000_000),
       templateId: z.string().uuid().optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       // Verify import belongs to this business
@@ -301,6 +373,7 @@ export const bankReconRouter = router({
           .where(and(
             eq(payments.businessId, ctx.businessId),
             isNull(payments.deletedAt),
+            paidThroughAccount(importRecord.bankAccountId),
             ...buildBusinessDateFilter(payments, { from: fromDate, to: toDate }),
           )),
         ctx.db
@@ -316,6 +389,7 @@ export const bankReconRouter = router({
           .where(and(
             eq(expenses.businessId, ctx.businessId),
             isNull(expenses.deletedAt),
+            spentFromAccount(importRecord.bankAccountId),
             ...buildBusinessDateFilter(expenses, { from: fromDate, to: toDate }),
           )),
         ctx.db
@@ -419,7 +493,7 @@ export const bankReconRouter = router({
         matchedLines: matchedCount,
         unmatchedLines: parsedLines.length - matchedCount,
       };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.confirmMapping", entityType: "bankStatementImport", entityId: input.importId }))),
 
   /**
    * List all imports for a bank account (or all accounts if omitted).
@@ -542,7 +616,7 @@ export const bankReconRouter = router({
     .input(z.object({
       lineId: z.string().uuid(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [line] = await ctx.db
@@ -570,7 +644,7 @@ export const bankReconRouter = router({
       await updateImportCounts(ctx.db, line.importId);
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.confirmMatch", entityType: "bankStatementLine", entityId: input.lineId }))),
 
   /**
    * Manually link a statement line to a payment or expense.
@@ -585,7 +659,7 @@ export const bankReconRouter = router({
       (d) => [d.paymentId, d.expenseId, d.bankTransactionId].filter(Boolean).length === 1,
       { message: "Provide exactly one of paymentId, expenseId, or bankTransactionId" },
     ))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [line] = await ctx.db
@@ -600,6 +674,7 @@ export const bankReconRouter = router({
       if (!line) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Statement line not found" });
       }
+      await assertMatchTarget(ctx.db, ctx.businessId, input);
 
       await ctx.db
         .update(bankStatementLines)
@@ -615,14 +690,14 @@ export const bankReconRouter = router({
       await updateImportCounts(ctx.db, line.importId);
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.manualMatch", entityType: "bankStatementLine", entityId: input.lineId, metadata: { paymentId: input.paymentId ?? null, expenseId: input.expenseId ?? null, bankTransactionId: input.bankTransactionId ?? null } }))),
 
   /**
    * Undo a match — revert line back to unmatched.
    */
   unmatch: adminProcedure
     .input(z.object({ lineId: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [line] = await ctx.db
@@ -656,7 +731,7 @@ export const bankReconRouter = router({
       await updateImportCounts(ctx.db, line.importId);
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.unmatch", entityType: "bankStatementLine", entityId: input.lineId }))),
 
   /**
    * Create an expense from an unmatched debit line and link it.
@@ -666,7 +741,7 @@ export const bankReconRouter = router({
       lineId: z.string().uuid(),
       expense: createExpenseSchema,
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "Expense");
 
       const [line] = await ctx.db
@@ -686,14 +761,82 @@ export const bankReconRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Line is already matched or ignored" });
       }
 
+      if (!money.isPositive(line.debit)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Expenses can only be created from debit (withdrawal) lines" });
+      }
+
+      // The withdrawal happened on the statement's bank account.
+      const [importRecord] = await ctx.db
+        .select({ bankAccountId: bankStatementImports.bankAccountId })
+        .from(bankStatementImports)
+        .where(and(
+          eq(bankStatementImports.id, line.importId),
+          eq(bankStatementImports.businessId, ctx.businessId),
+        ))
+        .limit(1);
+
+      if (!importRecord) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Import not found" });
+      }
+
       const newExpense = await ctx.db.transaction(async (tx) => {
+        // Claim the line inside the transaction: a concurrent request for the
+        // same line blocks on this row and then finds it no longer unmatched,
+        // so the expense and withdrawal are recorded exactly once.
+        const [claimed] = await tx
+          .update(bankStatementLines)
+          .set({ matchStatus: "created" })
+          .where(and(
+            eq(bankStatementLines.id, input.lineId),
+            eq(bankStatementLines.businessId, ctx.businessId),
+            eq(bankStatementLines.matchStatus, "unmatched"),
+          ))
+          .returning({ id: bankStatementLines.id });
+
+        if (!claimed) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Line is already matched or ignored" });
+        }
+
         const [exp] = await tx.insert(expenses).values({
           ...input.expense,
+          bankAccountId: importRecord.bankAccountId,
           businessId: ctx.businessId,
           expenseDate: input.expense.expenseDate ? new Date(input.expense.expenseDate) : line.transactionDate,
           createdByUserId: ctx.user.id,
           createdByName: ctx.user.name ?? undefined,
         }).returning();
+
+        // Record the withdrawal on the bank account (same as expense.create)
+        // so the bank ledger and balance reflect it, and link it to the line.
+        const [account] = await tx
+          .select({ id: bankAccounts.id, currentBalance: bankAccounts.currentBalance })
+          .from(bankAccounts)
+          .where(and(
+            eq(bankAccounts.id, importRecord.bankAccountId),
+            eq(bankAccounts.businessId, ctx.businessId),
+          ))
+          .for("update")
+          .limit(1);
+
+        if (!account) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Bank account not found" });
+        }
+
+        const [bankTxn] = await tx.insert(bankTransactions).values({
+          businessId: ctx.businessId,
+          bankAccountId: account.id,
+          type: "withdrawal",
+          amount: exp!.amount,
+          description: `Expense: ${exp!.category}${exp!.description ? ` — ${exp!.description}` : ""}`,
+          referenceType: "expense",
+          referenceId: exp!.id,
+          transactionDate: exp!.expenseDate,
+        }).returning({ id: bankTransactions.id });
+
+        await tx
+          .update(bankAccounts)
+          .set({ currentBalance: money.sub(account.currentBalance, exp!.amount), updatedAt: new Date() })
+          .where(eq(bankAccounts.id, account.id));
 
         await tx
           .update(bankStatementLines)
@@ -701,6 +844,7 @@ export const bankReconRouter = router({
             matchStatus: "created",
             matchConfidence: "1",
             matchedExpenseId: exp!.id,
+            matchedBankTransactionId: bankTxn!.id,
           })
           .where(eq(bankStatementLines.id, input.lineId));
 
@@ -710,14 +854,14 @@ export const bankReconRouter = router({
       await updateImportCounts(ctx.db, line.importId);
 
       return newExpense;
-    }),
+    }, (r, input) => [{ action: "expense.create", entityType: "expense", entityId: r.id, metadata: { amount: r.amount, category: r.category, source: "bankRecon.createExpense", lineId: input.lineId } }, { action: "bankRecon.createExpense", entityType: "bankStatementLine", entityId: input.lineId, metadata: { expenseId: r.id } }])),
 
   /**
    * Mark a statement line as ignored (no matching needed).
    */
   ignoreLine: adminProcedure
     .input(z.object({ lineId: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [line] = await ctx.db
@@ -741,7 +885,7 @@ export const bankReconRouter = router({
       await updateImportCounts(ctx.db, line.importId);
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.ignoreLine", entityType: "bankStatementLine", entityId: input.lineId }))),
 
   /**
    * Bank Reconciliation Statement (BRS): compare bank balance (closing balance
@@ -769,12 +913,12 @@ export const bankReconRouter = router({
       }
 
       // Get the latest import for this account (or the specific one requested)
-      const importCond = input.importId
-        ? [eq(bankStatementImports.id, input.importId)]
-        : [
-            eq(bankStatementImports.bankAccountId, input.bankAccountId),
-            eq(bankStatementImports.businessId, ctx.businessId),
-          ];
+      // Always this business's imports of this account; importId narrows it.
+      const importCond = [
+        eq(bankStatementImports.bankAccountId, input.bankAccountId),
+        eq(bankStatementImports.businessId, ctx.businessId),
+        ...(input.importId ? [eq(bankStatementImports.id, input.importId)] : []),
+      ];
 
       const [latestImport] = await ctx.db
         .select()
@@ -892,7 +1036,7 @@ export const bankReconRouter = router({
       label: z.string().max(255).optional(),
       fileFormat: z.enum(["csv", "xlsx", "pdf"]).optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankReconciliation");
 
       const bankSlug = input.bankSlug ?? `custom_${randomUUID()}`;
@@ -916,7 +1060,7 @@ export const bankReconRouter = router({
         .returning();
 
       return template!;
-    }),
+    }, (r) => ({ action: "bankRecon.templateCreate", entityType: "bankStatementTemplate", entityId: r.id, metadata: { bankSlug: r.bankSlug } }))),
 
   /**
    * Fork a seeded or existing template into a user-editable copy.
@@ -926,7 +1070,7 @@ export const bankReconRouter = router({
       templateId: z.string().uuid(),
       label: z.string().max(255).optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankReconciliation");
 
       const [source] = await ctx.db
@@ -972,7 +1116,7 @@ export const bankReconRouter = router({
         .returning();
 
       return forked!;
-    }),
+    }, (r, input) => ({ action: "bankRecon.templateFork", entityType: "bankStatementTemplate", entityId: r.id, metadata: { forkedFrom: input.templateId } }))),
 
   /**
    * Update a custom/forked template. Seeded templates cannot be modified.
@@ -997,7 +1141,7 @@ export const bankReconRouter = router({
       label: z.string().max(255).optional(),
       isActive: z.boolean().optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [existing] = await ctx.db
@@ -1036,14 +1180,14 @@ export const bankReconRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "bankRecon.templateUpdate", entityType: "bankStatementTemplate", entityId: input.id }))),
 
   /**
    * Delete a custom/forked template. Seeded templates cannot be deleted.
    */
   templateDelete: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "BankReconciliation");
 
       const [existing] = await ctx.db
@@ -1071,7 +1215,7 @@ export const bankReconRouter = router({
         .where(eq(bankStatementTemplates.id, input.id));
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.templateDelete", entityType: "bankStatementTemplate", entityId: input.id }))),
 
   // ── Categorization Rules ────────────────────────────────────────────────────
 
@@ -1103,23 +1247,9 @@ export const bankReconRouter = router({
 
   ruleCreate: adminProcedure
     .input(bankCategorizationRuleSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankReconciliation");
-
-      if (input.bankAccountId) {
-        const [account] = await ctx.db
-          .select({ id: bankAccounts.id })
-          .from(bankAccounts)
-          .where(and(
-            eq(bankAccounts.id, input.bankAccountId),
-            eq(bankAccounts.businessId, ctx.businessId),
-          ))
-          .limit(1);
-
-        if (!account) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Bank account not found" });
-        }
-      }
+      await assertRuleRefs(ctx.db, ctx.businessId, input);
 
       const [rule] = await ctx.db
         .insert(bankCategorizationRules)
@@ -1130,7 +1260,7 @@ export const bankReconRouter = router({
         .returning();
 
       return rule!;
-    }),
+    }, (r) => ({ action: "bankRecon.ruleCreate", entityType: "bankCategorizationRule", entityId: r.id, metadata: { action: r.action, matchValue: r.matchValue } }))),
 
   ruleUpdate: adminProcedure
     .input(z.object({
@@ -1139,7 +1269,7 @@ export const bankReconRouter = router({
         isActive: z.boolean().optional(),
       }),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [existing] = await ctx.db
@@ -1154,6 +1284,7 @@ export const bankReconRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Rule not found" });
       }
+      await assertRuleRefs(ctx.db, ctx.businessId, input.data);
 
       const [updated] = await ctx.db
         .update(bankCategorizationRules)
@@ -1162,11 +1293,11 @@ export const bankReconRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "bankRecon.ruleUpdate", entityType: "bankCategorizationRule", entityId: input.id }))),
 
   ruleDelete: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "BankReconciliation");
 
       const [existing] = await ctx.db
@@ -1187,12 +1318,49 @@ export const bankReconRouter = router({
         .where(eq(bankCategorizationRules.id, input.id));
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.ruleDelete", entityType: "bankCategorizationRule", entityId: input.id }))),
 });
 
-// ── Private helpers ───────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-type Db = TenantDatabase;
+// A db handle or a transaction.
+type Db = Pick<TenantDatabase, "select" | "update">;
+
+/**
+ * Put statement lines reconciled against a deleted expense (or against the
+ * withdrawal it recorded) back to unmatched, so the line can be reconciled
+ * again, and refresh their imports' counts. Called by expense.delete.
+ */
+export async function reopenLinesMatchedTo(
+  db: Db,
+  businessId: string,
+  refs: { expenseId: string; bankTransactionId?: string | null },
+) {
+  const reopened = await db
+    .update(bankStatementLines)
+    .set({
+      matchStatus: "unmatched",
+      matchConfidence: null,
+      matchedPaymentId: null,
+      matchedExpenseId: null,
+      matchedBankTransactionId: null,
+    })
+    .where(and(
+      eq(bankStatementLines.businessId, businessId),
+      inArray(bankStatementLines.matchStatus, ["auto_matched", "manual_matched", "created"]),
+      refs.bankTransactionId
+        ? or(
+            eq(bankStatementLines.matchedExpenseId, refs.expenseId),
+            eq(bankStatementLines.matchedBankTransactionId, refs.bankTransactionId),
+          )
+        : eq(bankStatementLines.matchedExpenseId, refs.expenseId),
+    ))
+    .returning({ importId: bankStatementLines.importId });
+
+  for (const importId of new Set(reopened.map((l) => l.importId))) {
+    await updateImportCounts(db, importId);
+  }
+}
 
 async function updateImportCounts(db: Db, importId: string) {
   const [counts] = await db

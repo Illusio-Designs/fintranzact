@@ -3,7 +3,7 @@
  *
  * Background: the upload XHR used `${window.location.origin}${url}` to resolve
  * the relative selfImport URL returned by the server. In split-host prod
- * (app.hisaabo.in + api.hisaabo.in) that pointed at the SPA, not the API,
+ * (app.fintranzact.com + api.fintranzact.com) that pointed at the SPA, not the API,
  * and the upload silently failed. The component now resolves through
  * `apiUrl(API_URL)` so split-host hits the API host correctly.
  *

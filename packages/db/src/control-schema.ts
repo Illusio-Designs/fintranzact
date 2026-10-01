@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, pgEnum, index, uniqueIndex, boolean, jsonb, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum, index, uniqueIndex, boolean, jsonb, integer, numeric, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 // ── Enums ──────────────────────────────────────────────────────
@@ -27,8 +27,16 @@ export const tenants = pgTable("tenants", {
   // Legacy plaintext values are handled gracefully on read.
   dbPassword: text("db_password"),
   referralCode: text("referral_code"),
+  /** The partner whose referral code this organisation signed up with. */
+  partnerId: uuid("partner_id").references((): AnyPgColumn => partners.id, { onDelete: "set null" }),
   plan: tenantPlanEnum("plan").default("free").notNull(),
   status: tenantStatusEnum("status").default("active").notNull(),
+  /**
+   * When the owner chose a plan (free or paid). NULL means "not chosen yet"
+   * and sends the owner to the plan page. Defaults to now() so existing rows,
+   * seeds and admin-created orgs count as chosen; only self sign-up inserts NULL.
+   */
+  planSelectedAt: timestamp("plan_selected_at", { withTimezone: true }).defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
@@ -143,6 +151,8 @@ export const magicLinkTokens = pgTable("magic_link_tokens", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),
   ipAddress: text("ip_address"),
+  /** Referral code typed or linked at sign-up, applied to the new organisation. */
+  referralCode: text("referral_code"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index("magic_link_tokens_email_idx").on(t.email),
@@ -157,7 +167,7 @@ export const apiKeys = pgTable("api_keys", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   // Store the hash, never the raw key
   keyHash: text("key_hash").notNull(),
-  // First 20 chars of the raw key for display: "hisaabo_key_abc12345..."
+  // First 20 chars of the raw key for display: "fintranzact_key_abc12345..."
   keyPrefix: text("key_prefix").notNull(),
   name: text("name").notNull(), // User-given label like "CLI", "CI/CD", "MCP Server"
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
@@ -198,6 +208,113 @@ export const shareLinks = pgTable("share_links", {
   uniqueIndex("share_links_token_hash_idx").on(t.tokenHash),
   // At most one live link per document.
   uniqueIndex("share_links_live_document_idx").on(t.tenantId, t.documentId).where(sql`${t.revokedAt} IS NULL`),
+]);
+
+// ── Plan settings ──────────────────────────────────────────────
+// A platform admin's edits to a plan. A plan with no row uses the built-in
+// definition from @fintranzact/shared (PLAN_DEFAULTS).
+export const planSettings = pgTable("plan_settings", {
+  plan: tenantPlanEnum("plan").primaryKey(),
+  name: text("name").notNull(),
+  tagline: text("tagline").notNull(),
+  /** Monthly price in rupees; null = priced on request. */
+  monthlyPriceInr: integer("monthly_price_inr"),
+  features: jsonb("features").$type<string[]>().notNull(),
+  highlight: boolean("highlight").default(false).notNull(),
+  /** Shown on the pricing page and sign-up plan picker. */
+  visible: boolean("visible").default(true).notNull(),
+  /** Every limit; numbers are null for unlimited. */
+  limits: jsonb("limits").$type<Record<string, number | boolean | null>>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedByUserId: uuid("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
+});
+
+// ── Partners ───────────────────────────────────────────────────
+// Applications from the public "Become a partner" form. A platform admin
+// approves or rejects them; approved partners who agreed are listed in the
+// public partner directory.
+export const partners = pgTable("partners", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  contactName: text("contact_name").notNull(),
+  companyName: text("company_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  city: text("city").notNull(),
+  state: text("state"),
+  website: text("website"),
+  /** reseller | referral | implementation | accountant */
+  partnerType: text("partner_type").notNull(),
+  clientCount: text("client_count"),
+  message: text("message"),
+  listPublicly: boolean("list_publicly").default(false).notNull(),
+  /** Given on approval; organisations that sign up with it are this partner's referrals. */
+  referralCode: text("referral_code"),
+  /** Commission on referred organisations' plan price. Null = the badge's rate. */
+  commissionPercent: integer("commission_percent"),
+  /** pending | approved | rejected */
+  status: text("status").default("pending").notNull(),
+  adminNotes: text("admin_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  reviewedByUserId: uuid("reviewed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+}, (t) => [
+  index("partners_status_idx").on(t.status, t.createdAt),
+  index("partners_email_idx").on(t.email),
+  uniqueIndex("partners_referral_code_idx").on(t.referralCode),
+]);
+
+// Money paid (or owed) to a partner for a month of referrals.
+export const partnerPayouts = pgTable("partner_payouts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  partnerId: uuid("partner_id").notNull().references(() => partners.id, { onDelete: "cascade" }),
+  /** "2026-09" */
+  period: text("period").notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  /** pending | paid */
+  status: text("status").default("pending").notNull(),
+  /** Bank / UPI reference once paid. */
+  reference: text("reference"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+}, (t) => [
+  uniqueIndex("partner_payouts_period_idx").on(t.partnerId, t.period),
+]);
+
+// ── Upcoming features (platform admin roadmap) ─────────────────
+// The operators' own board of what is planned and being built. Not shown to
+// customers. Seeded with the starting roadmap the first time it is opened.
+
+export const roadmapItems = pgTable("roadmap_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  /** Plain text with light markdown: paragraphs, "- " bullets, "### " headings, **bold**. */
+  description: text("description").default("").notNull(),
+  /** Free text; the console suggests Payroll, Inventory, GST, Mobile, Platform, Other. */
+  category: text("category").notNull(),
+  /** idea | planned | in_progress | done | dropped */
+  status: text("status").default("idea").notNull(),
+  /** high | medium | low */
+  priority: text("priority").default("medium").notNull(),
+  /** before_launch | after_launch */
+  launchStage: text("launch_stage").default("after_launch").notNull(),
+  /** Phase number within the category (Payroll phase 1, 2…). */
+  phase: integer("phase"),
+  /** Position on the board; lower first. */
+  sortOrder: integer("sort_order").default(0).notNull(),
+  /** Target month, "2026-11". */
+  target: text("target"),
+  /** included | paid_add_on */
+  billing: text("billing").default("included").notNull(),
+  priceNote: text("price_note"),
+  /** Sub-tasks: [{ text, done }] */
+  checklist: jsonb("checklist").$type<{ text: string; done: boolean }[]>().default([]).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+}, (t) => [
+  index("roadmap_items_status_idx").on(t.status, t.sortOrder),
 ]);
 
 // ── Relations ──────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import * as readline from "readline";
 import { setConfig, requireAuth } from "../../config.js";
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { fatalError, success, EXIT, outputJSON } from "../../output.js";
 
 export function registerBusinessCommands(program: Command): void {
@@ -15,7 +15,7 @@ export function registerBusinessCommands(program: Command): void {
     .option("--json", "JSON output")
     .action(async (opts) => {
       const cfg = requireAuth();
-      const client = new HisaaboClient(cfg);
+      const client = new FintranzactClient(cfg);
       try {
         const businesses = await client.business.list();
         if (opts.json) { outputJSON(businesses); return; }
@@ -94,7 +94,7 @@ export function registerBusinessCommands(program: Command): void {
     .option("--json", "JSON output")
     .action(async (opts) => {
       const cfg = requireAuth();
-      const client = new HisaaboClient(cfg);
+      const client = new FintranzactClient(cfg);
       try {
         const businesses = await client.business.list();
         if (opts.json) { outputJSON(businesses); return; }
@@ -111,8 +111,8 @@ export function registerBusinessCommands(program: Command): void {
         setConfig({ businessId: selected.id, businessName: selected.name });
         success(`Switched to: ${selected.name}`);
       } catch (e) {
-        if (e instanceof HisaaboApiError) {
-          if (e.hisaaboError.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+        if (e instanceof FintranzactApiError) {
+          if (e.fintranzactError.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
         }
         fatalError(String(e instanceof Error ? e.message : e));
       }

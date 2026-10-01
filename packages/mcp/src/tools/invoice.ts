@@ -13,14 +13,14 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { HisaaboClient } from "../client.js";
+import type { FintranzactClient } from "../client.js";
 import { wrapTool } from "../lib/errors.js";
 import { MAX_PAGE_SIZE, withPaginationMeta } from "../lib/pagination.js";
 
 const INVOICE_STATUS = ["draft", "unfulfilled", "sent", "paid", "partial", "overdue", "cancelled"] as const;
 const DOCUMENT_TYPE = ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return"] as const;
 
-export function registerInvoiceTools(server: McpServer, client: HisaaboClient) {
+export function registerInvoiceTools(server: McpServer, client: FintranzactClient) {
 
   server.tool(
     "invoice_list",
@@ -298,7 +298,7 @@ export function registerInvoiceTools(server: McpServer, client: HisaaboClient) {
     "invoice_pdf_url",
     [
       "Get the URL to download or view an invoice as a PDF.",
-      "The URL requires the HISAABO_API_KEY for authentication (pass as a Bearer token).",
+      "The URL requires the FINTRANZACT_API_KEY for authentication (pass as a Bearer token).",
       "Use format='a4' for standard invoices and format='thermal' for 80mm receipt printing.",
       "The URL is valid for as long as the session token is valid.",
     ].join(" "),
@@ -316,7 +316,7 @@ export function registerInvoiceTools(server: McpServer, client: HisaaboClient) {
           type: "text" as const,
           text: JSON.stringify({
             url,
-            note: "Fetch this URL with the Authorization: Bearer <HISAABO_API_KEY> header to download the PDF.",
+            note: "Fetch this URL with the Authorization: Bearer <FINTRANZACT_API_KEY> header to download the PDF.",
             format: input.format,
           }, null, 2),
         }],

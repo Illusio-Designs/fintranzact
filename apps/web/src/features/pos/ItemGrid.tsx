@@ -65,7 +65,7 @@ export function ItemGrid({ search, onPick }: Props) {
           onClick={() => onPick(tile)}
           className="text-left p-3 rounded-lg border border-border bg-surface-1 hover:bg-surface-2 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-600 min-h-[96px]"
         >
-          <div className="text-sm font-semibold text-text-primary leading-tight">
+          <div className="text-sm font-semibold text-text-primary leading-tight [overflow-wrap:anywhere]">
             {tile.displayName}
           </div>
           <div className="text-xs text-text-tertiary mt-1 tabular-nums">

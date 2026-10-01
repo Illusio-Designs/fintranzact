@@ -52,7 +52,7 @@ export function PartyShippingAddresses({
   return (
     <div className="space-y-3">
       {value.map((draft, index) => (
-        <div key={index} className="rounded-lg border border-border-light p-3 space-y-3">
+        <div key={index} data-testid={`shipping-address-${index + 2}`} className="rounded-lg border border-border-light p-3 space-y-3">
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <InputField

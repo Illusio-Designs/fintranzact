@@ -4,6 +4,7 @@ import { InputField } from "@/components/ui/FormField";
 import { toast } from "@/hooks/useToast";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon } from "@hugeicons/core-free-icons";
+import { InvoiceDesignSection } from "./InvoiceDesignSection";
 
 interface DocumentsTabProps {
   biz: any;
@@ -16,6 +17,9 @@ const DOC_TYPES = [
   { key: "credit_note", label: "Credit Note", prefixField: "creditNotePrefix", counterField: "nextCreditNoteNumber" },
   { key: "delivery_challan", label: "Delivery Challan", prefixField: "deliveryChallanPrefix", counterField: "nextDeliveryChallanNumber" },
   { key: "proforma", label: "Proforma Invoice", prefixField: "proformaPrefix", counterField: "nextProformaNumber" },
+  { key: "sales_order", label: "Sales Order", prefixField: "salesOrderPrefix", counterField: "nextSalesOrderNumber" },
+  { key: "purchase_order", label: "Purchase Order", prefixField: "purchaseOrderPrefix", counterField: "nextPurchaseOrderNumber" },
+  { key: "goods_receipt_note", label: "Goods Receipt Note", prefixField: "goodsReceiptNotePrefix", counterField: "nextGoodsReceiptNoteNumber" },
 ] as const;
 
 export function DocumentsTab({ biz }: DocumentsTabProps) {
@@ -88,6 +92,8 @@ export function DocumentsTab({ biz }: DocumentsTabProps) {
 
   return (
     <div className="space-y-6">
+      <InvoiceDesignSection biz={biz} />
+
       {/* Prefixes */}
       <div className="card overflow-hidden">
         <div className="px-6 py-4 border-b border-border-light flex items-center justify-between">
@@ -118,17 +124,19 @@ export function DocumentsTab({ biz }: DocumentsTabProps) {
                     value={prefixes[doc.prefixField]}
                     onChange={(e) => handlePrefixChange(doc.prefixField, e.target.value.toUpperCase())}
                     placeholder="e.g. INV"
+                    aria-label={`${doc.label} prefix`}
                     maxLength={10}
                   />
                 </div>
                 <span className="text-sm text-text-tertiary flex-1">
                   Next #:{" "}
-                  <span className="font-mono text-text-primary">
+                  <span className="font-mono text-text-primary" data-testid={`next-number-${doc.key}`}>
                     {biz[doc.counterField] ?? 1}
                   </span>
                 </span>
                 <button
                   className="btn-ghost text-xs px-2 py-1"
+                  aria-label={`Change next ${doc.label} number`}
                   onClick={() =>
                     setEditingSeq(editingSeq === doc.counterField ? null : doc.counterField)
                   }

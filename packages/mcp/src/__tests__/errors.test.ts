@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { wrapTool } from "../lib/errors.js";
-import { HisaaboApiError } from "../client.js";
+import { FintranzactApiError } from "../client.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 describe("wrapTool", () => {
@@ -15,9 +15,9 @@ describe("wrapTool", () => {
     expect(result).toEqual(expected);
   });
 
-  it("converts HisaaboApiError (not_found) to isError with formatted message", async () => {
+  it("converts FintranzactApiError (not_found) to isError with formatted message", async () => {
     const handler = wrapTool(async () => {
-      throw new HisaaboApiError({ code: "not_found", resource: "Invoice #42" });
+      throw new FintranzactApiError({ code: "not_found", resource: "Invoice #42" });
     });
 
     const result = await handler({});
@@ -30,9 +30,9 @@ describe("wrapTool", () => {
     expect(text).toContain("Invoice #42");
   });
 
-  it("converts HisaaboApiError (validation_failed) to isError with field details", async () => {
+  it("converts FintranzactApiError (validation_failed) to isError with field details", async () => {
     const handler = wrapTool(async () => {
-      throw new HisaaboApiError({
+      throw new FintranzactApiError({
         code: "validation_failed",
         fields: {
           amount: ["must be a positive number"],
@@ -51,9 +51,9 @@ describe("wrapTool", () => {
     expect(text).toContain("party_id");
   });
 
-  it("converts HisaaboApiError (unauthorized) to isError with auth guidance", async () => {
+  it("converts FintranzactApiError (unauthorized) to isError with auth guidance", async () => {
     const handler = wrapTool(async () => {
-      throw new HisaaboApiError({ code: "unauthorized", message: "Session expired" });
+      throw new FintranzactApiError({ code: "unauthorized", message: "Session expired" });
     });
 
     const result = await handler({});
@@ -61,7 +61,7 @@ describe("wrapTool", () => {
     expect(result.isError).toBe(true);
     const text = (result.content[0] as { type: "text"; text: string }).text;
     expect(text).toContain("Authentication required");
-    expect(text).toContain("HISAABO_API_KEY");
+    expect(text).toContain("FINTRANZACT_API_KEY");
   });
 
   it("sanitizes network errors — ECONNREFUSED does not leak host/port", async () => {

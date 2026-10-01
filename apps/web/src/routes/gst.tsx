@@ -1,12 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
 import { trpc, getBusinessId } from "@/lib/trpc";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
-dayjs.extend(utc);
 import { apiUrl } from "@/lib/api-url";
+import { getCurrentFYBounds, getPreviousFYBounds } from "@/lib/fy-bounds";
 import { StatCard } from "@/components/ui/StatCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
@@ -29,22 +27,24 @@ const months = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-type ReportTab = "gstr1" | "gstr3b" | "gstr9" | "pnl" | "trial-balance" | "balance-sheet" | "aging" | "ledger" | "tally";
+type ReportTab = "gstr1" | "gstr3b" | "gstr9" | "cmp08" | "pnl" | "trial-balance" | "balance-sheet" | "aging" | "ledger" | "tally";
 
 function GSTReportsPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [activeTab, setActiveTabRaw] = useState<ReportTab>(
-    () => (localStorage.getItem("hisaabo_gst_tab") as ReportTab) || "gstr1"
+    () => (localStorage.getItem("fintranzact_gst_tab") as ReportTab) || "gstr1"
   );
   const setActiveTab = (tab: ReportTab) => {
     setActiveTabRaw(tab);
-    localStorage.setItem("hisaabo_gst_tab", tab);
+    localStorage.setItem("fintranzact_gst_tab", tab);
   };
 
   const { data: businesses } = trpc.business.list.useQuery();
-  const biz = businesses?.[0];
+  // The business the reports are for (not simply the first one listed)
+  const biz = businesses?.find((b) => b.id === getBusinessId()) ?? businesses?.[0];
+  const isComposition = biz?.gstRegistrationType === "composition";
 
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);
 
@@ -62,6 +62,8 @@ function GSTReportsPage() {
     { value: "gstr1", label: tab1Label },
     { value: "gstr3b", label: tab2Label },
     { value: "gstr9", label: "GSTR-9" },
+    // Composition dealers pay tax quarterly on CMP-08
+    ...(isComposition ? [{ value: "cmp08" as const, label: "CMP-08" }] : []),
     { value: "pnl", label: "Profit & Loss" },
     { value: "trial-balance", label: "Trial Balance" },
     { value: "balance-sheet", label: "Balance Sheet" },
@@ -77,20 +79,23 @@ function GSTReportsPage() {
         description={reportDesc}
       />
 
-      {/* Tab bar */}
-      <div className="mb-6">
+      {/* Tab bar — nine reports don't fit a phone: the bar scrolls sideways
+          on its own instead of the page. */}
+      <div className="mb-6 overflow-x-auto" data-testid="gst-report-tabs">
         <PillTabs
           tabs={tabs}
           value={activeTab}
           onChange={(v) => setActiveTab(v as ReportTab)}
+          className="w-max"
         />
       </div>
 
       {/* Period selector — only shown for GST tabs */}
       {(activeTab === "gstr1" || activeTab === "gstr3b") && (
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-3 mb-6">
           <Select
             className="input w-40"
+            aria-label="Month"
             value={month}
             onChange={(e) => setMonth(Number(e.target.value))}
           >
@@ -100,6 +105,7 @@ function GSTReportsPage() {
           </Select>
           <Select
             className="input w-28"
+            aria-label="Year"
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
           >
@@ -108,7 +114,7 @@ function GSTReportsPage() {
             ))}
           </Select>
 
-          <div className="ml-4">
+          <div className="sm:ml-4">
             <SegmentedControl
               tabs={[
                 { value: "gstr1", label: tab1Label },
@@ -124,6 +130,7 @@ function GSTReportsPage() {
       {activeTab === "gstr1" && <GSTR1View year={year} month={month} />}
       {activeTab === "gstr3b" && <GSTR3BView year={year} month={month} />}
       {activeTab === "gstr9" && <GSTR9View />}
+      {activeTab === "cmp08" && isComposition && <CMP08View />}
       {activeTab === "pnl" && <ProfitAndLossView />}
       {activeTab === "trial-balance" && <TrialBalanceView />}
       {activeTab === "balance-sheet" && <BalanceSheetView />}
@@ -139,6 +146,8 @@ function GSTReportsPage() {
 function GSTR1View({ year, month }: { year: number; month: number }) {
   const { data, isLoading, error } = trpc.gst.gstr1.useQuery({ year, month });
   const { data: csvData } = trpc.gst.gstr1CSV.useQuery({ year, month });
+  const utils = trpc.useUtils();
+  const [downloadingJson, setDownloadingJson] = useState(false);
 
   function handleExport() {
     if (!csvData) return;
@@ -150,6 +159,27 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("GSTR-1 CSV exported");
+  }
+
+  // The JSON the GST portal's offline tool takes (b2b, b2cl, b2cs, nil,
+  // cdnr, cdnur, hsn), ready to upload on gst.gov.in.
+  async function handleDownloadJson() {
+    setDownloadingJson(true);
+    try {
+      const result = await utils.gst.gstr1Json.fetch({ year, month });
+      const blob = new Blob([JSON.stringify(result.json, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("GSTR-1 portal JSON downloaded");
+    } catch {
+      toast.error("Download failed");
+    } finally {
+      setDownloadingJson(false);
+    }
   }
 
   if (isLoading) return <ReportSkeleton />;
@@ -165,6 +195,13 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
     />
   );
 
+  const b2clInvoices = data.b2cLarge.flatMap((s) => (s.invoices ?? []).map((inv) => ({ ...inv, state: s.state })));
+  const notes = [
+    ...data.creditNotes.map((n) => ({ ...n, kind: "Credit" as const })),
+    ...data.debitNotes.map((n) => ({ ...n, kind: "Debit" as const })),
+  ];
+  const sectionLabel = (s?: string) => (s === "cdnr" ? "CDNR" : s === "cdnur" ? "CDNUR" : "B2CS");
+
   return (
     <div className="space-y-5">
       {/* Summary cards */}
@@ -176,7 +213,7 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
       </div>
 
       {/* Tax split cards */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatCard label="CGST" value={fmt(data.totalCgst)} />
         <StatCard label="SGST" value={fmt(data.totalSgst)} />
         <StatCard label="IGST" value={fmt(data.totalIgst)} />
@@ -184,76 +221,205 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
 
       {/* B2B Table */}
       {data.b2b.length > 0 && (
-        <div className="card overflow-hidden mb-6">
+        <div className="card overflow-hidden mb-6" data-testid="gstr1-b2b">
           <div className="px-4 py-3 border-b border-border-light">
             <h3 className="text-sm font-semibold text-text-primary">B2B — Outward supplies to registered persons</h3>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Party GSTIN</th>
-                <th>Name</th>
-                <th>Invoice #</th>
-                <th className="text-right">Taxable</th>
-                <th className="text-right">CGST</th>
-                <th className="text-right">SGST</th>
-                <th className="text-right">IGST</th>
-                <th className="text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.b2b.map((row, i) => (
-                <tr key={i}>
-                  <td className="font-mono text-ui text-text-secondary">{row.partyGstin}</td>
-                  <td className="text-text-primary">{row.partyName}</td>
-                  <td className="font-mono text-ui text-text-secondary">{row.invoiceNumber}</td>
-                  <td className="text-right tabular-nums">{fmt(row.taxableValue)}</td>
-                  <td className="text-right tabular-nums text-text-secondary">{fmt(row.cgst)}</td>
-                  <td className="text-right tabular-nums text-text-secondary">{fmt(row.sgst)}</td>
-                  <td className="text-right tabular-nums text-text-secondary">{fmt(row.igst)}</td>
-                  <td className="text-right tabular-nums font-medium">{fmt(row.totalInvoiceValue)}</td>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Party GSTIN</th>
+                  <th>Name</th>
+                  <th>Invoice #</th>
+                  <th className="text-right">Taxable</th>
+                  <th className="text-right">CGST</th>
+                  <th className="text-right">SGST</th>
+                  <th className="text-right">IGST</th>
+                  <th className="text-right">Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.b2b.map((row, i) => (
+                  <tr key={i}>
+                    <td className="font-mono text-ui text-text-secondary">{row.partyGstin}</td>
+                    <td className="text-text-primary">{row.partyName}</td>
+                    <td className="font-mono text-ui text-text-secondary">{row.invoiceNumber}</td>
+                    <td className="text-right tabular-nums">{fmt(row.taxableValue)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(row.cgst)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(row.sgst)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(row.igst)}</td>
+                    <td className="text-right tabular-nums font-medium">{fmt(row.totalInvoiceValue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* B2CL Table */}
+      {b2clInvoices.length > 0 && (
+        <div className="card overflow-hidden mb-6" data-testid="gstr1-b2cl">
+          <div className="px-4 py-3 border-b border-border-light">
+            <h3 className="text-sm font-semibold text-text-primary">B2CL — Inter-state supplies to unregistered persons above ₹1 lakh</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Place of supply</th>
+                  <th>Invoice #</th>
+                  <th>Date</th>
+                  <th className="text-right">Taxable</th>
+                  <th className="text-right">IGST</th>
+                  <th className="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {b2clInvoices.map((row) => (
+                  <tr key={row.invoiceNumber}>
+                    <td className="text-text-primary">{row.state}</td>
+                    <td className="font-mono text-ui text-text-secondary">{row.invoiceNumber}</td>
+                    <td className="text-text-secondary">{formatDate(row.invoiceDate)}</td>
+                    <td className="text-right tabular-nums">{fmt(row.taxableValue)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(row.igst)}</td>
+                    <td className="text-right tabular-nums font-medium">{fmt(row.totalInvoiceValue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* B2CS Table */}
       {data.b2cSmall.length > 0 && (
-        <div className="card overflow-hidden mb-6">
+        <div className="card overflow-hidden mb-6" data-testid="gstr1-b2cs">
           <div className="px-4 py-3 border-b border-border-light">
             <h3 className="text-sm font-semibold text-text-primary">B2CS — Outward supplies to unregistered persons</h3>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Tax Rate</th>
-                <th className="text-right">Taxable Value</th>
-                <th className="text-right">CGST</th>
-                <th className="text-right">SGST</th>
-                <th className="text-right">IGST</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.b2cSmall.map((row, i) => (
-                <tr key={i}>
-                  <td className="text-text-primary">{row.taxRate}%</td>
-                  <td className="text-right tabular-nums">{fmt(row.taxableValue)}</td>
-                  <td className="text-right tabular-nums text-text-secondary">{fmt(row.cgst)}</td>
-                  <td className="text-right tabular-nums text-text-secondary">{fmt(row.sgst)}</td>
-                  <td className="text-right tabular-nums text-text-secondary">{fmt(row.igst)}</td>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Tax Rate</th>
+                  <th>Supply</th>
+                  <th>Place of supply</th>
+                  <th className="text-right">Taxable Value</th>
+                  <th className="text-right">CGST</th>
+                  <th className="text-right">SGST</th>
+                  <th className="text-right">IGST</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.b2cSmall.map((row, i) => (
+                  <tr key={i}>
+                    <td className="text-text-primary">{row.taxRate}%{row.taxRate === 0 ? " (nil / exempt)" : ""}</td>
+                    <td className="text-text-secondary">{row.supplyType === "INTER" ? "Inter-state" : "Intra-state"}</td>
+                    <td className="text-text-secondary">{row.pos ?? "—"}</td>
+                    <td className="text-right tabular-nums">{fmt(row.taxableValue)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(row.cgst)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(row.sgst)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(row.igst)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Credit / debit notes */}
+      {notes.length > 0 && (
+        <div className="card overflow-hidden mb-6" data-testid="gstr1-notes">
+          <div className="px-4 py-3 border-b border-border-light">
+            <h3 className="text-sm font-semibold text-text-primary">CDNR / CDNUR — Credit and debit notes</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Table</th>
+                  <th>Note #</th>
+                  <th>Type</th>
+                  <th>Against</th>
+                  <th>Party</th>
+                  <th className="text-right">Taxable</th>
+                  <th className="text-right">CGST</th>
+                  <th className="text-right">SGST</th>
+                  <th className="text-right">IGST</th>
+                  <th className="text-right">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {notes.map((n) => (
+                  <tr key={n.invoiceNumber}>
+                    <td className="text-text-primary">{sectionLabel(n.section)}</td>
+                    <td className="font-mono text-ui text-text-secondary">{n.invoiceNumber}</td>
+                    <td className="text-text-secondary">{n.kind}</td>
+                    <td className="font-mono text-ui text-text-secondary">{n.originalInvoiceNumber ?? "—"}</td>
+                    <td className="text-text-primary">{n.partyName}</td>
+                    <td className="text-right tabular-nums">{fmtStr(n.taxableAmount)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(n.cgst ?? 0)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(n.sgst ?? 0)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(n.igst ?? 0)}</td>
+                    <td className="text-right tabular-nums font-medium">{fmtStr(n.totalAmount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* HSN summary */}
+      {data.hsn.length > 0 && (
+        <div className="card overflow-hidden mb-6" data-testid="gstr1-hsn">
+          <div className="px-4 py-3 border-b border-border-light">
+            <h3 className="text-sm font-semibold text-text-primary">HSN — Summary of outward supplies (net of notes)</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>HSN / SAC</th>
+                  <th>UQC</th>
+                  <th className="text-right">Qty</th>
+                  <th className="text-right">Rate</th>
+                  <th className="text-right">Taxable</th>
+                  <th className="text-right">CGST</th>
+                  <th className="text-right">SGST</th>
+                  <th className="text-right">IGST</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.hsn.map((row) => (
+                  <tr key={`${row.hsn}-${row.rate}-${row.uqc}`}>
+                    <td className="font-mono text-ui text-text-primary">{row.hsn}</td>
+                    <td className="text-text-secondary">{row.uqc ?? "OTH"}</td>
+                    <td className="text-right tabular-nums">{row.quantity}</td>
+                    <td className="text-right tabular-nums">{row.rate ?? 0}%</td>
+                    <td className="text-right tabular-nums">{fmt(row.taxableValue)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(row.cgst)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(row.sgst)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmt(row.igst)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* Export */}
-      <div className="flex justify-end">
-        <button onClick={handleExport} className="btn-primary">
+      <div className="flex flex-wrap justify-end gap-3">
+        <button onClick={handleExport} className="btn-secondary">
           Export GSTR-1 CSV
+        </button>
+        <button onClick={handleDownloadJson} disabled={downloadingJson} className="btn-primary inline-flex items-center gap-2">
+          {downloadingJson ? <Spinner size="sm" className="text-white" /> : <Icon icon={Download04Icon} size={16} />}
+          Download Portal JSON (GSTN)
         </button>
       </div>
     </div>
@@ -278,43 +444,54 @@ function GSTR3BView({ year, month }: { year: number; month: number }) {
     />
   );
 
+  const rows: Array<{ id: string; label: string; row: { taxableValue: number; igst: number; cgst: number; sgst: number }; muted?: boolean }> = [
+    { id: "a", label: "(a) Outward taxable supplies (other than zero rated, nil rated and exempted)", row: data.outwardSupplies.taxable },
+    { id: "b", label: "(b) Outward taxable supplies (zero rated)", row: data.outwardSupplies.zeroRated, muted: true },
+    { id: "c", label: "(c) Other outward supplies (nil rated, exempted)", row: data.outwardSupplies.exempt, muted: true },
+    {
+      id: "d",
+      label: "(d) Inward supplies (liable to reverse charge)",
+      row: {
+        taxableValue: parseFloat(data.rcmSupplies.taxableValue),
+        igst: parseFloat(data.rcmSupplies.igst),
+        cgst: parseFloat(data.rcmSupplies.cgst),
+        sgst: parseFloat(data.rcmSupplies.sgst),
+      },
+      muted: true,
+    },
+  ];
+
   return (
     <div className="space-y-5">
       {/* 3.1 Outward supplies */}
-      <div className="card overflow-hidden mb-6">
+      <div className="card overflow-hidden mb-6" data-testid="gstr3b-3-1">
         <div className="px-4 py-3 border-b border-border-light">
           <h3 className="text-sm font-semibold text-text-primary">3.1 — Outward supplies and inward supplies liable to reverse charge</h3>
         </div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th className="text-right">IGST</th>
-              <th className="text-right">CGST</th>
-              <th className="text-right">SGST</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="text-text-primary">Taxable outward supplies</td>
-              <td className="text-right tabular-nums">{fmt(data.outwardSupplies.taxable.igst)}</td>
-              <td className="text-right tabular-nums">{fmt(data.outwardSupplies.taxable.cgst)}</td>
-              <td className="text-right tabular-nums">{fmt(data.outwardSupplies.taxable.sgst)}</td>
-            </tr>
-            <tr>
-              <td className="text-text-secondary">Zero-rated supplies</td>
-              <td className="text-right tabular-nums text-text-secondary">{fmt(0)}</td>
-              <td className="text-right tabular-nums text-text-secondary">{fmt(0)}</td>
-              <td className="text-right tabular-nums text-text-secondary">{fmt(0)}</td>
-            </tr>
-            <tr>
-              <td className="text-text-secondary">Exempt supplies</td>
-              <td className="text-right tabular-nums text-text-secondary">{fmt(0)}</td>
-              <td className="text-right tabular-nums text-text-secondary">{fmt(0)}</td>
-              <td className="text-right tabular-nums text-text-secondary">{fmt(0)}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Nature of supplies</th>
+                <th className="text-right">Taxable value</th>
+                <th className="text-right">IGST</th>
+                <th className="text-right">CGST</th>
+                <th className="text-right">SGST</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ id, label, row, muted }) => (
+                <tr key={id}>
+                  <td className={muted ? "text-text-secondary" : "text-text-primary"}>{label}</td>
+                  <td className="text-right tabular-nums">{fmt(row.taxableValue)}</td>
+                  <td className="text-right tabular-nums">{fmt(row.igst)}</td>
+                  <td className="text-right tabular-nums">{fmt(row.cgst)}</td>
+                  <td className="text-right tabular-nums">{fmt(row.sgst)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* 4. ITC */}
@@ -322,7 +499,7 @@ function GSTR3BView({ year, month }: { year: number; month: number }) {
         <div className="px-4 py-3 border-b border-border-light">
           <h3 className="text-sm font-semibold text-text-primary">4 — Eligible input tax credit</h3>
         </div>
-        <div className="grid grid-cols-3 gap-4 p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4">
           <StatCard label="ITC — IGST" value={fmt(data.itc.igst)} />
           <StatCard label="ITC — CGST" value={fmt(data.itc.cgst)} />
           <StatCard label="ITC — SGST" value={fmt(data.itc.sgst)} />
@@ -332,12 +509,12 @@ function GSTR3BView({ year, month }: { year: number; month: number }) {
         </div>
       </div>
 
-      {/* 5. Tax payable */}
+      {/* Output tax (3.1 tax heads) */}
       <div className="card overflow-hidden mb-6">
         <div className="px-4 py-3 border-b border-border-light">
-          <h3 className="text-sm font-semibold text-text-primary">5 — Values of exempt, nil-rated and non-GST inward supplies</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Output tax payable</h3>
         </div>
-        <div className="grid grid-cols-3 gap-4 p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4">
           <StatCard label="Output IGST" value={fmt(data.taxPayable.igst)} />
           <StatCard label="Output CGST" value={fmt(data.taxPayable.cgst)} />
           <StatCard label="Output SGST" value={fmt(data.taxPayable.sgst)} />
@@ -359,6 +536,59 @@ function GSTR3BView({ year, month }: { year: number; month: number }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── CMP-08 View (composition scheme) ───────────────────────────
+
+const quarterLabels = ["Q1 (Apr–Jun)", "Q2 (Jul–Sep)", "Q3 (Oct–Dec)", "Q4 (Jan–Mar)"];
+
+function CMP08View() {
+  const now = new Date();
+  const thisFy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const thisQuarter = now.getMonth() >= 3 ? Math.floor((now.getMonth() - 3) / 3) + 1 : 4;
+  // Default to the quarter just ended: the one due for filing
+  const [fy, setFy] = useState(thisQuarter === 1 ? thisFy - 1 : thisFy);
+  const [quarter, setQuarter] = useState(thisQuarter === 1 ? 4 : thisQuarter - 1);
+  const { data, isLoading, error } = trpc.gst.cmp08.useQuery({ year: fy, quarter });
+  const fyOptions = Array.from({ length: 5 }, (_, i) => thisFy - i);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <Select className="input w-36" aria-label="Financial year" value={fy} onChange={(e) => setFy(Number(e.target.value))}>
+          {fyOptions.map((y) => (
+            <option key={y} value={y}>{fyLabel(y)}</option>
+          ))}
+        </Select>
+        <Select className="input w-40" aria-label="Quarter" value={quarter} onChange={(e) => setQuarter(Number(e.target.value))}>
+          {quarterLabels.map((label, i) => (
+            <option key={label} value={i + 1}>{label}</option>
+          ))}
+        </Select>
+      </div>
+
+      {isLoading && <ReportSkeleton />}
+      {error && (
+        <div className="card px-5 py-4 border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800">
+          <p className="text-sm text-red-700 dark:text-red-400">Failed to load CMP-08: {error.message}</p>
+        </div>
+      )}
+      {data && (
+        <div className="card overflow-hidden" data-testid="cmp08">
+          <div className="px-4 py-3 border-b border-border-light">
+            <h3 className="text-sm font-semibold text-text-primary">CMP-08 — Statement for payment of self-assessed tax</h3>
+            <p className="text-xs text-text-tertiary mt-0.5">
+              {formatDate(data.quarterStart)} — {formatDate(data.quarterEnd)} · outward supplies net of credit notes, at the 1% composition rate for traders
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
+            <StatCard label="Outward supplies (turnover)" value={fmtStr(data.taxableValue)} />
+            <StatCard label="Composition tax payable" value={fmtStr(data.taxPayable)} valueColor="text-amber-600" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -525,7 +755,7 @@ function ProfitAndLossView() {
               <p className="text-lg font-bold tabular-nums text-emerald-600">{fmtStr(data.revenue)}</p>
             </div>
             <div className="card px-4 py-3">
-              <p className="text-xs text-text-tertiary mb-1">COGS (Purchases)</p>
+              <p className="text-xs text-text-tertiary mb-1">Cost of Goods Sold</p>
               <p className="text-lg font-bold tabular-nums text-blue-600">{fmtStr(data.cogs)}</p>
             </div>
             <div className="card px-4 py-3">
@@ -560,7 +790,24 @@ function ProfitAndLossView() {
                   <td className="text-right tabular-nums font-semibold text-emerald-600">{fmtStr(data.revenue)}</td>
                 </tr>
                 <tr>
-                  <td className="text-text-secondary pl-6">Less: Cost of Goods Sold (Purchases)</td>
+                  <td className="text-text-secondary pl-6">Opening stock</td>
+                  <td className="text-right tabular-nums text-text-tertiary">{fmtStr(data.openingStock)}</td>
+                </tr>
+                <tr>
+                  <td className="text-text-secondary pl-6">Add: Purchases</td>
+                  <td className="text-right tabular-nums text-text-tertiary">{fmtStr(data.purchases)}</td>
+                </tr>
+                <tr>
+                  <td className="text-text-secondary pl-6">
+                    Less: Closing stock
+                    <span className="ml-1 text-2xs text-text-tertiary">
+                      ({data.valuationMethod === "fifo" ? "FIFO" : "average cost"})
+                    </span>
+                  </td>
+                  <td className="text-right tabular-nums text-text-tertiary">({fmtStr(data.closingStock)})</td>
+                </tr>
+                <tr>
+                  <td className="text-text-secondary pl-6">Less: Cost of Goods Sold</td>
                   <td className="text-right tabular-nums text-text-secondary">({fmtStr(data.cogs)})</td>
                 </tr>
                 <tr className="border-t border-border-light bg-surface-1">
@@ -599,32 +846,7 @@ function ProfitAndLossView() {
   );
 }
 
-// ── FY date helpers ────────────────────────────────────────────
-// All boundaries are UTC — the DB stores UTC timestamps and local-time
-// construction in IST would shift April 1 → March 31 UTC, pulling the
-// previous March into the current FY.
-function getCurrentFYBounds(): { start: string; end: string; year: number } {
-  const now = dayjs.utc();
-  const mm = now.month();
-  const fyYear = mm >= 3 ? now.year() : now.year() - 1;
-  return {
-    start: dayjs.utc().year(fyYear).month(3).date(1).startOf("day").toISOString(),
-    end: now.toISOString(),
-    year: fyYear,
-  };
-}
-
-function getPreviousFYBounds(): { start: string; end: string; year: number } {
-  const now = dayjs.utc();
-  const mm = now.month();
-  const prevFyYear = mm >= 3 ? now.year() - 1 : now.year() - 2;
-  return {
-    start: dayjs.utc().year(prevFyYear).month(3).date(1).startOf("day").toISOString(),
-    end: dayjs.utc().year(prevFyYear + 1).month(2).date(31).endOf("day").toISOString(),
-    year: prevFyYear,
-  };
-}
-
+// ── FY date helpers (lib/fy-bounds) ─────────────────────────────
 function fyLabel(year: number): string {
   return `FY ${year}-${String(year + 1).slice(-2)}`;
 }
@@ -1610,12 +1832,13 @@ function GSTR9View() {
   const { data, isLoading, error } = trpc.gst.gstr9.useQuery({ financialYear });
   const utils = trpc.useUtils();
 
-  // FY selector options — last 5 completed financial years
-  const fyOptions = Array.from({ length: 5 }, (_, i) => {
-    const startYear = currentFYStart - 1 - i;
+  // FY selector options — the year in progress (to review before it closes)
+  // and the last 5 completed financial years
+  const fyOptions = Array.from({ length: 6 }, (_, i) => {
+    const startYear = currentFYStart - i;
     return {
       value: startYear,
-      label: `FY ${startYear}-${String(startYear + 1).slice(2)}`,
+      label: `FY ${startYear}-${String(startYear + 1).slice(2)}${i === 0 ? " (to date)" : ""}`,
     };
   });
 
@@ -1646,7 +1869,8 @@ function GSTR9View() {
         <div>
           <p className="text-xs text-text-tertiary mb-1 font-medium uppercase tracking-wide">Financial Year</p>
           <Select
-            className="input w-44"
+            className="input w-52"
+            aria-label="Financial year"
             value={financialYear}
             onChange={(e) => setFinancialYear(Number(e.target.value))}
           >

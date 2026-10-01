@@ -1,9 +1,11 @@
 import { eq, and, sql, desc, ilike, or, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { expenses, bankAccounts, bankTransactions } from "@fintranzact/db";
+import { expenses, bankAccounts, bankTransactions, bankStatementLines } from "@fintranzact/db";
 import { createExpenseSchema, paginationSchema, money } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
+import { assertInBusiness } from "../lib/business-scope.js";
+import { reopenLinesMatchedTo } from "./bankRecon.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
@@ -63,6 +65,7 @@ export const expenseRouter = router({
     requireCan(ctx.ability, "create", "Expense");
 
     const expense = await ctx.db.transaction(async (tx) => {
+      await assertInBusiness(tx, bankAccounts, input.bankAccountId, ctx.businessId, "Bank account");
       const [newExpense] = await tx.insert(expenses).values({
         ...input,
         businessId: ctx.businessId,
@@ -162,6 +165,7 @@ export const expenseRouter = router({
           .limit(1);
 
         if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Expense not found" });
+        await assertInBusiness(tx, bankAccounts, input.data.bankAccountId, ctx.businessId, "Bank account");
 
         // Reverse old bank transaction if one exists
         const [oldBankTx] = await tx.select({
@@ -196,47 +200,79 @@ export const expenseRouter = router({
         // Update the expense
         const newAmount = input.data.amount ?? existing.amount;
         const newMode = input.data.mode ?? existing.mode;
+        // An expense pinned to an account (explicit bankAccountId, e.g. one
+        // created from that account's bank statement) keeps its withdrawal
+        // there, as expense.create does. Changing the mode without naming an
+        // account drops the pin.
+        const pinnedAccountId = input.data.bankAccountId
+          ?? (newMode === existing.mode ? existing.bankAccountId : null);
 
         const [result] = await tx.update(expenses)
           .set({
             ...input.data,
+            bankAccountId: pinnedAccountId,
             expenseDate: input.data.expenseDate ? new Date(input.data.expenseDate) : undefined,
           })
           .where(and(eq(expenses.id, input.id), eq(expenses.businessId, ctx.businessId)))
           .returning();
 
         // Create new bank transaction with updated values
-        const accountTypes = modeToAccountTypes(newMode);
-        if (accountTypes) {
-          const [account] = await tx
+        let account: { id: string; currentBalance: string } | undefined;
+        if (pinnedAccountId) {
+          [account] = await tx
             .select({ id: bankAccounts.id, currentBalance: bankAccounts.currentBalance })
             .from(bankAccounts)
             .where(and(
+              eq(bankAccounts.id, pinnedAccountId),
               eq(bankAccounts.businessId, ctx.businessId),
-              inArray(bankAccounts.accountType, accountTypes),
             ))
-            .orderBy(sql`${bankAccounts.isDefault} DESC`, bankAccounts.createdAt)
             .for("update")
             .limit(1);
-
-          if (account) {
-            const newBalance = money.sub(account.currentBalance, newAmount);
-
-            await tx.insert(bankTransactions).values({
-              businessId: ctx.businessId,
-              bankAccountId: account.id,
-              type: "withdrawal",
-              amount: newAmount,
-              description: `Expense: ${result.category}${result.description ? ` — ${result.description}` : ""}`,
-              referenceType: "expense",
-              referenceId: result.id,
-              transactionDate: result.expenseDate,
-            });
-
-            await tx.update(bankAccounts)
-              .set({ currentBalance: newBalance, updatedAt: new Date() })
-              .where(eq(bankAccounts.id, account.id));
+        } else {
+          const accountTypes = modeToAccountTypes(newMode);
+          if (accountTypes) {
+            [account] = await tx
+              .select({ id: bankAccounts.id, currentBalance: bankAccounts.currentBalance })
+              .from(bankAccounts)
+              .where(and(
+                eq(bankAccounts.businessId, ctx.businessId),
+                inArray(bankAccounts.accountType, accountTypes),
+              ))
+              .orderBy(sql`${bankAccounts.isDefault} DESC`, bankAccounts.createdAt)
+              .for("update")
+              .limit(1);
           }
+        }
+
+        let newBankTxId: string | null = null;
+        if (account) {
+          const newBalance = money.sub(account.currentBalance, newAmount);
+
+          const [newBankTx] = await tx.insert(bankTransactions).values({
+            businessId: ctx.businessId,
+            bankAccountId: account.id,
+            type: "withdrawal",
+            amount: newAmount,
+            description: `Expense: ${result.category}${result.description ? ` — ${result.description}` : ""}`,
+            referenceType: "expense",
+            referenceId: result.id,
+            transactionDate: result.expenseDate,
+          }).returning({ id: bankTransactions.id });
+          newBankTxId = newBankTx!.id;
+
+          await tx.update(bankAccounts)
+            .set({ currentBalance: newBalance, updatedAt: new Date() })
+            .where(eq(bankAccounts.id, account.id));
+        }
+
+        // Statement lines reconciled against the old withdrawal follow it.
+        if (oldBankTx) {
+          await tx.update(bankStatementLines)
+            .set({ matchedBankTransactionId: newBankTxId })
+            .where(and(
+              eq(bankStatementLines.businessId, ctx.businessId),
+              eq(bankStatementLines.matchedBankTransactionId, oldBankTx.id),
+            ));
         }
 
         return result;
@@ -316,6 +352,13 @@ export const expenseRouter = router({
             .delete(bankTransactions)
             .where(eq(bankTransactions.id, originalTx.id));
         }
+
+        // Statement lines reconciled against this expense (or its withdrawal)
+        // no longer have anything to match — reopen them.
+        await reopenLinesMatchedTo(tx, ctx.businessId, {
+          expenseId: input.id,
+          bankTransactionId: originalTx?.id,
+        });
       });
 
       logAudit(ctx.db, {

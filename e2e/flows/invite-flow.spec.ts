@@ -56,7 +56,7 @@ test.describe("Invite Flow — Team Tab", () => {
     await expect(modal).toBeVisible({ timeout: 5_000 });
 
     // Fill email
-    const inviteEmail = `invited-${Date.now()}@test.hisaabo.in`;
+    const inviteEmail = `invited-${Date.now()}@test.fintranzact.com`;
     await modal.getByPlaceholder("colleague@example.com").fill(inviteEmail);
 
     // Submit

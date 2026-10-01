@@ -1,8 +1,9 @@
-import { parties, items, invoices, invoiceItems, payments, shipments } from "@fintranzact/db";
-import { and, eq, isNull, sql } from "drizzle-orm";
-import { calcLineItem, money } from "@fintranzact/shared";
+import { businesses, parties, items, invoices, invoiceItems, payments, shipments } from "@fintranzact/db";
+import { and, eq, isNull } from "drizzle-orm";
+import { calcLineItem, isIntraStateSupply, money } from "@fintranzact/shared";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalInvoice } from "../types.js";
+import { postNewDocumentsStock } from "../../../lib/inventory-service.js";
 
 export interface InvoiceImportOpts {
   autoCreatePayments: boolean;
@@ -29,9 +30,14 @@ export async function runInvoicesImport(
   const errors: string[] = [];
 
   // Pre-fetch reference data
-  const allParties = await db.select({ id: parties.id, name: parties.name })
-    .from(parties).where(eq(parties.businessId, businessId));
+  const allParties = await db.select({
+    id: parties.id, name: parties.name, stateCode: parties.stateCode, state: parties.state, gstin: parties.gstin,
+  }).from(parties).where(eq(parties.businessId, businessId));
   const partyByName = new Map(allParties.map(p => [p.name.toLowerCase(), p.id]));
+  // Intra-state lines are taxed as CGST + SGST, each rounded at half the rate.
+  const [biz] = await db.select({ stateCode: businesses.stateCode, state: businesses.state, gstin: businesses.gstin })
+    .from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  const intraStateParty = new Map(allParties.map(p => [p.id, isIntraStateSupply(biz ?? {}, p)]));
 
   // Active items only — soft-deleted items should not be matched during
   // import. If an imported invoice references a name that matches a
@@ -54,7 +60,6 @@ export async function runInvoicesImport(
     invoiceRow: any;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     lineItemRows: any[];
-    stockDeltas: Map<string, number>;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     autoPaymentRow: any | null;
   }> = [];
@@ -80,10 +85,12 @@ export async function runInvoicesImport(
       partyId,
       type: inv.type,
       documentType: "invoice" as const,
+      stockMode: "tracked",
       invoiceNumber: inv.invoiceNumber,
       invoiceDate: inv.invoiceDate,
       dueDate: inv.dueDate ?? null,
-      status: (money.toNumber(inv.totalAmount) === 0 ? "paid" : "sent") as "paid" | "sent",
+      // A cancelled invoice stays cancelled: it holds no stock and is owed nothing.
+      status: (inv.status === "cancelled" ? "cancelled" : money.toNumber(inv.totalAmount) === 0 ? "paid" : "sent") as "paid" | "sent" | "cancelled",
       subtotal: inv.subtotal,
       taxAmount: inv.taxAmount,
       discountAmount: inv.discountAmount,
@@ -102,7 +109,6 @@ export async function runInvoicesImport(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lineItemRows: any[] = [];
-    const stockDeltas = new Map<string, number>();
 
     if (inv.lineItems?.length) {
       for (let idx = 0; idx < inv.lineItems.length; idx++) {
@@ -114,6 +120,7 @@ export async function runInvoicesImport(
           unitPrice: li.unitPrice || "0",
           taxPercent: li.taxPercent || "0",
           discountPercent: li.discountPercent || "0",
+          intraState: intraStateParty.get(partyId) ?? true,
         });
 
         const cf = li.conversionFactor || "1";
@@ -144,26 +151,27 @@ export async function runInvoicesImport(
           totalAmount: calc.total,
           sortOrder: idx,
         });
-
-        if (itemId) {
-          // Stock delta in base units: qty × conversionFactor
-          const baseQty = money.toNumber(li.quantity || "1") * money.toNumber(cf);
-          stockDeltas.set(itemId, (stockDeltas.get(itemId) || 0) + baseQty);
-        }
       }
     } else {
+      // Synthetic single-line fallback when the source CSV had no line
+      // items. Use itemName as the placeholder display text; description
+      // (notes) stays null. The line carries the invoice's tax: GST reports
+      // and the HSN summary are built from lines, so a line priced at the
+      // tax-inclusive total with no tax showed the whole amount as taxable
+      // at 0% while the invoice itself said otherwise.
+      const total = money.toNumber(inv.totalAmount);
+      const tax = money.toNumber(inv.taxAmount);
+      const taxable = total - tax;
+      const carriesTax = tax > 0 && taxable > 0;
       lineItemRows.push({
         invoiceId,
         itemId: null,
-        // Synthetic single-line fallback when the source CSV had no line
-        // items. Use itemName as the placeholder display text; description
-        // (notes) stays null.
         itemName: `Imported: ${inv.invoiceNumber}`,
         description: null,
         quantity: "1",
-        unitPrice: inv.totalAmount,
-        taxPercent: "0",
-        taxAmount: "0",
+        unitPrice: carriesTax ? taxable.toFixed(2) : inv.totalAmount,
+        taxPercent: carriesTax ? ((tax / taxable) * 100).toFixed(2) : "0",
+        taxAmount: carriesTax ? tax.toFixed(2) : "0",
         discountPercent: "0",
         totalAmount: inv.totalAmount,
         sortOrder: 0,
@@ -172,7 +180,7 @@ export async function runInvoicesImport(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let autoPaymentRow: any | null = null;
-    if (opts.autoCreatePayments && money.isPositive(inv.amountPaid)) {
+    if (opts.autoCreatePayments && inv.status !== "cancelled" && money.isPositive(inv.amountPaid)) {
       const mode = inv.paymentMode || opts.defaultPaymentMode;
       autoPaymentRow = {
         businessId,
@@ -190,7 +198,7 @@ export async function runInvoicesImport(
       };
     }
 
-    validInvoices.push({ invoiceId, invoiceRow, lineItemRows, stockDeltas, autoPaymentRow });
+    validInvoices.push({ invoiceId, invoiceRow, lineItemRows, autoPaymentRow });
     existingNumbers.add(inv.invoiceNumber);
     created++;
   }
@@ -212,34 +220,12 @@ export async function runInvoicesImport(
         }
       }
 
-      // Aggregate stock deltas by direction
-      const saleDeltas = new Map<string, number>();
-      const purchaseDeltas = new Map<string, number>();
-      for (const b of batch) {
-        for (const [itemId, qty] of b.stockDeltas) {
-          if (b.invoiceRow.type === "sale") {
-            saleDeltas.set(itemId, (saleDeltas.get(itemId) || 0) + qty);
-          } else {
-            purchaseDeltas.set(itemId, (purchaseDeltas.get(itemId) || 0) + qty);
-          }
-        }
-      }
-
-      // Apply sale stock adjustments (subtract)
-      for (const [itemId, totalQty] of saleDeltas) {
-        await tx.update(items).set({
-          stockQuantity: sql`${items.stockQuantity}::numeric - ${totalQty.toFixed(3)}::numeric`,
-          updatedAt: new Date(),
-        }).where(eq(items.id, itemId));
-      }
-
-      // Apply purchase stock adjustments (add)
-      for (const [itemId, totalQty] of purchaseDeltas) {
-        await tx.update(items).set({
-          stockQuantity: sql`${items.stockQuantity}::numeric + ${totalQty.toFixed(3)}::numeric`,
-          updatedAt: new Date(),
-        }).where(eq(items.id, itemId));
-      }
+      // Stock effect of the whole batch, per warehouse.
+      await postNewDocumentsStock(tx, {
+        businessId,
+        documentIds: batch.map((b) => b.invoiceId),
+        actorUserId: user.id,
+      });
 
       // Bulk insert auto-payment records if any
       const autoPayments = batch.map(b => b.autoPaymentRow).filter(Boolean);

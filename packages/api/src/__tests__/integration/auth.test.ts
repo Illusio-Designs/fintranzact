@@ -128,6 +128,30 @@ describe("auth.register", () => {
     expect(msUntilExpiry).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
   });
 
+  it("registers on a single-database server without creating a database", async () => {
+    // Managed Postgres (Railway) refuses CREATE DATABASE; point provisioning at
+    // an unreachable server so any attempt to create one fails the sign-up.
+    const saved = { multi: process.env.MULTI_TENANT, control: process.env.CONTROL_DATABASE_URL };
+    delete process.env.MULTI_TENANT;
+    process.env.CONTROL_DATABASE_URL = "postgresql://nobody:nobody@127.0.0.1:1/none";
+    try {
+      const result = await unauthCaller().auth.register({
+        email: "single.db@vyapar.in",
+        name: "Single DB",
+        password: "SecurePass1!",
+        confirmPassword: "SecurePass1!",
+      });
+      const memberships = await db.select().from(tenantMembers).where(eq(tenantMembers.userId, result.user.id));
+      expect(memberships).toHaveLength(1);
+      expect(memberships[0]!.role).toBe("owner");
+    } finally {
+      if (saved.multi === undefined) delete process.env.MULTI_TENANT;
+      else process.env.MULTI_TENANT = saved.multi;
+      if (saved.control === undefined) delete process.env.CONTROL_DATABASE_URL;
+      else process.env.CONTROL_DATABASE_URL = saved.control;
+    }
+  });
+
   it("creates a fresh tenant for each self-hosted registration and makes the user the owner", async () => {
     const caller = unauthCaller();
 
@@ -310,6 +334,29 @@ describe("auth.login", () => {
     expect(session!.userId).toBe(loginUserId);
   });
 
+  it("matches email case-insensitively — stored lowercase, login and duplicate check ignore case", async () => {
+    const caller = unauthCaller();
+    const reg = await caller.auth.register({
+      email: "Case.Mixed@Vyapar.in",
+      name: "Case Tester",
+      password: "Test@1234!",
+      confirmPassword: "Test@1234!",
+    });
+    expect(reg.user.email).toBe("case.mixed@vyapar.in");
+
+    const login = await unauthCaller().auth.login({ email: "CASE.MIXED@vyapar.in", password: "Test@1234!" });
+    expect(login.user.id).toBe(reg.user.id);
+
+    await expect(
+      unauthCaller().auth.register({
+        email: "case.mixed@VYAPAR.in",
+        name: "Case Tester",
+        password: "Test@1234!",
+        confirmPassword: "Test@1234!",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
   it("login with wrong password returns UNAUTHORIZED — does not leak whether email exists", async () => {
     const caller = unauthCaller();
     await expect(
@@ -475,9 +522,9 @@ describe("auth.logout", () => {
 // auth.sendMagicLink — email URL shape
 //
 // CRITICAL INVARIANT: the primary email CTA is ALWAYS an HTTPS URL, never
-// a `hisaabo://` custom-scheme anchor. Email clients (Gmail, Outlook, Apple
+// a `fintranzact://` custom-scheme anchor. Email clients (Gmail, Outlook, Apple
 // Mail, corporate gateways) strip or refuse to render custom URL schemes as
-// clickable links, so a `hisaabo://` primary reaches the user as plain,
+// clickable links, so a `fintranzact://` primary reaches the user as plain,
 // unclickable text. If this test fails because someone reverted the primary
 // URL to the custom scheme, DO NOT fix the test — fix the server to keep
 // shipping HTTPS as the primary and hand off to the native app from the
@@ -498,7 +545,7 @@ describe("auth.sendMagicLink — email URL shape", () => {
     sendSpy.mockRestore();
   });
 
-  it("web source: primary is an https link with no source suffix, secondary is the hisaabo://verify deep link", async () => {
+  it("web source: primary is an https link with no source suffix, secondary is the fintranzact://verify deep link", async () => {
     sendSpy.mockClear();
     const caller = unauthCaller();
     await caller.auth.sendMagicLink({ email: "deeplink-web@vyapar.in", source: "web" });
@@ -509,11 +556,11 @@ describe("auth.sendMagicLink — email URL shape", () => {
     // Web source does not thread `source` through the URL — the verify
     // page only hands off to the native app when source is desktop/mobile.
     expect(primaryUrl).not.toContain("source=");
-    expect(secondaryUrl).toMatch(/^hisaabo:\/\/verify\?token=/);
-    expect(secondaryUrl).not.toContain("hisaabo://auth/");
+    expect(secondaryUrl).toMatch(/^fintranzact:\/\/verify\?token=/);
+    expect(secondaryUrl).not.toContain("fintranzact://auth/");
   });
 
-  it("mobile source: primary is an https link with source=mobile, secondary is the hisaabo://verify deep link — primary MUST NOT be a custom-scheme URL because email clients strip non-http anchors and the user ends up with plain, unclickable text", async () => {
+  it("mobile source: primary is an https link with source=mobile, secondary is the fintranzact://verify deep link — primary MUST NOT be a custom-scheme URL because email clients strip non-http anchors and the user ends up with plain, unclickable text", async () => {
     sendSpy.mockClear();
     const caller = unauthCaller();
     await caller.auth.sendMagicLink({ email: "deeplink-mobile@vyapar.in", source: "mobile" });
@@ -524,12 +571,12 @@ describe("auth.sendMagicLink — email URL shape", () => {
     expect(primaryUrl).toContain("&source=mobile");
     // Regression guard: primary MUST be https so Gmail/Outlook render it as
     // a clickable button.
-    expect(primaryUrl).not.toMatch(/^hisaabo:\/\//);
-    expect(secondaryUrl).toMatch(/^hisaabo:\/\/verify\?token=/);
-    expect(secondaryUrl).not.toContain("hisaabo://auth/");
+    expect(primaryUrl).not.toMatch(/^fintranzact:\/\//);
+    expect(secondaryUrl).toMatch(/^fintranzact:\/\/verify\?token=/);
+    expect(secondaryUrl).not.toContain("fintranzact://auth/");
   });
 
-  it("desktop source: primary is an https link with source=desktop, secondary is the hisaabo://verify deep link — same email-client rationale as mobile", async () => {
+  it("desktop source: primary is an https link with source=desktop, secondary is the fintranzact://verify deep link — same email-client rationale as mobile", async () => {
     sendSpy.mockClear();
     const caller = unauthCaller();
     await caller.auth.sendMagicLink({ email: "deeplink-desktop@vyapar.in", source: "desktop" });
@@ -538,19 +585,19 @@ describe("auth.sendMagicLink — email URL shape", () => {
     const [, primaryUrl, secondaryUrl] = sendSpy.mock.calls[0]!;
     expect(primaryUrl).toMatch(/^https?:\/\/.+\/auth\/verify\?token=/);
     expect(primaryUrl).toContain("&source=desktop");
-    expect(primaryUrl).not.toMatch(/^hisaabo:\/\//);
-    expect(secondaryUrl).toMatch(/^hisaabo:\/\/verify\?token=/);
-    expect(secondaryUrl).not.toContain("hisaabo://auth/");
+    expect(primaryUrl).not.toMatch(/^fintranzact:\/\//);
+    expect(secondaryUrl).toMatch(/^fintranzact:\/\/verify\?token=/);
+    expect(secondaryUrl).not.toContain("fintranzact://auth/");
   });
 
-  it("primary URL is NEVER a hisaabo:// custom-scheme link for ANY source — this is the load-bearing invariant that kept desktop/mobile users stuck with unclickable email buttons; if this ever regresses, users report 'the link in the email does nothing, I have to copy-paste it into Firefox' (verbatim user report)", async () => {
+  it("primary URL is NEVER a fintranzact:// custom-scheme link for ANY source — this is the load-bearing invariant that kept desktop/mobile users stuck with unclickable email buttons; if this ever regresses, users report 'the link in the email does nothing, I have to copy-paste it into Firefox' (verbatim user report)", async () => {
     for (const source of ["web", "desktop", "mobile"] as const) {
       sendSpy.mockClear();
       const caller = unauthCaller();
       await caller.auth.sendMagicLink({ email: `deeplink-${source}-guard@vyapar.in`, source });
 
       const [, primaryUrl] = sendSpy.mock.calls[0]!;
-      expect(primaryUrl).not.toMatch(/^hisaabo:\/\//);
+      expect(primaryUrl).not.toMatch(/^fintranzact:\/\//);
       expect(primaryUrl).toMatch(/^https?:\/\//);
     }
   });

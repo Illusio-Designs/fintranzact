@@ -127,6 +127,76 @@
       "when": 1790759610687,
       "tag": "0017_barcode_setup",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790765053019,
+      "tag": "0018_inventory_stock_controls",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790766409853,
+      "tag": "0019_stock_valuation_method",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790770857818,
+      "tag": "0020_orders_and_grn",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790773436914,
+      "tag": "0021_stock_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790773520965,
+      "tag": "0022_bom_manufacturing",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790774558848,
+      "tag": "0023_price_levels",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790795646662,
+      "tag": "0024_free_qty_rejections",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790798367934,
+      "tag": "0025_item_batches",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790847336129,
+      "tag": "0026_supplier_invoice_number",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790883697137,
+      "tag": "0027_invoice_templates",
+      "breakpoints": true
     }
   ]
 }

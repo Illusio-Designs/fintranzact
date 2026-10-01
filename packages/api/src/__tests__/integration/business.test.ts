@@ -218,6 +218,25 @@ describe("business.list", () => {
     expect(found!.name).toBe("List Test Biz");
   });
 
+  // Regression (J11 settings journey): signatureData (bytea) came back in the
+  // list as a superjson Buffer the browser cannot rebuild, so once a business
+  // had a signature its business list stopped loading in the web app.
+  it("never sends logo or signature bytes — only their MIME type and timestamp", async () => {
+    const caller = tenantLevelCaller(owner, tenant.id);
+    const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAIAAAA8r+mnAAAAEUlEQVR4nGMQkYvCihioJwEAYtERgXCh6XsAAAAASUVORK5CYII=";
+    await caller.business.uploadLogo({ id: createdBizId, data: { dataUrl: png, width: 8, height: 4 } });
+    await caller.business.uploadSignature({ id: createdBizId, data: { dataUrl: png, width: 8, height: 4 } });
+
+    const found = (await caller.business.list()).find((b) => b.id === createdBizId)!;
+    expect(found).toMatchObject({ logoMimeType: "image/png", signatureMimeType: "image/png" });
+    expect(found).not.toHaveProperty("logoData");
+    expect(found).not.toHaveProperty("signatureData");
+
+    const one = await caller.business.getById({ id: createdBizId });
+    expect(one).toMatchObject({ signatureMimeType: "image/png" });
+    expect(one).not.toHaveProperty("signatureData");
+  });
+
   it("seller sees only businesses they are assigned to — listing requires only tenantProcedure (not admin)", async () => {
     const caller = tenantLevelCaller(seller, tenant.id);
     const before = await caller.business.list();
@@ -307,6 +326,82 @@ describe("business.update", () => {
     expect(updated).toBeDefined();
     expect(updated!.name).toBe("Updated Test Biz");
     expect(updated!.address).toBe("55, New Road");
+  });
+
+  // Regression (J11 settings journey): update returned the whole row, logo
+  // and signature bytes included. Those travel as a superjson Buffer the
+  // browser cannot rebuild, so once a business had a logo every Settings save
+  // (prefixes, terms, shipping) was stored but never confirmed in the app.
+  it("does not send the logo or signature bytes back", async () => {
+    const caller = businessLevelCaller(owner, tenant.id, bizId);
+    const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAIAAAA8r+mnAAAAEUlEQVR4nGMQkYvCihioJwEAYtERgXCh6XsAAAAASUVORK5CYII=";
+    await caller.business.uploadLogo({ id: bizId, data: { dataUrl: png, width: 8, height: 4 } });
+    await caller.business.uploadSignature({ id: bizId, data: { dataUrl: png, width: 8, height: 4 } });
+
+    const updated = await caller.business.update({ id: bizId, data: { invoicePrefix: "UTX" } });
+    expect(updated).toMatchObject({ invoicePrefix: "UTX", logoMimeType: "image/png", signatureMimeType: "image/png" });
+    expect(updated).not.toHaveProperty("logoData");
+    expect(updated).not.toHaveProperty("signatureData");
+  });
+
+  it("persists custom shipping methods (Settings → Shipping) and clears them with an empty list", async () => {
+    const caller = businessLevelCaller(owner, tenant.id, bizId);
+    const methods = [
+      { id: "porter", label: "Porter", hasTracking: false },
+      { id: "dunzo", label: "Dunzo", hasTracking: true },
+    ];
+
+    const updated = await caller.business.update({
+      id: bizId,
+      data: { customShippingMethods: methods },
+    });
+    expect(updated!.customShippingMethods).toEqual(methods);
+
+    const db = getTenantTestDb();
+    const [row] = await db
+      .select({ customShippingMethods: businesses.customShippingMethods })
+      .from(businesses)
+      .where(eq(businesses.id, bizId));
+    expect(row!.customShippingMethods).toEqual(methods);
+
+    await caller.business.update({ id: bizId, data: { customShippingMethods: [] } });
+    const [cleared] = await db
+      .select({ customShippingMethods: businesses.customShippingMethods })
+      .from(businesses)
+      .where(eq(businesses.id, bizId));
+    expect(cleared!.customShippingMethods).toEqual([]);
+  });
+
+  // Settings → Documents → Invoice design
+  it("defaults the invoice design to classic and the thermal roll to 80 mm", async () => {
+    const caller = tenantLevelCaller(owner, tenant.id);
+    const list = await caller.business.list();
+    const biz = list.find((b) => b.id === bizId)!;
+    expect(biz).toMatchObject({ invoiceTemplate: "classic", thermalWidth: 80 });
+  });
+
+  it("saves the invoice design and thermal width, and an unrelated update leaves them alone", async () => {
+    const caller = businessLevelCaller(owner, tenant.id, bizId);
+    const updated = await caller.business.update({ id: bizId, data: { invoiceTemplate: "tally", thermalWidth: 58 } });
+    expect(updated).toMatchObject({ invoiceTemplate: "tally", thermalWidth: 58 });
+
+    await caller.business.update({ id: bizId, data: { name: "Updated Test Biz" } });
+    const db = getTenantTestDb();
+    const [row] = await db
+      .select({ invoiceTemplate: businesses.invoiceTemplate, thermalWidth: businesses.thermalWidth })
+      .from(businesses)
+      .where(eq(businesses.id, bizId));
+    expect(row).toEqual({ invoiceTemplate: "tally", thermalWidth: 58 });
+  });
+
+  it("rejects an unknown invoice design or roll width", async () => {
+    const caller = businessLevelCaller(owner, tenant.id, bizId);
+    await expect(
+      caller.business.update({ id: bizId, data: { invoiceTemplate: "fancy" as never } }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.business.update({ id: bizId, data: { thermalWidth: 72 as never } }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("seller cannot update a business — FORBIDDEN due to insufficient tenant admin role", async () => {
@@ -470,7 +565,32 @@ describe("POS mode — business.ensureWalkInParty", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("seller can call ensureWalkInParty (no admin gate) — needed for POS bootstrap by non-admin cashiers", async () => {
+  it("a tenant member who is not assigned to the business receives FORBIDDEN", async () => {
+    const caller = tenantLevelCaller(seller, tenant.id);
+    await expect(
+      caller.business.ensureWalkInParty({ id: bizId })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    // Nothing was created for them either.
+    const rows = await getTenantTestDb()
+      .select()
+      .from(parties)
+      .where(and(eq(parties.businessId, bizId), eq(parties.name, "Walk-in Customer")));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("a user from another tenant cannot seed or read the walk-in party", async () => {
+    const outsider = await createUser({ email: "walkin.outsider@other.in", name: "Outsider" });
+    const otherTenant = await createTenant({ name: "Other Org" });
+    await addMember(otherTenant.id, outsider.id, "owner");
+    const caller = tenantLevelCaller(outsider, otherTenant.id);
+    await expect(
+      caller.business.ensureWalkInParty({ id: bizId })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("seller can call ensureWalkInParty (no admin gate) once assigned — needed for POS bootstrap by non-admin cashiers", async () => {
+    await tenantLevelCaller(owner, tenant.id).business.addMember({ businessId: bizId, userId: seller.id });
     const caller = tenantLevelCaller(seller, tenant.id);
     const result = await caller.business.ensureWalkInParty({ id: bizId });
     expect(result.id).toBeTruthy();

@@ -168,11 +168,11 @@ describe("authentication flow — login → lock screen → app", () => {
     const TOKEN = "sess_valid_user_no_biometric";
 
     // Route SecureStore reads by key so each store gets the correct value.
-    // auth: hisaabo_session_token → TOKEN
-    // biometric: hisaabo_biometric_enabled → null, hisaabo_pin_hash → null,
-    //            hisaabo_setup_prompted → null
+    // auth: fintranzact_session_token → TOKEN
+    // biometric: fintranzact_biometric_enabled → null, fintranzact_pin_hash → null,
+    //            fintranzact_setup_prompted → null
     mockGet.mockImplementation(async (key: string) => {
-      if (key === "hisaabo_session_token") return TOKEN;
+      if (key === "fintranzact_session_token") return TOKEN;
       return null; // all biometric/pin/prompted keys return null
     });
 

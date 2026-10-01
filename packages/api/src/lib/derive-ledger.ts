@@ -11,10 +11,10 @@
  * the returned DerivedEntry array — they never maintain their own shadow tables.
  *
  * MAPPING RULES (see spec):
- *   Sale Invoice     → Dr 1100 Receivable  / Cr 4000 Sales (subtotal)
+ *   Sale Invoice     → Dr 1100 Receivable  / Cr 4000 Sales (total less GST)
  *                    → Dr 1100 Receivable  / Cr 2100/2101 Output CGST+SGST (intra-state)
  *                    → Dr 1100 Receivable  / Cr 2102 Output IGST (inter-state)
- *   Purchase Invoice → Dr 5000 Purchases   / Cr 2000 Payable (subtotal)
+ *   Purchase Invoice → Dr 5000 Purchases   / Cr 2000 Payable (total less GST)
  *                    → Dr 1510/1511 Input CGST+SGST / Cr 2000 Payable (intra-state)
  *                    → Dr 1512 Input IGST  / Cr 2000 Payable (inter-state)
  *   Payment Received → Dr 1000/1010 Cash/Bank / Cr 1100 Receivable
@@ -37,6 +37,7 @@ import {
   journalEntryLines,
 } from "@fintranzact/db";
 import { buildBusinessDateFilter } from "./business-date.js";
+import { isIntraStateSupply, money, splitIntraStateTax } from "@fintranzact/shared";
 
 // ── Public types ────────────────────────────────────────────────
 
@@ -63,36 +64,21 @@ export interface DerivedEntry {
 // ── Internal helpers ────────────────────────────────────────────
 
 /**
- * Split a tax amount into two equal halves using integer (paise) arithmetic
- * to avoid floating-point rounding errors on odd amounts (e.g. ₹1.01).
- * Returns the two halves as money strings that sum exactly to the input.
+ * Split a tax amount into CGST and SGST (the shared rule: CGST is half
+ * rounded to the paisa, SGST the rest — they sum exactly to the input).
  */
 function splitTax(amount: string): [string, string] {
-  // Work in paise to avoid floating-point drift
-  const totalPaise = Math.round(parseFloat(amount) * 100);
-  const half = Math.floor(totalPaise / 2);
-  const remainder = totalPaise - half; // handles odd paise (e.g. 101 → 50 + 51)
-  return [
-    (half / 100).toFixed(2),
-    (remainder / 100).toFixed(2),
-  ];
+  const { cgst, sgst } = splitIntraStateTax(amount);
+  return [cgst.toFixed(2), sgst.toFixed(2)];
 }
 
-/** Determine whether two state codes represent the same state. */
-function isSameState(
-  bizStateCode: string | null | undefined,
-  partyStateCode: string | null | undefined,
-  bizState: string | null | undefined,
-  partyState: string | null | undefined,
-): boolean {
-  if (bizStateCode && partyStateCode) {
-    return bizStateCode === partyStateCode;
-  }
-  if (bizState && partyState) {
-    return bizState.toLowerCase() === partyState.toLowerCase();
-  }
-  // Cannot determine — treat as intra-state (conservative, avoids wrong IGST split)
-  return true;
+/**
+ * Value a document books to sales/purchases (or their returns): its total
+ * less GST — the lines after line and document discounts, plus charges and
+ * round-off — so every entry balances.
+ */
+function netValue(inv: { totalAmount: string; taxAmount: string }): string {
+  return money.sub(inv.totalAmount, inv.taxAmount);
 }
 
 /** Build a DerivedEntryLine for the debit side. */
@@ -199,6 +185,7 @@ export async function deriveLedger(
     .select({
       stateCode: businesses.stateCode,
       state: businesses.state,
+      gstin: businesses.gstin,
     })
     .from(businesses)
     .where(eq(businesses.id, businessId))
@@ -235,6 +222,7 @@ export async function deriveLedger(
     totalAmount: string;
     partyState: string | null;
     partyStateCode: string | null;
+    partyGstin: string | null;
     status: string;
   }> = await db
     .select({
@@ -249,6 +237,7 @@ export async function deriveLedger(
       totalAmount: invoices.totalAmount,
       partyState: parties.state,
       partyStateCode: parties.stateCode,
+      partyGstin: parties.gstin,
     })
     .from(invoices)
     .innerJoin(parties, eq(parties.id, invoices.partyId))
@@ -266,13 +255,12 @@ export async function deriveLedger(
   for (const inv of activeInvRows) {
     const lines: DerivedEntryLine[] = [];
 
-    const subtotal = inv.subtotal;
+    const subtotal = netValue(inv);
     const taxStr = inv.taxAmount;
-    const sameState = isSameState(
-      biz?.stateCode,
-      inv.partyStateCode,
-      biz?.state,
-      inv.partyState,
+    // Shared place-of-supply rule (unknown buyer state → intra-state)
+    const sameState = isIntraStateSupply(
+      { stateCode: biz?.stateCode, state: biz?.state, gstin: biz?.gstin },
+      { stateCode: inv.partyStateCode, state: inv.partyState, gstin: inv.partyGstin },
     );
 
     if (inv.type === "sale" && inv.documentType === "invoice") {
@@ -349,10 +337,9 @@ export async function deriveLedger(
       const receivable = getAccount(coa, "1100");
       const taxStr = inv.taxAmount;
 
-      lines.push(debitLine(salesReturns, inv.subtotal));
+      lines.push(debitLine(salesReturns, subtotal));
       // Reverse GST liability
       if (parseFloat(taxStr) > 0) {
-        const sameState = isSameState(biz?.stateCode, inv.partyStateCode, biz?.state, inv.partyState);
         if (sameState) {
           const [cgstAmt, sgstAmt] = splitTax(taxStr);
           lines.push(debitLine(getAccount(coa, "2100"), cgstAmt));
@@ -381,9 +368,8 @@ export async function deriveLedger(
       const taxStr = inv.taxAmount;
 
       lines.push(debitLine(receivable, inv.totalAmount));
-      lines.push(creditLine(sales, inv.subtotal));
+      lines.push(creditLine(sales, subtotal));
       if (parseFloat(taxStr) > 0) {
-        const sameState = isSameState(biz?.stateCode, inv.partyStateCode, biz?.state, inv.partyState);
         if (sameState) {
           const [cgstAmt, sgstAmt] = splitTax(taxStr);
           lines.push(creditLine(getAccount(coa, "2100"), cgstAmt));
@@ -412,10 +398,9 @@ export async function deriveLedger(
       const taxStr = inv.taxAmount;
 
       lines.push(debitLine(payable, inv.totalAmount));
-      lines.push(creditLine(purchaseReturns, inv.subtotal));
+      lines.push(creditLine(purchaseReturns, subtotal));
       // Reverse input GST
       if (parseFloat(taxStr) > 0) {
-        const sameState = isSameState(biz?.stateCode, inv.partyStateCode, biz?.state, inv.partyState);
         if (sameState) {
           const [cgstAmt, sgstAmt] = splitTax(taxStr);
           lines.push(creditLine(getAccount(coa, "1510"), cgstAmt));

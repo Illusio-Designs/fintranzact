@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Modal } from "./Modal";
 import { Spinner } from "./Spinner";
 import { Alert02Icon, Delete02Icon } from "@hugeicons/core-free-icons";
@@ -10,6 +11,8 @@ interface ConfirmDialogProps {
   title: string;
   description?: string;
   confirmLabel?: string;
+  /** Label of the button that backs out (default "Cancel"). */
+  cancelLabel?: string;
   variant?: "danger" | "default";
   loading?: boolean;
 }
@@ -21,11 +24,21 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   variant = "default",
   loading = false,
 }: ConfirmDialogProps) {
+  // The question names the dialog for assistive tech (and tests).
+  const titleId = useId();
+  const descriptionId = useId();
   return (
-    <Modal open={open} onClose={onCancel} className="max-w-sm">
+    <Modal
+      open={open}
+      onClose={onCancel}
+      className="max-w-sm"
+      labelledBy={titleId}
+      describedBy={description ? descriptionId : undefined}
+    >
       <div className="flex items-start gap-3 pb-2">
         <IconCircle
           icon={variant === "danger" ? Delete02Icon : Alert02Icon}
@@ -33,11 +46,11 @@ export function ConfirmDialog({
           size="lg"
         />
         <div className="min-w-0 pt-0.5">
-          <p className="text-sm font-semibold text-text-primary">
+          <p id={titleId} className="text-sm font-semibold text-text-primary">
             {title}
           </p>
           {description && (
-            <p className="text-sm mt-1.5 text-text-secondary">
+            <p id={descriptionId} className="text-sm mt-1.5 text-text-secondary">
               {description}
             </p>
           )}
@@ -50,7 +63,7 @@ export function ConfirmDialog({
           onClick={onCancel}
           disabled={loading}
         >
-          Cancel
+          {cancelLabel}
         </button>
         <button
           type="button"

@@ -1,11 +1,17 @@
 import { z } from "zod";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { invoices, businesses } from "@fintranzact/db";
+import { istPeriodRange } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { generateGSTR1, generateGSTR3B, gstr1ToCSV, gstr1ToPortalJson } from "../lib/gst-reports.js";
 import { generateGSTR9, gstr9ToPortalJson } from "../lib/gstr9-generator.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
+
+/** Sale documents that add to CMP-08 outward supplies. */
+const CMP08_ADDING_DOCUMENTS = ["invoice", "debit_note"] as const;
+/** Sale documents that reduce CMP-08 outward supplies. */
+const CMP08_REDUCING_DOCUMENTS = ["credit_note", "sales_return"] as const;
 
 export const gstRouter = router({
   // Reports are available for ALL businesses — GST-registered get GST terminology,
@@ -108,31 +114,43 @@ export const gstRouter = router({
   // This endpoint calculates total outward supplies for a quarter and the tax payable.
   cmp08: viewerProcedure
     .input(z.object({
+      /** Start year of the financial year: 2025 for FY 2025-26. */
       year: z.number().int().min(2020).max(2099),
+      /** Financial-year quarter: Q1 = Apr–Jun, Q2 = Jul–Sep, Q3 = Oct–Dec, Q4 = Jan–Mar (next year). */
       quarter: z.number().int().min(1).max(4),
     }))
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Report");
 
-      // Derive start and end months from quarter
-      const startMonth = (input.quarter - 1) * 3 + 1; // Q1→1, Q2→4, Q3→7, Q4→10
-      const quarterStart = new Date(input.year, startMonth - 1, 1);
-      const quarterEnd = new Date(input.year, startMonth + 2, 0, 23, 59, 59); // last day of 3rd month
+      // CMP-08 quarters follow the financial year: Q1 starts in April
+      const startMonth = 4 + (input.quarter - 1) * 3; // Q1→4, Q2→7, Q3→10, Q4→13 (January next year)
+      // The quarter's three calendar months in India
+      const { from: quarterStart, to: quarterEnd } = istPeriodRange(input.year, startMonth, 3);
 
+      // Outward supplies are the sale invoices, net of the credit notes and
+      // sales returns (less) and debit notes (more) issued to customers.
+      // Quotations, proformas, orders and challans are not supplies, and
+      // deleted or cancelled documents are not reported.
       const rows = await ctx.db.select({
-        totalAmount: invoices.totalAmount,
+        documentType: invoices.documentType,
         subtotal: invoices.subtotal,
+        discountAmount: invoices.discountAmount,
+        additionalCharges: invoices.additionalCharges,
       }).from(invoices)
         .where(and(
           eq(invoices.businessId, ctx.businessId),
           eq(invoices.type, "sale"),
+          inArray(invoices.documentType, [...CMP08_ADDING_DOCUMENTS, ...CMP08_REDUCING_DOCUMENTS]),
           sql`${invoices.status} != 'cancelled'`,
+          isNull(invoices.deletedAt),
           ...buildBusinessDateFilter(invoices, { from: quarterStart, to: quarterEnd }),
         ));
 
       let taxableValue = 0;
       for (const row of rows) {
-        taxableValue += parseFloat(row.subtotal);
+        const sign = (CMP08_REDUCING_DOCUMENTS as readonly string[]).includes(row.documentType) ? -1 : 1;
+        // Value of supply: lines less the document discount, plus charges
+        taxableValue += sign * (parseFloat(row.subtotal) - parseFloat(row.discountAmount || "0") + parseFloat(row.additionalCharges || "0"));
       }
 
       // Default composition rate for traders: 1%.

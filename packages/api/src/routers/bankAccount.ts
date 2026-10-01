@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, asc } from "drizzle-orm";
+import { eq, and, sql, desc, asc, type SQLWrapper } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { bankAccounts, bankTransactions, paymentGatewayConfigs } from "@fintranzact/db";
@@ -15,6 +15,11 @@ import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trp
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { logAudit } from "../lib/audit.js";
+
+/** The India calendar day a timestamp falls on. */
+function dayOf(ts: SQLWrapper) {
+  return sql`((${ts}) AT TIME ZONE 'Asia/Kolkata')::date`;
+}
 
 export const bankAccountRouter = router({
   // ── Accounts ────────────────────────────────────────────────
@@ -136,7 +141,15 @@ export const bankAccountRouter = router({
 
         const [result] = await tx
           .update(bankAccounts)
-          .set({ ...input.data, updatedAt: new Date() })
+          .set({
+            ...input.data,
+            // The balance is opening balance + postings, so moving the
+            // opening balance moves the balance by the same amount.
+            ...(input.data.openingBalance !== undefined
+              ? { currentBalance: sql`${bankAccounts.currentBalance}::numeric + (${input.data.openingBalance}::numeric - ${bankAccounts.openingBalance}::numeric)` }
+              : {}),
+            updatedAt: new Date(),
+          })
           .where(
             and(
               eq(bankAccounts.id, input.id),
@@ -276,20 +289,30 @@ export const bankAccountRouter = router({
             referenceId: bankTransactions.referenceId,
             transactionDate: bankTransactions.transactionDate,
             createdAt: bankTransactions.createdAt,
-            // Running balance: opening_balance + cumulative deposits - cumulative withdrawals
+            // Running balance: the opening balance plus every transaction of
+            // the account up to and including this one — over the whole
+            // account, not just the rows the period filter shows (a month's
+            // first row carries the months before it). Within a day,
+            // transactions follow the order they were entered: a day's date
+            // picked in a form is that day's midnight, while a transfer is
+            // stamped with the time it was made.
             balanceAfter: sql<string>`(
-              ${acct.openingBalance}::numeric + SUM(
-                CASE WHEN ${bankTransactions.type} = 'deposit' THEN ${bankTransactions.amount}::numeric
-                     ELSE -${bankTransactions.amount}::numeric END
-              ) OVER (
-                ORDER BY ${bankTransactions.transactionDate} ASC, ${bankTransactions.createdAt} ASC
-                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+              ${acct.openingBalance}::numeric + (
+                SELECT COALESCE(SUM(CASE WHEN t2.type = 'deposit' THEN t2.amount ELSE -t2.amount END), 0)
+                FROM bank_transactions t2
+                WHERE t2.bank_account_id = bank_transactions.bank_account_id
+                  AND (${dayOf(sql`t2.transaction_date`)}, t2.created_at, t2.id)
+                      <= (${dayOf(sql`bank_transactions.transaction_date`)}, bank_transactions.created_at, bank_transactions.id)
               )
             )::text`.as("balance_after"),
           })
           .from(bankTransactions)
           .where(and(...conditions))
-          .orderBy(desc(bankTransactions.transactionDate))
+          .orderBy(
+            desc(dayOf(bankTransactions.transactionDate)),
+            desc(bankTransactions.createdAt),
+            desc(bankTransactions.id),
+          )
           .limit(input.limit)
           .offset(offset),
         ctx.db
@@ -326,8 +349,12 @@ export const bankAccountRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "Bank account not found" });
         }
 
+        // Only a deposit brings money in. A single "transfer" row is money
+        // sent out of this account (a two-sided move between the business's
+        // own accounts is bankAccount.transfer) — the same reading as the
+        // statement's running balance, recomputeDerived and every reversal.
         const newBalance =
-          input.type === "deposit" || input.type === "transfer"
+          input.type === "deposit"
             ? money.add(account.currentBalance, input.amount)
             : money.sub(account.currentBalance, input.amount);
 
@@ -392,7 +419,7 @@ export const bankAccountRouter = router({
             : input.fromAccountId;
 
         const [firstAccount] = await tx
-          .select({ id: bankAccounts.id, currentBalance: bankAccounts.currentBalance })
+          .select({ id: bankAccounts.id, accountName: bankAccounts.accountName, currentBalance: bankAccounts.currentBalance })
           .from(bankAccounts)
           .where(
             and(
@@ -404,7 +431,7 @@ export const bankAccountRouter = router({
           .limit(1);
 
         const [secondAccount] = await tx
-          .select({ id: bankAccounts.id, currentBalance: bankAccounts.currentBalance })
+          .select({ id: bankAccounts.id, accountName: bankAccounts.accountName, currentBalance: bankAccounts.currentBalance })
           .from(bankAccounts)
           .where(
             and(
@@ -437,7 +464,7 @@ export const bankAccountRouter = router({
             bankAccountId: input.fromAccountId,
             type: "withdrawal",
             amount: input.amount,
-            description: input.description ?? `Transfer to account ${input.toAccountId}`,
+            description: input.description ?? `Transfer to ${toAccount.accountName}`,
             referenceType: "transfer",
             referenceId: input.toAccountId,
 
@@ -452,7 +479,7 @@ export const bankAccountRouter = router({
             bankAccountId: input.toAccountId,
             type: "deposit",
             amount: input.amount,
-            description: input.description ?? `Transfer from account ${input.fromAccountId}`,
+            description: input.description ?? `Transfer from ${fromAccount.accountName}`,
             referenceType: "transfer",
             referenceId: input.fromAccountId,
 

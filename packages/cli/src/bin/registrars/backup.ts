@@ -12,8 +12,8 @@ export function registerBackupCommands(program: Command): void {
       "after",
       `
 Examples:
-  hisaabo export --tenant my-company -o backup.tar.gz
-  hisaabo export --tenant 550e8400-e29b-41d4-a716-446655440000 -o /tmp/backup.tar.gz
+  fintranzact export --tenant my-company -o backup.tar.gz
+  fintranzact export --tenant 550e8400-e29b-41d4-a716-446655440000 -o /tmp/backup.tar.gz
 
 Exit codes:
   0  Success
@@ -38,9 +38,9 @@ Exit codes:
       "after",
       `
 Examples:
-  hisaabo restore --tenant my-company -i backup.tar.gz
-  hisaabo restore --tenant my-company -i backup.tar.gz --yes
-  hisaabo restore --tenant 550e8400-e29b-41d4-a716-446655440000 -i /tmp/backup.tar.gz -y
+  fintranzact restore --tenant my-company -i backup.tar.gz
+  fintranzact restore --tenant my-company -i backup.tar.gz --yes
+  fintranzact restore --tenant 550e8400-e29b-41d4-a716-446655440000 -i /tmp/backup.tar.gz -y
 
 Notes:
   The target tenant must be completely empty (no businesses).

@@ -1,5 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CONTACT_EMAIL, LegalPage } from "@/components/marketing/MarketingLayout";
+import {
+  CONTACT_EMAIL,
+  EmailText,
+  GrievanceOfficerSection,
+  LegalPage,
+  RegisteredOffice,
+} from "@/components/marketing/MarketingLayout";
+import {
+  GOVERNING_LAW,
+  JURISDICTION,
+  LEGAL_EMAIL,
+  LEGAL_ENTITY_NAME,
+  LEGAL_LAST_UPDATED,
+  PAYMENT_PROCESSOR,
+} from "@/lib/legal";
 
 export const Route = createFileRoute("/terms")({
   component: TermsPage,
@@ -7,12 +21,24 @@ export const Route = createFileRoute("/terms")({
 
 function TermsPage() {
   return (
-    <LegalPage title="Terms of service" updated="29 September 2026">
+    <LegalPage
+      title="Terms of service"
+      updated={LEGAL_LAST_UPDATED}
+      description="The terms for using Fintranzact, provided by Finvera Solutions LLP: your account, acceptable use, plans and payment, liability, governing law and grievances."
+    >
       <p>
         These terms govern your use of Fintranzact's website, web app,
         desktop and mobile apps and API (the "Service"). By creating an
         account or using the Service you agree to these terms.
       </p>
+
+      <h2>Who provides the Service</h2>
+      <p>
+        Fintranzact is a product operated by {LEGAL_ENTITY_NAME} ("we", "us",
+        "our"). These terms are an agreement between you and
+        {" "}{LEGAL_ENTITY_NAME}. Our registered office is:
+      </p>
+      <RegisteredOffice />
 
       <h2>Your account</h2>
       <ul>
@@ -47,7 +73,11 @@ function TermsPage() {
       <p>
         Some features may require a paid plan. Prices and plan contents are
         shown on our <Link to="/pricing">pricing page</Link> or in your quote.
-        Refunds are covered by our <Link to="/refund-policy">refund policy</Link>.
+        Payments are processed by {PAYMENT_PROCESSOR.name}
+        {" "}({PAYMENT_PROCESSOR.legalName}), and {PAYMENT_PROCESSOR.name}'s
+        own terms apply to the payment itself. We do not store your full card,
+        UPI or bank details. Refunds are covered by our{" "}
+        <Link to="/refund-policy">refund policy</Link>.
       </p>
 
       <h2>Availability</h2>
@@ -59,8 +89,8 @@ function TermsPage() {
 
       <h2>Limitation of liability</h2>
       <p>
-        To the extent permitted by law, Fintranzact is not liable for indirect
-        or consequential losses, and our total liability is limited to the
+        To the extent permitted by law, we are not liable for indirect or
+        consequential losses, and our total liability is limited to the
         amount you paid us in the twelve months before the claim.
       </p>
 
@@ -71,13 +101,30 @@ function TermsPage() {
         account is closed.
       </p>
 
-      <h2>Governing law</h2>
-      <p>These terms are governed by the laws of India.</p>
+      <h2>Governing law and jurisdiction</h2>
+      <p>
+        These terms are governed by {GOVERNING_LAW}. Any dispute arising out
+        of or relating to these terms or the Service is subject to the
+        exclusive jurisdiction of {JURISDICTION}.
+      </p>
+
+      <GrievanceOfficerSection>
+        <p>
+          If you have a complaint about the Service, about content on it, or
+          about how we have dealt with you, you can write to or call our
+          Grievance Officer, appointed under the Information Technology Act,
+          2000, the rules made under it and the Digital Personal Data
+          Protection Act, 2023.
+        </p>
+      </GrievanceOfficerSection>
 
       <h2>Contact</h2>
       <p>
         Questions about these terms? Email{" "}
-        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. Formal legal
+        notices should be sent to {LEGAL_ENTITY_NAME} at the registered office
+        above, or by email to{" "}
+        <a href={`mailto:${LEGAL_EMAIL}`}><EmailText email={LEGAL_EMAIL} /></a>.
       </p>
     </LegalPage>
   );

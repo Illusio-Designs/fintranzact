@@ -28,7 +28,7 @@ cd android
 # Step 3: Locate the output
 APK_PATH=$(find . -name "*.apk" -path "*/release/*" | head -1)
 if [ -n "$APK_PATH" ]; then
-  DEST="../../build/hisaabo-$(date +%Y%m%d).apk"
+  DEST="../../build/fintranzact-$(date +%Y%m%d).apk"
   mkdir -p "$(dirname "$DEST")"
   cp "$APK_PATH" "$DEST"
   echo ""

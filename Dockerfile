@@ -79,13 +79,13 @@ ARG VERSION=dev
 LABEL org.opencontainers.image.title="Fintranzact API"
 LABEL org.opencontainers.image.description="Invoicing and business management API"
 LABEL org.opencontainers.image.version="${VERSION}"
-LABEL org.opencontainers.image.source="https://github.com/hisaabo/hisaabo"
+LABEL org.opencontainers.image.source="https://github.com/fintranzact/fintranzact"
 
 EXPOSE 3000
 
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV HISAABO_VERSION=${VERSION}
+ENV FINTRANZACT_VERSION=${VERSION}
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1

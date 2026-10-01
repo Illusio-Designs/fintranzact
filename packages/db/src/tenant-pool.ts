@@ -106,7 +106,7 @@ async function resolveConnectionString(tenantId: string): Promise<string> {
   // FINDING 6: Validate/sanitize all connection string components to prevent injection
   const host = validateDbHost(tenant.dbHost || "localhost");
   const port = validateDbPort(tenant.dbPort || "5432");
-  const user = sanitizeDbComponent(tenant.dbUser || "hisaabo");
+  const user = sanitizeDbComponent(tenant.dbUser || "fintranzact");
   // Decrypt tenant password (handles legacy plaintext gracefully)
   const { decryptDbPassword } = await import("./crypto.js");
   const password = sanitizeDbComponent(decryptDbPassword(tenant.dbPassword || ""));

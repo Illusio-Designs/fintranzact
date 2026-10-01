@@ -1,10 +1,13 @@
-import { eq, and, gt, lte, isNull, desc } from "drizzle-orm";
+import { eq, and, gt, lte, isNull, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { createHash, randomBytes } from "node:crypto";
 import * as argon2 from "argon2";
+import { isPlatformAdmin } from "../lib/platform-admin.js";
 import { controlDb, users, sessions, tenants, tenantMembers, magicLinkTokens, invitations, accessTokens, provisionTenantDatabase, cleanupTenantDatabase, type TenantDbConfig } from "@fintranzact/db";
+import { normalizeReferralCode } from "@fintranzact/shared";
+import { partnerForReferralCode } from "../lib/partner-program.js";
 import { loginSchema, registerSchema, magicLinkRequestSchema, magicLinkVerifySchema, completeProfileSchema } from "@fintranzact/shared";
 import { router, publicProcedure, protectedProcedure } from "../trpc.js";
 import { emailService } from "../lib/email.js";
@@ -63,7 +66,7 @@ function getClientIpFromRequest(req: Request): string | null {
 /**
  * Tauri desktop clients can't solve Cloudflare Turnstile challenges — the
  * widget rejects the `tauri.localhost` / `tauri://localhost` host. The web
- * bundle running inside Tauri sets `X-Fintranzact-Client: desktop` (or legacy `X-Hisaabo-Client`) and we skip
+ * bundle running inside Tauri sets `X-Fintranzact-Client: desktop` and we skip
  * the Turnstile gate here.
  *
  * Trade-off: the header is client-supplied and therefore spoofable. A
@@ -80,7 +83,7 @@ function isDesktopClient(req: Request): boolean {
 /**
  * Returns true when the session being minted will be consumed as a Bearer
  * token rather than a cookie. Mobile and desktop clients carry
- * `X-Fintranzact-Client: mobile | desktop` (legacy `X-Hisaabo-Client` also accepted); they never rely on Set-Cookie.
+ * `X-Fintranzact-Client: mobile | desktop`; they never rely on Set-Cookie.
  *
  * We use the client header (not the presence of an Authorization header) as
  * the signal because at session creation time there IS no existing Bearer
@@ -91,11 +94,21 @@ function isBearerClient(req: Request): boolean {
   return client === "mobile" || client === "desktop";
 }
 
+/** Case-insensitive match on users.email (sign-up stores it lowercase). */
+function emailMatches(emailLower: string) {
+  return sql`lower(${users.email}) = ${emailLower}`;
+}
+
 // ── Shared helper: self-hosted tenant assignment ─────────────────────
 // Every new sign-up gets their own organization and becomes the owner.
 type ControlTx = Parameters<Parameters<typeof controlDb.transaction>[0]>[0];
 
-async function createTenantForUser(userId: string, displayName: string, parentTx?: ControlTx): Promise<string> {
+async function createTenantForUser(
+  userId: string,
+  displayName: string,
+  parentTx?: ControlTx,
+  referralCode: string | null = null,
+): Promise<string> {
   const run = async (tx: ControlTx) => {
     const tenantName = `${displayName.trim() || "My Organization"}'s Organization`;
     const slug = generateSlug(tenantName);
@@ -104,6 +117,10 @@ async function createTenantForUser(userId: string, displayName: string, parentTx
       name: tenantName,
       slug,
       plan: "forever_free",
+      // Self sign-up: the owner still has to choose a plan.
+      planSelectedAt: null,
+      referralCode: normalizeReferralCode(referralCode),
+      partnerId: await partnerForReferralCode(tx, referralCode),
     }).returning({ id: tenants.id });
 
     await tx.insert(tenantMembers).values({
@@ -136,7 +153,7 @@ async function createSessionForUser(
   await enforceSessionLimit(userId);
 
   const previousSessionId = getSessionIdFromRequest(ctx.req);
-  if (previousSessionId && !previousSessionId.startsWith("hisaabo_key_")) {
+  if (previousSessionId && !previousSessionId.startsWith("fintranzact_key_")) {
     controlDb.delete(sessions).where(eq(sessions.id, previousSessionId)).catch(() => { });
     invalidateSessionCache(previousSessionId);
   }
@@ -168,7 +185,7 @@ async function createSessionForUser(
 }
 
 // Session ID extraction uses the canonical getSessionIdFromRequest from context.ts
-// which correctly skips API keys (hisaabo_key_ prefix).
+// which correctly skips API keys (fintranzact_key_ prefix).
 function getSessionIdFromContext(ctx: { req: Request }): string | null {
   return getSessionIdFromRequest(ctx.req);
 }
@@ -225,7 +242,11 @@ async function writeNewTenantRows(
     dbUser: provisioned.dbConfig.dbUser,
     dbPassword: provisioned.dbConfig.dbPassword,
     plan: "forever_free",
-    referralCode: referralCode || null,
+    planSelectedAt: null,
+    referralCode: normalizeReferralCode(referralCode),
+    // A partner's code links the organisation to that partner (referrals,
+    // badge and commission). Any other code is kept as typed.
+    partnerId: await partnerForReferralCode(tx, referralCode),
   }).returning({ id: tenants.id });
   await tx.insert(tenantMembers).values({
     tenantId: tenant.id,
@@ -290,7 +311,9 @@ export const authRouter = router({
       }
     }
 
-    const existing = await controlDb.select({ id: users.id }).from(users).where(eq(users.email, input.email)).limit(1);
+    // Emails are stored lowercase; older rows may not be, so match case-insensitively.
+    const email = input.email.trim().toLowerCase();
+    const existing = await controlDb.select({ id: users.id }).from(users).where(emailMatches(email)).limit(1);
     if (existing.length > 0) {
       throw new TRPCError({ code: "CONFLICT", message: "Email already registered" });
     }
@@ -311,7 +334,7 @@ export const authRouter = router({
     // invitation peek is a dirty read — confirmed inside the tx below. If the
     // peek is wrong (invitation accepted mid-flight), withProvisionedTenantCleanup
     // drops the unused DB on its way out.
-    const emailLower = input.email.toLowerCase();
+    const emailLower = email;
     const [pendingInvitePeek] = await controlDb.select({ id: invitations.id })
       .from(invitations)
       .where(and(
@@ -323,7 +346,11 @@ export const authRouter = router({
     // By default, create a tenant for brand-new signups unless there's a
     // pending invite for this email. This makes interactive sign-up
     // tenant-first instead of creating a member on an existing org.
-    const needsAutoTenant = !pendingInvitePeek;
+    // Only multi-tenant servers get a database per organisation; a
+    // single-database server creates the tenant inside the transaction below
+    // and must not need CREATE DATABASE rights (managed Postgres usually
+    // refuses them).
+    const needsAutoTenant = !pendingInvitePeek && process.env.MULTI_TENANT === "true";
     const provisioned: ProvisionedTenant | null = needsAutoTenant
       ? await provisionNewTenantForUser(displayName)
       : null;
@@ -336,7 +363,7 @@ export const authRouter = router({
       async (markUsed) =>
         controlDb.transaction(async (tx) => {
           const [user] = await tx.insert(users).values({
-            email: input.email,
+            email,
             name: displayName,
             referralCode: input.referralCode?.trim() || null,
             passwordHash,
@@ -370,7 +397,7 @@ export const authRouter = router({
             await writeNewTenantRows(tx, user.id, provisioned, input.referralCode?.trim() || null);
             markUsed();
           } else {
-            await createTenantForUser(user.id, displayName, tx);
+            await createTenantForUser(user.id, displayName, tx, input.referralCode?.trim() || null);
           }
 
           const sessionId = nanoid(64);
@@ -414,7 +441,7 @@ export const authRouter = router({
   // ── Password login ───────────────────────────────────────────
   login: publicProcedure.input(loginSchema).mutation(async ({ input, ctx }) => {
     // Per-email rate limiting: block after too many failed attempts
-    const emailKey = input.email.toLowerCase();
+    const emailKey = input.email.trim().toLowerCase();
     const attempts = failedLoginAttempts.get(emailKey);
     if (attempts && attempts.count >= LOGIN_MAX_ATTEMPTS && Date.now() - attempts.firstAttempt < LOGIN_WINDOW_MS) {
       throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many failed login attempts. Please try again later." });
@@ -423,7 +450,7 @@ export const authRouter = router({
     const [user] = await controlDb
       .select({ id: users.id, email: users.email, name: users.name, passwordHash: users.passwordHash })
       .from(users)
-      .where(eq(users.email, input.email))
+      .where(emailMatches(emailKey))
       .limit(1);
 
     if (!user) {
@@ -456,7 +483,9 @@ export const authRouter = router({
       .from(tenantMembers)
       .where(eq(tenantMembers.userId, user.id));
 
-    if (memberships.length === 0) {
+    // Platform admins (set by the server environment) may have no organisation
+    // of their own; they sign in to use /platform.
+    if (memberships.length === 0 && !(await isPlatformAdmin(user.id))) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Account has no organization membership" });
     }
 
@@ -500,6 +529,7 @@ export const authRouter = router({
       tokenHash: tokenH,
       expiresAt: new Date(Date.now() + 15 * 60 * 1000),
       ipAddress: getClientIpFromRequest(ctx.req),
+      referralCode: normalizeReferralCode(input.referralCode),
     });
 
     const baseUrl = process.env.APP_URL || "http://localhost:5173";
@@ -507,14 +537,14 @@ export const authRouter = router({
 
     // Primary email CTA is ALWAYS the HTTPS link — email clients (Gmail,
     // Outlook, Apple Mail, corporate gateways) strip or refuse to render
-    // anchors with custom URL schemes like `hisaabo://`, treating them as
+    // anchors with custom URL schemes like `fintranzact://`, treating them as
     // phishing / protocol-hijack vectors. Shipping the deep link as the
     // primary `<a href="...">` produces a plain-text, non-clickable line
     // in most inboxes.
     //
     // When the sign-in was initiated from the desktop or mobile app we
     // thread the `source` through the HTTPS URL as a query param so the
-    // /auth/verify page can hand off to the native app via the `hisaabo://`
+    // /auth/verify page can hand off to the native app via the `fintranzact://`
     // scheme from a real browser (where custom schemes ARE honored by the
     // OS), instead of consuming the token inside the browser session.
     const sourceSuffix =
@@ -522,7 +552,7 @@ export const authRouter = router({
         ? `&source=${input.source}`
         : "";
     const webUrl = `${baseUrl}/auth/verify?${tokenParam}${sourceSuffix}`;
-    const deepLinkUrl = `hisaabo://verify?${tokenParam}`;
+    const deepLinkUrl = `fintranzact://verify?${tokenParam}`;
 
     // Secondary is the raw deep link — some email clients do render it
     // (and it serves as a copy-paste fallback) but we no longer depend
@@ -635,6 +665,7 @@ export const authRouter = router({
             isNew = true;
             const [newUser] = await tx.insert(users).values({
               email: emailLocal,
+              referralCode: tokenRow.referralCode,
               emailVerified: true,
             }).returning({ id: users.id, email: users.email, name: users.name });
             user = newUser;
@@ -663,11 +694,11 @@ export const authRouter = router({
                   message: "Sign-in state changed — please try again.",
                 });
               }
-              await writeNewTenantRows(tx, user.id, provisioned, null);
+              await writeNewTenantRows(tx, user.id, provisioned, tokenRow.referralCode);
               markUsed();
             } else {
               const assignedName = user.name ?? emailLocal.split("@")[0] ?? "My Organization";
-              await createTenantForUser(user.id, assignedName, tx);
+              await createTenantForUser(user.id, assignedName, tx, tokenRow.referralCode);
             }
           } else {
             // Existing user path — mark email verified
@@ -810,6 +841,13 @@ export const authRouter = router({
       // Require that this token was issued for an email-change request (has a bound userId)
       if (!tokenRow.userId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired link" });
+      }
+
+      // The address may have been taken since the request was made.
+      const [taken] = await controlDb.select({ id: users.id })
+        .from(users).where(eq(users.email, tokenRow.email)).limit(1);
+      if (taken && taken.id !== tokenRow.userId) {
+        throw new TRPCError({ code: "CONFLICT", message: "Email already in use" });
       }
 
       // Update the user's email using the userId stored in the token — never from client input

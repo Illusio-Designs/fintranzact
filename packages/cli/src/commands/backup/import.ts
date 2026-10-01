@@ -1,5 +1,5 @@
 /**
- * hisaabo restore — upload a .tar.gz backup archive to an empty tenant.
+ * fintranzact restore — upload a .tar.gz backup archive to an empty tenant.
  *
  * Flow:
  *   1. Verify file exists, is readable, non-zero
@@ -14,7 +14,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import * as readline from "node:readline";
 
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireTenantAuth } from "../../config.js";
 import { fatalError, success, warn, hasColor, isInteractive, EXIT } from "../../output.js";
 import chalk from "chalk";
@@ -43,7 +43,7 @@ interface TenantEntry {
   role: string;
 }
 
-async function resolveTenant(client: HisaaboClient, slugOrId: string): Promise<{ id: string; slug: string }> {
+async function resolveTenant(client: FintranzactClient, slugOrId: string): Promise<{ id: string; slug: string }> {
   if (isUuid(slugOrId)) {
     return { id: slugOrId, slug: slugOrId };
   }
@@ -51,7 +51,7 @@ async function resolveTenant(client: HisaaboClient, slugOrId: string): Promise<{
   const tenants = await client.tenant.list() as TenantEntry[];
   const match = tenants.find((t) => t.slug === slugOrId);
   if (!match) {
-    fatalError(`Tenant "${slugOrId}" not found. Run: hisaabo tenant list`, EXIT.NOT_FOUND);
+    fatalError(`Tenant "${slugOrId}" not found. Run: fintranzact tenant list`, EXIT.NOT_FOUND);
   }
   return { id: match.id, slug: match.slug };
 }
@@ -150,7 +150,7 @@ export interface RestoreOpts {
 
 export async function restoreCommand(opts: RestoreOpts): Promise<void> {
   const cfg = requireTenantAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   // 1. Verify file exists, readable, non-zero
   let fileStats: { size: number };
@@ -172,10 +172,10 @@ export async function restoreCommand(opts: RestoreOpts): Promise<void> {
     tenantId = resolved.id;
     tenantSlug = resolved.slug;
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
       if (err.code === "unauthorized") {
-        fatalError("Not authenticated. Run `hisaabo login` first.", EXIT_AUTH);
+        fatalError("Not authenticated. Run `fintranzact login` first.", EXIT_AUTH);
       }
       if (err.code === "network_error") {
         fatalError(err.message, EXIT_SERVER_ERROR);
@@ -210,10 +210,10 @@ export async function restoreCommand(opts: RestoreOpts): Promise<void> {
       ? `${cfg.apiUrl}${result.url}`
       : result.url;
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
       if (err.code === "unauthorized") {
-        fatalError("Not authenticated. Run `hisaabo login` first.", EXIT_AUTH);
+        fatalError("Not authenticated. Run `fintranzact login` first.", EXIT_AUTH);
       }
       if (err.code === "forbidden") {
         fatalError("You must be the tenant owner to import data.", EXIT_AUTH);
@@ -310,8 +310,8 @@ export async function restoreCommand(opts: RestoreOpts): Promise<void> {
       clearInterval(progressInterval);
     }
     clearProgress();
-    if (e instanceof HisaaboApiError && e.hisaaboError.code === "network_error") {
-      fatalError(`Upload failed: ${e.hisaaboError.message}`, EXIT_SERVER_ERROR);
+    if (e instanceof FintranzactApiError && e.fintranzactError.code === "network_error") {
+      fatalError(`Upload failed: ${e.fintranzactError.message}`, EXIT_SERVER_ERROR);
     }
     // Re-throw if it's already a process.exit (fatalError)
     if (e instanceof Error && e.message === "process.exit") throw e;

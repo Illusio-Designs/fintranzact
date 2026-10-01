@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, getInitials, cn, downloadCSV, toISOString } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -29,10 +30,10 @@ import {
   type MsmeCategory,
   type GstinStatus,
 } from "@fintranzact/shared";
+import { PartyPriceLevel, PriceLevelSelect } from "@/components/pricing/PriceLevelSelect";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { InputField, TextareaField } from "@/components/ui/FormField";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
@@ -78,7 +79,7 @@ function countFilled(...values: string[]): number {
 }
 
 function PartiesPage() {
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search by name…");
   const [partyFilter, setPartyFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"name" | "balance">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -152,6 +153,8 @@ function PartiesPage() {
     },
     onError: (err) => {
       toast.error(err.message);
+      // Close the confirmation: the refusal is the answer, not a retry prompt.
+      deleteConfirm.cancelDelete();
     },
   });
 
@@ -186,12 +189,6 @@ function PartiesPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search by name…"
-          className="max-w-xs"
-        />
         <PillTabs
           tabs={PARTY_TYPE_TABS}
           value={["all", "customer", "supplier"].includes(partyFilter) ? partyFilter : "all"}
@@ -353,6 +350,7 @@ const PARTY_DETAIL_TABS = [
 function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () => void }) {
   const [tab, setTab] = useState("overview");
   const [showMerge, setShowMerge] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const navigate = useNavigate();
 
   const { data: party } = trpc.party.getById.useQuery({ id: partyId });
@@ -394,7 +392,13 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
         party.gstin,
       ].filter(Boolean).join(" · ")}
       footer={
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => setShowEdit(true)}
+            className="btn-secondary text-xs px-3 py-1.5"
+          >
+            Edit
+          </button>
           <button
             onClick={() => setShowMerge(true)}
             className="text-xs px-3 py-1.5 rounded-lg font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 border border-amber-200 dark:border-amber-800 transition-colors"
@@ -471,6 +475,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                       TDS: {tdsSections.find((t) => t.code === party.tdsSection)?.label ?? party.tdsSection} @ {tdsRateFor(party)}%
                     </p>
                   )}
+                  {party.type === "customer" && <PartyPriceLevel partyId={party.id} priceLevelId={party.priceLevelId ?? null} />}
                 </div>
               </div>
 
@@ -555,7 +560,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                     View all
                   </LinkButton>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -606,7 +611,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                     View all
                   </LinkButton>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -657,7 +662,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                 description="Invoices and payments for this party will appear here."
               />
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -700,7 +705,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                                   purchase: "/invoices",
                                   credit_note: "/credit-notes",
                                   sales_return: "/sales-returns",
-                                  purchase_return: "/invoices",
+                                  purchase_return: "/purchase-returns",
                                   debit_note: "/invoices",
                                 };
                                 onClose();
@@ -743,7 +748,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                 description="Invoices for this party will appear here."
               />
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -801,7 +806,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
             {!paymentList?.data?.length ? (
               <p className="text-sm text-text-tertiary text-center py-6">No payments recorded</p>
             ) : (
-              <div className="rounded-xl border border-border-light overflow-hidden">
+              <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                 <table className="data-table w-full text-sm">
                   <thead>
                     <tr>
@@ -861,7 +866,7 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                   {party.type === "customer" ? "Items purchased by" : "Items supplied by"}{" "}
                   <span className="font-medium text-text-secondary">{party.name}</span>
                 </p>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -903,6 +908,9 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
         )}
       </div>
     </SlideOver>
+    {showEdit && (
+      <AddPartyModal open existing={party} onClose={() => setShowEdit(false)} />
+    )}
     {showMerge && (
       <MergePartyModal
         sourceId={partyId}
@@ -949,6 +957,10 @@ function MergePartyModal({
   const mergeMutation = trpc.party.merge.useMutation({
     onSuccess: () => {
       utils.party.list.invalidate();
+      // The target now has the source's balance, addresses and documents; a
+      // cached copy would show (and an edit would save back) the old ones.
+      utils.party.getById.invalidate();
+      utils.party.ledger.invalidate();
       toast.success(`"${sourceName}" merged successfully`);
       onClose();
     },
@@ -1197,43 +1209,89 @@ function MergePartyModal({
   );
 }
 
-function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [partyType, setPartyType] = useState<PartyType>("customer");
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [openingBalance, setOpeningBalance] = useState("");
-  const [gstin, setGstin] = useState("");
-  const [pan, setPan] = useState("");
+/** The saved party an edit starts from (the fields the form shows). */
+type EditableParty = {
+  id: string;
+  type: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  openingBalance?: string | null;
+  gstin?: string | null;
+  pan?: string | null;
+  category?: string | null;
+  billingAddress?: string | null;
+  shippingAddress?: string | null;
+  additionalShippingAddresses?: Array<{ label?: string; address: string; city?: string; stateCode?: string; pincode?: string }> | null;
+  city?: string | null;
+  state?: string | null;
+  stateCode?: string | null;
+  pincode?: string | null;
+  creditPeriodDays?: number | null;
+  creditLimit?: string | null;
+  contactPersonName?: string | null;
+  contactPersonDob?: string | Date | null;
+  bankAccountNumber?: string | null;
+  bankIfsc?: string | null;
+  bankName?: string | null;
+  legalName?: string | null;
+  tradeName?: string | null;
+  gstRegistrationType?: string | null;
+  constitution?: string | null;
+  isMsme?: boolean | null;
+  udyamNumber?: string | null;
+  msmeCategory?: string | null;
+  tdsSection?: string | null;
+  priceLevelId?: string | null;
+};
+
+function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: () => void; existing?: EditableParty }) {
+  const e0 = existing;
+  const [partyType, setPartyType] = useState<PartyType>((e0?.type as PartyType) ?? "customer");
+  const [name, setName] = useState(e0?.name ?? "");
+  const [phone, setPhone] = useState(e0?.phone ?? "");
+  const [email, setEmail] = useState(e0?.email ?? "");
+  const [openingBalance, setOpeningBalance] = useState(e0?.openingBalance ?? "");
+  const [gstin, setGstin] = useState(e0?.gstin ?? "");
+  const [pan, setPan] = useState(e0?.pan ?? "");
   // PAN last auto-filled from the GSTIN, so a corrected GSTIN can update it
   // without overwriting a PAN the user typed by hand.
   const [autoPan, setAutoPan] = useState<string | null>(null);
-  const [category, setCategory] = useState("");
-  const [billingAddress, setBillingAddress] = useState("");
-  const [shippingAddress, setShippingAddress] = useState("");
+  const [category, setCategory] = useState(e0?.category ?? "");
+  const [billingAddress, setBillingAddress] = useState(e0?.billingAddress ?? "");
+  const [shippingAddress, setShippingAddress] = useState(e0?.shippingAddress ?? "");
   const [sameAsBilling, setSameAsBilling] = useState(false);
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [pincode, setPincode] = useState("");
-  const [creditPeriodDays, setCreditPeriodDays] = useState("");
-  const [creditLimit, setCreditLimit] = useState("");
-  const [contactPersonName, setContactPersonName] = useState("");
-  const [contactPersonDob, setContactPersonDob] = useState("");
-  const [bankAccountNumber, setBankAccountNumber] = useState("");
-  const [bankIfsc, setBankIfsc] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [stateCode, setStateCode] = useState("");
-  const [legalName, setLegalName] = useState("");
-  const [tradeName, setTradeName] = useState("");
-  const [gstType, setGstType] = useState<PartyGstType | "">("");
-  const [constitution, setConstitution] = useState<PartyConstitution | "">("");
+  const [city, setCity] = useState(e0?.city ?? "");
+  const [state, setState] = useState(e0?.state ?? "");
+  const [pincode, setPincode] = useState(e0?.pincode ?? "");
+  const [creditPeriodDays, setCreditPeriodDays] = useState(e0?.creditPeriodDays != null ? String(e0.creditPeriodDays) : "");
+  const [creditLimit, setCreditLimit] = useState(e0?.creditLimit ?? "");
+  const [contactPersonName, setContactPersonName] = useState(e0?.contactPersonName ?? "");
+  const [contactPersonDob, setContactPersonDob] = useState(e0?.contactPersonDob ? new Date(e0.contactPersonDob).toISOString().slice(0, 10) : "");
+  const [bankAccountNumber, setBankAccountNumber] = useState(e0?.bankAccountNumber ?? "");
+  const [bankIfsc, setBankIfsc] = useState(e0?.bankIfsc ?? "");
+  const [bankName, setBankName] = useState(e0?.bankName ?? "");
+  const [stateCode, setStateCode] = useState(e0?.stateCode ?? "");
+  const [legalName, setLegalName] = useState(e0?.legalName ?? "");
+  const [tradeName, setTradeName] = useState(e0?.tradeName ?? "");
+  const [gstType, setGstType] = useState<PartyGstType | "">((e0?.gstRegistrationType as PartyGstType) ?? "");
+  const [constitution, setConstitution] = useState<PartyConstitution | "">((e0?.constitution as PartyConstitution) ?? "");
   const [gstinStatus, setGstinStatus] = useState<GstinStatus | null>(null);
   const [gstinVerifiedAt, setGstinVerifiedAt] = useState<string | null>(null);
-  const [isMsme, setIsMsme] = useState(false);
-  const [udyamNumber, setUdyamNumber] = useState("");
-  const [msmeCategory, setMsmeCategory] = useState<MsmeCategory | "">("");
-  const [tdsSection, setTdsSection] = useState("");
-  const [extraShipping, setExtraShipping] = useState<ShippingAddressDraft[]>([]);
+  const [isMsme, setIsMsme] = useState(e0?.isMsme ?? false);
+  const [udyamNumber, setUdyamNumber] = useState(e0?.udyamNumber ?? "");
+  const [msmeCategory, setMsmeCategory] = useState<MsmeCategory | "">((e0?.msmeCategory as MsmeCategory) ?? "");
+  const [tdsSection, setTdsSection] = useState(e0?.tdsSection ?? "");
+  const [priceLevelId, setPriceLevelId] = useState(e0?.priceLevelId ?? "");
+  const [extraShipping, setExtraShipping] = useState<ShippingAddressDraft[]>(
+    () => (e0?.additionalShippingAddresses ?? []).map((a) => ({
+      label: a.label ?? "",
+      address: a.address,
+      city: a.city ?? "",
+      stateCode: a.stateCode ?? "",
+      pincode: a.pincode ?? "",
+    })),
+  );
 
   const utils = trpc.useUtils();
 
@@ -1247,9 +1305,11 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
     }
     const derivedState = stateCodeFromGstin(value);
     if (derivedState) {
+      // Code and name move together (the State picker shows the code), so
+      // they can never disagree.
       setStateCode(derivedState);
       const stateName = INDIAN_STATES.find((st) => st.code === derivedState)?.name;
-      if (stateName && !state) setState(stateName);
+      if (stateName) setState(stateName);
     }
     const derivedConstitution = constitutionFromPan(derivedPan);
     if (derivedConstitution && !constitution) setConstitution(derivedConstitution);
@@ -1288,12 +1348,28 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
     onSuccess: () => {
       utils.party.list.invalidate();
       toast.success("Party created");
+      // The panel stays mounted: start the next party from a blank form, not
+      // with this one's phone, addresses and credit terms.
+      resetForm();
       onClose();
     },
     onError: (err) => {
       toast.error(err.message);
     },
   });
+
+  const updateMutation = trpc.party.update.useMutation({
+    onSuccess: () => {
+      utils.party.list.invalidate();
+      if (existing) utils.party.getById.invalidate({ id: existing.id });
+      toast.success("Party updated");
+      onClose();
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
+  const saving = createMutation.isPending || updateMutation.isPending;
 
   function resetForm() {
     setPartyType("customer");
@@ -1329,6 +1405,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
     setUdyamNumber("");
     setMsmeCategory("");
     setTdsSection("");
+    setPriceLevelId("");
     setExtraShipping([]);
   }
 
@@ -1354,7 +1431,7 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
       toast.error("Invalid Udyam number (e.g. UDYAM-MH-26-0012345)");
       return;
     }
-    createMutation.mutate({
+    const payload = {
       type: partyType,
       name,
       phone: phone || undefined,
@@ -1387,7 +1464,37 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
       udyamNumber: isMsme ? udyamNumber || undefined : undefined,
       msmeCategory: isMsme ? msmeCategory || undefined : undefined,
       tdsSection: tdsSection || undefined,
-    });
+      priceLevelId: partyType === "customer" && priceLevelId ? priceLevelId : undefined,
+    };
+    if (existing) {
+      // An edit sends what is on screen, so a cleared text field is saved
+      // empty and removed shipping addresses go away.
+      const { type: _type, ...data } = payload;
+      updateMutation.mutate({
+        id: existing.id,
+        data: {
+          ...data,
+          phone,
+          email,
+          pan,
+          category,
+          billingAddress,
+          shippingAddress: sameAsBilling ? billingAddress : shippingAddress,
+          city,
+          state,
+          pincode,
+          contactPersonName,
+          bankAccountNumber,
+          bankName,
+          legalName: legalName.trim(),
+          tradeName: tradeName.trim(),
+          additionalShippingAddresses: shippingAddressesPayload(extraShipping) ?? [],
+          priceLevelId: partyType === "customer" ? priceLevelId || null : undefined,
+        },
+      });
+    } else {
+      createMutation.mutate(payload);
+    }
   }
 
   const warnings = partyComplianceWarnings({
@@ -1409,33 +1516,35 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
     <SlideOver
       open={open}
       onClose={handleClose}
-      title="Add Party"
-      description="Create a new customer or supplier"
+      title={existing ? "Edit Party" : "Add Party"}
+      description={existing ? "Change this customer's or supplier's details" : "Create a new customer or supplier"}
       footer={
         <div className="flex justify-end gap-3">
-          <button className="btn-secondary" onClick={handleClose} disabled={createMutation.isPending}>
+          <button className="btn-secondary" onClick={handleClose} disabled={saving}>
             Cancel
           </button>
           <button
             className="btn-primary"
             onClick={handleCreate}
-            disabled={createMutation.isPending || !name.trim()}
+            disabled={saving || !name.trim()}
           >
-            {createMutation.isPending ? "Creating…" : "Create Party"}
+            {existing
+              ? updateMutation.isPending ? "Saving…" : "Save Changes"
+              : createMutation.isPending ? "Creating…" : "Create Party"}
           </button>
         </div>
       }
     >
       <div className="space-y-4">
-        {/* Party Type toggle */}
-        <SegmentedControl
+        {/* Party Type toggle (a saved party keeps its type) */}
+        {!existing && <SegmentedControl
           tabs={[
             { value: "customer", label: "Customer" },
             { value: "supplier", label: "Supplier" },
           ]}
           value={partyType}
           onChange={(v) => setPartyType(v as PartyType)}
-        />
+        />}
 
         {/* Base fields — 2 column */}
         <div className="grid grid-cols-2 gap-4">
@@ -1714,6 +1823,11 @@ function AddPartyModal({ open, onClose }: { open: boolean; onClose: () => void }
                 placeholder="0.00"
               />
             </div>
+            {partyType === "customer" && (
+              <div className="mt-4 max-w-[50%]">
+                <PriceLevelSelect value={priceLevelId} onChange={setPriceLevelId} />
+              </div>
+            )}
           </Disclosure>
 
           <Disclosure

@@ -37,6 +37,8 @@ test.beforeAll(async () => {
         unit: "pcs",
         itemMode: "variants",
         variantAttributes: ["Size", "Color"],
+        // A variants item is billed and stocked per variant, so give it one.
+        variants: [{ attributeValues: { Size: "M", Color: "Red" }, stockQuantity: "0" }],
         salePrice: "800.00",
         purchasePrice: "500.00",
         taxPercent: "12.00",

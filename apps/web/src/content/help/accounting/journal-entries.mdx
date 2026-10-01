@@ -1,0 +1,187 @@
+---
+title: Journal Entries
+description: Record manual double-entry adjustments in Fintranzact — debit and credit lines against your chart of accounts, automatic JE numbering, voiding with reversal entries, templates, and how journals flow into the Trial Balance, P&L and Balance Sheet.
+sidebar:
+  order: 1
+---
+
+import { ForCA } from "@/components/help/mdx";
+import { ForBusiness } from "@/components/help/mdx";
+
+Most of your books in Fintranzact are written for you: every invoice, payment and expense is turned into double-entry postings automatically when a report is run. **Journal Entries** is where you record the adjustments that don't come from a document — depreciation, provisions, capital introduced, opening adjustments, write-offs, corrections between two ledger accounts, and so on.
+
+Journal entries are available in the web and desktop app. Open them from the sidebar under **Vouchers → Journal Entries**. Press <kbd>N</kbd> on the page to start a new entry.
+
+## Who can use it
+
+| Role | View entries | Create, edit, void, templates |
+|---|---|---|
+| Owner / Admin | Yes | Yes |
+| Accountant | Yes | Yes |
+| Seller Manager | Yes | No — the server rejects the save |
+| Seller | No — the menu item is hidden | No |
+
+## The accounts you can post to
+
+Each line of a journal entry is posted to an account in your business's chart of accounts. The **Account** picker lists every active account as `code - name`, with the account type (asset, liability, equity, income or expense) shown beneath it. A new business starts with a standard chart that includes, among others:
+
+| Code | Account | Type |
+|---|---|---|
+| 1000 | Cash in Hand | Asset |
+| 1010 | Bank Accounts | Asset |
+| 1100 | Accounts Receivable | Asset |
+| 1500 | Fixed Assets | Asset |
+| 2000 | Accounts Payable | Liability |
+| 2100 / 2101 / 2102 | Output CGST / SGST / IGST Payable | Liability |
+| 3000 | Capital Account | Equity |
+| 3100 | Drawings | Equity |
+| 4100 | Other Income | Income |
+| 5300 | Rent | Expense |
+| 5900 | Depreciation | Expense |
+| 5970 | Bad Debts | Expense |
+
+:::note
+Journal lines post to ledger accounts, not to parties. A journal line on **1100 Accounts Receivable** changes the receivables balance in your financial statements, but it does not appear in any individual customer's party ledger or change their outstanding balance. Use a credit note or payment when a specific party's balance needs to change.
+:::
+
+## Creating an entry
+
+1. Go to **Vouchers → Journal Entries** and click **+ New Entry** (or press <kbd>N</kbd>).
+2. The **New Journal Entry** panel opens with two blank lines.
+3. Fill in the header:
+
+| Field | Required | Notes |
+|---|---|---|
+| **Date** | Yes | Defaults to today. The entry lands in reports for this date. |
+| **Narration** | No | Purpose of the entry, up to 2,000 characters. Shown in the list and used as the ledger description. |
+
+4. For each line under **Line Items**, choose an **Account** and enter either a **Debit** or a **Credit** amount. Typing a debit clears the credit on that line and vice versa, so each line is one-sided. **Note** is an optional per-line remark (up to 500 characters).
+5. Click **+ Add Row** for more lines. Once there are more than two lines, each line gets a delete icon.
+6. Watch the totals bar: **Total Debit**, **Total Credit** and **Difference**. The footer shows **Balanced** in green or **Unbalanced (₹x)** in red.
+7. Click **Create Entry**.
+
+### Validation rules
+
+**Create Entry** stays disabled until all of these hold, and the server checks them again:
+
+- At least two lines have an account selected. Lines without an account are dropped when you save.
+- Total debits equal total credits (to within ₹0.01).
+- The entry has a non-zero total.
+- Every account belongs to the current business.
+
+Amounts accept up to two decimal places.
+
+### Example: monthly depreciation
+
+| Account | Debit | Credit |
+|---|---|---|
+| 5900 - Depreciation | 12,500.00 | |
+| 1500 - Fixed Assets | | 12,500.00 |
+
+Narration: "Depreciation on machinery for April".
+
+## Entry numbering
+
+Entries are numbered automatically as `JE-00001`, `JE-00002`, and so on. The next number is one more than the highest number already used in the business, and it is generated inside the same database transaction as the save, so two people saving at once can't get the same number. You cannot type your own entry number.
+
+The same series is shared by manual entries, void reversals and system entries (for example the entry Fintranzact posts when you record ITC utilisation on the **Input Tax Credit** page).
+
+## The entries list
+
+The **Entries** tab lists journals for the selected period (the **Date range** bar defaults to this financial year), newest first:
+
+| Column | Meaning |
+|---|---|
+| **Entry #** | The JE number. Struck through when voided. |
+| **Date** | Entry date |
+| **Narration** | Header narration, or `--` if blank |
+| **Amount** | Sum of the debit side |
+| **Source** | **Manual** (entered by a user) or **System** (posted by Fintranzact, such as ITC utilisation) |
+| **Status** | **Active** or **Voided** |
+
+Click a row to expand it and see every line — account code and name, debit, credit and note — plus who created the entry.
+
+## Editing an entry
+
+Hover over a manual, active entry to show the action icons, then click the pencil (**Edit**). The **Edit Journal Entry** panel opens with the date, narration and lines filled in. Change what you need and click **Save Changes**. The same balancing rules apply. When you change lines, all the old lines are replaced with the new set.
+
+:::caution
+Expand the entry (click its row) before clicking **Edit** or **Save as template**. Both actions copy the lines from the expanded entry, so they don't work on a row that isn't expanded.
+:::
+
+You can't edit **System** entries or entries that have been voided.
+
+## Voiding an entry
+
+Fintranzact doesn't let you delete a journal from the app. To cancel one, void it:
+
+1. Hover over the entry and click the void icon.
+2. Confirm **Void Journal Entry**. The dialog warns that this creates a reversing entry and cannot be undone.
+
+Voiding does two things in one transaction:
+
+- It creates a new entry with the next JE number, dated the same as the original, with every debit and credit swapped and the narration `Void: reversal of JE-000xx`.
+- It marks the original as **Voided**.
+
+Both entries remain in your books, so the original and its reversal cancel each other out in every report. The audit trail stays intact.
+
+<ForCA>
+The void-by-reversal approach keeps the original voucher visible for audit. If you need the correction in a different period, don't void. Pass a fresh reversing journal dated in the correct period instead, because a void reversal always carries the original entry's date.
+</ForCA>
+
+## Templates
+
+For entries you pass every month, such as rent provisions, depreciation or salary accruals, save them as templates.
+
+- **Save as template:** hover over a manual, active entry and click the copy icon (**Save as template**). Enter a **Template Name** (for example "Monthly rent adjustment") and click **Save Template**. The template stores the narration and every line, amounts included.
+- **Use a template:** open the **Templates** tab and click **Use** on a row. The **New Journal Entry** panel opens pre-filled with today's date and the template's lines. Adjust the amounts if needed, then click **Create Entry**.
+- **Delete a template:** click the delete icon on the template row and confirm.
+
+The **Templates** tab lists each template's **Name**, **Narration** and number of **Lines**.
+
+## How journals affect your reports
+
+Manual and system journal entries are merged with the postings generated from your invoices, payments and expenses whenever these reports are run:
+
+- Trial Balance and Comparative Trial Balance
+- Profit & Loss and Comparative Profit & Loss
+- Balance Sheet and Comparative Balance Sheet
+- General Ledger (journal lines appear with the JE number as the reference)
+- Cash Flow Statement
+- Tally export (journal entries are included as journal vouchers)
+
+Voided entries and their reversals are both included, so they net to zero.
+
+Journal entries do **not** affect:
+
+- Party ledgers, party outstanding balances or ageing (lines carry no party)
+- Bank and cash account balances on the **Cash & Bank** page
+- Stock quantities
+- GST returns (GSTR-1, GSTR-3B), which are built from invoices
+
+<ForBusiness>
+If you only need to record money going out, such as rent or electricity, use **Expenses** rather than a journal. Expenses show up in expense reports and can be categorised. Keep journals for adjustments your accountant asks you to pass.
+</ForBusiness>
+
+## Frequently asked questions
+
+**Why is the Create Entry button greyed out?**
+The entry isn't balanced, has fewer than two lines with an account selected, or has no amounts. Check the **Difference** figure in the totals bar. It must be ₹0.00.
+
+**Can I put both a debit and a credit on the same line?**
+No. Entering an amount in one column clears the other. Use two lines instead.
+
+**Can I delete a journal entry?**
+Not from the app. Void it instead, which posts a reversing entry and marks the original as **Voided**.
+
+**Why can't I edit an entry?**
+Only **Manual** entries that are still **Active** can be edited. **System** entries and voided entries are read-only.
+
+**Will a journal on Accounts Receivable reduce a customer's balance?**
+No. Journal lines post to ledger accounts only and don't touch party ledgers. To reduce what a specific customer owes, record a payment or issue a credit note.
+
+**Can I choose the JE number?**
+No. Numbers are generated automatically in sequence (`JE-00001`, `JE-00002`, …).
+
+**Are journal entries available on mobile?**
+No. Journal entries are only in the web and desktop app.

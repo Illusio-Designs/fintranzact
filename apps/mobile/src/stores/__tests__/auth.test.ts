@@ -155,7 +155,7 @@ describe("auth store — session token management", () => {
     expect(useAuthStore.getState().token).toBe(NEW_TOKEN);
 
     // The token must be persisted to SecureStore with the correct key
-    expect(mockSet).toHaveBeenCalledWith("hisaabo_session_token", NEW_TOKEN);
+    expect(mockSet).toHaveBeenCalledWith("fintranzact_session_token", NEW_TOKEN);
   });
 
   // -------------------------------------------------------------------------
@@ -188,7 +188,7 @@ describe("auth store — session token management", () => {
     await useAuthStore.getState().logout();
 
     expect(useAuthStore.getState().token).toBeNull();
-    expect(mockDelete).toHaveBeenCalledWith("hisaabo_session_token");
+    expect(mockDelete).toHaveBeenCalledWith("fintranzact_session_token");
   });
 
   // -------------------------------------------------------------------------

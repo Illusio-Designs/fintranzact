@@ -8,6 +8,7 @@ import { Alert02Icon, ArrowRight01Icon, BankIcon, Cancel01Icon, ChartBarLineIcon
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
+import { buildFieldNameMapping } from "@/lib/import-mapping";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -696,6 +697,7 @@ function DropZone({
               ? "border-brand-300 bg-brand-50"
               : "border-border-light hover:border-brand-300 hover:bg-surface-1"
           )}
+          data-testid={`import-dropzone-${entityKey}`}
           onClick={() => inputRef.current?.click()}
           onDragOver={(e) => {
             e.preventDefault();
@@ -766,7 +768,7 @@ function MappingPanel({
   const firstRow = parsedFile.rows[0] || {};
 
   return (
-    <div className="rounded-xl border border-border-light overflow-hidden">
+    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
       <div
         className="px-4 py-2.5 flex items-center justify-between bg-surface-1 border-b border-border-light"
       >
@@ -793,6 +795,7 @@ function MappingPanel({
                 )}
               </span>
               <Select
+                aria-label={`${ENTITY_LABELS[entityKey]}: ${field.label} column`}
                 value={selectedHeader}
                 onChange={(e) =>
                   onChange({ ...mapping, [field.key]: e.target.value })
@@ -839,7 +842,7 @@ function PreviewTable({
   if (mappedFields.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border-light overflow-hidden">
+    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
       <div
         className="px-4 py-2.5 flex items-center justify-between bg-surface-1 border-b border-border-light"
       >
@@ -916,7 +919,7 @@ function ImportStepRow({
   const [errorsOpen, setErrorsOpen] = useState(false);
 
   return (
-    <div className="rounded-xl border border-border-light overflow-hidden">
+    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3">
         <div className="shrink-0 w-6 h-6 flex items-center justify-center">
           {status === "pending" && (
@@ -1122,6 +1125,8 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
       const file = state.files[key];
       if (file && preset[key]) {
         newMappings[key] = buildAutoMapping(file.headers, preset[key]!);
+      } else if (file && key !== "cashBank") {
+        newMappings[key] = buildFieldNameMapping(file.headers, ENTITY_FIELDS[key]);
       } else if (state.mappings[key]) {
         newMappings[key] = state.mappings[key];
       }
@@ -1131,9 +1136,10 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
 
   function handleFile(entityKey: EntityKey, parsedFile: ParsedFile) {
     const preset = PRESET_MAPS[state.source][entityKey];
+    // Without a preset (Tally, Generic CSV), columns named after a field map to it.
     const mapping = preset
       ? buildAutoMapping(parsedFile.headers, preset)
-      : {};
+      : buildFieldNameMapping(parsedFile.headers, ENTITY_FIELDS[entityKey]);
     setState((s) => ({
       ...s,
       files: { ...s.files, [entityKey]: parsedFile },
@@ -2496,7 +2502,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
             />
           ))}
           {gstReportFile && gstReportFile.rows.length > 0 && (
-            <div className="rounded-xl border border-border-light overflow-hidden">
+            <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
               <div className="px-4 py-2.5 flex items-center justify-between bg-surface-1 border-b border-border-light">
                 <span className="text-sm font-semibold text-text-primary">
                   GST Sales Report — Line Items
@@ -2611,7 +2617,7 @@ export function ImportWizard({ open, onClose }: ImportWizardProps) {
             </div>
           )}
           {cashBankFile && cashBankFile.rows.length > 0 && (
-            <div className="rounded-xl border border-border-light overflow-hidden">
+            <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
               <div className="px-4 py-2.5 flex items-center justify-between bg-surface-1 border-b border-border-light">
                 <div>
                   <span className="text-sm font-semibold text-text-primary">

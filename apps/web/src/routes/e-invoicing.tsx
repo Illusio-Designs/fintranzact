@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
@@ -12,7 +13,6 @@ import { InputField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { Spinner } from "@/components/ui/Spinner";
 import { Select } from "@/components/ui/Select";
-import { SearchInput } from "@/components/ui/SearchInput";
 
 import { Alert02Icon, CancelCircleIcon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/Icon";
@@ -61,7 +61,7 @@ function statusLabel(status: string | null | undefined): string {
 
 function DashboardTab() {
   const [tab, setTab] = useState("");
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search invoice # or party…");
   const [page, setPage] = useState(1);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState<CancelReason>("1");
@@ -135,12 +135,6 @@ function DashboardTab() {
       {/* Filters + bulk retry */}
       <div className="card overflow-hidden">
         <div className="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-border-light">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search invoice # or party…"
-            className="max-w-xs"
-          />
           {hasFailed && (
             <button
               onClick={() => bulkRetryMutation.mutate()}
@@ -446,10 +440,11 @@ function SettingsTab() {
             maxLength={15}
           />
           <div>
-            <label className="text-xs font-medium text-text-secondary block mb-1">
+            <label htmlFor="einvoice-threshold" className="text-xs font-medium text-text-secondary block mb-1">
               Threshold (crore)
             </label>
             <input
+              id="einvoice-threshold"
               type="number"
               min="0"
               step="0.01"

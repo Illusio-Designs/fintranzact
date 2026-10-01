@@ -41,7 +41,7 @@ import { createHash } from "node:crypto";
 // provisionTenantDatabase() calls migrateSingleTenantDb() from the inlined API
 // bundle, which resolved drizzle-tenant/ under packages/api/ (nonexistent).
 //
-// Resolution order: HISAABO_MIGRATIONS_DIR override → sibling of __dirname →
+// Resolution order: FINTRANZACT_MIGRATIONS_DIR override → sibling of __dirname →
 // monorepo cwd layout → error at call time with a clear message.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -88,7 +88,7 @@ function resolveMigrationsDir(subdir: string): string {
     dbPkgRoot: DB_PKG_ROOT,
     currentDir: __dirname,
     cwd: process.cwd(),
-    override: process.env.HISAABO_MIGRATIONS_DIR,
+    override: process.env.FINTRANZACT_MIGRATIONS_DIR,
   });
   return pickExistingMigrationsDir(candidates);
 }

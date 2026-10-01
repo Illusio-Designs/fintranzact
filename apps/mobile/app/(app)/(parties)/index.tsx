@@ -14,7 +14,8 @@ import { useBusinessStore } from "../../../src/stores/business";
 import { formatCurrency } from "../../../src/lib/utils";
 import { makeStyles } from "../../../src/lib/makeStyles";
 import { useColors } from "../../../src/contexts/ThemeContext";
-import { FAB, SearchBar, PressableRow, EmptyState } from "../../../src/components/ui";
+import { SearchBar, PressableRow, EmptyState } from "../../../src/components/ui";
+import { Ionicons } from "@expo/vector-icons";
 
 type PartyType = "customer" | "supplier";
 
@@ -151,6 +152,16 @@ export default function PartiesScreen() {
       <View style={styles.header}>
         <Text style={styles.screenTitle}>Parties</Text>
         <Text style={styles.countBadge}>{total}</Text>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() => router.push("/(app)/(parties)/create" as never)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Add party"
+        >
+          <Ionicons name="add" size={22} color={colors.onBrand} />
+        </TouchableOpacity>
       </View>
 
       {/* Segmented Control */}
@@ -214,7 +225,7 @@ export default function PartiesScreen() {
           ListFooterComponent={renderFooter}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
-          contentContainerStyle={[allParties.length === 0 ? styles.listEmpty : undefined, { paddingBottom: 100 }]}
+          contentContainerStyle={[allParties.length === 0 ? styles.listEmpty : undefined, { paddingBottom: 24 }]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -224,11 +235,11 @@ export default function PartiesScreen() {
             />
           }
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          style={styles.list}
           keyboardDismissMode="on-drag"
         />
       )}
 
-      <FAB onPress={() => router.push("/(app)/(parties)/create" as never)} />
     </SafeAreaView>
   );
 }
@@ -238,56 +249,18 @@ const useStyles = makeStyles((colors) => ({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    gap: 10,
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, gap: 10 },
+  screenTitle: { fontSize: 28, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.6 },
+  countBadge: { fontSize: 13, fontWeight: "700", color: colors.brand, backgroundColor: colors.brandLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: "hidden" },
+  addBtn: {
+    width: 44, height: 44, borderRadius: 14, backgroundColor: colors.brand, alignItems: "center", justifyContent: "center",
+    shadowColor: "#0f1b3d", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 4,
   },
-  screenTitle: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: colors.textPrimary,
-  },
-  countBadge: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.brand,
-    backgroundColor: colors.brandLight,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  segmentedControl: {
-    flexDirection: "row",
-    marginHorizontal: 20,
-    marginBottom: 12,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  segmentTab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: 9,
-  },
-  segmentTabActive: {
-    backgroundColor: colors.brand,
-  },
-  segmentTabText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.textMuted,
-  },
-  segmentTabTextActive: {
-    color: colors.textPrimary,
-  },
+  segmentedControl: { flexDirection: "row", marginHorizontal: 20, marginBottom: 12, backgroundColor: colors.surfaceHover, borderRadius: 14, padding: 4 },
+  segmentTab: { flex: 1, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 10 },
+  segmentTabActive: { backgroundColor: colors.surface, shadowColor: "#0f1b3d", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 2 },
+  segmentTabText: { fontSize: 14, fontWeight: "700", color: colors.textMuted },
+  segmentTabTextActive: { color: colors.textPrimary },
   searchContainer: {
     marginHorizontal: 20,
     marginBottom: 12,
@@ -300,35 +273,15 @@ const useStyles = makeStyles((colors) => ({
   listEmpty: {
     flex: 1,
   },
-  listItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: colors.bg,
-  },
+  listItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 16, paddingVertical: 14, marginHorizontal: 20, backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: colors.border },
   itemLeft: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
     gap: 12,
   },
-  avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.brandLight,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(99,102,241,0.3)",
-  },
-  avatarText: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.brand,
-  },
+  avatarCircle: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.brandLight, alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 15, fontWeight: "700", color: colors.brand },
   itemInfo: {
     flex: 1,
   },
@@ -361,15 +314,9 @@ const useStyles = makeStyles((colors) => ({
   balanceRed: {
     color: colors.danger,
   },
-  balanceLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.surface,
-    marginLeft: 76,
-  },
+  balanceLabel: { fontSize: 12, color: colors.textMuted },
+  separator: { height: 8 },
+  list: { flex: 1 },
   footer: {
     paddingVertical: 20,
     alignItems: "center",

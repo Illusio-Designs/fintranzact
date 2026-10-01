@@ -1,0 +1,142 @@
+---
+title: Orders & GRN
+description: Track sales orders and purchase orders until they're delivered or received, record goods receipt notes (GRN) with accepted and rejected quantities, carry free goods ("10 + 1") through, convert pending quantities in full or in part, and short-close what won't come.
+sidebar:
+  order: 11
+---
+
+import { ForBusiness } from "@/components/help/mdx";
+
+Orders let you record what a customer has asked for, or what you've asked a supplier for, and then track how much is still to be delivered or received. **Goods receipt notes (GRN)** and **delivery challans** record goods physically arriving or leaving, before the bill.
+
+All four are in the sidebar under **Vouchers**: **Sales Orders**, **Delivery Challans**, **Purchase Orders** and **Goods Receipts (GRN)**.
+
+## The documents
+
+| Document | Use it when | Moves stock? | Converts into |
+|---|---|---|---|
+| **Sales order** | A customer places an order | No | Delivery challan or invoice |
+| **Delivery challan** | Goods leave before (or without) an invoice | Yes, **out** | Invoice |
+| **Purchase order** | You place an order with a supplier | No | Goods receipt note or purchase invoice |
+| **Goods receipt note (GRN)** | Goods arrive before the supplier's bill | Yes, **in** | Purchase invoice |
+
+Orders never move stock. Stock moves when the goods do: on the challan or GRN, or on the invoice if you bill an order directly. An invoice made from a challan or GRN does **not** move stock again, since the goods have already moved. See [How Stock Moves](/help/inventory/how-stock-moves).
+
+On orders, the date field is called **Delivery by**.
+
+## Sales order to delivery
+
+1. Create the order: **Sales Orders → + New Sales Order**. Add the customer, the items and quantities, and a **Delivery by** date.
+2. When goods are ready, open the order and click **Convert**, or use **Convert** on the row.
+3. In the **Convert pending items** dialog, choose **Delivery Challan** or **Invoice**.
+4. The table shows each line's **Ordered**, **Done** and **Pending** quantity, with any free goods underneath ("+ 1 free"). **Take now** starts at the full pending quantity and **Free** at the pending free quantity. Lower them to deliver only part of a line.
+5. If you have more than one warehouse, choose **Dispatch from** (leave blank to use the default).
+6. Click **Create …**.
+
+Later, convert the delivery challan into an invoice the same way.
+
+Purchase orders work the same way: **Purchase Orders → + New Purchase Order**, then **Convert** into a **Goods Receipt Note** (choose **Receive into**) or straight into a **Purchase Invoice**. A GRN is later converted into the purchase invoice when the bill arrives.
+
+:::tip[Always bill through Convert]
+Make the invoice from the challan or GRN using **Convert**, rather than typing a new invoice. Converting links the two, so stock isn't counted twice and the challan or GRN shows as billed.
+:::
+
+**Conversion rules:**
+
+- You can't take more than what's pending ("Only N of … is pending").
+- A cancelled document can't be converted.
+- A closed (short-closed) document can't be converted until you reopen it.
+- Documents made from an order, or from a GRN, are dated **today**. An invoice made from a delivery challan keeps the challan's date.
+- A partial conversion doesn't carry over the source's additional charges or round-off. A full conversion does.
+- Free goods travel separately from the billed quantity. When you convert through the API without saying how much free to take, all of the pending free quantity goes along if you take all of the pending billed quantity, and none otherwise.
+
+## Free goods ("10 + 1")
+
+Suppliers and distributors often give goods free with an order: buy 10, get 1 free. Enter the free quantity in the **Free** column on the line, next to **Qty**. It works on invoices, quotations, proformas, orders, delivery challans, GRNs and returns (credit and debit notes are money only, so they have no Free column).
+
+- **Stock moves by billed + free.** A sale of 10 + 1 takes 11 out of stock; a purchase of 10 + 2 brings 12 in.
+- **Money uses the billed quantity only.** Price, discount, GST and totals are worked out on the 10. The free goods add nothing to the taxable value.
+- **A line can be entirely free** (billed quantity 0) — for a free sample, say.
+- **Orders track free goods apart.** An order for 10 + 1 is fulfilled once 10 billed and 1 free have gone out. The Fulfilment table and the pending reports show free goods still owed ("+ 1 free").
+- **Conversions carry it.** Quotation → invoice, order → challan, GRN or invoice, and challan or GRN → invoice all take the free quantity along. In the Convert dialog, the **Free** column says how much free goes this time.
+- **Returns can send free goods back.** A sales or purchase return made from the invoice copies the free quantity. You can also enter a return for free goods alone, at no value.
+- **Valuation.** Free goods on a purchase bill come in at no cost, so they lower the item's average (or FIFO) rate.
+- PDFs print "+ 1 pcs free" under the line, and the sales and purchase registers, item-wise sales and the stock ledger show free quantities.
+
+See [GST on free goods](/help/invoicing/gst-on-invoices) for how tax is treated.
+
+## Rejections on goods receipt
+
+When goods arrive, some may be damaged, short-dated or not what you ordered. Record that on the GRN instead of taking everything in and adjusting later.
+
+1. Open the purchase order and click **Convert**, choose **GRN**.
+2. For each line, enter what you **Accept**, any **Free** goods received, what you **Reject**, and a **Reason** (Damaged, Short expiry, Wrong item, … or type your own). A reason is required for every rejection.
+3. Click **Create GRN**.
+
+A GRN made directly (**Goods Receipts → + New**) has the same fields: the quantity column is called **Accepted**, with **Rejected** and **Reason for rejecting** underneath.
+
+What happens to rejected goods:
+
+- **Only accepted (and free) goods enter stock.** Rejected goods are never counted.
+- **They stay pending on the purchase order.** Order fulfilment counts only accepted quantities, so the order shows **Partly received** and its Fulfilment table shows how many were rejected. When the supplier sends replacements, convert the order again. If no replacement is coming, **Short-close** the order.
+- **Accepted + rejected can't be more than what is pending** on the order line.
+- **The purchase invoice bills what was accepted.** Converting the GRN into a purchase invoice takes the accepted quantity (and the free goods), not the rejected ones.
+- **Send them back on a purchase return or debit note.** Open the GRN: the **Rejected on receipt** box lists each rejection. Click **Return rejected goods**, choose **Purchase Return** or **Debit Note**, and how much to send back. Neither moves stock (the goods never came in), and neither is held to the GRN's total. Use a debit note when the supplier has billed you for the rejected goods and you want the amount back; a purchase return records the goods going back. Cancelling that return puts the quantity back as not yet returned.
+
+The GRN's PDF prints the rejected quantity and reason under each line.
+
+## Tracking what's pending
+
+Pending quantities are always worked out live from the documents made from an order:
+
+- **Pending = ordered − delivered (or received, or billed)**, line by line, in base units.
+- Only documents made using **Convert** count. An invoice typed separately doesn't reduce what's pending on the order.
+- If a document made from the order is cancelled or deleted, its quantity goes back to pending.
+
+Each list shows a **Pending** column with a fulfilment badge, and has status tabs:
+
+| Page | Tabs |
+|---|---|
+| Sales Orders | All, Open, Partly delivered, Fulfilled, Closed, Cancelled |
+| Purchase Orders | All, Open, Partly received, Received, Closed, Cancelled |
+| Goods Receipt Notes | All, Not billed, Partly billed, Billed, Closed, Cancelled |
+| Delivery Challans | All, Draft, Sent, Cancelled, plus a **Sales / Purchases** switch |
+
+Open a document to see its **Fulfilment** section: a table of **Item**, **Ordered**, **Done** and **Pending**, and the list of documents made from it. Documents made from another one show a **Made from …** link back to the source.
+
+## Short-close and reopen
+
+Sometimes the rest of an order will never come: the customer cancelled part of it, or the supplier can't supply the balance. Open the document and click **Short-close**. Nothing more is expected against it, whatever is still pending. It moves to the **Closed** tab and drops out of the [pending reports](/help/inventory/reports).
+
+Changed your mind? Open it and click **Reopen**. It goes back to open or partly done, and can be converted again.
+
+A cancelled document can't be closed.
+
+## Deleting, and billed challans and GRNs
+
+- **Delete** is available on draft documents, for owners and admins.
+- A delivery challan or GRN that has been billed can't be cancelled or deleted while its invoice stands: "Invoice … was billed from this document. Cancel or delete that invoice first." Delete the invoice first. That also puts the quantity back to pending on the challan or GRN.
+
+<ForBusiness>
+Open **Reports → Orders → Pending Sales Orders** every morning, and tick **Past delivery date only** to see which customers are waiting on overdue deliveries. Do the same with **Pending GRNs** at month end, so no supplier bill is missed before you file GST returns.
+</ForBusiness>
+
+## Frequently asked questions
+
+**Does a sales order reduce my stock?**
+No. Stock goes out when you create the delivery challan, or the invoice if you bill the order directly.
+
+**A supplier sent 100 but 5 were broken. How do I record it?**
+Receive the order on a GRN with **Accept** 95 and **Reject** 5, reason "Damaged". Stock goes up by 95, the order still expects 5. Then either wait for the replacement and convert the order again, or short-close it and send the 5 back with **Return rejected goods**.
+
+**The order says "10 + 1 free" but the supplier sent 11 and billed 11.**
+Receive it as it came: 11 accepted and no free. The order's free piece stays pending — short-close the order once you've settled it with the supplier.
+
+**Can I deliver an order in several lots?**
+Yes. Convert it as many times as needed, lowering **Take now** each time. The order shows **Partly delivered** until everything is done.
+
+**I made an invoice separately instead of converting the challan. What now?**
+The goods were taken out of stock twice, and the challan still shows as not billed. Delete the separate invoice and convert the challan instead.
+
+**What's the difference between Short-close and Cancel?**
+Short-close keeps everything already delivered or received and just stops expecting the rest. The web app doesn't have a Cancel button on these documents; drafts can be deleted.

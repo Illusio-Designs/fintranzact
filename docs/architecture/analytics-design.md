@@ -1,8 +1,37 @@
 # Analytics Design -- Fintranzact
 
-**Status**: Proposed
-**Date**: 2026-03-29
+**Status**: Built, mostly (the sections below are the original proposal; see "As built" for what exists and what does not)
+**Date**: 2026-03-29 (proposal); as-built note 2026-10-01
 **Author**: Analytics Reporter
+
+## As built
+
+Where it lives:
+
+| Part | Location |
+|---|---|
+| Dashboard API | tRPC `dashboard` router, `packages/api/src/routers/dashboard.ts` — 14 procedures: `summary`, `shippingSummary`, `salesTrend`, `topOutstanding`, `topCustomers`, `topSellingItems`, `expensesByCategory`, `invoiceStatusBreakdown`, `profitAndLoss`, `receivablesAging`, `paymentModeBreakdown`, `collectionEfficiency`, `expenseCategoryBreakdown`, `monthlyComparison` |
+| Reports API | tRPC `reports` router, `packages/api/src/routers/reports.ts` — 21 procedures: `daybook`, `outstanding`, `msmePayables`, `salesRegister`, `purchaseRegister`, `taxSummary`, `cashFlowForecast`, `collectionEfficiency`, `itemSales`, `stockSummary`, `partyStatement`, `paymentSummary`, `trialBalance`, `balanceSheet`, `profitAndLoss`, `generalLedger`, `comparativeTrialBalance`, `comparativeBalanceSheet`, `comparativeProfitAndLoss`, `tallyExport`, `cashFlowStatement` |
+| Inventory reports API | tRPC `inventoryReports` router, `packages/api/src/routers/inventory-reports.ts` — `stockLedger`, `movementSummary`, `godownSummary`, `ageing`, `reorderStatus`, `deadStock`, `stockGroupSummary`, `batchStock` |
+| Sales targets API | tRPC `target` router, `packages/api/src/routers/target.ts` — `create`, `list`, `getProgress`, `update`, `delete`, `myTargets` |
+| Dashboard UI | `apps/web/src/routes/index.tsx` (sales trend, invoice status, top items, top customers, payment mode breakdown, collection efficiency, expense category breakdown, monthly comparison) |
+| Reports UI | `/reports` — `apps/web/src/routes/reports.tsx` and `apps/web/src/components/reports/`; 27 reports in five groups |
+| Other clients | CLI `dashboard` and `report` groups; MCP `dashboard.ts` and `reports.ts` tools |
+
+How it differs from the proposal:
+
+- There are no separate `dso`, `agingReport`, `itemWiseSales`, `sellerPerformance` or `inventoryTurnover` procedures. DSO is returned by `reports.collectionEfficiency`; receivable and payable ageing buckets come from `reports.outstanding` (and `dashboard.receivablesAging` for receivables); item-wise sales is `reports.itemSales`, which includes a gross-margin % per item.
+- Built beyond the proposal: trial balance, balance sheet, general ledger, comparative trial balance / balance sheet / P&L, Tally export, MSME payables, and the inventory reports.
+
+Not built (proposed above, not found in the code):
+
+- Inventory turnover (1.4) and revenue concentration (1.6).
+- Gross margin by category (1.5) — only per item, in `itemSales`.
+- Seller performance report and leaderboard (2.7) and all of Part 3 (peak selling hours, average order value by seller, party retention by seller). Sales targets and progress exist via the `target` router.
+- Store analytics (Part 4): order volume, cancellation rate, repeat customers, popular store items, conversion funnel. The `store` router only lists and updates orders.
+- Sparkline charts on summary cards (6.2). Up/down change badges exist on the collection efficiency and monthly comparison cards, not on every widget (6.6).
+
+The role access matrix (Part 8) was not re-checked against the permission code for this note.
 
 ---
 

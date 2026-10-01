@@ -61,13 +61,13 @@ PASSING:
 
 GAPS:
 
-**Gap 1.1.1 (HIGH)**: The GSTR-1 CSV export format (`gstr1ToCSV`, lines 472-516) uses a generic multi-section flat CSV with section headers as text rows. The GST portal offline utility expects a specific column mapping per table. The current CSV will require manual reformatting before upload. The documentation (apps/docs/src/content/docs/gst/gstr1.mdx, line 126) correctly advises users to "import the CSV or manually enter the data," but this creates friction and error risk. A JSON export matching the GSTN JSON schema would be more useful.
+**Gap 1.1.1 (HIGH)**: The GSTR-1 CSV export format (`gstr1ToCSV`, lines 472-516) uses a generic multi-section flat CSV with section headers as text rows. The GST portal offline utility expects a specific column mapping per table. The current CSV will require manual reformatting before upload. The documentation (apps/web/src/content/help/gst/gstr1.mdx, line 126) correctly advises users to "import the CSV or manually enter the data," but this creates friction and error risk. A JSON export matching the GSTN JSON schema would be more useful.
 - Current state: Generic CSV, multi-section, not directly importable to GST Offline Utility.
 - Target state: JSON export matching GSTN schema, or at minimum, per-section CSV files matching the offline utility's column order.
 - Remediation: Implement a `gstr1ToJson()` function outputting the GSTN API JSON schema format. Expose it as a separate export endpoint.
 - Effort: 3-5 days.
 
-**Gap 1.1.2 (MEDIUM)**: Zero-rated supplies (exports of goods/services, SEZ supplies) are not separately classified. They fall into B2B or B2CS based on the party GSTIN. The GSTR-1 requires zero-rated supplies in Table 6A (exports) and Table 6B (SEZ). The documentation acknowledges this limitation (`apps/docs/src/content/docs/gst/index.mdx`, line 65).
+**Gap 1.1.2 (MEDIUM)**: Zero-rated supplies (exports of goods/services, SEZ supplies) are not separately classified. They fall into B2B or B2CS based on the party GSTIN. The GSTR-1 requires zero-rated supplies in Table 6A (exports) and Table 6B (SEZ). The documentation acknowledges this limitation (`apps/web/src/content/help/gst/index.mdx`, line 65).
 - Current state: Zero-rated supplies not identified; no `exportType` field on invoices.
 - Target state: An `exportType` field (none/export/sez) on invoices, with Table 6A/6B generation.
 - Remediation: Add `exportType` enum to invoice schema and branch logic in `generateGSTR1`.
@@ -498,7 +498,7 @@ The `logAudit()` function wraps the insert in a try/catch (line 27-29) so audit 
 | `packages/shared/src/validators.ts` | Zod schemas, GSTIN/PAN regex validation |
 | `packages/db/src/tenant-schema.ts` | Tenant database schema (invoices, parties, audit_log, etc.) |
 | `packages/db/src/control-schema.ts` | Control database schema (users, sessions, tenants, invitations) |
-| `apps/docs/src/content/docs/gst/` | GST documentation |
+| `apps/web/src/content/help/gst/` | GST documentation |
 | `SECURITY.md` | Security architecture documentation |
 | `SECURITY_PENDING.md` | Known unresolved security findings |
 | `scripts/backup.sh` | PostgreSQL backup script |

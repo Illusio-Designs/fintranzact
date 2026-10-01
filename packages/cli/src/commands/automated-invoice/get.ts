@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT, termWidth, hasColor } from "../../output.js";
 import { formatAmount, formatDate } from "../../format.js";
@@ -29,7 +29,7 @@ function statusBadge(status: string): string {
 
 export async function automatedInvoiceGetCommand(id: string, opts: { json?: boolean }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const tmpl = await client.recurringInvoice.getById(id);
@@ -102,10 +102,10 @@ export async function automatedInvoiceGetCommand(id: string, opts: { json?: bool
     process.stdout.write(` +${"~".repeat(inner + 2)}+\n\n`);
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
       if (err.code === "not_found") fatalError(`Recurring invoice template not found: ${id}`, EXIT.NOT_FOUND);
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));

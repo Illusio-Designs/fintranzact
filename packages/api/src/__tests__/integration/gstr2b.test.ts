@@ -494,3 +494,175 @@ describe("gstr2b router — mutations", () => {
     expect(result.success).toBe(true);
   });
 });
+
+describe("gstr2b router — inter-state vs intra-state tax split", () => {
+  // business1 is in Maharashtra (27). A Karnataka (29) supplier's invoice is
+  // inter-state: 20,000 @ 18% = 3,600 IGST, no CGST/SGST.
+  it("matches an inter-state supplier invoice on IGST (not CGST+SGST halves)", async () => {
+    const db = getTenantTestDb();
+    const kaSupplier = await createParty(db, world.business1.id, {
+      name: "Bengaluru Components Ltd",
+      type: "supplier",
+      gstin: "29AABCB4321R1ZM",
+      city: "Bengaluru",
+      state: "Karnataka",
+      stateCode: "29",
+      openingBalance: "0.00",
+    });
+
+    await createInvoiceWithItems(
+      db,
+      world.business1.id,
+      kaSupplier.id,
+      [{ description: "Circuit boards", quantity: "20", unitPrice: "1000.00", taxPercent: "18.00" }],
+      {
+        type: "purchase",
+        documentType: "invoice",
+        status: "sent",
+        invoiceDate: new Date("2026-05-08"),
+        invoiceNumber: "KA-IGST-001",
+      },
+    );
+
+    const json = JSON.stringify({
+      gstin: "27AABCA0000R1ZM",
+      ret_period: "052026",
+      docdata: {
+        b2b: [{
+          ctin: "29AABCB4321R1ZM",
+          trdnm: "Bengaluru Components Ltd",
+          inv: [{
+            inum: "KA-IGST-001",
+            dt: "08-05-2026",
+            val: 23600,
+            pos: "27",
+            itcavl: "Y",
+            rev: "N",
+            typ: "R",
+            items: [{ num: 1, rt: 18, txval: 20000, cgst: 0, sgst: 0, igst: 3600, cess: 0 }],
+          }],
+        }],
+      },
+    });
+
+    const caller = callerForRamesh();
+    const result = await caller.gstr2b.upload({
+      returnPeriod: "2026-05",
+      content: json,
+      fileName: "gstr2b_052026.json",
+      format: "json",
+    });
+
+    const [rec] = await db
+      .select()
+      .from(gstr2bRecords)
+      .where(eq(gstr2bRecords.uploadId, result.uploadId));
+
+    expect(rec!.igst).toBe("3600.00");
+    expect(rec!.matchStatus).toBe("matched");
+    expect(rec!.mismatchReasons).toBeNull();
+    expect(result.matchedRecords).toBe(1);
+  });
+
+  it("still matches an intra-state supplier invoice on CGST+SGST (odd paise split)", async () => {
+    const db = getTenantTestDb();
+    // Same-state supplier (27): 1,000.20 @ 5% = 50.01 tax
+    // → CGST 25.00 + SGST 25.01 (paise-exact), IGST 0
+    await createInvoiceWithItems(
+      db,
+      world.business1.id,
+      supplierParty.id,
+      [{ description: "Twine", quantity: "1", unitPrice: "1000.20", taxPercent: "5.00" }],
+      {
+        type: "purchase",
+        documentType: "invoice",
+        status: "sent",
+        invoiceDate: new Date("2026-05-09"),
+        invoiceNumber: "MH-CGST-001",
+      },
+    );
+
+    const json = JSON.stringify({
+      gstin: "27AABCA0000R1ZM",
+      ret_period: "052026",
+      docdata: {
+        b2b: [{
+          ctin: "27AABCM0000R1ZM",
+          trdnm: "Mumbai Supplies Pvt Ltd",
+          inv: [{
+            inum: "MH-CGST-001",
+            dt: "09-05-2026",
+            val: 1050.21,
+            pos: "27",
+            itcavl: "Y",
+            rev: "N",
+            typ: "R",
+            items: [{ num: 1, rt: 5, txval: 1000.2, cgst: 25.0, sgst: 25.01, igst: 0, cess: 0 }],
+          }],
+        }],
+      },
+    });
+
+    const caller = callerForRamesh();
+    const result = await caller.gstr2b.upload({
+      returnPeriod: "2026-05",
+      content: json,
+      fileName: "gstr2b_052026_mh.json",
+      format: "json",
+    });
+
+    const [rec] = await db
+      .select()
+      .from(gstr2bRecords)
+      .where(eq(gstr2bRecords.uploadId, result.uploadId));
+
+    expect(rec!.matchStatus).toBe("matched");
+  });
+});
+
+describe("gstr2b router — only documents a supplier reports are expected in 2B", () => {
+  it("missingIn2B lists purchase invoices, not orders, proformas, challans or our returns", async () => {
+    const db = getTenantTestDb();
+    const date = new Date("2026-07-10");
+    const lines = [{ description: "Packing tape", quantity: "10", unitPrice: "100.00", taxPercent: "18.00" }];
+    const doc = (documentType: "invoice" | "quotation" | "proforma" | "delivery_challan" | "purchase_order"
+      | "goods_receipt_note" | "purchase_return", invoiceNumber: string) =>
+      createInvoiceWithItems(db, world.business1.id, supplierParty.id, lines, {
+        type: "purchase", documentType, status: "sent", invoiceDate: date, invoiceNumber,
+      });
+
+    await doc("invoice", "JUL-PI-1");
+    await doc("quotation", "JUL-QT-1");
+    await doc("proforma", "JUL-PF-1");
+    await doc("delivery_challan", "JUL-DC-1");
+    await doc("purchase_order", "JUL-PO-1");
+    await doc("goods_receipt_note", "JUL-GRN-1");
+    await doc("purchase_return", "JUL-PR-1");
+
+    // A 2B for the period that has none of them
+    const caller = callerForRamesh();
+    await caller.gstr2b.upload({
+      returnPeriod: "2026-07",
+      content: JSON.stringify({
+        gstin: "27AABCA0000R1ZM",
+        ret_period: "072026",
+        docdata: {
+          b2b: [{
+            ctin: "27AABCM0000R1ZM",
+            trdnm: "Mumbai Supplies Pvt Ltd",
+            inv: [{
+              inum: "JUL-OTHER-1", dt: "01-07-2026", val: 118, pos: "27", itcavl: "Y", rev: "N", typ: "R",
+              items: [{ num: 1, rt: 18, txval: 100, cgst: 9, sgst: 9, igst: 0, cess: 0 }],
+            }],
+          }],
+        },
+      }),
+      fileName: "gstr2b_072026.json",
+      format: "json",
+    });
+
+    const missing = await caller.gstr2b.missingIn2B({ returnPeriod: "2026-07" });
+    expect(missing.records.map((r) => r.invoiceNumber)).toEqual(["JUL-PI-1"]);
+    expect(missing.total).toBe(1);
+  });
+});

@@ -22,7 +22,7 @@ setup("authenticate", async ({ page, request }) => {
   const authDir = path.dirname(AUTH_FILE);
   if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
-  const email = `e2e-${Date.now()}@test.hisaabo.in`;
+  const email = `e2e-${Date.now()}@test.fintranzact.com`;
   const password = "Test@1234!";
   const name = "E2E Test User";
 
@@ -35,6 +35,13 @@ setup("authenticate", async ({ page, request }) => {
   const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
   const apiUrl = process.env.API_URL ?? "http://localhost:3000";
 
+  // A new organisation's owner chooses a plan first (J1 covers that page).
+  const planRes = await request.post(`${apiUrl}/api/trpc/tenant.updatePlan`, {
+    headers: { "Content-Type": "application/json", "X-Requested-With": "fintranzact", Cookie: cookieHeader },
+    data: { json: { plan: "forever_free" } },
+  });
+  expect(planRes.ok(), `tenant.updatePlan failed: ${await planRes.text()}`).toBeTruthy();
+
   const createBizRes = await request.post(`${apiUrl}/api/trpc/business.create`, {
     headers: {
       "Content-Type": "application/json",
@@ -46,7 +53,7 @@ setup("authenticate", async ({ page, request }) => {
         name: "E2E Test Business",
         gstRegistrationType: "regular",
         gstin: "27AABCU9603R1ZM",
-        pan: "AAACE0000A",
+        pan: "AABCU9603R", // characters 3–12 of the GSTIN
         phone: "9876500000",
         email: email,
         address: "123 Test Road",

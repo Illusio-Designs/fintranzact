@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
@@ -11,10 +11,17 @@ interface ModalProps {
   title?: string;
   children: ReactNode;
   className?: string;
+  /** Untitled modals: the id of the element inside that names the dialog. */
+  labelledBy?: string;
+  /** Untitled modals: the id of the element inside that describes it. */
+  describedBy?: string;
 }
 
-export function Modal({ open, onClose, title, children, className }: ModalProps): React.JSX.Element | null {
+export function Modal({ open, onClose, title, children, className, labelledBy, describedBy }: ModalProps): React.JSX.Element | null {
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Unique per instance: two open at once (a panel over a panel) must
+  // each be named by their own title.
+  const titleId = useId();
 
   useFocusTrap(dialogRef, open);
 
@@ -39,7 +46,8 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-labelledby={title ? "modal-title" : undefined}
+      aria-labelledby={title ? titleId : labelledBy}
+      aria-describedby={describedBy}
     >
       <div
         className="fixed inset-0 bg-black/40 animate-fade-in"
@@ -56,7 +64,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
         {title && (
           <div className="flex items-center justify-between px-6 py-4 border-b border-border-light">
             <h2
-              id="modal-title"
+              id={titleId}
               className="text-base font-semibold text-text-primary"
             >
               {title}

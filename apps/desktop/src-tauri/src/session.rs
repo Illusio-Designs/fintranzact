@@ -8,7 +8,7 @@
 //! `expo-secure-store` posture.
 //!
 //! Design notes:
-//! - Service name is the bundle identifier `in.hisaabo.app` so OS-level
+//! - Service name is the bundle identifier `in.fintranzact.app` so OS-level
 //!   ACLs isolate this token from other apps running as the same user.
 //! - Account name `session_token` is a stable label; we don't version it.
 //! - On Linux, if libsecret / gnome-keyring isn't available (headless or
@@ -22,7 +22,7 @@
 
 use keyring::Entry;
 
-const SERVICE: &str = "in.hisaabo.app";
+const SERVICE: &str = "in.fintranzact.app";
 const ACCOUNT: &str = "session_token";
 
 fn entry() -> Result<Entry, String> {

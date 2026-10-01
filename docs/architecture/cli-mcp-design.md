@@ -5,7 +5,7 @@
 This document describes the design for two new packages that make Fintranzact accessible
 to AI agents and terminal workflows:
 
-- `packages/cli` — A `hisaabo` command-line tool for humans and automation scripts
+- `packages/cli` — A `fintranzact` command-line tool for humans and automation scripts
 - `packages/mcp` — A Model Context Protocol server for AI agents (Claude, Cursor, etc.)
 
 Both packages are thin clients. They share a common HTTP client layer and both call
@@ -44,8 +44,8 @@ The `AppRouter` type from `@fintranzact/api` is imported as a **devDependency on
 etc. at runtime.
 
 ### Consequences
-- CLI and MCP have one import: `import { HisaaboClient } from "@fintranzact/client"`.
-- Adding a new API procedure means adding one method to `HisaaboClient` — one change
+- CLI and MCP have one import: `import { FintranzactClient } from "@fintranzact/client"`.
+- Adding a new API procedure means adding one method to `FintranzactClient` — one change
   propagates to both consumers.
 - A third consumer (e.g., a webhook processor) gets the same client for free.
 - The client package adds a build step to the monorepo pipeline.
@@ -67,8 +67,8 @@ Keep them separate (`packages/cli` and `packages/mcp`). The reasons:
 1. **Dependency footprint**: The MCP server pulls in `@modelcontextprotocol/sdk`. The
    CLI pulls in `commander` and `cli-table3`. These dependencies have no overlap and
    should not be bundled together.
-2. **Distribution path**: The CLI is published as `hisaabo` on npm, installable via
-   `npm install -g hisaabo`. The MCP server is published as `@fintranzact/mcp`, invoked
+2. **Distribution path**: The CLI is published as `fintranzact` on npm, installable via
+   `npm install -g fintranzact`. The MCP server is published as `@fintranzact/mcp`, invoked
    via `npx`. Different publish targets.
 3. **Version cadence**: A new CLI flag does not require bumping the MCP server version
    and vice versa. Independent versioning keeps changelogs clean.
@@ -97,7 +97,7 @@ Reasons:
 1. **Self-hosted deployments**: Users run Fintranzact behind Docker or a VPS. An MCP
    server embedded in the API container means Claude Desktop needs access to the API
    container's stdio — which is not how Docker deployments work. A standalone MCP
-   server can run on the user's local machine, pointing at `HISAABO_API_URL`.
+   server can run on the user's local machine, pointing at `FINTRANZACT_API_URL`.
 2. **Auth boundary**: The MCP server authenticates as a service account (session token)
    not as the API process itself. Keeping it out of the API container preserves that
    boundary.
@@ -127,8 +127,8 @@ Options considered:
 3. Use the existing `Bearer` token path with a stored session ID
 
 ### Decision
-Use option 3: `hisaabo login` calls `auth.login` over tRPC, receives the session ID
-from the response body (not from a cookie), and stores it in `~/.hisaabo/config.json`.
+Use option 3: `fintranzact login` calls `auth.login` over tRPC, receives the session ID
+from the response body (not from a cookie), and stores it in `~/.fintranzact/config.json`.
 Subsequent CLI and MCP calls set `Authorization: Bearer <session_id>`.
 
 The API already supports Bearer auth in `createContext`. No API changes are needed.
@@ -140,13 +140,13 @@ modification.
 
 ### Consequences
 - Session tokens expire after 30 days. The CLI can detect a 401 and prompt
-  `hisaabo login` again.
+  `fintranzact login` again.
 - Config file contains a credential. File permissions must be `0600` (enforced by
   the CLI on write).
 - No refresh token mechanism — user must re-login after expiry. Acceptable for
   developer tooling.
 - The MCP server reads the token from an environment variable
-  (`HISAABO_API_KEY`), not the config file, so it works in CI and containerized
+  (`FINTRANZACT_API_KEY`), not the config file, so it works in CI and containerized
   agent setups without a home directory.
 
 ---
@@ -186,7 +186,7 @@ server simply passes `limit: 25` down.
 - An agent that needs all 142 invoices must make 6 calls. This is intentional —
   an agent that needs all records should use the CSV export tool instead.
 - The 25-record cap is a constant in the MCP server. Operators can override it via
-  `HISAABO_MCP_PAGE_SIZE` env var (max 50).
+  `FINTRANZACT_MCP_PAGE_SIZE` env var (max 50).
 
 ---
 
@@ -231,7 +231,7 @@ sending) are translated to `validation_failed` with a per-field message map.
 ## Directory Structure
 
 ```
-hisaabo/
+fintranzact/
   packages/
     shared/           (existing — Zod validators + TypeScript types)
     db/               (existing — Drizzle schema)
@@ -239,7 +239,7 @@ hisaabo/
     client/           (planned — shared HTTP client; see Design Review §8 for current status)
       src/
         index.ts            — re-exports
-        client.ts           — HisaaboClient class
+        client.ts           — FintranzactClient class
         types.ts            — response shapes, error types
         procedures/
           auth.ts           — login, logout, whoami
@@ -263,13 +263,13 @@ hisaabo/
       package.json
       tsconfig.json
       tsup.config.ts
-    cli/              (implemented — hisaabo CLI binary)
+    cli/              (implemented — fintranzact CLI binary)
       src/
         bin/
-          hisaabo.ts        — entry point, commander program setup, auth commands
+          fintranzact.ts        — entry point, commander program setup, auth commands
         auth.ts             — login, loginWithToken, logout, whoami implementations
-        client.ts           — inline HisaaboClient (replaces packages/client until built)
-        config.ts           — read/write ~/.hisaabo/config.json
+        client.ts           — inline FintranzactClient (replaces packages/client until built)
+        config.ts           — read/write ~/.fintranzact/config.json
         output.ts           — table/JSON/CSV formatters, color helpers
         format.ts           — display formatting utilities
         commands/
@@ -305,7 +305,7 @@ hisaabo/
       src/
         index.ts            — entry point, MCP server init, env var validation
         server.ts           — tool + resource registration aggregator
-        client.ts           — inline HisaaboClient (replaces packages/client until built)
+        client.ts           — inline FintranzactClient (replaces packages/client until built)
         tools/
           invoice.ts        — 7 tools: invoice_list, invoice_create, invoice_get,
                               invoice_update_status, invoice_delete, invoice_pdf_url,
@@ -404,7 +404,7 @@ export interface ClientConfig {
   businessId: string;   // x-business-id header (maps to ctx.businessId in the API)
 }
 
-export class HisaaboClient {
+export class FintranzactClient {
   constructor(private config: ClientConfig) {}
 
   /**
@@ -466,14 +466,14 @@ export class HisaaboClient {
 }
 
 /**
- * Translate a raw tRPC error envelope into a structured HisaaboError.
+ * Translate a raw tRPC error envelope into a structured FintranzactError.
  * This is the only place in the codebase that knows about tRPC error shapes.
  */
-export function normalizeTrpcError(raw: unknown): HisaaboError {
+export function normalizeTrpcError(raw: unknown): FintranzactError {
   // ... maps UNAUTHORIZED → { code: "unauthorized" }, BAD_REQUEST + zodError → { code: "validation_failed" }, etc.
 }
 
-export type HisaaboError =
+export type FintranzactError =
   | { code: "unauthorized"; message: string }
   | { code: "forbidden"; message: string }
   | { code: "not_found"; resource: string }
@@ -484,12 +484,12 @@ export type HisaaboError =
 ### `src/procedures/invoice.ts` — skeleton
 
 ```typescript
-import type { HisaaboClient, RouterOutputs, RouterInputs } from "../client.js";
+import type { FintranzactClient, RouterOutputs, RouterInputs } from "../client.js";
 
 export type InvoiceList = RouterOutputs["invoice"]["list"];
 export type InvoiceCreate = RouterInputs["invoice"]["create"];
 
-export function invoiceProcedures(client: HisaaboClient) {
+export function invoiceProcedures(client: FintranzactClient) {
   return {
     list(input: RouterInputs["invoice"]["list"]) {
       return client.query<InvoiceList>("invoice.list", input);
@@ -529,7 +529,7 @@ export function invoiceProcedures(client: HisaaboClient) {
   "private": false,
   "type": "module",
   "bin": {
-    "hisaabo": "./dist/index.js"
+    "fintranzact": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --minify",
@@ -560,38 +560,38 @@ import { readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const CONFIG_DIR = join(homedir(), ".hisaabo");
+const CONFIG_DIR = join(homedir(), ".fintranzact");
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 
-export interface HisaaboConfig {
+export interface FintranzactConfig {
   apiUrl: string;
   token: string;
   tenantId: string;
   businessId: string;
-  // Human-readable labels — stored for `hisaabo whoami` display only
+  // Human-readable labels — stored for `fintranzact whoami` display only
   userEmail: string;
   businessName: string;
 }
 
-export function readConfig(): HisaaboConfig | null {
+export function readConfig(): FintranzactConfig | null {
   try {
-    return JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as HisaaboConfig;
+    return JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as FintranzactConfig;
   } catch {
     return null;
   }
 }
 
-export function writeConfig(config: HisaaboConfig): void {
+export function writeConfig(config: FintranzactConfig): void {
   mkdirSync(CONFIG_DIR, { recursive: true });
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 });
   // Enforce 0600 — file contains a session credential
   chmodSync(CONFIG_PATH, 0o600);
 }
 
-export function requireConfig(): HisaaboConfig {
+export function requireConfig(): FintranzactConfig {
   const cfg = readConfig();
   if (!cfg) {
-    throw new Error("Not logged in. Run: hisaabo login");
+    throw new Error("Not logged in. Run: fintranzact login");
   }
   return cfg;
 }
@@ -601,9 +601,9 @@ export function clearConfig(): void {
 }
 ```
 
-### `src/bin/hisaabo.ts` — entry point (actual structure)
+### `src/bin/fintranzact.ts` — entry point (actual structure)
 
-The CLI entry point is `src/bin/hisaabo.ts` rather than `src/index.ts`. Commands
+The CLI entry point is `src/bin/fintranzact.ts` rather than `src/index.ts`. Commands
 are split into per-action files nested under domain subdirectories and imported
 individually. This keeps each file small and independently testable.
 
@@ -626,7 +626,7 @@ import { storeSettingsCommand, storeOrdersCommand } from "../commands/store/inde
 import { importPartiesCommand, importItemsCommand } from "../commands/import/index.js";
 
 const program = new Command()
-  .name("hisaabo")
+  .name("fintranzact")
   .description("Fintranzact CLI — Invoicing and business management")
   .version("0.1.0");
 
@@ -732,7 +732,7 @@ This is a deliberate non-negotiable. AI agents that invoke the CLI subprocess
   "private": false,
   "type": "module",
   "bin": {
-    "hisaabo-mcp": "./dist/index.js"
+    "fintranzact-mcp": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm",
@@ -758,20 +758,20 @@ This is a deliberate non-negotiable. AI agents that invoke the CLI subprocess
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { HisaaboClient } from "@fintranzact/client";
+import { FintranzactClient } from "@fintranzact/client";
 import { registerTools } from "./server.js";
 
 // All config comes from environment variables — no file system dependency.
 // This makes the MCP server work cleanly in Docker, CI, and Claude Desktop.
 const config = {
-  apiUrl: process.env.HISAABO_API_URL ?? "http://localhost:3000",
-  token: requireEnv("HISAABO_API_KEY"),
-  tenantId: requireEnv("HISAABO_TENANT_ID"),
-  businessId: requireEnv("HISAABO_BUSINESS_ID"),
+  apiUrl: process.env.FINTRANZACT_API_URL ?? "http://localhost:3000",
+  token: requireEnv("FINTRANZACT_API_KEY"),
+  tenantId: requireEnv("FINTRANZACT_TENANT_ID"),
+  businessId: requireEnv("FINTRANZACT_BUSINESS_ID"),
 };
 
-const client = new HisaaboClient(config);
-const server = new McpServer({ name: "hisaabo", version: "0.1.0" });
+const client = new FintranzactClient(config);
+const server = new McpServer({ name: "fintranzact", version: "0.1.0" });
 registerTools(server, client);
 
 const transport = new StdioServerTransport();
@@ -789,7 +789,7 @@ function requireEnv(name: string): string {
 ```typescript
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { HisaaboClient } from "@fintranzact/client";
+import type { FintranzactClient } from "@fintranzact/client";
 import { registerInvoiceTools } from "./tools/invoice.js";
 import { registerPartyTools } from "./tools/party.js";
 import { registerItemTools } from "./tools/item.js";
@@ -808,7 +808,7 @@ import { registerTargetTools } from "./tools/target.js";
 import { registerImportTools } from "./tools/import.js";
 import { registerResources } from "./resources/index.js";
 
-export function registerTools(server: McpServer, client: HisaaboClient) {
+export function registerTools(server: McpServer, client: FintranzactClient) {
   // Core business operations
   registerInvoiceTools(server, client);    // 7 tools
   registerPartyTools(server, client);      // 10 tools
@@ -847,11 +847,11 @@ from `@fintranzact/shared` validators, constrained further for MCP consumption.
 ```typescript
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { HisaaboClient } from "@fintranzact/client";
+import type { FintranzactClient } from "@fintranzact/client";
 import { MAX_PAGE_SIZE } from "../lib/pagination.js";
 import { wrapTool } from "../lib/errors.js";
 
-export function registerInvoiceTools(server: McpServer, client: HisaaboClient) {
+export function registerInvoiceTools(server: McpServer, client: FintranzactClient) {
 
   server.tool(
     "invoice_list",
@@ -1113,7 +1113,7 @@ export function registerInvoiceTools(server: McpServer, client: HisaaboClient) {
 // Tools registered (3 total):
 //
 // api_key_list   — list all API keys for the current user
-// api_key_create — generate a new API key (hisaabo_key_...) with a label
+// api_key_create — generate a new API key (fintranzact_key_...) with a label
 // api_key_revoke — permanently revoke an API key by ID
 ```
 
@@ -1165,7 +1165,7 @@ chooses to act.
 ```typescript
 // src/resources/index.ts
 
-export function registerResources(server: McpServer, client: HisaaboClient) {
+export function registerResources(server: McpServer, client: FintranzactClient) {
 
   // business://current — current business profile
   server.resource(
@@ -1198,7 +1198,7 @@ export function registerResources(server: McpServer, client: HisaaboClient) {
 
 ```typescript
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { HisaaboError } from "@fintranzact/client";
+import type { FintranzactError } from "@fintranzact/client";
 
 type ToolHandler<T> = (input: T) => Promise<CallToolResult>;
 
@@ -1206,7 +1206,7 @@ type ToolHandler<T> = (input: T) => Promise<CallToolResult>;
  * Wraps a tool handler in error normalization.
  *
  * Successful calls pass through unchanged.
- * HisaaboError values are returned as { isError: true, content: [{ type: "text", text: ... }] }.
+ * FintranzactError values are returned as { isError: true, content: [{ type: "text", text: ... }] }.
  * Unexpected errors are collapsed to a generic api_error message.
  */
 export function wrapTool<T>(handler: ToolHandler<T>): ToolHandler<T> {
@@ -1214,19 +1214,19 @@ export function wrapTool<T>(handler: ToolHandler<T>): ToolHandler<T> {
     try {
       return await handler(input);
     } catch (err) {
-      const hisaaboErr = toHisaaboError(err);
+      const fintranzactErr = toFintranzactError(err);
       return {
         isError: true,
-        content: [{ type: "text", text: formatError(hisaaboErr) }],
+        content: [{ type: "text", text: formatError(fintranzactErr) }],
       };
     }
   };
 }
 
-function formatError(err: HisaaboError): string {
+function formatError(err: FintranzactError): string {
   switch (err.code) {
     case "unauthorized":
-      return `Authentication required. Check that HISAABO_API_KEY is set and not expired.`;
+      return `Authentication required. Check that FINTRANZACT_API_KEY is set and not expired.`;
     case "forbidden":
       return `Permission denied: ${err.message}`;
     case "not_found":
@@ -1246,7 +1246,7 @@ function formatError(err: HisaaboError): string {
 ### Initial login (CLI)
 
 ```
-$ hisaabo login
+$ fintranzact login
 Email: user@example.com
 Password: ••••••••
 
@@ -1258,7 +1258,7 @@ Password: ••••••••
 
 Prompts: "Select active business:" (if multiple)
 
-Writes ~/.hisaabo/config.json (mode 0600):
+Writes ~/.fintranzact/config.json (mode 0600):
 {
   "apiUrl": "${import.meta.env.API_URL}",
   "token": "abc123",
@@ -1279,11 +1279,11 @@ the cookie. This is the only required change to the existing API.
 
 ```
 npx @fintranzact/mcp
-# env: HISAABO_API_KEY, HISAABO_TENANT_ID, HISAABO_BUSINESS_ID, HISAABO_API_URL
+# env: FINTRANZACT_API_KEY, FINTRANZACT_TENANT_ID, FINTRANZACT_BUSINESS_ID, FINTRANZACT_API_URL
 
-All requests set: Authorization: Bearer $HISAABO_API_KEY
-                  x-business-id: $HISAABO_BUSINESS_ID
-                  x-tenant-id: $HISAABO_TENANT_ID
+All requests set: Authorization: Bearer $FINTRANZACT_API_KEY
+                  x-business-id: $FINTRANZACT_BUSINESS_ID
+                  x-tenant-id: $FINTRANZACT_TENANT_ID
 ```
 
 The MCP server validates env vars at startup and exits with a clear error message
@@ -1296,25 +1296,25 @@ if any are missing. It does not attempt a lazy login.
 ```json
 {
   "mcpServers": {
-    "hisaabo": {
+    "fintranzact": {
       "command": "npx",
       "args": ["@fintranzact/mcp"],
       "env": {
-        "HISAABO_API_URL": "http://localhost:3000",
-        "HISAABO_API_KEY": "<session-id-from-hisaabo-login>",
-        "HISAABO_TENANT_ID": "<tenant-id>",
-        "HISAABO_BUSINESS_ID": "<business-id>"
+        "FINTRANZACT_API_URL": "http://localhost:3000",
+        "FINTRANZACT_API_KEY": "<session-id-from-fintranzact-login>",
+        "FINTRANZACT_TENANT_ID": "<tenant-id>",
+        "FINTRANZACT_BUSINESS_ID": "<business-id>"
       }
     }
   }
 }
 ```
 
-The `hisaabo whoami --json` command outputs the tenant ID, business ID, and token
+The `fintranzact whoami --json` command outputs the tenant ID, business ID, and token
 in a machine-readable format to make config setup easy:
 
 ```bash
-$ hisaabo whoami --json
+$ fintranzact whoami --json
 {
   "email": "user@example.com",
   "businessName": "My Shop",
@@ -1416,17 +1416,17 @@ auth paths.
 
 | Path | Purpose |
 |------|---------|
-| `packages/client/src/client.ts` | `HisaaboClient` class, `normalizeTrpcError` (planned; currently inlined) |
+| `packages/client/src/client.ts` | `FintranzactClient` class, `normalizeTrpcError` (planned; currently inlined) |
 | `packages/client/src/procedures/` | Typed wrappers for each router namespace (planned) |
-| `packages/cli/src/bin/hisaabo.ts` | CLI entry point, `commander` program, auth commands |
+| `packages/cli/src/bin/fintranzact.ts` | CLI entry point, `commander` program, auth commands |
 | `packages/cli/src/auth.ts` | Login, logout, whoami implementations |
-| `packages/cli/src/client.ts` | Inline `HisaaboClient` (used until `packages/client` is extracted) |
-| `packages/cli/src/config.ts` | Read/write `~/.hisaabo/config.json` |
+| `packages/cli/src/client.ts` | Inline `FintranzactClient` (used until `packages/client` is extracted) |
+| `packages/cli/src/config.ts` | Read/write `~/.fintranzact/config.json` |
 | `packages/cli/src/output.ts` | Table + JSON output formatters |
 | `packages/cli/src/commands/` | One subdirectory per domain; one file per action |
 | `packages/mcp/src/index.ts` | MCP server entry point, env var validation |
 | `packages/mcp/src/server.ts` | Tool + resource registration aggregator (16 tool files) |
-| `packages/mcp/src/client.ts` | Inline `HisaaboClient` (used until `packages/client` is extracted) |
+| `packages/mcp/src/client.ts` | Inline `FintranzactClient` (used until `packages/client` is extracted) |
 | `packages/mcp/src/tools/invoice.ts` | 7 invoice tools |
 | `packages/mcp/src/tools/party.ts` | 10 party tools |
 | `packages/mcp/src/tools/item.ts` | 16 item tools (variants, units, merge) |
@@ -1501,12 +1501,12 @@ URI templates with variables (e.g. `invoices://{id}`). Fixed in implementation.
 The `createContext` function in `packages/api/src/context.ts` reads `tenantId`
 from the session record in the DB, not from a header. The `x-tenant-id` header
 is read via `opts.req.headers.get("x-tenant-id")` only if present. This means
-`HISAABO_TENANT_ID` is a belt-and-suspenders concern — the session already carries
+`FINTRANZACT_TENANT_ID` is a belt-and-suspenders concern — the session already carries
 the tenant. However, keeping it as an env var and header is correct defensive
 behavior: it ensures the MCP server can be pointed at a specific tenant without
 ambiguity.
 
-#### 7. `HisaaboError` `not_found` shape mismatch between ADR-006 and actual types
+#### 7. `FintranzactError` `not_found` shape mismatch between ADR-006 and actual types
 
 ADR-006 defines: `{ code: "not_found", resource: string; id: string }` (with `id`).
 The implementation in `src/lib/errors.ts` uses `{ code: "not_found", resource: string }`
@@ -1521,8 +1521,8 @@ includes an inline copy of the HTTP client in `src/client.ts`. When `packages/cl
 is built, replace the import in `src/client.ts` with:
 
 ```typescript
-export { HisaaboClient, HisaaboApiError, formatHisaaboError } from "@fintranzact/client";
-export type { HisaaboError, ClientConfig, /* domain types */ } from "@fintranzact/client";
+export { FintranzactClient, FintranzactApiError, formatFintranzactError } from "@fintranzact/client";
+export type { FintranzactError, ClientConfig, /* domain types */ } from "@fintranzact/client";
 ```
 
 The inline client is architecturally identical to the design in ADR-001.

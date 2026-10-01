@@ -15,8 +15,8 @@ Thanks for your interest in contributing. Fintranzact is an open-source invoicin
 
 ```bash
 # Fork and clone
-git clone https://github.com/<your-username>/hisaabo.git
-cd hisaabo
+git clone https://github.com/<your-username>/fintranzact.git
+cd fintranzact
 
 # Install dependencies
 pnpm install

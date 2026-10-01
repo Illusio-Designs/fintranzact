@@ -1,13 +1,9 @@
 # Local development database.
 #
-# Renamed from hisaabo → fintranzact. POSTGRES_* only apply when the pgdata
-# volume is first created, so an existing volume still holds the old
-# "hisaabo" role/database. Either start fresh (deletes local data):
+# POSTGRES_* only apply when the pgdata volume is first created, so an
+# existing volume keeps its original role/database. To start fresh (deletes
+# local data):
 #   docker compose down -v && docker compose up -d
-# or rename in place (keeps data):
-#   docker compose exec postgres psql -U hisaabo -d postgres -c "ALTER DATABASE hisaabo RENAME TO fintranzact;"
-#   docker compose exec postgres psql -U hisaabo -d postgres -c "ALTER ROLE hisaabo RENAME TO fintranzact;"
-#   docker compose exec postgres psql -U fintranzact -d postgres -c "ALTER ROLE fintranzact PASSWORD 'fintranzact_dev';"
 # then set DATABASE_URL=postgresql://fintranzact:fintranzact_dev@localhost:5432/fintranzact
 services:
   postgres:

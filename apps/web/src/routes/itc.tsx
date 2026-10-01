@@ -108,12 +108,12 @@ function ITCPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [activeTab, setActiveTabRaw] = useState<ITCTab>(
-    () => (localStorage.getItem("hisaabo_itc_tab") as ITCTab) || "dashboard",
+    () => (localStorage.getItem("fintranzact_itc_tab") as ITCTab) || "dashboard",
   );
 
   const setActiveTab = (tab: ITCTab) => {
     setActiveTabRaw(tab);
-    localStorage.setItem("hisaabo_itc_tab", tab);
+    localStorage.setItem("fintranzact_itc_tab", tab);
   };
 
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);
@@ -134,12 +134,13 @@ function ITCPage() {
         description="Track, manage, and utilize ITC across return periods"
       />
 
-      {/* Tab bar */}
-      <div className="mb-6">
+      {/* Tab bar — scrolls on its own on a phone, like the GST page's */}
+      <div className="mb-6 overflow-x-auto" data-testid="itc-tabs">
         <PillTabs
           tabs={tabs}
           value={activeTab}
           onChange={(v) => setActiveTab(v as ITCTab)}
+          className="w-max"
         />
       </div>
 

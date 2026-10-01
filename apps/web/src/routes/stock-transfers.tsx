@@ -3,6 +3,7 @@ import { useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
 import { formatDate, todayISODate, toISOString, cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -50,7 +51,7 @@ function StockTransfersPage() {
 
   const transfer = trpc.stock.transfer.useMutation({
     onSuccess: async () => {
-      await Promise.all([utils.stock.transfers.invalidate(), utils.stock.warehouses.invalidate(), utils.stock.balances.invalidate()]);
+      await invalidateStockViews(utils);
       toast({ title: "Stock transferred", variant: "success" });
       setOpen(false);
       reset();
@@ -64,7 +65,7 @@ function StockTransfersPage() {
   return (
     <div>
       <PageHeader
-        title="Stock transfers"
+        title="Stock Transfers"
         description="Move stock between your warehouses. Every transfer is kept in this journal."
         actions={
           <button className="btn-primary" onClick={() => setOpen(true)}>
@@ -111,7 +112,7 @@ function StockTransfersPage() {
                       </td>
                       <td className="max-w-[420px]">
                         <p className="truncate text-text-secondary">
-                          {t.lines.map((l) => `${l.name} × ${formatQty(l.quantity, l.unit)}`).join(", ")}
+                          {t.lines.map((l) => `${l.name}${l.batchNumber ? ` (${l.batchNumber})` : ""} × ${formatQty(l.quantity, l.unit)}`).join(", ")}
                         </p>
                         {t.lineCount > 1 && <p className="text-xs text-text-tertiary">{t.lineCount} items</p>}
                       </td>
@@ -146,7 +147,7 @@ function StockTransfersPage() {
                   sourceWarehouseId: from,
                   destinationWarehouseId: to,
                   date: toISOString(date),
-                  lines: ready,
+                  lines: ready.map(({ newBatch: _newBatch, ...l }) => l),
                 })
               }
             >
@@ -161,7 +162,7 @@ function StockTransfersPage() {
             <WarehouseSelect label="To" value={to} onChange={setTo} exclude={from} required />
           </div>
           <InputField label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <StockLinesEditor lines={lines} onChange={setLines} warehouseId={from || undefined} />
+          <StockLinesEditor lines={lines} onChange={setLines} warehouseId={from || undefined} batchMode="out" />
         </div>
       </SlideOver>
     </div>

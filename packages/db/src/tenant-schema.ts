@@ -12,6 +12,7 @@ import {
   jsonb,
   customType,
   date,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -33,7 +34,7 @@ export const paymentModeEnum = pgEnum("payment_mode", ["cash", "bank", "upi", "c
 export const unitEnum = pgEnum("unit", ["pcs", "kg", "g", "l", "ml", "m", "cm", "ft", "in", "box", "dozen", "pair", "set", "pkt", "bun", "pouch", "jar", "btl", "bag", "ton", "pack", "pet", "person", "other"]);
 export const itemTypeEnum = pgEnum("item_type", ["product", "service"]);
 export const itemModeEnum = pgEnum("item_mode", ["simple", "alt_units", "variants"]);
-export const documentTypeEnum = pgEnum("document_type", ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return"]);
+export const documentTypeEnum = pgEnum("document_type", ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return", "purchase_order", "sales_order", "goods_receipt_note"]);
 export const bankAccountTypeEnum = pgEnum("bank_account_type", ["savings", "current", "cash", "upi", "credit_card", "payment_gateway"]);
 export const bankTransactionTypeEnum = pgEnum("bank_transaction_type", ["deposit", "withdrawal", "transfer"]);
 export const gstRegistrationTypeEnum = pgEnum("gst_registration_type", ["regular", "composition", "unregistered"]);
@@ -126,6 +127,12 @@ export const businesses = pgTable("businesses", {
   nextPurchaseReturnNumber: integer("next_purchase_return_number").default(1).notNull(),
   deliveryChallanPrefix: text("delivery_challan_prefix").default("DC").notNull(),
   nextDeliveryChallanNumber: integer("next_delivery_challan_number").default(1).notNull(),
+  purchaseOrderPrefix: text("purchase_order_prefix").default("PO").notNull(),
+  nextPurchaseOrderNumber: integer("next_purchase_order_number").default(1).notNull(),
+  salesOrderPrefix: text("sales_order_prefix").default("SO").notNull(),
+  nextSalesOrderNumber: integer("next_sales_order_number").default(1).notNull(),
+  goodsReceiptNotePrefix: text("goods_receipt_note_prefix").default("GRN").notNull(),
+  nextGoodsReceiptNoteNumber: integer("next_goods_receipt_note_number").default(1).notNull(),
   // Counter behind auto-generated internal barcodes (see generateInternalBarcode).
   // Follows the same allocate-then-increment pattern as the document numbers
   // above so two concurrent purchases cannot mint the same code.
@@ -173,6 +180,11 @@ export const businesses = pgTable("businesses", {
   // business under Settings → Documents.
   defaultRoundOff: boolean("default_round_off").default(true).notNull(),
   defaultTermsAndConditions: text("default_terms_and_conditions"),
+  // Printed invoice design (see INVOICE_TEMPLATES in @fintranzact/shared).
+  // "classic" is the original A4 layout, so nothing changes until chosen.
+  invoiceTemplate: text("invoice_template").default("classic").notNull(),
+  // Thermal receipt roll width in mm: 58 or 80.
+  thermalWidth: integer("thermal_width").default(80).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
@@ -238,6 +250,16 @@ export const inventorySettings = pgTable("inventory_settings", {
 
   stockAdjustmentWarehouseId: uuid("stock_adjustment_warehouse_id")
     .references(() => warehouses.id, { onDelete: "set null" }),
+
+  // What happens when a document would take a warehouse below zero:
+  // "allow" silently, "warn" (the entry form flags it, saving still works) or
+  // "block" (the server refuses to save).
+  negativeStockPolicy: text("negative_stock_policy").default("warn").notNull(),
+
+  // How closing stock is valued in the stock summary, P&L and balance sheet:
+  // "weighted_average" (average cost of purchases, Tally's default) or "fifo"
+  // (the latest purchases are the ones still on the shelf).
+  valuationMethod: text("valuation_method").default("weighted_average").notNull(),
 
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
@@ -340,6 +362,9 @@ export const parties = pgTable("parties", {
   msmeCategory: text("msme_category"), // micro | small | medium
   // TDS applicable on payments to this party (see @fintranzact/shared tds.ts).
   tdsSection: text("tds_section"),
+  // Price level (Retail, Wholesale, Dealer...) sales to this party are priced at.
+  // Null = the business's default level, if it has one.
+  priceLevelId: uuid("price_level_id").references(() => priceLevels.id, { onDelete: "set null" }),
   source: text("source"), // null = manual, "mybillbook", "tally", etc.
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -450,6 +475,25 @@ export const warehouseLocations = pgTable("warehouse_locations", {
   ),
 ]);
 
+// ── Stock Groups ───────────────────────────────────────────────
+// Tally-style stock groups: a business-scoped tree that items hang off.
+// Replaces the free-text `items.category`. That column stays and is kept
+// equal to the group's name so older readers (CLI, mobile, store) still work.
+
+export const stockGroups = pgTable("stock_groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  // Nesting. Restrict: the API refuses to delete a group that still has
+  // children, so a group never points at a missing parent.
+  parentId: uuid("parent_id").references((): AnyPgColumn => stockGroups.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("stock_groups_business_name_idx").on(t.businessId, t.name),
+  index("stock_groups_parent_idx").on(t.parentId),
+]);
+
 // ── Items / Products ───────────────────────────────────────────
 
 export const items = pgTable("items", {
@@ -474,13 +518,24 @@ export const items = pgTable("items", {
   variantAttributes: jsonb("variant_attributes").$type<string[]>(), // dimension names e.g. ["Size", "Color"]
   salePrice: numeric("sale_price", { precision: 15, scale: 2 }),
   purchasePrice: numeric("purchase_price", { precision: 15, scale: 2 }),
+  // Maximum retail price printed on the pack. Selling above it is flagged.
+  mrp: numeric("mrp", { precision: 15, scale: 2 }),
   taxPercent: numeric("tax_percent", { precision: 5, scale: 2 }).default("0").notNull(),
   stockQuantity: numeric("stock_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
   lowStockAlert: numeric("low_stock_alert", { precision: 15, scale: 3 }),
   description: text("description"),
   itemType: itemTypeEnum("item_type").default("product").notNull(),
   category: text("category"),
+  // Stock group. When set, `category` mirrors the group's name.
+  stockGroupId: uuid("stock_group_id").references(() => stockGroups.id, { onDelete: "set null" }),
   taxInclusive: boolean("tax_inclusive").default(false).notNull(),
+  // Batch / lot tracking. Off by default: an item that doesn't track batches
+  // moves stock exactly as before. When on, stock is held per batch
+  // (item_batches) and every movement names the batch it came from or went to.
+  trackBatches: boolean("track_batches").default(false).notNull(),
+  // Only meaningful with trackBatches: new batches need an expiry date, and
+  // sales pick the batch that expires first (FEFO) and skip expired ones.
+  trackExpiry: boolean("track_expiry").default(false).notNull(),
   source: text("source"),
   // ── Online Store fields ──
   storeEnabled: boolean("store_enabled").default(false).notNull(),
@@ -508,6 +563,7 @@ export const items = pgTable("items", {
     .on(t.businessId, t.barcode)
     .where(sql`${t.barcode} IS NOT NULL AND ${t.deletedAt} IS NULL`),
   index("items_store_idx").on(t.businessId, t.storeEnabled),
+  index("items_stock_group_idx").on(t.stockGroupId),
   // Partial index that mirrors the active-read path (`items.list`, catalog,
   // store, dashboards). The query planner picks this up for any WHERE that
   // includes `business_id` AND `deleted_at IS NULL`, keeping active-item
@@ -527,6 +583,7 @@ export const itemVariants = pgTable("item_variants", {
   barcode: text("barcode"),
   salePrice: numeric("sale_price", { precision: 15, scale: 2 }),
   purchasePrice: numeric("purchase_price", { precision: 15, scale: 2 }),
+  mrp: numeric("mrp", { precision: 15, scale: 2 }),
   stockQuantity: numeric("stock_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
   lowStockAlert: numeric("low_stock_alert", { precision: 15, scale: 3 }),
   storeEnabled: boolean("store_enabled").default(false).notNull(),
@@ -551,6 +608,36 @@ export const itemVariants = pgTable("item_variants", {
   index("item_variants_active_idx").on(t.itemId).where(sql`deleted_at IS NULL`),
 ]);
 
+// ── Item batches (batch / lot numbers with expiry) ─────────────
+// The batch master for items that track batches. How much of a batch is
+// where is never stored: it is the sum of the stock movements that name the
+// batch, per warehouse — the same ledger that drives every other stock figure.
+
+export const itemBatches = pgTable("item_batches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  // Set for a batch of one variant of a variant item.
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  batchNumber: text("batch_number").notNull(),
+  mfgDate: date("mfg_date"),
+  expiryDate: date("expiry_date"),
+  // MRP printed on this batch's packs, when it differs from the item's.
+  mrp: numeric("mrp", { precision: 15, scale: 2 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  // A batch number names one batch per item (or per variant).
+  uniqueIndex("item_batches_item_number_idx")
+    .on(t.businessId, t.itemId, t.batchNumber)
+    .where(sql`${t.variantId} IS NULL`),
+  uniqueIndex("item_batches_variant_number_idx")
+    .on(t.businessId, t.itemId, t.variantId, t.batchNumber)
+    .where(sql`${t.variantId} IS NOT NULL`),
+  index("item_batches_item_idx").on(t.itemId),
+  index("item_batches_expiry_idx").on(t.businessId, t.expiryDate),
+]);
+
 // ── Extra item barcodes (businesses on "many barcodes per item") ──
 // The item's / variant's own `barcode` column stays the primary code — the one
 // printed on labels. These are the other codes that also scan to the item: a
@@ -572,6 +659,54 @@ export const itemBarcodes = pgTable("item_barcodes", {
   index("item_barcodes_item_idx").on(t.itemId),
 ]);
 
+// ── Price levels / price lists ─────────────────────────────────
+// Named selling-price levels (Tally "Price Levels"): Retail, Wholesale,
+// Dealer... A party is priced at its level, or at the business's default
+// level; an item with no entry on that level sells at its own sale price.
+
+export const priceLevels = pgTable("price_levels", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  isDefault: boolean("is_default").default(false).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("price_levels_name_idx").on(t.businessId, t.name),
+  // At most one default level per business.
+  uniqueIndex("price_levels_default_idx").on(t.businessId).where(sql`is_default`),
+]);
+
+// One price on one level for an item (optionally one variant, or one
+// alternate unit), from a quantity (slab) and from a date. The entries of a
+// level/item/variant/unit that share an effective date form one price list
+// revision; the latest revision on or before the document date applies.
+// An entry sets a rate, a discount off the item's sale price, or both.
+export const priceListEntries = pgTable("price_list_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  priceLevelId: uuid("price_level_id").notNull().references(() => priceLevels.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  // Null = every variant of the item.
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  // Null = the item's base unit; otherwise one of its alternate units.
+  unit: text("unit"),
+  // Slab: applies from this quantity up (in the entry's unit).
+  minQuantity: numeric("min_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
+  price: numeric("price", { precision: 15, scale: 2 }),
+  discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }),
+  // Null = always.
+  effectiveFrom: date("effective_from"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("price_list_entries_level_item_idx").on(t.priceLevelId, t.itemId),
+  index("price_list_entries_item_idx").on(t.itemId),
+  index("price_list_entries_business_idx").on(t.businessId),
+]);
+
 // ── Invoices ───────────────────────────────────────────────────
 
 export const invoices = pgTable("invoices", {
@@ -582,6 +717,10 @@ export const invoices = pgTable("invoices", {
   status: invoiceStatusEnum("status").default("draft").notNull(),
   documentType: documentTypeEnum("document_type").default("invoice").notNull(),
   invoiceNumber: text("invoice_number").notNull(),
+  // Purchase documents: the supplier's own number for the bill (what the
+  // supplier reports in GSTR-1, so what GSTR-2B shows). Our invoiceNumber is
+  // the business's internal sequence and never appears in the 2B.
+  supplierInvoiceNumber: text("supplier_invoice_number"),
   invoiceDate: timestamp("invoice_date", { withTimezone: true }).defaultNow().notNull(),
   dueDate: timestamp("due_date", { withTimezone: true }),
   subtotal: numeric("subtotal", { precision: 15, scale: 2 }).default("0").notNull(),
@@ -595,9 +734,21 @@ export const invoices = pgTable("invoices", {
   notes: text("notes"),
   termsAndConditions: text("terms_and_conditions"),
   referenceDocumentId: uuid("reference_document_id"),
+  // How this document's stock effect is recorded:
+  //   "tracked" — through stock_movements (warehouse-aware; net may be zero
+  //               while the document is cancelled)
+  //   "none"    — never moves stock (e.g. an invoice billed against a
+  //               delivery challan that already moved it)
+  //   "legacy"  — created before stock movements existed; its effect was
+  //               applied straight to item totals from its line items
+  stockMode: text("stock_mode").default("legacy").notNull(),
   // Where the goods physically came in (purchase) or went out (sale). Null
   // means the business's default warehouse for that operation.
   warehouseId: uuid("warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
+  // Orders, GRNs and delivery challans track what is still pending against
+  // them (ordered minus what later documents took up). Set when the user
+  // short-closes one: nothing more is expected, whatever is still pending.
+  closedAt: timestamp("closed_at", { withTimezone: true }),
   // No FK to users — plain UUID, users live in control schema (different DB in cloud mode)
   createdByUserId: uuid("created_by_user_id"),
   createdByName: text("created_by_name"), // denormalized for display + imports
@@ -654,8 +805,20 @@ export const invoiceItems = pgTable("invoice_items", {
   selectedUnit: text("selected_unit"), // which unit was used (null = base unit)
   conversionFactor: numeric("conversion_factor", { precision: 10, scale: 4 }).default("1"), // how many base units per selected unit
   variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "set null" }),
+  // Free goods on the line ("10 + 1"), in the line's unit. They move stock
+  // with the billed quantity but carry no price, so they add nothing to the
+  // taxable value or the totals.
+  freeQuantity: numeric("free_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
+  // Goods receipt notes only: received but rejected at inspection, in the
+  // line's unit. `quantity` is what was accepted; rejected goods never enter
+  // stock and stay pending on the purchase order.
+  rejectedQuantity: numeric("rejected_quantity", { precision: 15, scale: 3 }).default("0").notNull(),
+  rejectionReason: text("rejection_reason"),
+  // The batch this line brought in or took out (items that track batches).
+  batchId: uuid("batch_id").references(() => itemBatches.id, { onDelete: "set null" }),
 }, (t) => [
   index("invoice_items_invoice_idx").on(t.invoiceId),
+  index("invoice_items_batch_idx").on(t.batchId),
   index("invoice_items_item_idx").on(t.itemId),
   index("invoice_items_variant_idx").on(t.variantId),
 ]);
@@ -854,6 +1017,111 @@ export const physicalStockCounts = pgTable("physical_stock_counts", {
   index("physical_counts_business_idx").on(t.businessId, t.createdAt),
 ]);
 
+// ── Bill of materials ─────────────────────────────────────────
+// What it takes to make an item (Tally's BOM): components per `outputQuantity`
+// of the finished item, plus any by-products or scrap it gives off.
+// Quantities are in each item's base unit.
+
+export const boms = pgTable("boms", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  outputQuantity: numeric("output_quantity", { precision: 15, scale: 3 }).default("1").notNull(),
+  // The BOM the manufacture form picks first for this item.
+  isDefault: boolean("is_default").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("boms_business_idx").on(t.businessId),
+  index("boms_item_idx").on(t.businessId, t.itemId),
+]);
+
+export const bomComponents = pgTable("bom_components", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bomId: uuid("bom_id").notNull().references(() => boms.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  // Needed per the BOM's output quantity, before wastage.
+  quantity: numeric("quantity", { precision: 15, scale: 3 }).notNull(),
+  unit: text("unit"),
+  // Extra consumed on top of `quantity`, e.g. 5 = 5% more.
+  wastagePercent: numeric("wastage_percent", { precision: 6, scale: 2 }).default("0").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+}, (t) => [
+  index("bom_components_bom_idx").on(t.bomId),
+  index("bom_components_item_idx").on(t.itemId),
+]);
+
+export const bomByProducts = pgTable("bom_by_products", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bomId: uuid("bom_id").notNull().references(() => boms.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  // Given off per the BOM's output quantity.
+  quantity: numeric("quantity", { precision: 15, scale: 3 }).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+}, (t) => [
+  index("bom_by_products_bom_idx").on(t.bomId),
+]);
+
+// ── Manufacturing journal ─────────────────────────────────────
+// One production run: components leave the source warehouse, the finished
+// item (and any by-products) arrive in the destination warehouse. The stock
+// itself moves through stock_movements (reference MANUFACTURING); this is the
+// voucher and its costing. Cancelling reverses the movements.
+
+export const manufacturingJournals = pgTable("manufacturing_journals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  journalNumber: text("journal_number").notNull(),
+  journalDate: timestamp("journal_date", { withTimezone: true }).notNull(),
+  bomId: uuid("bom_id").references(() => boms.id, { onDelete: "set null" }),
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  quantity: numeric("quantity", { precision: 15, scale: 3 }).notNull(),
+  sourceWarehouseId: uuid("source_warehouse_id").notNull().references(() => warehouses.id, { onDelete: "cascade" }),
+  destinationWarehouseId: uuid("destination_warehouse_id").notNull().references(() => warehouses.id, { onDelete: "cascade" }),
+  componentsCost: numeric("components_cost", { precision: 15, scale: 2 }).default("0").notNull(),
+  additionalCosts: jsonb("additional_costs").$type<Array<{ label: string; amount: string }>>().default([]).notNull(),
+  additionalCostTotal: numeric("additional_cost_total", { precision: 15, scale: 2 }).default("0").notNull(),
+  // Cost of the finished quantity: components + additional costs.
+  totalCost: numeric("total_cost", { precision: 15, scale: 2 }).default("0").notNull(),
+  unitCost: numeric("unit_cost", { precision: 15, scale: 4 }).default("0").notNull(),
+  notes: text("notes"),
+  status: text("status").default("posted").notNull(), // posted | cancelled
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledByUserId: uuid("cancelled_by_user_id"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("manufacturing_journals_number_idx").on(t.businessId, t.journalNumber),
+  index("manufacturing_journals_date_idx").on(t.businessId, t.journalDate),
+  index("manufacturing_journals_item_idx").on(t.itemId),
+]);
+
+export const manufacturingJournalLines = pgTable("manufacturing_journal_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  journalId: uuid("journal_id").notNull().references(() => manufacturingJournals.id, { onDelete: "cascade" }),
+  kind: text("kind").default("component").notNull(), // component | by_product
+  itemId: uuid("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").references(() => itemVariants.id, { onDelete: "cascade" }),
+  // What the BOM called for at this production quantity (null without a BOM line).
+  standardQuantity: numeric("standard_quantity", { precision: 15, scale: 3 }),
+  // What was actually consumed (components) or given off (by-products).
+  quantity: numeric("quantity", { precision: 15, scale: 3 }).notNull(),
+  unitCost: numeric("unit_cost", { precision: 15, scale: 4 }).default("0").notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+}, (t) => [
+  index("manufacturing_journal_lines_journal_idx").on(t.journalId),
+]);
+
 // ── Stock Balances ────────────────────────────────────────────
 // Current stock state per business, warehouse, location and item/variant.
 // This table stores the latest inventory balance, not the movement history.
@@ -989,7 +1257,9 @@ export const stockMovements = pgTable("stock_movements", {
   variantId: uuid("variant_id")
     .references(() => itemVariants.id, { onDelete: "cascade" }),
 
-  batchId: uuid("batch_id"),
+  // Set for items that track batches: the batch this stock belongs to.
+  batchId: uuid("batch_id")
+    .references(() => itemBatches.id, { onDelete: "set null" }),
 
   serialId: uuid("serial_id"),
 
@@ -1713,11 +1983,25 @@ export const partiesRelations = relations(parties, ({ one, many }) => ({
 
 export const itemsRelations = relations(items, ({ one, many }) => ({
   business: one(businesses, { fields: [items.businessId], references: [businesses.id] }),
+  stockGroup: one(stockGroups, { fields: [items.stockGroupId], references: [stockGroups.id] }),
   variants: many(itemVariants),
+}));
+
+export const stockGroupsRelations = relations(stockGroups, ({ one, many }) => ({
+  business: one(businesses, { fields: [stockGroups.businessId], references: [businesses.id] }),
+  parent: one(stockGroups, { fields: [stockGroups.parentId], references: [stockGroups.id], relationName: "stockGroupParent" }),
+  children: many(stockGroups, { relationName: "stockGroupParent" }),
+  items: many(items),
 }));
 
 export const itemVariantsRelations = relations(itemVariants, ({ one }) => ({
   item: one(items, { fields: [itemVariants.itemId], references: [items.id] }),
+}));
+
+export const itemBatchesRelations = relations(itemBatches, ({ one }) => ({
+  business: one(businesses, { fields: [itemBatches.businessId], references: [businesses.id] }),
+  item: one(items, { fields: [itemBatches.itemId], references: [items.id] }),
+  variant: one(itemVariants, { fields: [itemBatches.variantId], references: [itemVariants.id] }),
 }));
 
 export const invoicesRelations = relations(invoices, ({ one, many }) => ({
@@ -1733,6 +2017,7 @@ export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({
   invoice: one(invoices, { fields: [invoiceItems.invoiceId], references: [invoices.id] }),
   item: one(items, { fields: [invoiceItems.itemId], references: [items.id] }),
   variant: one(itemVariants, { fields: [invoiceItems.variantId], references: [itemVariants.id] }),
+  batch: one(itemBatches, { fields: [invoiceItems.batchId], references: [itemBatches.id] }),
 }));
 
 export const paymentsRelations = relations(payments, ({ one }) => ({

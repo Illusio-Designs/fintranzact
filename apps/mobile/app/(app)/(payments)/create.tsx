@@ -670,7 +670,7 @@ export default function CreatePaymentScreen() {
           activeOpacity={0.85}
         >
           {createPayment.isPending ? (
-            <ActivityIndicator color={colors.textPrimary} size="small" />
+            <ActivityIndicator color={colors.onBrand} size="small" />
           ) : (
             <Text style={styles.submitBtnText}>
               {amount && parseFloat(amount) > 0
@@ -757,7 +757,16 @@ const useStyles = makeStyles((colors) => ({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: { fontSize: 20, fontWeight: "700", color: colors.textPrimary },
   content: { padding: 16, paddingBottom: 40 },
   section: { marginBottom: 20 },
@@ -1040,7 +1049,7 @@ const useStyles = makeStyles((colors) => ({
     marginTop: 8,
   },
   submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { color: colors.textPrimary, fontSize: 16, fontWeight: "700" },
+  submitBtnText: { color: colors.onBrand, fontSize: 16, fontWeight: "700" },
 
   // ── Modal ────────────────────────────────────────────────────────────────
 

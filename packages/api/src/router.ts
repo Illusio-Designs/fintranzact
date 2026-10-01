@@ -17,8 +17,12 @@ import {
   proformaRouter,
   salesReturnRouter,
   purchaseReturnRouter,
+  purchaseOrderRouter,
+  salesOrderRouter,
+  goodsReceiptNoteRouter,
   documentRouter,
 } from "./routers/document.js";
+import { ordersRouter } from "./routers/orders.js";
 import { bankAccountRouter } from "./routers/bankAccount.js";
 import { importRouter } from "./routers/import/index.js";
 import { storeRouter } from "./routers/store.js";
@@ -36,7 +40,10 @@ import { ewayBillRouter } from "./routers/ewayBill.js";
 import { bankReconRouter } from "./routers/bankRecon.js";
 import { gstr2bRouter } from "./routers/gstr2b.js";
 import { systemRouter } from "./routers/system.js";
+import { partnerRouter } from "./routers/partner.js";
+import { platformRouter } from "./routers/platform.js";
 import { planRouter } from "./routers/plan.js";
+import { billingRouter } from "./routers/billing.js";
 import { selfExportRouter } from "./routers/selfExport.js";
 import { selfImportRouter } from "./routers/selfImport.js";
 import { posRouter } from "./routers/pos.js";
@@ -44,6 +51,13 @@ import { warehouseRouter } from "./routers/warehouse.js";
 import { barcodeRouter } from "./routers/barcode.js";
 import { shareRouter } from "./routers/share.js";
 import { stockRouter } from "./routers/stock.js";
+import { batchRouter } from "./routers/batch.js";
+import { inventoryReportsRouter } from "./routers/inventory-reports.js";
+import { stockGroupRouter } from "./routers/stockGroup.js";
+import { manufacturingRouter } from "./routers/manufacturing.js";
+import { priceLevelRouter } from "./routers/priceLevel.js";
+import { pricingRouter } from "./routers/pricing.js";
+import { contactRouter } from "./routers/contact.js";
 
 export const appRouter = router({
   auth: authRouter,
@@ -63,6 +77,10 @@ export const appRouter = router({
   proforma: proformaRouter,
   salesReturn: salesReturnRouter,
   purchaseReturn: purchaseReturnRouter,
+  purchaseOrder: purchaseOrderRouter,
+  salesOrder: salesOrderRouter,
+  goodsReceiptNote: goodsReceiptNoteRouter,
+  orders: ordersRouter,
   document: documentRouter,
   bankAccount: bankAccountRouter,
   import: importRouter,
@@ -81,14 +99,24 @@ export const appRouter = router({
   bankRecon: bankReconRouter,
   gstr2b: gstr2bRouter,
   system: systemRouter,
+  platform: platformRouter,
+  partner: partnerRouter,
   plan: planRouter,
+  billing: billingRouter,
   selfExport: selfExportRouter,
   selfImport: selfImportRouter,
   pos: posRouter,
   warehouse: warehouseRouter,
   stock: stockRouter,
+  batch: batchRouter,
+  inventoryReports: inventoryReportsRouter,
+  stockGroup: stockGroupRouter,
+  manufacturing: manufacturingRouter,
+  priceLevel: priceLevelRouter,
+  pricing: pricingRouter,
   barcode: barcodeRouter,
   share: shareRouter,
+  contact: contactRouter,
 });
 
 export type AppRouter = typeof appRouter;

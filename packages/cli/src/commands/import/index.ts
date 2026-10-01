@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT, success, warn } from "../../output.js";
 
@@ -33,7 +33,7 @@ function readCsvFile(filePath: string): Array<Record<string, string>> {
 
 export async function importPartiesCommand(filePath: string, opts: { json?: boolean; format?: string }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   const fmt = opts.format ?? (filePath.endsWith(".csv") ? "csv" : "json");
   const data = fmt === "csv"
@@ -55,9 +55,9 @@ export async function importPartiesCommand(filePath: string, opts: { json?: bool
     result.errors.forEach((e) => console.error(`  Row ${e.row}: ${e.message}`));
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
@@ -67,7 +67,7 @@ export async function importPartiesCommand(filePath: string, opts: { json?: bool
 
 export async function importItemsCommand(filePath: string, opts: { json?: boolean; format?: string }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   const fmt = opts.format ?? (filePath.endsWith(".csv") ? "csv" : "json");
   const data = fmt === "csv"
@@ -89,9 +89,9 @@ export async function importItemsCommand(filePath: string, opts: { json?: boolea
     result.errors.forEach((e) => console.error(`  Row ${e.row}: ${e.message}`));
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
@@ -101,7 +101,7 @@ export async function importItemsCommand(filePath: string, opts: { json?: boolea
 
 export async function importInvoicesCommand(filePath: string, opts: { json?: boolean; format?: string }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   const fmt = opts.format ?? (filePath.endsWith(".csv") ? "csv" : "json");
   const data = fmt === "csv"
@@ -123,9 +123,9 @@ export async function importInvoicesCommand(filePath: string, opts: { json?: boo
     result.errors.forEach((e) => console.error(`  Row ${e.row}: ${e.message}`));
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
@@ -135,7 +135,7 @@ export async function importInvoicesCommand(filePath: string, opts: { json?: boo
 
 export async function importPaymentsCommand(filePath: string, opts: { json?: boolean; format?: string }): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   const fmt = opts.format ?? (filePath.endsWith(".csv") ? "csv" : "json");
   const data = fmt === "csv"
@@ -157,9 +157,9 @@ export async function importPaymentsCommand(filePath: string, opts: { json?: boo
     result.errors.forEach((e) => console.error(`  Row ${e.row}: ${e.message}`));
 
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "validation_failed") fatalError(e.message, EXIT.VALIDATION);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }

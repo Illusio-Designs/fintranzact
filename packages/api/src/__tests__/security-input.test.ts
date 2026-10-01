@@ -33,14 +33,14 @@ import {
   createApiKeySchema,
 } from "@fintranzact/shared";
 import { escapeLike } from "../lib/escape-like.js";
-import { getLimits } from "../lib/plan-limits.js";
+import { PLAN_DEFAULTS } from "@fintranzact/shared";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECURITY — ILIKE wildcard injection (Finding #7) — FIXED
 // ─────────────────────────────────────────────────────────────────────────────
 describe("plan limits — forever free is truly unlimited", () => {
-  it("returns unlimited access for the forever free plan", () => {
-    const limits = getLimits("forever_free");
+  it("gives the forever free plan unlimited access by default", () => {
+    const limits = PLAN_DEFAULTS.forever_free.limits;
 
     expect(limits.maxOwnedOrgs).toBe(Infinity);
     expect(limits.maxBusinesses).toBe(Infinity);
@@ -249,7 +249,7 @@ describe("SECURITY — Zod validators reject malformed inputs before they reach 
 
   describe("magicLinkRequestSchema", () => {
     it("accepts valid email for magic link", () => {
-      const result = magicLinkRequestSchema.safeParse({ email: "kiran@hisaabo.in" });
+      const result = magicLinkRequestSchema.safeParse({ email: "kiran@fintranzact.com" });
       expect(result.success).toBe(true);
     });
 
@@ -523,8 +523,8 @@ describe("SECURITY — escapeHtml prevents HTML injection in email templates", (
 
   it("escapes double-quote in URLs to prevent attribute injection (href=\"...\")", () => {
     // If a magic link URL contained a " it could break out of the href attribute
-    // Example: magicLinkUrl = 'https://hisaabo.in/verify?token=abc"onload=alert(1)'
-    const maliciousUrl = 'https://hisaabo.in/verify?token=abc"onload=alert(1)';
+    // Example: magicLinkUrl = 'https://fintranzact.com/verify?token=abc"onload=alert(1)'
+    const maliciousUrl = 'https://fintranzact.com/verify?token=abc"onload=alert(1)';
     const escaped = escapeHtml(maliciousUrl);
     expect(escaped).not.toContain('"onload');
     expect(escaped).toContain("&quot;");

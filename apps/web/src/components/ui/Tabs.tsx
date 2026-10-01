@@ -22,8 +22,8 @@ export function PillTabs({ tabs, value, onChange, size = "md", className }: Pill
         <button
           key={tab.value}
           type="button"
-          onClick={() => tab.value !== value && onChange(tab.value)}
           aria-pressed={tab.value === value}
+          onClick={() => tab.value !== value && onChange(tab.value)}
           className={cn(
             "font-medium transition-colors inline-flex items-center gap-1.5",
             isSmall ? "px-2 py-0.5 text-2xs rounded-md" : "h-8 px-3 text-ui rounded-full border",

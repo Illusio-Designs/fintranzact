@@ -66,7 +66,7 @@ Drizzle supports passing a transaction as the `db` argument. The test helper cre
 ## 3. File Structure
 
 ```
-hisaabo/
+fintranzact/
 ├── packages/
 │   ├── shared/
 │   │   └── src/

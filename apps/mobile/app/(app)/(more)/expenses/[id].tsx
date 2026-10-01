@@ -180,7 +180,7 @@ export default function ExpenseDetailScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>
@@ -209,7 +209,7 @@ export default function ExpenseDetailScreen() {
                 disabled={updateExpense.isPending}
               >
                 {updateExpense.isPending ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                  <ActivityIndicator size="small" color={colors.onBrand} />
                 ) : (
                   <Text style={styles.saveBtnText}>Save</Text>
                 )}
@@ -404,7 +404,16 @@ const useStyles = makeStyles((colors) => ({
     borderBottomColor: colors.border,
     gap: 12,
   },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   headerCenter: { flex: 1 },
   headerTitle: { fontSize: 17, fontWeight: "700", color: colors.textPrimary },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -442,7 +451,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: "center",
   },
   saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
+  saveBtnText: { fontSize: 14, fontWeight: "700", color: colors.onBrand },
   content: { padding: 16, paddingBottom: 40 },
   amountCard: {
     backgroundColor: colors.surface,

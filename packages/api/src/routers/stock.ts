@@ -3,11 +3,12 @@
  * adjustments and physical stock verification.
  *
  * Stock has two layers. items/item_variants.stock_quantity is the business-wide
- * total every other screen reads (and many paths — opening stock, imports,
- * merges — write only that). stock_balances splits it by warehouse. Stock that
- * no warehouse accounts for yet ("unplaced") is treated as sitting in the
- * default warehouse: read paths add it there, and write paths move it there
- * for real before touching a balance, so the two layers stay consistent.
+ * total every other screen reads. stock_balances splits it by warehouse. Every
+ * write path records a movement that updates both, but data from before
+ * warehouses existed can leave stock that no warehouse accounts for
+ * ("unplaced"). It is treated as sitting in the default warehouse: read paths
+ * add it there, and write paths move it there for real before touching a
+ * balance, so the two layers stay consistent.
  */
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -16,20 +17,35 @@ import {
   businessMembers,
   inventorySettings,
   itemBarcodes,
+  itemBatches,
   items,
-  itemVariants,
   physicalStockCounts,
   stockAdjustments,
-  stockMovements,
   warehousePermissions,
   warehouses,
 } from "@fintranzact/db";
 import { paginationSchema } from "@fintranzact/shared";
-import { router, viewerProcedure, memberProcedure } from "../trpc.js";
+import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
-import { ensureDefaultWarehouse, recordStockMovement, updateStockBalance } from "../lib/inventory-service.js";
+import { audited } from "../lib/audit.js";
+import {
+  ensureDefaultWarehouse,
+  getNegativeStockPolicy,
+  placeUnplacedStock,
+  recordStockMovement,
+  warehouseBalance,
+} from "../lib/inventory-service.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { getValuationMethod } from "../lib/stock-valuation.js";
 import { getBarcodeSetup, requireBarcodesEnabled, resolveCodes } from "../lib/barcode-setup.js";
+import {
+  allocateFefo,
+  batchBalance,
+  businessDay,
+  findOrCreateBatch,
+  type Allocation,
+} from "../lib/batches.js";
+import { batchFieldsSchema } from "@fintranzact/shared";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
@@ -43,6 +59,90 @@ const lineKey = z.object({
   variantId: z.string().uuid().nullish(),
 });
 
+/** Batch on a transfer or adjustment line (items that track batches). */
+const lineBatch = {
+  batchId: z.string().uuid().nullish(),
+  /** Adjustments that add stock: a new or existing batch by number. */
+  newBatch: batchFieldsSchema.nullish(),
+};
+
+async function itemTracking(tx: Tx, businessId: string, itemId: string) {
+  const [row] = await tx
+    .select({ name: items.name, trackBatches: items.trackBatches, trackExpiry: items.trackExpiry })
+    .from(items)
+    .where(and(eq(items.id, itemId), eq(items.businessId, businessId)))
+    .limit(1);
+  return row as { name: string; trackBatches: boolean; trackExpiry: boolean } | undefined;
+}
+
+/** A picked batch must be one of this item's (and variant's). */
+export async function assertBatchOf(tx: Tx, businessId: string, batchId: string, itemId: string, variantId?: string | null) {
+  const [b] = await tx
+    .select()
+    .from(itemBatches)
+    .where(and(eq(itemBatches.id, batchId), eq(itemBatches.businessId, businessId)))
+    .limit(1);
+  if (!b || b.itemId !== itemId || (b.variantId ?? null) !== (variantId ?? null)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That batch doesn't belong to this item" });
+  }
+  return b as typeof itemBatches.$inferSelect;
+}
+
+/**
+ * Where outgoing stock of one line comes from: the batch picked, or — for an
+ * item that tracks batches — its batches first expiry first, expired ones
+ * included (transfers and write-offs move expired stock too), then the
+ * unbatched pool. With `enforce`, a picked batch can't go below zero and
+ * nothing may come up short.
+ */
+async function outgoingPieces(
+  tx: Tx,
+  input: {
+    businessId: string;
+    warehouseId: string;
+    itemId: string;
+    variantId?: string | null;
+    quantity: number; // positive
+    batchId?: string | null;
+    date: Date;
+    enforce: boolean;
+  },
+): Promise<Allocation[]> {
+  if (input.batchId) {
+    const b = await assertBatchOf(tx, input.businessId, input.batchId, input.itemId, input.variantId);
+    if (input.enforce) {
+      const available = await batchBalance(tx, input.businessId, input.warehouseId, b.id);
+      if (available < input.quantity - 0.0005) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Not enough stock in batch ${b.batchNumber}: ${qty(Math.max(available, 0)).replace(/\.?0+$/, "")} available`,
+        });
+      }
+    }
+    return [{ batchId: b.id, quantity: input.quantity }];
+  }
+  const item = await itemTracking(tx, input.businessId, input.itemId);
+  if (!item?.trackBatches) return [{ batchId: null, quantity: input.quantity }];
+  const { allocations, shortfall } = await allocateFefo(tx, {
+    businessId: input.businessId,
+    warehouseId: input.warehouseId,
+    itemId: input.itemId,
+    variantId: input.variantId ?? null,
+    quantity: input.quantity,
+    day: businessDay(input.date),
+    includeExpired: true,
+  });
+  if (shortfall >= 0.0005) {
+    if (input.enforce) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `Not enough stock of ${item.name} in its batches` });
+    }
+    const pool = allocations.find((a) => a.batchId === null);
+    if (pool) pool.quantity += shortfall;
+    else allocations.push({ batchId: null, quantity: shortfall });
+  }
+  return allocations;
+}
+
 /** Roles that manage stock in every warehouse without per-warehouse grants. */
 const ADMIN_ROLES = new Set(["admin", "superadmin"]);
 
@@ -52,88 +152,7 @@ function qty(n: number) {
   return n.toFixed(3);
 }
 
-/** Total stock for an item or variant, locked for the rest of the transaction. */
-async function lockTotal(tx: Tx, businessId: string, itemId: string, variantId?: string | null) {
-  if (variantId) {
-    const [row] = await tx
-      .select({ stock: itemVariants.stockQuantity })
-      .from(itemVariants)
-      .innerJoin(items, eq(items.id, itemVariants.itemId))
-      .where(and(
-        eq(itemVariants.id, variantId),
-        eq(items.id, itemId),
-        eq(items.businessId, businessId),
-        sql`${items.deletedAt} IS NULL`,
-        sql`${itemVariants.deletedAt} IS NULL`,
-      ))
-      .for("update")
-      .limit(1);
-    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Item variant not found" });
-    return parseFloat(row.stock);
-  }
-  const [row] = await tx
-    .select({ stock: items.stockQuantity, itemType: items.itemType })
-    .from(items)
-    .where(and(eq(items.id, itemId), eq(items.businessId, businessId), sql`${items.deletedAt} IS NULL`))
-    .for("update")
-    .limit(1);
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Item not found" });
-  if (row.itemType === "service") {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Services don't carry stock" });
-  }
-  return parseFloat(row.stock);
-}
-
-/** Sum of warehouse balances (all locations) for one item or variant. */
-async function placedTotal(tx: Tx, businessId: string, itemId: string, variantId?: string | null) {
-  const rows = (await tx.execute(sql`
-    SELECT COALESCE(SUM(quantity::numeric), 0)::text AS placed
-    FROM stock_balances
-    WHERE business_id = ${businessId} AND item_id = ${itemId}
-      AND ${variantId ? sql`variant_id = ${variantId}` : sql`variant_id IS NULL`}
-  `)) as unknown as Array<{ placed: string }>;
-  return parseFloat(rows[0]?.placed ?? "0");
-}
-
-/** Balance at one warehouse (location-less row). */
-async function warehouseBalance(tx: Tx, businessId: string, warehouseId: string, itemId: string, variantId?: string | null) {
-  const rows = (await tx.execute(sql`
-    SELECT COALESCE(SUM(quantity::numeric), 0)::text AS qty
-    FROM stock_balances
-    WHERE business_id = ${businessId} AND warehouse_id = ${warehouseId}
-      AND item_id = ${itemId} AND location_id IS NULL
-      AND ${variantId ? sql`variant_id = ${variantId}` : sql`variant_id IS NULL`}
-  `)) as unknown as Array<{ qty: string }>;
-  return parseFloat(rows[0]?.qty ?? "0");
-}
-
-/**
- * Put stock that no warehouse accounts for into the default warehouse, without
- * changing the item's total. Records an OPENING_BALANCE movement for the audit
- * trail. Call after lockTotal so the total cannot move underneath.
- */
-async function placeUnplacedStock(tx: Tx, businessId: string, itemId: string, variantId?: string | null) {
-  const total = await lockTotal(tx, businessId, itemId, variantId);
-  const placed = await placedTotal(tx, businessId, itemId, variantId);
-  const diff = total - placed;
-  if (Math.abs(diff) < 0.0005) return total;
-
-  const settings = await ensureDefaultWarehouse(tx, businessId);
-  const warehouseId = settings.salesWarehouseId as string;
-  await tx.insert(stockMovements).values({
-    businessId,
-    warehouseId,
-    itemId,
-    variantId: variantId ?? null,
-    referenceType: "OPENING_BALANCE",
-    movementType: "UNPLACED_STOCK",
-    quantity: qty(diff),
-  });
-  await updateStockBalance(tx, { businessId, warehouseId, locationId: null, itemId, variantId: variantId ?? null }, qty(diff));
-  return total;
-}
-
-async function assertWarehouses(tx: Tx, businessId: string, ids: string[]) {
+export async function assertWarehouses(tx: Tx, businessId: string, ids: string[]) {
   const rows = await tx
     .select({ id: warehouses.id, status: warehouses.status })
     .from(warehouses)
@@ -147,7 +166,7 @@ async function assertWarehouses(tx: Tx, businessId: string, ids: string[]) {
 }
 
 /** Non-admin members need an explicit per-warehouse grant. */
-async function assertWarehousePermission(
+export async function assertWarehousePermission(
   tx: Tx,
   ctx: { businessId: string; role: string; user: { id: string } },
   warehouseIds: string[],
@@ -194,6 +213,12 @@ export async function applyStockAdjustment(
     referenceType?: "STOCK_ADJUSTMENT" | "PHYSICAL_STOCK";
     /** Refuse to take the warehouse below zero. */
     enforceWarehouseBalance?: boolean;
+    /** Receives the id of every stock_adjustments row written (for the audit log). */
+    collect?: string[];
+    /** Batch the stock goes into or comes out of. Without one, stock taken
+     *  from an item that tracks batches comes out of its batches earliest
+     *  expiry first; stock added goes to the unbatched pool. */
+    batchId?: string | null;
   },
 ) {
   const previousTotal = await placeUnplacedStock(tx, input.businessId, input.itemId, input.variantId);
@@ -208,34 +233,61 @@ export async function applyStockAdjustment(
     }
   }
 
-  const [adjustment] = await tx.insert(stockAdjustments).values({
-    businessId: input.businessId,
-    itemId: input.itemId,
-    variantId: input.variantId ?? null,
-    quantity: qty(input.quantity),
-    previousStock: qty(previousTotal),
-    newStock: qty(previousTotal + input.quantity),
-    reason: input.reason,
-    adjustmentDate: input.date,
-    createdByUserId: input.user.id,
-    createdByName: input.user.name,
-  }).returning();
+  // One adjustment (and movement) per batch the change touches.
+  const pieces: Allocation[] = input.quantity < 0
+    ? (await outgoingPieces(tx, {
+        businessId: input.businessId,
+        warehouseId: input.warehouseId,
+        itemId: input.itemId,
+        variantId: input.variantId,
+        quantity: -input.quantity,
+        batchId: input.batchId,
+        date: input.date,
+        enforce: !!input.enforceWarehouseBalance,
+      })).map((p) => ({ ...p, quantity: -p.quantity }))
+    : [{
+        batchId: input.batchId
+          ? (await assertBatchOf(tx, input.businessId, input.batchId, input.itemId, input.variantId)).id
+          : null,
+        quantity: input.quantity,
+      }];
 
-  // Updates the warehouse balance and the item total together.
-  await recordStockMovement(tx, {
-    businessId: input.businessId,
-    warehouseId: input.warehouseId,
-    itemId: input.itemId,
-    variantId: input.variantId ?? undefined,
-    referenceType: input.referenceType ?? "STOCK_ADJUSTMENT",
-    referenceId: adjustment.id,
-    movementType: "ADJUSTMENT",
-    quantity: qty(input.quantity),
-    movementDate: input.date,
-    actorUserId: input.user.id,
-  });
+  let running = previousTotal;
+  let first: typeof stockAdjustments.$inferSelect | undefined;
+  for (const piece of pieces) {
+    const [adjustment] = await tx.insert(stockAdjustments).values({
+      businessId: input.businessId,
+      itemId: input.itemId,
+      variantId: input.variantId ?? null,
+      quantity: qty(piece.quantity),
+      previousStock: qty(running),
+      newStock: qty(running + piece.quantity),
+      reason: input.reason,
+      adjustmentDate: input.date,
+      createdByUserId: input.user.id,
+      createdByName: input.user.name,
+    }).returning();
+    running += piece.quantity;
+    first ??= adjustment;
+    input.collect?.push(adjustment.id);
 
-  return adjustment;
+    // Updates the warehouse balance and the item total together.
+    await recordStockMovement(tx, {
+      businessId: input.businessId,
+      warehouseId: input.warehouseId,
+      itemId: input.itemId,
+      variantId: input.variantId ?? undefined,
+      batchId: piece.batchId,
+      referenceType: input.referenceType ?? "STOCK_ADJUSTMENT",
+      referenceId: adjustment.id,
+      movementType: "ADJUSTMENT",
+      quantity: qty(piece.quantity),
+      movementDate: input.date,
+      actorUserId: input.user.id,
+    });
+  }
+
+  return first!;
 }
 
 /** Stock units: simple items, plus one unit per variant for variant items. */
@@ -244,14 +296,16 @@ function stockUnitsSql(businessId: string, search?: string | null) {
   return sql`
     WITH units AS (
       SELECT i.id AS item_id, NULL::uuid AS variant_id, i.name AS name, i.sku, i.unit::text AS unit,
-             i.stock_quantity::numeric AS total, i.low_stock_alert::numeric AS low_stock
+             i.stock_quantity::numeric AS total, i.low_stock_alert::numeric AS low_stock,
+             i.track_batches, i.track_expiry
       FROM items i
       WHERE i.business_id = ${businessId} AND i.deleted_at IS NULL
         AND i.item_type = 'product' AND i.item_mode <> 'variants'
       UNION ALL
       SELECT i.id, v.id,
              i.name || ' — ' || COALESCE((SELECT string_agg(value, ' / ') FROM jsonb_each_text(v.attribute_values)), 'Variant'),
-             COALESCE(v.sku, i.sku), i.unit::text, v.stock_quantity::numeric, v.low_stock_alert::numeric
+             COALESCE(v.sku, i.sku), i.unit::text, v.stock_quantity::numeric, v.low_stock_alert::numeric,
+             i.track_batches, i.track_expiry
       FROM item_variants v
       JOIN items i ON i.id = v.item_id
       WHERE i.business_id = ${businessId} AND i.deleted_at IS NULL AND v.deleted_at IS NULL
@@ -401,6 +455,7 @@ async function postCountLines(
   warehouseId: string,
   lines: Array<{ itemId: string; variantId: string | null; scanned: string }>,
   note: string | null,
+  collect?: string[],
 ) {
   const reason = note?.trim() ? `${PHYSICAL_REASON} (scan): ${note.trim()}` : `${PHYSICAL_REASON} (scan)`;
   const date = new Date();
@@ -420,6 +475,7 @@ async function postCountLines(
       date,
       user: ctx.user,
       referenceType: "PHYSICAL_STOCK",
+      collect,
     });
     adjusted++;
   }
@@ -508,6 +564,7 @@ export const stockRouter = router({
           WITH units AS (${stockUnitsSql(ctx.businessId, input.search)})
           SELECT u.item_id AS "itemId", u.variant_id AS "variantId", u.name, u.sku, u.unit,
                  u.total::text AS total, u.low_stock::text AS "lowStock",
+                 u.track_batches AS "trackBatches", u.track_expiry AS "trackExpiry",
                  COALESCE((
                    SELECT json_object_agg(b.warehouse_id, b.qty)
                    FROM (
@@ -523,7 +580,8 @@ export const stockRouter = router({
           LIMIT ${input.limit} OFFSET ${offset}
         `) as unknown as Promise<Array<{
           itemId: string; variantId: string | null; name: string; sku: string | null; unit: string;
-          total: string; lowStock: string | null; byWarehouse: Record<string, string>;
+          total: string; lowStock: string | null; trackBatches: boolean; trackExpiry: boolean;
+          byWarehouse: Record<string, string>;
         }>>,
         ctx.db.execute(sql`
           WITH units AS (${stockUnitsSql(ctx.businessId, input.search)})
@@ -550,7 +608,7 @@ export const stockRouter = router({
       sourceWarehouseId: z.string().uuid(),
       destinationWarehouseId: z.string().uuid(),
       date: z.string().datetime().optional(),
-      lines: z.array(lineKey.extend({ quantity: quantityString })).min(1).max(100),
+      lines: z.array(lineKey.extend({ quantity: quantityString, batchId: lineBatch.batchId })).min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
@@ -560,7 +618,7 @@ export const stockRouter = router({
       const ids = [input.sourceWarehouseId, input.destinationWarehouseId];
       const date = input.date ? new Date(input.date) : new Date();
 
-      return ctx.db.transaction(async (tx: Tx) => {
+      return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
         await assertWarehouses(tx, ctx.businessId, ids);
         await assertWarehousePermission(tx, ctx, ids, "canTransfer");
         const referenceId = crypto.randomUUID();
@@ -575,22 +633,41 @@ export const stockRouter = router({
           if (available < amount - 0.0005) {
             throw new TRPCError({ code: "BAD_REQUEST", message: `Not enough stock to transfer: ${available} available` });
           }
-          const common = {
+          // A batch keeps its number and expiry wherever it goes.
+          const pieces = await outgoingPieces(tx, {
             businessId: ctx.businessId,
+            warehouseId: input.sourceWarehouseId,
             itemId: line.itemId,
-            variantId: line.variantId ?? undefined,
-            sourceWarehouseId: input.sourceWarehouseId,
-            destinationWarehouseId: input.destinationWarehouseId,
-            referenceType: "STOCK_TRANSFER",
-            referenceId,
-            movementDate: date,
-            actorUserId: ctx.user.id,
-          };
-          await recordStockMovement(tx, { ...common, warehouseId: input.sourceWarehouseId, movementType: "TRANSFER_OUT", quantity: qty(-amount) });
-          await recordStockMovement(tx, { ...common, warehouseId: input.destinationWarehouseId, movementType: "TRANSFER_IN", quantity: qty(amount) });
+            variantId: line.variantId,
+            quantity: amount,
+            batchId: line.batchId,
+            date,
+            enforce: true,
+          });
+          for (const piece of pieces) {
+            const common = {
+              businessId: ctx.businessId,
+              itemId: line.itemId,
+              variantId: line.variantId ?? undefined,
+              batchId: piece.batchId,
+              sourceWarehouseId: input.sourceWarehouseId,
+              destinationWarehouseId: input.destinationWarehouseId,
+              referenceType: "STOCK_TRANSFER",
+              referenceId,
+              movementDate: date,
+              actorUserId: ctx.user.id,
+            };
+            await recordStockMovement(tx, { ...common, warehouseId: input.sourceWarehouseId, movementType: "TRANSFER_OUT", quantity: qty(-piece.quantity) });
+            await recordStockMovement(tx, { ...common, warehouseId: input.destinationWarehouseId, movementType: "TRANSFER_IN", quantity: qty(piece.quantity) });
+          }
         }
         return { referenceId };
-      });
+      }), (r) => ({
+        action: "stock.transfer",
+        entityType: "stockTransfer",
+        entityId: r.referenceId,
+        metadata: { sourceWarehouseId: input.sourceWarehouseId, destinationWarehouseId: input.destinationWarehouseId, lines: input.lines.length },
+      }));
     }),
 
   /** The stock transfer journal, newest first. */
@@ -612,11 +689,14 @@ export const stockRouter = router({
                  json_agg(json_build_object(
                    'name', i.name || COALESCE(' — ' || (SELECT string_agg(value, ' / ') FROM jsonb_each_text(v.attribute_values)), ''),
                    'unit', i.unit,
-                   'quantity', (-m.quantity::numeric)::text
+                   'quantity', (-m.quantity::numeric)::text,
+                   'batchNumber', bt.batch_number,
+                   'expiryDate', bt.expiry_date
                  ) ORDER BY i.name) AS lines
           FROM stock_movements m
           JOIN items i ON i.id = m.item_id
           LEFT JOIN item_variants v ON v.id = m.variant_id
+          LEFT JOIN item_batches bt ON bt.id = m.batch_id
           JOIN warehouses sw ON sw.id = m.warehouse_id
           LEFT JOIN warehouses dw ON dw.id = COALESCE(m.destination_warehouse_id, (
             SELECT x.warehouse_id FROM stock_movements x
@@ -630,7 +710,8 @@ export const stockRouter = router({
         `) as unknown as Promise<Array<{
           referenceId: string; date: string; sourceWarehouseId: string; sourceName: string;
           destinationWarehouseId: string | null; destinationName: string | null; lineCount: number;
-          totalQuantity: string; lines: Array<{ name: string; unit: string; quantity: string }>;
+          totalQuantity: string;
+          lines: Array<{ name: string; unit: string; quantity: string; batchNumber: string | null; expiryDate: string | null }>;
         }>>,
         ctx.db.execute(sql`
           SELECT COUNT(DISTINCT reference_id)::int AS count FROM stock_movements
@@ -648,16 +729,37 @@ export const stockRouter = router({
       reason: z.string().min(1, "Give a reason").max(500),
       lines: z.array(lineKey.extend({
         quantity: quantityString.refine((v) => parseFloat(v) !== 0, "Quantity cannot be zero"),
+        ...lineBatch,
       })).min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
       const date = input.date ? new Date(input.date) : new Date();
-      return ctx.db.transaction(async (tx: Tx) => {
+      const adjustmentIds: string[] = [];
+      return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
         await assertWarehouses(tx, ctx.businessId, [input.warehouseId]);
         await assertWarehousePermission(tx, ctx, [input.warehouseId], "canAdjust");
         for (const line of input.lines) {
+          // Stock added to an item that tracks batches goes into a named batch.
+          let batchId = line.batchId ?? null;
+          if (!batchId && parseFloat(line.quantity) > 0) {
+            const item = await itemTracking(tx, ctx.businessId, line.itemId);
+            if (item?.trackBatches) {
+              if (!line.newBatch) {
+                throw new TRPCError({ code: "BAD_REQUEST", message: `Enter a batch number for ${item.name}` });
+              }
+              batchId = (await findOrCreateBatch(tx, {
+                businessId: ctx.businessId,
+                itemId: line.itemId,
+                variantId: line.variantId ?? null,
+                itemName: item.name,
+                ...line.newBatch,
+                requireExpiry: item.trackExpiry,
+              })).id;
+            }
+          }
           await applyStockAdjustment(tx, {
+            batchId,
             businessId: ctx.businessId,
             warehouseId: input.warehouseId,
             itemId: line.itemId,
@@ -667,10 +769,16 @@ export const stockRouter = router({
             date,
             user: { id: ctx.user.id, name: ctx.user.name },
             enforceWarehouseBalance: true,
+            collect: adjustmentIds,
           });
         }
         return { count: input.lines.length };
-      });
+      }), () => adjustmentIds.map((id) => ({
+        action: "stock.adjust",
+        entityType: "stockAdjustment",
+        entityId: id,
+        metadata: { warehouseId: input.warehouseId, reason: input.reason },
+      })));
     }),
 
   /** Adjustment log across all items; `kind` narrows to physical counts. */
@@ -687,19 +795,21 @@ export const stockRouter = router({
                  a.reason, a.created_by_name AS "createdByName",
                  i.name || COALESCE(' — ' || (SELECT string_agg(value, ' / ') FROM jsonb_each_text(v.attribute_values)), '') AS "itemName",
                  i.unit, w.name AS "warehouseName",
+                 bt.batch_number AS "batchNumber", bt.expiry_date AS "expiryDate",
                  COALESCE(m.reference_type = 'PHYSICAL_STOCK', false) AS physical
           FROM stock_adjustments a
           JOIN items i ON i.id = a.item_id
           LEFT JOIN item_variants v ON v.id = a.variant_id
           LEFT JOIN stock_movements m ON m.reference_id = a.id AND m.reference_type IN ('STOCK_ADJUSTMENT', 'PHYSICAL_STOCK')
           LEFT JOIN warehouses w ON w.id = m.warehouse_id
+          LEFT JOIN item_batches bt ON bt.id = m.batch_id
           WHERE a.business_id = ${ctx.businessId} ${kindFilter}
           ORDER BY a.adjustment_date DESC, a.created_at DESC
           LIMIT ${input.limit} OFFSET ${offset}
         `) as unknown as Promise<Array<{
           id: string; date: string; quantity: string; previousStock: string; newStock: string;
           reason: string | null; createdByName: string | null; itemName: string; unit: string;
-          warehouseName: string | null; physical: boolean;
+          warehouseName: string | null; batchNumber: string | null; expiryDate: string | null; physical: boolean;
         }>>,
         ctx.db.execute(sql`
           SELECT COUNT(*)::int AS count
@@ -728,7 +838,8 @@ export const stockRouter = router({
       requireCan(ctx.ability, "update", "Item");
       const date = input.date ? new Date(input.date) : new Date();
       const reason = input.note?.trim() ? `${PHYSICAL_REASON}: ${input.note.trim()}` : PHYSICAL_REASON;
-      return ctx.db.transaction(async (tx: Tx) => {
+      const adjustmentIds: string[] = [];
+      return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
         await assertWarehouses(tx, ctx.businessId, [input.warehouseId]);
         await assertWarehousePermission(tx, ctx, [input.warehouseId], "canAdjust");
         let adjusted = 0;
@@ -747,13 +858,103 @@ export const stockRouter = router({
             date,
             user: { id: ctx.user.id, name: ctx.user.name },
             referenceType: "PHYSICAL_STOCK",
+            collect: adjustmentIds,
           });
           adjusted++;
         }
         return { checked: input.counts.length, adjusted };
-      });
+      }), () => adjustmentIds.map((id) => ({
+        action: "stock.verify",
+        entityType: "stockAdjustment",
+        entityId: id,
+        metadata: { warehouseId: input.warehouseId, reason },
+      })));
     }),
 
+  /** Inventory settings: the negative stock policy and default warehouses. */
+  settings: viewerProcedure.query(async ({ ctx }) => {
+    requireCan(ctx.ability, "read", "Item");
+    const settings = await ctx.db.transaction((tx: Tx) => ensureDefaultWarehouse(tx, ctx.businessId));
+    return {
+      negativeStockPolicy: await getNegativeStockPolicy(ctx.db, ctx.businessId),
+      valuationMethod: await getValuationMethod(ctx.db, ctx.businessId),
+      salesWarehouseId: settings.salesWarehouseId as string | null,
+      purchaseWarehouseId: settings.purchaseWarehouseId as string | null,
+      salesReturnWarehouseId: settings.salesReturnWarehouseId as string | null,
+      purchaseReturnWarehouseId: settings.purchaseReturnWarehouseId as string | null,
+      stockAdjustmentWarehouseId: settings.stockAdjustmentWarehouseId as string | null,
+    };
+  }),
+
+  updateSettings: adminProcedure
+    .input(z.object({
+      negativeStockPolicy: z.enum(["allow", "warn", "block"]).optional(),
+      valuationMethod: z.enum(["weighted_average", "fifo"]).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // A business-wide rule, so the same permission as editing the business.
+      requireCan(ctx.ability, "update", "Business");
+      const settingsId = await ctx.db.transaction(async (tx: Tx) => {
+        const current = await ensureDefaultWarehouse(tx, ctx.businessId);
+        await tx
+          .update(inventorySettings)
+          .set({
+            ...(input.negativeStockPolicy ? { negativeStockPolicy: input.negativeStockPolicy } : {}),
+            ...(input.valuationMethod ? { valuationMethod: input.valuationMethod } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(inventorySettings.businessId, ctx.businessId));
+        return current.id as string;
+      });
+      await audited(ctx, async () => null, () => ({
+        action: "stock.updateSettings", entityType: "inventorySettings", entityId: settingsId, metadata: { ...input },
+      }));
+      return { ok: true };
+    }),
+
+  /**
+   * How much of each item a warehouse holds, for warning about shortfalls
+   * while a document is being entered. Defaults to the default warehouse,
+   * which also holds any unplaced stock.
+   */
+  availability: viewerProcedure
+    .input(z.object({
+      warehouseId: z.string().uuid().nullish(),
+      lines: z.array(lineKey).max(200),
+    }))
+    .query(async ({ ctx, input }) => {
+      requireCan(ctx.ability, "read", "Item");
+      const [settings] = await ctx.db
+        .select({ defaultId: inventorySettings.salesWarehouseId, policy: inventorySettings.negativeStockPolicy })
+        .from(inventorySettings)
+        .where(eq(inventorySettings.businessId, ctx.businessId))
+        .limit(1);
+      const warehouseId = input.warehouseId ?? settings?.defaultId ?? null;
+      const policy = settings?.policy ?? "warn";
+      if (!warehouseId || input.lines.length === 0) return { warehouseId, policy, lines: [] };
+      const isDefault = warehouseId === settings?.defaultId;
+
+      const itemIds = [...new Set(input.lines.map((l) => l.itemId))];
+      const rows = (await ctx.db.execute(sql`
+        WITH units AS (${stockUnitsSql(ctx.businessId)})
+        SELECT u.item_id AS "itemId", u.variant_id AS "variantId",
+               COALESCE((SELECT SUM(quantity::numeric) FROM stock_balances sb
+                 WHERE sb.business_id = ${ctx.businessId} AND sb.warehouse_id = ${warehouseId}
+                   AND sb.item_id = u.item_id AND sb.variant_id IS NOT DISTINCT FROM u.variant_id), 0)
+               + CASE WHEN ${isDefault} THEN u.total - COALESCE((SELECT SUM(quantity::numeric) FROM stock_balances sb
+                 WHERE sb.business_id = ${ctx.businessId}
+                   AND sb.item_id = u.item_id AND sb.variant_id IS NOT DISTINCT FROM u.variant_id), 0)
+                 ELSE 0 END AS available
+        FROM units u
+        WHERE u.item_id IN ${itemIds}
+      `)) as unknown as Array<{ itemId: string; variantId: string | null; available: string }>;
+
+      return {
+        warehouseId,
+        policy,
+        lines: rows.map((r) => ({ ...r, available: qty(parseFloat(r.available)) })),
+      };
+    }),
   /**
    * What a barcode count at this warehouse expects: every stock unit with its
    * book quantity and the codes that scan to it, so the scanner screen can
@@ -796,12 +997,13 @@ export const stockRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
-      return ctx.db.transaction(async (tx: Tx) => {
+      const adjustmentIds: string[] = [];
+      return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
         await assertWarehouses(tx, ctx.businessId, [input.warehouseId]);
         if (input.post) await assertWarehousePermission(tx, ctx, [input.warehouseId], "canAdjust");
         const report = await buildCountReport(tx, ctx.businessId, input.warehouseId, input.scans);
         const adjusted = input.post
-          ? await postCountLines(tx, { businessId: ctx.businessId, user: { id: ctx.user.id, name: ctx.user.name } }, input.warehouseId, report.lines, input.note ?? null)
+          ? await postCountLines(tx, { businessId: ctx.businessId, user: { id: ctx.user.id, name: ctx.user.name } }, input.warehouseId, report.lines, input.note ?? null, adjustmentIds)
           : 0;
         const [row] = await tx.insert(physicalStockCounts).values({
           businessId: ctx.businessId,
@@ -820,7 +1022,12 @@ export const stockRouter = router({
           createdByName: ctx.user.name,
         }).returning({ id: physicalStockCounts.id });
         return { id: row.id, adjusted };
-      });
+      }), (r) => ({
+        action: input.post ? "stock.countPost" : "stock.countFinish",
+        entityType: "physicalStockCount",
+        entityId: r.id,
+        metadata: { warehouseId: input.warehouseId, adjusted: r.adjusted, adjustmentIds },
+      }));
     }),
 
   /** Post a saved count's differences later. */
@@ -828,7 +1035,8 @@ export const stockRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
-      return ctx.db.transaction(async (tx: Tx) => {
+      const adjustmentIds: string[] = [];
+      return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
         const [count] = await tx
           .select()
           .from(physicalStockCounts)
@@ -839,12 +1047,17 @@ export const stockRouter = router({
         if (count.status === "posted") throw new TRPCError({ code: "BAD_REQUEST", message: "This count is already posted" });
         await assertWarehouses(tx, ctx.businessId, [count.warehouseId]);
         await assertWarehousePermission(tx, ctx, [count.warehouseId], "canAdjust");
-        const adjusted = await postCountLines(tx, { businessId: ctx.businessId, user: { id: ctx.user.id, name: ctx.user.name } }, count.warehouseId, count.lines, count.note);
+        const adjusted = await postCountLines(tx, { businessId: ctx.businessId, user: { id: ctx.user.id, name: ctx.user.name } }, count.warehouseId, count.lines, count.note, adjustmentIds);
         await tx.update(physicalStockCounts)
           .set({ status: "posted", postedAt: new Date(), adjustedCount: adjusted })
           .where(eq(physicalStockCounts.id, count.id));
         return { id: count.id, adjusted };
-      });
+      }), (r) => ({
+        action: "stock.countPost",
+        entityType: "physicalStockCount",
+        entityId: r.id,
+        metadata: { adjusted: r.adjusted, adjustmentIds },
+      }));
     }),
 
   /** Past counts, newest first. */

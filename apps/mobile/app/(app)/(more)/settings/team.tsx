@@ -199,7 +199,7 @@ export default function TeamScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Team</Text>
         {canManage ? (
@@ -208,10 +208,10 @@ export default function TeamScreen() {
             onPress={() => setShowInviteModal(true)}
             activeOpacity={0.7}
           >
-            <Ionicons name="person-add-outline" size={18} color={colors.textPrimary} />
+            <Ionicons name="person-add-outline" size={18} color={colors.onBrand} />
           </TouchableOpacity>
         ) : (
-          <View style={{ width: 40 }} />
+          <View style={{ width: 44 }} />
         )}
       </View>
 
@@ -424,7 +424,7 @@ export default function TeamScreen() {
               activeOpacity={0.8}
             >
               {updateRoleMutation.isPending ? (
-                <ActivityIndicator color={colors.textPrimary} size="small" />
+                <ActivityIndicator color={colors.onBrand} size="small" />
               ) : (
                 <Text style={styles.inviteSubmitBtnText}>Save Role</Text>
               )}
@@ -487,7 +487,7 @@ export default function TeamScreen() {
               activeOpacity={0.8}
             >
               {inviteMutation.isPending ? (
-                <ActivityIndicator color={colors.textPrimary} size="small" />
+                <ActivityIndicator color={colors.onBrand} size="small" />
               ) : (
                 <Text style={styles.inviteSubmitBtnText}>Send Invitation</Text>
               )}
@@ -510,7 +510,16 @@ const useStyles = makeStyles((colors) => ({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: { fontSize: 20, fontWeight: "700", color: colors.textPrimary },
   inviteBtn: {
     width: 40,
@@ -698,7 +707,7 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
   },
   rolePillTextActive: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
   },
   inviteSubmitBtn: {
     backgroundColor: colors.brand,
@@ -707,7 +716,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: "center",
   },
   inviteSubmitBtnText: {
-    color: colors.textPrimary,
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "700",
   },

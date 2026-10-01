@@ -188,9 +188,9 @@ describe("getSessionIdFromRequest — extracts session ID from cookie OR Bearer 
     expect(getSessionIdFromRequest(req)).toBeNull();
   });
 
-  it("skips API keys (hisaabo_key_ prefix) — those are not session IDs", () => {
+  it("skips API keys (fintranzact_key_ prefix) — those are not session IDs", () => {
     const req = new Request("http://localhost/", {
-      headers: { authorization: "Bearer hisaabo_key_abc123def456" },
+      headers: { authorization: "Bearer fintranzact_key_abc123def456" },
     });
     expect(getSessionIdFromRequest(req)).toBeNull();
   });

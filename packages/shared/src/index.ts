@@ -1,8 +1,15 @@
 export * from "./validators.js";
 export * from "./party-compliance.js";
 export * from "./money.js";
-export { calcLineItem, calcInvoiceTotals } from "./calc.js";
-export type { LineItemInput, LineItemResult, InvoiceTotalsInput, InvoiceTotals } from "./calc.js";
+export { calcLineItem, calcInvoiceTotals, taxOn, allocatePaise, chargeTaxRateFor, chargeSupplyOf } from "./calc.js";
+export type { LineItemInput, LineItemResult, InvoiceTotalsInput, InvoiceTotals, AllocatedLine } from "./calc.js";
 export { calculateGatewayCharge } from "./gateway.js";
 export type { GatewayChargeConfig, GatewayChargeRate, GatewayChargeResult } from "./gateway.js";
 export * from "./plans.js";
+export * from "./partners.js";
+export * from "./gst-uqc.js";
+export * from "./roadmap.js";
+export * from "./dates.js";
+export * from "./gst.js";
+export * from "./bank-statement-formats.js";
+export * from "./invoice-templates.js";

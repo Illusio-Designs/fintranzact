@@ -45,7 +45,7 @@ import {
   closeTestDb,
 } from "../helpers/test-db.js";
 import { seedChartOfAccounts } from "../../lib/coa-seed.js";
-import { money } from "@fintranzact/shared";
+import { istReturnPeriod, money } from "@fintranzact/shared";
 
 // ── Fixture ──────────────────────────────────────────────────────────────────
 
@@ -742,8 +742,8 @@ describe("ITC dashboard", () => {
   it("defaults to current period when no period specified", async () => {
     const caller = callerForRamesh();
 
-    const now = new Date();
-    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    // The return period is the current month in India, whatever the server zone.
+    const currentPeriod = istReturnPeriod(new Date());
 
     // Create a purchase invoice with today's date
     await caller.invoice.create({

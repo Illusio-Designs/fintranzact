@@ -1,10 +1,14 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
 import { z } from "zod";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
+import { useCan } from "@/lib/permissions";
 import { getBusinessId } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn } from "@/lib/utils";
 import { apiUrl } from "@/lib/api-url";
+import { openPdf } from "@/lib/open-pdf";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -16,8 +20,8 @@ import { DetailField } from "@/components/ui/DetailField";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { DocumentCreator } from "@/components/DocumentCreator";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { Select } from "@/components/ui/Select";
+import { deliveryMethodLabel, useDeliveryMethods } from "@/lib/delivery-methods";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -91,11 +95,14 @@ function DownloadPDFButton({
   invoiceNumber,
   invoiceStatus,
   onShared,
+  menuAbove = false,
 }: {
   invoiceId: string;
   invoiceNumber: string;
   invoiceStatus: string;
   onShared?: () => void;
+  /** Open the format menu upwards (the button sits at the bottom of a panel). */
+  menuAbove?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -106,23 +113,28 @@ function DownloadPDFButton({
   const hasGstin = !!(activeBusiness?.gstin && activeBusiness.gstRegistrationType !== "unregistered");
 
   type Format = "a4" | "a5" | "thermal";
-  const options: { format: Format; label: string }[] = hasGstin
+  // A4 prints in the business's chosen design (Settings → Documents); the
+  // copies option prints Original, Duplicate and Triplicate in one PDF.
+  const design = activeBusiness?.invoiceTemplate ?? "classic";
+  const options: { format: Format; label: string; copies?: boolean }[] = hasGstin
     ? [
         { format: "a4", label: "GST Invoice (A4)" },
+        { format: "a4", label: "GST Invoice, all copies", copies: true },
         { format: "a5", label: "Simple Invoice (A5)" },
         { format: "thermal", label: "Thermal Receipt" },
       ]
     : [
+        ...(design !== "classic" ? [{ format: "a4" as const, label: "Invoice (A4)" }] : []),
         { format: "a5", label: "Invoice (A5)" },
         { format: "thermal", label: "Thermal Receipt" },
       ];
 
-  async function download(format: Format) {
+  async function download(format: Format, copies = false) {
     setOpen(false);
     setLoading(true);
     try {
       const res = await fetch(
-        apiUrl(`/api/invoices/${invoiceId}/pdf?format=${format}`),
+        apiUrl(`/api/invoices/${invoiceId}/pdf?format=${format}${copies ? "&copies=all" : ""}`),
         {
           credentials: "include",
           headers: { "x-business-id": getBusinessId() || "" },
@@ -133,7 +145,7 @@ function DownloadPDFButton({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${invoiceNumber}_${format}.pdf`;
+      a.download = `${invoiceNumber}_${format}${copies ? "_copies" : ""}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       if (invoiceStatus === "draft") {
@@ -162,11 +174,11 @@ function DownloadPDFButton({
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-20 min-w-[172px] rounded-lg border border-border-light bg-surface-1 shadow-lg py-1">
+          <div className={cn("absolute right-0 z-20 min-w-[172px] rounded-lg border border-border-light bg-surface-1 shadow-lg py-1", menuAbove ? "bottom-full mb-1" : "top-full mt-1")}>
             {options.map((opt) => (
               <button
-                key={opt.format}
-                onClick={() => download(opt.format)}
+                key={opt.label}
+                onClick={() => download(opt.format, opt.copies)}
                 className="w-full text-left text-xs px-3 py-2 text-text-primary hover:bg-surface-2 transition-colors"
               >
                 {opt.label}
@@ -218,6 +230,8 @@ function InvoiceShipmentStatusBadge({ status }: { status: ShipmentStatus }) {
 
 function CreateShipmentForm({ invoiceId, partyId, onCreated }: { invoiceId: string; partyId: string; onCreated: () => void }) {
   const [mode, setMode] = useState("");
+  // The business's own methods from Settings → Shipping can be a shipment's mode too.
+  const customModes = useDeliveryMethods().filter((m) => m.custom);
   const [carrier, setCarrier] = useState("");
   const [tracking, setTracking] = useState("");
   const [cost, setCost] = useState("");
@@ -247,6 +261,9 @@ function CreateShipmentForm({ invoiceId, partyId, onCreated }: { invoiceId: stri
           <option value="courier">Courier</option>
           <option value="transport">Transport</option>
           <option value="post">Post</option>
+          {customModes.map((m) => (
+            <option key={m.id} value={m.id}>{m.label}</option>
+          ))}
         </Select>
         <input
           type="text"
@@ -303,6 +320,7 @@ function InvoiceShipmentCard({ invoiceId, partyId, invoiceStatus }: { invoiceId:
   const [trackingInput, setTrackingInput] = useState("");
 
   const utils = trpc.useUtils();
+  const deliveryOptions = useDeliveryMethods();
 
   const { data, isLoading } = trpc.shipment.list.useQuery(
     { invoiceId, limit: 1, page: 1 },
@@ -394,7 +412,7 @@ function InvoiceShipmentCard({ invoiceId, partyId, invoiceStatus }: { invoiceId:
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
               <p className="text-text-tertiary mb-0.5">Mode</p>
-              <p className="text-text-secondary">{INVOICE_MODE_LABELS[shipment.mode ?? ""] ?? shipment.mode ?? "—"}</p>
+              <p className="text-text-secondary">{INVOICE_MODE_LABELS[shipment.mode ?? ""] ?? deliveryMethodLabel(shipment.mode, deliveryOptions)}</p>
             </div>
             <div>
               <p className="text-text-tertiary mb-0.5">Carrier</p>
@@ -477,6 +495,7 @@ function InvoiceDetailPanel({
   onCreateSR,
 }: InvoiceDetailPanelProps) {
   const navigate = useNavigate();
+  const deliveryOptions = useDeliveryMethods();
   const { data: invoice, isLoading } = trpc.invoice.getById.useQuery(
     { id: invoiceId! },
     { enabled: !!invoiceId }
@@ -493,17 +512,23 @@ function InvoiceDetailPanel({
     onSuccess: () => {
       utils.invoice.list.invalidate();
       utils.dashboard.summary.invalidate();
+      // Cancelling puts the stock back.
+      void invalidateStockViews(utils);
       if (invoiceId) utils.invoice.getById.invalidate({ id: invoiceId });
       toast.success("Invoice status updated");
     },
     onError: (err) => toast.error("Failed to update status", err.message),
   });
 
+  // Sellers can view invoices but not edit them.
+  const { data: me } = trpc.auth.me.useQuery();
+
   if (!invoiceId) return null;
 
   // Compute how much has been credited/returned against this invoice (combined limit)
   const relatedCNs = invoice?.relatedDocuments?.filter((d: any) => d.documentType === "credit_note") ?? [];
-  const relatedSRs = invoice?.relatedDocuments?.filter((d: any) => d.documentType === "sales_return") ?? [];
+  // Goods back from a customer are a sales return; goods back to a supplier a purchase return.
+  const relatedSRs = invoice?.relatedDocuments?.filter((d: any) => d.documentType === "sales_return" || d.documentType === "purchase_return") ?? [];
   const allRelated = [...relatedCNs, ...relatedSRs];
   const totalAdjusted = allRelated.reduce((sum: number, d: any) => sum + parseFloat(d.totalAmount), 0);
   const invoiceTotal = invoice ? parseFloat(invoice.totalAmount) : 0;
@@ -539,7 +564,7 @@ function InvoiceDetailPanel({
         invoice ? (
           <div className="flex items-center justify-between gap-3">
             <div className="flex gap-2">
-              {invoice.status !== "paid" && (
+              {invoice.status !== "paid" && !invoice.governmentLock && me?.role !== "seller" && (
                 <button
                   onClick={() => {
                     onClose();
@@ -569,13 +594,21 @@ function InvoiceDetailPanel({
                   See {cn.invoiceNumber}
                 </a>
               ))}
-              {relatedSRs.map((sr: any) => (
+              {relatedSRs.map((sr: any) => sr.documentType === "sales_return" ? (
                 <a
                   key={sr.id}
                   href={`/sales-returns?id=${sr.id}`}
                   className="inline-flex items-center text-xs px-2.5 py-1.5 rounded font-medium text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950 transition-colors"
                 >
                   See {sr.invoiceNumber}
+                </a>
+              ) : (
+                <a
+                  key={sr.id}
+                  href={`/purchase-returns?id=${sr.id}`}
+                  className="inline-flex items-center text-xs px-2.5 py-1.5 rounded font-medium text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950 transition-colors"
+                >
+                  Returned on {sr.invoiceNumber}
                 </a>
               ))}
               {/* Create buttons — only when not fully adjusted */}
@@ -591,7 +624,7 @@ function InvoiceDetailPanel({
                     onClick={() => { onClose(); onCreateSR?.(invoice.id, invoice.type as "sale" | "purchase"); }}
                     className="inline-flex items-center text-xs px-2.5 py-1.5 rounded font-medium text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950 transition-colors"
                   >
-                    Create Sales Return
+                    {invoice.type === "purchase" ? "Create Purchase Return" : "Create Sales Return"}
                   </button>
                 </>
               )}
@@ -602,6 +635,7 @@ function InvoiceDetailPanel({
                 invoiceNumber={invoice.invoiceNumber}
                 invoiceStatus={invoice.status}
                 onShared={() => onStatusChange(invoice.id, "sent")}
+                menuAbove
               />
               {canRecordPayment && (
                 <button
@@ -628,6 +662,27 @@ function InvoiceDetailPanel({
         <p className="text-text-tertiary text-sm">Invoice not found.</p>
       ) : (
         <div className="space-y-5">
+          {invoice.governmentLock && (
+            <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-text-secondary">
+              {invoice.governmentLock.kind === "e_invoice"
+                ? "This invoice has an e-invoice (IRN), so it can't be edited, deleted or cancelled. Cancel the e-invoice first."
+                : `This invoice has an active e-way bill${invoice.governmentLock.ewbNumber ? ` (${invoice.governmentLock.ewbNumber})` : ""}, so it can't be edited, deleted or cancelled. Cancel the e-way bill first.`}
+              {invoice.governmentLock.kind === "eway_bill" && invoice.governmentLock.ewbNumber && (
+                <button
+                  type="button"
+                  className="ml-2 font-medium text-brand-600 hover:underline"
+                  onClick={() => {
+                    const lock = invoice.governmentLock;
+                    if (lock?.kind !== "eway_bill") return;
+                    openPdf(`/api/eway-bills/${lock.ewayBillId}/pdf`, `eway-bill-${(lock.ewbNumber ?? "").replace(/[^0-9A-Za-z]/g, "")}.pdf`)
+                      .catch(() => toast.error("Could not open the e-way bill"));
+                  }}
+                >
+                  Print e-way bill
+                </button>
+              )}
+            </p>
+          )}
           {/* Header info */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-3">
@@ -648,6 +703,11 @@ function InvoiceDetailPanel({
               {invoice.dueDate && (
                 <DetailField label="Due Date">
                   <p>{formatDate(invoice.dueDate)}</p>
+                </DetailField>
+              )}
+              {invoice.type === "sale" && invoice.deliveryMethod && (
+                <DetailField label="Delivery">
+                  <p>{deliveryMethodLabel(invoice.deliveryMethod, deliveryOptions)}</p>
                 </DetailField>
               )}
             </div>
@@ -683,7 +743,12 @@ function InvoiceDetailPanel({
                           </p>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-text-secondary align-top">{li.quantity}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-text-secondary align-top">
+                        {li.quantity}
+                        {parseFloat(li.freeQuantity ?? "0") > 0 && (
+                          <span className="block text-2xs text-emerald-700 dark:text-emerald-400">+ {parseFloat(li.freeQuantity)} free</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-text-secondary text-xs align-top">
                         {(li.selectedUnit || li.itemUnit)?.toUpperCase() || "—"}
                       </td>
@@ -875,7 +940,7 @@ const PAGE_SIZE = 25;
 function InvoicesPage() {
   const [type, setType] = useState<"sale" | "purchase">("sale");
   const [status, setStatus] = useState("");
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search invoices…");
   const [sortBy, setSortBy] = useState<"date" | "amount" | "number">("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -901,22 +966,24 @@ function InvoicesPage() {
   // the Dashboard "+ New Invoice" CTA so users land directly in the form
   // rather than just on the list).
   const { id: idFromSearch, create: createFromSearch } = useSearch({ from: "/invoices" });
+  // Accountants read invoices but cannot raise them: no way in to the form.
+  const canCreate = useCan("Invoice", "create");
   useEffect(() => {
     if (idFromSearch) {
       setSelectedInvoiceId(idFromSearch);
     }
   }, [idFromSearch]);
   useEffect(() => {
-    if (createFromSearch) {
+    if (createFromSearch && canCreate) {
       setShowCreate(true);
     }
-  }, [createFromSearch]);
+  }, [createFromSearch, canCreate]);
 
   const debouncedSearch = useDebounce(search, 300);
 
   // Keyboard shortcut: N to create new invoice
   useHotkeys([
-    { key: "n", handler: () => setShowCreate(true), description: "New invoice", scope: "invoices" },
+    { key: "n", handler: () => canCreate && setShowCreate(true), description: "New invoice", scope: "invoices" },
   ]);
 
   // Reset to page 1 whenever filters or sort change
@@ -1040,223 +1107,226 @@ function InvoicesPage() {
                 Switch to POS
               </a>
             )}
-            <button
-              className="btn-primary inline-flex items-center gap-2"
-              onClick={() => setShowCreate(true)}
-            >
-              + New Invoice
-              <KbdShortcut keys={["N"]} className="opacity-60" />
-            </button>
+            {canCreate && (
+              <button
+                className="btn-primary inline-flex items-center gap-2"
+                onClick={() => setShowCreate(true)}
+              >
+                + New Invoice
+                <KbdShortcut keys={["N"]} className="opacity-60" />
+              </button>
+            )}
           </div>
         }
       />
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search invoices…"
-          className="max-w-xs"
-        />
-        <SegmentedControl
-          tabs={typeOptions}
-          value={type}
-          onChange={(v) => setType(v as "sale" | "purchase")}
-        />
-        <div className="ml-auto">
-          <PillTabs
-            tabs={statusTabs}
-            value={status}
-            onChange={setStatus}
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+        {/* Filters */}
+        <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
+          <SegmentedControl
+            tabs={typeOptions}
+            value={type}
+            onChange={(v) => setType(v as "sale" | "purchase")}
           />
-        </div>
-      </div>
-      <DateRangeBar
-        preset={dateRange.preset}
-        onPresetChange={dateRange.setPreset}
-        customFrom={dateRange.customFrom}
-        customTo={dateRange.customTo}
-        onCustomChange={dateRange.setCustomRange}
-        onExport={exportInvoicesCSV}
-        exporting={exporting}
-        className="mb-4"
-      />
-
-      {/* Content */}
-      {isLoading ? (
-        <SkeletonRows count={6} height="h-14" />
-      ) : !list.items.length && !isFetching ? (
-        <EmptyState
-          icon={
-            <Icon icon={File01Icon} size={24} className="text-text-tertiary" />
-          }
-          title="No invoices found"
-          description={`No ${type === "sale" ? "sales" : "purchase"} invoices${status ? ` with status "${status}"` : ""}.`}
-          encouragement={!search && !status ? "Create your first invoice — it only takes a minute." : undefined}
-          action={
-            <button
-              className="btn-primary"
-              onClick={() => setShowCreate(true)}
-            >
-              + New Invoice
-            </button>
-          }
-        />
-      ) : (
-        <div className="card overflow-hidden">
-          <div
-            ref={list.scrollRef}
-            onScroll={list.onScroll}
-            className="max-h-[600px] overflow-y-auto"
-          >
-            <table className="data-table w-full">
-              <thead className="sticky top-0 z-10">
-                <tr>
-                  <th>Party</th>
-                  <th
-                    className="whitespace-nowrap cursor-pointer select-none hover:text-text-primary transition-colors"
-                    onClick={() => {
-                      if (sortBy === "number" && sortDir === "desc") setSortDir("asc");
-                      else if (sortBy === "number" && sortDir === "asc") { setSortBy("date"); setSortDir("desc"); }
-                      else { setSortBy("number"); setSortDir("desc"); }
-                    }}
-                  >
-                    Invoice # {sortBy === "number" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
-                  </th>
-                  <th className="whitespace-nowrap">Date</th>
-                  <th className="whitespace-nowrap">Source</th>
-                  <th className="whitespace-nowrap">Seller</th>
-                  <th
-                    className="text-right whitespace-nowrap cursor-pointer select-none hover:text-text-primary transition-colors"
-                    onClick={() => {
-                      if (sortBy === "amount" && sortDir === "desc") setSortDir("asc");
-                      else if (sortBy === "amount" && sortDir === "asc") { setSortBy("date"); setSortDir("desc"); }
-                      else { setSortBy("amount"); setSortDir("desc"); }
-                    }}
-                  >
-                    Amount {sortBy === "amount" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
-                  </th>
-                  <th>Status</th>
-                  <th className="w-28"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.items.map((inv) => (
-                    <tr
-                      key={inv.id}
-                      className="group cursor-pointer"
-                      onClick={() => setSelectedInvoiceId(inv.id)}
-                    >
-                      <td className="font-medium"><span className="block truncate max-w-[250px]">{inv.partyName}</span></td>
-                      <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
-                        {inv.invoiceNumber}
-                      </td>
-                      <td className="text-text-secondary whitespace-nowrap">
-                        {formatDate(inv.invoiceDate)}
-                      </td>
-                      <td className="whitespace-nowrap">
-                        <SourceChip source={(inv as { source?: string | null }).source ?? null} />
-                      </td>
-                      <td className="text-text-secondary whitespace-nowrap">
-                        <span className="block truncate max-w-[140px]" title={inv.createdByName ?? ""}>
-                          {inv.createdByName ?? "—"}
-                        </span>
-                      </td>
-                      <td className="text-right tabular-nums font-medium whitespace-nowrap">
-                        {formatCurrency(inv.totalAmount)}
-                      </td>
-                      <td className="whitespace-nowrap">
-                        <StatusBadge status={inv.status} size="sm" />
-                      </td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-0.5">
-                          {/* PDF buttons — always visible, LEFT aligned */}
-                          <DownloadPDFButton
-                            invoiceId={inv.id}
-                            invoiceNumber={inv.invoiceNumber}
-                            invoiceStatus={inv.status}
-                            onShared={() =>
-                              updateStatus.mutate({ id: inv.id, status: "sent" })
-                            }
-                          />
-                          {/* Context actions — always visible at reduced opacity, full on hover */}
-                          <div className="flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
-                            {(inv.status === "draft" || inv.status === "unfulfilled") && (
-                              <button
-                                onClick={() =>
-                                  updateStatus.mutate({ id: inv.id, status: "sent" })
-                                }
-                                title={inv.status === "unfulfilled" ? "Mark fulfilled" : "Mark as sent"}
-                                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
-                              >
-                                <Icon icon={SentIcon} size={16} />
-                              </button>
-                            )}
-                            {inv.status !== "draft" &&
-                              inv.status !== "cancelled" &&
-                              inv.status !== "paid" &&
-                              inv.status !== "adjusted" &&
-                              (parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0")) > 0.01 && (
-                                <button
-                                  onClick={() =>
-                                    openPaymentPanel(
-                                      inv.partyId,
-                                      inv.id,
-                                      (parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0")).toFixed(2)
-                                    )
-                                  }
-                                  title="Record payment"
-                                  className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-600/[0.08] transition-colors"
-                                >
-                                  <Icon icon={Cash01Icon} size={16} />
-                                </button>
-                              )}
-                            {(inv.status === "draft" || inv.status === "unfulfilled") && (
-                              <button
-                                onClick={() =>
-                                  confirmDelete(inv.id, inv.invoiceNumber)
-                                }
-                                title="Delete invoice"
-                                className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
-                              >
-                                <Icon icon={Delete02Icon} size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                ))}
-              </tbody>
-            </table>
-            {list.loadingMore && (
-              <div className="border-t border-border-light">
-                <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                  <div className="h-3 bg-surface-2 rounded w-32" />
-                  <div className="h-3 bg-surface-2 rounded w-20" />
-                  <div className="h-3 bg-surface-2 rounded w-24" />
-                  <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
-                </div>
-              </div>
-            )}
-            {list.hasMore && !list.loadingMore && (
-              <button
-                type="button"
-                onClick={list.loadMore}
-                className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
-              >
-                Load more
-              </button>
-            )}
-            {!list.hasMore && list.items.length > PAGE_SIZE && (
-              <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
-                All {list.total.toLocaleString()} records loaded
-              </div>
-            )}
+          <div className="ml-auto">
+            <PillTabs
+              tabs={statusTabs}
+              value={status}
+              onChange={setStatus}
+            />
           </div>
         </div>
-      )}
+        <div className="border-b border-border-light px-4 py-2">
+          <DateRangeBar
+            preset={dateRange.preset}
+            onPresetChange={dateRange.setPreset}
+            customFrom={dateRange.customFrom}
+            customTo={dateRange.customTo}
+            onCustomChange={dateRange.setCustomRange}
+            onExport={exportInvoicesCSV}
+            exporting={exporting}
+          />
+        </div>
+
+        {/* Content */}
+        {isLoading ? (
+          <div className="p-4">
+            <SkeletonRows count={6} height="h-14" />
+          </div>
+        ) : !list.items.length && !isFetching ? (
+          <EmptyState
+            icon={
+              <Icon icon={File01Icon} size={24} className="text-text-tertiary" />
+            }
+            title="No invoices found"
+            description={`No ${type === "sale" ? "sales" : "purchase"} invoices${status ? ` with status "${status}"` : ""}.`}
+            encouragement={!search && !status ? "Create your first invoice — it only takes a minute." : undefined}
+            action={
+              canCreate ? (
+                <button
+                  className="btn-primary"
+                  onClick={() => setShowCreate(true)}
+                >
+                  + New Invoice
+                </button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div>
+            <div
+              ref={list.scrollRef}
+              onScroll={list.onScroll}
+              className="max-h-[600px] overflow-y-auto"
+            >
+              <table className="data-table w-full">
+                <thead className="sticky top-0 z-10">
+                  <tr>
+                    <th>Party</th>
+                    <th
+                      className="whitespace-nowrap cursor-pointer select-none hover:text-text-primary transition-colors"
+                      onClick={() => {
+                        if (sortBy === "number" && sortDir === "desc") setSortDir("asc");
+                        else if (sortBy === "number" && sortDir === "asc") { setSortBy("date"); setSortDir("desc"); }
+                        else { setSortBy("number"); setSortDir("desc"); }
+                      }}
+                    >
+                      Invoice # {sortBy === "number" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
+                    </th>
+                    <th className="whitespace-nowrap">Date</th>
+                    <th className="whitespace-nowrap">Source</th>
+                    <th className="whitespace-nowrap">Seller</th>
+                    <th
+                      className="text-right whitespace-nowrap cursor-pointer select-none hover:text-text-primary transition-colors"
+                      onClick={() => {
+                        if (sortBy === "amount" && sortDir === "desc") setSortDir("asc");
+                        else if (sortBy === "amount" && sortDir === "asc") { setSortBy("date"); setSortDir("desc"); }
+                        else { setSortBy("amount"); setSortDir("desc"); }
+                      }}
+                    >
+                      Amount {sortBy === "amount" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
+                    </th>
+                    <th>Status</th>
+                    <th className="w-28"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.items.map((inv) => (
+                      <tr
+                        key={inv.id}
+                        className="group cursor-pointer"
+                        onClick={() => setSelectedInvoiceId(inv.id)}
+                      >
+                        <td className="font-medium"><span className="block truncate max-w-[250px]">{inv.partyName}</span></td>
+                        <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
+                          {inv.invoiceNumber}
+                        </td>
+                        <td className="text-text-secondary whitespace-nowrap">
+                          {formatDate(inv.invoiceDate)}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <SourceChip source={(inv as { source?: string | null }).source ?? null} />
+                        </td>
+                        <td className="text-text-secondary whitespace-nowrap">
+                          <span className="block truncate max-w-[140px]" title={inv.createdByName ?? ""}>
+                            {inv.createdByName ?? "—"}
+                          </span>
+                        </td>
+                        <td className="text-right tabular-nums font-medium whitespace-nowrap">
+                          {formatCurrency(inv.totalAmount)}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <StatusBadge status={inv.status} size="sm" />
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-0.5">
+                            {/* PDF buttons — always visible, LEFT aligned */}
+                            <DownloadPDFButton
+                              invoiceId={inv.id}
+                              invoiceNumber={inv.invoiceNumber}
+                              invoiceStatus={inv.status}
+                              onShared={() =>
+                                updateStatus.mutate({ id: inv.id, status: "sent" })
+                              }
+                            />
+                            {/* Context actions — always visible at reduced opacity, full on hover */}
+                            <div className="flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
+                              {(inv.status === "draft" || inv.status === "unfulfilled") && (
+                                <button
+                                  onClick={() =>
+                                    updateStatus.mutate({ id: inv.id, status: "sent" })
+                                  }
+                                  title={inv.status === "unfulfilled" ? "Mark fulfilled" : "Mark as sent"}
+                                  className="p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
+                                >
+                                  <Icon icon={SentIcon} size={16} />
+                                </button>
+                              )}
+                              {inv.status !== "draft" &&
+                                inv.status !== "cancelled" &&
+                                inv.status !== "paid" &&
+                                inv.status !== "adjusted" &&
+                                (parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0")) > 0.01 && (
+                                  <button
+                                    onClick={() =>
+                                      openPaymentPanel(
+                                        inv.partyId,
+                                        inv.id,
+                                        (parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0")).toFixed(2)
+                                      )
+                                    }
+                                    title="Record payment"
+                                    className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-600/[0.08] transition-colors"
+                                  >
+                                    <Icon icon={Cash01Icon} size={16} />
+                                  </button>
+                                )}
+                              {(inv.status === "draft" || inv.status === "unfulfilled") && (
+                                <button
+                                  onClick={() =>
+                                    confirmDelete(inv.id, inv.invoiceNumber)
+                                  }
+                                  title="Delete invoice"
+                                  className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
+                                >
+                                  <Icon icon={Delete02Icon} size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                  ))}
+                </tbody>
+              </table>
+              {list.loadingMore && (
+                <div className="border-t border-border-light">
+                  <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                    <div className="h-3 bg-surface-2 rounded w-32" />
+                    <div className="h-3 bg-surface-2 rounded w-20" />
+                    <div className="h-3 bg-surface-2 rounded w-24" />
+                    <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
+                  </div>
+                </div>
+              )}
+              {list.hasMore && !list.loadingMore && (
+                <button
+                  type="button"
+                  onClick={list.loadMore}
+                  className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
+                >
+                  Load more
+                </button>
+              )}
+              {!list.hasMore && list.items.length > PAGE_SIZE && (
+                <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
+                  All {list.total.toLocaleString()} records loaded
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Delete confirm dialog */}
       <DeleteConfirmDialog
@@ -1319,7 +1389,7 @@ function InvoicesPage() {
       {/* DocumentCreator pre-filled from source invoice for Sales Return */}
       {srSource && (
         <DocumentCreator
-          documentType="sales_return"
+          documentType={srSource.type === "purchase" ? "purchase_return" : "sales_return"}
           invoiceType={srSource.type}
           prefillFromInvoiceId={srSource.id}
           onClose={() => setSrSource(null)}

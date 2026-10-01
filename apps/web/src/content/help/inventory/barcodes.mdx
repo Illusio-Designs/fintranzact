@@ -1,0 +1,130 @@
+---
+title: Barcodes
+description: Switch on barcodes in Fintranzact, lock your barcode type and label size, give items main, extra and pack codes, print labels, and scan at the POS and during stock counts.
+sidebar:
+  order: 5
+---
+
+import { ForBusiness } from "@/components/help/mdx";
+
+Barcodes let you add items to a bill with one scan, print shelf and product labels, and count stock by scanning. They're off until you switch them on.
+
+## Setting up barcodes
+
+Go to **Settings → Barcodes**. Only owners and admins see this tab.
+
+### 1. Switch on
+
+Turn on **Use barcodes**. This switches on, for the whole business:
+
+- a barcode field on items (and on each size / colour),
+- scan-to-add in the Point of Sale,
+- automatic codes for items that arrive without one (optional, see below),
+- barcode label printing, and
+- the [Physical Stock](/help/inventory/physical-stock) page.
+
+When it's off, nothing barcode-related shows anywhere in the app. You can switch it on and off at any time.
+
+### 2. Choose and lock your setup
+
+In the **Set up barcodes for this business** card, make two choices.
+
+**1 · Barcode type**
+
+| Type | Best for | Label size |
+|---|---|---|
+| **EAN-13** | The 13-digit retail standard. Codes Fintranzact creates use the in-store range that starts with 2. | 50 × 25 mm |
+| **Code 128** | Letters and numbers. A short SKU (up to 14 characters) becomes the barcode itself. | 75 × 25 mm |
+| **QR** | Readable by any phone camera | 38 × 25 mm, 2 across |
+
+**2 · Barcodes per item**
+
+| Option | Meaning |
+|---|---|
+| **One barcode per item** | Each item (and each size / colour) has exactly one code. |
+| **Many barcodes per item** | An item can also have the supplier's code, your own code, and box / carton codes that add a whole pack in one scan. |
+
+Then click **Lock barcode setup** and confirm. The card then shows **Locked**, with the date and who locked it.
+
+:::caution[Locking is permanent]
+The barcode type, barcodes-per-item choice and label size can't be changed after you lock them. This keeps every code Fintranzact creates, and every label printed from every counter, consistent. Lock your setup **before** you start creating codes or printing labels.
+:::
+
+These stay changeable after locking:
+
+- **Use barcodes** (on / off)
+- **Create a code for items that don't have one**: when a purchase invoice is saved, items on it that have no barcode get one automatically. A supplier's barcode you've already entered is always kept.
+
+The **Label — fixed size** panel beside the card shows a preview of your label and the roll size to buy for your label printer.
+
+## Giving items barcodes
+
+Open an item from **Inventory → Stock Items** and find the **Barcode** field (called **Main barcode (printed on labels)** if you chose Many barcodes per item).
+
+- **Scan or type** the code already printed on the product, or
+- click **Create code** to let Fintranzact make one:
+  - **EAN-13**: a valid 13-digit in-store code starting with 2.
+  - **Code 128 / QR**: the item's SKU if it's 14 characters or fewer and not already used; otherwise a code like `FT000123`.
+
+Every code must be unique across your business. If a code is already used, you see "Barcode … is already used by *item name*".
+
+For items with variants, each variant has its own barcode.
+
+### Extra codes and pack codes
+
+With **Many barcodes per item**, the item edit form has a **More barcodes** section. Codes here scan to the same item, but only the main code prints on labels.
+
+| Field | Use |
+|---|---|
+| **Code** | The barcode, for example the supplier's code or the carton code |
+| **1 scan =** | How many units one scan adds. Leave at 1 for a second product code; enter 12 for a box of 12. |
+| **Name (optional)** | For example "Box of 12" |
+
+Click **Add** to save the code. Each saved code shows its name (or "N pcs") and can be removed with the delete icon.
+
+<ForBusiness>
+Pack codes save a lot of time at the counter and during stock counts: scan the carton once and 24 pieces are added, instead of opening the box and scanning each piece.
+</ForBusiness>
+
+## Printing labels
+
+Click **Print labels** on the **Stock Items** page header, or in an item's detail panel. The panel prints on your locked label size and offers three tabs:
+
+| Tab | Prints |
+|---|---|
+| **One item** | Any number of copies of a single item |
+| **Many items** | The items currently shown on the Stock Items page. Search or filter the list first to narrow it down. |
+| **From a purchase bill** | Pick one of your 20 most recent purchases. One label per piece received. |
+
+For each item, set the number of **Labels** (0 to 500). Two switches control what's printed besides the barcode: **Show product name** and **Show price** (the sale price, as ₹). Variant details are printed on the label, and the code is printed in readable text under the bars.
+
+Click **Print N labels**. A PDF at the exact label size opens your computer's print window. Pick your label printer there, and set the roll size in the printer's own settings. Items without a barcode are skipped, and a message tells you how many.
+
+:::tip[Printing labels for variants]
+To print labels for items with variants (sizes, colours), use **From a purchase bill**. The **One item** and **Many items** tabs use the main item's barcode, which variant items usually don't have.
+:::
+
+## Where scanning works
+
+| Screen | What a scan does |
+|---|---|
+| **Point of Sale** | Adds the item to the bill. A pack code adds the whole pack. A USB or Bluetooth scanner that types like a keyboard works; no setup needed. |
+| **Physical Stock** | Counts the item during a [stock count](/help/inventory/physical-stock). |
+
+The regular invoice and document forms don't take barcode scans. Search for the item by name or SKU there.
+
+When scanning, Fintranzact looks for the code in this order: the item's or variant's main barcode, then extra and pack codes, then the item's SKU.
+
+## Frequently asked questions
+
+**My products already have barcodes from the manufacturer. Can I use them?**
+Yes. Scan them into each item's **Barcode** field. If you also want your own code or a carton code on the same item, choose **Many barcodes per item** before locking.
+
+**I locked the wrong barcode type. Can it be changed?**
+No. The lock is permanent, and the barcode type, barcodes-per-item choice and label size can't be changed from the app afterwards.
+
+**Does creating a GRN give items a barcode automatically?**
+No. Automatic codes are created only when a purchase invoice is saved, with **Create a code for items that don't have one** switched on.
+
+**Is the MRP printed on the label?**
+No. Labels show the barcode, and optionally the product name and sale price.

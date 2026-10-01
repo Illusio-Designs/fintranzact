@@ -1,6 +1,9 @@
-import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, asc, desc, inArray, isNull } from "drizzle-orm";
+import { documentIsIntraState, saveAllocatedLines, withAllocatedLines } from "../lib/document-totals.js";
 import { z } from "zod";
-import { recordStockMovement, resolveInvoiceWarehouse, reverseInvoiceStock } from "../lib/inventory-service.js";
+import { documentStockDirection, getDocumentWarehouseId, getDefaultWarehouse, resolveDocumentWarehouseId, resolveInvoiceWarehouse, syncDocumentStock } from "../lib/inventory-service.js";
+import { resolveLineBatches } from "../lib/batches.js";
+import { lineBatchDetails } from "../lib/batch-display.js";
 import {
   invoices,
   invoiceItems,
@@ -8,14 +11,18 @@ import {
   itemVariants,
   businesses,
   parties,
+  payments,
+  paymentAllocations,
   shipments,
   itcLedgerEntries,
   eInvoiceConfigs,
 } from "@fintranzact/db";
-import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
+import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, documentTypes, invoiceChargeSchema, invoiceLineItemSchema, deliveryMethodSchema, calcLineItem, calcInvoiceTotals, isIntraStateSupply, istReturnPeriod, money, splitIntraStateTax } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
+import { assertNotLockedByGovernment, getGovernmentLock } from "../lib/government-lock.js";
+import { assertInBusiness } from "../lib/business-scope.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
@@ -23,6 +30,65 @@ import { IRPClient, IRPError } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { ensureBarcodeForStock } from "../lib/barcode-setup.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
+import { assertLineExtras, lineExtras } from "../lib/line-extras.js";
+import { resolveDeliveryMethod } from "../lib/delivery-methods.js";
+import { recomputeInvoiceStatus, recomputeReferencedInvoice } from "../lib/invoice-status.js";
+import { syncReversingItc } from "../lib/itc-reversal.js";
+
+/**
+ * Keep a purchase invoice's live ITC entry equal to the invoice after an edit:
+ * the claim is its tax, split CGST+SGST for a supplier in the business's
+ * state and IGST otherwise, in the invoice's month. Mirrors the entry
+ * invoice.create writes. Reversed/utilised entries are history and left alone.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function syncPurchaseItc(tx: any, businessId: string, invoiceId: string) {
+  const [inv] = await tx.select({
+    type: invoices.type,
+    documentType: invoices.documentType,
+    taxAmount: invoices.taxAmount,
+    invoiceDate: invoices.invoiceDate,
+    isReverseCharge: invoices.isReverseCharge,
+    partyStateCode: parties.stateCode,
+    partyState: parties.state,
+    partyGstin: parties.gstin,
+  }).from(invoices)
+    .innerJoin(parties, eq(parties.id, invoices.partyId))
+    .where(and(eq(invoices.id, invoiceId), eq(invoices.businessId, businessId)))
+    .limit(1);
+  if (!inv || inv.type !== "purchase" || inv.documentType !== "invoice") return;
+
+  const [biz] = await tx.select({
+    gstRegistrationType: businesses.gstRegistrationType,
+    stateCode: businesses.stateCode,
+    state: businesses.state,
+    gstin: businesses.gstin,
+  }).from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  if (biz?.gstRegistrationType === "composition") return;
+
+  // Same place-of-supply and CGST/SGST rules as invoice.create (shared).
+  const sameState = isIntraStateSupply(biz ?? {}, { stateCode: inv.partyStateCode, state: inv.partyState, gstin: inv.partyGstin });
+  const taxPaise = Math.round(parseFloat(inv.taxAmount) * 100);
+  const intra = splitIntraStateTax(inv.taxAmount);
+  const split = sameState
+    ? { cgst: intra.cgst.toFixed(2), sgst: intra.sgst.toFixed(2), igst: "0" }
+    : { cgst: "0", sgst: "0", igst: money.add(inv.taxAmount, 0) };
+  const returnPeriod = istReturnPeriod(inv.invoiceDate);
+
+  const live = await tx.update(itcLedgerEntries)
+    .set({ ...split, returnPeriod, isReverseCharge: inv.isReverseCharge, updatedAt: new Date() })
+    .where(and(
+      eq(itcLedgerEntries.invoiceId, invoiceId),
+      eq(itcLedgerEntries.businessId, businessId),
+      inArray(itcLedgerEntries.status, ["available", "blocked"]),
+    ))
+    .returning({ id: itcLedgerEntries.id });
+  if (live.length === 0 && taxPaise > 0) {
+    await tx.insert(itcLedgerEntries).values({
+      businessId, invoiceId, returnPeriod, status: "available", ...split, cess: "0", isReverseCharge: inv.isReverseCharge,
+    });
+  }
+}
 
 export const invoiceRouter = router({
   list: viewerProcedure
@@ -187,9 +253,11 @@ export const invoiceRouter = router({
         }
       }
 
+      const batchDetails = await lineBatchDetails(ctx.db, ctx.businessId, lineItems);
       const lineItemsWithUnit = lineItems.map(li => ({
         ...li,
         itemUnit: li.itemId ? (itemUnitMap.get(li.itemId) ?? null) : null,
+        batch: li.batchId ? batchDetails.get(li.batchId) ?? null : null,
       }));
 
       // Fetch child documents (CN/SR) that reference this invoice
@@ -220,7 +288,11 @@ export const invoiceRouter = router({
         ? "adjusted"
         : invoice.status;
 
-      return { ...invoice, status: effectiveStatus, lineItems: lineItemsWithUnit, party: party ?? null, relatedDocuments: relatedDocs, totalAdjusted };
+      // Saved choice first; older documents only show it in their movements.
+      const warehouseId = invoice.warehouseId ?? await getDocumentWarehouseId(ctx.db, ctx.businessId, invoice);
+
+      const governmentLock = await getGovernmentLock(ctx.db, ctx.businessId, invoice.id);
+      return { ...invoice, status: effectiveStatus, lineItems: lineItemsWithUnit, party: party ?? null, relatedDocuments: relatedDocs, totalAdjusted, warehouseId, governmentLock };
     }),
 
   create: memberProcedure.input(createInvoiceSchema).mutation(async ({ input, ctx }) => {
@@ -229,13 +301,16 @@ export const invoiceRouter = router({
       // Security: validate that the partyId belongs to the current business before
       // creating the invoice. Without this check an attacker could associate an
       // invoice with a party from a different business within the same tenant.
-      const [partyCheck] = await tx.select({ id: parties.id, stateCode: parties.stateCode })
+      const [partyCheck] = await tx.select({ id: parties.id, stateCode: parties.stateCode, state: parties.state, gstin: parties.gstin })
         .from(parties)
         .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
         .limit(1);
       if (!partyCheck) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Party not found in this business" });
       }
+      // Stored references must be this business's documents.
+      await assertInBusiness(tx, invoices, input.referenceDocumentId, ctx.businessId, "Referenced document");
+      await assertInBusiness(tx, shipments, (input.charges ?? []).map((c) => c.shipmentId), ctx.businessId, "Shipment");
 
       // Composition scheme: block inter-state sale invoices.
       // Composition dealers may only make intra-state outward supplies (GST rule).
@@ -243,10 +318,12 @@ export const invoiceRouter = router({
         const [biz] = await tx.select({
           gstRegistrationType: businesses.gstRegistrationType,
           stateCode: businesses.stateCode,
+          state: businesses.state,
+          gstin: businesses.gstin,
         }).from(businesses).where(eq(businesses.id, ctx.businessId)).limit(1);
 
         if (biz?.gstRegistrationType === "composition") {
-          if (partyCheck.stateCode && biz.stateCode && partyCheck.stateCode !== biz.stateCode) {
+          if (!isIntraStateSupply(biz, partyCheck)) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: "Composition scheme businesses cannot make inter-state outward supplies",
@@ -341,13 +418,42 @@ export const invoiceRouter = router({
         .set({ nextInvoiceNumber: biz.nextNum + 1 })
         .where(eq(businesses.id, ctx.businessId));
 
+      assertLineExtras("invoice", input.lineItems);
+      // Check a picked warehouse before anything reads stock in it.
+      if (input.warehouseId && !input.skipStockAdjustment) {
+        await resolveInvoiceWarehouse(tx, {
+          businessId: ctx.businessId,
+          operation: input.type === "sale" ? "sale" : "purchase",
+          warehouseId: input.warehouseId,
+        });
+      }
+
+      // Lines of batch-tracked items get their batch: created or picked on a
+      // purchase, first-expiry-first-out on a sale. A sale line may split
+      // into one line per batch.
+      const stockDoc = { documentType: "invoice", type: input.type, warehouseId: input.warehouseId ?? null };
+      const invoiceDate = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
+      const lineItems = await resolveLineBatches(tx, {
+        businessId: ctx.businessId,
+        lines: input.lineItems,
+        direction: input.skipStockAdjustment ? 0 : documentStockDirection(stockDoc),
+        warehouseId: input.skipStockAdjustment
+          ? null
+          : await resolveDocumentWarehouseId(tx, { businessId: ctx.businessId, doc: stockDoc }),
+        documentDate: invoiceDate,
+        strict: true,
+      });
+
+      // Intra-state: CGST and SGST are each rounded at half the rate.
+      const intraState = await documentIsIntraState(tx, ctx.businessId, partyCheck);
       // Calculate line item totals using fixed-point arithmetic
-      const processedItems = input.lineItems.map((li, idx) => {
+      const processedItems = lineItems.map((li, idx) => {
         const calc = calcLineItem({
           quantity: li.quantity,
           unitPrice: li.unitPrice,
           taxPercent: li.taxPercent || "0",
           discountPercent: li.discountPercent || "0",
+          intraState,
         });
         return {
           itemId: li.itemId || null,
@@ -363,35 +469,33 @@ export const invoiceRouter = router({
           selectedUnit: li.selectedUnit || null,
           conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
           variantId: li.variantId || null,
+          ...lineExtras(li),
+          batchId: li.batchId,
         };
       });
 
       const charges = input.charges ?? [];
+      // A flat additionalCharges (no itemised charges) is part of the total too —
+      // it used to be stored but left out of totalAmount.
+      const flatCharges = charges.length > 0 ? charges : [{ amount: input.additionalCharges || "0" }];
       const totals = calcInvoiceTotals({
-        lineItems: input.lineItems.map((li) => ({
+        lineItems: lineItems.map((li) => ({
           quantity: li.quantity,
           unitPrice: li.unitPrice,
           taxPercent: li.taxPercent || "0",
           discountPercent: li.discountPercent || "0",
         })),
-        charges: charges.length > 0 ? charges : undefined,
+        charges: flatCharges,
         invoiceDiscount: input.invoiceDiscount || "0",
         invoiceDiscountType: input.invoiceDiscountType || "amount",
         roundOff: input.roundOff || "0",
+        intraState,
       });
-      const additionalCharges = charges.length > 0
-        ? totals.chargesTotal
-        : (input.additionalCharges || "0");
+      const additionalCharges = totals.chargesTotal;
       const roundOff = input.roundOff || "0";
 
-      // Check a picked warehouse before the invoice row references it.
-      if (input.warehouseId && !input.skipStockAdjustment) {
-        await resolveInvoiceWarehouse(tx, {
-          businessId: ctx.businessId,
-          operation: input.type === "sale" ? "sale" : "purchase",
-          warehouseId: input.warehouseId,
-        });
-      }
+      // A built-in delivery method, or one of the business's own.
+      const deliveryMethod = await resolveDeliveryMethod(tx, ctx.businessId, input.deliveryMethod || "self_pickup");
 
       const [invoice] = await tx.insert(invoices).values({
         businessId: ctx.businessId,
@@ -399,7 +503,8 @@ export const invoiceRouter = router({
         type: input.type,
         documentType: "invoice",
         invoiceNumber,
-        invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
+        supplierInvoiceNumber: input.type === "purchase" ? input.supplierInvoiceNumber || null : null,
+        invoiceDate,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         subtotal: totals.subtotal,
         taxAmount: totals.taxTotal,
@@ -412,81 +517,40 @@ export const invoiceRouter = router({
         termsAndConditions: input.termsAndConditions,
         referenceDocumentId: input.referenceDocumentId || null,
         warehouseId: input.skipStockAdjustment ? null : input.warehouseId ?? null,
-        deliveryMethod: input.deliveryMethod || "self_pickup",
+        deliveryMethod,
         isReverseCharge: input.isReverseCharge ?? false,
         source: input.source ?? null,
+        stockMode: input.skipStockAdjustment ? "none" : "tracked",
         createdByUserId: ctx.user!.id,
         createdByName: ctx.user!.name,
       }).returning();
 
       if (processedItems.length > 0) {
         await tx.insert(invoiceItems).values(
-          processedItems.map((li) => ({ ...li, invoiceId: invoice.id }))
+          withAllocatedLines(processedItems, totals.lines).map((li) => ({ ...li, invoiceId: invoice.id }))
         );
       }
 
-      // Record inventory movement for sale/purchase invoices.
-      // Skip when skipStockAdjustment is set — used when converting from
-      // delivery_challan (which already decremented stock) to avoid double-counting.
-      if (!input.skipStockAdjustment) {
-        const operation = input.type === "sale" ? "sale" : "purchase";
-        const movementType = input.type === "sale" ? "SALE" : "PURCHASE";
+      // Record inventory movement for sale/purchase invoices. An invoice billed
+      // against a delivery challan (skipStockAdjustment) is stored with stock
+      // mode "none": the challan already moved the goods.
+      await syncDocumentStock(tx, {
+        businessId: ctx.businessId,
+        documentId: invoice.id,
+        event: "CREATE",
+        enforceStock: true,
+        actorUserId: ctx.user!.id,
+      });
 
-        const warehouse = await resolveInvoiceWarehouse(tx, {
-          businessId: ctx.businessId,
-          operation,
-          warehouseId: input.warehouseId,
-        });
-
+      // Goods receipt is the moment stock becomes something you put on a
+      // shelf, so anything arriving without a scannable code gets an
+      // in-store one now — ready to label straight off the purchase.
+      // Sales never mint codes: selling an unbarcoded item is not a
+      // reason to relabel it.
+      if (input.type === "purchase" && !input.skipStockAdjustment) {
         for (const li of input.lineItems) {
-          if (!li.itemId && !li.variantId) {
-            continue;
-          }
-
-          const itemId =
-            li.itemId ||
-            (li.variantId ? variantItemMap.get(li.variantId) : null);
-
-          if (!itemId) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Inventory item could not be resolved for invoice line",
-            });
-          }
-
-          const cf = li.conversionFactor || "1";
-
-          const signedQuantity = li.variantId
-            ? input.type === "sale"
-              ? `-${li.quantity}`
-              : li.quantity
-            : sql<string>`
-              (
-                ${input.type === "sale" ? sql`-` : sql``}
-                ${li.quantity}::numeric * ${cf}::numeric
-              )
-            `;
-
-          await recordStockMovement(tx, {
-            businessId: ctx.businessId,
-            warehouseId: warehouse.id,
-            itemId,
-            variantId: li.variantId || null,
-            referenceType: "INVOICE",
-            referenceId: invoice.id,
-            movementType,
-            quantity: signedQuantity,
-            actorUserId: ctx.user!.id,
-          });
-
-          // Goods receipt is the moment stock becomes something you put on a
-          // shelf, so anything arriving without a scannable code gets an
-          // in-store one now — ready to label straight off the purchase.
-          // Sales never mint codes: selling an unbarcoded item is not a
-          // reason to relabel it.
-          if (input.type === "purchase") {
-            await ensureBarcodeForStock(tx, ctx.businessId, itemId, li.variantId || null);
-          }
+          const itemId = li.itemId || (li.variantId ? variantItemMap.get(li.variantId) : null);
+          if (itemId) await ensureBarcodeForStock(tx, ctx.businessId, itemId, li.variantId || null);
         }
       }
 
@@ -504,7 +568,7 @@ export const invoiceRouter = router({
             businessId: ctx.businessId,
             invoiceId: invoice.id,
             partyId: input.partyId,
-            mode: input.deliveryMethod === "self_pickup" ? "hand_delivery" : (input.deliveryMethod || "hand_delivery"),
+            mode: deliveryMethod === "self_pickup" ? "hand_delivery" : deliveryMethod,
             cost: shippingCharge.amount,
             status: "pending",
           }).returning();
@@ -527,27 +591,29 @@ export const invoiceRouter = router({
         const [bizForItc] = await tx.select({
           gstRegistrationType: businesses.gstRegistrationType,
           stateCode: businesses.stateCode,
+          state: businesses.state,
+          gstin: businesses.gstin,
         }).from(businesses).where(eq(businesses.id, ctx.businessId)).limit(1);
 
         if (bizForItc?.gstRegistrationType !== "composition") {
           const invoiceDate = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
-          const returnPeriod = `${invoiceDate.getFullYear()}-${String(invoiceDate.getMonth() + 1).padStart(2, "0")}`;
+          // The return month the invoice falls in, by the calendar in India
+          const returnPeriod = istReturnPeriod(invoiceDate);
 
-          const sameState = !!(bizForItc?.stateCode && partyCheck.stateCode && bizForItc.stateCode === partyCheck.stateCode);
+          // Shared place-of-supply rule (unknown supplier state → intra-state)
+          const sameState = isIntraStateSupply(bizForItc ?? {}, partyCheck);
 
-          // Use integer paise arithmetic to avoid floating-point rounding errors
-          const taxPaise = Math.round(parseFloat(totals.taxTotal) * 100);
+          // CGST = half rounded to the paisa, SGST = the rest (shared rule)
           let cgst = "0";
           let sgst = "0";
           let igst = "0";
 
           if (sameState) {
-            const halfPaise = Math.floor(taxPaise / 2);
-            const remainderPaise = taxPaise - halfPaise;
-            cgst = (halfPaise / 100).toFixed(2);
-            sgst = (remainderPaise / 100).toFixed(2);
+            const split = splitIntraStateTax(totals.taxTotal);
+            cgst = split.cgst.toFixed(2);
+            sgst = split.sgst.toFixed(2);
           } else {
-            igst = (taxPaise / 100).toFixed(2);
+            igst = money.add(totals.taxTotal, 0);
           }
 
           await tx.insert(itcLedgerEntries).values({
@@ -610,7 +676,8 @@ export const invoiceRouter = router({
           if (!inv) return;
 
           const [party] = await db.select().from(parties).where(eq(parties.id, inv.partyId)).limit(1);
-          if (!party?.gstin) return; // B2C — skip
+          // B2C — skip. Exports to overseas buyers (no GSTIN) are e-invoiced.
+          if (!party || (!party.gstin && party.gstRegistrationType !== "overseas")) return;
 
           const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
           if (!biz) return;
@@ -624,6 +691,7 @@ export const invoiceRouter = router({
               itemName: invoiceItems.itemName,
               description: invoiceItems.description,
               quantity: invoiceItems.quantity,
+              freeQuantity: invoiceItems.freeQuantity,
               unitPrice: invoiceItems.unitPrice,
               taxPercent: invoiceItems.taxPercent,
               taxAmount: invoiceItems.taxAmount,
@@ -662,6 +730,7 @@ export const invoiceRouter = router({
               itemName: li.itemName,
               description: li.description,
               quantity: li.quantity,
+              freeQuantity: li.freeQuantity,
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent,
               taxAmount: li.taxAmount,
@@ -681,6 +750,7 @@ export const invoiceRouter = router({
               pincode: party.pincode,
               phone: party.phone,
               email: party.email,
+              gstRegistrationType: party.gstRegistrationType,
             },
             {
               gstin: biz.gstin,
@@ -740,6 +810,7 @@ export const invoiceRouter = router({
   lastDeliveryMethod: viewerProcedure
     .input(z.object({ partyId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Invoice");
       const [row] = await ctx.db.select({ deliveryMethod: invoices.deliveryMethod })
         .from(invoices)
         .where(and(
@@ -747,6 +818,7 @@ export const invoiceRouter = router({
           eq(invoices.partyId, input.partyId),
           eq(invoices.type, "sale"),
           eq(invoices.documentType, "invoice"),
+          isNull(invoices.deletedAt),
         ))
         .orderBy(desc(invoices.invoiceDate))
         .limit(1);
@@ -757,20 +829,43 @@ export const invoiceRouter = router({
     .input(z.object({ id: z.string().uuid(), ...updateInvoiceStatusSchema.shape }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Invoice");
+      if (input.status === "cancelled") {
+        await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "cancel");
+      }
       // Fetch current status before the update for audit metadata
       const [before] = await ctx.db.select({ status: invoices.status })
         .from(invoices)
         .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
         .limit(1);
 
-      const [invoice] = await ctx.db.update(invoices)
-        .set({ status: input.status, updatedAt: new Date() })
-        .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
-        .returning();
+      const invoice = await ctx.db.transaction(async (tx) => {
+        const [updated] = await tx.update(invoices)
+          .set({ status: input.status, updatedAt: new Date() })
+          .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
+          .returning();
 
-      if (!invoice) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" });
-      }
+        if (!updated) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" });
+        }
+
+        // A cancelled invoice gives its stock back; reinstating it takes the
+        // stock out again.
+        const wasCancelled = before?.status === "cancelled";
+        const isCancelled = input.status === "cancelled";
+        if (wasCancelled !== isCancelled) {
+          await syncDocumentStock(tx, {
+            businessId: ctx.businessId,
+            documentId: input.id,
+            event: isCancelled ? "CANCEL" : "REINSTATE",
+            enforceStock: !isCancelled,
+            actorUserId: ctx.user!.id,
+          });
+          // A cancelled or reinstated note or return changes what settles its invoice.
+          await recomputeReferencedInvoice(tx, ctx.businessId, updated);
+          await syncReversingItc(tx, ctx.businessId, input.id);
+        }
+        return updated;
+      });
 
       // Auto-reverse ITC when a purchase invoice is cancelled
       if (input.status === "cancelled" && invoice.type === "purchase" && invoice.documentType === "invoice") {
@@ -802,6 +897,8 @@ export const invoiceRouter = router({
       partyId: z.string().uuid().optional(),
       invoiceDate: z.string().datetime().optional(),
       dueDate: z.string().datetime().optional().nullable(),
+      /** Purchase invoices: the supplier's bill number (null clears it). */
+      supplierInvoiceNumber: z.string().trim().max(50).optional().nullable(),
       notes: z.string().max(2000).optional().nullable(),
       termsAndConditions: z.string().max(2000).optional().nullable(),
       charges: z.array(invoiceChargeSchema).optional(),
@@ -810,9 +907,17 @@ export const invoiceRouter = router({
       roundOff: z.string().regex(/^-?\d+(\.\d{1,2})?$/).optional(),
       lineItems: z.array(invoiceLineItemSchema).min(1).optional(),
       warehouseId: z.string().uuid().nullish(),
+      /** A built-in delivery method or one from Settings → Shipping. */
+      deliveryMethod: deliveryMethodSchema.optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Invoice");
+      // Owner decision: sellers create documents but never edit them; a
+      // manager or admin makes corrections.
+      if (ctx.role === "seller") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sellers can't edit invoices. Ask a sales manager or admin to make the change." });
+      }
+      await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "edit");
       const updated = await ctx.db.transaction(async (tx) => {
         // 1. Fetch existing invoice
         const [existing] = await tx.select()
@@ -871,12 +976,48 @@ export const invoiceRouter = router({
 
         // 2. Build update payload
         const updates: Record<string, any> = { updatedAt: new Date() };
+        // Intra-state (with the party the invoice will have): CGST and SGST
+        // are each rounded at half the rate.
+        const partyChanged = !!input.partyId && input.partyId !== existing.partyId;
+        const intraState = await documentIsIntraState(tx, ctx.businessId, input.partyId ?? existing.partyId);
 
+        if (input.partyId && input.partyId !== existing.partyId) {
+          // Payments and credit notes/returns were made by (or to) the old
+          // party; moving the invoice would leave them pointing at someone
+          // else's bill. Same rule as editing a paid invoice.
+          const [paid] = await tx.select({ id: paymentAllocations.id })
+            .from(paymentAllocations)
+            .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
+            .where(and(eq(paymentAllocations.invoiceId, input.id), isNull(payments.deletedAt)))
+            .limit(1);
+          const [adjusted] = await tx.select({ id: invoices.id })
+            .from(invoices)
+            .where(and(
+              eq(invoices.referenceDocumentId, input.id),
+              isNull(invoices.deletedAt),
+              sql`${invoices.status} <> 'cancelled'`,
+            ))
+            .limit(1);
+          if (paid || adjusted) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "This invoice has payments or documents made against it. Remove them before changing the party." });
+          }
+          // A shipment goes to the invoice's party.
+          await tx.update(shipments).set({ partyId: input.partyId, updatedAt: new Date() })
+            .where(and(eq(shipments.invoiceId, input.id), eq(shipments.businessId, ctx.businessId)));
+        }
         if (input.partyId) updates.partyId = input.partyId;
         if (input.invoiceDate) updates.invoiceDate = new Date(input.invoiceDate);
         if (input.dueDate !== undefined) updates.dueDate = input.dueDate ? new Date(input.dueDate) : null;
         if (input.notes !== undefined) updates.notes = input.notes;
         if (input.termsAndConditions !== undefined) updates.termsAndConditions = input.termsAndConditions;
+        if (input.supplierInvoiceNumber !== undefined && existing.type === "purchase") {
+          updates.supplierInvoiceNumber = input.supplierInvoiceNumber || null;
+        }
+        // Keeping the saved method is always fine, even one since removed
+        // from Settings → Shipping; a change must be one the business offers.
+        if (input.deliveryMethod !== undefined && input.deliveryMethod !== existing.deliveryMethod) {
+          updates.deliveryMethod = await resolveDeliveryMethod(tx, ctx.businessId, input.deliveryMethod);
+        }
 
         // 3. Handle charges — preserve shipment-linked entries that should not be
         // directly edited by the user (they are managed via shipment mutations).
@@ -902,28 +1043,49 @@ export const invoiceRouter = router({
         }
 
         // 4. Handle line items — delete old, insert new, recalculate totals
+        let lineItems: typeof input.lineItems = input.lineItems;
         if (input.lineItems) {
 
-          // Step 2: Undo this invoice's current stock effect before applying the
-          // new lines. Nets all earlier movements, so repeated edits are safe.
-          await reverseInvoiceStock(tx, {
+          assertLineExtras(existing.documentType, input.lineItems);
+          // Batches for the new lines, counting what this invoice already
+          // holds as available again.
+          const newWarehouseId = input.warehouseId !== undefined
+            ? input.warehouseId ?? (await getDefaultWarehouse(tx, {
+                businessId: ctx.businessId,
+                operation: existing.type === "sale" ? "sale" : "purchase",
+              })).id
+            : undefined;
+          if (input.warehouseId) {
+            await resolveInvoiceWarehouse(tx, {
+              businessId: ctx.businessId,
+              operation: existing.type === "sale" ? "sale" : "purchase",
+              warehouseId: input.warehouseId,
+            });
+          }
+          const moves = existing.stockMode !== "none";
+          lineItems = await resolveLineBatches(tx, {
             businessId: ctx.businessId,
-            invoiceId: input.id,
-            invoiceType: existing.type,
-            referenceType: "INVOICE_UPDATE_REVERSAL",
-            actorUserId: ctx.user!.id,
+            lines: input.lineItems,
+            direction: moves ? documentStockDirection(existing) : 0,
+            warehouseId: moves
+              ? await resolveDocumentWarehouseId(tx, { businessId: ctx.businessId, doc: existing, warehouseId: newWarehouseId })
+              : null,
+            documentDate: input.invoiceDate ? new Date(input.invoiceDate) : existing.invoiceDate,
+            documentId: existing.id,
+            strict: true,
           });
 
           // Step 3: Delete existing line items
           await tx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, input.id));
 
           // Step 4: Process and insert new line items using fixed-point arithmetic
-          const processedItems = input.lineItems.map((li, idx) => {
+          const processedItems = lineItems.map((li, idx) => {
             const calc = calcLineItem({
               quantity: li.quantity,
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent || "0",
               discountPercent: li.discountPercent || "0",
+              intraState: intraState,
             });
             return {
               invoiceId: input.id,
@@ -940,6 +1102,8 @@ export const invoiceRouter = router({
               selectedUnit: li.selectedUnit || null,
               conversionFactor: li.variantId ? "1" : (li.conversionFactor || "1"),
               variantId: li.variantId || null,
+              ...lineExtras(li),
+              batchId: li.batchId,
             };
           });
 
@@ -947,88 +1111,95 @@ export const invoiceRouter = router({
             await tx.insert(invoiceItems).values(processedItems);
           }
 
-          // Step 5: Record new inventory movements.
-          const operation = existing.type === "sale" ? "sale" : "purchase";
-          const movementType = existing.type === "sale" ? "SALE" : "PURCHASE";
-
-          const warehouse = await resolveInvoiceWarehouse(tx, {
+          // Step 5: Post only the change in stock against the new lines.
+          await syncDocumentStock(tx, {
             businessId: ctx.businessId,
-            operation,
-            warehouseId: input.warehouseId !== undefined ? input.warehouseId : existing.warehouseId,
+            documentId: input.id,
+            event: "UPDATE",
+            // null picks the business default again.
+            warehouseId: newWarehouseId,
+            enforceStock: true,
+            actorUserId: ctx.user!.id,
           });
           if (input.warehouseId !== undefined) updates.warehouseId = input.warehouseId ?? null;
+        }
 
-          for (const li of input.lineItems) {
-            if (!li.itemId && !li.variantId) continue;
+        // Recalculate totals whenever anything they're made of changes — the
+        // lines, or just the charges, discount or round-off — so the saved
+        // total always matches its parts.
+        if (
+          input.lineItems ||
+          input.charges !== undefined ||
+          input.invoiceDiscount !== undefined ||
+          input.roundOff !== undefined ||
+          // Another party may move the supply between intra- and inter-state.
+          partyChanged
+        ) {
+          const linesForTotals = lineItems ?? await tx
+            .select({
+              quantity: invoiceItems.quantity,
+              unitPrice: invoiceItems.unitPrice,
+              taxPercent: invoiceItems.taxPercent,
+              discountPercent: invoiceItems.discountPercent,
+            })
+            .from(invoiceItems)
+            .where(eq(invoiceItems.invoiceId, input.id))
+            .orderBy(asc(invoiceItems.sortOrder), asc(invoiceItems.id));
 
-            const itemId = li.itemId;
-
-            if (!itemId) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Inventory item could not be resolved for invoice line",
-              });
-            }
-
-            const cf = li.conversionFactor || "1";
-
-            const signedQuantity = li.variantId
-              ? existing.type === "sale"
-                ? `-${li.quantity}`
-                : li.quantity
-              : sql<string>`
-        (
-          ${existing.type === "sale" ? sql`-` : sql``}
-          ${li.quantity}::numeric * ${cf}::numeric
-        )
-      `;
-
-            await recordStockMovement(tx, {
-              businessId: ctx.businessId,
-              warehouseId: warehouse.id,
-              itemId,
-              variantId: li.variantId || null,
-              referenceType: "INVOICE_UPDATE",
-              referenceId: input.id,
-              movementType,
-              quantity: signedQuantity,
-              actorUserId: ctx.user!.id,
-            });
-          }
-
-
-
-          // Recalculate totals using fixed-point arithmetic.
           // Use merged charges (updates.charges) if charges were modified; otherwise
           // fall back to existing charges. This ensures shipment-linked charge entries
           // are included in the total even when the user didn't touch charges.
-          const chargesForTotals = updates.charges !== undefined
+          const itemisedCharges = updates.charges !== undefined
             ? (updates.charges as Array<{ amount: string }> | null) ?? []
             : (existing.charges as Array<{ amount: string }> | null) ?? [];
+          // An invoice with a flat additionalCharges and no itemised charges
+          // keeps counting it, as it did when it was created.
+          const chargesForTotals = itemisedCharges.length > 0 || updates.charges !== undefined
+            ? itemisedCharges
+            : [{ amount: existing.additionalCharges ?? "0" }];
           const roundOffStr = input.roundOff !== undefined ? input.roundOff : existing.roundOff;
+          // A stored discount is always an amount; a new one may be a percent.
           const totals = calcInvoiceTotals({
-            lineItems: input.lineItems.map((li) => ({
+            lineItems: linesForTotals.map((li) => ({
               quantity: li.quantity,
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent || "0",
               discountPercent: li.discountPercent || "0",
             })),
             charges: chargesForTotals.length > 0 ? chargesForTotals : undefined,
-            invoiceDiscount: input.invoiceDiscount || existing.discountAmount || "0",
-            invoiceDiscountType: input.invoiceDiscountType || "amount",
+            invoiceDiscount: input.invoiceDiscount ?? existing.discountAmount ?? "0",
+            invoiceDiscountType: input.invoiceDiscount !== undefined ? input.invoiceDiscountType || "amount" : "amount",
             roundOff: roundOffStr,
+            intraState: intraState,
           });
 
           updates.subtotal = totals.subtotal;
           updates.taxAmount = totals.taxTotal;
           updates.discountAmount = totals.invoiceDiscountAmount;
           updates.totalAmount = totals.total;
+          // The document discount is shared over the lines, so their tax moves with it.
+          await saveAllocatedLines(tx, input.id, totals.lines);
         }
 
         // 5. Apply update
         const [result] = await tx.update(invoices).set(updates).where(eq(invoices.id, input.id)).returning();
+        // An edited return or note to a supplier takes back its new tax.
+        await syncReversingItc(tx, ctx.businessId, result.id);
 
+        // A new total changes how much of it is settled: for a note or return,
+        // on the invoice it adjusts; for an invoice, on itself.
+        if (updates.totalAmount !== undefined && updates.totalAmount !== existing.totalAmount) {
+          await recomputeReferencedInvoice(tx, ctx.businessId, result);
+          if (result.documentType === "invoice") {
+            const status = await recomputeInvoiceStatus(tx, ctx.businessId, result.id);
+            if (status) result.status = status;
+          }
+        }
 
+        // A purchase's input tax credit follows its tax, party and date.
+        if (existing.status !== "cancelled" && !existing.deletedAt && (input.lineItems || input.partyId || input.invoiceDate)) {
+          await syncPurchaseItc(tx, ctx.businessId, input.id);
+        }
 
         return result;
       });
@@ -1058,6 +1229,7 @@ export const invoiceRouter = router({
 
       if (!inv) return { success: true };
       if (inv.deletedAt) return { success: true }; // already soft-deleted
+      await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "delete");
 
       // seller_manager: can only delete unpaid invoices created within the last 2 hours
       if (ctx.role === "seller_manager") {
@@ -1072,13 +1244,6 @@ export const invoiceRouter = router({
 
       await ctx.db.transaction(async (tx) => {
 
-        await reverseInvoiceStock(tx, {
-          businessId: ctx.businessId,
-          invoiceId: input.id,
-          invoiceType: inv.type,
-          referenceType: "INVOICE_DELETE_REVERSAL",
-          actorUserId: ctx.user!.id,
-        });
 
         // Auto-reverse ITC when a purchase invoice is deleted
         if (inv.type === "purchase" && inv.documentType === "invoice") {
@@ -1095,6 +1260,20 @@ export const invoiceRouter = router({
         await tx.update(invoices)
           .set({ deletedAt: new Date(), status: "cancelled" as const, updatedAt: new Date() })
           .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)));
+
+        // A deleted invoice holds no stock.
+        await syncDocumentStock(tx, {
+          businessId: ctx.businessId,
+          documentId: input.id,
+          event: "DELETE",
+          actorUserId: ctx.user!.id,
+        });
+
+        // A deleted note or return no longer settles its invoice.
+        const [deleted] = await tx.select({ documentType: invoices.documentType, referenceDocumentId: invoices.referenceDocumentId })
+          .from(invoices).where(eq(invoices.id, input.id)).limit(1);
+        if (deleted) await recomputeReferencedInvoice(tx, ctx.businessId, deleted);
+        await syncReversingItc(tx, ctx.businessId, input.id);
       });
 
       await logAudit(ctx.db, {

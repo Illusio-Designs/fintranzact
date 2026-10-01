@@ -143,7 +143,7 @@ export async function ensureBusiness(api: ApiClient): Promise<SeededBusiness> {
     gstRegistrationType: "regular",
     gstin: "27AABCU9603R1ZM",
     phone: "9876500000",
-    email: "e2e@test.hisaabo.in",
+    email: "e2e@test.fintranzact.com",
     address: "123 Test Road",
     city: "Mumbai",
     state: "Maharashtra",
@@ -260,7 +260,10 @@ export async function createInvoice(
 }
 
 /**
- * Update an invoice's status via the API.
+ * Bring an invoice to a status via the API. "paid" and "partial" come from
+ * recording a payment (all of it / half of it), as the Payments screen does,
+ * so the seeded invoice has the amount paid its status claims — the Layer 4
+ * data audit that runs after the suite flags invoices marked paid by hand.
  */
 export async function updateInvoiceStatus(
   api: ApiClient,
@@ -268,11 +271,23 @@ export async function updateInvoiceStatus(
   invoiceId: string,
   status: string,
 ): Promise<void> {
-  await api.mutate(
-    "invoice.updateStatus",
-    { id: invoiceId, status },
-    { "x-business-id": businessId },
-  );
+  const headers = { "x-business-id": businessId };
+  if (status === "paid" || status === "partial") {
+    const inv = await api.query<{ partyId: string; totalAmount: string; amountPaid: string }>(
+      "invoice.getById",
+      { id: invoiceId },
+      headers,
+    );
+    const due = parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid || "0");
+    const amount = status === "paid" ? due : Math.round((due / 2) * 100) / 100;
+    await api.mutate(
+      "payment.create",
+      { partyId: inv.partyId, invoiceId, amount: amount.toFixed(2), mode: "cash" },
+      headers,
+    );
+    return;
+  }
+  await api.mutate("invoice.updateStatus", { id: invoiceId, status }, headers);
 }
 
 /**

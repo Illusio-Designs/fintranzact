@@ -2,13 +2,13 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
-import { secureHeaders } from "hono/secure-headers";
 import type { Context, Next } from "hono";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { eq, and, gt, lt, inArray, isNull, sql } from "drizzle-orm";
+import { eq, and, gt, lt, inArray, isNull, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 import { escapeLike } from "./lib/escape-like.js";
 import { buildBusinessDateFilter } from "./lib/business-date.js";
+import { documentIsIntraState } from "./lib/document-totals.js";
 import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import { Worker } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
@@ -18,21 +18,29 @@ import QRCode from "qrcode";
 import { appRouter } from "./router.js";
 import { createContext, getSessionIdFromRequest } from "./context.js";
 import type { InvoicePDFData } from "./lib/invoice-pdf.js";
+import { generateEwayBillPDF, type EwayBillPDFData } from "./lib/eway-bill-pdf.js";
+import { sampleInvoiceData } from "./lib/invoice-templates/sample.js";
 import { generateLedgerPDF } from "./lib/ledger-pdf.js";
 import { generateLabelSheetPDF, LABEL_PRESETS, TYPE_PRESET } from "./lib/label-pdf.js";
 import { asBarcodeType } from "./lib/barcode-setup.js";
+import { verifyBusinessAccess } from "./lib/business-membership.js";
 import { recordShareView, resolveShareToken } from "./lib/share-links.js";
-import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, tenantMembers, magicLinkTokens, bankAccounts, storeOrders, payments, assertMigrationsPresent } from "@fintranzact/db";
-import { calcLineItem, calcInvoiceTotals, money } from "@fintranzact/shared";
+import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, magicLinkTokens, bankAccounts, storeOrders, payments, ewayBills, ewayBillVehicleUpdates, assertMigrationsPresent } from "@fintranzact/db";
+import { calcLineItem, calcInvoiceTotals, money, parseCopies, isIntraStateSupply, formatIstDate, INVOICE_TEMPLATES, splitIntraStateTax, type InvoiceTemplate, type ThermalWidth } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
+import { seedPlatformAdmin } from "./lib/platform-admin.js";
 import { logger } from "./lib/logger.js";
+import { resolveDocumentWarehouseId, syncDocumentStock } from "./lib/inventory-service.js";
+import { resolveLineBatches } from "./lib/batches.js";
+import { lineBatchDetails } from "./lib/batch-display.js";
 import { validateEnv } from "./lib/env.js";
 import { createCsrfMiddleware } from "./lib/csrf-middleware.js";
 import { assertAllowedStoreOrigin } from "./lib/store-origin.js";
 import { registerExportRoute } from "./http/exportStream.js";
 import { registerImportRoute } from "./http/importStream.js";
 import { listPublicPlansJson } from "./lib/public-plans.js";
+import { apiSecureHeaders } from "./lib/security-headers.js";
 
 // ── Process crash handlers ────────────────────────────────────
 process.on("unhandledRejection", (reason) => {
@@ -60,7 +68,7 @@ function escapeHtml(str: string): string {
 const app = new Hono();
 
 // ── Security headers ───────────────────────────────────────────
-app.use("*", secureHeaders());
+app.use("*", ...apiSecureHeaders());
 
 // ── Request ID tracing ────────────────────────────────────────
 app.use("*", async (c: Context, next: Next) => {
@@ -101,7 +109,7 @@ const allowedOrigins = [
 app.use("*", cors({
   origin: allowedOrigins,
   credentials: true,
-  allowHeaders: ["Content-Type", "x-business-id", "Authorization", "X-Requested-With", "X-Fintranzact-Client", "X-Hisaabo-Client"],
+  allowHeaders: ["Content-Type", "x-business-id", "Authorization", "X-Requested-With", "X-Fintranzact-Client", "X-Fintranzact-Client"],
   allowMethods: ["GET", "POST", "OPTIONS"],
   maxAge: 86400,
 }));
@@ -203,7 +211,7 @@ setInterval(() => {
 
 // ── CSRF protection (non-tRPC routes) ─────────────────────────
 // State-changing requests authenticated via cookies must include the
-// `X-Requested-With: fintranzact` header (legacy `hisaabo` still accepted). This blocks cross-origin form
+// `X-Requested-With: fintranzact` header. This blocks cross-origin form
 // submissions and navigation-based CSRF attacks.
 //
 // Scope:
@@ -302,9 +310,9 @@ app.get("/pay/upi", async (c) => {
 });
 
 // Public plan catalogue (prices, features, enforced limits). Unlimited = null.
-app.get("/api/plans", (c) => {
-  c.header("Cache-Control", "public, max-age=300");
-  return c.json({ plans: listPublicPlansJson() });
+app.get("/api/plans", async (c) => {
+  c.header("Cache-Control", "public, max-age=60");
+  return c.json({ plans: await listPublicPlansJson() });
 });
 
 app.get("/health", async (c) => {
@@ -364,6 +372,17 @@ class Semaphore {
 
 const pdfSemaphore = new Semaphore(os.cpus().length);
 
+/** Collect a PDFKit document into a Buffer. */
+function pdfToBuffer(doc: { on: (e: string, cb: (chunk?: Buffer) => void) => void; end: () => void }): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    doc.on("data", (chunk) => chunks.push(chunk!));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject as (chunk?: Buffer) => void);
+    doc.end();
+  });
+}
+
 async function generatePDFInWorker(data: any, format: "a5" | "a4" | "thermal"): Promise<Buffer> {
   await pdfSemaphore.acquire();
   try {
@@ -398,36 +417,13 @@ async function generatePDFInWorker(data: any, format: "a5" | "a4" | "thermal"): 
   }
 }
 
-// ── Shared business access check for non-tRPC endpoints ─────────
-// Mirrors the hasBusinessAccess middleware in trpc.ts: verifies the business
-// exists in the tenant DB AND (for self-hosted shared-DB mode) that the
-// business creator is a member of the caller's tenant.
-async function verifyBusinessAccess(
-  db: Awaited<ReturnType<typeof getTenantDb>>,
-  businessId: string,
-  tenantId: string,
-): Promise<{ ok: true; business: { id: string; createdByUserId: string } } | { ok: false; error: string }> {
-  const [biz] = await db.select({ id: businesses.id, createdByUserId: businesses.createdByUserId })
-    .from(businesses).where(eq(businesses.id, businessId)).limit(1);
-  if (!biz) return { ok: false, error: "Business not found" };
-
-  // Self-hosted cross-tenant guard: verify the creator is a member of this tenant
-  const [creatorMembership] = await controlDb
-    .select({ userId: tenantMembers.userId })
-    .from(tenantMembers)
-    .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, biz.createdByUserId)))
-    .limit(1);
-  if (!creatorMembership) return { ok: false, error: "Business not found" };
-
-  return { ok: true, business: biz };
-}
-
 // ── PDF-specific rate limiting (per IP, 30/min) ──────────────
 const pdfRateMap = new Map<string, { count: number; reset: number }>();
 const PDF_RATE_LIMIT = 30; // per minute
 const PDF_RATE_WINDOW = 60_000;
 
 function checkPdfRateLimit(ip: string): boolean {
+  if (rateLimitDisabled) return true;
   const now = Date.now();
   const entry = pdfRateMap.get(ip);
   if (!entry || now > entry.reset) {
@@ -474,10 +470,26 @@ async function buildInvoicePdfData(
   // must not blank out HSN or unit on a previously-generated PDF.
   const itemIds = lineItems.map(li => li.itemId).filter(Boolean) as string[];
   const itemMeta = itemIds.length > 0
-    ? await db.select({ id: items.id, hsn: items.hsn, unit: items.unit }).from(items).where(inArray(items.id, itemIds))
+    ? await db.select({ id: items.id, hsn: items.hsn, unit: items.unit, mrp: items.mrp, itemType: items.itemType }).from(items).where(inArray(items.id, itemIds))
     : [];
+  // MRP per line: the variant's, else the item's, scaled to an alternate unit.
+  const variantIds = lineItems.map(li => li.variantId).filter(Boolean) as string[];
+  const variantMrp = new Map(
+    (variantIds.length > 0
+      ? await db.select({ id: itemVariants.id, mrp: itemVariants.mrp }).from(itemVariants).where(inArray(itemVariants.id, variantIds))
+      : []).map(v => [v.id, v.mrp]),
+  );
+  const itemMrp = new Map(itemMeta.map(i => [i.id, i.mrp]));
+  const lineMrp = (li: typeof lineItems[number]): string | null => {
+    const base = (li.variantId ? variantMrp.get(li.variantId) : null) ?? (li.itemId ? itemMrp.get(li.itemId) : null);
+    if (!base || invoice.type !== "sale") return null;
+    return money.mul(base, parseFloat(li.conversionFactor ?? "1") || 1);
+  };
   const hsnMap = new Map(itemMeta.map(i => [i.id, i.hsn || ""]));
   const itemUnitMap = new Map(itemMeta.map(i => [i.id, i.unit]));
+  // Batch and expiry of lines from batch-tracked items. A batch's own MRP
+  // wins over the item's.
+  const batchMap = await lineBatchDetails(db, businessId, lineItems);
 
   // Fetch bank accounts for payment info on invoice
   const bizBankAccounts = await db.select().from(bankAccounts)
@@ -533,6 +545,17 @@ async function buildInvoicePdfData(
       quantity: li.quantity,
       unit: li.selectedUnit || (li.itemId ? itemUnitMap.get(li.itemId) : undefined) || undefined,
       unitPrice: li.unitPrice,
+      mrp: (() => {
+        const batchMrp = li.batchId ? batchMap.get(li.batchId)?.mrp : null;
+        return batchMrp && invoice.type === "sale"
+          ? money.mul(batchMrp, parseFloat(li.conversionFactor ?? "1") || 1)
+          : lineMrp(li);
+      })(),
+      freeQuantity: li.freeQuantity,
+      rejectedQuantity: li.rejectedQuantity,
+      rejectionReason: li.rejectionReason,
+      batchNumber: li.batchId ? batchMap.get(li.batchId)?.batchNumber ?? null : null,
+      expiryDate: li.batchId ? batchMap.get(li.batchId)?.expiryDate ?? null : null,
       taxPercent: li.taxPercent,
       taxAmount: li.taxAmount,
       discountPercent: li.discountPercent,
@@ -541,6 +564,7 @@ async function buildInvoicePdfData(
     subtotal: invoice.subtotal,
     taxAmount: invoice.taxAmount,
     discountAmount: invoice.discountAmount,
+    additionalCharges: invoice.additionalCharges,
     totalAmount: invoice.totalAmount,
     amountPaid: invoice.amountPaid,
     notes: invoice.notes || undefined,
@@ -563,9 +587,107 @@ async function buildInvoicePdfData(
     // accepts either.
     logoBuffer: biz.logoData ?? undefined,
     signatureBuffer: biz.signatureData ?? undefined,
+    // Invoice designs (Settings → Documents → Invoice design)
+    documentType: invoice.documentType,
+    roundOff: invoice.roundOff,
+    isReverseCharge: invoice.isReverseCharge,
+    partyShippingAddress: party.shippingAddress || undefined,
+    partyPincode: party.pincode || undefined,
+    partyGstRegistrationType: party.gstRegistrationType || undefined,
+    businessLutArn: biz.lutArn || undefined,
+    businessIecCode: biz.iecCode || undefined,
+    businessCin: biz.cin || undefined,
+    businessLlpin: biz.llpin || undefined,
+    isServices: lineItems.length > 0 && lineItems.every((li) => {
+      const type = li.itemId ? itemMeta.find((m) => m.id === li.itemId)?.itemType : null;
+      return type === "service" || (!type && (hsnMap.get(li.itemId ?? "") ?? "").startsWith("99"));
+    }),
+    eInvoice: invoice.irn ? await eInvoicePrint(invoice) : undefined,
+    eWayBill: await liveEwayBill(db, businessId, invoiceId),
+    print: {
+      template: (INVOICE_TEMPLATES as readonly string[]).includes(biz.invoiceTemplate) ? biz.invoiceTemplate as InvoiceTemplate : "classic",
+      thermalWidth: biz.thermalWidth === 58 ? 58 : 80,
+    },
   };
 
   return { pdfData, invoice, party, biz, lineItems };
+}
+
+/** IRN, Ack and the IRP's signed QR for printing. */
+async function eInvoicePrint(invoice: typeof invoices.$inferSelect): Promise<InvoicePDFData["eInvoice"]> {
+  let qrDataUrl: string | undefined;
+  if (invoice.signedQrCode) {
+    try {
+      qrDataUrl = await QRCode.toDataURL(invoice.signedQrCode, { width: 260, margin: 1, errorCorrectionLevel: "L" });
+    } catch {
+      qrDataUrl = undefined; // an unreadable QR must not stop the invoice printing
+    }
+  }
+  return {
+    irn: invoice.irn!,
+    ackNumber: invoice.irnAckNumber || undefined,
+    ackDate: invoice.irnAckDate?.toISOString(),
+    qrDataUrl,
+  };
+}
+
+/** The invoice's live (generated or active) e-way bill, for the print. */
+async function liveEwayBill(db: Awaited<ReturnType<typeof getTenantDb>>, businessId: string, invoiceId: string): Promise<InvoicePDFData["eWayBill"]> {
+  const [ewb] = await db.select().from(ewayBills)
+    .where(and(eq(ewayBills.invoiceId, invoiceId), eq(ewayBills.businessId, businessId), inArray(ewayBills.status, ["generated", "active"])))
+    .orderBy(desc(ewayBills.createdAt))
+    .limit(1);
+  if (!ewb?.ewbNumber) return undefined;
+  return {
+    number: ewb.ewbNumber,
+    date: ewb.ewbDate?.toISOString(),
+    validUpto: ewb.validUpto?.toISOString(),
+    vehicleNumber: ewb.vehicleNumber || undefined,
+    transportMode: ewb.transportMode || undefined,
+    transporterName: ewb.transporterName || undefined,
+    transporterId: ewb.transporterId || undefined,
+    distance: ewb.distance ?? undefined,
+  };
+}
+
+/**
+ * The signed-in checks every PDF endpoint makes: a live session, an active
+ * organisation, and a business (x-business-id) the caller is a member of.
+ * Returns the tenant DB to read from, or the error response to send.
+ */
+async function authorizePdfRequest(c: Context): Promise<
+  | { ok: true; db: Awaited<ReturnType<typeof getTenantDb>>; businessId: string; plan: string }
+  | { ok: false; response: Response }
+> {
+  const fail = (body: { error: string }, status: 400 | 401 | 403) => ({ ok: false as const, response: c.json(body, status) });
+  const sessionId = getSessionIdFromRequest(c.req.raw);
+  if (!sessionId) return fail({ error: "Unauthorized" }, 401);
+  const [sessionRow] = await controlDb
+    .select({ userId: sessions.userId, tenantId: sessions.tenantId })
+    .from(sessions)
+    .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, new Date())))
+    .limit(1);
+  if (!sessionRow) return fail({ error: "Unauthorized" }, 401);
+  if (!sessionRow.tenantId) return fail({ error: "No organization selected" }, 400);
+  const [tenant] = await controlDb.select({ status: tenants.status, plan: tenants.plan })
+    .from(tenants).where(eq(tenants.id, sessionRow.tenantId)).limit(1);
+  if (!tenant || tenant.status !== "active") return fail({ error: "Organization suspended" }, 403);
+  const businessId = c.req.header("x-business-id");
+  if (!businessId) return fail({ error: "No business selected" }, 400);
+  const db = await getTenantDb(sessionRow.tenantId);
+  const access = await verifyBusinessAccess(db, businessId, sessionRow.tenantId, sessionRow.userId);
+  if (!access.ok) return fail({ error: access.error }, 403);
+  return { ok: true, db, businessId, plan: tenant.plan };
+}
+
+/** Print options from the query: copies=original,duplicate,triplicate and width=58|80. */
+function printOptionsFromQuery(c: Context, base: InvoicePDFData["print"]): InvoicePDFData["print"] {
+  const width = c.req.query("width");
+  return {
+    ...base,
+    copies: parseCopies(c.req.query("copies")),
+    ...(width === "58" || width === "80" ? { thermalWidth: Number(width) as ThermalWidth } : {}),
+  };
 }
 
 // ── PDF Download endpoint ──────────────────────────────────────
@@ -579,37 +701,15 @@ app.get("/api/invoices/:id/pdf", async (c) => {
   // Accept legacy "a5-landscape" param from older clients and remap to "a5"
   const format = (rawFormat === "a5-landscape" ? "a5" : rawFormat) as "a5" | "a4" | "thermal";
 
-  // Auth check — look up session in control DB
-  const sessionId = getSessionIdFromRequest(c.req.raw);
-  if (!sessionId) return c.json({ error: "Unauthorized" }, 401);
+  // Session, active organisation, and a business the caller belongs to.
+  const auth = await authorizePdfRequest(c);
+  if (!auth.ok) return auth.response;
+  const { db, businessId, plan } = auth;
 
-  const [sessionRow] = await controlDb
-    .select({ userId: sessions.userId, tenantId: sessions.tenantId })
-    .from(sessions)
-    .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, new Date())))
-    .limit(1);
-
-  if (!sessionRow) return c.json({ error: "Unauthorized" }, 401);
-  if (!sessionRow.tenantId) return c.json({ error: "No organization selected" }, 400);
-
-  // Verify tenant is active
-  const [tenant] = await controlDb.select({ status: tenants.status, plan: tenants.plan })
-    .from(tenants).where(eq(tenants.id, sessionRow.tenantId)).limit(1);
-  if (!tenant || tenant.status !== "active") return c.json({ error: "Organization suspended" }, 403);
-
-  const businessId = c.req.header("x-business-id");
-  if (!businessId) return c.json({ error: "No business selected" }, 400);
-
-  // Get tenant DB for invoice data
-  const db = await getTenantDb(sessionRow.tenantId);
-
-  // Verify the business exists and belongs to this tenant (cross-tenant guard)
-  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
-  if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
-
-  const built = await buildInvoicePdfData(db, businessId, invoiceId, new URL(c.req.url).origin, tenant.plan);
+  const built = await buildInvoicePdfData(db, businessId, invoiceId, new URL(c.req.url).origin, plan);
   if (!built) return c.json({ error: "Invoice not found" }, 404);
   const { pdfData, invoice } = built;
+  pdfData.print = printOptionsFromQuery(c, pdfData.print);
 
   const pdfBuffer = await generatePDFInWorker(pdfData, format);
   return new Response(new Uint8Array(pdfBuffer), {
@@ -704,6 +804,7 @@ app.get("/api/share/:token", async (c) => {
       description: li.description ?? null,
       hsn: d.lineItemHsn?.[i] || null,
       quantity: li.quantity,
+      freeQuantity: li.freeQuantity && parseFloat(li.freeQuantity) > 0 ? li.freeQuantity : null,
       unit: li.unit ?? null,
       unitPrice: li.unitPrice,
       discountPercent: li.discountPercent,
@@ -727,12 +828,153 @@ app.get("/api/share/:token/pdf", async (c) => {
   const shared = await loadSharedDocument(c);
   if (!shared) return c.json({ error: "This link is not valid any more" }, 404, SHARE_HEADERS);
   const format = c.req.query("format") === "a5" ? "a5" : "a4";
+  shared.pdfData.print = printOptionsFromQuery(c, shared.pdfData.print);
   const pdfBuffer = await generatePDFInWorker(shared.pdfData, format);
   return new Response(new Uint8Array(pdfBuffer), {
     headers: {
       ...SHARE_HEADERS,
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${shared.invoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf"`,
+    },
+  });
+});
+
+// ── Invoice design preview ────────────────────────────────────
+// GET /api/invoice-templates/preview?template=modern[&format=thermal&width=58]
+// A sample invoice in the chosen design, with the business's own name,
+// address, GSTIN, logo, signature and bank details. Same auth and PDF rate
+// limit as the invoice PDF.
+app.get("/api/invoice-templates/preview", async (c) => {
+  if (!checkPdfRateLimit(getClientIp(c))) {
+    return c.json({ error: "Too many PDF requests. Try again later." }, 429);
+  }
+  const auth = await authorizePdfRequest(c);
+  if (!auth.ok) return auth.response;
+  const { db, businessId, plan } = auth;
+  const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  if (!biz) return c.json({ error: "Business not found" }, 404);
+
+  const asked = c.req.query("template");
+  if (asked && !(INVOICE_TEMPLATES as readonly string[]).includes(asked)) return c.json({ error: "Unknown invoice design" }, 400);
+  const template = (asked ?? biz.invoiceTemplate) as InvoiceTemplate;
+  const format = c.req.query("format") === "thermal" ? "thermal" : "a4";
+
+  const accounts = await db.select().from(bankAccounts).where(eq(bankAccounts.businessId, businessId)).orderBy(bankAccounts.isDefault);
+  const bank = accounts.find((a) => a.accountType === "savings" || a.accountType === "current");
+  const upi = accounts.find((a) => a.accountType === "upi");
+  const registered = biz.gstRegistrationType === "regular" || biz.gstRegistrationType === "composition";
+  const sample = sampleInvoiceData({ withEwayBill: true }, {
+    businessName: biz.name,
+    businessLegalName: biz.legalName || undefined,
+    businessGstin: registered ? biz.gstin || undefined : undefined,
+    businessPan: biz.pan || undefined,
+    businessPhone: biz.phone || undefined,
+    businessEmail: biz.email || undefined,
+    businessAddress: biz.address || undefined,
+    businessCity: biz.city || undefined,
+    businessState: biz.state || undefined,
+    businessPincode: biz.pincode || undefined,
+    businessStateCode: biz.stateCode || undefined,
+    businessCin: biz.cin || undefined,
+    businessLlpin: biz.llpin || undefined,
+    gstRegistrationType: biz.gstRegistrationType,
+    logoBuffer: biz.logoData ?? undefined,
+    signatureBuffer: biz.signatureData ?? undefined,
+    ...(bank ? { bankName: bank.bankName || undefined, bankAccountNumber: bank.accountNumber || undefined, bankIfsc: bank.ifsc || undefined, bankAccountName: bank.accountName || undefined } : {}),
+    upiId: upi?.accountNumber || undefined,
+    isPaidPlan: plan !== "free",
+    print: { template, thermalWidth: c.req.query("width") === "58" ? 58 : c.req.query("width") === "80" ? 80 : biz.thermalWidth === 58 ? 58 : 80 },
+  });
+  if (sample.upiId) {
+    sample.upiQrDataUrl = await QRCode.toDataURL(`upi://pay?pa=${encodeURIComponent(sample.upiId)}&pn=${encodeURIComponent(biz.name)}&am=${sample.totalAmount}&cu=INR`, { width: 200, margin: 1 });
+  }
+  const pdfBuffer = await generatePDFInWorker(sample, format);
+  return new Response(new Uint8Array(pdfBuffer), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="invoice-design-${template}.pdf"`,
+      "Cache-Control": "no-store",
+    },
+  });
+});
+
+// ── E-way bill PDF ─────────────────────────────────────────────
+// GET /api/eway-bills/:id/pdf — the e-way bill in the EWB-01 layout. Same
+// auth, business check and PDF rate limit as the invoice PDF.
+app.get("/api/eway-bills/:id/pdf", async (c) => {
+  if (!checkPdfRateLimit(getClientIp(c))) {
+    return c.json({ error: "Too many PDF requests. Try again later." }, 429);
+  }
+  const auth = await authorizePdfRequest(c);
+  if (!auth.ok) return auth.response;
+  const { db, businessId, plan } = auth;
+  const id = c.req.param("id");
+  if (!z.string().uuid().safeParse(id).success) return c.json({ error: "E-way bill not found" }, 404);
+  const [ewb] = await db.select().from(ewayBills)
+    .where(and(eq(ewayBills.id, id), eq(ewayBills.businessId, businessId))).limit(1);
+  if (!ewb || !ewb.ewbNumber) return c.json({ error: "E-way bill not found" }, 404);
+  const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  const [invoice] = ewb.invoiceId
+    ? await db.select().from(invoices).where(and(eq(invoices.id, ewb.invoiceId), eq(invoices.businessId, businessId))).limit(1)
+    : [];
+  const [party] = invoice ? await db.select().from(parties).where(eq(parties.id, invoice.partyId)).limit(1) : [];
+  const lines = invoice
+    ? await db.select({ hsn: items.hsn }).from(invoiceItems).leftJoin(items, eq(invoiceItems.itemId, items.id)).where(eq(invoiceItems.invoiceId, invoice.id))
+    : [];
+  const vehicles = await db.select().from(ewayBillVehicleUpdates)
+    .where(eq(ewayBillVehicleUpdates.ewayBillId, ewb.id)).orderBy(desc(ewayBillVehicleUpdates.updatedAt));
+
+  const place = (...parts: Array<string | null | undefined>) => parts.filter(Boolean).join(", ");
+  const bizBlock = { gstin: biz!.gstin ?? "", name: biz!.legalName || biz!.name, address: place(biz!.address, biz!.city, biz!.state, biz!.pincode), state: biz!.state ?? undefined };
+  const partyBlock = { gstin: party?.gstin ?? "", name: party?.name ?? "", address: place(party?.billingAddress, party?.city, party?.state, party?.pincode), state: party?.state ?? undefined };
+  const sale = !invoice || invoice.type === "sale";
+  const supplier = sale ? bizBlock : partyBlock;
+  const recipient = sale ? partyBlock : bizBlock;
+  const tax = invoice?.taxAmount ?? "0";
+  const intra = isIntraStateSupply(
+    { stateCode: biz!.stateCode, state: biz!.state, gstin: biz!.gstin },
+    { stateCode: party?.stateCode, state: party?.state, gstin: party?.gstin },
+  );
+  const heads = intra ? splitIntraStateTax(tax) : null;
+  const docType = invoice?.documentType === "delivery_challan" ? "Delivery Challan"
+    : biz!.gstRegistrationType === "composition" ? "Bill of Supply" : "Tax Invoice";
+  const enteredBy = biz!.gstin ?? biz!.name;
+  const data: EwayBillPDFData = {
+    ewbNumber: ewb.ewbNumber,
+    ewbDate: ewb.ewbDate?.toISOString(),
+    validUpto: ewb.validUpto?.toISOString(),
+    status: ewb.status,
+    cancelReason: ewb.cancelReason ?? undefined,
+    generatedBy: { gstin: biz!.gstin ?? "", name: biz!.legalName || biz!.name },
+    supplier,
+    recipient,
+    dispatchFrom: place(ewb.fromAddress, ewb.fromPincode) || supplier.address,
+    deliverTo: place(ewb.toAddress, ewb.toPincode) || recipient.address,
+    documentType: docType,
+    documentNumber: invoice?.invoiceNumber ?? "",
+    documentDate: invoice?.invoiceDate?.toISOString() ?? "",
+    transactionType: "Regular",
+    valueOfGoods: invoice?.totalAmount ?? "0",
+    taxableValue: invoice ? money.sub(invoice.totalAmount, money.add(invoice.taxAmount, invoice.roundOff ?? "0")) : "0",
+    ...(heads ? { cgst: heads.cgst.toFixed(2), sgst: heads.sgst.toFixed(2) } : { igst: tax }),
+    hsnCodes: [...new Set(lines.map((l) => l.hsn).filter((h): h is string => !!h))],
+    reason: sale ? "Outward - Supply" : "Inward - Supply",
+    transporterId: ewb.transporterId ?? undefined,
+    transporterName: ewb.transporterName ?? undefined,
+    distance: ewb.distance ?? undefined,
+    // Vehicle updates, latest first; with none, the vehicle entered at generation.
+    partB: vehicles.length
+      ? vehicles.map((v) => ({ mode: ewb.transportMode ?? undefined, vehicle: v.vehicleNumber, from: v.fromPlace ?? undefined, enteredDate: v.updatedAt.toISOString(), enteredBy }))
+      : [{ mode: ewb.transportMode ?? undefined, vehicle: ewb.vehicleNumber ?? "", from: place(biz!.city, biz!.state) || undefined, enteredDate: ewb.ewbDate?.toISOString(), enteredBy }],
+    isPaidPlan: plan !== "free",
+  };
+  const genDate = ewb.ewbDate ? formatIstDate(ewb.ewbDate, "/") : "";
+  data.qrDataUrl = await QRCode.toDataURL(`${ewb.ewbNumber}/${biz!.gstin ?? ""}/${genDate}`, { width: 220, margin: 1 });
+  const pdfBuffer = await pdfToBuffer(generateEwayBillPDF(data));
+  return new Response(new Uint8Array(pdfBuffer), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="eway-bill-${ewb.ewbNumber.replace(/[^0-9A-Za-z]/g, "")}.pdf"`,
     },
   });
 });
@@ -803,7 +1045,7 @@ async function serveBusinessImage(c: Context, kind: "logo" | "signature") {
   if (!tenant || tenant.status !== "active") return c.json({ error: "Organization suspended" }, 403);
 
   const db = await getTenantDb(sessionRow.tenantId);
-  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
+  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId, sessionRow.userId);
   if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
 
   const [row] = await db.select({
@@ -881,7 +1123,7 @@ app.get("/api/parties/:id/ledger.pdf", async (c) => {
   const db = await getTenantDb(sessionRow.tenantId);
 
   // Verify the business exists and belongs to this tenant (cross-tenant guard)
-  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
+  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId, sessionRow.userId);
   if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
 
   // Validate party belongs to this business
@@ -1451,9 +1693,13 @@ app.post("/store/:slug/order", async (c) => {
     deliveryAddress,
     deliveryCity,
     deliveryPincode,
-    notes,
+    deliveryNotes,
+    notes: legacyNotes,
     items: orderItems,
   } = body as Record<string, unknown>;
+  // The storefront sends the customer's order notes as `deliveryNotes`
+  // (apps/store api.ts); only `notes` was read, so they were dropped.
+  const notes = deliveryNotes ?? legacyNotes;
 
   // Validate Turnstile for order submission
   const orderIp = getClientIp(c) || null;
@@ -1631,8 +1877,11 @@ app.post("/store/:slug/order", async (c) => {
     });
   }
 
-  // Calculate totals using shared library
-  const totals = calcInvoiceTotals({
+  // Calculate totals using shared library. The order goes to the Walk-in
+  // Customer — no state, so the place of supply is the store's own: intra-state,
+  // CGST and SGST each rounded at half the rate (re-checked against the
+  // walk-in party below).
+  const totalsFor = (intraState: boolean) => calcInvoiceTotals({
     lineItems: lineItemInputs.map((li) => ({
       quantity: li.quantity,
       unitPrice: li.unitPrice,
@@ -1640,7 +1889,9 @@ app.post("/store/:slug/order", async (c) => {
       discountPercent: li.discountPercent,
       taxInclusive: li.taxInclusive,
     })),
+    intraState,
   });
+  let totals = totalsFor(true);
 
   // Check minimum order amount
   if (biz.storeMinOrderAmount) {
@@ -1701,6 +1952,9 @@ app.post("/store/:slug/order", async (c) => {
         walkinPartyId = newWalkin.id;
       }
 
+      const intraState = await documentIsIntraState(tx, resolved.businessId, walkinPartyId);
+      if (!intraState) totals = totalsFor(false);
+
       // Create unfulfilled invoice (online store order awaiting fulfillment)
       const [invoice] = await tx.insert(invoices).values({
         businessId: resolved.businessId,
@@ -1719,16 +1973,30 @@ app.post("/store/:slug/order", async (c) => {
         amountPaid: "0",
         notes: typeof notes === "string" ? notes : null,
         source: "online_store",
+        stockMode: "tracked",
       }).returning();
 
+      // Lines of batch-tracked items take stock first-expiry-first-out; a
+      // line that spans batches becomes one line per batch.
+      const stockDoc = { documentType: "invoice", type: "sale" };
+      const batchedLines = await resolveLineBatches(tx, {
+        businessId: resolved.businessId,
+        lines: lineItemInputs.map((li) => ({ ...li, itemName: li.name })),
+        direction: -1,
+        warehouseId: await resolveDocumentWarehouseId(tx, { businessId: resolved.businessId, doc: stockDoc }),
+        documentDate: new Date(),
+        strict: false,
+      });
+
       // Create invoice line items
-      const processedLineItems = lineItemInputs.map((li, idx) => {
+      const processedLineItems = batchedLines.map((li, idx) => {
         const calc = calcLineItem({
           quantity: li.quantity,
           unitPrice: li.unitPrice,
           taxPercent: li.taxPercent,
           discountPercent: li.discountPercent,
           taxInclusive: li.taxInclusive,
+          intraState,
         });
         return {
           invoiceId: invoice.id,
@@ -1748,13 +2016,14 @@ app.post("/store/:slug/order", async (c) => {
           conversionFactor: li.conversionFactor ?? "1",
           selectedUnit: li.selectedUnit ?? null,
           variantId: li.variantId ?? null,
+          batchId: li.batchId,
         };
       });
 
       await tx.insert(invoiceItems).values(processedLineItems);
 
-      // Stock adjustment per line item — use PostgreSQL NUMERIC arithmetic
-      // to avoid JS floating-point drift. Lock rows first for concurrency safety.
+      // Take the ordered stock out, per warehouse. Lock the item rows first
+      // so concurrent orders for the same item queue up.
       // No extra isNull filter needed here: items/variants were already confirmed
       // active by the foundItems/foundVariants queries earlier in this handler.
       const itemIds = [...new Set(lineItemInputs.filter(li => !li.variantId).map(li => li.itemId))];
@@ -1767,20 +2036,11 @@ app.post("/store/:slug/order", async (c) => {
         await tx.select({ id: itemVariants.id }).from(itemVariants)
           .where(inArray(itemVariants.id, variantIds)).for("update");
       }
-      for (const li of lineItemInputs) {
-        if (li.variantId) {
-          await tx.update(itemVariants).set({
-            stockQuantity: sql`${itemVariants.stockQuantity}::numeric - ${li.quantity}::numeric`,
-            updatedAt: new Date(),
-          }).where(eq(itemVariants.id, li.variantId));
-        } else {
-          const cf = li.conversionFactor || "1";
-          await tx.update(items).set({
-            stockQuantity: sql`${items.stockQuantity}::numeric - (${li.quantity}::numeric * ${cf}::numeric)`,
-            updatedAt: new Date(),
-          }).where(eq(items.id, li.itemId));
-        }
-      }
+      await syncDocumentStock(tx, {
+        businessId: resolved.businessId,
+        documentId: invoice.id,
+        event: "CREATE",
+      });
 
       // Create the store order record
       const [order] = await tx.insert(storeOrders).values({
@@ -1860,7 +2120,7 @@ app.post("/api/items/labels", async (c) => {
   if (!businessId) return c.json({ error: "No business selected" }, 400);
 
   const db = await getTenantDb(sessionRow.tenantId);
-  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId);
+  const bizAccess = await verifyBusinessAccess(db, businessId, sessionRow.tenantId, sessionRow.userId);
   if (!bizAccess.ok) return c.json({ error: bizAccess.error }, 403);
 
   const parsed = labelRequestSchema.safeParse(await c.req.json().catch(() => null));
@@ -2157,6 +2417,8 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   logger.info({ port: info.port }, `Fintranzact API running on http://localhost:${info.port}`);
   logger.info({ port: info.port }, `  tRPC endpoint: http://localhost:${info.port}/api/trpc`);
   startRecurringScheduler();
+  // Create the platform admin from PLATFORM_ADMIN_EMAIL / _PASSWORD if set.
+  seedPlatformAdmin().catch((err) => logger.error({ err }, "Could not create the platform admin account"));
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────

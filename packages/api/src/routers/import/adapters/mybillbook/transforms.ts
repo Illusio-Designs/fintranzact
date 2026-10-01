@@ -17,7 +17,9 @@ function str(v: unknown, fallback = ""): string {
 
 // Normalize a money string: empty or non-numeric → "0"
 function moneyStr(v: unknown): string {
-  const s = str(v, "0");
+  // Exports write amounts like "1,250.50" or "₹ 1,250.50"; parseFloat would
+  // stop at the comma and read 1.
+  const s = str(v, "0").replace(/[,\s₹]/g, "");
   if (s === "") return "0";
   // Keep the value if it looks like a valid money string
   if (/^-?\d+(\.\d{1,2})?$/.test(s)) return s;
@@ -89,7 +91,7 @@ export function transformInvoice(raw: Record<string, unknown>): CanonicalInvoice
   // exports) is a fallback so old CSVs don't break. Imported historical
   // invoices never carry a user-authored description, so the optional notes
   // column is left blank (null) — user notes only make sense when a human
-  // authored the line in Hisaabo.
+  // authored the line in Fintranzact.
   let lineItems: CanonicalInvoice["lineItems"] = undefined;
   if (Array.isArray(raw.lineItems) && raw.lineItems.length > 0) {
     lineItems = (raw.lineItems as Record<string, unknown>[]).map((li) => ({

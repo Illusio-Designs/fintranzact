@@ -5,6 +5,7 @@ import { chartOfAccounts } from "@fintranzact/db";
 import { createAccountSchema, updateAccountSchema } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { withAudit } from "../lib/audit.js";
 
 export const accountRouter = router({
   list: viewerProcedure.query(async ({ ctx }) => {
@@ -18,8 +19,17 @@ export const accountRouter = router({
 
   create: adminProcedure
     .input(createAccountSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "Account");
+      if (input.parentId) {
+        // The parent must be one of this business's accounts.
+        const [parent] = await ctx.db
+          .select({ id: chartOfAccounts.id })
+          .from(chartOfAccounts)
+          .where(and(eq(chartOfAccounts.id, input.parentId), eq(chartOfAccounts.businessId, ctx.businessId)))
+          .limit(1);
+        if (!parent) throw new TRPCError({ code: "NOT_FOUND", message: "Parent account not found" });
+      }
       const [account] = await ctx.db
         .insert(chartOfAccounts)
         .values({
@@ -34,11 +44,11 @@ export const accountRouter = router({
         .returning();
 
       return account!;
-    }),
+    }, (r) => ({ action: "account.create", entityType: "account", entityId: r.id, metadata: { code: r.code, name: r.name } }))),
 
   update: adminProcedure
     .input(z.object({ id: z.string().uuid() }).merge(updateAccountSchema))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Account");
 
       // Verify the account belongs to this business
@@ -75,11 +85,11 @@ export const accountRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "account.update", entityType: "account", entityId: input.id }))),
 
   delete: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "Account");
 
       const [existing] = await ctx.db
@@ -114,5 +124,5 @@ export const accountRouter = router({
         );
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "account.delete", entityType: "account", entityId: input.id }))),
 });

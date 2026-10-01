@@ -59,6 +59,8 @@ export function defineAbilityFor(ctx: PermissionContext): AppAbility {
       can("read", "Account");
       can("read", "Business");
       can("read", "Report");
+      // GST returns: read (docs/architecture/role-based-ui.md §3)
+      can("read", "GstReport");
       // Store: create/read/update (toggle items, confirm orders)
       can("create", "Store");
       can("read", "Store");

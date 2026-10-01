@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 interface PanInputProps {
   value: string;
@@ -7,6 +7,7 @@ interface PanInputProps {
 }
 
 export function PanInput({ value, onChange, error }: PanInputProps) {
+  const inputId = useId();
   const [blurred, setBlurred] = useState(false);
   const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
   const isValid = !value || panRegex.test(value);
@@ -14,8 +15,9 @@ export function PanInput({ value, onChange, error }: PanInputProps) {
 
   return (
     <div>
-      <label className="label">PAN <span className="text-red-500">*</span></label>
+      <label className="label" htmlFor={inputId}>PAN <span className="text-red-500">*</span></label>
       <input
+        id={inputId}
         className={`input font-mono tracking-wide ${showError || error ? "border-red-500" : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}

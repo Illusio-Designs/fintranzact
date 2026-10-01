@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { INVOICE_TEMPLATES } from "./invoice-templates.js";
 import {
   GSTIN_REGEX,
   PAN_REGEX,
@@ -66,6 +67,8 @@ export const magicLinkRequestSchema = z.object({
   email: z.string().email().max(255),
   turnstileToken: z.string().optional(),
   source: z.enum(["web", "desktop", "mobile"]).default("web"),
+  /** Partner referral code; applied if this link creates a new organisation. */
+  referralCode: z.string().trim().max(50).optional(),
 });
 
 export const magicLinkVerifySchema = z.object({
@@ -185,10 +188,36 @@ export const createBusinessSchema = z.object({
   debitNotePrefix: z.string().min(1).max(10).default("DN"),
   salesReturnPrefix: z.string().min(1).max(10).default("SR"),
   purchaseReturnPrefix: z.string().min(1).max(10).default("PR"),
+  purchaseOrderPrefix: z.string().min(1).max(10).default("PO"),
+  salesOrderPrefix: z.string().min(1).max(10).default("SO"),
+  goodsReceiptNotePrefix: z.string().min(1).max(10).default("GRN"),
   // Drives HSN digit enforcement and the e-invoicing threshold.
   annualTurnover: z.number().nonnegative().nullable().optional(),
   defaultRoundOff: z.boolean().default(true),
   defaultTermsAndConditions: z.string().max(2000).nullable().optional(),
+  // Print settings (Settings → Documents → Invoice design). No defaults here:
+  // the columns default to "classic" / 80 mm, and update must not reset them.
+  invoiceTemplate: z.enum(INVOICE_TEMPLATES).optional(),
+  thermalWidth: z.union([z.literal(58), z.literal(80)]).optional(),
+
+  // Settings → Shipping: user-defined delivery methods shown in the invoice form.
+  customShippingMethods: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(100),
+        label: z.string().min(1).max(100),
+        hasTracking: z.boolean(),
+      }),
+    )
+    .max(50)
+    .refine((methods) => new Set(methods.map((m) => m.id)).size === methods.length, {
+      message: "Each delivery method needs its own id",
+    })
+    .refine((methods) => !methods.some((m) => isBuiltInDeliveryMethod(m.id)), {
+      message: "A custom delivery method can't reuse a built-in method's id",
+    })
+    .nullable()
+    .optional(),
 });
 
 export const updateBusinessSchema = createBusinessSchema.partial();
@@ -209,7 +238,7 @@ export const uploadBusinessLogoSchema = z.object({
 export const uploadBusinessSignatureSchema = uploadBusinessLogoSchema;
 
 export const updateSequenceNumberSchema = z.object({
-  documentType: z.enum(["invoice", "payment", "quotation", "credit_note", "delivery_challan", "proforma"]),
+  documentType: z.enum(["invoice", "payment", "quotation", "credit_note", "delivery_challan", "proforma", "purchase_order", "sales_order", "goods_receipt_note"]),
   newNumber: z.number().int().min(1),
 });
 
@@ -218,7 +247,7 @@ export const updateSequenceNumberSchema = z.object({
 export const itemTypes = ["product", "service"] as const;
 export type ItemType = (typeof itemTypes)[number];
 
-export const documentTypes = ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return"] as const;
+export const documentTypes = ["invoice", "quotation", "credit_note", "debit_note", "delivery_challan", "proforma", "sales_return", "purchase_return", "purchase_order", "sales_order", "goods_receipt_note"] as const;
 export type DocumentType = (typeof documentTypes)[number];
 
 export const bankAccountTypes = ["savings", "current", "cash", "upi", "credit_card", "payment_gateway"] as const;
@@ -243,6 +272,38 @@ export const partyShippingAddressSchema = z.object({
 });
 export type PartyShippingAddress = z.infer<typeof partyShippingAddressSchema>;
 
+/** A party can keep up to this many extra shipping addresses. */
+export const MAX_ADDITIONAL_SHIPPING_ADDRESSES = 20;
+
+const addressKey = (address: string) => address.trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * Shipping addresses for the party that survives a merge. The target keeps its
+ * default address (or takes the source's when it has none); every other
+ * address from both parties is kept as an extra one, without repeats.
+ */
+export function mergePartyShippingAddresses(
+  target: { shippingAddress?: string | null; additionalShippingAddresses?: readonly PartyShippingAddress[] | null },
+  source: { shippingAddress?: string | null; additionalShippingAddresses?: readonly PartyShippingAddress[] | null },
+): { shippingAddress: string | null; additionalShippingAddresses: PartyShippingAddress[] | null } {
+  const shippingAddress = target.shippingAddress?.trim() || source.shippingAddress?.trim() || null;
+  const seen = new Set(shippingAddress ? [addressKey(shippingAddress)] : []);
+  const extras: PartyShippingAddress[] = [];
+  const candidates: PartyShippingAddress[] = [
+    ...(target.additionalShippingAddresses ?? []),
+    ...(source.shippingAddress?.trim() ? [{ address: source.shippingAddress.trim() }] : []),
+    ...(source.additionalShippingAddresses ?? []),
+  ];
+  for (const entry of candidates) {
+    const key = addressKey(entry.address ?? "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    extras.push(entry);
+  }
+  const kept = extras.slice(0, MAX_ADDITIONAL_SHIPPING_ADDRESSES);
+  return { shippingAddress, additionalShippingAddresses: kept.length ? kept : null };
+}
+
 // Fields shared by create and update.
 const partyFields = {
   type: z.enum(partyTypes),
@@ -253,7 +314,7 @@ const partyFields = {
   pan: z.string().regex(PAN_REGEX).optional().or(z.literal("")),
   billingAddress: z.string().max(500).optional(),
   shippingAddress: z.string().max(500).optional(),
-  additionalShippingAddresses: z.array(partyShippingAddressSchema).max(20).optional(),
+  additionalShippingAddresses: z.array(partyShippingAddressSchema).max(MAX_ADDITIONAL_SHIPPING_ADDRESSES).optional(),
   city: z.string().max(100).optional(),
   state: z.string().max(100).optional(),
   stateCode: z.string().max(2).optional(),
@@ -277,6 +338,8 @@ const partyFields = {
   udyamNumber: z.string().regex(UDYAM_REGEX, "Invalid Udyam number (e.g. UDYAM-MH-26-0012345)").optional().or(z.literal("")),
   msmeCategory: z.enum(msmeCategories).optional(),
   tdsSection: z.enum(tdsSectionCodes).optional(),
+  // Price level sales to this party use; null = the business default.
+  priceLevelId: z.string().uuid().nullable().optional(),
 };
 
 // A PAN or state that contradicts the GSTIN is only a warning
@@ -319,11 +382,24 @@ export const itemVariantSchema = z.object({
 
   salePrice: decimalStr.optional(),
   purchasePrice: decimalStr.optional(),
+  // Printed MRP; "" clears it.
+  mrp: decimalStr.optional().or(z.literal("")),
   stockQuantity: decimalStr3.default("0"),
   lowStockAlert: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
 });
 
 export type ItemVariant = z.infer<typeof itemVariantSchema>;
+
+/** A calendar date, YYYY-MM-DD. */
+export const dateOnlyStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
+
+/** Batch number, dates and MRP of one batch of an item that tracks batches. */
+export const batchFieldsSchema = z.object({
+  batchNumber: z.string().trim().min(1, "Enter a batch number").max(60),
+  mfgDate: dateOnlyStr.nullish(),
+  expiryDate: dateOnlyStr.nullish(),
+  mrp: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).nullish(),
+});
 
 const createItemBaseSchema = z.object({
   name: z.string().min(1).max(200),
@@ -341,13 +417,24 @@ const createItemBaseSchema = z.object({
   itemMode: z.enum(itemModes).default("simple"),
   salePrice: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
   purchasePrice: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
+  // Printed MRP (maximum retail price); null clears it. A sale price above it
+  // is only a warning (see mrpWarning).
+  mrp: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).nullable().optional(),
   taxPercent: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0"),
   stockQuantity: z.string().regex(/^-?\d+(\.\d{1,3})?$/).default("0"),
   lowStockAlert: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
   description: z.string().max(1000).optional(),
   itemType: z.enum(itemTypes).default("product"),
   category: z.string().max(100).optional(),
+  // Stock group. Takes precedence over `category`, which then mirrors the
+  // group's name; null clears it.
+  stockGroupId: z.string().uuid().nullish(),
   taxInclusive: z.boolean().default(false),
+  // Batch / lot tracking (see item_batches). Off by default.
+  trackBatches: z.boolean().optional(),
+  trackExpiry: z.boolean().optional(),
+  // Opening stock of a new batch-tracked item goes into this batch.
+  openingBatch: batchFieldsSchema.optional(),
   unitVariants: z.array(unitVariantSchema).optional(),
   variantAttributes: z.array(z.string().min(1).max(50)).max(5).optional(),
   variants: z.array(itemVariantSchema).optional(),
@@ -362,6 +449,27 @@ export const createItemSchema = createItemBaseSchema.refine((d) => {
 
 export const updateItemSchema = createItemBaseSchema.partial();
 
+/**
+ * Warning text when a selling price is above the printed MRP (selling above
+ * MRP is not allowed under the Legal Metrology rules), else null.
+ */
+export function mrpWarning(price: string | number | null | undefined, mrp: string | number | null | undefined): string | null {
+  const p = parseFloat(String(price ?? ""));
+  const m = parseFloat(String(mrp ?? ""));
+  if (!Number.isFinite(p) || !Number.isFinite(m) || m <= 0) return null;
+  return p > m + 0.0001 ? `Price ${p.toFixed(2)} is above the MRP ${m.toFixed(2)}` : null;
+}
+
+// ── Price levels ───────────────────────────────────────────────
+
+export const priceSlabSchema = z.object({
+  minQuantity: z.string().regex(/^\d{1,12}(\.\d{1,3})?$/).default("0"),
+  price: decimalStr.nullable().optional(),
+  discountPercent: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/).refine((v) => parseFloat(v) <= 100, "Discount can't exceed 100%").nullable().optional(),
+}).refine((s) => !!s.price || !!s.discountPercent, { message: "Give a price or a discount" });
+
+export type PriceSlab = z.infer<typeof priceSlabSchema>;
+
 // ── Invoice ────────────────────────────────────────────────────
 
 export const invoiceTypes = ["sale", "purchase"] as const;
@@ -369,13 +477,54 @@ export const invoiceStatuses = ["draft", "unfulfilled", "sent", "paid", "partial
 export const deliveryMethods = ["self_pickup", "hand_delivery", "courier", "bus", "transport", "post"] as const;
 export type DeliveryMethod = (typeof deliveryMethods)[number];
 
+export function isBuiltInDeliveryMethod(method: string): method is DeliveryMethod {
+  return (deliveryMethods as readonly string[]).includes(method);
+}
+
+/**
+ * How the goods go out: a built-in method, or the id of one of the
+ * business's own methods from Settings → Shipping. Only the shape is checked
+ * here; the server checks custom ids against the business's list.
+ */
+export const deliveryMethodSchema = z.string().trim().min(1).max(100);
+
 export const invoiceChargeSchema = z.object({
   label: z.string().min(1).max(100),
   amount: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/),
   shipmentId: z.string().uuid().optional(),
 });
 
-export const invoiceLineItemSchema = z.object({
+/**
+ * Batch fields on a document line, for items that track batches.
+ * Inward lines name the batch by id, or by number (created if new, with its
+ * dates and MRP). Outward lines name a batch, or leave it empty to have
+ * stock taken first-expiry-first-out; an expired batch goes out only with
+ * `allowExpired`.
+ */
+export const lineBatchFields = {
+  batchId: z.string().uuid().nullish(),
+  batchNumber: z.string().trim().max(60).nullish(),
+  mfgDate: dateOnlyStr.nullish(),
+  expiryDate: dateOnlyStr.nullish(),
+  batchMrp: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).nullish(),
+  allowExpired: z.boolean().nullish(),
+};
+
+const lineQuantityStr = z.string().regex(/^\d+(\.\d{1,3})?$/);
+
+/**
+ * Document types whose lines can carry free goods ("10 + 1"). Credit and
+ * debit notes are money only.
+ */
+export const freeQuantityDocumentTypes = [
+  "invoice", "quotation", "proforma", "delivery_challan", "sales_return", "purchase_return",
+  "purchase_order", "sales_order", "goods_receipt_note",
+] as const;
+
+/** Reasons offered for goods rejected on receipt; any other text is allowed too. */
+export const rejectionReasons = ["Damaged", "Short expiry", "Wrong item", "Quality not as ordered", "Excess supply"] as const;
+
+const invoiceLineItemBaseSchema = z.object({
   itemId: z.string().uuid().optional(),
   // Snapshot of the item name at billing time. Required on every line — this
   // is the primary display text on invoices and must be frozen at create
@@ -385,13 +534,32 @@ export const invoiceLineItemSchema = z.object({
   // Nullable because the DB column is nullable and the client may pass null
   // explicitly to clear notes. Empty string is coerced to null downstream.
   description: z.string().max(500).optional().nullable(),
-  quantity: z.string().regex(/^\d+(\.\d{1,3})?$/).refine((v) => parseFloat(v) > 0, { message: "Quantity must be greater than 0" }),
+  /**
+   * Billed quantity: what the price, discount and tax apply to. On a goods
+   * receipt note, the quantity accepted. May be 0 only when the line has free
+   * or rejected goods.
+   */
+  quantity: lineQuantityStr,
   unitPrice: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/),
   taxPercent: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0").refine((v) => parseFloat(v) <= 56, { message: "Tax percent cannot exceed 56%" }),
   discountPercent: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0").refine((v) => parseFloat(v) <= 100, { message: "Discount cannot exceed 100%" }),
   selectedUnit: z.string().nullish(),
   conversionFactor: z.string().nullish(), // stored as string like all numerics
   variantId: z.string().uuid().nullish(),
+  /** Free goods on top of the billed quantity ("10 + 1"), in the line's unit. Moves stock, adds no value. */
+  freeQuantity: lineQuantityStr.nullish(),
+  /** Goods receipt notes only: received but rejected, in the line's unit. Never enters stock. */
+  rejectedQuantity: lineQuantityStr.nullish(),
+  rejectionReason: z.string().max(200).nullish(),
+  ...lineBatchFields,
+});
+
+export const invoiceLineItemSchema = invoiceLineItemBaseSchema.superRefine((li, ctx) => {
+  const billed = parseFloat(li.quantity);
+  const other = parseFloat(li.freeQuantity || "0") + parseFloat(li.rejectedQuantity || "0");
+  if (!(billed > 0) && !(other > 0)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["quantity"], message: "Quantity must be greater than 0" });
+  }
 });
 
 export const createInvoiceSchema = z.object({
@@ -400,6 +568,11 @@ export const createInvoiceSchema = z.object({
   documentType: z.enum(documentTypes).default("invoice"),
   invoiceDate: z.string().datetime().optional(),
   dueDate: z.string().datetime().optional(),
+  /**
+   * Purchase invoices: the supplier's own bill number, as it appears in the
+   * supplier's GSTR-1 and so in our GSTR-2B. Ignored on sales.
+   */
+  supplierInvoiceNumber: z.string().trim().max(50).optional(),
   notes: z.string().max(2000).optional(),
   termsAndConditions: z.string().max(2000).optional(),
   additionalCharges: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0"),
@@ -418,7 +591,7 @@ export const createInvoiceSchema = z.object({
    */
   skipStockAdjustment: z.boolean().optional(),
   isReverseCharge: z.boolean().default(false),
-  deliveryMethod: z.enum(deliveryMethods).default("self_pickup"),
+  deliveryMethod: deliveryMethodSchema.default("self_pickup"),
   /**
    * Origin channel for this invoice. "pos" for the fullscreen register,
    * "online_store" for storefront orders, "webhook" for public-API /
@@ -541,9 +714,61 @@ export const bankTransferSchema = z.object({
   transactionDate: z.string().datetime().optional(),
 });
 
+/**
+ * Documents that track what is still pending against them: orders until they
+ * are delivered or received, and challans/GRNs until they are billed.
+ */
+export const pendingTrackedDocumentTypes = ["sales_order", "purchase_order", "goods_receipt_note", "delivery_challan"] as const;
+export type PendingTrackedDocumentType = (typeof pendingTrackedDocumentTypes)[number];
+
 export const convertDocumentSchema = z.object({
   sourceDocumentId: z.string().uuid(),
   targetDocumentType: z.enum(documentTypes),
+  /**
+   * Quantities to take from the source, per source line, in the line's unit.
+   * Only for sources that track pending quantities (orders, challans, GRNs).
+   * Omitted, every line's pending quantity is taken; lines left out are not
+   * converted.
+   */
+  lines: z.array(z.object({
+    sourceLineId: z.string().uuid(),
+    /** Billed quantity; on a GRN made from a purchase order, the quantity accepted. */
+    quantity: z.string().regex(/^\d+(\.\d{1,3})?$/),
+    /**
+     * Free quantity to take, up to what is pending free. Omitted, all of the
+     * pending free quantity goes along when the whole pending billed quantity
+     * is taken, and none otherwise.
+     */
+    freeQuantity: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
+    /** Purchase order → GRN only: received but rejected. Stays pending on the order. */
+    rejectedQuantity: z.string().regex(/^\d+(\.\d{1,3})?$/).optional(),
+    rejectionReason: z.string().max(200).optional(),
+    /**
+     * Items that track batches, when the new document brings goods in (a GRN
+     * or purchase invoice from a purchase order): the batch they arrive in,
+     * matched by number or created with these dates.
+     */
+    batchNumber: z.string().trim().max(60).optional(),
+    expiryDate: dateOnlyStr.optional(),
+    mfgDate: dateOnlyStr.optional(),
+  })).optional(),
+  /**
+   * Goods receipt note → purchase return or debit note: take the goods
+   * rejected on receipt that have not been returned yet (or the quantities in
+   * `lines`, up to that). The return moves no stock, since rejected goods
+   * never came in.
+   */
+  fromRejected: z.boolean().optional(),
+  /** Warehouse for the new document when it moves stock. Default warehouse when omitted. */
+  warehouseId: z.string().uuid().nullish(),
+});
+
+export const pendingOrdersInputSchema = z.object({
+  documentType: z.enum(pendingTrackedDocumentTypes),
+  partyId: z.string().uuid().optional(),
+  itemId: z.string().uuid().optional(),
+  /** Only lines whose due date has passed. */
+  overdueOnly: z.boolean().default(false),
 });
 
 // ── Reports ────────────────────────────────────────────────────
@@ -591,6 +816,8 @@ export const itemSalesInputSchema = z.object({
 
 export const stockSummaryInputSchema = z.object({
   category: z.string().optional(),
+  // Limit to one stock group and the groups under it.
+  stockGroupId: z.string().uuid().optional(),
   showZeroStock: z.boolean().default(false),
 });
 
@@ -805,7 +1032,9 @@ export const eInvoiceConfigSchema = z.object({
   clientId: z.string().max(200).optional().or(z.literal("")),
   clientSecret: z.string().max(500).optional().or(z.literal("")),
   username: z.string().min(1).max(100),
-  password: z.string().min(1).max(200),
+  // Blank on a re-save keeps the stored password (the settings form never
+  // shows it back); a first save must include it.
+  password: z.string().max(200).optional().or(z.literal("")),
   isSandbox: z.boolean().default(true),
   isEnabled: z.boolean().default(false),
   thresholdCrore: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/).default("5"),

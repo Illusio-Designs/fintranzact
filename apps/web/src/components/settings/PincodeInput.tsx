@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { lookupPincode } from "@/lib/pincode-lookup";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
@@ -16,6 +16,7 @@ interface PincodeInputProps {
 }
 
 export function PincodeInput({ value, onChange, onCityStateResolved, currentCity, currentState, error }: PincodeInputProps) {
+  const inputId = useId();
   const [lookupState, setLookupState] = useState<"idle" | "found" | "found-mismatch" | "not-found">("idle");
   const [resolvedInfo, setResolvedInfo] = useState<{ district: string; state: string } | null>(null);
   const [justFilled, setJustFilled] = useState(false);
@@ -60,9 +61,10 @@ export function PincodeInput({ value, onChange, onCityStateResolved, currentCity
 
   return (
     <div>
-      <label className="label">Pincode</label>
+      <label className="label" htmlFor={inputId}>Pincode</label>
       <div className="relative">
         <input
+          id={inputId}
           className="input"
           value={value}
           onChange={handleChange}

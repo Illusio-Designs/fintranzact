@@ -1,4 +1,4 @@
-import { HisaaboClient, HisaaboApiError } from "../../client.js";
+import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, outputTable, outputTSV, outputCSV, EXIT, hasColor } from "../../output.js";
 import { formatDate, formatRelativeDate } from "../../format.js";
@@ -11,7 +11,7 @@ interface ApiKeyListOpts {
 
 export async function apiKeyListCommand(opts: ApiKeyListOpts): Promise<void> {
   const cfg = requireAuth();
-  const client = new HisaaboClient(cfg);
+  const client = new FintranzactClient(cfg);
 
   try {
     const keys = await client.apiKey.list();
@@ -24,14 +24,14 @@ export async function apiKeyListCommand(opts: ApiKeyListOpts): Promise<void> {
     const items: unknown[] = Array.isArray(keys) ? keys : (keys?.items ?? keys?.data ?? []);
 
     if (items.length === 0) {
-      process.stdout.write("\n  No API keys found.\n  Use: hisaabo api-key create --name <name>\n\n");
+      process.stdout.write("\n  No API keys found.\n  Use: fintranzact api-key create --name <name>\n\n");
       return;
     }
 
     const rows = items.map((item: unknown) => {
       const k = item as Record<string, unknown>;
       const rawKey = String(k["keyPrefix"] ?? k["prefix"] ?? k["key"] ?? "");
-      // Show key prefix safely: hisaabo_key_abc... (first 20 chars)
+      // Show key prefix safely: fintranzact_key_abc... (first 20 chars)
       const displayKey = rawKey.length > 20 ? rawKey.slice(0, 20) + "..." : rawKey || "-";
       return {
         name: String(k["name"] ?? "-"),
@@ -61,9 +61,9 @@ export async function apiKeyListCommand(opts: ApiKeyListOpts): Promise<void> {
       process.stdout.write("\n");
     }
   } catch (e) {
-    if (e instanceof HisaaboApiError) {
-      const err = e.hisaaboError;
-      if (err.code === "unauthorized") fatalError("Session expired. Run: hisaabo login", EXIT.AUTH);
+    if (e instanceof FintranzactApiError) {
+      const err = e.fintranzactError;
+      if (err.code === "unauthorized") fatalError("Session expired. Run: fintranzact login", EXIT.AUTH);
       if (err.code === "network_error") fatalError(err.message, EXIT.NETWORK);
     }
     fatalError(String(e instanceof Error ? e.message : e));

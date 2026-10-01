@@ -23,6 +23,8 @@ import { MarketingLayout, CONTACT_EMAIL } from "@/components/marketing/Marketing
 import { Icon, type IconSvgElement } from "@/components/ui/Icon";
 import { Logo } from "@/components/ui/Logo";
 import { EYEBROW, FaqAccordion, HEADING, PricingCards } from "@/components/marketing/sections";
+import type { FeatureSlug } from "@/lib/feature-slugs";
+import type { SOLUTION_SLUGS } from "@/lib/public-paths";
 import { cn } from "@/lib/utils";
 
 /**
@@ -33,28 +35,41 @@ import { cn } from "@/lib/utils";
 
 const NAVY = "bg-[#0f1b3d]";
 
-const INDUSTRIES = [
-  "Retail & kirana",
-  "Wholesale & distribution",
-  "Manufacturing",
-  "Services & agencies",
-  "Pharmacy",
-  "Restaurants & cafés",
-  "Electronics",
-  "Apparel & textiles",
+type SolutionSlug = (typeof SOLUTION_SLUGS)[number];
+
+/** Each industry chip opens that industry's solutions page. */
+const INDUSTRIES: Array<[label: string, slug: SolutionSlug]> = [
+  ["Retail & kirana", "retail"],
+  ["Wholesale & distribution", "wholesale"],
+  ["Manufacturing", "manufacturing"],
+  ["Services & agencies", "services"],
+  ["Pharmacy", "pharmacy"],
+  ["Restaurants & cafés", "restaurants"],
+  ["Electronics", "electronics"],
+  ["Apparel & textiles", "apparel"],
 ];
 
 type TabId = "invoicing" | "gst" | "stock" | "payments" | "reports";
 
+/** The public page for a feature (/features/<slug>). */
+function feature(slug: FeatureSlug): string {
+  return `/features/${slug}`;
+}
+
 const TABS: Array<{
   id: TabId;
   label: string;
+  /** The feature page the tab's "More about" link opens. */
+  page: FeatureSlug;
+  more: string;
   title: string;
   body: string;
   points: Array<{ name: string; body: string }>;
 }> = [
   {
     id: "invoicing",
+    page: "invoicing",
+    more: "More about invoicing",
     label: "Invoicing",
     title: "Professional GST invoices in seconds",
     body: "Pick a party, add items and Fintranzact works out CGST, SGST, IGST and cess for you — ready to print, download or share.",
@@ -67,6 +82,8 @@ const TABS: Array<{
   },
   {
     id: "gst",
+    page: "gst-filing",
+    more: "More about GST filing",
     label: "GST & e-Invoice",
     title: "Stay GST-compliant without the busywork",
     body: "Returns are built from your transactions as you bill, and e-Invoices and e-Way Bills come straight from your invoices.",
@@ -79,6 +96,8 @@ const TABS: Array<{
   },
   {
     id: "stock",
+    page: "inventory",
+    more: "More about inventory",
     label: "Inventory",
     title: "Always know what's in stock",
     body: "Stock updates itself as you buy and sell, across items, variants and warehouses.",
@@ -91,6 +110,8 @@ const TABS: Array<{
   },
   {
     id: "payments",
+    page: "payments",
+    more: "More about payments",
     label: "Payments & banking",
     title: "Get paid faster and keep banks in sync",
     body: "See who owes you, record receipts in any mode and reconcile bank statements against your books.",
@@ -103,6 +124,8 @@ const TABS: Array<{
   },
   {
     id: "reports",
+    page: "reporting",
+    more: "More about reports",
     label: "Reports",
     title: "Your numbers, always up to date",
     body: "Financial statements and tax reports are ready the moment you need them — no year-end scramble.",
@@ -115,19 +138,20 @@ const TABS: Array<{
   },
 ];
 
-const TILES: Array<[string, string, string]> = [
-  ["QP", "Quotations & proforma", "Estimates that turn into invoices in one click."],
-  ["DC", "Delivery challans", "Move goods now and invoice them later."],
-  ["RI", "Recurring invoices", "Monthly billing on autopilot."],
-  ["POS", "Point of sale", "Fast checkout for walk-in customers."],
-  ["EWB", "e-Way bills", "Create and track bills for goods in transit."],
-  ["BR", "Bank reconciliation", "Match statements to your books."],
-  ["OS", "Online store", "Take orders straight into your books."],
-  ["MB", "Multiple businesses", "Several GSTINs under one login."],
-  ["RP", "Roles & permissions", "The right access for staff and accountants."],
-  ["API", "API & integrations", "Connect your own tools and workflows."],
-  ["IB", "Import & backup", "Bring data in, take it out any time."],
-  ["EX", "Expenses", "Track spend by category with GST."],
+/** Feature tiles: mark, name, one line, and the page each one opens. */
+const TILES: Array<[mark: string, name: string, body: string, to: string]> = [
+  ["QP", "Quotations & proforma", "Estimates that turn into invoices in one click.", feature("quotations")],
+  ["DC", "Delivery challans", "Move goods now and invoice them later.", feature("delivery-challans")],
+  ["RI", "Recurring invoices", "Monthly billing on autopilot.", feature("recurring-invoices")],
+  ["POS", "Point of sale", "Fast checkout for walk-in customers.", feature("point-of-sale")],
+  ["EWB", "e-Way bills", "Create and track bills for goods in transit.", feature("e-way-bills")],
+  ["BR", "Bank reconciliation", "Match statements to your books.", feature("banking")],
+  ["OS", "Online store", "Take orders straight into your books.", feature("online-store")],
+  ["MB", "Multiple businesses", "Several GSTINs under one login.", "/solutions/multi-branch"],
+  ["RP", "Roles & permissions", "The right access for staff and accountants.", feature("team-roles")],
+  ["API", "API & integrations", "Connect your own tools and workflows.", feature("api-integrations")],
+  ["IB", "Import & backup", "Bring data in, take it out any time.", "/help/settings/backup-restore"],
+  ["EX", "Expenses", "Track spend by category with GST.", feature("expenses")],
 ];
 
 const TILE_TONES = [
@@ -167,11 +191,12 @@ const FAQS = [
 export function LandingPage() {
   return (
     <MarketingLayout
+      description="GST billing, inventory and accounting for Indian businesses. Send GST invoices, generate e-invoices and e-way bills, track stock and file returns from web, desktop or mobile."
       announcement={
         <span className="inline-flex flex-wrap items-center justify-center gap-2.5">
           <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-bold tracking-wide text-white">NEW</span>
           <span>e-Invoicing and e-Way Bills are built into every plan.</span>
-          <Link to="/features" className="inline-flex items-center gap-0.5 font-semibold text-white hover:underline">
+          <Link to={feature("e-invoicing")} className="inline-flex items-center gap-0.5 font-semibold text-white hover:underline">
             See how
             <Icon icon={ArrowRight01Icon} size={14} strokeWidth={2} />
           </Link>
@@ -367,20 +392,29 @@ function HeroPreview() {
 
 function Industries() {
   return (
-    <section id="industries" className="scroll-mt-24 border-b border-border-light bg-surface-1">
+    <section className="border-b border-border-light bg-surface-1">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-4 py-10 md:px-6">
         <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">
           Built for every kind of Indian business
         </p>
         <div className="flex flex-wrap justify-center gap-2.5">
-          {INDUSTRIES.map((i) => (
-            <span
-              key={i}
-              className="rounded-full border border-border-light bg-surface-0 px-4 py-2 text-sm font-medium text-text-secondary"
+          {INDUSTRIES.map(([label, slug]) => (
+            <Link
+              key={slug}
+              to="/solutions/$slug"
+              params={{ slug }}
+              className="rounded-full border border-border-light bg-surface-0 px-4 py-2 text-sm font-medium text-text-secondary transition hover:border-brand-300 hover:text-brand-700 dark:hover:border-brand-700 dark:hover:text-white"
             >
-              {i}
-            </span>
+              {label}
+            </Link>
           ))}
+          <Link
+            to="/solutions"
+            className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-brand-600 hover:underline dark:text-brand-300"
+          >
+            All solutions
+            <Icon icon={ArrowRight01Icon} size={14} strokeWidth={2} />
+          </Link>
         </div>
       </div>
     </section>
@@ -439,13 +473,21 @@ function FeatureTabs() {
                 </li>
               ))}
             </ul>
-            <Link
-              to="/features"
-              className="mt-7 inline-flex items-center gap-1 text-[15px] font-bold text-brand-600 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-100"
-            >
-              Explore all features
-              <Icon icon={ArrowRight01Icon} size={16} strokeWidth={2} />
-            </Link>
+            <div className="mt-7 flex flex-wrap gap-x-6 gap-y-3">
+              <Link
+                to={feature(cur.page)}
+                className="inline-flex items-center gap-1 text-[15px] font-bold text-brand-600 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-100"
+              >
+                {cur.more}
+                <Icon icon={ArrowRight01Icon} size={16} strokeWidth={2} />
+              </Link>
+              <Link
+                to="/features"
+                className="inline-flex items-center gap-1 text-[15px] font-semibold text-text-secondary hover:text-text-primary"
+              >
+                Explore all features
+              </Link>
+            </div>
           </div>
           <div className="flex min-h-[460px] items-center justify-center rounded-3xl bg-brand-50 p-6 sm:p-8 dark:bg-[#1a2547]" aria-hidden="true">
             <TabPreview id={tab} />
@@ -664,10 +706,11 @@ function FeatureGrid() {
           </Link>
         </div>
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {TILES.map(([mark, name, body], i) => (
-            <article
+          {TILES.map(([mark, name, body, to], i) => (
+            <Link
               key={name}
-              className="rounded-2xl border border-border-light bg-surface-0 p-5 transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_18px_40px_-18px_rgba(15,27,61,.28)] dark:hover:border-brand-800"
+              to={to}
+              className="block rounded-2xl border border-border-light bg-surface-0 p-5 transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_18px_40px_-18px_rgba(15,27,61,.28)] dark:hover:border-brand-800"
             >
               <span
                 className={cn(
@@ -679,7 +722,7 @@ function FeatureGrid() {
               </span>
               <h3 className="mt-4 text-base font-bold text-text-primary">{name}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-text-tertiary">{body}</p>
-            </article>
+            </Link>
           ))}
         </div>
       </div>
@@ -785,7 +828,7 @@ function AnywhereAndData() {
 
 function Pricing() {
   return (
-    <section id="pricing" className="bg-surface-1">
+    <section className="bg-surface-1">
       <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
         <p className={cn(EYEBROW, "text-center")}>Pricing</p>
         <h2 className={cn(HEADING, "mt-3 text-center text-3xl md:text-[40px]")}>

@@ -20,14 +20,18 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
+  bankAccounts,
   bankStatementImports,
   bankStatementLines,
+  bankTransactions,
 } from "@fintranzact/db";
+import { money, ofxToRows, qifToRows, rowsToCsv, sheetToRows } from "@fintranzact/shared";
 import {
   createTestWorld,
   createBankAccount,
+  createExpense,
   createPayment,
   type TestWorld,
   type TestBankAccount,
@@ -442,6 +446,64 @@ describe("Bank Reconciliation — CSV Import", () => {
     expect(matched!.matchedPaymentId).not.toBeNull();
   });
 
+  // Regression (J8 journey): a cash expense or receipt — or one through
+  // another account — with the statement line's amount and date was offered
+  // as its match, so a card purchase on the bank statement "matched" a cash
+  // purchase of the same amount and could not be booked as its own expense.
+  it("matches only payments and expenses that went through the statement's account", async () => {
+    const db = getTenantTestDb();
+    const caller = callerForRamesh();
+    const day = new Date("2026-05-10T06:00:00Z");
+    const savings = await createBankAccount(db, world.business1.id, {
+      accountName: "SBI Savings", accountType: "savings", isDefault: false,
+    });
+    // Not on this statement: cash, and another account.
+    await createExpense(db, world.business1.id, { amount: "450.00", mode: "cash", expenseDate: day });
+    await createPayment(db, world.business1.id, party.id, { amount: "700.00", mode: "cash", paymentDate: day });
+    await createExpense(db, world.business1.id, {
+      amount: "300.00", mode: "bank", bankAccountId: savings.id, expenseDate: day,
+    });
+    await createPayment(db, world.business1.id, party.id, {
+      amount: "820.00", mode: "upi", bankAccountId: savings.id, paymentDate: day,
+    });
+    // On it: paid from this account, and a bank expense with no account named.
+    const fromHdfc = await createExpense(db, world.business1.id, {
+      amount: "610.00", mode: "bank", bankAccountId: account.id, expenseDate: day,
+    });
+    const unnamed = await createExpense(db, world.business1.id, { amount: "999.00", mode: "bank", expenseDate: day });
+    const received = await createPayment(db, world.business1.id, party.id, {
+      amount: "1234.00", mode: "upi", bankAccountId: account.id, paymentDate: day,
+    });
+
+    const csv = [
+      "Date,Description,Debit,Credit,Balance",
+      "10/05/2026,POS STATIONERY,450.00,,1.00",
+      "10/05/2026,UPI CR,,700.00,1.00",
+      "10/05/2026,ACH DEBIT,300.00,,1.00",
+      "10/05/2026,NEFT CR,,820.00,1.00",
+      "10/05/2026,CHQ PAID,610.00,,1.00",
+      "10/05/2026,ECS ELECTRICITY,999.00,,1.00",
+      "10/05/2026,IMPS CR,,1234.00,1.00",
+    ].join("\n");
+    const upload = await caller.bankRecon.uploadCSV({ bankAccountId: account.id, fileName: "scope.csv", csvContent: csv });
+    await caller.bankRecon.confirmMapping({
+      importId: upload.importId,
+      csvContent: csv,
+      columnMapping: { date: 0, narration: 1, debit: 2, credit: 3, balance: 4, dateFormat: "DD/MM/YYYY", skipRows: 1 },
+    });
+    const lines = await db.select().from(bankStatementLines)
+      .where(eq(bankStatementLines.importId, upload.importId)).orderBy(bankStatementLines.lineNumber);
+    expect(lines.map((l) => [l.narration, l.matchStatus, l.matchedExpenseId ?? l.matchedPaymentId])).toEqual([
+      ["POS STATIONERY", "unmatched", null],
+      ["UPI CR", "unmatched", null],
+      ["ACH DEBIT", "unmatched", null],
+      ["NEFT CR", "unmatched", null],
+      ["CHQ PAID", "auto_matched", fromHdfc.id],
+      ["ECS ELECTRICITY", "auto_matched", unnamed.id],
+      ["IMPS CR", "auto_matched", received.id],
+    ]);
+  });
+
   it("creates an expense from an unmatched debit line and marks it as created", async () => {
     const caller = callerForRamesh();
 
@@ -504,6 +566,98 @@ describe("Bank Reconciliation — CSV Import", () => {
 
     expect(refreshed[0]!.matchStatus).toBe("created");
     expect(refreshed[0]!.matchedExpenseId).toBe(expense.id);
+  });
+
+  it("records the bank withdrawal for an expense created from a debit line", async () => {
+    const caller = callerForRamesh();
+    const db = getTenantTestDb();
+
+    const csv = [
+      "Date,Description,Debit,Credit,Balance",
+      "05/04/2026,Courier charges,1250.50,,95000.00",
+      "06/04/2026,Refund received,,400.00,95400.00",
+    ].join("\n");
+
+    const upload = await caller.bankRecon.uploadCSV({
+      bankAccountId: account.id,
+      fileName: "withdrawal-test.csv",
+      csvContent: csv,
+    });
+    await caller.bankRecon.confirmMapping({
+      importId: upload.importId,
+      csvContent: csv,
+      columnMapping: {
+        date: 0,
+        narration: 1,
+        debit: 2,
+        credit: 3,
+        balance: 4,
+        dateFormat: "DD/MM/YYYY",
+        skipRows: 1,
+      },
+    });
+
+    const lines = await db
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.importId, upload.importId));
+    const debitLine = lines.find((l) => parseFloat(l.debit) > 0)!;
+    const creditLine = lines.find((l) => parseFloat(l.credit) > 0)!;
+    expect(debitLine.matchStatus).toBe("unmatched");
+
+    const [before] = await db
+      .select({ currentBalance: bankAccounts.currentBalance })
+      .from(bankAccounts)
+      .where(eq(bankAccounts.id, account.id));
+
+    const expense = await caller.bankRecon.createExpense({
+      lineId: debitLine.id,
+      expense: {
+        category: "Freight",
+        amount: "1250.50",
+        mode: "bank",
+        expenseDate: new Date("2026-04-05").toISOString(),
+      },
+    });
+
+    expect(expense.bankAccountId).toBe(account.id);
+
+    const txns = await db
+      .select()
+      .from(bankTransactions)
+      .where(and(
+        eq(bankTransactions.referenceType, "expense"),
+        eq(bankTransactions.referenceId, expense.id),
+      ));
+    expect(txns).toHaveLength(1);
+    expect(txns[0]!.type).toBe("withdrawal");
+    expect(txns[0]!.bankAccountId).toBe(account.id);
+    expect(txns[0]!.amount).toBe("1250.50");
+
+    const [after] = await db
+      .select({ currentBalance: bankAccounts.currentBalance })
+      .from(bankAccounts)
+      .where(eq(bankAccounts.id, account.id));
+    expect(parseFloat(after!.currentBalance)).toBeCloseTo(
+      parseFloat(before!.currentBalance) - 1250.5,
+      2,
+    );
+
+    const [line] = await db
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.id, debitLine.id));
+    expect(line!.matchStatus).toBe("created");
+    expect(line!.matchedExpenseId).toBe(expense.id);
+    expect(line!.matchedBankTransactionId).toBe(txns[0]!.id);
+
+    // A credit (deposit) line is not a withdrawal — no expense can be created.
+    await expect(
+      caller.bankRecon.createExpense({
+        lineId: creditLine.id,
+        expense: { category: "Misc", amount: "400.00", mode: "bank" },
+      }),
+    ).rejects.toThrow(/debit/);
   });
 
   it("applies a categorization rule to auto-categorize a matching line on import", async () => {
@@ -590,5 +744,294 @@ describe("Bank Reconciliation — CSV Import", () => {
 
     expect(importRecord!.templateId).toBe(hdfcTemplate!.id);
     expect(importRecord!.templateVersion).toBe(hdfcTemplate!.version);
+  });
+});
+
+// ── Expense created from a statement line: its lifecycle ─────────────────────
+
+describe("Bank Reconciliation — expense created from a line", () => {
+  /** Import a one-line debit statement on `bankAccountId` and return the line. */
+  async function importDebitLine(bankAccountId: string, row: string) {
+    const caller = callerForRamesh();
+    const csv = ["Date,Description,Debit,Credit,Balance", row].join("\n");
+    const upload = await caller.bankRecon.uploadCSV({
+      bankAccountId,
+      fileName: "single-line.csv",
+      csvContent: csv,
+    });
+    await caller.bankRecon.confirmMapping({
+      importId: upload.importId,
+      csvContent: csv,
+      columnMapping: {
+        date: 0,
+        narration: 1,
+        debit: 2,
+        credit: 3,
+        balance: 4,
+        dateFormat: "DD/MM/YYYY",
+        skipRows: 1,
+      },
+    });
+    const [line] = await getTenantTestDb()
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.importId, upload.importId));
+    expect(line!.matchStatus).toBe("unmatched");
+    return line!;
+  }
+
+  async function balanceOf(bankAccountId: string) {
+    const [row] = await getTenantTestDb()
+      .select({ currentBalance: bankAccounts.currentBalance })
+      .from(bankAccounts)
+      .where(eq(bankAccounts.id, bankAccountId));
+    return row!.currentBalance;
+  }
+
+  async function withdrawalsFor(expenseId: string) {
+    return getTenantTestDb()
+      .select()
+      .from(bankTransactions)
+      .where(and(
+        eq(bankTransactions.referenceType, "expense"),
+        eq(bankTransactions.referenceId, expenseId),
+      ));
+  }
+
+  // Regression: the "is the line still unmatched?" check ran outside the
+  // transaction, so a double-submit recorded two expenses and two withdrawals.
+  it("records the withdrawal exactly once when the request is sent twice", async () => {
+    const caller = callerForRamesh();
+    const line = await importDebitLine(account.id, "11/05/2026,Printer toner,777.77,,90000.00");
+    const before = await balanceOf(account.id);
+
+    const expense = {
+      category: "Office Supplies",
+      amount: "777.77",
+      mode: "bank" as const,
+      expenseDate: new Date("2026-05-11").toISOString(),
+    };
+    const results = await Promise.allSettled([
+      caller.bankRecon.createExpense({ lineId: line.id, expense }),
+      caller.bankRecon.createExpense({ lineId: line.id, expense }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+
+    const db = getTenantTestDb();
+    const txns = await db
+      .select()
+      .from(bankTransactions)
+      .where(and(
+        eq(bankTransactions.bankAccountId, account.id),
+        eq(bankTransactions.amount, "777.77"),
+      ));
+    expect(txns).toHaveLength(1);
+    expect(money.sub(before, await balanceOf(account.id))).toBe("777.77");
+
+    const [refreshed] = await db
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.id, line.id));
+    expect(refreshed!.matchStatus).toBe("created");
+    expect(refreshed!.matchedBankTransactionId).toBe(txns[0]!.id);
+  });
+
+  // Regression: deleting the expense reversed the withdrawal but left the line
+  // "created" and pointing at the deleted expense, so it could never be
+  // reconciled again (unmatch and createExpense both refused it).
+  it("deleting the expense reverses the withdrawal and reopens the line", async () => {
+    const caller = callerForRamesh();
+    const line = await importDebitLine(account.id, "12/05/2026,Stationery,333.33,,89000.00");
+    const before = await balanceOf(account.id);
+
+    const expense = await caller.bankRecon.createExpense({
+      lineId: line.id,
+      expense: { category: "Stationery", amount: "333.33", mode: "bank" },
+    });
+    expect(await withdrawalsFor(expense.id)).toHaveLength(1);
+
+    await caller.expense.delete({ id: expense.id });
+
+    expect(await withdrawalsFor(expense.id)).toHaveLength(0);
+    expect(await balanceOf(account.id)).toBe(before);
+
+    const db = getTenantTestDb();
+    const [reopened] = await db
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.id, line.id));
+    expect(reopened!.matchStatus).toBe("unmatched");
+    expect(reopened!.matchedExpenseId).toBeNull();
+    expect(reopened!.matchedBankTransactionId).toBeNull();
+
+    const [imp] = await db
+      .select()
+      .from(bankStatementImports)
+      .where(eq(bankStatementImports.id, line.importId));
+    expect(imp!.unmatchedLines).toBe(1);
+    expect(imp!.matchedLines).toBe(0);
+
+    // The line can be reconciled again.
+    const again = await caller.bankRecon.createExpense({
+      lineId: line.id,
+      expense: { category: "Stationery", amount: "333.33", mode: "bank" },
+    });
+    expect(await withdrawalsFor(again.id)).toHaveLength(1);
+  });
+
+  // Regression: expense.update re-created the withdrawal on the default account
+  // for the payment mode, moving it off the statement's account and leaving
+  // the line linked to a deleted bank transaction.
+  it("editing the expense keeps the withdrawal on the statement's account", async () => {
+    const caller = callerForRamesh();
+    const db = getTenantTestDb();
+    const other = await createBankAccount(db, world.business1.id, {
+      accountName: "ICICI Current Account",
+      accountNumber: "99887766554433",
+      ifsc: "ICIC0000001",
+      bankName: "ICICI Bank",
+      accountType: "current",
+      openingBalance: "50000.00",
+      currentBalance: "50000.00",
+      isDefault: false,
+    });
+    const line = await importDebitLine(other.id, "13/05/2026,Internet bill,1111.00,,48889.00");
+    const defaultBefore = await balanceOf(account.id);
+
+    const expense = await caller.bankRecon.createExpense({
+      lineId: line.id,
+      expense: { category: "Internet", amount: "1111.00", mode: "bank" },
+    });
+    expect(await balanceOf(other.id)).toBe("48889.00");
+
+    // What the Expenses page sends when the user edits the description.
+    await caller.expense.update({
+      id: expense.id,
+      data: {
+        category: "Internet",
+        description: "Broadband for May",
+        amount: "1111.00",
+        mode: "bank",
+        expenseDate: new Date("2026-05-13").toISOString(),
+      },
+    });
+
+    const txns = await withdrawalsFor(expense.id);
+    expect(txns).toHaveLength(1);
+    expect(txns[0]!.bankAccountId).toBe(other.id);
+    expect(await balanceOf(other.id)).toBe("48889.00");
+    expect(await balanceOf(account.id)).toBe(defaultBefore);
+
+    const [refreshed] = await db
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.id, line.id));
+    expect(refreshed!.matchStatus).toBe("created");
+    expect(refreshed!.matchedBankTransactionId).toBe(txns[0]!.id);
+  });
+});
+
+// ── Converted statement formats (OFX, QIF, Excel) ────────────────────────────
+//
+// The web app turns OFX/QFX, QIF, Excel and PDF statements into CSV in the
+// browser with the @fintranzact/shared converters, then calls uploadCSV. The
+// converters' column names must be ones the API auto-maps.
+
+describe("Bank Reconciliation — converted statement formats", () => {
+  let plainAccount: TestBankAccount;
+
+  beforeAll(async () => {
+    // No IFSC or bank name, so no bank template is suggested and the
+    // header heuristics decide the mapping.
+    plainAccount = await createBankAccount(getTenantTestDb(), world.business1.id, {
+      accountName: "Converted Formats Account",
+      accountNumber: "99990000111122",
+      ifsc: null,
+      bankName: null,
+    });
+  });
+
+  async function importConverted(fileName: string, csvContent: string) {
+    const caller = callerForRamesh();
+    const upload = await caller.bankRecon.uploadCSV({ bankAccountId: plainAccount.id, fileName, csvContent });
+    const m = upload.detectedMapping;
+    await caller.bankRecon.confirmMapping({
+      importId: upload.importId,
+      csvContent,
+      columnMapping: {
+        date: m.date!,
+        narration: m.narration!,
+        debit: m.debit,
+        credit: m.credit,
+        reference: m.reference,
+        balance: m.balance,
+        dateFormat: m.dateFormat ?? "DD/MM/YYYY",
+        skipRows: m.skipRows ?? 1,
+      },
+    });
+    const lines = await getTenantTestDb()
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.importId, upload.importId));
+    return { upload, lines: lines.sort((a, b) => a.lineNumber - b.lineNumber) };
+  }
+
+  it("auto-maps every column of an OFX statement and imports its lines", async () => {
+    const csv = rowsToCsv(
+      ofxToRows(
+        [
+          "OFXHEADER:100",
+          "<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>",
+          "<STMTTRN><DTPOSTED>20260401<TRNAMT>-1500.00<FITID>OFX001<NAME>Office, Supplies</STMTTRN>",
+          "<STMTTRN><DTPOSTED>20260402<TRNAMT>25000<FITID>OFX002<NAME>Client Payment</STMTTRN>",
+          "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>",
+        ].join("\n"),
+      ),
+    );
+    const { upload, lines } = await importConverted("april.ofx", csv);
+
+    expect(upload.detectedTemplate).toBeNull();
+    expect(upload.detectedMapping).toMatchObject({ date: 0, narration: 1, reference: 2, debit: 3, credit: 4 });
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({ narration: "Office, Supplies", referenceNumber: "OFX001", debit: "1500.00", credit: "0.00" });
+    expect(lines[1]).toMatchObject({ narration: "Client Payment", referenceNumber: "OFX002", debit: "0.00", credit: "25000.00" });
+    expect(lines[0]!.transactionDate.getDate()).toBe(1);
+    expect(lines[0]!.transactionDate.getMonth()).toBe(3);
+  });
+
+  it("doesn't force the bank's template on a file without its headers", async () => {
+    // HDFC IFSC and bank name on the account, but an OFX export's columns.
+    const csvContent = rowsToCsv(
+      ofxToRows("<OFX><STMTTRN><DTPOSTED>20260405<TRNAMT>-750<FITID>OFX009<NAME>Courier</STMTTRN></OFX>"),
+    );
+    const upload = await callerForRamesh().bankRecon.uploadCSV({ bankAccountId: account.id, fileName: "hdfc.ofx", csvContent });
+
+    expect(upload.detectedTemplate).toBeNull();
+    expect(upload.detectedMapping).toMatchObject({ date: 0, narration: 1, reference: 2, debit: 3, credit: 4 });
+  });
+
+  it("imports a QIF statement", async () => {
+    const csv = rowsToCsv(qifToRows("!Type:Bank\nD1/4'26\nT-2,000.00\nPATM WDL\nN000123\n^\n"));
+    const { upload, lines } = await importConverted("april.qif", csv);
+
+    expect(upload.detectedMapping).toMatchObject({ date: 0, narration: 1, reference: 2, debit: 3, credit: 4 });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ narration: "ATM WDL", referenceNumber: "000123", debit: "2000.00" });
+  });
+
+  it("imports an Excel sheet from its header row", async () => {
+    const csv = rowsToCsv(
+      sheetToRows([
+        ["Statement of Account", null],
+        ["Account No", "99990000111122"],
+        ["Txn Date", "Description", "Debit", "Credit", "Balance"],
+        [new Date(Date.UTC(2026, 3, 3)), "Bank charges", 118, null, 9882],
+      ]),
+    );
+    const { upload, lines } = await importConverted("april.xlsx", csv);
+
+    expect(upload.headers).toEqual(["Txn Date", "Description", "Debit", "Credit", "Balance"]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ narration: "Bank charges", debit: "118.00", credit: "0.00", balance: "9882.00" });
   });
 });

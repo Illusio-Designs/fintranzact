@@ -5,7 +5,7 @@
  *   1. Invites a user with that role (via owner's API)
  *   2. Registers the invited user via UI
  *   3. Visits the invite link, which accepts it automatically
- *   3b. Has the owner assign the user to the seeded business (business
+ *   3b. Checks the member can open the seeded business (business
  *       access is per business; joining the organization alone shows none)
  *   4. Verifies which sidebar nav items are visible vs. hidden
  *   5. Verifies which routes are accessible vs. redirected
@@ -62,7 +62,7 @@ async function createRoleUser(
 ) {
   const api = new ApiHelper(ownerPage, API_URL);
   const ts = Date.now();
-  const email = `e2e-${role}-${ts}@test.hisaabo.in`;
+  const email = `e2e-${role}-${ts}@test.fintranzact.com`;
   const password = "Test@1234!";
   const name = `E2E ${role} User`;
 
@@ -91,7 +91,8 @@ async function createRoleUser(
   // Step 3: Visit the invite acceptance page
   await page.goto(`/invite/${invite.token}`);
 
-  // The invite page auto-accepts and moves on into the organization
+  // The invite page auto-accepts, says so, and continues on request
+  await page.getByRole("button", { name: /Continue with / }).click();
   await expect(page).not.toHaveURL(/\/invite\//, { timeout: 15_000 });
 
   // Step 3b: Owner assigns the new member to the seeded business
@@ -99,7 +100,9 @@ async function createRoleUser(
   const members = await api.query<Array<{ userId: string; userEmail: string }>>("tenant.members");
   const member = members.find((m) => m.userEmail === email);
   expect(member, `invited ${role} not found in tenant members`).toBeDefined();
-  await api.mutate("business.addMember", { businessId, userId: member!.userId, role: "member" });
+  // Joining the organisation already opened its businesses to the member.
+  const access = await api.query<Array<{ userId: string }>>("business.members", { businessId }, { "x-business-id": businessId });
+  expect(access.map((m) => m.userId)).toContain(member!.userId);
 
   // Open the app with that business selected (kept in sessionStorage)
   await page.evaluate((id: string) => sessionStorage.setItem("selectedBusinessId", id), businessId);

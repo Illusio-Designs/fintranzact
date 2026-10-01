@@ -149,6 +149,8 @@ test.describe("Expenses — Delete", () => {
     await waitForSearchResults(page);
 
     const rows = page.locator("tbody tr");
+    // The search is debounced: wait for the seeded row, not just any response.
+    await expect(rows.filter({ hasText: "DeleteMe Category" }).first()).toBeVisible();
     const count = await rows.count();
     test.skip(count === 0, "Seeded expense not found in list");
 
@@ -160,7 +162,7 @@ test.describe("Expenses — Delete", () => {
     await expect(page.locator(".btn-danger")).toBeVisible({ timeout: 5_000 });
     await page.locator(".btn-danger").click();
 
-    // The server deletes successfully — assert via the "0 expenses" footer
-    await expect(page.getByText(/0 expenses/i)).toBeVisible({ timeout: 10_000 });
+    // The deleted expense's row leaves the list.
+    await expect(rows).toHaveCount(count - 1, { timeout: 10_000 });
   });
 });

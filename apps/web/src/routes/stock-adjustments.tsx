@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
 import { formatDate, todayISODate, toISOString, cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -56,7 +57,7 @@ function StockAdjustmentsPage() {
 
   const adjust = trpc.stock.adjust.useMutation({
     onSuccess: async () => {
-      await Promise.all([utils.stock.adjustments.invalidate(), utils.stock.warehouses.invalidate(), utils.stock.balances.invalidate()]);
+      await invalidateStockViews(utils);
       toast({ title: "Stock adjusted", variant: "success" });
       setOpen(false);
       setLines([newLine()]);
@@ -72,7 +73,7 @@ function StockAdjustmentsPage() {
   return (
     <div>
       <PageHeader
-        title="Stock adjustments"
+        title="Stock Adjustments"
         description="Stock added or removed outside of sales and purchases, with the reason"
         actions={
           <button className="btn-primary" onClick={() => setOpen(true)}>
@@ -120,7 +121,14 @@ function StockAdjustmentsPage() {
                     return (
                       <tr key={a.id}>
                         <td className="whitespace-nowrap text-text-secondary">{formatDate(a.date)}</td>
-                        <td className="font-medium text-text-primary">{a.itemName}</td>
+                        <td className="font-medium text-text-primary">
+                          {a.itemName}
+                          {a.batchNumber && (
+                            <span className="block text-xs font-normal text-text-tertiary">
+                              Batch {a.batchNumber}{a.expiryDate ? ` · exp ${formatDate(a.expiryDate)}` : ""}
+                            </span>
+                          )}
+                        </td>
                         <td className="text-text-secondary">{a.warehouseName ?? "—"}</td>
                         <td
                           className={cn(
@@ -165,9 +173,11 @@ function StockAdjustmentsPage() {
                   warehouseId,
                   reason: finalReason,
                   date: toISOString(date),
-                  lines: ready.map((l) => ({
+                  lines: ready.map(({ batchId, newBatch, ...l }) => ({
                     ...l,
                     quantity: direction === "remove" ? `-${l.quantity}` : l.quantity,
+                    // Stock taken out comes from a batch; stock added goes into one.
+                    ...(direction === "remove" ? (batchId ? { batchId } : {}) : (newBatch ? { newBatch } : {})),
                   })),
                 })
               }
@@ -208,6 +218,7 @@ function StockAdjustmentsPage() {
             onChange={setLines}
             warehouseId={warehouseId || undefined}
             quantityLabel={direction === "remove" ? "Remove" : "Add"}
+            batchMode={direction === "remove" ? "out" : "in"}
           />
         </div>
       </SlideOver>

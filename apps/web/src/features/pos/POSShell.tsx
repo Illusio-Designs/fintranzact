@@ -50,6 +50,7 @@ export function POSShell({ businessId, walkInPartyId }: Props) {
       // Another tab finalised a sale — invalidate stock/listings.
       if (ev.data.type === "invoice:finalized") {
         utils.item.list.invalidate();
+        utils.pos.catalog.invalidate();
       }
     };
     return () => channel.close();
@@ -66,12 +67,26 @@ export function POSShell({ businessId, walkInPartyId }: Props) {
   };
 
   // ── Scanner ────────────────────────────────────────────────────
-  const handleScan = async (code: string) => {
+  const handleScan = async (scanned: string) => {
     // Resolve the code to an item first: it may be a box / carton code that
     // stands for several pieces, which catalogue search can't know. Then pick
     // that item's tile from the catalogue for price, tax and unit.
+    //
+    // A scan made with the search box focused typed the code into it too.
+    // If the box holds more than the code and the whole of it is a known
+    // code, the detector caught only the tail of a burst (its first keys
+    // came in slowly): use the whole. Either way take what was scanned back
+    // out of the box now (before the lookup, so a second scan right after is
+    // not appended to it), or the grid filters on the barcode.
+    const typed = searchRef.current?.value.trim() ?? "";
+    const whole =
+      typed !== scanned && typed.endsWith(scanned)
+        ? await utils.item.lookupByCode.fetch({ code: typed }).catch(() => null)
+        : null;
+    const code = whole ? typed : scanned;
+    setSearch((s) => (s.trim().endsWith(code) ? s.trim().slice(0, -code.length) : s));
     try {
-      const hit = await utils.item.lookupByCode.fetch({ code });
+      const hit = whole ?? (await utils.item.lookupByCode.fetch({ code }));
       const search = hit
         ? (hit.variant?.barcode ?? hit.item.barcode ?? hit.item.sku ?? hit.item.name)
         : code;
@@ -114,6 +129,17 @@ export function POSShell({ businessId, walkInPartyId }: Props) {
   );
   useKeyboardShortcuts(shellRef, shortcuts);
 
+  // The scanner and the shortcuts listen on the shell. When the payment sheet
+  // or customer picker closes, the button that had focus is gone and focus
+  // falls to <body>, outside the shell: take it back, or the next scan and
+  // F9 go nowhere. (The shell, not the search box, so a phone's keyboard
+  // does not pop up after every sale.)
+  useEffect(() => {
+    if (paymentOpen || pickerOpen) return;
+    const active = document.activeElement;
+    if (!active || active === document.body) shellRef.current?.focus({ preventScroll: true });
+  }, [paymentOpen, pickerOpen]);
+
   // ── Tile → cart handler ────────────────────────────────────────
   // Matches the tile's composite identity (item + variant OR item + unit)
   // so two different alt-units of the same item don't merge into one line.
@@ -139,7 +165,7 @@ export function POSShell({ businessId, walkInPartyId }: Props) {
     setPickerOpen(false);
   };
 
-  const handleFinalized = (invoiceId: string) => {
+  const handleFinalized = (invoiceId: string, invoiceNumber: string) => {
     setPaymentOpen(false);
     // Print receipt (fire-and-forget)
     setPrintInvoiceId(invoiceId);
@@ -147,19 +173,24 @@ export function POSShell({ businessId, walkInPartyId }: Props) {
     if (activeCart) {
       store.removeCart(activeCart.id, walkInPartyId, "Walk-in Customer");
     }
-    // Tell other tabs to invalidate stock
+    // The tiles' "in stock" counts are stale now, here and in other tabs
+    // (a BroadcastChannel does not deliver to its own tab).
+    utils.pos.catalog.invalidate();
+    utils.item.list.invalidate();
     broadcast({ type: "invoice:finalized", invoiceId });
-    toast.success("Sale complete", `Invoice ${invoiceId.slice(0, 8)}`);
+    toast.success("Sale complete", `Invoice ${invoiceNumber || invoiceId.slice(0, 8)}`);
   };
 
   return (
     <div
       ref={shellRef}
       tabIndex={-1}
+      data-testid="pos-shell"
       className="fixed inset-0 flex flex-col bg-surface-0 text-text-primary outline-none"
     >
       {/* Top bar */}
-      <header className="flex items-center gap-3 px-4 py-2 border-b border-border bg-surface-1">
+      {/* On a phone the search box takes its own row under the buttons. */}
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 border-b border-border bg-surface-1">
         <button
           type="button"
           onClick={() => navigate({ to: "/invoices" })}
@@ -169,20 +200,32 @@ export function POSShell({ businessId, walkInPartyId }: Props) {
           ← Exit
         </button>
         <div className="text-sm font-semibold">POS Register</div>
-        <div className="flex-1">
+        <div className="order-last basis-full md:order-none md:basis-0 md:flex-1">
           <input
             ref={searchRef}
             type="search"
             className="w-full max-w-md px-3 py-1.5 rounded border border-border bg-surface-2 text-sm"
             placeholder="Search item — F2, or scan barcode"
+            aria-label="Search item or scan barcode"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter on a code typed by hand (a label the scanner can't
+              // read), or a scan the timing detector missed because the
+              // keys arrived slowly: look it up like a scan. A burst the
+              // detector did catch never gets here (it stops the Enter).
+              const code = search.trim();
+              if (e.key !== "Enter" || !code) return;
+              e.preventDefault();
+              void handleScan(code);
+            }}
           />
         </div>
         <button
           type="button"
           className="px-3 py-1.5 rounded border border-border bg-surface-2 hover:bg-surface-3 text-sm"
           onClick={() => setPickerOpen(true)}
+          aria-label={`Customer: ${activeCart?.partyName ?? "Walk-in"} (F3 to change)`}
         >
           {activeCart?.partyName ?? "Walk-in"}{" "}
           <span className="text-text-tertiary text-xs ml-1">F3</span>
@@ -232,18 +275,19 @@ export function POSShell({ businessId, walkInPartyId }: Props) {
       </div>
 
       {/* Main two-pane */}
-      <main className="flex-1 flex min-h-0">
-        <section className="flex-1 min-w-0 overflow-hidden">
+      {/* Item grid beside the cart; on a phone the cart sits under the grid. */}
+      <main className="flex-1 flex flex-col md:flex-row min-h-0">
+        <section className="flex-1 min-w-0 min-h-0 overflow-y-auto" aria-label="Items">
           <ItemGrid search={search} onPick={(t) => handlePickItem(t)} />
         </section>
-        <aside className="w-[360px] flex-shrink-0 flex flex-col min-h-0">
+        <aside className="h-[55%] md:h-auto md:w-[360px] flex-shrink-0 flex flex-col min-h-0 border-t border-border md:border-t-0" aria-label="Cart">
           <Cart store={store} />
         </aside>
       </main>
 
       {/* Bottom pay bar */}
       <footer className="border-t border-border bg-surface-1 px-4 py-3 flex items-center gap-3">
-        <div className="text-xs text-text-tertiary">
+        <div className="hidden md:block text-xs text-text-tertiary">
           F2 search · F3 customer · F6 hold · F9 pay · Alt+1..5 switch
         </div>
         <div className="flex-1" />

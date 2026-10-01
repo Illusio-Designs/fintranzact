@@ -21,7 +21,7 @@ pub fn run() {
                 )?;
             }
 
-            // Listen for deep link events (hisaabo://verify?token=xxx)
+            // Listen for deep link events (fintranzact://verify?token=xxx)
             // The deep link scheme uses /verify (matching Expo Router's layout
             // group path), but the webview runs the web app which uses
             // /auth/verify (TanStack Router).

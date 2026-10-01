@@ -11,6 +11,8 @@
  *   (8-digit is optional but accepted at any turnover level)
  */
 
+import cbicCodes from "./hsn-cbic.json";
+
 export interface HsnEntry {
   hsn: string;
   description: string;
@@ -568,6 +570,41 @@ const HSN_MASTER: HsnEntry[] = [
   { hsn: "999716", description: "Yoga instruction services", type: "services" },
 ];
 
+// ── Full CBIC list ──────────────────────────────────────────────────────────
+// hsn-cbic.json holds [code, description] pairs: 12,604 eight-digit HSN codes
+// and 496 SAC codes from the CBIC / WCO HSN list, taken from the ISC-licensed
+// npm package `hsn-code-package` v3.0.0 (data dated 2 Jun 2026). Its 7-digit
+// HSN codes had lost their leading zero and are padded back to 8 digits. The
+// curated list above comes first in results (shorter, friendlier names).
+
+
+let allEntries: HsnEntry[] | null = null;
+let allSearch: string[] = [];
+let allCodes: Set<string> = new Set();
+
+function entries(): HsnEntry[] {
+  if (allEntries) return allEntries;
+  const curated = new Set(HSN_MASTER.map((e) => e.hsn));
+  const full: HsnEntry[] = (cbicCodes as [string, string][])
+    .filter(([code]) => !curated.has(code))
+    .map(([code, description]) => ({
+      hsn: code,
+      description: readable(description),
+      type: code.startsWith("99") ? "services" : "goods",
+    }));
+  allEntries = [...HSN_MASTER, ...full];
+  allSearch = allEntries.map((e) => e.description.toLowerCase());
+  allCodes = new Set(allEntries.map((e) => e.hsn));
+  return allEntries;
+}
+
+/** "MEDICAMENTS ... PENICILLINS" → "Medicaments ... penicillins" (all-caps text only). */
+function readable(text: string): string {
+  if (text !== text.toUpperCase()) return text;
+  const lower = text.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 export interface SearchOptions {
@@ -576,75 +613,104 @@ export interface SearchOptions {
 }
 
 /**
- * Search the HSN master data.
+ * Search the HSN / SAC list (curated codes first, then the full CBIC list).
  *
- * - If the query is all digits, match codes that start with the query string.
- * - If the query contains non-digit characters, do a case-insensitive
- *   substring match on the description.
- *
- * Results are ordered by relevance:
- *   1. Exact code match
- *   2. Code starts with query
- *   3. Description contains the query
+ * - All digits: codes equal to the query, then codes that start with it
+ *   (shorter codes first, so a heading comes before its sub-codes).
+ * - Otherwise: every word of the query must appear in the description.
  *
  * The default limit is 20.
  */
 export function searchHsn(query: string, opts?: SearchOptions): HsnEntry[] {
   const limit = opts?.limit ?? 20;
   const typeFilter = opts?.type;
-
   const trimmed = query.trim();
   if (!trimmed) return [];
+  const list = entries();
 
-  const isDigitQuery = /^\d+$/.test(trimmed);
-  const lowerQuery = trimmed.toLowerCase();
-
-  const scored: Array<{ entry: HsnEntry; score: number }> = [];
-
-  for (const entry of HSN_MASTER) {
-    if (typeFilter && entry.type !== typeFilter) continue;
-
-    let score = 0;
-
-    if (isDigitQuery) {
-      if (entry.hsn === trimmed) {
-        score = 3;
-      } else if (entry.hsn.startsWith(trimmed)) {
-        score = 2;
-      }
-    } else {
-      if (entry.description.toLowerCase().includes(lowerQuery)) {
-        score = 1;
-      }
-    }
-
-    if (score > 0) {
-      scored.push({ entry, score });
-    }
+  const out: Array<{ entry: HsnEntry; score: number; index: number }> = [];
+  if (/^\d+$/.test(trimmed)) {
+    list.forEach((entry, index) => {
+      if (typeFilter && entry.type !== typeFilter) return;
+      if (entry.hsn === trimmed) out.push({ entry, score: 3, index });
+      else if (entry.hsn.startsWith(trimmed)) out.push({ entry, score: 2, index });
+    });
+    out.sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.entry.hsn.length - b.entry.hsn.length ||
+        a.entry.hsn.localeCompare(b.entry.hsn),
+    );
+  } else {
+    const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+    list.forEach((entry, index) => {
+      if (typeFilter && entry.type !== typeFilter) return;
+      if (words.every((w) => allSearch[index].includes(w))) out.push({ entry, score: 1, index });
+    });
+    // Curated codes first, then shorter codes (headings before sub-codes).
+    out.sort(
+      (a, b) =>
+        Number(b.index < HSN_MASTER.length) - Number(a.index < HSN_MASTER.length) ||
+        a.entry.hsn.length - b.entry.hsn.length ||
+        a.entry.hsn.localeCompare(b.entry.hsn),
+    );
   }
-
-  // Sort by score descending, then by HSN code ascending for stable ordering
-  scored.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return a.entry.hsn.localeCompare(b.entry.hsn);
-  });
-
-  return scored.slice(0, limit).map(s => s.entry);
+  return out.slice(0, limit).map((s) => s.entry);
 }
 
 /**
- * Check whether a given code exists in the master data (as an exact match
- * or as the prefix of a longer code in the master list).
- *
- * Rules:
- *   - Must be at least 4 digits long
- *   - Must be entirely numeric
- *   - Must exist as an exact match in the master list
+ * Whether a code is a real HSN / SAC code: 4 to 8 digits, and either listed
+ * itself or the heading of a listed code (e.g. "3004" for "30041010").
  */
 export function isValidHsn(code: string): boolean {
-  if (code.length < 4) return false;
-  if (!/^\d+$/.test(code)) return false;
-  return HSN_MASTER.some(entry => entry.hsn === code);
+  if (!/^\d{4,8}$/.test(code)) return false;
+  entries();
+  if (allCodes.has(code)) return true;
+  for (const c of allCodes) if (c.startsWith(code)) return true;
+  return false;
+}
+
+export interface HsnDetails {
+  code: string;
+  type: "goods" | "services";
+  description: string;
+  /** "code" when the code itself is listed, "heading" when it heads listed sub-codes. */
+  match: "code" | "heading";
+  /** For a heading: how many listed codes sit under it. */
+  subCodes?: number;
+}
+
+/** What a valid code stands for, or null when it is not a real code. */
+export function describeHsn(code: string): HsnDetails | null {
+  const c = code.trim();
+  if (!isValidHsn(c)) return null;
+  const list = entries();
+  const exact = list.find((e) => e.hsn === c);
+  if (exact) return { code: c, type: exact.type, description: exact.description, match: "code" };
+  const under = list.filter((e) => e.hsn.startsWith(c));
+  // A heading's own text is the part its sub-codes share; the shortest
+  // sub-code's description is the closest stand-in.
+  const first = [...under].sort((a, b) => a.hsn.length - b.hsn.length || a.hsn.localeCompare(b.hsn))[0];
+  return {
+    code: c,
+    type: first.type,
+    description: first.description,
+    match: "heading",
+    subCodes: under.length,
+  };
+}
+
+/**
+ * Why an item's HSN / SAC code would be refused, or null when it is fine.
+ * Codes are digits only, 4, 6 or 8 long, and must be a real code.
+ */
+export function hsnProblem(code: string): string | null {
+  const c = code.trim();
+  if (!c) return null;
+  if (!/^\d+$/.test(c)) return "HSN / SAC code must contain digits only.";
+  if (![4, 6, 8].includes(c.length)) return "HSN / SAC code must be 4, 6 or 8 digits long.";
+  if (!isValidHsn(c)) return `HSN / SAC code ${c} is not in the GST HSN / SAC list. Check the code.`;
+  return null;
 }
 
 /**

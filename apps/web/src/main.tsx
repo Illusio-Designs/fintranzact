@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { trpc, createTRPCClient, queryClient } from "@/lib/trpc";
 import { ToastContainer } from "@/components/ui/Toast";
+import { PageSearchProvider } from "@/lib/page-search";
 import { routeTree } from "./routeTree.gen";
 import { hydrateDesktopSession } from "@/lib/desktop-session";
 import { isDesktop } from "@/lib/isDesktop";
@@ -36,7 +37,9 @@ function App() {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} context={{ trpc }} />
+        <PageSearchProvider>
+          <RouterProvider router={router} context={{ trpc }} />
+        </PageSearchProvider>
         <ToastContainer />
       </QueryClientProvider>
     </trpc.Provider>

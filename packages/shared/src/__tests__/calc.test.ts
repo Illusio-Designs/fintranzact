@@ -14,7 +14,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { calcLineItem, calcInvoiceTotals } from "../calc.js";
+import { calcLineItem, calcInvoiceTotals, taxOn } from "../calc.js";
+import { splitIntraStateTax } from "../gst.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // calcLineItem — single invoice line item calculations
@@ -208,38 +209,46 @@ describe("calcInvoiceTotals — aggregates line items with invoice-level discoun
   });
 
   it("applies an invoice-level discount as a fixed amount (type='amount')", () => {
-    // Sharma Traders gets a ₹50 loyalty discount on the whole invoice.
-    // subtotal=700, invoiceDiscount=50, tax=10, total = 700 - 50 + 10 = 660
+    // Sharma Traders gets a ₹50 loyalty discount on the whole invoice. Given
+    // on the invoice, it reduces the taxable value (CGST Act s.15(3)(a)):
+    // shared 500:200 → 35.71 + 14.29, so the 5% line is taxed on 185.71 = 9.29.
+    // total = 700 - 50 + 9.29 = 659.29
     const result = calcInvoiceTotals({
       ...sharmaInvoiceInput(),
       invoiceDiscount: "50",
       invoiceDiscountType: "amount",
     });
-    expect(result.invoiceDiscountAmount).toBe("50");
-    expect(result.total).toBe("660.00");
+    expect(result.invoiceDiscountAmount).toBe("50.00");
+    expect(result.lines.map((l) => l.discountShare)).toEqual(["35.71", "14.29"]);
+    expect(result.taxTotal).toBe("9.29");
+    expect(result.total).toBe("659.29");
   });
 
   it("applies an invoice-level discount as a percentage (type='percent')", () => {
-    // 10% discount on the post-line-discount subtotal of ₹700 = ₹70 discount.
-    // tax=10, total = 700 - 70 + 10 = 640
+    // 10% discount on the post-line-discount subtotal of ₹700 = ₹70 discount,
+    // shared 50 + 20; the 5% line is taxed on 180 = 9.00. total = 630 + 9 = 639
     const result = calcInvoiceTotals({
       ...sharmaInvoiceInput(),
       invoiceDiscount: "10",
       invoiceDiscountType: "percent",
     });
     expect(result.invoiceDiscountAmount).toBe("70.00");
-    expect(result.total).toBe("640.00");
+    expect(result.taxTotal).toBe("9.00");
+    expect(result.total).toBe("639.00");
   });
 
   it("adds additional charges (e.g. delivery charges, packing fees)", () => {
-    // ₹50 delivery fee added on top of the invoice total.
-    // subtotal=700, tax=10, charges=50, total=760
+    // ₹50 delivery fee: part of the value of supply (s.15(2)(c)), taxed at the
+    // highest line rate (5%) = 2.50. total = 700 + 50 + 10 + 2.50 = 762.50
     const result = calcInvoiceTotals({
       ...sharmaInvoiceInput(),
       charges: [{ amount: "50.00" }],
     });
     expect(result.chargesTotal).toBe("50.00");
-    expect(result.total).toBe("760.00");
+    expect(result.chargeTaxRate).toBe("5.00");
+    expect(result.chargeTax).toBe("2.50");
+    expect(result.taxableValue).toBe("750.00");
+    expect(result.total).toBe("762.50");
   });
 
   it("applies multiple named charges and sums them into chargesTotal", () => {
@@ -286,7 +295,7 @@ describe("calcInvoiceTotals — aggregates line items with invoice-level discoun
       invoiceDiscount: "100",
       // invoiceDiscountType intentionally omitted
     });
-    expect(result.invoiceDiscountAmount).toBe("100");
+    expect(result.invoiceDiscountAmount).toBe("100.00");
     expect(result.total).toBe("900.00");
   });
 
@@ -311,11 +320,10 @@ describe("calcInvoiceTotals — aggregates line items with invoice-level discoun
     //   subtotal=500, disc=0, afterDisc=500, tax=60, total=560
     // Invoice-level: ₹200 flat discount, ₹100 delivery charge, +₹0.80 roundoff
     // Combined subtotal (afterDisc) = 28500 + 500 = 29000
-    // taxTotal = 3420 + 60 = 3480
-    // invoiceDiscount = 200
-    // chargesTotal = 100
-    // roundOff = 0.80
-    // total = 29000 + 3480 - 200 + 100 + 0.80 = 32380.80
+    // Discount shared pro rata: 196.55 + 3.45 → taxable 28303.45 + 496.55
+    //   line tax 3396.41 + 59.59 = 3456.00
+    // Charges ₹100 at 12% = 12.00 → taxTotal = 3468.00
+    // total = 29000 - 200 + 100 + 3468 + 0.80 = 32368.80
     const result = calcInvoiceTotals({
       lineItems: [
         { quantity: "2", unitPrice: "15000.00", taxPercent: "12", discountPercent: "5" },
@@ -327,9 +335,91 @@ describe("calcInvoiceTotals — aggregates line items with invoice-level discoun
       roundOff: "0.80",
     });
     expect(result.subtotal).toBe("29000.00");
-    expect(result.taxTotal).toBe("3480.00");
-    expect(result.invoiceDiscountAmount).toBe("200");
+    expect(result.lines.map((l) => l.taxableValue)).toEqual(["28303.45", "496.55"]);
+    expect(result.taxTotal).toBe("3468.00");
+    expect(result.invoiceDiscountAmount).toBe("200.00");
     expect(result.chargesTotal).toBe("100.00");
-    expect(result.total).toBe("32380.80");
+    expect(result.total).toBe("32368.80");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Intra-state supplies: CGST and SGST are each rounded at half the rate
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("intraState — CGST and SGST rounded separately at half the rate", () => {
+  it("5% on ₹135: the full-rate tax ₹6.75 is an odd paisa; intra-state it is 2 × ₹3.38", () => {
+    const igst = calcLineItem({ quantity: "1", unitPrice: "135", taxPercent: "5", discountPercent: "0" });
+    expect(igst.taxAmount).toBe("6.75");
+    const intra = calcLineItem({ quantity: "1", unitPrice: "135", taxPercent: "5", discountPercent: "0", intraState: true });
+    expect(intra.taxAmount).toBe("6.76");
+    expect(intra.total).toBe("141.76");
+    const { cgst, sgst } = splitIntraStateTax(intra.taxAmount);
+    expect(cgst).toBe(3.38);
+    expect(sgst).toBe(3.38);
+  });
+
+  it("inter-state (intraState false / unset) keeps one amount at the full rate", () => {
+    const off = calcLineItem({ quantity: "1", unitPrice: "135", taxPercent: "5", discountPercent: "0", intraState: false });
+    expect(off.taxAmount).toBe("6.75");
+    const t = calcInvoiceTotals({
+      lineItems: [{ quantity: "1", unitPrice: "135", taxPercent: "5", discountPercent: "0" }],
+      charges: [{ amount: "45" }],
+    });
+    expect(t.taxTotal).toBe("9.00"); // 6.75 + 2.25
+  });
+
+  it("already-even taxes are unchanged", () => {
+    const r = calcLineItem({ quantity: "2", unitPrice: "500", taxPercent: "18", discountPercent: "0", intraState: true });
+    expect(r.taxAmount).toBe("180.00");
+  });
+
+  it("tax-inclusive: the back-calculated base is taxed in two equal halves", () => {
+    // ₹141.75 incl. 5% → base 135.00; halves 3.375 → 3.38 each
+    const r = calcLineItem({ quantity: "1", unitPrice: "141.75", taxPercent: "5", discountPercent: "0", taxInclusive: true, intraState: true });
+    expect(r.afterDiscount).toBe("135.00");
+    expect(r.taxAmount).toBe("6.76");
+    const old = calcLineItem({ quantity: "1", unitPrice: "141.75", taxPercent: "5", discountPercent: "0", taxInclusive: true });
+    expect(old.taxAmount).toBe("6.75");
+  });
+
+  it("totals: lines, the discounted lines and the charges are all even-paisa", () => {
+    const t = calcInvoiceTotals({
+      lineItems: [
+        { quantity: "1", unitPrice: "135", taxPercent: "5", discountPercent: "0" },
+        { quantity: "1", unitPrice: "45", taxPercent: "5", discountPercent: "0" },
+      ],
+      charges: [{ amount: "45" }],
+      intraState: true,
+    });
+    expect(t.lines.map((l) => l.taxAmount)).toEqual(["6.76", "2.26"]);
+    expect(t.chargeTax).toBe("2.26");
+    expect(t.taxTotal).toBe("11.28");
+    expect(t.total).toBe("236.28");
+    for (const tax of [...t.lines.map((l) => l.taxAmount), t.chargeTax, t.taxTotal]) {
+      const { cgst, sgst } = splitIntraStateTax(tax);
+      expect(cgst).toBe(sgst);
+    }
+  });
+
+  it("totals with a document discount re-tax the discounted line in halves", () => {
+    // 145 − 10 discount = 135 taxable → 2 × 3.38
+    const t = calcInvoiceTotals({
+      lineItems: [{ quantity: "1", unitPrice: "145", taxPercent: "5", discountPercent: "0" }],
+      invoiceDiscount: "10",
+      intraState: true,
+    });
+    expect(t.lines[0]!.taxableValue).toBe("135.00");
+    expect(t.lines[0]!.taxAmount).toBe("6.76");
+    expect(t.taxTotal).toBe("6.76");
+  });
+
+  it("taxOn: zero/blank rates and amounts give zero", () => {
+    expect(taxOn("0", "18", true)).toBe("0.00");
+    expect(taxOn("100", "0", true)).toBe("0.00");
+    expect(taxOn("100", "", true)).toBe("0.00");
+    expect(taxOn("100", "28", true)).toBe("28.00");
+    expect(taxOn("0.03", "18", true)).toBe("0.00"); // half 0.0027 → 0.00
+    expect(taxOn("0.03", "18")).toBe("0.01");
   });
 });

@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
+import { invalidateStockViews } from "@/lib/stock-cache";
 import { formatCurrency, formatDate, cn, downloadCSV, todayISODate, toISOString } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "@/hooks/useToast";
@@ -8,19 +10,21 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import type { ItemType, ItemMode } from "@fintranzact/shared";
+import { MrpField } from "@/components/pricing/MrpField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LabelPrintPanel, type LabelCandidate, type LabelMode } from "@/components/items/LabelPrintPanel";
 import { ItemBarcodeField, ItemExtraCodes } from "@/components/items/ItemBarcodeFields";
+import { HsnSacInput } from "@/components/items/HsnSacInput";
 import { useBarcodeSetup } from "@/components/barcodes/BarcodeSymbol";
 import { Modal } from "@/components/ui/Modal";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Listbox } from "@/components/ui/Listbox";
+import { gstRateOptions, gstRateValue } from "@/lib/gst-rates";
 import { Combobox } from "@/components/ui/Combobox";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
@@ -30,10 +34,13 @@ import {
   type UiUnitVariant,
   recomputeOnBasePriceChange,
   toPayloadVariant,
+  switchFactorForVariant,
 } from "@/lib/unit-variant-derivation";
 import { Icon } from "@/components/ui/Icon";
 import { ArrowDown01Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
+import { StockGroupFilter, StockGroupPicker } from "@/components/inventory/StockGroups";
+import { BatchTrackingFields, ItemBatchesPanel, type BatchInValue } from "@/components/inventory/BatchFields";
 
 import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/items")({
@@ -119,9 +126,10 @@ function countFilled(...values: string[]): number {
 }
 
 function ItemsPage() {
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search items…");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
+  const [groupFilter, setGroupFilter] = useState("");
   const [page, setPage] = useState(1);
   const [showAddModal, setShowAddModal] = useState(false);
   const deleteConfirm = useDeleteConfirmation();
@@ -135,11 +143,12 @@ function ItemsPage() {
   const debouncedSearch = useDebounce(search, 300);
 
   // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter, showLowStock]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter, showLowStock, groupFilter]);
 
   const { data, isLoading } = trpc.item.list.useQuery({
     search: debouncedSearch || undefined,
     lowStock: showLowStock || undefined,
+    stockGroupId: groupFilter || undefined,
     page,
     limit: ITEMS_PAGE_SIZE,
   });
@@ -170,6 +179,7 @@ function ItemsPage() {
       const result = await utils.item.list.fetch({
         search: debouncedSearch || undefined,
         lowStock: showLowStock || undefined,
+        stockGroupId: groupFilter || undefined,
         page: pg,
         limit: 100,
       });
@@ -292,10 +302,13 @@ function ItemsPage() {
   return (
     <div>
       <PageHeader
-        title="Items"
+        title="Stock Items"
         description="Products and services inventory"
         actions={
           <div className="flex items-center gap-2">
+            <Link to="/stock-groups" className="btn-secondary inline-flex items-center gap-2">
+              Stock groups
+            </Link>
             {barcodesOn && (
               <button
                 className="btn-secondary inline-flex items-center gap-2"
@@ -317,17 +330,12 @@ function ItemsPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search items…"
-          className="max-w-xs"
-        />
         <SegmentedControl
           tabs={TYPE_TABS}
           value={typeFilter}
           onChange={setTypeFilter}
         />
+        <StockGroupFilter value={groupFilter} onChange={setGroupFilter} allowNone className="w-48" />
         {(lowStockCount ?? 0) > 0 && (
           <button
             onClick={() => setShowLowStock(!showLowStock)}
@@ -536,14 +544,18 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
-  const [category, setCategory] = useState("");
+  const [stockGroupId, setStockGroupId] = useState("");
   const [hsn, setHsn] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
+  const [mrp, setMrp] = useState("");
   const [taxPercent, setTaxPercent] = useState("0");
   const [taxInclusive, setTaxInclusive] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("0");
   const [lowStockAlert, setLowStockAlert] = useState("");
+  const [trackBatches, setTrackBatches] = useState(false);
+  const [trackExpiry, setTrackExpiry] = useState(false);
+  const [openingBatch, setOpeningBatch] = useState<BatchInValue>({});
   const [unit, setUnit] = useState("pcs");
   const [unitVariants, setUnitVariants] = useState<UiUnitVariant[]>([]);
   const [variantAttributes, setVariantAttributes] = useState<string[]>([]);
@@ -633,6 +645,9 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
     onSuccess: () => {
       utils.item.list.invalidate();
       toast.success("Item created");
+      // The panel stays mounted: the next item starts blank instead of
+      // inheriting this one's barcode, stock, batches and variants.
+      resetForm();
       onClose();
     },
     onError: (err) => {
@@ -645,14 +660,18 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
     setName("");
     setSku("");
     setBarcode("");
-    setCategory("");
+    setStockGroupId("");
     setHsn("");
     setSalePrice("");
     setPurchasePrice("");
+    setMrp("");
     setTaxPercent("0");
     setTaxInclusive(false);
     setStockQuantity("0");
     setLowStockAlert("");
+    setTrackBatches(false);
+    setTrackExpiry(false);
+    setOpeningBatch({});
     setUnit("pcs");
     setUnitVariants([]);
     setVariantAttributes([]);
@@ -684,14 +703,25 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
       name,
       sku: sku || undefined,
       barcode: barcode || undefined,
-      category: category || undefined,
+      stockGroupId: stockGroupId || undefined,
       hsn: hsn || undefined,
       salePrice: salePrice || undefined,
       purchasePrice: purchasePrice || undefined,
+      mrp: mrp || undefined,
       taxPercent,
       taxInclusive,
       stockQuantity: effectiveMode === "variants" ? "0" : stockQuantity,
       lowStockAlert: lowStockAlert || undefined,
+      ...(itemType === "product" ? { trackBatches, trackExpiry: trackBatches && trackExpiry } : {}),
+      ...(itemType === "product" && trackBatches && effectiveMode !== "variants" && openingBatch.batchNumber?.trim()
+        ? {
+            openingBatch: {
+              batchNumber: openingBatch.batchNumber.trim(),
+              expiryDate: openingBatch.expiryDate || undefined,
+              mfgDate: openingBatch.mfgDate || undefined,
+            },
+          }
+        : {}),
       unit: unit as any,
       unitVariants: effectiveMode === "alt_units" && validUnitVariants.length > 0 ? validUnitVariants : undefined,
       variantAttributes: effectiveMode === "variants" && variantAttributes.length > 0 ? variantAttributes : undefined,
@@ -760,14 +790,11 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
             placeholder="0.00"
           />
           <div className="flex flex-col gap-1">
-            <InputField
-              label="Tax %"
-              type="number"
-              step="0.01"
-              min="0"
-              value={taxPercent}
-              onChange={(e) => setTaxPercent(e.target.value)}
-              placeholder="0"
+            <Listbox
+              label="GST rate"
+              value={gstRateValue(taxPercent)}
+              onChange={setTaxPercent}
+              options={gstRateOptions(taxPercent)}
             />
             <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer mt-0.5">
               <input
@@ -804,7 +831,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
         <div className="space-y-1">
           <Disclosure
             label="Identification"
-            count={countFilled(sku, hsn, category)}
+            count={countFilled(sku, hsn, stockGroupId)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -813,23 +840,13 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                 onChange={(e) => setSku(e.target.value)}
                 placeholder="Stock keeping unit"
               />
-              <InputField
-                label="HSN / SAC Code"
-                value={hsn}
-                onChange={(e) => setHsn(e.target.value)}
-                placeholder="HSN/SAC code"
-              />
+              <HsnSacInput value={hsn} onChange={setHsn} itemType={itemType} />
             </div>
             <div className="mt-3">
               <ItemBarcodeField value={barcode} onChange={setBarcode} sku={sku} />
             </div>
             <div className="mt-3">
-              <InputField
-                label="Category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="e.g. Electronics, Food"
-              />
+              <StockGroupPicker value={stockGroupId} onChange={setStockGroupId} />
             </div>
           </Disclosure>
 
@@ -847,6 +864,12 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
               placeholder="0.00"
             />
           </Disclosure>
+
+          {itemType === "product" && (
+            <Disclosure label="MRP" count={countFilled(mrp)}>
+              <MrpField value={mrp} onChange={setMrp} salePrice={salePrice} />
+            </Disclosure>
+          )}
 
           {itemType === "product" && derivedMode !== "variants" && (
             <Disclosure
@@ -871,6 +894,22 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                   placeholder="Alert threshold"
                 />
               </div>
+            </Disclosure>
+          )}
+
+          {itemType === "product" && (
+            <Disclosure label="Batches & expiry" count={trackBatches ? 1 : 0}>
+              <BatchTrackingFields
+                trackBatches={trackBatches}
+                trackExpiry={trackExpiry}
+                onChange={(p) => {
+                  if (p.trackBatches !== undefined) setTrackBatches(p.trackBatches);
+                  if (p.trackExpiry !== undefined) setTrackExpiry(p.trackExpiry);
+                }}
+                openingStock={derivedMode === "variants" ? "0" : stockQuantity}
+                openingBatch={openingBatch}
+                onOpeningBatchChange={(p) => setOpeningBatch((b) => ({ ...b, ...p }))}
+              />
             </Disclosure>
           )}
 
@@ -1094,14 +1133,17 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
-  const [category, setCategory] = useState("");
+  const [stockGroupId, setStockGroupId] = useState("");
   const [hsn, setHsn] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
+  const [mrp, setMrp] = useState("");
   const [taxPercent, setTaxPercent] = useState("0");
   const [taxInclusive, setTaxInclusive] = useState(false);
   const [stockQuantity, setStockQuantity] = useState("0");
   const [lowStockAlert, setLowStockAlert] = useState("");
+  const [trackBatches, setTrackBatches] = useState(false);
+  const [trackExpiry, setTrackExpiry] = useState(false);
   const [unit, setUnit] = useState("pcs");
   const [unitVariants, setUnitVariants] = useState<UiUnitVariant[]>([]);
   const [itemMode, setItemMode] = useState<ItemMode>("simple");
@@ -1122,14 +1164,17 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
     setName(item.name);
     setSku(item.sku ?? "");
     setBarcode(item.barcode ?? "");
-    setCategory(item.category ?? "");
+    setStockGroupId(item.stockGroupId ?? "");
     setHsn(item.hsn ?? "");
     setSalePrice(item.salePrice ?? "");
     setPurchasePrice(item.purchasePrice ?? "");
+    setMrp(item.mrp ?? "");
     setTaxPercent(item.taxPercent ?? "0");
     setTaxInclusive(item.taxInclusive ?? false);
     setStockQuantity(item.stockQuantity ?? "0");
     setLowStockAlert(item.lowStockAlert ?? "");
+    setTrackBatches(item.trackBatches ?? false);
+    setTrackExpiry(item.trackExpiry ?? false);
     setUnit(item.unit ?? "pcs");
     setUnitVariants((item.unitVariants as any[]) ?? []);
     setItemMode((item.itemMode as ItemMode) ?? "simple");
@@ -1240,14 +1285,19 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         itemType,
         name,
         sku: sku || undefined,
-        barcode: barcode || undefined,
-        category: category || undefined,
+        // Always sent: "" is how the server clears a barcode (stored as NULL).
+        // Omitting it on blank would keep the old code on the item and its labels.
+        barcode: barcode.trim(),
+        // Only when changed, so saving never touches a group set elsewhere.
+        ...(stockGroupId !== (item?.stockGroupId ?? "") ? { stockGroupId: stockGroupId || null } : {}),
         hsn: hsn || undefined,
         salePrice: salePrice || undefined,
         purchasePrice: purchasePrice || undefined,
+        mrp: mrp || null,
         taxPercent,
         taxInclusive,
         lowStockAlert: lowStockAlert || undefined,
+        ...(itemType === "product" ? { trackBatches, trackExpiry: trackBatches && trackExpiry } : {}),
         unit: unit as any,
         unitVariants: itemMode === "alt_units" && validVariants.length > 0 ? validVariants : undefined,
       },
@@ -1324,14 +1374,11 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
             placeholder="0.00"
           />
           <div className="flex flex-col gap-1">
-            <InputField
-              label="Tax %"
-              type="number"
-              step="0.01"
-              min="0"
-              value={taxPercent}
-              onChange={(e) => setTaxPercent(e.target.value)}
-              placeholder="0"
+            <Listbox
+              label="GST rate"
+              value={gstRateValue(taxPercent)}
+              onChange={setTaxPercent}
+              options={gstRateOptions(taxPercent)}
             />
             <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer mt-0.5">
               <input
@@ -1375,7 +1422,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         <div className="space-y-1">
           <Disclosure
             label="Identification"
-            count={countFilled(sku, hsn, category)}
+            count={countFilled(sku, hsn, stockGroupId)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -1384,24 +1431,14 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
                 onChange={(e) => setSku(e.target.value)}
                 placeholder="Stock keeping unit"
               />
-              <InputField
-                label="HSN / SAC Code"
-                value={hsn}
-                onChange={(e) => setHsn(e.target.value)}
-                placeholder="HSN/SAC code"
-              />
+              <HsnSacInput value={hsn} onChange={setHsn} itemType={itemType} />
             </div>
             <div className="mt-3">
               <ItemBarcodeField value={barcode} onChange={setBarcode} sku={sku} />
               <ItemExtraCodes itemId={itemId} />
             </div>
             <div className="mt-3">
-              <InputField
-                label="Category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="e.g. Electronics, Food"
-              />
+              <StockGroupPicker value={stockGroupId} onChange={setStockGroupId} />
             </div>
           </Disclosure>
 
@@ -1419,6 +1456,12 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
               placeholder="0.00"
             />
           </Disclosure>
+
+          {itemType === "product" && (
+            <Disclosure label="MRP" count={countFilled(mrp)}>
+              <MrpField value={mrp} onChange={setMrp} salePrice={salePrice} />
+            </Disclosure>
+          )}
 
           {itemType === "product" && itemMode !== "variants" && (
             <Disclosure
@@ -1442,6 +1485,24 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
                   placeholder="Alert threshold"
                 />
               </div>
+            </Disclosure>
+          )}
+
+          {itemType === "product" && (
+            <Disclosure label="Batches & expiry" count={trackBatches ? 1 : 0}>
+              <BatchTrackingFields
+                trackBatches={trackBatches}
+                trackExpiry={trackExpiry}
+                onChange={(p) => {
+                  if (p.trackBatches !== undefined) setTrackBatches(p.trackBatches);
+                  if (p.trackExpiry !== undefined) setTrackExpiry(p.trackExpiry);
+                }}
+              />
+              {item?.trackBatches && !trackBatches && (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                  Existing batches are kept; new entries won't ask for one.
+                </p>
+              )}
             </Disclosure>
           )}
 
@@ -1654,7 +1715,7 @@ const DOC_TYPE_ROUTE: Record<string, string> = {
   delivery_challan: "/delivery-challans",
   quotation: "/quotations",
   proforma: "/proforma-invoices",
-  purchase_return: "/invoices",
+  purchase_return: "/purchase-returns",
   debit_note: "/invoices",
 };
 
@@ -1751,7 +1812,7 @@ function PriceHistoryTab({
       {priceChangedRows.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-text-secondary mb-2">Price Changes</p>
-          <div className="rounded-xl border border-border-light overflow-hidden">
+          <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
             <div className="max-h-[300px] overflow-y-auto">
               <table className="data-table w-full">
                 <thead className="sticky top-0 z-10">
@@ -1923,7 +1984,7 @@ function StockMovementsTab({
         </div>
       )}
 
-      <div className="rounded-xl border border-border-light overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
         <div className="max-h-[300px] overflow-y-auto">
           <table className="data-table w-full">
             <thead className="sticky top-0 z-10">
@@ -2147,12 +2208,13 @@ function ItemDetailPanel({
             </div>
 
             {/* Compact item info grid */}
-            <div className="rounded-xl border border-border-light overflow-hidden">
+            <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
               <table className="w-full text-sm">
                 <tbody>
                   {[
                     ["Sale Price", item.salePrice ? `${formatCurrency(item.salePrice)}${item.taxInclusive ? " (incl. tax)" : ""}` : "—"],
                     ["Purchase Price", item.purchasePrice ? formatCurrency(item.purchasePrice) : "—"],
+                    ...(item.mrp ? [["MRP", formatCurrency(item.mrp)]] : []),
                     ...(item.itemMode !== "variants"
                       ? [["Current Stock", `${parseFloat(item.stockQuantity).toLocaleString()} ${item.unit}${isLow ? " ⚠ Low" : ""}`]]
                       : [["Variants", `${item.variants?.length ?? 0} variants`]]
@@ -2173,6 +2235,11 @@ function ItemDetailPanel({
               </table>
             </div>
 
+            {/* Batches (items that track batches) */}
+            {item.trackBatches && item.itemMode !== "variants" && (
+              <ItemBatchesPanel itemId={item.id} unit={item.unit} />
+            )}
+
             {/* Variants table */}
             {item.itemMode === "variants" && item.variants && item.variants.length > 0 && (
               <div>
@@ -2182,7 +2249,7 @@ function ItemDetailPanel({
                     Total stock: {item.variants.reduce((sum, v) => sum + parseFloat(v.stockQuantity), 0).toLocaleString()} {item.unit}
                   </p>
                 </div>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="data-table w-full">
                       <thead>
@@ -2219,7 +2286,7 @@ function ItemDetailPanel({
             {item.unitVariants && Array.isArray(item.unitVariants) && item.unitVariants.length > 0 && (
               <div>
                 <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">Unit Variants</p>
-                <div className="rounded-xl border border-border-light overflow-hidden">
+                <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -2317,10 +2384,13 @@ function SwitchUnitModal({
   unitVariants: Array<{ unit: string; conversionFactor: number; salePrice: string }>;
   onClose: () => void;
 }) {
-  // Default to the first alt unit if one exists
+  // A unit variant's conversionFactor is how many base units one of it holds
+  // ("1 BAG = 25 KG"). switchBaseUnit wants the other way round — how many
+  // new units make one current base unit ("1 KG = 0.04 BAG") — so switching
+  // to an existing variant sends 1 / its factor.
   const defaultVariant = unitVariants.length > 0 ? unitVariants[0] : null;
   const [newUnit, setNewUnit] = useState(defaultVariant?.unit || "");
-  const [conversionFactor, setConversionFactor] = useState(defaultVariant ? String(defaultVariant.conversionFactor) : "");
+  const [conversionFactor, setConversionFactor] = useState("");
   const [isCustom, setIsCustom] = useState(!defaultVariant);
   const utils = trpc.useUtils();
 
@@ -2339,7 +2409,6 @@ function SwitchUnitModal({
     const variant = unitVariants.find((v) => v.unit === unit);
     if (variant) {
       setNewUnit(unit);
-      setConversionFactor(String(variant.conversionFactor));
       setIsCustom(false);
     }
   }
@@ -2350,7 +2419,12 @@ function SwitchUnitModal({
     setIsCustom(true);
   }
 
-  const factor = parseFloat(conversionFactor) || 0;
+  const pickedVariant = isCustom ? null : unitVariants.find((v) => v.unit === newUnit) ?? null;
+  // New units per current base unit.
+  const factor = pickedVariant
+    ? switchFactorForVariant(pickedVariant.conversionFactor)
+    : parseFloat(conversionFactor) || 0;
+  const shown = (n: number) => String(parseFloat(n.toPrecision(6)));
 
   return (
     <Modal open={true} onClose={onClose} title="Switch Base Unit" className="max-w-md">
@@ -2380,7 +2454,7 @@ function SwitchUnitModal({
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{v.unit.toUpperCase()}</span>
                     <span className="text-xs text-text-tertiary">
-                      1 {currentUnit.toUpperCase()} = {v.conversionFactor} {v.unit.toUpperCase()}
+                      1 {v.unit.toUpperCase()} = {v.conversionFactor} {currentUnit.toUpperCase()}
                     </span>
                   </div>
                 </button>
@@ -2430,7 +2504,8 @@ function SwitchUnitModal({
           <div className="rounded-lg bg-surface-1 border border-border-light px-4 py-3 text-xs space-y-1">
             <p className="font-medium text-text-primary">Preview</p>
             <p className="text-text-secondary">
-              1 {currentUnit.toUpperCase()} = {factor} {newUnit.toUpperCase()}
+              1 {currentUnit.toUpperCase()} = {shown(factor)} {newUnit.toUpperCase()}
+              {factor > 0 && factor < 1 && <> (1 {newUnit.toUpperCase()} = {shown(1 / factor)} {currentUnit.toUpperCase()})</>}
             </p>
             <p className="text-text-secondary">
               Old base ({currentUnit.toUpperCase()}) becomes a unit variant
@@ -2584,7 +2659,8 @@ function AdjustStockModal({
   const adjustMutation = trpc.item.adjustStock.useMutation({
     onSuccess: () => {
       utils.item.getById.invalidate({ id: itemId });
-      utils.item.list.invalidate();
+      void invalidateStockViews(utils);
+      utils.item.stockAdjustmentHistory.invalidate();
       utils.item.lowStockCount.invalidate();
       toast.success("Stock adjusted");
       onClose();

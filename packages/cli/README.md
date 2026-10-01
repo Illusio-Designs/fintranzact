@@ -5,7 +5,7 @@ Terminal-first invoicing and business management for Indian businesses. Manage i
 [![npm](https://img.shields.io/npm/v/@fintranzact/cli?logo=npm&logoColor=white&label=@fintranzact/cli)](https://www.npmjs.com/package/@fintranzact/cli)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 
-**What this does:** Run `hisaabo invoice list --this-month` and get a formatted table of every invoice your business issued this month. Run `hisaabo gst r3b --quarter Q4` and get your GSTR-3B numbers ready for filing. Pipe any command to `jq` or a spreadsheet with `--json`, `--format csv`, or `--format tsv`.
+**What this does:** Run `fintranzact invoice list --this-month` and get a formatted table of every invoice your business issued this month. Run `fintranzact gst r3b --quarter Q4` and get your GSTR-3B numbers ready for filing. Pipe any command to `jq` or a spreadsheet with `--json`, `--format csv`, or `--format tsv`.
 
 ---
 
@@ -18,7 +18,7 @@ npm install -g @fintranzact/cli
 **Log in interactively:**
 
 ```bash
-hisaabo login --api-url https://your-hisaabo-instance.com
+fintranzact login --api-url https://your-fintranzact-instance.com
 ```
 
 You'll be prompted for email and password, then asked to pick a business if you have more than one.
@@ -26,7 +26,7 @@ You'll be prompted for email and password, then asked to pick a business if you 
 **Log in with an API key (for scripts and CI):**
 
 ```bash
-hisaabo login --api-url https://your-hisaabo-instance.com --token hisaabo_key_abc123...
+fintranzact login --api-url https://your-fintranzact-instance.com --token fintranzact_key_abc123...
 ```
 
 Generate API keys at Settings > API Keys in the Fintranzact web app.
@@ -34,7 +34,7 @@ Generate API keys at Settings > API Keys in the Fintranzact web app.
 **Verify your session:**
 
 ```bash
-hisaabo whoami
+fintranzact whoami
 ```
 
 ---
@@ -45,23 +45,23 @@ hisaabo whoami
 
 | Command | Description |
 |---|---|
-| `hisaabo login` | Authenticate with email/password or API key |
-| `hisaabo logout` | Clear saved credentials |
-| `hisaabo whoami` | Show current user and active business |
-| `hisaabo switch` | Switch active business |
+| `fintranzact login` | Authenticate with email/password or API key |
+| `fintranzact logout` | Clear saved credentials |
+| `fintranzact whoami` | Show current user and active business |
+| `fintranzact switch` | Switch active business |
 
 ### Business
 
 | Command | Description |
 |---|---|
-| `hisaabo business list` | List all businesses under your account |
-| `hisaabo business switch` | Switch active business |
+| `fintranzact business list` | List all businesses under your account |
+| `fintranzact business switch` | Switch active business |
 
 ### Dashboard
 
 | Command | Description |
 |---|---|
-| `hisaabo dashboard` | Financial summary with box-drawing UI (alias: `dash`) |
+| `fintranzact dashboard` | Financial summary with box-drawing UI (alias: `dash`) |
 
 ### Invoices
 
@@ -188,7 +188,7 @@ hisaabo whoami
 | `export --tenant <slug> -o <file>` | Download full tenant backup as `.tar.gz` |
 | `restore --tenant <slug> -i <file>` | Restore backup into an empty tenant |
 
-These are tenant-level commands -- they don't require a business to be selected. Only tenant owners can use them. See [full docs](https://docs.fintranzact.com/ai/cli/#hisaabo-export) for details.
+These are tenant-level commands -- they don't require a business to be selected. Only tenant owners can use them. See the [CLI guide](https://fintranzact-web.vercel.app/help/ai/cli) for details.
 
 ---
 
@@ -197,7 +197,7 @@ These are tenant-level commands -- they don't require a business to be selected.
 **List this month's sale invoices:**
 
 ```
-$ hisaabo invoice list --type sale --this-month
+$ fintranzact invoice list --type sale --this-month
 
  ──────────────────────────────────────────────────────────────────────
   #            Party                  Amount  Status    Date
@@ -214,7 +214,7 @@ $ hisaabo invoice list --type sale --this-month
 **Check a party's outstanding balance:**
 
 ```
-$ hisaabo party get f3a1...
+$ fintranzact party get f3a1...
 
   Gupta Enterprises (customer)
   ────────────────────────────────────────
@@ -228,7 +228,7 @@ $ hisaabo party get f3a1...
 **Pull GSTR-3B numbers for Q4 and pipe to a file:**
 
 ```
-$ hisaabo gst r3b --quarter Q4 --json | jq '.taxPayable'
+$ fintranzact gst r3b --quarter Q4 --json | jq '.taxPayable'
 {
   "igst": "0.00",
   "cgst": "18420.00",
@@ -254,13 +254,13 @@ Every `list` command supports multiple output formats:
 **Pipe invoice IDs into a loop:**
 
 ```bash
-hisaabo invoice list --status draft --format ids | xargs -I{} hisaabo invoice status {} sent
+fintranzact invoice list --status draft --format ids | xargs -I{} fintranzact invoice status {} sent
 ```
 
 **Export all parties to CSV:**
 
 ```bash
-hisaabo party list --format csv > parties.csv
+fintranzact party list --format csv > parties.csv
 ```
 
 **Environment variables:**
@@ -294,13 +294,13 @@ If you manage multiple businesses under one account, list and switch between the
 
 ```bash
 # List all businesses on your account
-hisaabo business list
+fintranzact business list
 
 # Switch the active business (interactive picker)
-hisaabo switch
+fintranzact switch
 
 # Or switch via the business subcommand
-hisaabo business switch
+fintranzact business switch
 ```
 
 All subsequent commands operate on the active business. The `dashboard`, `invoice`, `party`, and every other command scopes data to whichever business is currently selected. Switching resets all cached data so you always see numbers for the correct business.
@@ -328,13 +328,13 @@ pnpm --filter @fintranzact/cli typecheck
 For local development, point at your local API:
 
 ```bash
-hisaabo login --api-url http://localhost:3000
+fintranzact login --api-url http://localhost:3000
 ```
 
-The CLI stores credentials in the OS config directory (`~/.config/hisaabo-cli` on Linux, `~/Library/Preferences/hisaabo-cli` on macOS).
+The CLI stores credentials in the OS config directory (`~/.config/fintranzact-cli` on Linux, `~/Library/Preferences/fintranzact-cli` on macOS).
 
 ---
 
 ## Full Documentation
 
-[docs.fintranzact.com/ai/cli/](https://docs.fintranzact.com/ai/cli/) -- Setup guide, full command reference with all flags, scripting recipes, and CI/CD integration examples.
+[Help centre: CLI](https://fintranzact-web.vercel.app/help/ai/cli) -- Setup guide, full command reference with all flags, scripting recipes, and CI/CD integration examples.

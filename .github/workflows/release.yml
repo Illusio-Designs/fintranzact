@@ -107,8 +107,8 @@ jobs:
           push: true
           build-args: VERSION=${{ github.ref_name }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/hisaabo-api:${{ github.ref_name }}
-            ghcr.io/${{ github.repository_owner }}/hisaabo-api:latest
+            ghcr.io/${{ github.repository_owner }}/fintranzact-api:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/fintranzact-api:latest
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
@@ -121,8 +121,8 @@ jobs:
           push: true
           build-args: VERSION=${{ github.ref_name }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/hisaabo:${{ github.ref_name }}
-            ghcr.io/${{ github.repository_owner }}/hisaabo:latest
+            ghcr.io/${{ github.repository_owner }}/fintranzact:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/fintranzact:latest
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha,scope=once
           cache-to: type=gha,mode=max,scope=once
@@ -140,10 +140,14 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            build_args: ""
+          # One universal app that runs on Apple Silicon and Intel Macs.
           - os: macos-latest
-            target: aarch64-apple-darwin
+            target: aarch64-apple-darwin,x86_64-apple-darwin
+            build_args: --target universal-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            build_args: ""
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
@@ -183,7 +187,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          API_URL: ${{ secrets.API_URL }}
+          API_URL: ${{ secrets.API_URL || 'https://api.fintranzact.com' }}
           VITE_TURNSTILE_SITE_KEY: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ""
         with:
@@ -191,7 +195,7 @@ jobs:
           # Apply the production CSP overlay (strips localhost:3000 —
           # needed for `tauri dev` but dangerous in a signed release). See
           # apps/desktop/src-tauri/tauri.conf.prod.json.
-          args: "--config src-tauri/tauri.conf.prod.json"
+          args: "--config src-tauri/tauri.conf.prod.json ${{ matrix.build_args }}"
           tagName: ${{ github.ref_name }}
           releaseName: "Fintranzact ${{ github.ref_name }}"
           releaseBody: "Desktop builds for ${{ github.ref_name }}. See the [release notes](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}) for details."
@@ -236,13 +240,13 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK
-        run: mv apps/mobile/android/app/build/outputs/apk/release/*.apk apps/mobile/android/app/build/outputs/apk/release/hisaabo-${{ github.ref_name }}.apk
+        run: mv apps/mobile/android/app/build/outputs/apk/release/*.apk apps/mobile/android/app/build/outputs/apk/release/fintranzact-${{ github.ref_name }}.apk
 
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: apps/mobile/android/app/build/outputs/apk/release/hisaabo-${{ github.ref_name }}.apk
+          files: apps/mobile/android/app/build/outputs/apk/release/fintranzact-${{ github.ref_name }}.apk
           tag_name: ${{ github.ref_name }}
 
   # ── CLI (npm publish) ──────────────────────────────────────────
@@ -410,7 +414,7 @@ jobs:
           ## Docker
 
           \`\`\`bash
-          docker pull ghcr.io/hisaabo/hisaabo:${{ github.ref_name }}
+          docker pull ghcr.io/fintranzact/fintranzact:${{ github.ref_name }}
           \`\`\`
 
           ## Commits
@@ -420,7 +424,7 @@ jobs:
           \`\`\`
 
           ---
-          *Components marked "No changes" are unchanged from the previous release. Download those builds from the [latest release](https://github.com/hisaabo/hisaabo/releases) that includes them.*
+          *Components marked "No changes" are unchanged from the previous release. Download those builds from the [latest release](https://github.com/fintranzact/fintranzact/releases) that includes them.*
           EOF
 
           echo "body_path=/tmp/release-body.md" >> "$GITHUB_OUTPUT"

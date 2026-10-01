@@ -9,7 +9,8 @@
  *   2. Proforma → Invoice (same as quotation — proforma has no stock effect)
  *   3. Delivery Challan → Invoice (skipStockAdjustment — challan already decremented)
  *   4. Invoice → Credit Note (stock incremented — items returned)
- *   5. Invoice → Sales Return (stock incremented)
+ *   5. Invoice → Sales Return (stock incremented); a purchase invoice
+ *      always converts to a Purchase Return (stock decremented)
  *
  * The conversion flow:
  *   document.convert({ sourceDocumentId, targetDocumentType })
@@ -28,6 +29,7 @@ import { invoices, items as itemsTable } from "@fintranzact/db";
 import {
   createTestWorld,
   createItem,
+  createParty,
   type TestWorld,
 } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
@@ -339,6 +341,143 @@ describe("DOC-05: Invoice → Sales Return — stock incremented on conversion",
 });
 
 // =============================================================================
+// DOC-05b: Purchase Invoice → Purchase Return
+// =============================================================================
+
+describe("DOC-05b: Purchase invoice → return goes back to the supplier", () => {
+  async function purchaseWithStock(name: string) {
+    const caller = callerForRamesh();
+    const db = getTenantTestDb();
+    const supplier = await createParty(db, world.business1.id, { type: "supplier", name: `${name} Supplier` });
+    const item = await createItem(db, world.business1.id, {
+      name,
+      stockQuantity: "100.000",
+      purchasePrice: "200.00",
+      taxPercent: "18.00",
+    });
+    // Purchase invoice: 100 + 10 = 110
+    const bill = await caller.invoice.create({
+      partyId: supplier.id,
+      type: "purchase",
+      invoiceDate: isoNow(),
+      lineItems: [{
+        itemId: item.id,
+        itemName: name,
+        quantity: "10",
+        unitPrice: "200.00",
+        taxPercent: "18.00",
+        discountPercent: "0",
+        conversionFactor: null,
+        variantId: null,
+      }],
+    });
+    expect(await getStockQty(item.id)).toBe("110.000");
+    return { caller, supplier, item, bill };
+  }
+
+  async function savedDoc(id: string) {
+    const [row] = await getTenantTestDb()
+      .select({ documentType: invoices.documentType, type: invoices.type, referenceDocumentId: invoices.referenceDocumentId, partyId: invoices.partyId })
+      .from(invoices)
+      .where(eq(invoices.id, id));
+    return row!;
+  }
+
+  it("converting a purchase invoice to a purchase return takes the stock back out", async () => {
+    const { caller, supplier, item, bill } = await purchaseWithStock("PINV→PR Item");
+
+    const converted = await caller.document.convert({
+      sourceDocumentId: bill.id,
+      targetDocumentType: "purchase_return",
+    });
+
+    expect(converted.documentType).toBe("purchase_return");
+    expect(await savedDoc(converted.id)).toEqual({
+      documentType: "purchase_return",
+      type: "purchase",
+      referenceDocumentId: bill.id,
+      partyId: supplier.id,
+    });
+    // 110 - 10 sent back = 100
+    expect(await getStockQty(item.id)).toBe("100.000");
+  });
+
+  it("asking for a sales return of a purchase invoice makes a purchase return, never a sale-side one", async () => {
+    const { caller, item, bill } = await purchaseWithStock("PINV→SR Item");
+
+    const converted = await caller.document.convert({
+      sourceDocumentId: bill.id,
+      targetDocumentType: "sales_return",
+    });
+
+    expect(converted.documentType).toBe("purchase_return");
+    expect(await savedDoc(converted.id)).toMatchObject({ documentType: "purchase_return", type: "purchase" });
+    // Stock goes out (110 → 100), not in (which a sales return would do: 110 → 120).
+    expect(await getStockQty(item.id)).toBe("100.000");
+
+    const salesReturns = await caller.salesReturn.list({ page: 1, limit: 100 });
+    expect(salesReturns.data.some((d) => d.referenceDocumentId === bill.id)).toBe(false);
+    const purchaseReturns = await caller.purchaseReturn.list({ page: 1, limit: 100 });
+    expect(purchaseReturns.data.some((d) => d.id === converted.id && d.type === "purchase")).toBe(true);
+  });
+
+  it("asking for a purchase return of a sale invoice makes a sales return", async () => {
+    const caller = callerForRamesh();
+    const db = getTenantTestDb();
+    const item = await createItem(db, world.business1.id, { name: "SINV→PR Item", stockQuantity: "50.000", salePrice: "100.00" });
+    const invoice = await caller.invoice.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      lineItems: [{ itemId: item.id, itemName: "SINV→PR Item", quantity: "5", unitPrice: "100.00", taxPercent: "0", discountPercent: "0" }],
+    });
+    expect(await getStockQty(item.id)).toBe("45.000");
+
+    const converted = await caller.document.convert({ sourceDocumentId: invoice.id, targetDocumentType: "purchase_return" });
+
+    expect(converted.documentType).toBe("sales_return");
+    expect(await savedDoc(converted.id)).toMatchObject({ documentType: "sales_return", type: "sale" });
+    expect(await getStockQty(item.id)).toBe("50.000");
+  });
+
+  it("rejects a sales return made directly against a purchase invoice", async () => {
+    const { caller, supplier, item, bill } = await purchaseWithStock("PINV direct SR Item");
+
+    await expect(
+      caller.salesReturn.create({
+        partyId: supplier.id,
+        type: "sale",
+        referenceDocumentId: bill.id,
+        lineItems: [{ itemId: item.id, itemName: "PINV direct SR Item", quantity: "1", unitPrice: "200.00", taxPercent: "18.00", discountPercent: "0" }],
+      }),
+    ).rejects.toThrow(/purchase return/i);
+    expect(await getStockQty(item.id)).toBe("110.000");
+  });
+
+  it("creates a purchase return directly against a purchase invoice with picked lines and quantities", async () => {
+    const { caller, supplier, item, bill } = await purchaseWithStock("PINV direct PR Item");
+
+    const ret = await caller.purchaseReturn.create({
+      partyId: supplier.id,
+      type: "purchase",
+      referenceDocumentId: bill.id,
+      lineItems: [{ itemId: item.id, itemName: "PINV direct PR Item", quantity: "3", unitPrice: "200.00", taxPercent: "18.00", discountPercent: "0" }],
+    });
+    expect(ret.documentType).toBe("purchase_return");
+    expect(ret.type).toBe("purchase");
+    expect(await getStockQty(item.id)).toBe("107.000");
+
+    // The purchase invoice lists it among its returns.
+    const full = await caller.invoice.getById({ id: bill.id });
+    expect(full!.relatedDocuments.map((d) => [d.id, d.documentType])).toContainEqual([ret.id, "purchase_return"]);
+
+    // Cancelling it brings the stock back.
+    await caller.purchaseReturn.updateStatus({ id: ret.id, status: "cancelled" });
+    expect(await getStockQty(item.id)).toBe("110.000");
+  });
+});
+
+// =============================================================================
 // DOC-06: Source document not found
 // =============================================================================
 
@@ -585,5 +724,146 @@ describe("Server-side guard: CN/SR total must not exceed invoice total", () => {
         targetDocumentType: "credit_note",
       })
     ).rejects.toThrow(/exceeds remaining/i);
+  });
+});
+
+// =============================================================================
+// Document-level discount and round-off
+// =============================================================================
+
+describe("Document-level discount and round-off", () => {
+  const lineOf = (quantity: string, unitPrice = "100.00", taxPercent = "0") => ({
+    itemName: "Discounted line",
+    quantity,
+    unitPrice,
+    taxPercent,
+    discountPercent: "0",
+    conversionFactor: null,
+    variantId: null,
+  });
+
+  async function saved(id: string) {
+    const [row] = await getTenantTestDb()
+      .select({
+        subtotal: invoices.subtotal,
+        taxAmount: invoices.taxAmount,
+        discountAmount: invoices.discountAmount,
+        roundOff: invoices.roundOff,
+        additionalCharges: invoices.additionalCharges,
+        totalAmount: invoices.totalAmount,
+      })
+      .from(invoices)
+      .where(eq(invoices.id, id));
+    return row!;
+  }
+
+  it("keeps a quotation's discount and round-off, and totals them like an invoice", async () => {
+    const caller = callerForRamesh();
+    const quotation = await caller.quotation.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      invoiceDiscount: "50.00",
+      invoiceDiscountType: "amount",
+      roundOff: "-0.40",
+      lineItems: [lineOf("10", "100.00", "18")],
+    });
+    // The discount reduces the taxable value: (1000 - 50) + 18% of 950 - 0.40
+    expect(await saved(quotation.id)).toMatchObject({
+      subtotal: "1000.00",
+      taxAmount: "171.00",
+      discountAmount: "50.00",
+      roundOff: "-0.40",
+      totalAmount: "1120.60",
+    });
+  });
+
+  it("applies a percent discount on documents made by the factory", async () => {
+    const caller = callerForRamesh();
+    const order = await caller.salesOrder.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      invoiceDiscount: "10",
+      invoiceDiscountType: "percent",
+      lineItems: [lineOf("5")],
+    });
+    expect(await saved(order.id)).toMatchObject({ discountAmount: "50.00", totalAmount: "450.00" });
+  });
+
+  it("carries discount, round-off and charges through quotation → invoice", async () => {
+    const caller = callerForRamesh();
+    const quotation = await caller.quotation.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      invoiceDiscount: "25.00",
+      charges: [{ label: "Freight", amount: "40.00" }],
+      roundOff: "0.30",
+      lineItems: [lineOf("3")],
+    });
+    const source = await saved(quotation.id);
+    expect(source).toMatchObject({ discountAmount: "25.00", additionalCharges: "40.00", totalAmount: "315.30" });
+
+    const converted = await caller.document.convert({ sourceDocumentId: quotation.id, targetDocumentType: "invoice" });
+    expect(await saved(converted.id)).toEqual(source);
+  });
+
+  it("carries the discount through sales order → challan → invoice", async () => {
+    const caller = callerForRamesh();
+    const order = await caller.salesOrder.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      invoiceDiscount: "20.00",
+      roundOff: "0.50",
+      lineItems: [lineOf("4")],
+    });
+    const challan = await caller.document.convert({ sourceDocumentId: order.id, targetDocumentType: "delivery_challan" });
+    expect(await saved(challan.id)).toMatchObject({ discountAmount: "20.00", roundOff: "0.50", totalAmount: "380.50" });
+
+    const bill = await caller.document.convert({ sourceDocumentId: challan.id, targetDocumentType: "invoice" });
+    expect(await saved(bill.id)).toMatchObject({ discountAmount: "20.00", roundOff: "0.50", totalAmount: "380.50" });
+  });
+
+  it("gives part of an order the matching share of its discount, and no round-off", async () => {
+    const caller = callerForRamesh();
+    const order = await caller.purchaseOrder.create({
+      partyId: world.party1.id,
+      type: "purchase",
+      invoiceDate: isoNow(),
+      invoiceDiscount: "100.00",
+      roundOff: "0.25",
+      lineItems: [lineOf("10")],
+    });
+    const full = await caller.purchaseOrder.getById({ id: order.id });
+    const grn = await caller.document.convert({
+      sourceDocumentId: order.id,
+      targetDocumentType: "goods_receipt_note",
+      lines: [{ sourceLineId: full!.lineItems[0]!.id, quantity: "4" }],
+    });
+    // 4 of 10 → 40% of the ₹100 discount.
+    expect(await saved(grn.id)).toMatchObject({ subtotal: "400.00", discountAmount: "40.00", roundOff: "0.00", totalAmount: "360.00" });
+  });
+
+  it("recomputes the total when only the discount or round-off is edited", async () => {
+    const caller = callerForRamesh();
+    const proforma = await caller.proforma.create({
+      partyId: world.party1.id,
+      type: "sale",
+      invoiceDate: isoNow(),
+      lineItems: [lineOf("2")],
+    });
+    expect((await saved(proforma.id)).totalAmount).toBe("200.00");
+
+    await caller.invoice.update({ id: proforma.id, invoiceDiscount: "15.00", roundOff: "-0.25" });
+    expect(await saved(proforma.id)).toMatchObject({ discountAmount: "15.00", roundOff: "-0.25", totalAmount: "184.75" });
+
+    // Editing the lines keeps the saved discount and round-off.
+    await caller.invoice.update({ id: proforma.id, lineItems: [lineOf("3")] });
+    expect(await saved(proforma.id)).toMatchObject({ discountAmount: "15.00", roundOff: "-0.25", totalAmount: "284.75" });
+
+    await caller.invoice.update({ id: proforma.id, invoiceDiscount: "10", invoiceDiscountType: "percent" });
+    expect(await saved(proforma.id)).toMatchObject({ discountAmount: "30.00", totalAmount: "269.75" });
   });
 });

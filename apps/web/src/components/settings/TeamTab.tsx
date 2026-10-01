@@ -83,14 +83,14 @@ function TeamSection() {
                 <tr>
                   <th>Email</th>
                   <th>Role</th>
-                  <th>Sent</th>
+                  <th className="hidden sm:table-cell">Sent</th>
                   {canManage && <th />}
                 </tr>
               </thead>
               <tbody>
                 {pendingInvitations.map((inv) => (
                   <tr key={inv.id}>
-                    <td className="text-text-secondary">{inv.email}</td>
+                    <td className="text-text-secondary break-all">{inv.email}</td>
                     <td>
                       <span className={cn(
                         "px-2 py-0.5 rounded text-2xs font-medium",
@@ -101,7 +101,7 @@ function TeamSection() {
                         {formatRole(inv.role)}
                       </span>
                     </td>
-                    <td className="text-text-secondary text-xs">
+                    <td className="hidden sm:table-cell text-text-secondary text-xs">
                       {formatDate(inv.createdAt)}
                     </td>
                     {canManage && (
@@ -132,17 +132,25 @@ function TeamSection() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Email</th>
+                <th className="hidden sm:table-cell">Email</th>
                 <th>Role</th>
-                <th>Joined</th>
+                <th className="hidden sm:table-cell">Joined</th>
                 {canManage && <th />}
               </tr>
             </thead>
             <tbody>
               {members?.map((m) => (
                 <tr key={m.id}>
-                  <td className="font-medium">{m.userName}</td>
-                  <td className="text-text-secondary">{m.userEmail}</td>
+                  {/* A long name may wrap anywhere, so it can't push the table
+                      (and the page, on a phone) wider than the screen. */}
+                  <td className="font-medium [overflow-wrap:anywhere]">
+                    {m.userName}
+                    {/* Phones have no Email column: show it under the name. */}
+                    <span className="block sm:hidden text-xs font-normal text-text-secondary break-all">
+                      {m.userEmail}
+                    </span>
+                  </td>
+                  <td className="hidden sm:table-cell text-text-secondary">{m.userEmail}</td>
                   <td>
                     <span
                       className={cn(
@@ -157,13 +165,13 @@ function TeamSection() {
                       {formatRole(m.role)}
                     </span>
                   </td>
-                  <td className="text-text-secondary text-xs">
+                  <td className="hidden sm:table-cell text-text-secondary text-xs">
                     {m.acceptedAt ? formatDate(m.acceptedAt) : "Pending"}
                   </td>
                   {canManage && (
                     <td className="text-right">
                       {m.role !== "owner" && m.role !== "superadmin" && m.userEmail !== me?.user?.email && (
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <div className="w-28">
                             <Listbox
                               value={m.role}
@@ -264,9 +272,10 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
             </p>
           </div>
           <div>
-            <label className="label">Invite Link</label>
+            <label className="label" htmlFor="invite-link">Invite Link</label>
             <div className="flex gap-2">
               <input
+                id="invite-link"
                 readOnly
                 value={`${window.location.origin}${inviteResult.inviteLink}`}
                 className="input flex-1 font-mono text-xs"
@@ -289,8 +298,9 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
       ) : (
         <form id="invite-member-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="label">Email address</label>
+            <label className="label" htmlFor="invite-email">Email address</label>
             <input
+              id="invite-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

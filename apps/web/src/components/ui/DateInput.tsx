@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowLeft01Icon,
@@ -65,12 +65,37 @@ export function formatDisplayDate(iso: string): string {
 }
 
 /**
+ * Read a typed date, day first: "120325" / "12032025" (DDMMYY / DDMMYYYY),
+ * "1203" (this year), or with separators "12/3/25", "12-03-2025", "12.3".
+ * Two-digit years are 20YY. Returns ISO `YYYY-MM-DD`, or null when the text is
+ * not a real calendar date.
+ */
+export function parseTypedDate(text: string, refYear = new Date().getFullYear()): string | null {
+  const s = text.trim();
+  let d: number, m: number, y: number;
+  let match = /^(\d{2})(\d{2})(\d{2}|\d{4})?$/.exec(s);
+  if (match) {
+    [d, m, y] = [+match[1], +match[2], match[3] ? +match[3] : refYear];
+  } else if ((match = /^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2}|\d{4}))?$/.exec(s))) {
+    [d, m, y] = [+match[1], +match[2], match[3] ? +match[3] : refYear];
+  } else {
+    return null;
+  }
+  if (y < 100) y += 2000;
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return toIso(y, m - 1, d);
+}
+
+/**
  * Custom-styled drop-in replacement for `<input type="date">` with a calendar
  * popover. Values stay ISO `YYYY-MM-DD` strings and `onChange` receives an
  * event-like object, so existing `e.target.value` handlers keep working.
  *
  * Keyboard: Enter/Space/ArrowDown opens; arrows move by day/week; PageUp/Down
- * by month; Enter picks; Escape closes; Delete/Backspace clears (when not required).
+ * by month (with Shift, by year); Enter picks; Escape closes; Delete/Backspace
+ * clears (when not required). Typing digits (DDMMYY, 12/3/25) enters a date
+ * directly. The title switches to a month grid, then a year grid.
  */
 export function DateInput({
   value,
@@ -102,11 +127,13 @@ export function DateInput({
     const p = parseIso(current) ?? parseIso(todayIso())!;
     return { y: p.y, m: p.m };
   });
+  const [mode, setMode] = useState<"days" | "months" | "years">("days");
+  const [typed, setTyped] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const uid = useId();
   const popId = `date-pop-${uid}`;
-  const popoverStyle = useAnchoredPopover(triggerRef, open, { width: 296, estimatedHeight: 340 });
+  const popoverStyle = useAnchoredPopover(triggerRef, open, { width: 296, estimatedHeight: 420 });
 
   const outOfRange = useCallback(
     (iso: string) => (!!min && iso < min) || (!!max && iso > max),
@@ -130,6 +157,8 @@ export function DateInput({
     const p = parseIso(start)!;
     setFocusIso(start);
     setView({ y: p.y, m: p.m });
+    setMode("days");
+    setTyped("");
     setOpen(true);
   }, [disabled, current]);
 
@@ -171,15 +200,53 @@ export function DateInput({
     setView({ y: d.getFullYear(), m: d.getMonth() });
   };
 
+  const typedIso = typed ? parseTypedDate(typed, view.y) : null;
+  const typedError = !typed
+    ? null
+    : !typedIso
+      ? "Type the date as DDMMYY, e.g. 120325 or 12/3/25"
+      : outOfRange(typedIso)
+        ? "That date is outside the allowed range"
+        : null;
+  const updateTyped = (next: string) => {
+    setTyped(next);
+    const iso = parseTypedDate(next, view.y);
+    if (iso) moveFocus(iso);
+    setMode("days");
+  };
+  const commitTyped = () => {
+    if (typedIso && !outOfRange(typedIso)) pick(typedIso);
+  };
+
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const typingKey = /^[0-9/.-]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey;
     if (!open) {
-      if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+      if (typingKey && /^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        openCal();
+        updateTyped(e.key);
+      } else if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
         e.preventDefault();
         openCal();
       } else if ((e.key === "Delete" || e.key === "Backspace") && !required && current) {
         e.preventDefault();
         emit("");
       }
+      return;
+    }
+    if (typingKey) {
+      e.preventDefault();
+      updateTyped(typed + e.key);
+      return;
+    }
+    if (e.key === "Backspace" && typed) {
+      e.preventDefault();
+      updateTyped(typed.slice(0, -1));
+      return;
+    }
+    if (e.key === "Enter" && typed) {
+      e.preventDefault();
+      commitTyped();
       return;
     }
     const map: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
@@ -189,8 +256,10 @@ export function DateInput({
     } else if (e.key === "PageUp" || e.key === "PageDown") {
       e.preventDefault();
       const p = parseIso(focusIso)!;
-      const d = new Date(p.y, p.m + (e.key === "PageUp" ? -1 : 1), Math.min(p.d, 28));
+      const step = (e.key === "PageUp" ? -1 : 1) * (e.shiftKey ? 12 : 1);
+      const d = new Date(p.y, p.m + step, Math.min(p.d, 28));
       moveFocus(toIso(d.getFullYear(), d.getMonth(), d.getDate()));
+      setMode("days");
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       pick(focusIso);
@@ -258,29 +327,136 @@ export function DateInput({
             onMouseDown={(e) => e.preventDefault()}
             className="z-[80] rounded-2xl border border-border bg-surface-0 p-3 shadow-dropdown animate-scale-in"
           >
-            <div className="mb-2 flex items-center justify-between">
-              <button
-                type="button"
+            <div className="mb-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
                 tabIndex={-1}
-                onClick={() => shiftMonth(-1)}
-                aria-label="Previous month"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-text-secondary hover:text-text-primary"
-              >
-                <Icon icon={ArrowLeft01Icon} size={16} />
-              </button>
-              <span className="text-sm font-semibold text-text-primary" aria-live="polite">
-                {MONTHS[view.m]} {view.y}
-              </span>
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => shiftMonth(1)}
-                aria-label="Next month"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-text-secondary hover:text-text-primary"
-              >
-                <Icon icon={ArrowRight01Icon} size={16} />
-              </button>
+                value={typed}
+                onChange={(e) => updateTyped(e.target.value.replace(/[^0-9/.-]/g, "").slice(0, 10))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitTyped();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeCal();
+                  }
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                placeholder="Type DDMMYY, e.g. 120325"
+                aria-label="Type date (DDMMYY)"
+                aria-invalid={typedError ? true : undefined}
+                className="w-full rounded-lg border border-border bg-surface-1 px-2.5 py-1.5 text-ui tabular-nums text-text-primary placeholder:text-text-tertiary focus:border-brand-500 focus:outline-none"
+              />
+              {typed && (
+                <p
+                  aria-live="polite"
+                  className={cn("mt-1 text-2xs", typedError ? "text-red-600 dark:text-red-400" : "text-text-secondary")}
+                >
+                  {typedError ?? `${formatDisplayDate(typedIso!)} · press Enter`}
+                </p>
+              )}
             </div>
+            <div className="mb-2 flex items-center justify-between gap-1">
+              <div className="flex items-center gap-1">
+                {mode === "days" && (
+                  <NavButton label="Previous year" onClick={() => setView({ y: view.y - 1, m: view.m })} small>
+                    «
+                  </NavButton>
+                )}
+                <NavButton
+                  label={mode === "days" ? "Previous month" : mode === "months" ? "Previous year" : "Earlier years"}
+                  onClick={() =>
+                    mode === "days" ? shiftMonth(-1) : setView({ y: view.y - (mode === "months" ? 1 : 12), m: view.m })
+                  }
+                >
+                  <Icon icon={ArrowLeft01Icon} size={16} />
+                </NavButton>
+              </div>
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setMode(mode === "days" ? "months" : "years")}
+                disabled={mode === "years"}
+                aria-label={mode === "days" ? `${MONTHS[view.m]} ${view.y}, choose month and year` : mode === "months" ? `${view.y}, choose year` : undefined}
+                className="rounded-md px-2 py-1 text-sm font-semibold text-text-primary hover:bg-surface-2 disabled:hover:bg-transparent"
+              >
+                {mode === "days"
+                  ? `${MONTHS[view.m]} ${view.y}`
+                  : mode === "months"
+                    ? view.y
+                    : `${yearBlockStart(view.y)} – ${yearBlockStart(view.y) + 11}`}
+              </button>
+              <div className="flex items-center gap-1">
+                <NavButton
+                  label={mode === "days" ? "Next month" : mode === "months" ? "Next year" : "Later years"}
+                  onClick={() =>
+                    mode === "days" ? shiftMonth(1) : setView({ y: view.y + (mode === "months" ? 1 : 12), m: view.m })
+                  }
+                >
+                  <Icon icon={ArrowRight01Icon} size={16} />
+                </NavButton>
+                {mode === "days" && (
+                  <NavButton label="Next year" onClick={() => setView({ y: view.y + 1, m: view.m })} small>
+                    »
+                  </NavButton>
+                )}
+              </div>
+            </div>
+            {mode === "months" && (
+              <div className="grid grid-cols-3 gap-1.5">
+                {MONTHS.map((label, m) => {
+                  const sel = parseIso(current);
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => {
+                        setView({ y: view.y, m });
+                        setMode("days");
+                      }}
+                      aria-label={`${label} ${view.y}`}
+                      className={cn(
+                        "h-10 rounded-lg text-ui text-text-primary hover:bg-surface-2",
+                        sel?.y === view.y && sel.m === m && "bg-brand-600 font-bold text-white hover:bg-brand-700",
+                      )}
+                    >
+                      {label.slice(0, 3)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {mode === "years" && (
+              <div className="grid grid-cols-3 gap-1.5">
+                {Array.from({ length: 12 }, (_, i) => yearBlockStart(view.y) + i).map((y) => {
+                  const selY = parseIso(current)?.y;
+                  return (
+                    <button
+                      key={y}
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => {
+                        setView({ y, m: view.m });
+                        setMode("months");
+                      }}
+                      className={cn(
+                        "h-10 rounded-lg text-ui tabular-nums text-text-primary hover:bg-surface-2",
+                        selY === y && "bg-brand-600 font-bold text-white hover:bg-brand-700",
+                        y === new Date().getFullYear() && selY !== y && "font-bold ring-1 ring-inset ring-brand-500",
+                      )}
+                    >
+                      {y}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {mode === "days" && (
             <div role="grid" className="grid grid-cols-7 gap-0.5 text-center">
               {WEEKDAYS.map((w) => (
                 <span key={w} role="columnheader" className="py-1 text-2xs font-semibold text-text-tertiary">
@@ -313,6 +489,7 @@ export function DateInput({
                 ),
               )}
             </div>
+            )}
             <div className="mt-2 flex items-center justify-between border-t border-border-light pt-2">
               <button
                 type="button"
@@ -341,5 +518,37 @@ export function DateInput({
           document.body,
         )}
     </>
+  );
+}
+
+/** First year of the 12-year block that contains `year` (e.g. 2016 for 2026). */
+function yearBlockStart(year: number): number {
+  return year - (((year % 12) + 12) % 12);
+}
+
+function NavButton({
+  label,
+  onClick,
+  small,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  small?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      onClick={onClick}
+      aria-label={label}
+      className={cn(
+        "inline-flex items-center justify-center rounded-full bg-surface-2 text-text-secondary hover:text-text-primary",
+        small ? "h-7 w-7 text-sm" : "h-8 w-8",
+      )}
+    >
+      {children}
+    </button>
   );
 }

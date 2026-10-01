@@ -7,6 +7,8 @@ import {
 } from "@tanstack/react-router";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { trpc, setBusinessId, queryClient } from "@/lib/trpc";
+import { canAccess } from "@/lib/permissions";
+import { needsPlanSelection } from "@/lib/plan-selection";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useIndiaTimeTheme } from "@/hooks/useTheme";
 import { CommandPalette } from "@/components/ui/CommandPalette";
@@ -17,6 +19,7 @@ import { BusinessSwitcher } from "@/components/ui/BusinessSwitcher";
 import { Logo } from "@/components/ui/Logo";
 import { Icon } from "@/components/ui/Icon";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { usePageSearchSlot } from "@/lib/page-search";
 import {
   Add01Icon,
   Alert02Icon,
@@ -24,6 +27,10 @@ import {
   CreditCardIcon,
   DashboardSquare01Icon,
   DeliveryTruck01Icon,
+  PackageReceiveIcon,
+  DeliveryReturn01Icon,
+  ShoppingBasket01Icon,
+  ShoppingCartCheck01Icon,
   FileEditIcon,
   FileSyncIcon,
   FileValidationIcon,
@@ -35,15 +42,19 @@ import {
   PanelLeftOpenIcon,
   NoteRemoveIcon,
   PackageIcon,
+  FolderLibraryIcon,
   ReceiptDollarIcon,
   ReturnRequestIcon,
   Settings01Icon,
+  UserShield01Icon,
+  Award01Icon,
   ShippingTruck01Icon,
   ShoppingCart01Icon,
   TaxesIcon,
   UnfoldMoreIcon,
   UserIcon,
   Search01Icon,
+  Cancel01Icon,
   File01Icon,
   Location01Icon,
   Call02Icon,
@@ -56,6 +67,9 @@ import {
   Coins01Icon,
   CheckListIcon,
   Building03Icon,
+  HierarchySquare01Icon,
+  Factory01Icon,
+  Tag01Icon,
   ArrowDataTransferHorizontalIcon,
   SlidersHorizontalIcon,
   TaskDone01Icon,
@@ -100,65 +114,14 @@ function RootError({ error }: { error: Error }) {
   );
 }
 
-// ── Role-based access control ──────────────────────────────────
-
-const ROLE_ABILITIES: Record<string, Set<string>> = {
-  owner: new Set(["*"]),
-  admin: new Set(["*"]),
-  seller_manager: new Set([
-    "Invoice:read",
-    "Invoice:create",
-    "Party:read",
-    "Item:read",
-    "Payment:read",
-    "Store:read",
-    "RecurringInvoice:read",
-    "Business:read",
-  ]),
-  seller: new Set([
-    "Invoice:read",
-    "Invoice:create",
-    "Party:read",
-    "Item:read",
-    "Payment:read",
-    "Store:read",
-    "Business:read",
-    "RecurringInvoice:read",
-  ]),
-  accountant: new Set([
-    "Payment:read",
-    "Expense:read",
-    "BankAccount:read",
-    "Invoice:read",
-    "Party:read",
-    "Item:read",
-    "Store:read",
-    "RecurringInvoice:read",
-    "Report:read",
-    "GstReport:read",
-    "Business:read",
-    // Mirrors the API: accountants manage the books and read compliance docs
-    "Account:read",
-    "BankReconciliation:read",
-    "ITC:read",
-    "EInvoice:read",
-    "EWayBill:read",
-  ]),
-};
-
-function canAccess(
-  role: string | null | undefined,
-  resource: string,
-  action: string,
-): boolean {
-  if (!role) return true; // graceful degradation while loading
-  const abilities = ROLE_ABILITIES[role];
-  if (!abilities) return true; // unknown role — show all
-  if (abilities.has("*")) return true;
-  return abilities.has(`${resource}:${action}`);
-}
-
 const NAV_COLLAPSED_KEY = "fintranzact:nav-collapsed";
+/** Where to go once signed in, when a signed-out visitor opened a role's page. */
+const AFTER_LOGIN_KEY = "fintranzact:after-login";
+
+/** Pages that belong to a role rather than an organisation: the admin console and partner portal. */
+function isRoleHome(pathname: string): boolean {
+  return ["/platform", "/partner-portal"].some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 const NAV_SECTIONS_KEY = "fintranzact:nav-sections";
 
 // ── Sidebar nav structure ──────────────────────────────────────
@@ -219,9 +182,23 @@ const navSections = [
         action: "read",
       },
       {
+        to: "/stock-groups",
+        label: "Stock Groups",
+        icon: FolderLibraryIcon,
+        resource: "Item",
+        action: "read",
+      },
+      {
         to: "/warehouses",
         label: "Warehouses",
         icon: Building03Icon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/price-levels",
+        label: "Price Levels",
+        icon: Tag01Icon,
         resource: "Item",
         action: "read",
       },
@@ -247,6 +224,20 @@ const navSections = [
         action: "read",
         // Counting is by barcode scan, so it goes away with barcodes.
         barcodeOnly: true,
+      },
+      {
+        to: "/bill-of-materials",
+        label: "Bill of Materials",
+        icon: HierarchySquare01Icon,
+        resource: "Item",
+        action: "read",
+      },
+      {
+        to: "/manufacturing",
+        label: "Manufacturing",
+        icon: Factory01Icon,
+        resource: "Item",
+        action: "read",
       },
       {
         to: "/shipments",
@@ -282,9 +273,37 @@ const navSections = [
         action: "read",
       },
       {
+        to: "/sales-orders",
+        label: "Sales Orders",
+        icon: ShoppingCartCheck01Icon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
         to: "/delivery-challans",
         label: "Delivery Challans",
         icon: DeliveryTruck01Icon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/purchase-orders",
+        label: "Purchase Orders",
+        icon: ShoppingBasket01Icon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/goods-receipt-notes",
+        label: "Goods Receipts (GRN)",
+        icon: PackageReceiveIcon,
+        resource: "Invoice",
+        action: "read",
+      },
+      {
+        to: "/purchase-returns",
+        label: "Purchase Returns",
+        icon: DeliveryReturn01Icon,
         resource: "Invoice",
         action: "read",
       },
@@ -646,6 +665,16 @@ function RootLayout() {
   // We could not find out whether the visitor is signed in. Never treat that
   // as "signed out" (that is what used to bounce people to /login at random).
   const sessionUnknown = !session && sessionCheckFailed;
+  // Platform admins (set by the server's PLATFORM_ADMIN_EMAIL) get /platform.
+  const { data: platformMe } = trpc.platform.me.useQuery(undefined, {
+    enabled: !!session?.user,
+  });
+  const isPlatformAdmin = !!platformMe?.isPlatformAdmin;
+  // Partners (approved, or with an application in) get /partner-portal.
+  const { data: partnerMe, isLoading: partnerMeLoading } = trpc.partner.me.useQuery(undefined, {
+    enabled: !!session?.user,
+  });
+  const partnerStatus = partnerMe?.status ?? null;
   const {
     data: tenantList,
     isLoading: tenantListLoading,
@@ -671,6 +700,7 @@ function RootLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [showPalette, setShowPalette] = useState(false);
+  const pageSearch = usePageSearchSlot();
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showTenantPicker, setShowTenantPicker] = useState(false);
 
@@ -1008,13 +1038,13 @@ function RootLayout() {
     }
   }, [currentBusinessId]);
 
-  const selectedTenantPlan = session?.tenantId
-    ? (tenantList?.find((tenant) => tenant.tenantId === session.tenantId)
-      ?.tenantPlan ?? null)
-    : null;
+  // A new organisation's owner chooses a plan first (planSelectedAt is null
+  // until they do); other roles are never held up by it.
+  const selectedTenant = session?.tenantId
+    ? tenantList?.find((tenant) => tenant.tenantId === session.tenantId)
+    : undefined;
 
-  const hasCompletedPlanSelection =
-    selectedTenantPlan !== null && selectedTenantPlan !== undefined;
+  const hasCompletedPlanSelection = !needsPlanSelection(selectedTenant);
 
   // Single consolidated redirect — priority order matters
   const publicPaths = AUTH_PUBLIC_PATHS;
@@ -1038,6 +1068,14 @@ function RootLayout() {
     if (!session?.user) {
       if (showsLandingPage) return;
       if (!publicPaths.some((p) => pathname.startsWith(p))) {
+        // Come back to the partner portal or admin console after signing in.
+        if (isRoleHome(pathname)) {
+          try {
+            sessionStorage.setItem(AFTER_LOGIN_KEY, pathname);
+          } catch {
+            // Private mode: the role-based landing below still applies.
+          }
+        }
         navigate({ to: "/login" });
       }
       return;
@@ -1051,9 +1089,57 @@ function RootLayout() {
       return;
     }
 
+    // Opened the partner portal (or admin console) while signed out: go back
+    // there. The destination is kept until they arrive, so another redirect
+    // racing with this one (e.g. the profile page's) cannot lose it.
+    let afterLogin: string | null = null;
+    try {
+      afterLogin = sessionStorage.getItem(AFTER_LOGIN_KEY);
+      if (afterLogin && (pathname === afterLogin || !isRoleHome(afterLogin))) {
+        sessionStorage.removeItem(AFTER_LOGIN_KEY);
+        afterLogin = null;
+      }
+    } catch {
+      afterLogin = null;
+    }
+    if (afterLogin) {
+      navigate({ to: afterLogin, replace: true });
+      return;
+    }
+
+    // The partner portal and platform admin pages need a signed-in user only —
+    // no organisation, plan or business.
+    if (isRoleHome(pathname)) return;
+
+    // Profile just completed: move on (joining an invited organisation is
+    // handled on that page instead).
+    if (pathname === "/auth/complete-profile" && !sessionStorage.getItem("pendingInviteToken")) {
+      navigate({ to: "/", replace: true });
+      return;
+    }
+
+    // Everyone signs in the same way; where they land depends on their role.
+    // Wait until we know whether this user is a partner.
+    if (partnerMeLoading) return;
+
     // Already signed in: the login and register pages have nothing to do.
     if (pathname === "/login" || pathname === "/register") {
-      navigate({ to: "/", replace: true });
+      navigate({
+        to: isPlatformAdmin && !session.tenantId ? "/platform" : partnerStatus && !session.tenantId ? "/partner-portal" : "/",
+        replace: true,
+      });
+      return;
+    }
+
+    // A platform admin who is not part of any organisation has nothing else to open.
+    if (isPlatformAdmin && !session.tenantId && tenantList && tenantList.length === 0) {
+      navigate({ to: "/platform", replace: true });
+      return;
+    }
+
+    // Likewise a partner with no organisation lands on their partner portal.
+    if (partnerStatus && !session.tenantId && tenantList && tenantList.length === 0) {
+      navigate({ to: "/partner-portal", replace: true });
       return;
     }
 
@@ -1113,10 +1199,17 @@ function RootLayout() {
       Array.isArray(businesses) &&
       businesses.length === 0
     ) {
+      // A partner who has not set up a business of their own lands on the
+      // partner portal; they can still open onboarding from there.
+      if (partnerStatus && pathname === "/") {
+        navigate({ to: "/partner-portal", replace: true });
+        return;
+      }
       if (
         pathname !== "/onboarding" &&
         !pathname.startsWith("/auth/plan-selection") &&
-        !pathname.startsWith("/business/create")
+        !pathname.startsWith("/business/create") &&
+        !pathname.startsWith("/invite")
       ) {
         navigate({ to: "/onboarding" });
       }
@@ -1138,6 +1231,10 @@ function RootLayout() {
     sessionUnknown,
     session,
     businesses,
+    // A refetch that returns the same (empty) list keeps the same array, so
+    // the loading flags are what re-run the "no business yet" redirects.
+    businessesLoading,
+    businessesFetching,
     navigate,
     pathname,
     currentBusinessId,
@@ -1145,6 +1242,9 @@ function RootLayout() {
     tenantListLoading,
     tenantListFetching,
     hasCompletedPlanSelection,
+    isPlatformAdmin,
+    partnerStatus,
+    partnerMeLoading,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select single tenant
@@ -1207,6 +1307,10 @@ function RootLayout() {
     return <Outlet />;
   }
 
+  // The platform admin and partner portal pages have their own full-page
+  // layout and access check.
+  if (isRoleHome(pathname)) return <Outlet />;
+
   // Authenticated but no tenant selected
   if (!session.tenantId) {
     // Auth flow pages (complete-profile, invite) handle tenant resolution
@@ -1216,6 +1320,9 @@ function RootLayout() {
     if (isAuthFlow) return <Outlet />;
 
     if (!tenantList) return loadingSpinner;
+
+    // Platform admin or partner without an organisation: the redirect is in flight.
+    if (tenantList.length === 0 && (isPlatformAdmin || partnerStatus || partnerMeLoading)) return loadingSpinner;
 
     if (tenantList.length === 0) {
       // If a pending invite token exists, show spinner — the redirect useEffect
@@ -1255,20 +1362,27 @@ function RootLayout() {
     );
   }
 
-  // Tenant selected but businesses still loading — show spinner, don't render
-  // the main layout yet (prevents flash of /settings "Set up your business")
-  if (session.tenantId && businessesLoading) return loadingSpinner;
-
   // Tenant-level routes are independent of business context.
   // They must render without waiting for the business list and
-  // must not use the business dashboard shell.
+  // must not use the business dashboard shell. Checked before the
+  // business-list spinner: swapping the page for a spinner (and then the
+  // shell) while the list loads remounted it and wiped what the user had
+  // already typed, e.g. their name on the complete-profile page.
   if (
+    pathname.startsWith("/auth/complete-profile") ||
+    // The invite page shows "You've joined …" and lets the member choose how
+    // to continue; the company picker must not replace it once they join.
+    pathname.startsWith("/invite") ||
     pathname.startsWith("/auth/plan-selection") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/business/create")
   ) {
     return <Outlet />;
   }
+
+  // Tenant selected but businesses still loading — show spinner, don't render
+  // the main layout yet (prevents flash of /settings "Set up your business")
+  if (session.tenantId && businessesLoading) return loadingSpinner;
 
   // Business-level routes require business context.
   if (session.tenantId && businessesLoading) {
@@ -1388,6 +1502,7 @@ function RootLayout() {
         {/* Sidebar — hidden during onboarding (no business context yet) */}
         {!isOnboarding && (
           <aside
+            data-testid="app-sidebar"
             className={cn(
               // Navy brand sidebar in both themes (light text on #0f1b3d).
               "w-60 shrink-0 border-r border-white/5 flex flex-col overflow-hidden bg-[#0f1b3d] text-[#c3cee6] dark:border-white/10",
@@ -1455,10 +1570,18 @@ function RootLayout() {
                         ? `GSTIN ${activeBusiness.gstin}`
                         : activeBusiness?.city || "Not GST registered"
                     }
-                    onSwitch={handleBusinessSwitch}
+                    // On a phone the switcher sits in the nav drawer: close it,
+                    // as following a nav link does, to show the new business
+                    onSwitch={(id) => {
+                      setSidebarOpen(false);
+                      handleBusinessSwitch(id);
+                    }}
                     onCreateNew={
                       canCreateBiz && canAccess(session?.role, "Business", "manage")
-                        ? () => navigate({ to: "/business/create" })
+                        ? () => {
+                            setSidebarOpen(false);
+                            navigate({ to: "/business/create" });
+                          }
                         : undefined
                     }
                   />
@@ -1481,6 +1604,7 @@ function RootLayout() {
 
             {/* Nav sections */}
             <nav
+              data-testid="app-sidebar-nav"
               className="flex-1 overflow-y-auto pb-2"
               onClick={() => setSidebarOpen(false)}
             >
@@ -1604,6 +1728,36 @@ function RootLayout() {
 
             {/* Sidebar footer: settings, then the signed-in user */}
             <div className="shrink-0 border-t border-white/10 px-2 py-2">
+              {isPlatformAdmin ? (
+                <Tooltip label="Platform admin" disabled={!navCollapsed}>
+                  <Link
+                    to="/platform"
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-[9px] py-2 text-ui text-[#c3cee6] transition-colors hover:bg-white/[.07] hover:text-white",
+                      navCollapsed ? "px-3 md:justify-center md:px-0" : "px-3",
+                    )}
+                  >
+                    <Icon icon={UserShield01Icon} size={16} className="shrink-0" />
+                    <span className={cn(navCollapsed && "md:hidden")}>Platform admin</span>
+                  </Link>
+                </Tooltip>
+              ) : null}
+              {partnerStatus ? (
+                <Tooltip label="Partner portal" disabled={!navCollapsed}>
+                  <Link
+                    to="/partner-portal"
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-[9px] py-2 text-ui text-[#c3cee6] transition-colors hover:bg-white/[.07] hover:text-white",
+                      navCollapsed ? "px-3 md:justify-center md:px-0" : "px-3",
+                    )}
+                  >
+                    <Icon icon={Award01Icon} size={16} className="shrink-0" />
+                    <span className={cn(navCollapsed && "md:hidden")}>Partner portal</span>
+                  </Link>
+                </Tooltip>
+              ) : null}
               <Tooltip label="Settings" disabled={!navCollapsed}>
                 <Link
                   to="/settings"
@@ -1696,8 +1850,43 @@ function RootLayout() {
               </div>
             )}
 
-            {/* Search — opens the command palette (also ⌘K / Ctrl+K) */}
-            {!isOnboarding && (
+            {/* Search — filters the current page's list when the page uses
+                it (usePageSearch); otherwise opens the command palette.
+                ⌘K / Ctrl+K always opens the palette. */}
+            {!isOnboarding && pageSearch?.placeholder && (
+              <div className="flex h-10 min-w-0 items-center gap-2.5 rounded-xl border border-border-light bg-surface-1 px-3 text-sm transition-colors focus-within:border-brand-500 focus-within:bg-surface-0 sm:w-72 lg:w-96">
+                <Icon icon={Search01Icon} size={17} className="shrink-0 text-text-tertiary" />
+                <input
+                  type="search"
+                  value={pageSearch.query}
+                  onChange={(e) => pageSearch.setQuery(e.target.value)}
+                  placeholder={pageSearch.placeholder}
+                  aria-label={pageSearch.placeholder}
+                  className="min-w-0 flex-1 bg-transparent text-text-primary outline-none placeholder:text-text-tertiary [&::-webkit-search-cancel-button]:hidden"
+                />
+                {pageSearch.query ? (
+                  <button
+                    type="button"
+                    onClick={() => pageSearch.setQuery("")}
+                    className="shrink-0 rounded-md p-0.5 text-text-tertiary hover:text-text-primary"
+                    aria-label="Clear search"
+                  >
+                    <Icon icon={Cancel01Icon} size={14} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowPalette(true)}
+                    className="hidden shrink-0 rounded-md border border-border-light px-1.5 py-0.5 font-sans text-2xs font-semibold text-text-tertiary hover:text-text-primary sm:block"
+                    aria-label="Search the whole app"
+                    title="Search the whole app (⌘K)"
+                  >
+                    ⌘K
+                  </button>
+                )}
+              </div>
+            )}
+            {!isOnboarding && !pageSearch?.placeholder && (
               <button
                 type="button"
                 onClick={() => setShowPalette(true)}
@@ -1731,17 +1920,6 @@ function RootLayout() {
                   isGstRegistered={isGstRegistered}
                 />
               )}
-              {!isOnboarding && canAccess(session?.role, "Invoice", "create") && (
-                <Link
-                  to="/invoices"
-                  search={{ create: "1" }}
-                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-3 text-sm font-bold text-white shadow-[0_8px_18px_-8px_rgba(59,94,170,.7)] transition hover:bg-brand-700 sm:px-4"
-                  aria-label="New invoice"
-                >
-                  <Icon icon={Add01Icon} size={16} strokeWidth={2.2} />
-                  <span className="hidden sm:inline">New invoice</span>
-                </Link>
-              )}
 
               {/* No sidebar during onboarding, so the account controls live here */}
               {isOnboarding && (
@@ -1764,7 +1942,7 @@ function RootLayout() {
           </div>
 
           {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto">
+          <div data-testid="app-content" className="flex-1 overflow-y-auto">
             <div className="max-w-[1400px] mx-auto px-6 py-6">
               <Outlet />
             </div>

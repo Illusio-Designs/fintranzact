@@ -225,6 +225,69 @@
       "when": 1790759718567,
       "tag": "0031_share_links",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790774898433,
+      "tag": "0032_plans_and_partners",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790779605517,
+      "tag": "0033_inventory",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790795644081,
+      "tag": "0034_free_qty_rejections",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790798365903,
+      "tag": "0035_item_batches",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790799840261,
+      "tag": "0036_roadmap_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790847334384,
+      "tag": "0037_supplier_invoice_number",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790868999562,
+      "tag": "0038_repair_skipped_migrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790878996344,
+      "tag": "0039_tenant_plan_selected_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790883697137,
+      "tag": "0040_invoice_templates",
+      "breakpoints": true
     }
   ]
 }

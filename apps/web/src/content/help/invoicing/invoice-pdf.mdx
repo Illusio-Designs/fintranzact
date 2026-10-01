@@ -1,0 +1,136 @@
+---
+title: Invoice PDF
+description: Download and share invoice PDFs in your chosen A4 design, A5 landscape, or a 58 mm / 80 mm thermal roll, with copies for the recipient, transporter and supplier, and print e-way bills.
+sidebar:
+  order: 4
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+import { ForMobile } from "@/components/help/mdx";
+
+Every invoice in Fintranzact can be downloaded as a PDF and shared with your customer or supplier. PDFs are generated on the server using the NotoSans font family, which supports all Indic scripts.
+
+## PDF formats
+
+Three formats are available:
+
+| Format | Use case |
+|---|---|
+| **A4 (your invoice design)** | Standard invoices, email attachments, filing. Printed in the design chosen in Settings → Documents → Invoice design |
+| **A5 landscape** | Compact invoices for retail counters |
+| **Thermal** | Point-of-sale thermal printers, on a 58 mm or 80 mm roll (Settings → Documents) |
+
+## Invoice designs
+
+The A4 PDF uses the design chosen in **Settings → Documents → Invoice design**: Classic, Tally Classic, Modern GST, Corporate Letterhead, Bold Header Band, Minimal, Spreadsheet (Batch & MRP), Landscape Wide, Compact A5 or Professional Services. Long invoices continue over several pages with the table header repeated, the running total carried forward and "Page x of y" on every page; the totals, tax summary and signature always stay together.
+
+A composition dealer's invoices always print as a **Bill of Supply** (with "Composition taxable person, not eligible to collect tax on supplies" and no tax columns), invoices to an overseas customer as an **Export Invoice** with the LUT endorsement, and quotations and proforma invoices as an **Estimate** marked "This is not a tax invoice".
+
+When the invoice has an e-invoice IRN, the IRN, acknowledgement number and date and the signed QR code are printed; when it has an e-way bill, its number, date and vehicle number are printed too.
+
+## Copies
+
+Choose **GST Invoice, all copies** in the Download PDF menu to get the original, duplicate and triplicate in one PDF, each labelled at the top right: ORIGINAL FOR RECIPIENT, DUPLICATE FOR TRANSPORTER and TRIPLICATE FOR SUPPLIER. Invoices for services print the original and DUPLICATE FOR SUPPLIER only.
+
+## E-way bill PDF
+
+On the **E-Way Bills** page, **Print** on a bill (or **Print e-way bill** in its details) opens the e-way bill in the standard EWB-01 layout: number, date, validity and QR code, Part A (supplier, recipient, places of dispatch and delivery, document, value of goods, HSN codes, reason, transporter) and Part B (vehicle details). An invoice with an active e-way bill links to it from its details too.
+
+<ForDesktop>
+Select the format from the **Download PDF** dropdown on the invoice detail page.
+</ForDesktop>
+
+<ForMobile>
+Select the format before sharing. The PDF is generated on the server and delivered to your device's native share sheet, so the output is identical regardless of which device you use.
+</ForMobile>
+
+## What is included in the PDF
+
+### Header section
+- Your business name and legal name
+- Your GSTIN (if GST registered)
+- Your PAN
+- Your business phone, email, and address
+- Document title (INVOICE, TAX INVOICE, QUOTATION, etc.)
+- Invoice number and date
+- Due date (if set)
+
+### Bill to / Ship to section
+- Party name
+- Party GSTIN (if available)
+- Party billing address, city, state, and pincode
+
+### Line items table
+
+Each row shows:
+- Item description
+- HSN or SAC code (pulled from the item catalogue)
+- Quantity and unit (the billed quantity; free goods are printed under the item as "+ 1 pcs free", and on a GRN the rejected quantity and reason)
+- Unit price
+- Discount % (if any)
+- GST rate %
+- GST amount
+- Total amount
+
+### Totals section
+- Subtotal (taxable value)
+- GST breakdown — CGST + SGST for intra-state, or IGST for inter-state, per rate. Additional charges appear under the rate they were taxed at. A customer with no state on record is treated as intra-state.
+- Discount amount (if any)
+- Additional charges (if any)
+- Round-off (if any)
+- **Total amount** (highlighted)
+- Amount paid
+- **Balance due** (total minus amount paid)
+
+### Notes and terms
+Your invoice notes and terms and conditions are printed below the totals.
+
+### Payment details (optional)
+
+If you have set up a bank account as the default for your business, the PDF can show:
+- Bank name
+- Account name
+- Account number
+- IFSC code
+
+### UPI QR code (optional)
+
+If you configure a UPI ID on your business (or on the linked bank account), a QR code is printed on the invoice. Your customer can scan it with any UPI app (PhonePe, Google Pay, Paytm, etc.) to pay the exact invoice amount directly.
+
+:::tip[Enable UPI QR on invoices]
+Go to Settings → Bank Accounts, edit your account, and enter the UPI ID (for example, `yourbusiness@upi` or `9876543210@paytm`). Then set that account as the default. The QR code will appear on all new PDFs.
+:::
+
+## Downloading a PDF
+
+<ForDesktop>
+1. Open an invoice from the invoice list.
+2. Click the **Download PDF** button in the invoice detail view. If you want a specific format, click the dropdown arrow next to the button and select A4, A5, or thermal.
+3. The PDF is generated on the server and downloaded to your browser's default download location.
+
+You can also share the PDF directly by clicking **Share** — this copies a download link to the clipboard.
+</ForDesktop>
+
+<ForMobile>
+1. Open an invoice from the invoice list.
+2. Tap the **Share** button at the top of the invoice detail screen.
+3. The PDF is generated on the server and delivered to your device's native share sheet (powered by expo-sharing). From the share sheet, you can send the PDF via WhatsApp, email, save it to Files, AirDrop it, or use any other sharing option your device supports.
+</ForMobile>
+
+## Fonts and script support
+
+PDFs use **NotoSans Regular** and **NotoSans Bold** — fonts that cover Latin, Devanagari, and other Indian scripts. Party names, item descriptions, and notes in Hindi, Marathi, or other languages will render correctly in the PDF.
+
+## Frequently asked questions
+
+**Can I put my business logo on the invoice PDF?**
+Logo support is available through the business settings. Upload a PNG or JPG logo in Settings → Business Profile. The logo appears in the top-left corner of the A4 and A5 formats.
+
+**The thermal PDF text is too small. Can I adjust it?**
+Receipts are laid out for 58 mm or 80 mm rolls; pick yours in Settings → Documents → Thermal receipt width. If text is still too small on your printer, check your printer's scaling settings.
+
+**Can I customise the invoice template?**
+Choose one of ten designs in Settings → Documents → Invoice design, and add your logo, signature, bank details and default terms and conditions in your business settings.
+
+**Is the PDF generated on the server or in the browser?**
+The PDF is generated on the **server** using PDFKit (a Node.js library). This means it works correctly regardless of the browser or device the user is on, and the output is always consistent.

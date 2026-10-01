@@ -34,12 +34,16 @@ import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import type { TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPClient, IRPError } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 import { encryptEInvoiceConfig, decryptEInvoiceConfig } from "../lib/field-encryption.js";
+import { audited, withAudit } from "../lib/audit.js";
 
 // ── Shared helper ─────────────────────────────────────────────────────────────
+
+const E_INVOICE_DOCUMENT_TYPES: string[] = ["invoice", "credit_note", "debit_note", "sales_return"];
 
 /**
  * Shared logic for generating an IRN. Used by both `generate` and `retryFailed`.
@@ -72,12 +76,22 @@ async function generateIRNForInvoice(
     .limit(1);
 
   if (!invoice) throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" });
-
-  const [party] = await db.select().from(parties).where(eq(parties.id, invoice.partyId)).limit(1);
-  if (!party?.gstin) {
+  // IRNs are for outward tax documents only: not purchases, and not
+  // quotations, proformas, challans, orders or goods receipts.
+  if (invoice.type !== "sale" || !E_INVOICE_DOCUMENT_TYPES.includes(invoice.documentType)) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "E-invoicing requires the customer to have a GSTIN (B2B only)",
+      message: "E-invoices can only be generated for sales invoices, credit notes, debit notes and sales returns",
+    });
+  }
+
+  const [party] = await db.select().from(parties).where(eq(parties.id, invoice.partyId)).limit(1);
+  // B2B needs the buyer's GSTIN; an export to an overseas buyer has none
+  // (the mapper reports it as "URP").
+  if (!party || (!party.gstin && party.gstRegistrationType !== "overseas")) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "E-invoicing requires the customer to have a GSTIN (B2B) or to be an overseas buyer (export)",
     });
   }
 
@@ -92,6 +106,7 @@ async function generateIRNForInvoice(
       itemName: invoiceItems.itemName,
       description: invoiceItems.description,
       quantity: invoiceItems.quantity,
+      freeQuantity: invoiceItems.freeQuantity,
       unitPrice: invoiceItems.unitPrice,
       taxPercent: invoiceItems.taxPercent,
       taxAmount: invoiceItems.taxAmount,
@@ -106,57 +121,65 @@ async function generateIRNForInvoice(
     .where(eq(invoiceItems.invoiceId, invoiceId))
     .orderBy(invoiceItems.sortOrder);
 
-  const irpJson = mapInvoiceToIRP(
-    {
-      invoiceNumber: invoice.invoiceNumber,
-      invoiceDate: invoice.invoiceDate,
-      type: invoice.type,
-      documentType: invoice.documentType,
-      subtotal: invoice.subtotal,
-      taxAmount: invoice.taxAmount,
-      discountAmount: invoice.discountAmount,
-      additionalCharges: invoice.additionalCharges,
-      roundOff: invoice.roundOff,
-      totalAmount: invoice.totalAmount,
-      isReverseCharge: invoice.isReverseCharge ?? false,
-    },
-    lineItemRows.map((li) => ({
-      itemName: li.itemName,
-      description: li.description,
-      quantity: li.quantity,
-      unitPrice: li.unitPrice,
-      taxPercent: li.taxPercent,
-      taxAmount: li.taxAmount,
-      discountPercent: li.discountPercent,
-      totalAmount: li.totalAmount,
-      selectedUnit: li.selectedUnit,
-      itemType: li.itemType,
-      itemHsn: li.itemHsn,
-    })),
-    {
-      gstin: party.gstin,
-      name: party.name,
-      billingAddress: party.billingAddress,
-      city: party.city,
-      state: party.state,
-      stateCode: party.stateCode,
-      pincode: party.pincode,
-      phone: party.phone,
-      email: party.email,
-    },
-    {
-      gstin: business.gstin,
-      legalName: business.legalName,
-      name: business.name,
-      address: business.address,
-      city: business.city,
-      state: business.state,
-      stateCode: business.stateCode,
-      pincode: business.pincode,
-      phone: business.phone,
-      email: business.email,
-    },
-  );
+  let irpJson: ReturnType<typeof mapInvoiceToIRP>;
+  try {
+    irpJson = mapInvoiceToIRP(
+      {
+        invoiceNumber: invoice.invoiceNumber,
+        invoiceDate: invoice.invoiceDate,
+        type: invoice.type,
+        documentType: invoice.documentType,
+        subtotal: invoice.subtotal,
+        taxAmount: invoice.taxAmount,
+        discountAmount: invoice.discountAmount,
+        additionalCharges: invoice.additionalCharges,
+        roundOff: invoice.roundOff,
+        totalAmount: invoice.totalAmount,
+        isReverseCharge: invoice.isReverseCharge ?? false,
+      },
+      lineItemRows.map((li) => ({
+        itemName: li.itemName,
+        description: li.description,
+        quantity: li.quantity,
+        freeQuantity: li.freeQuantity,
+        unitPrice: li.unitPrice,
+        taxPercent: li.taxPercent,
+        taxAmount: li.taxAmount,
+        discountPercent: li.discountPercent,
+        totalAmount: li.totalAmount,
+        selectedUnit: li.selectedUnit,
+        itemType: li.itemType,
+        itemHsn: li.itemHsn,
+      })),
+      {
+        gstin: party.gstin,
+        name: party.name,
+        billingAddress: party.billingAddress,
+        city: party.city,
+        state: party.state,
+        stateCode: party.stateCode,
+        pincode: party.pincode,
+        phone: party.phone,
+        email: party.email,
+        gstRegistrationType: party.gstRegistrationType,
+      },
+      {
+        gstin: business.gstin,
+        legalName: business.legalName,
+        name: business.name,
+        address: business.address,
+        city: business.city,
+        state: business.state,
+        stateCode: business.stateCode,
+        pincode: business.pincode,
+        phone: business.phone,
+        email: business.email,
+      },
+    );
+  } catch (err) {
+    // The mapper refuses missing GSTINs and the like: bad data, not a crash.
+    throw new TRPCError({ code: "BAD_REQUEST", message: err instanceof Error ? err.message : "Invoice can't be e-invoiced" });
+  }
 
   // Mark as pending before calling IRP
   await db
@@ -214,22 +237,33 @@ export const eInvoiceRouter = router({
    */
   configure: adminProcedure
     .input(eInvoiceConfigSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EInvoice");
 
       const existing = await ctx.db
-        .select({ id: eInvoiceConfigs.id })
+        .select({ id: eInvoiceConfigs.id, password: eInvoiceConfigs.password, clientSecret: eInvoiceConfigs.clientSecret })
         .from(eInvoiceConfigs)
         .where(eq(eInvoiceConfigs.businessId, ctx.businessId))
         .limit(1);
+
+      // The settings form never shows the stored password or client secret
+      // back ("enter to update"), so a blank one on a re-save keeps what is
+      // stored rather than wiping it.
+      if (!input.password && existing.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Enter the IRP password." });
+      }
 
       // Encrypt sensitive fields before persisting
       const encrypted = encryptEInvoiceConfig({
         clientId: input.clientId || null,
         clientSecret: input.clientSecret || null,
         username: input.username,
-        password: input.password,
+        password: input.password || "",
       });
+      if (existing.length > 0) {
+        if (!input.password) encrypted.password = existing[0]!.password;
+        if (!input.clientSecret && input.clientId) encrypted.clientSecret = existing[0]!.clientSecret;
+      }
 
       if (existing.length > 0) {
         const [updated] = await ctx.db
@@ -268,7 +302,7 @@ export const eInvoiceRouter = router({
         })
         .returning();
       return decryptEInvoiceConfig(created!);
-    }),
+    }, (r) => ({ action: "eInvoice.configure", entityType: "eInvoiceConfig", entityId: r.id, metadata: { gstin: r.gstin, isEnabled: r.isEnabled } }))),
 
   /**
    * Get IRP config for this business (masks password).
@@ -323,7 +357,9 @@ export const eInvoiceRouter = router({
       await client.authenticate();
       return { success: true, message: "Successfully connected to IRP" };
     } catch (err) {
-      const message = err instanceof IRPError ? err.message : "Connection failed";
+      // IRPError: the portal answered; TRPCError: stopped before calling it
+      // (e.g. no GSP client credentials on this server) — say which.
+      const message = err instanceof IRPError || err instanceof TRPCError ? err.message : "Connection failed";
       return { success: false, message };
     }
   }),
@@ -333,7 +369,7 @@ export const eInvoiceRouter = router({
    */
   generate: adminProcedure
     .input(z.object({ invoiceId: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EInvoice");
 
       // Pre-validate status before delegating to shared helper
@@ -354,14 +390,14 @@ export const eInvoiceRouter = router({
       }
 
       return generateIRNForInvoice(input.invoiceId, ctx.businessId, ctx.db);
-    }),
+    }, (_r, input) => ({ action: "eInvoice.generate", entityType: "invoice", entityId: input.invoiceId }))),
 
   /**
    * Cancel an IRN. Only valid within 24 hours of generation.
    */
   cancel: adminProcedure
     .input(cancelEInvoiceSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EInvoice");
 
       // Fetch config and decrypt credentials
@@ -442,7 +478,7 @@ export const eInvoiceRouter = router({
         .returning();
 
       return updated;
-    }),
+    }, (_r, input) => ({ action: "eInvoice.cancel", entityType: "invoice", entityId: input.invoiceId, metadata: { cancelReason: input.cancelReason } }))),
 
   /**
    * Retry a failed e-invoice submission.
@@ -450,7 +486,7 @@ export const eInvoiceRouter = router({
    */
   retryFailed: adminProcedure
     .input(z.object({ invoiceId: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EInvoice");
 
       const [invoice] = await ctx.db
@@ -478,7 +514,7 @@ export const eInvoiceRouter = router({
 
       // Run the generate logic inline (reuse same helper)
       return generateIRNForInvoice(invoice.id, ctx.businessId, ctx.db);
-    }),
+    }, (_r, input) => ({ action: "eInvoice.retryFailed", entityType: "invoice", entityId: input.invoiceId }))),
 
   /**
    * Dashboard: list invoices with e-invoice status, counts, filters.
@@ -536,12 +572,9 @@ export const eInvoiceRouter = router({
       if (input.status) {
         conditions.push(eq(invoices.eInvoiceStatus, input.status));
       }
-      if (input.fromDate) {
-        conditions.push(sql`${invoices.invoiceDate} >= ${new Date(input.fromDate)}`);
-      }
-      if (input.toDate) {
-        conditions.push(sql`${invoices.invoiceDate} <= ${new Date(input.toDate)}`);
-      }
+      // Bound through drizzle's column-typed comparisons: a raw Date inside a
+      // sql`` template is rejected by postgres-js
+      conditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
       if (input.search) {
         const term = `%${escapeLike(input.search)}%`;
         conditions.push(
@@ -665,6 +698,8 @@ export const eInvoiceRouter = router({
       }
     }
 
-    return results;
+    return audited(ctx, async () => results, (r) => failedInvoices.map((inv) => ({
+      action: "eInvoice.retryFailed", entityType: "invoice", entityId: inv.id, metadata: { bulk: true, ...r },
+    })));
   }),
 });

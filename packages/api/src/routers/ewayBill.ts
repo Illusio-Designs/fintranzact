@@ -26,7 +26,7 @@
  * The sandbox is used by default so no accidental production calls occur in dev.
  */
 
-import { eq, and, desc, gte, lte, sql, isNull } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -50,10 +50,23 @@ import { EWBClient, computeValidUpto } from "../lib/ewb-client.js";
 import { decryptEwbConfig } from "../lib/field-encryption.js";
 import { mapInvoiceToEWB } from "../lib/invoice-to-ewb.js";
 import type { TransportDetails, InvoiceForEWB, LineItemForEWB } from "../lib/invoice-to-ewb.js";
+import { withAudit } from "../lib/audit.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const EWB_MIN_VALUE = 50000; // ₹50,000 threshold for mandatory EWB
+const EWB_MIN_VALUE = 50000; // statutory ₹50,000 threshold for mandatory EWB
+
+/**
+ * The consignment value at which an EWB is required for this business.
+ * businesses.e_way_bill_threshold overrides the statutory default (some
+ * states notify a different limit for intra-state movement); null/blank or
+ * an unparseable value falls back to ₹50,000.
+ */
+export function resolveEwbThreshold(configured: string | null | undefined): number {
+  if (configured == null || configured === "") return EWB_MIN_VALUE;
+  const v = parseFloat(configured);
+  return Number.isFinite(v) && v >= 0 ? v : EWB_MIN_VALUE;
+}
 
 /**
  * Build an EWBClient for a business.
@@ -134,12 +147,12 @@ export const ewayBillRouter = router({
    * Validates:
    *   - Invoice belongs to the business
    *   - Invoice is a goods invoice (at least one product item)
-   *   - Invoice total > ₹50,000
+   *   - Invoice total >= the business's E-Way Bill threshold (default ₹50,000)
    *   - No existing active/generated EWB for this invoice
    */
   generate: adminProcedure
     .input(generateEwayBillSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EWayBill");
 
       // ── 1. Fetch invoice ─────────────────────────────────────────────────────
@@ -173,6 +186,7 @@ export const ewayBillRouter = router({
           itemName: invoiceItems.itemName,
           description: invoiceItems.description,
           quantity: invoiceItems.quantity,
+          freeQuantity: invoiceItems.freeQuantity,
           unitPrice: invoiceItems.unitPrice,
           taxPercent: invoiceItems.taxPercent,
           taxAmount: invoiceItems.taxAmount,
@@ -200,16 +214,9 @@ export const ewayBillRouter = router({
         });
       }
 
-      // ── 4. Validate ₹50,000 threshold ────────────────────────────────────
-      const total = parseFloat(invoice.totalAmount) || 0;
-      if (total < EWB_MIN_VALUE) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `Invoice total (₹${total.toFixed(2)}) is below the ₹50,000 threshold for E-Way Bill`,
-        });
-      }
-
       // ── 5. Check for existing active EWB ──────────────────────────────────
+      // Look for a live bill specifically: an invoice can also carry
+      // cancelled ones, and an unordered limit(1) could land on those.
       const [existingEwb] = await ctx.db
         .select({ id: ewayBills.id, status: ewayBills.status })
         .from(ewayBills)
@@ -217,11 +224,12 @@ export const ewayBillRouter = router({
           and(
             eq(ewayBills.businessId, ctx.businessId),
             eq(ewayBills.invoiceId, invoice.id),
+            inArray(ewayBills.status, ["generated", "active"]),
           ),
         )
         .limit(1);
 
-      if (existingEwb && (existingEwb.status === "generated" || existingEwb.status === "active")) {
+      if (existingEwb) {
         throw new TRPCError({
           code: "CONFLICT",
           message: "An active E-Way Bill already exists for this invoice",
@@ -249,6 +257,16 @@ export const ewayBillRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Business not found" });
       }
 
+      // ── 4. Validate threshold (business setting, default ₹50,000) ────────
+      const threshold = resolveEwbThreshold(business.eWayBillThreshold);
+      const total = parseFloat(invoice.totalAmount) || 0;
+      if (total < threshold) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Invoice total (₹${total.toFixed(2)}) is below the ₹${threshold.toLocaleString("en-IN")} threshold for E-Way Bill`,
+        });
+      }
+
       // ── 7. Build EWB payload ──────────────────────────────────────────────
       const invoiceForEWB: InvoiceForEWB = {
         id: invoice.id,
@@ -257,6 +275,8 @@ export const ewayBillRouter = router({
         type: invoice.type,
         documentType: invoice.documentType,
         subtotal: invoice.subtotal,
+        discountAmount: invoice.discountAmount,
+        additionalCharges: invoice.additionalCharges,
         taxAmount: invoice.taxAmount,
         totalAmount: invoice.totalAmount,
         isReverseCharge: invoice.isReverseCharge,
@@ -278,6 +298,7 @@ export const ewayBillRouter = router({
         itemName: li.itemName,
         description: li.description,
         quantity: li.quantity,
+        freeQuantity: li.freeQuantity,
         unitPrice: li.unitPrice,
         taxPercent: li.taxPercent,
         taxAmount: li.taxAmount,
@@ -344,7 +365,7 @@ export const ewayBillRouter = router({
         .returning();
 
       return newEwb!;
-    }),
+    }, (r, input) => ({ action: "ewayBill.generate", entityType: "ewayBill", entityId: r.id, metadata: { invoiceId: input.invoiceId, ewbNumber: r.ewbNumber } }))),
 
   /**
    * Cancel an E-Way Bill.
@@ -352,7 +373,7 @@ export const ewayBillRouter = router({
    */
   cancel: adminProcedure
     .input(cancelEwayBillSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EWayBill");
 
       const [ewb] = await ctx.db
@@ -413,7 +434,7 @@ export const ewayBillRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "ewayBill.cancel", entityType: "ewayBill", entityId: input.ewayBillId, metadata: { cancelReason: input.cancelReason } }))),
 
   /**
    * Update vehicle number (Part-B update).
@@ -421,7 +442,7 @@ export const ewayBillRouter = router({
    */
   updateVehicle: adminProcedure
     .input(updateEwbVehicleSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EWayBill");
 
       const [ewb] = await ctx.db
@@ -500,7 +521,7 @@ export const ewayBillRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "ewayBill.updateVehicle", entityType: "ewayBill", entityId: input.ewayBillId, metadata: { vehicleNumber: input.vehicleNumber } }))),
 
   /**
    * Extend EWB validity.
@@ -516,7 +537,7 @@ export const ewayBillRouter = router({
         remainingDistance: z.number().int().min(1),
       }),
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EWayBill");
 
       const [ewb] = await ctx.db
@@ -532,6 +553,10 @@ export const ewayBillRouter = router({
 
       if (!ewb) {
         throw new TRPCError({ code: "NOT_FOUND", message: "E-Way Bill not found" });
+      }
+
+      if (ewb.status === "cancelled") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot extend a cancelled E-Way Bill" });
       }
 
       if (!ewb.validUpto) {
@@ -598,7 +623,7 @@ export const ewayBillRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "ewayBill.extend", entityType: "ewayBill", entityId: input.ewayBillId }))),
 
   /**
    * Get E-Way Bill details for a specific invoice.

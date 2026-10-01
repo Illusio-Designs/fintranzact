@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { trpc } from "@/lib/trpc";
-import { formatDate, cn } from "@/lib/utils";
+import { trpc, getBusinessId } from "@/lib/trpc";
+import { formatDate, formatCurrency, cn } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
 import { Badge } from "@/components/ui/Badge";
 import { toast } from "@/hooks/useToast";
@@ -13,6 +13,9 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { Listbox } from "@/components/ui/Listbox";
 import { InputField } from "@/components/ui/FormField";
 import { Spinner } from "@/components/ui/Spinner";
+import { Combobox } from "@/components/ui/Combobox";
+import { useDebounce } from "@/hooks/useDebounce";
+import { openPdf } from "@/lib/open-pdf";
 
 export const Route = createFileRoute("/eway-bills")({
   component: EWayBillsPage,
@@ -83,6 +86,15 @@ const STATUS_OPTIONS = [
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Open the e-way bill (EWB-01 layout) as a PDF for printing. */
+async function printEwayBill(id: string, ewbNumber: string | null) {
+  try {
+    await openPdf(`/api/eway-bills/${id}/pdf`, `eway-bill-${(ewbNumber ?? id).replace(/[^0-9A-Za-z]/g, "")}.pdf`);
+  } catch {
+    toast.error("Could not open the e-way bill");
+  }
+}
 
 function statusBadgeColor(status: string): string {
   switch (status) {
@@ -191,6 +203,21 @@ function EWayBillsPage() {
 
   const [detailEwbId, setDetailEwbId] = useState<string | null>(null);
 
+  // The invoice to generate for, picked by number or customer.
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const debouncedInvoiceSearch = useDebounce(invoiceSearch, 300);
+  const { data: saleInvoices, isFetching: invoicesFetching } = trpc.invoice.list.useQuery(
+    { type: "sale", search: debouncedInvoiceSearch || undefined, page: 1, limit: 20 },
+    { enabled: showGenerateModal },
+  );
+  const invoiceOptions = (saleInvoices?.data ?? [])
+    .filter((inv: { status: string }) => inv.status !== "cancelled" && inv.status !== "draft")
+    .map((inv: { id: string; invoiceNumber: string; partyName?: string | null; totalAmount: string }) => ({
+      value: inv.id,
+      label: inv.invoiceNumber,
+      description: `${inv.partyName ?? ""} · ${formatCurrency(inv.totalAmount)}`,
+    }));
+
   const tabs: Array<{ value: EWBTab; label: string }> = [
     { value: "dashboard", label: "All E-Way Bills" },
     { value: "expiring", label: "Expiring Soon" },
@@ -207,6 +234,13 @@ function EWayBillsPage() {
   }, { placeholderData: (prev) => prev });
 
   const { data: expiringData, isLoading: expiringLoading } = trpc.ewayBill.expiringList.useQuery();
+
+  // The business may override the statutory ₹50,000 threshold in Settings;
+  // the server enforces the same value on generate.
+  const { data: businessList } = trpc.business.list.useQuery();
+  const configuredThreshold = businessList?.find((b) => b.id === getBusinessId())?.eWayBillThreshold;
+  const thresholdValue = configuredThreshold != null && configuredThreshold !== "" ? Number(configuredThreshold) : NaN;
+  const thresholdLabel = `₹${(Number.isFinite(thresholdValue) ? thresholdValue : 50000).toLocaleString("en-IN")}`;
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -246,7 +280,7 @@ function EWayBillsPage() {
 
   function validateGenerate(): boolean {
     const errs: Partial<GenerateFormState> = {};
-    if (!generateForm.invoiceId.trim()) errs.invoiceId = "Invoice ID is required";
+    if (!generateForm.invoiceId.trim()) errs.invoiceId = "Pick the invoice";
     if (!generateForm.vehicleNumber.trim()) errs.vehicleNumber = "Vehicle number is required";
     if (!generateForm.distance || isNaN(parseInt(generateForm.distance)) || parseInt(generateForm.distance) < 1) {
       errs.distance = "Valid distance in km is required";
@@ -302,7 +336,7 @@ function EWayBillsPage() {
     <div>
       <PageHeader
         title="E-Way Bills"
-        description="Generate and manage E-Way Bills for goods movement above ₹50,000"
+        description={`Generate and manage E-Way Bills for goods movement above ${thresholdLabel}`}
         actions={
           <button
             className="btn-primary"
@@ -389,7 +423,7 @@ function EWayBillsPage() {
         open={showGenerateModal}
         onClose={() => setShowGenerateModal(false)}
         title="Generate E-Way Bill"
-        description="Provide transport details to generate an EWB for a goods invoice above ₹50,000"
+        description={`Provide transport details to generate an EWB for a goods invoice above ${thresholdLabel}`}
         footer={
           <div className="flex justify-end gap-3">
             <button
@@ -412,14 +446,20 @@ function EWayBillsPage() {
         }
       >
         <div className="space-y-4">
-          <InputField
-            label="Invoice ID"
-            placeholder="Paste the invoice UUID"
-            value={generateForm.invoiceId}
-            onChange={(e) => setGenerateForm((f) => ({ ...f, invoiceId: e.target.value }))}
-            error={generateErrors.invoiceId}
-            required
-          />
+          <div>
+            <Combobox
+              label="Invoice"
+              required
+              value={generateForm.invoiceId}
+              onChange={(id) => setGenerateForm((f) => ({ ...f, invoiceId: id }))}
+              options={invoiceOptions}
+              placeholder="Search invoice number or customer…"
+              emptyMessage="No issued sale invoices found"
+              onQueryChange={setInvoiceSearch}
+              isLoading={invoicesFetching && !!debouncedInvoiceSearch}
+            />
+            {generateErrors.invoiceId && <p className="mt-1 text-xs text-red-600">{generateErrors.invoiceId}</p>}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <InputField
               label="Vehicle Number"
@@ -494,7 +534,7 @@ function EWayBillsPage() {
             />
           </div>
           <p className="text-xs text-text-tertiary">
-            The EWB will be generated for invoices with goods above ₹50,000. Services-only invoices are not eligible.
+            The EWB will be generated for invoices with goods above {thresholdLabel}. Services-only invoices are not eligible.
           </p>
         </div>
       </SlideOver>
@@ -716,7 +756,17 @@ function DashboardTab({
                         </Badge>
                       </td>
                       <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
+                          {row.ewbNumber && (
+                            <button
+                              className="p-1.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors text-xs"
+                              onClick={() => printEwayBill(row.id, row.ewbNumber)}
+                              title="Print e-way bill"
+                              aria-label={`Print e-way bill ${row.ewbNumber}`}
+                            >
+                              Print
+                            </button>
+                          )}
                           {row.invoiceId && (
                             <button
                               className="p-1.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors text-xs"
@@ -970,7 +1020,12 @@ function EWBDetailModal({
             )}
           </div>
         )}
-        <div className="flex justify-end pt-2 border-t border-border-light">
+        <div className="flex justify-end gap-2 pt-2 border-t border-border-light">
+          {data?.ewbNumber && (
+            <button className="btn-primary" onClick={() => printEwayBill(data.id, data.ewbNumber)}>
+              Print e-way bill
+            </button>
+          )}
           <button className="btn-secondary" onClick={onClose}>Close</button>
         </div>
       </div>

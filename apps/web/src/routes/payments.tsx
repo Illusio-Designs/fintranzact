@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { z } from "zod";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc, getBusinessId } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -17,11 +18,11 @@ import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { DetailField } from "@/components/ui/DetailField";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { RecordPaymentPanel } from "@/components/RecordPaymentPanel";
 import { Icon } from "@/components/ui/Icon";
 import { Cancel01Icon, Delete02Icon, StarIcon } from "@hugeicons/core-free-icons";
+import { paymentModeLabel } from "@/lib/payment-modes";
 
 const paymentsSearchSchema = z.object({
   id: z.string().uuid().optional(),
@@ -37,7 +38,7 @@ export const Route = createFileRoute("/payments")({
 const SECONDS_PER_MANUAL_ASSIGN = 75;
 
 function getAutoAssignKey(businessId: string) {
-  return `hisaabo_autoassign_shown_${businessId}`;
+  return `fintranzact_autoassign_shown_${businessId}`;
 }
 
 function formatTimeSaved(assignedCount: number): string {
@@ -223,14 +224,6 @@ function SmartAssignBanner({ onAssigned }: { onAssigned: () => void }) {
   );
 }
 
-const modeLabels: Record<string, string> = {
-  cash: "Cash",
-  bank: "Bank",
-  upi: "UPI",
-  cheque: "Cheque",
-  other: "Other",
-};
-
 const PAYMENTS_PAGE_SIZE = 25;
 
 function PaymentsPage() {
@@ -239,7 +232,7 @@ function PaymentsPage() {
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const deleteConfirm = useDeleteConfirmation();
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search by party or payment #…");
   const [exporting, setExporting] = useState(false);
   const dateRange = useDateRange("payments", "this-month");
 
@@ -355,124 +348,121 @@ function PaymentsPage() {
       {/* Smart auto-assign banner — one-time per business, shown only when assignments fire */}
       <SmartAssignBanner onAssigned={() => utils.payment.list.invalidate()} />
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search by party or payment #..."
-          className="max-w-xs"
-        />
-      </div>
-      <DateRangeBar
-        preset={dateRange.preset}
-        onPresetChange={dateRange.setPreset}
-        customFrom={dateRange.customFrom}
-        customTo={dateRange.customTo}
-        onCustomChange={dateRange.setCustomRange}
-        onExport={exportPaymentsCSV}
-        exporting={exporting}
-        className="mb-4"
-      />
-
-      {/* Table */}
-      {isLoading ? (
-        <SkeletonRows count={5} height="h-12" />
-      ) : !list.items.length && !isFetching ? (
-        <EmptyState
-          title="No payments recorded yet"
-          description="Record your first payment to start tracking cash flow."
-          encouragement="Once you start invoicing, payments will show here."
-          action={
-            <button className="btn-primary" onClick={() => setShowPanel(true)}>
-              + Record Payment
-            </button>
-          }
-        />
-      ) : (
-        <div className="card overflow-hidden">
-          <div
-            ref={list.scrollRef}
-            onScroll={list.onScroll}
-            className="max-h-[600px] overflow-y-auto"
-          >
-            <table className="data-table">
-              <thead className="sticky top-0 z-10">
-                <tr>
-                  <th>Payment #</th>
-                  <th>Party</th>
-                  <th>Date</th>
-                  <th>Mode</th>
-                  <th>Reference</th>
-                  <th className="text-right">Amount</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.items.map((p) => (
-                  <tr key={p.id} className="group cursor-pointer" onClick={() => setSelectedPaymentId(p.id)}>
-                    <td className="font-mono text-ui text-text-secondary">
-                      {p.paymentNumber || "—"}
-                    </td>
-                    <td className="font-medium">{p.partyName}</td>
-                    <td className="text-text-secondary">{formatDate(p.paymentDate)}</td>
-                    <td className="text-text-secondary">
-                      {modeLabels[p.mode] || p.mode}
-                    </td>
-                    <td className="text-text-secondary text-xs">
-                      {p.referenceNumber || "—"}
-                    </td>
-                    <td className="text-right tabular-nums font-semibold text-emerald-600">
-                      {formatCurrency(p.amount)}
-                    </td>
-                    <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          className="text-xs px-2 py-1 rounded font-medium text-text-secondary hover:bg-surface-2 transition-colors"
-                          onClick={() => setEditPaymentId(p.id)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn-icon text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
-                          onClick={() => deleteConfirm.requestDelete(p.id, p.paymentNumber || p.partyName)}
-                          aria-label="Delete payment"
-                        >
-                          <Icon icon={Delete02Icon} size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {list.loadingMore && (
-              <div className="border-t border-border-light">
-                <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                  <div className="h-3 bg-surface-2 rounded w-32" />
-                  <div className="h-3 bg-surface-2 rounded w-20" />
-                  <div className="h-3 bg-surface-2 rounded w-24" />
-                  <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
-                </div>
-              </div>
-            )}
-            {list.hasMore && !list.loadingMore && (
-              <button
-                type="button"
-                onClick={list.loadMore}
-                className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
-              >
-                Load more
-              </button>
-            )}
-            {!list.hasMore && list.items.length > PAYMENTS_PAGE_SIZE && (
-              <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
-                All {list.total.toLocaleString()} records loaded
-              </div>
-            )}
-          </div>
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+        {/* Filters */}
+        <div className="border-b border-border-light px-4 py-2">
+          <DateRangeBar
+            preset={dateRange.preset}
+            onPresetChange={dateRange.setPreset}
+            customFrom={dateRange.customFrom}
+            customTo={dateRange.customTo}
+            onCustomChange={dateRange.setCustomRange}
+            onExport={exportPaymentsCSV}
+            exporting={exporting}
+          />
         </div>
-      )}
+
+        {/* Table */}
+        {isLoading ? (
+          <div className="p-4">
+            <SkeletonRows count={5} height="h-12" />
+          </div>
+        ) : !list.items.length && !isFetching ? (
+          <EmptyState
+            title="No payments recorded yet"
+            description="Record your first payment to start tracking cash flow."
+            encouragement="Once you start invoicing, payments will show here."
+            action={
+              <button className="btn-primary" onClick={() => setShowPanel(true)}>
+                + Record Payment
+              </button>
+            }
+          />
+        ) : (
+          <div>
+            <div
+              ref={list.scrollRef}
+              onScroll={list.onScroll}
+              className="max-h-[600px] overflow-y-auto"
+            >
+              <table className="data-table">
+                <thead className="sticky top-0 z-10">
+                  <tr>
+                    <th>Payment #</th>
+                    <th>Party</th>
+                    <th>Date</th>
+                    <th>Mode</th>
+                    <th>Reference</th>
+                    <th className="text-right">Amount</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.items.map((p) => (
+                    <tr key={p.id} className="group cursor-pointer" onClick={() => setSelectedPaymentId(p.id)}>
+                      <td className="font-mono text-ui text-text-secondary">
+                        {p.paymentNumber || "—"}
+                      </td>
+                      <td className="font-medium">{p.partyName}</td>
+                      <td className="text-text-secondary">{formatDate(p.paymentDate)}</td>
+                      <td className="text-text-secondary">
+                        {paymentModeLabel(p.mode)}
+                      </td>
+                      <td className="text-text-secondary text-xs">
+                        {p.referenceNumber || "—"}
+                      </td>
+                      <td className="text-right tabular-nums font-semibold text-emerald-600">
+                        {formatCurrency(p.amount)}
+                      </td>
+                      <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            className="text-xs px-2 py-1 rounded font-medium text-text-secondary hover:bg-surface-2 transition-colors"
+                            onClick={() => setEditPaymentId(p.id)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn-icon text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+                            onClick={() => deleteConfirm.requestDelete(p.id, p.paymentNumber || p.partyName)}
+                            aria-label="Delete payment"
+                          >
+                            <Icon icon={Delete02Icon} size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {list.loadingMore && (
+                <div className="border-t border-border-light">
+                  <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                    <div className="h-3 bg-surface-2 rounded w-32" />
+                    <div className="h-3 bg-surface-2 rounded w-20" />
+                    <div className="h-3 bg-surface-2 rounded w-24" />
+                    <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
+                  </div>
+                </div>
+              )}
+              {list.hasMore && !list.loadingMore && (
+                <button
+                  type="button"
+                  onClick={list.loadMore}
+                  className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
+                >
+                  Load more
+                </button>
+              )}
+              {!list.hasMore && list.items.length > PAYMENTS_PAGE_SIZE && (
+                <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
+                  All {list.total.toLocaleString()} records loaded
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Record Payment SlideOver (create) */}
       <RecordPaymentPanel

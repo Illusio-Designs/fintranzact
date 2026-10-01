@@ -1,12 +1,17 @@
 /**
- * Plan catalogue — the single source of truth for plans.
+ * Plan catalogue — the built-in plan definitions.
  *
- * The API enforces `PLAN_LIMITS` (see packages/api/src/lib/plan-limits.ts) and
- * the web app renders the pricing page and plan picker from `PLANS`, so the
- * limits a visitor reads are exactly the limits the backend applies.
+ * A platform admin can edit any plan (name, price, features, limits); the
+ * edits live in the plan_settings table and replace these defaults. The API
+ * merges the two (packages/api/src/lib/plan-catalog.ts), enforces the merged
+ * limits and serves them to the pricing page and plan picker, so what a
+ * visitor reads is exactly what the backend applies.
  */
 
-export type PlanId = "forever_free" | "free" | "pro" | "business" | "enterprise";
+import { z } from "zod";
+
+export const PLAN_IDS = ["forever_free", "free", "pro", "business", "enterprise"] as const;
+export type PlanId = (typeof PLAN_IDS)[number];
 
 export interface PlanLimits {
   maxOwnedOrgs: number; // orgs a user can own (across all their tenants)
@@ -106,6 +111,115 @@ export const PLANS: PlanInfo[] = [
   },
 ];
 
+/** Every plan with its built-in definition, in display order. */
+export interface PlanDefinition extends PlanInfo {
+  /** Shown on the pricing page and in the sign-up plan picker. */
+  visible: boolean;
+  limits: PlanLimits;
+}
+
+const HIDDEN_PLANS: Record<"free" | "enterprise", PlanInfo> = {
+  free: {
+    id: "free",
+    name: "Free (legacy)",
+    tagline: "Older organisations",
+    monthlyPriceInr: 0,
+    features: ["One business", "Up to 3 team members"],
+  },
+  enterprise: {
+    id: "enterprise",
+    name: "Enterprise",
+    tagline: "For large organisations",
+    monthlyPriceInr: null,
+    features: ["Everything in Business", "Custom agreement"],
+  },
+};
+
+export const PLAN_DEFAULTS: Record<PlanId, PlanDefinition> = Object.fromEntries(
+  PLAN_IDS.map((id) => {
+    const listed = PLANS.find((p) => p.id === id);
+    const info = listed ?? HIDDEN_PLANS[id as "free" | "enterprise"];
+    return [id, { ...info, features: [...info.features], visible: !!listed, limits: { ...PLAN_LIMITS[id] } }];
+  }),
+) as Record<PlanId, PlanDefinition>;
+
+// ── Editing plans (platform admin) ─────────────────────────────────────────
+
+/** A number limit: a whole number, or null for unlimited. */
+const countLimit = z.number().int().min(0).max(1_000_000).nullable();
+
+/** What a platform admin can set for a plan. Number limits use null for unlimited. */
+export const planSettingsSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  tagline: z.string().trim().max(120),
+  monthlyPriceInr: z.number().int().min(0).max(10_000_000).nullable(),
+  features: z.array(z.string().trim().min(1).max(160)).max(15),
+  highlight: z.boolean(),
+  visible: z.boolean(),
+  limits: z.object({
+    maxOwnedOrgs: countLimit,
+    maxBusinesses: countLimit,
+    maxTeamMembers: countLimit,
+    maxConcurrentSessions: countLimit.refine((v) => v === null || v >= 1, "At least one session"),
+    maxApiKeys: countLimit,
+    recurringRunsPerMonth: countLimit,
+    auditRetentionDays: countLimit,
+    dataExport: z.boolean(),
+    onlineStore: z.boolean(),
+    pdfBranding: z.boolean(),
+  }),
+});
+export type PlanSettings = z.infer<typeof planSettingsSchema>;
+export type StoredPlanLimits = PlanSettings["limits"];
+
+/** Limits as stored and sent over JSON: Infinity becomes null. */
+export function limitsToStored(limits: PlanLimits): StoredPlanLimits {
+  const n = (v: number | null) => (v === null || v === Infinity ? null : v);
+  return {
+    maxOwnedOrgs: n(limits.maxOwnedOrgs),
+    maxBusinesses: n(limits.maxBusinesses),
+    maxTeamMembers: n(limits.maxTeamMembers),
+    maxConcurrentSessions: n(limits.maxConcurrentSessions),
+    maxApiKeys: n(limits.maxApiKeys),
+    recurringRunsPerMonth: n(limits.recurringRunsPerMonth),
+    auditRetentionDays: limits.auditRetentionDays,
+    dataExport: limits.dataExport,
+    onlineStore: limits.onlineStore,
+    pdfBranding: limits.pdfBranding,
+  };
+}
+
+/**
+ * Limits the API enforces, from stored ones: null becomes Infinity (except
+ * audit retention, where null already means unlimited). Anything missing or
+ * malformed falls back to the given defaults.
+ */
+export function limitsFromStored(stored: Partial<Record<keyof PlanLimits, unknown>> | null | undefined, fallback: PlanLimits): PlanLimits {
+  const count = (key: Exclude<keyof PlanLimits, "auditRetentionDays" | "dataExport" | "onlineStore" | "pdfBranding">) => {
+    const v = stored?.[key];
+    if (v === null) return Infinity;
+    return typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : fallback[key];
+  };
+  const flag = (key: "dataExport" | "onlineStore" | "pdfBranding") => {
+    const v = stored?.[key];
+    return typeof v === "boolean" ? v : fallback[key];
+  };
+  const retention = stored?.auditRetentionDays;
+  return {
+    maxOwnedOrgs: count("maxOwnedOrgs"),
+    maxBusinesses: count("maxBusinesses"),
+    maxTeamMembers: count("maxTeamMembers"),
+    maxConcurrentSessions: count("maxConcurrentSessions"),
+    maxApiKeys: count("maxApiKeys"),
+    recurringRunsPerMonth: count("recurringRunsPerMonth"),
+    auditRetentionDays:
+      retention === null ? null : typeof retention === "number" && retention >= 0 ? retention : fallback.auditRetentionDays,
+    dataExport: flag("dataExport"),
+    onlineStore: flag("onlineStore"),
+    pdfBranding: flag("pdfBranding"),
+  };
+}
+
 /** "₹0", "₹1,499" or "Custom" for plans priced on request. */
 export function formatPlanPrice(plan: Pick<PlanInfo, "monthlyPriceInr">): string {
   if (plan.monthlyPriceInr === null) return "Custom";
@@ -120,4 +234,31 @@ export function formatPlanLimit(value: number | null, unit?: "days"): string {
     return `${value} days`;
   }
   return value.toLocaleString("en-IN");
+}
+
+// ── Checkout amounts ───────────────────────────────────────────────────────
+
+export const BILLING_CYCLES = ["monthly", "yearly"] as const;
+export type BillingCycle = (typeof BILLING_CYCLES)[number];
+
+/** GST charged on a subscription. */
+export const PLAN_GST_RATE_PERCENT = 18;
+
+export interface PlanCheckoutAmount {
+  /** Plan price for the cycle, before GST, in paise. */
+  basePaise: number;
+  gstPaise: number;
+  totalPaise: number;
+}
+
+/**
+ * What a plan costs for one billing cycle, in paise, with 18% GST on top.
+ * Plans carry a monthly price only, so a year is twelve months. Integer math:
+ * prices are whole rupees, so 18% of them is always a whole number of paise.
+ */
+export function planCheckoutAmount(monthlyPriceInr: number, cycle: BillingCycle): PlanCheckoutAmount {
+  const months = cycle === "yearly" ? 12 : 1;
+  const basePaise = monthlyPriceInr * 100 * months;
+  const gstPaise = Math.round((basePaise * PLAN_GST_RATE_PERCENT) / 100);
+  return { basePaise, gstPaise, totalPaise: basePaise + gstPaise };
 }

@@ -2,19 +2,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Building03Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
-import { SearchInput } from "@/components/ui/SearchInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
 import { Icon } from "@/components/ui/Icon";
 import { cn } from "@/lib/utils";
 import { formatQty, useWarehouses } from "@/components/inventory/shared";
+import { DefaultWarehouses, WarehouseManager } from "@/components/inventory/WarehouseManager";
 
 export const Route = createFileRoute("/warehouses")({
   component: WarehousesPage,
@@ -31,15 +32,124 @@ const TYPE_OPTIONS = [
 ];
 const TYPE_LABEL = Object.fromEntries(TYPE_OPTIONS.map((t) => [t.value, t.label]));
 
+const POLICY_OPTIONS = [
+  { value: "allow", label: "Allow", hint: "Stock can go below zero without a warning." },
+  { value: "warn", label: "Warn", hint: "Entry forms flag a shortfall, but saving still works." },
+  { value: "block", label: "Block", hint: "Documents that would take a warehouse below zero can't be saved." },
+] as const;
+
+const VALUATION_OPTIONS = [
+  { value: "weighted_average", label: "Average cost", hint: "Stock is valued at the average cost of its purchases." },
+  { value: "fifo", label: "FIFO", hint: "What's left is valued at the most recent purchase prices." },
+] as const;
+
+type Option = { value: string; label: string; hint: string };
+
+/** One setting: its title and current explanation, and a segmented choice. */
+function SettingRow({
+  title,
+  options,
+  value,
+  canEdit,
+  pending,
+  onChange,
+}: {
+  title: string;
+  options: readonly Option[];
+  value: string;
+  canEdit: boolean;
+  pending: boolean;
+  onChange: (value: string) => void;
+}) {
+  const current = options.find((o) => o.value === value) ?? options[0]!;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
+        <p className="mt-0.5 text-xs text-text-tertiary">{current.hint}</p>
+      </div>
+      {canEdit ? (
+        <div className="inline-flex rounded-lg border border-border-light p-0.5" role="radiogroup" aria-label={title}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={o.value === current.value}
+              disabled={pending}
+              onClick={() => o.value !== current.value && onChange(o.value)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                o.value === current.value ? "bg-brand-600 text-white" : "text-text-secondary hover:bg-surface-2",
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-text-secondary">{current.label}</span>
+      )}
+    </div>
+  );
+}
+
+/** Business-wide stock rules: selling below zero, and how stock is valued. */
+function InventorySettings() {
+  const utils = trpc.useUtils();
+  const { data: session } = trpc.auth.me.useQuery();
+  const { data: settings } = trpc.stock.settings.useQuery();
+  const canEdit = ["owner", "admin", "superadmin"].includes(session?.role ?? "");
+  const update = trpc.stock.updateSettings.useMutation({
+    onSuccess: () => {
+      utils.stock.settings.invalidate();
+      utils.stock.availability.invalidate();
+      utils.reports.invalidate();
+      toast.success("Inventory setting saved");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  if (!settings) return null;
+
+  return (
+    <div className="card mb-6 divide-y divide-border-light">
+      <SettingRow
+        title="Selling more than you have"
+        options={POLICY_OPTIONS}
+        value={settings.negativeStockPolicy}
+        canEdit={canEdit}
+        pending={update.isPending}
+        onChange={(v) => update.mutate({ negativeStockPolicy: v as (typeof POLICY_OPTIONS)[number]["value"] })}
+      />
+      <SettingRow
+        title="Stock valuation"
+        options={VALUATION_OPTIONS}
+        value={settings.valuationMethod}
+        canEdit={canEdit}
+        pending={update.isPending}
+        onChange={(v) => update.mutate({ valuationMethod: v as (typeof VALUATION_OPTIONS)[number]["value"] })}
+      />
+      <DefaultWarehouses canEdit={canEdit} />
+    </div>
+  );
+}
+
 function WarehousesPage() {
   const utils = trpc.useUtils();
   const { data: warehouses, isLoading } = useWarehouses();
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search item or SKU…");
   const [page, setPage] = useState(1);
+  // A new search starts from the first page.
+  useEffect(() => setPage(1), [search]);
   const { data: balances, isFetching } = trpc.stock.balances.useQuery(
     { search: search || undefined, page, limit: PAGE_SIZE },
     { placeholderData: keepPreviousData },
   );
+
+  const { data: session } = trpc.auth.me.useQuery();
+  const canManage = ["owner", "admin", "superadmin"].includes(session?.role ?? "");
+  const [managingId, setManagingId] = useState<string | null>(null);
+  const managing = (warehouses ?? []).find((w) => w.id === managingId) ?? null;
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", code: "", warehouseType: "godown", premiseId: "", address: "" });
@@ -84,7 +194,7 @@ function WarehousesPage() {
       ) : (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {(warehouses ?? []).map((w) => (
-            <div key={w.id} className={cn("card p-5", w.status !== "active" && "opacity-60")}>
+            <div key={w.id} data-testid="warehouse-card" className={cn("card min-w-0 p-5", w.status !== "active" && "opacity-60")}>
               <div className="flex items-start gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300">
                   <Icon icon={Building03Icon} size={19} />
@@ -107,6 +217,14 @@ function WarehousesPage() {
                     {w.premiseName ? ` · ${w.premiseName}` : ""}
                   </p>
                 </div>
+                {canManage && (
+                  <button
+                    className="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                    onClick={() => setManagingId(w.id)}
+                  >
+                    Manage
+                  </button>
+                )}
               </div>
               <div className="mt-4 flex items-end justify-between border-t border-border-light pt-3">
                 <div>
@@ -120,19 +238,12 @@ function WarehousesPage() {
         </div>
       )}
 
+      <InventorySettings />
+
       {/* Stock by warehouse */}
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-light px-4 py-3">
           <h2 className="text-sm font-semibold text-text-primary">Stock by warehouse</h2>
-          <SearchInput
-            value={search}
-            onChange={(v) => {
-              setSearch(v);
-              setPage(1);
-            }}
-            placeholder="Search item or SKU…"
-            className="max-w-xs"
-          />
         </div>
         {!balances ? (
           <SkeletonRows />
@@ -187,6 +298,8 @@ function WarehousesPage() {
           </>
         )}
       </div>
+
+      {managing && <WarehouseManager key={managing.id} warehouse={managing} onClose={() => setManagingId(null)} />}
 
       <SlideOver
         open={open}

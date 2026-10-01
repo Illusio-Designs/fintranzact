@@ -21,8 +21,8 @@ export function ScreenHeader({ title, subtitle, right }: Props) {
 }
 
 const useStyles = makeStyles((colors) => ({
-  container: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
+  container: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
   textWrap: { flex: 1 },
-  title: { fontSize: 28, fontWeight: "700", color: colors.textPrimary, letterSpacing: -0.5 },
+  title: { fontSize: 28, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.6 },
   subtitle: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
 }));

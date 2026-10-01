@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -26,13 +27,17 @@ type OrderStatus =
   | "delivered"
   | "cancelled";
 
+// Shapes as store.getOrder returns them (store_orders row + its invoice and
+// invoice lines). These were hand-written to other names (amount,
+// invoiceNumber, notes, cancelReason), so the panel showed ₹NaN per line and
+// never the invoice, delivery notes or cancel reason.
 interface LineItem {
   id: string;
   itemName: string;
   description?: string | null;
   quantity: string | number;
   unitPrice: string;
-  amount: string;
+  totalAmount: string;
   unit?: string | null;
   selectedUnit?: string | null;
   conversionFactor?: string | null;
@@ -46,11 +51,14 @@ interface OrderDetail {
   status: OrderStatus;
   totalAmount: string;
   createdAt: Date;
-  notes: string | null;
-  cancelReason: string | null;
+  deliveryAddress: string | null;
+  deliveryCity: string | null;
+  deliveryPincode: string | null;
+  deliveryNotes: string | null;
+  cancellationReason: string | null;
   lineItems: LineItem[];
   invoiceId: string | null;
-  invoiceNumber: string | null;
+  invoice: { invoiceNumber: string } | null;
 }
 
 interface OrderRow {
@@ -360,9 +368,9 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                 Order Progress
               </p>
               <StatusTimeline current={o.status} />
-              {o.status === "cancelled" && o.cancelReason && (
+              {o.status === "cancelled" && o.cancellationReason && (
                 <p className="mt-2 text-xs text-text-tertiary">
-                  Reason: {o.cancelReason}
+                  Reason: {o.cancellationReason}
                 </p>
               )}
             </div>
@@ -390,11 +398,11 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                     {formatDate(o.createdAt)}
                   </span>
                 </div>
-                {o.invoiceNumber && (
+                {o.invoice?.invoiceNumber && (
                   <div className="flex items-center justify-between">
                     <span className="text-2xs text-text-tertiary">Invoice</span>
                     <span className="text-xs font-mono text-brand-600">
-                      {o.invoiceNumber}
+                      {o.invoice.invoiceNumber}
                     </span>
                   </div>
                 )}
@@ -445,7 +453,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                           {formatCurrency(item.unitPrice)}
                         </td>
                         <td className="px-4 py-3 text-right font-medium tabular-nums">
-                          {formatCurrency(item.amount)}
+                          {formatCurrency(item.totalAmount)}
                         </td>
                       </tr>
                     ))}
@@ -467,14 +475,28 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
               </div>
             </div>
 
+            {/* Where it goes */}
+            {(o.deliveryAddress || o.deliveryCity || o.deliveryPincode) && (
+              <div>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">
+                  Deliver to
+                </p>
+                <p className="text-sm text-text-secondary whitespace-pre-wrap" data-testid="store-order-address">
+                  {[o.deliveryAddress, [o.deliveryCity, o.deliveryPincode].filter(Boolean).join(" ")]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              </div>
+            )}
+
             {/* Notes */}
-            {o.notes && (
+            {o.deliveryNotes && (
               <div>
                 <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-1">
                   Notes
                 </p>
                 <p className="text-sm text-text-secondary whitespace-pre-wrap">
-                  {o.notes}
+                  {o.deliveryNotes}
                 </p>
               </div>
             )}
@@ -484,17 +506,21 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
 
       {/* Cancel confirm dialog */}
       {cancelOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="card max-w-sm w-full mx-4 p-6">
-            <p className="text-sm font-semibold text-text-primary">Cancel Order</p>
+        // Above the order panel: the SlideOver portals to <body> at z-50, so at
+        // the same z-index it covered this dialog and "Cancel Order" could not
+        // be clicked.
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="card max-w-sm w-full mx-4 p-6" role="dialog" aria-modal="true" aria-labelledby="cancel-order-title">
+            <p id="cancel-order-title" className="text-sm font-semibold text-text-primary">Cancel Order</p>
             <p className="text-sm text-text-secondary mt-1">
               Cancel order {o?.orderNumber ?? ""}? This action cannot be undone.
             </p>
             <div className="mt-3">
-              <label className="block text-xs font-medium text-text-secondary mb-1">
+              <label htmlFor="cancel-order-reason" className="block text-xs font-medium text-text-secondary mb-1">
                 Reason (optional)
               </label>
               <textarea
+                id="cancel-order-reason"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 rows={2}
@@ -530,8 +556,10 @@ const PAGE_SIZE = 30;
 
 function StoreOrdersPage() {
   const [status, setStatus] = useState<OrderStatus | "">("");
-  const [search, setSearch] = useState("");
+  const [search] = usePageSearch("Search customer, order #…");
   const [page, setPage] = useState(1);
+  // A new search starts from the first page.
+  useEffect(() => setPage(1), [search]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inlineConfirmId, setInlineConfirmId] = useState<string | null>(null);
   const [inlineCancelId, setInlineCancelId] = useState<string | null>(null);
@@ -586,197 +614,191 @@ function StoreOrdersPage() {
         description="Manage and track customer orders from your store"
       />
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <PillTabs
-          tabs={STATUS_TABS}
-          value={status}
-          onChange={(v) => {
-            setStatus(v as OrderStatus | "");
-            setPage(1);
-          }}
-        />
-        <div className="ml-auto">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+        {/* Filters */}
+        <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
+          <PillTabs
+            tabs={STATUS_TABS}
+            value={status}
+            onChange={(v) => {
+              setStatus(v as OrderStatus | "");
               setPage(1);
             }}
-            placeholder="Search customer, order #…"
-            className="h-8 rounded-lg border border-border-light bg-surface-0 px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-brand-500 w-52"
           />
         </div>
-      </div>
 
-      {/* Content */}
-      {isLoading ? (
-        <SkeletonRows count={7} height="h-14" />
-      ) : !orders.length ? (
-        <EmptyState
-          icon={
-            <Icon icon={ShoppingBag01Icon} size={24} className="text-text-tertiary" />
-          }
-          title="No orders found"
-          description={
-            status
-              ? `No ${STATUS_CONFIG[status as OrderStatus]?.label.toLowerCase() ?? status} orders${search ? ` matching "${search}"` : ""}.`
-              : search
-                ? `No orders matching "${search}".`
-                : "No store orders have been placed yet."
-          }
-        />
-      ) : (
-        <div className="card overflow-hidden">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="whitespace-nowrap">Order #</th>
-                <th>Customer</th>
-                <th className="whitespace-nowrap">Phone</th>
-                <th className="text-center">Items</th>
-                <th className="text-right whitespace-nowrap">Total</th>
-                <th>Status</th>
-                <th className="whitespace-nowrap">Date</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="group cursor-pointer"
-                  onClick={() => setSelectedId(order.id)}
-                >
-                  <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
-                    {order.orderNumber}
-                  </td>
-                  <td className="font-medium">
-                    <span className="block truncate max-w-[180px]">
-                      {order.customerName}
-                    </span>
-                  </td>
-                  <td className="text-text-secondary font-mono text-ui whitespace-nowrap">
-                    {order.customerPhone ?? "—"}
-                  </td>
-                  <td className="text-center tabular-nums text-text-secondary">
-                    {order.itemCount}
-                  </td>
-                  <td className="text-right tabular-nums font-medium whitespace-nowrap">
-                    {formatCurrency(order.totalAmount)}
-                  </td>
-                  <td className="whitespace-nowrap">
-                    <OrderStatusBadge status={order.status} />
-                  </td>
-                  <td className="text-text-secondary text-xs whitespace-nowrap">
-                    {formatDate(order.createdAt)}
-                  </td>
-                  <td
-                    className="text-right"
-                    onClick={(e) => e.stopPropagation()}
+        {/* Content */}
+        {isLoading ? (
+          <div className="p-4">
+            <SkeletonRows count={7} height="h-14" />
+          </div>
+        ) : !orders.length ? (
+          <EmptyState
+            icon={
+              <Icon icon={ShoppingBag01Icon} size={24} className="text-text-tertiary" />
+            }
+            title="No orders found"
+            description={
+              status
+                ? `No ${STATUS_CONFIG[status as OrderStatus]?.label.toLowerCase() ?? status} orders${search ? ` matching "${search}"` : ""}.`
+                : search
+                  ? `No orders matching "${search}".`
+                  : "No store orders have been placed yet."
+            }
+          />
+        ) : (
+          // Scrolls sideways on a phone: the card around it clips, which hid the
+          // Total, Status and action columns.
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th className="whitespace-nowrap">Order #</th>
+                  <th>Customer</th>
+                  <th className="whitespace-nowrap">Phone</th>
+                  <th className="text-center">Items</th>
+                  <th className="text-right whitespace-nowrap">Total</th>
+                  <th>Status</th>
+                  <th className="whitespace-nowrap">Date</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((order) => (
+                  <tr
+                    key={order.id}
+                    className="group cursor-pointer"
+                    onClick={() => setSelectedId(order.id)}
                   >
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {order.status === "pending" && (
-                        <button
-                          onClick={() => setInlineConfirmId(order.id)}
-                          className="text-xs px-2 py-1 rounded font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
-                        >
-                          Confirm
-                        </button>
-                      )}
-                      {order.status === "confirmed" && (
-                        <button
-                          onClick={() =>
-                            updateStatus.mutate({
-                              orderId: order.id,
-                              status: "preparing",
-                            })
-                          }
-                          disabled={updateStatus.isPending}
-                          className="text-xs px-2 py-1 rounded font-medium text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-colors disabled:opacity-50"
-                        >
-                          Preparing
-                        </button>
-                      )}
-                      {order.status === "preparing" && (
-                        <button
-                          onClick={() =>
-                            updateStatus.mutate({
-                              orderId: order.id,
-                              status: "ready",
-                            })
-                          }
-                          disabled={updateStatus.isPending}
-                          className="text-xs px-2 py-1 rounded font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors disabled:opacity-50"
-                        >
-                          Ready
-                        </button>
-                      )}
-                      {order.status === "ready" && (
-                        <button
-                          onClick={() =>
-                            updateStatus.mutate({
-                              orderId: order.id,
-                              status: "delivered",
-                            })
-                          }
-                          disabled={updateStatus.isPending}
-                          className="text-xs px-2 py-1 rounded font-medium text-green-600 hover:bg-green-50 dark:hover:bg-green-950 transition-colors disabled:opacity-50"
-                        >
-                          Delivered
-                        </button>
-                      )}
-                      {order.status !== "delivered" &&
-                        order.status !== "cancelled" && (
+                    <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
+                      {order.orderNumber}
+                    </td>
+                    <td className="font-medium">
+                      <span className="block truncate max-w-[180px]">
+                        {order.customerName}
+                      </span>
+                    </td>
+                    <td className="text-text-secondary font-mono text-ui whitespace-nowrap">
+                      {order.customerPhone ?? "—"}
+                    </td>
+                    <td className="text-center tabular-nums text-text-secondary">
+                      {order.itemCount}
+                    </td>
+                    <td className="text-right tabular-nums font-medium whitespace-nowrap">
+                      {formatCurrency(order.totalAmount)}
+                    </td>
+                    <td className="whitespace-nowrap">
+                      <OrderStatusBadge status={order.status} />
+                    </td>
+                    <td className="text-text-secondary text-xs whitespace-nowrap">
+                      {formatDate(order.createdAt)}
+                    </td>
+                    <td
+                      className="text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {order.status === "pending" && (
                           <button
-                            onClick={() => setInlineCancelId(order.id)}
-                            className="text-xs px-2 py-1 rounded font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                            onClick={() => setInlineConfirmId(order.id)}
+                            className="text-xs px-2 py-1 rounded font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
                           >
-                            Cancel
+                            Confirm
                           </button>
                         )}
-                      <button
-                        onClick={() => setSelectedId(order.id)}
-                        className="text-xs px-2 py-1 rounded font-medium text-text-secondary hover:bg-surface-2 transition-colors"
-                      >
-                        View
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                        {order.status === "confirmed" && (
+                          <button
+                            onClick={() =>
+                              updateStatus.mutate({
+                                orderId: order.id,
+                                status: "preparing",
+                              })
+                            }
+                            disabled={updateStatus.isPending}
+                            className="text-xs px-2 py-1 rounded font-medium text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-colors disabled:opacity-50"
+                          >
+                            Preparing
+                          </button>
+                        )}
+                        {order.status === "preparing" && (
+                          <button
+                            onClick={() =>
+                              updateStatus.mutate({
+                                orderId: order.id,
+                                status: "ready",
+                              })
+                            }
+                            disabled={updateStatus.isPending}
+                            className="text-xs px-2 py-1 rounded font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors disabled:opacity-50"
+                          >
+                            Ready
+                          </button>
+                        )}
+                        {order.status === "ready" && (
+                          <button
+                            onClick={() =>
+                              updateStatus.mutate({
+                                orderId: order.id,
+                                status: "delivered",
+                              })
+                            }
+                            disabled={updateStatus.isPending}
+                            className="text-xs px-2 py-1 rounded font-medium text-green-600 hover:bg-green-50 dark:hover:bg-green-950 transition-colors disabled:opacity-50"
+                          >
+                            Delivered
+                          </button>
+                        )}
+                        {order.status !== "delivered" &&
+                          order.status !== "cancelled" && (
+                            <button
+                              onClick={() => setInlineCancelId(order.id)}
+                              className="text-xs px-2 py-1 rounded font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        <button
+                          onClick={() => setSelectedId(order.id)}
+                          className="text-xs px-2 py-1 rounded font-medium text-text-secondary hover:bg-surface-2 transition-colors"
+                        >
+                          View
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-          {/* Pagination */}
-          {data && data.total > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border-light">
-              <p className="text-xs text-text-tertiary">
-                Showing {(page - 1) * PAGE_SIZE + 1}–
-                {Math.min(page * PAGE_SIZE, data.total)} of{" "}
-                {data.total.toLocaleString()} orders
-              </p>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="text-xs px-2.5 py-1 rounded-lg border border-border-light text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={page * PAGE_SIZE >= data.total}
-                  className="text-xs px-2.5 py-1 rounded-lg border border-border-light text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
+            {/* Pagination */}
+            {data && data.total > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border-light">
+                <p className="text-xs text-text-tertiary">
+                  Showing {(page - 1) * PAGE_SIZE + 1}–
+                  {Math.min(page * PAGE_SIZE, data.total)} of{" "}
+                  {data.total.toLocaleString()} orders
+                </p>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="text-xs px-2.5 py-1 rounded-lg border border-border-light text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => p + 1)}
+                    disabled={page * PAGE_SIZE >= data.total}
+                    className="text-xs px-2.5 py-1 rounded-lg border border-border-light text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Detail panel */}
       <OrderDetailPanel

@@ -299,6 +299,35 @@ describe("useInfiniteList — loading states", () => {
   });
 });
 
+// Regression (J8 journey): deleting an expense showed the "Expense deleted"
+// toast but its row stayed in the list — the page-1 refetch only merged and
+// prepended, never dropped what was gone.
+describe("useInfiniteList — records deleted elsewhere", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it("drops a deleted record when the whole list fits on page 1", () => {
+    const { result, rerender } = renderInfiniteList({ total: 5 });
+    rerender({
+      key: "test", data: page1.filter((i) => i.id !== "item-3"), total: 4, page: 1,
+      isFetching: false, onLoadMore: vi.fn(), resetDeps: [],
+    });
+    expect(result.current.items.map((i) => i.id)).toEqual(["item-1", "item-2", "item-4", "item-5"]);
+  });
+
+  it("drops a deleted record from the top of a longer list, keeping later pages", () => {
+    const { result, rerender } = renderInfiniteList();
+    rerender({ key: "test", data: page2, total: 13, page: 2, isFetching: false, onLoadMore: vi.fn(), resetDeps: [] });
+    // item-2 deleted: page 1 now runs to item-6.
+    const fresh = [...page1.filter((i) => i.id !== "item-2"), page2[0]];
+    rerender({ key: "test", data: fresh, total: 12, page: 1, isFetching: false, onLoadMore: vi.fn(), resetDeps: [] });
+    expect(result.current.items.map((i) => i.id)).toEqual(
+      ["item-1", "item-3", "item-4", "item-5", "item-6", "item-7", "item-8", "item-9", "item-10"],
+    );
+  });
+});
+
 describe("useInfiniteList — removeItem", () => {
   beforeEach(() => {
     sessionStorage.clear();
