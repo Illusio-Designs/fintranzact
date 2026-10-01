@@ -199,13 +199,27 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
 
+      # apt mirrors occasionally stall; cap each attempt and retry rather
+      # than letting one hung download eat the whole job timeout.
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 12
+        run: |
+          for i in 1 2 3; do
+            timeout 240 npx playwright install --with-deps chromium && exit 0
+            echo "attempt $i failed or timed out; retrying"
+          done
+          exit 1
 
       - name: Install Playwright system dependencies
         if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        timeout-minutes: 10
+        run: |
+          for i in 1 2 3; do
+            timeout 180 npx playwright install-deps chromium && exit 0
+            echo "attempt $i failed or timed out; retrying"
+          done
+          exit 1
 
       - name: Push schema to test DB
         run: pnpm db:push
