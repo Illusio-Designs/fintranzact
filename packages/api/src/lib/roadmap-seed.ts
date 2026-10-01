@@ -1692,9 +1692,138 @@ ${SANDBOX_NOTE}
   ),
 ];
 
+const BANK_FEEDS: RoadmapSeedItem[] = [
+  feature(
+    "before_launch",
+    "high",
+    "Banking",
+    "Bank statement import: Excel, OFX/QIF and PDF",
+    `Bank reconciliation accepts CSV only today. Accept whatever net banking gives the customer, so reconciliation works with every bank from day one.
+
+- Excel (.xlsx), OFX/QFX and QIF converted in the browser to the same rows as CSV, then the usual bank detection and column mapping
+- PDF statements: text read page by page into rows; password-protected PDFs (DOB / customer ID) ask for the password; scanned image-only PDFs get a clear "download Excel or CSV instead" message
+- Title and account-info rows above the real header are skipped automatically
+- Same 10 MB limit; the customer still confirms the column mapping before import`,
+    [
+      "Excel (.xlsx) import",
+      "OFX / QFX import",
+      "QIF import",
+      "PDF import with password support",
+      "Skip title rows above the header",
+      "Clear message for scanned PDFs",
+      "Help pages list the formats",
+      "Tests for each format",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "high",
+    "Banking",
+    "ICICI Connected Banking: daily statement feed and auto-reconciliation",
+    `Fetch the customer's ICICI current-account statement and balance automatically, the way Zoho Books and Tally do — no file upload.
+
+- ICICI Connected Banking is free for the business; Fintranzact must be listed as a partner in ICICI's connected-banking library (partnership agreement)
+- Customer links the account once from Fintranzact (approved in ICICI's corporate net banking)
+- Statement lines pulled daily (and on demand), then the existing auto-match and categorisation rules run
+- Live balance on the bank account screen and dashboard
+- Later on the same rails: vendor payments from Fintranzact, approved in ICICI
+
+### Why not Account Aggregator
+- RBI's Account Aggregator data can only be received by entities regulated by RBI, SEBI, IRDAI or PFRDA; software companies can't, without a licence or a regulated partner — see "Account Aggregator bank data"`,
+    [
+      "Apply for ICICI connected-banking partnership",
+      "Sign agreement and get UAT access",
+      "Link account flow (customer approves in ICICI net banking)",
+      "Daily statement pull and manual refresh",
+      "Run auto-match and rules on fetched lines",
+      "Live balance on bank account and dashboard",
+      "Disconnect / re-link and error states",
+      "Go-live checklist with ICICI",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "medium",
+    "Banking",
+    "Direct bank feeds: Axis, Kotak, SBI, HDFC and Yes Bank",
+    `Repeat the ICICI connected-banking pattern with the next banks, one partnership each — there is no single API for all Indian banks.
+
+- Order by customer demand (count of linked bank accounts per bank)
+- Axis first (Zoho Books already runs the same tie-up: feeds, balance, vendor payments), then Kotak, SBI, HDFC, Yes Bank
+- One bank-feed adapter in our code so each bank plugs into the same import and matching flow
+- Banks without a tie-up keep using statement import`,
+    [
+      "Rank banks by customer accounts",
+      "Bank-feed adapter shared by all banks",
+      "Axis Bank partnership and integration",
+      "Kotak Bank partnership and integration",
+      "SBI partnership and integration",
+      "HDFC / Yes Bank partnership and integration",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "medium",
+    "Banking",
+    "Bank account verification (penny drop) and IFSC lookup through Sandbox.co.in",
+    `Check that a vendor's or employee's bank account is real and in the right name before paying them — part of the same Sandbox.co.in subscription.
+
+- Verify account number + IFSC; show the name the bank returns next to the name we have, with a match / mismatch flag
+- IFSC lookup fills bank name and branch when an IFSC is typed
+- Used on parties (vendors), employees (payroll) and our own bank accounts
+- Each verification is one Sandbox call (may carry a wallet charge — confirm)`,
+    [
+      "IFSC lookup fills bank and branch",
+      "Verify vendor bank accounts",
+      "Verify employee bank accounts for payroll",
+      "Name match / mismatch flag",
+      "Store verification date and result",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "medium",
+    "Banking",
+    "Vendor and salary payouts through RazorpayX",
+    `Pay vendors and salaries from inside Fintranzact.
+
+- RazorpayX current account (partner banks ICICI, Axis, RBL, Yes) — free account, no minimum balance
+- Payouts by IMPS / NEFT / RTGS / UPI at about ₹2–5 each, charged by RazorpayX (verify current rates)
+- Pay a purchase bill or a payroll run; the payment is recorded and reconciled automatically
+- Maker-checker approval for payouts; only to verified bank accounts`,
+    [
+      "Connect RazorpayX account",
+      "Pay a purchase bill",
+      "Bulk salary payout from a payroll run",
+      "Maker-checker approval",
+      "Record and reconcile payouts automatically",
+      "Payout status and failure handling",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "low",
+    "Banking",
+    "Account Aggregator bank data (only with a regulated partner)",
+    `RBI's Account Aggregator (Setu, Finvu, OneMoney, FinBox) shares bank data with the customer's consent — but only to Financial Information Users regulated by RBI, SEBI, IRDAI or PFRDA.
+
+- Fintranzact is not regulated, so it can't receive AA data directly
+- Possible only by partnering with a regulated entity (for example an NBFC) that acts as the FIU, with Fintranzact as its technology provider
+- AA is built for consent-based pulls (lending, wealth), not daily accounting feeds — direct bank feeds fit better
+- Revisit if lending or credit features are added`,
+    [
+      "Keep direct bank feeds as the main route",
+      "Revisit if a lending partner (NBFC) is signed",
+      "If pursued: FIU partner, AA provider, consent flow",
+      "Legal review of data use",
+    ],
+  ),
+];
+
 /** Batches added after the first seed, each put on an older board once. */
 export const ROADMAP_ADDITIONS: { key: string; items: RoadmapSeedItem[] }[] = [
   { key: "2026-10-government-filing", items: GOVERNMENT_FILING },
+  { key: "2026-10-bank-feeds", items: BANK_FEEDS },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

@@ -55,11 +55,11 @@ describe("starting roadmap", () => {
   it("fills an empty board the first time it is opened", async () => {
     const list = await adminCaller().platform.roadmapList();
     expect(list.data).toHaveLength(ROADMAP_SEED.length);
-    expect(ROADMAP_SEED.length).toBe(61);
+    expect(ROADMAP_SEED.length).toBe(67);
     expect(new Set(list.data.map((i) => i.title))).toEqual(new Set(ROADMAP_SEED.map((s) => s.title)));
     expect(list.counts.planned).toBe(ROADMAP_SEED.length);
-    expect(list.stageCounts).toEqual({ before_launch: 16, after_launch: 45 });
-    expect(list.categories).toEqual(expect.arrayContaining(["Payroll", "Inventory", "GST", "Mobile", "Platform", "Accounting"]));
+    expect(list.stageCounts).toEqual({ before_launch: 17, after_launch: 50 });
+    expect(list.categories).toEqual(expect.arrayContaining(["Payroll", "Inventory", "GST", "Mobile", "Platform", "Accounting", "Banking"]));
     for (const item of list.data) {
       expect(item.description.length, item.title).toBeGreaterThan(80);
       expect(item.checklist.length, item.title).toBeGreaterThanOrEqual(4);
@@ -129,10 +129,10 @@ describe("starting roadmap", () => {
 
   it("filters by launch stage", async () => {
     const before = await adminCaller().platform.roadmapList({ launchStage: "before_launch" });
-    expect(before.data).toHaveLength(16);
+    expect(before.data).toHaveLength(17);
     expect(before.data.every((i) => i.launchStage === "before_launch")).toBe(true);
-    expect(before.counts.planned).toBe(16);
-    expect(before.stageCounts).toEqual({ before_launch: 16, after_launch: 45 });
+    expect(before.counts.planned).toBe(17);
+    expect(before.stageCounts).toEqual({ before_launch: 17, after_launch: 50 });
   });
 
   it("seeds only once, even if the board is emptied later", async () => {
