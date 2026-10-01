@@ -31,6 +31,7 @@ import {
 } from "@/components/reports/OrderReports";
 import { StockGroupFilter } from "@/components/inventory/StockGroups";
 import { PriceListReport } from "@/components/reports/PriceListReport";
+import { paymentModeLabel } from "@/lib/payment-modes";
 export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
@@ -2043,7 +2044,7 @@ function PaymentSummaryReport({
                 {data.byMode.map((row, i) => (
                   <tr key={i} className="border-b border-border/40 last:border-0 hover:bg-surface-2/40 transition-colors">
                     <td className="px-4 py-2.5">
-                      <span className="text-text-primary text-[13px] capitalize">{row.mode}</span>
+                      <span className="text-text-primary text-[13px]">{paymentModeLabel(row.mode)}</span>
                     </td>
                     <td className="px-4 py-2.5 hidden md:table-cell">
                       <span className="text-text-tertiary text-[12px]">{row.bankAccountName ?? "—"}</span>

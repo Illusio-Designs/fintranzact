@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { inlineScriptHashes } from "@/lib/csp-hash";
+import { cspDirectives, inlineScriptHashes } from "@/lib/csp-hash";
 
 const sha = (s: string) => `sha256-${createHash("sha256").update(s).digest("base64")}`;
 
@@ -22,5 +22,25 @@ describe("inlineScriptHashes", () => {
     const body = html.slice(start, html.indexOf("</script>", start));
     expect(body).toContain("fintranzact-theme");
     expect(inlineScriptHashes(html)).toContain(sha(body));
+  });
+});
+
+describe("cspDirectives", () => {
+  const directive = (name: string, isDev: boolean) =>
+    cspDirectives({ isDev, apiOrigin: "https://api.example.test", inlineScriptSources: "'sha256-x'" }).find((d) =>
+      d.startsWith(`${name} `),
+    );
+
+  // Regression: frame-src allowed only Turnstile, so the POS receipt (a PDF
+  // loaded into a hidden iframe from a blob: URL) was refused and never printed.
+  it("lets the POS receipt PDF load in a blob: iframe, in dev and in a build", () => {
+    for (const isDev of [true, false]) {
+      expect(directive("frame-src", isDev)?.split(" ")).toEqual(expect.arrayContaining(["blob:", "https://challenges.cloudflare.com"]));
+    }
+  });
+
+  it("allows the API origin to be called directly", () => {
+    expect(directive("connect-src", false)).toBe("connect-src 'self' https://api.example.test");
+    expect(directive("connect-src", true)).toBe("connect-src 'self' ws: https://api.example.test");
   });
 });

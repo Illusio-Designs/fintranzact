@@ -20,3 +20,31 @@ export function inlineScriptHashes(html: string): string[] {
   }
   return hashes;
 }
+
+/**
+ * The page's Content-Security-Policy directives. `inlineScriptSources` are
+ * the quoted hashes from `inlineScriptHashes`.
+ */
+export function cspDirectives(opts: { isDev: boolean; apiOrigin: string | null; inlineScriptSources: string }): string[] {
+  const { isDev, apiOrigin, inlineScriptSources } = opts;
+  // When API_URL is set the app calls the API directly (not via the
+  // /api proxy), so its origin must be allowed in dev as well as prod.
+  const connectSrc = isDev
+    ? `connect-src 'self' ws:${apiOrigin ? ` ${apiOrigin}` : ""}`
+    : apiOrigin
+      ? `connect-src 'self' ${apiOrigin}`
+      : "connect-src 'self'";
+  return [
+    "default-src 'self'",
+    `script-src 'self' ${inlineScriptSources} https://challenges.cloudflare.com`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    connectSrc,
+    // blob: — the POS prints its thermal receipt from a PDF the app fetched,
+    // loaded into a hidden iframe as a blob: URL.
+    "frame-src 'self' blob: https://challenges.cloudflare.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+  ];
+}

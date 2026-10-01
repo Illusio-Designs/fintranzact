@@ -22,6 +22,7 @@ import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { RecordPaymentPanel } from "@/components/RecordPaymentPanel";
 import { Icon } from "@/components/ui/Icon";
 import { Cancel01Icon, Delete02Icon, StarIcon } from "@hugeicons/core-free-icons";
+import { paymentModeLabel } from "@/lib/payment-modes";
 
 const paymentsSearchSchema = z.object({
   id: z.string().uuid().optional(),
@@ -223,14 +224,6 @@ function SmartAssignBanner({ onAssigned }: { onAssigned: () => void }) {
   );
 }
 
-const modeLabels: Record<string, string> = {
-  cash: "Cash",
-  bank: "Bank",
-  upi: "UPI",
-  cheque: "Cheque",
-  other: "Other",
-};
-
 const PAYMENTS_PAGE_SIZE = 25;
 
 function PaymentsPage() {
@@ -413,7 +406,7 @@ function PaymentsPage() {
                       <td className="font-medium">{p.partyName}</td>
                       <td className="text-text-secondary">{formatDate(p.paymentDate)}</td>
                       <td className="text-text-secondary">
-                        {modeLabels[p.mode] || p.mode}
+                        {paymentModeLabel(p.mode)}
                       </td>
                       <td className="text-text-secondary text-xs">
                         {p.referenceNumber || "—"}

@@ -272,12 +272,14 @@ export type DocRow = {
   delivery_method: string | null;
   stock_mode: string;
   e_invoice_status: string | null;
+  /** Where it was raised ("pos" for the register), null for the invoice form. */
+  source: string | null;
   deleted_at: Date | null;
 };
 
 const DOC_COLUMNS = `id, document_type, type, status, invoice_number, party_id, reference_document_id, subtotal, tax_amount,
   discount_amount, additional_charges, charges, round_off, total_amount, amount_paid, delivery_method, stock_mode,
-  e_invoice_status, deleted_at`;
+  e_invoice_status, source, deleted_at`;
 
 /** A party's documents of one kind, oldest first. */
 export async function documentsOf(partyId: string, documentType: string) {
@@ -619,6 +621,174 @@ export async function manufacturingJournalsOf(itemId: string) {
     destination: string;
     lines: Array<{ itemId: string; kind: string; standard: string | null; quantity: string; unitCost: string; amount: string }>;
   }>;
+}
+
+// ── POS & money ──────────────────────────────────────────────────
+
+export async function posEnabled(businessId: string) {
+  const [row] = await db()`select pos_enabled from businesses where id = ${businessId}`;
+  return (row as { pos_enabled: boolean }).pos_enabled;
+}
+
+/** A party's sale invoices, oldest first (all sources). */
+export async function saleInvoicesOf(partyId: string) {
+  return documentsOf(partyId, "invoice");
+}
+
+/**
+ * Taxable value and tax of a party's sale invoices, per GST rate, from the
+ * lines (taxable = line total − line tax), with the business's and the
+ * party's state codes the CGST/SGST vs IGST split is decided by.
+ */
+export async function salesTaxByRate(partyId: string) {
+  const rows = (await db()`
+    select ii.tax_percent::numeric::float8 as rate,
+           sum(ii.total_amount - ii.tax_amount)::numeric::float8 as taxable,
+           sum(ii.tax_amount)::numeric::float8 as tax
+    from invoice_items ii join invoices i on i.id = ii.invoice_id
+    where i.party_id = ${partyId} and i.type = 'sale' and i.document_type = 'invoice' and i.deleted_at is null
+    group by 1 order by 1 desc`) as unknown as Array<{ rate: number; taxable: number; tax: number }>;
+  const [states] = await db()`
+    select b.state_code as seller, p.state_code as buyer, p.gstin as buyer_gstin
+    from parties p join businesses b on b.id = p.business_id where p.id = ${partyId}`;
+  return { rows, ...(states as { seller: string | null; buyer: string | null; buyer_gstin: string | null }) };
+}
+
+export type BankAccountRow = {
+  id: string;
+  account_name: string;
+  account_type: string;
+  bank_name: string | null;
+  account_number: string | null;
+  ifsc: string | null;
+  opening_balance: string;
+  current_balance: string;
+  is_default: boolean;
+};
+
+export async function bankAccountsOf(businessId: string) {
+  return (await db()`
+    select id, account_name, account_type, bank_name, account_number, ifsc, opening_balance, current_balance, is_default
+    from bank_accounts where business_id = ${businessId} order by created_at`) as unknown as BankAccountRow[];
+}
+
+export type BankTxnRow = {
+  id: string;
+  type: string;
+  amount: string;
+  description: string | null;
+  reference_type: string | null;
+  reference_id: string | null;
+};
+
+/** An account's transactions, oldest first. */
+export async function bankTransactionsOf(accountId: string) {
+  return (await db()`
+    select id, type, amount, description, reference_type, reference_id
+    from bank_transactions where bank_account_id = ${accountId} order by created_at, id`) as unknown as BankTxnRow[];
+}
+
+/**
+ * An account's balance worked out here from its opening balance and its
+ * transactions (a deposit adds; a withdrawal, or a one-sided transfer out,
+ * takes away) — to hold the stored current_balance against.
+ */
+export async function bookBankBalance(accountId: string): Promise<number> {
+  const [row] = await db()`
+    select a.opening_balance + coalesce(sum(case when t.type = 'deposit' then t.amount else -t.amount end), 0) as balance
+    from bank_accounts a left join bank_transactions t on t.bank_account_id = a.id
+    where a.id = ${accountId} group by a.id, a.opening_balance`;
+  return Number((row as { balance: string }).balance);
+}
+
+export type ExpenseRow = {
+  id: string;
+  category: string;
+  description: string | null;
+  amount: string;
+  mode: string;
+  reference_number: string | null;
+  bank_account_id: string | null;
+  deleted_at: Date | null;
+};
+
+export async function expensesOf(businessId: string) {
+  return (await db()`
+    select id, category, description, amount, mode, reference_number, bank_account_id, deleted_at
+    from expenses where business_id = ${businessId} order by created_at`) as unknown as ExpenseRow[];
+}
+
+export type StatementLineRow = {
+  id: string;
+  narration: string | null;
+  debit: string;
+  credit: string;
+  match_status: string;
+  matched_payment_id: string | null;
+  matched_expense_id: string | null;
+  matched_bank_transaction_id: string | null;
+};
+
+/** The lines of every statement imported into an account, in statement order. */
+export async function statementLinesOf(accountId: string) {
+  return (await db()`
+    select l.id, l.narration, l.debit, l.credit, l.match_status, l.matched_payment_id, l.matched_expense_id,
+           l.matched_bank_transaction_id
+    from bank_statement_lines l join bank_statement_imports i on i.id = l.import_id
+    where i.bank_account_id = ${accountId} order by i.created_at, l.line_number`) as unknown as StatementLineRow[];
+}
+
+export async function statementImportsOf(accountId: string) {
+  return (await db()`
+    select id, file_name, status, total_lines, matched_lines, unmatched_lines from bank_statement_imports
+    where bank_account_id = ${accountId} order by created_at`) as unknown as Array<{
+    id: string;
+    file_name: string;
+    status: string;
+    total_lines: number;
+    matched_lines: number;
+    unmatched_lines: number;
+  }>;
+}
+
+/** Journal entries with their lines (account code, debit, credit). */
+export async function journalEntriesOf(businessId: string) {
+  return (await db()`
+    select e.id, e.entry_number, e.narration, e.source, e.is_voided,
+           (select json_agg(json_build_object('code', a.code, 'name', a.name, 'debit', l.debit::numeric, 'credit', l.credit::numeric)
+                            order by l.debit desc, a.code)
+            from journal_entry_lines l join chart_of_accounts a on a.id = l.account_id where l.journal_entry_id = e.id) as lines
+    from journal_entries e where e.business_id = ${businessId} order by e.created_at`) as unknown as Array<{
+    id: string;
+    entry_number: string;
+    narration: string | null;
+    source: string;
+    is_voided: boolean;
+    lines: Array<{ code: string; name: string; debit: number; credit: number }>;
+  }>;
+}
+
+export async function recurringTemplatesOfBusiness(businessId: string) {
+  return (await db()`
+    select id, name, party_id, type, frequency, status, total_runs, next_run_date, last_run_date, line_items
+    from recurring_invoice_templates where business_id = ${businessId} order by created_at`) as unknown as Array<{
+    id: string;
+    name: string;
+    party_id: string;
+    type: string;
+    frequency: string;
+    status: string;
+    total_runs: number;
+    next_run_date: Date;
+    last_run_date: Date | null;
+    line_items: Array<{ itemId?: string; itemName: string; quantity: string; unitPrice: string; taxPercent: string }>;
+  }>;
+}
+
+export async function recurringRunsOf(templateId: string) {
+  return (await db()`
+    select id, status, invoice_id, error_message from recurring_invoice_runs where template_id = ${templateId}
+    order by executed_at`) as unknown as Array<{ id: string; status: string; invoice_id: string | null; error_message: string | null }>;
 }
 
 // ── Test plumbing (no UI exists for these) ───────────────────────

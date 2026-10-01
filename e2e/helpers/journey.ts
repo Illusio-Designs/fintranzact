@@ -153,8 +153,9 @@ export async function expectNoHorizontalScroll(page: Page, screen: string) {
       const body = document.body;
       const docOverflow = Math.max(doc.scrollWidth, body.scrollWidth) - doc.clientWidth;
       // Inside the app shell the page scrolls in its content pane, not
-      // the document: sideways overflow there is page-level too.
-      const pane = document.querySelector<HTMLElement>('[data-testid="app-content"]');
+      // the document (the POS register: its full-screen shell), so
+      // sideways overflow there is page-level too.
+      const pane = document.querySelector<HTMLElement>('[data-testid="app-content"], [data-testid="pos-shell"]');
       const paneOverflow = pane ? pane.scrollWidth - pane.clientWidth : 0;
       return Math.max(docOverflow, paneOverflow);
     });
@@ -164,7 +165,7 @@ export async function expectNoHorizontalScroll(page: Page, screen: string) {
     // Name the widest offenders so the failure says what to fix.
     const culprits = await page.evaluate(() => {
       const vw = document.documentElement.clientWidth;
-      const pane = document.querySelector('[data-testid="app-content"]');
+      const pane = document.querySelector('[data-testid="app-content"], [data-testid="pos-shell"]');
       // Content inside its own sideways scroller (a tab strip, a wide table
       // wrapper) does not scroll the page.
       const inOwnScroller = (el: HTMLElement) => {

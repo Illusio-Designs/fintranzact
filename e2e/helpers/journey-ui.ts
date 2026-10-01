@@ -36,6 +36,14 @@ export async function openPage(page: Page, label: string, heading: string | RegE
   await expectNoHorizontalScroll(page, label);
 }
 
+/** Business Reports → one report, from its menu (a drawer on a phone). */
+export async function openReport(page: Page, label: string) {
+  if (!page.url().endsWith("/reports")) await openPage(page, "Business Reports", /.+/);
+  if (isPhone(page)) await page.getByRole("button", { name: "Select report" }).click();
+  await page.getByRole("button", { name: label, exact: true }).click();
+  await expect(page.getByRole("heading", { name: label, level: 1 })).toBeVisible();
+}
+
 /** Pick `search` in a searchable combobox (party, item, invoice pickers). */
 export async function pick(page: Page, combobox: Locator, search: string, option: RegExp = startsWith(search)) {
   await combobox.click();

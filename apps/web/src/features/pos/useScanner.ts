@@ -34,7 +34,11 @@ export function useScanner(
     if (!root) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const now = performance.now();
+      // When the key was pressed, not when this handler got to run: a
+      // re-render after the first key (the search box filters the grid)
+      // delays the next handlers, which would read as a human's gap and
+      // cut the scan short.
+      const now = e.timeStamp || performance.now();
       const gap = now - lastKeyAtRef.current;
       lastKeyAtRef.current = now;
 

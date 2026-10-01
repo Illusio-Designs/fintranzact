@@ -6,7 +6,7 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
 import { DEFAULT_SITE_URL, buildSitemap, resolveSiteUrl } from "./src/lib/seo";
 import { helpPlugins } from "./vite-help";
-import { inlineScriptHashes } from "./src/lib/csp-hash";
+import { cspDirectives, inlineScriptHashes } from "./src/lib/csp-hash";
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8"));
 
@@ -35,27 +35,7 @@ function cspPlugin(apiOrigin: string | null): Plugin {
       order: "pre",
       handler(html, ctx) {
         const isDev = ctx.server !== undefined;
-        // When API_URL is set the app calls the API directly (not via the
-        // /api proxy), so its origin must be allowed in dev as well as prod.
-        const connectSrc = isDev
-          ? `connect-src 'self' ws:${apiOrigin ? ` ${apiOrigin}` : ""}`
-          : apiOrigin
-            ? `connect-src 'self' ${apiOrigin}`
-            : "connect-src 'self'";
-
-        const directives = [
-          "default-src 'self'",
-          `script-src 'self' ${INLINE_SCRIPT_SOURCES} https://challenges.cloudflare.com`,
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-          "font-src 'self' https://fonts.gstatic.com",
-          "img-src 'self' data: blob:",
-          connectSrc,
-          "frame-src https://challenges.cloudflare.com",
-          "object-src 'none'",
-          "base-uri 'self'",
-        ];
-
-        const cspContent = directives.join("; ");
+        const cspContent = cspDirectives({ isDev, apiOrigin, inlineScriptSources: INLINE_SCRIPT_SOURCES }).join("; ");
         const metaTag = `<meta http-equiv="Content-Security-Policy" content="${cspContent}">`;
 
         return html.replace("<head>", `<head>\n    ${metaTag}`);
