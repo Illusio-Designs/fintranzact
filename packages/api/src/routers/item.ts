@@ -12,6 +12,7 @@ import { documentStockDirection, ensureDefaultWarehouse, recordOpeningStock, upd
 import { applyStockAdjustment } from "./stock.js";
 import { findOrCreateBatch } from "../lib/batches.js";
 import { groupSubtreeSql, resolveItemGroup } from "../lib/stock-groups.js";
+import { hsnProblem } from "../lib/hsn-data.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
@@ -235,6 +236,7 @@ export const itemRouter = router({
     const { variants: initialVariants, stockGroupId, category, openingBatch, ...itemData } = input;
     // Expiry is tracked per batch, so it only means something with batches.
     itemData.trackExpiry = !!itemData.trackBatches && !!itemData.trackExpiry;
+    assertHsn(itemData.hsn);
 
     return ctx.db.transaction(async (tx) => {
       const group = await resolveItemGroup(tx, ctx.businessId, { stockGroupId, category });
@@ -442,7 +444,7 @@ export const itemRouter = router({
       const { stockQuantity, stockGroupId, category, openingBatch: _openingBatch, ...data } = input.data;
       const adjustmentIds: string[] = [];
       const item = await ctx.db.transaction(async (tx) => {
-        const [before] = await tx.select({ stockQuantity: items.stockQuantity, trackBatches: items.trackBatches })
+        const [before] = await tx.select({ stockQuantity: items.stockQuantity, trackBatches: items.trackBatches, hsn: items.hsn })
           .from(items)
           .where(and(
             eq(items.id, input.id),
@@ -454,6 +456,9 @@ export const itemRouter = router({
         if (!before) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Item not found" });
         }
+        // Only a changed code is checked, so items saved before HSN checks
+        // existed stay editable.
+        if (data.hsn !== undefined && data.hsn.trim() !== (before.hsn ?? "").trim()) assertHsn(data.hsn);
 
         if (stockQuantity !== undefined) {
           await setStockTotal(tx, {
@@ -1362,3 +1367,9 @@ export const itemRouter = router({
     return itemResult.count + variantResult.count;
   }),
 });
+
+/** Refuse an HSN / SAC code that is malformed or not a real GST code. */
+function assertHsn(code: string | null | undefined): void {
+  const problem = code ? hsnProblem(code) : null;
+  if (problem) throw new TRPCError({ code: "BAD_REQUEST", message: problem });
+}

@@ -57,14 +57,14 @@ for item in results:
       method: "query",
       path: "hsn.validate",
       title: "Validate HSN Code",
-      description: "Check whether an HSN/SAC code exists in the official master list. Returns a boolean. Use this for form validation before saving items.",
+      description: "Check whether an HSN/SAC code is a real GST code, and get what it stands for. Use this to show the code's details on an item form before saving.",
       auth: "public",
       input: [
         { name: "hsn", type: "string", required: true, description: "HSN or SAC code to validate (2–8 characters)" },
       ],
       output: {
-        description: "Validation result.",
-        example: { valid: true },
+        description: "Validation result, with the code's details when it is valid.",
+        example: { valid: true, details: { code: "61091000", type: "goods", description: "T-shirts, singlets and other vests, knitted or crocheted - of cotton", match: "code" } },
       },
       codeExamples: {
         curl: `curl "${API_BASE_URL}/api/trpc/hsn.validate?input=%7B%22json%22%3A%7B%22hsn%22%3A%2261091000%22%7D%7D"`,
@@ -85,8 +85,8 @@ print("Valid:", result["valid"])`,
       },
       gotchas: [
         "This is a public endpoint — no authentication required.",
-        "Accepts 2 to 8 digit codes. Both 2-digit chapter codes (e.g. '61') and full 8-digit codes (e.g. '61091000') are valid.",
-        "The validation is against the static master list — it does not check whether the code is mandatory for your turnover bracket.",
+        "Valid codes are 4 to 8 digits: a listed code (e.g. '61091000') or the heading of listed codes (e.g. '6109', returned with match: 'heading'). 2-digit chapters are not valid.",
+        "The list is the CBIC HSN / SAC list (12,600+ HSN and ~500 SAC codes). It does not check whether the code length is mandatory for your turnover bracket; use hsn.validateForTurnover for that.",
       ],
       relatedEndpoints: ["hsn-search", "hsn-validate-for-turnover"],
     },

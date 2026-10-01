@@ -141,6 +141,15 @@ describe("item.create", () => {
     expect(result.id).toBeDefined();
   });
 
+  it("refuses an HSN / SAC code that is malformed or not in the GST list", async () => {
+    const base = { name: "Bad HSN Product", itemType: "product" as const, itemMode: "simple" as const, unit: "pcs" as const, salePrice: "10.00" };
+    await expect(callerRamesh.item.create({ ...base, hsn: "52AB" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("digits only") });
+    await expect(callerRamesh.item.create({ ...base, hsn: "52081" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(callerRamesh.item.create({ ...base, hsn: "00000000" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const ok = await callerRamesh.item.create({ ...base, name: "Good HSN Product", hsn: "30041010" });
+    expect(ok.hsn).toBe("30041010");
+  });
+
   it("sale price and purchase price are stored as strings — not JS floats", async () => {
     const result = await callerRamesh.item.create({
       name: "Price Type Test Product",
@@ -370,6 +379,17 @@ describe("item.update", () => {
     expect(result!.salePrice).toBe("120.00");
     expect(result!.purchasePrice).toBe("95.00");
     expect(result!.taxPercent).toBe("12.00");
+  });
+
+  it("refuses a changed HSN code that is not a real GST code, but keeps old codes editable", async () => {
+    await expect(
+      callerRamesh.item.update({ id: itemToUpdate.id, data: { hsn: "00000000" } }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("not in the GST HSN") });
+    // An item saved before the check with an odd code can still be edited.
+    const legacy = await createItem(getTenantTestDb(), business1.id, { name: "Legacy HSN Item", hsn: "52" });
+    const updated = await callerRamesh.item.update({ id: legacy.id, data: { name: "Legacy HSN Item (renamed)" } });
+    expect(updated!.name).toBe("Legacy HSN Item (renamed)");
+    expect(updated!.hsn).toBe("52");
   });
 
   it("partial update only changes provided fields — other fields remain unchanged", async () => {

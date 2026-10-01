@@ -14,6 +14,7 @@ import { MrpField } from "@/components/pricing/MrpField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LabelPrintPanel, type LabelCandidate, type LabelMode } from "@/components/items/LabelPrintPanel";
 import { ItemBarcodeField, ItemExtraCodes } from "@/components/items/ItemBarcodeFields";
+import { HsnSacInput } from "@/components/items/HsnSacInput";
 import { useBarcodeSetup } from "@/components/barcodes/BarcodeSymbol";
 import { Modal } from "@/components/ui/Modal";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -839,12 +840,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                 onChange={(e) => setSku(e.target.value)}
                 placeholder="Stock keeping unit"
               />
-              <InputField
-                label="HSN / SAC Code"
-                value={hsn}
-                onChange={(e) => setHsn(e.target.value)}
-                placeholder="HSN/SAC code"
-              />
+              <HsnSacInput value={hsn} onChange={setHsn} itemType={itemType} />
             </div>
             <div className="mt-3">
               <ItemBarcodeField value={barcode} onChange={setBarcode} sku={sku} />
@@ -1435,12 +1431,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
                 onChange={(e) => setSku(e.target.value)}
                 placeholder="Stock keeping unit"
               />
-              <InputField
-                label="HSN / SAC Code"
-                value={hsn}
-                onChange={(e) => setHsn(e.target.value)}
-                placeholder="HSN/SAC code"
-              />
+              <HsnSacInput value={hsn} onChange={setHsn} itemType={itemType} />
             </div>
             <div className="mt-3">
               <ItemBarcodeField value={barcode} onChange={setBarcode} sku={sku} />
