@@ -54,7 +54,9 @@ const FULFILMENT_FILTERS = ["open", "partial", "fulfilled", "closed"];
 export interface ConvertConfig {
   /** The id of the document currently being converted (null if none) */
   convertingId: string | null;
-  onConvert: (id: string) => void;
+  /** What it can be converted into (an invoice when not given). */
+  targets?: ConvertTarget[];
+  onConvert: (id: string, target: DocumentType) => void;
 }
 
 export interface DocumentListPageConfig {
@@ -109,6 +111,12 @@ export interface DocumentListPageConfig {
   /** Show "Mark Paid" button when doc.status === "sent" (credit-notes only) */
   markPaid?: boolean;
   /**
+   * Issued documents can be cancelled from their panel. Cancelling gives back
+   * any stock they moved and, for a note or return, what it took off its
+   * invoice.
+   */
+  cancellable?: boolean;
+  /**
    * When provided, a "Convert to Invoice" button is shown for every row.
    * Pass a ConvertConfig from the route wrapper that owns the convert mutation.
    */
@@ -154,6 +162,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
     col4Header,
     markSent = false,
     markPaid = false,
+    cancellable = false,
     convert,
     fulfilment,
   } = config;
@@ -169,6 +178,8 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
   const [editId, setEditId] = useState<string | undefined>(undefined);
   const [convertId, setConvertId] = useState<string | null>(null);
+  const [cancelDoc, setCancelDoc] = useState<{ id: string; number: string } | null>(null);
+  const convertTargets: ConvertTarget[] = convert?.targets ?? [{ type: "invoice", label: "Invoice" }];
   // GRN whose rejected goods are going back on a purchase return / debit note.
   const [returnRejectedId, setReturnRejectedId] = useState<string | null>(null);
 
@@ -211,10 +222,17 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
   });
 
   const updateStatus = router.updateStatus.useMutation({
-    onSuccess: () => {
+    onSuccess: (_: unknown, vars: { id: string; status: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (utils as any)[trpcRouter].list.invalidate();
-      toast.success("Status updated");
+      // This document's panel; and a cancelled return or note changes its
+      // invoice, the stock and the party's balance.
+      utils.invoice.invalidate();
+      utils.item.list.invalidate();
+      utils.party.invalidate();
+      utils.orders.invalidate();
+      if (vars.status === "cancelled") setCancelDoc(null);
+      toast.success(vars.status === "cancelled" ? "Cancelled" : "Status updated");
     },
     onError: (err: { message: string }) =>
       toast.error("Failed to update status", err.message),
@@ -390,17 +408,18 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                             Mark Paid
                           </button>
                         )}
-                        {convert && (
+                        {convert && doc.status !== "cancelled" && convertTargets.map((t) => (
                           <button
-                            onClick={() => convert.onConvert(doc.id)}
+                            key={t.type}
+                            onClick={() => convert.onConvert(doc.id, t.type)}
                             disabled={convert.convertingId === doc.id}
                             className="text-xs px-2 py-1 rounded font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950 transition-colors disabled:opacity-50"
                           >
                             {convert.convertingId === doc.id
                               ? "Converting…"
-                              : "Convert to Invoice"}
+                              : `Convert to ${t.label}`}
                           </button>
-                        )}
+                        ))}
                         {fulfilment && (doc.fulfilmentStatus === "open" || doc.fulfilmentStatus === "partial") && (
                           <button
                             onClick={() => setConvertId(doc.id)}
@@ -450,6 +469,14 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                     Delete
                   </button>
                 )}
+                {cancellable && selectedDoc.status !== "draft" && selectedDoc.status !== "cancelled" && (
+                  <button
+                    onClick={() => setCancelDoc({ id: selectedDoc.id, number: selectedDoc.invoiceNumber })}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950 border border-red-200 dark:border-red-800 transition-colors"
+                  >
+                    Cancel {singular}
+                  </button>
+                )}
               </div>
               <div className="flex gap-2">
                 {fulfilment && selectedFulfilment && selectedDoc.status !== "cancelled" && (
@@ -480,6 +507,25 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                     Convert
                   </button>
                 )}
+                {markSent && selectedDoc.status === "draft" && (
+                  <button
+                    onClick={() => updateStatus.mutate({ id: selectedDoc.id, status: "sent" })}
+                    disabled={updateStatus.isPending}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium text-text-secondary hover:bg-surface-2 border border-border-light transition-colors disabled:opacity-50"
+                  >
+                    Mark Sent
+                  </button>
+                )}
+                {convert && selectedDoc.status !== "cancelled" && convertTargets.map((t) => (
+                  <button
+                    key={t.type}
+                    onClick={() => convert.onConvert(selectedDoc.id, t.type)}
+                    disabled={convert.convertingId === selectedDoc.id}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium text-white bg-brand-600 hover:bg-brand-700 transition-colors disabled:opacity-50"
+                  >
+                    {convert.convertingId === selectedDoc.id ? "Converting…" : `Convert to ${t.label}`}
+                  </button>
+                ))}
                 {selectedDoc.status === "draft" && (
                   <button
                     onClick={() => {
@@ -705,6 +751,12 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                     <span className="tabular-nums text-text-primary">{formatCurrency(selectedDoc.additionalCharges ?? "0")}</span>
                   </div>
                 )}
+                {parseFloat(selectedDoc.roundOff ?? "0") !== 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-secondary">Round Off</span>
+                    <span className="tabular-nums text-text-primary">{formatCurrency(selectedDoc.roundOff)}</span>
+                  </div>
+                )}
                 <div className="pt-2 border-t border-border-light flex justify-between">
                   <span className="text-sm font-semibold text-text-primary">Total</span>
                   <span className="text-base font-bold tabular-nums text-text-primary">{formatCurrency(selectedDoc.totalAmount)}</span>
@@ -751,6 +803,18 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
         loading={deleteMutation.isPending}
         onConfirm={() => deleteId && deleteMutation.mutate({ id: deleteId })}
         onCancel={() => setDeleteId(null)}
+      />
+
+      <ConfirmDialog
+        open={!!cancelDoc}
+        title={`Cancel ${singular}`}
+        description={`Cancel ${singular.toLowerCase()} ${cancelDoc?.number ?? ""}? It stays on record as cancelled; any stock it moved goes back, and a return or note no longer counts against its invoice.`}
+        confirmLabel={`Cancel ${singular}`}
+        cancelLabel="Keep it"
+        variant="danger"
+        loading={updateStatus.isPending}
+        onConfirm={() => cancelDoc && updateStatus.mutate({ id: cancelDoc.id, status: "cancelled" })}
+        onCancel={() => setCancelDoc(null)}
       />
 
       {/* Document creator */}

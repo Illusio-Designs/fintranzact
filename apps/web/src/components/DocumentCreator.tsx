@@ -441,10 +441,18 @@ export function DocumentCreator({
     utils.goodsReceiptNote.list.invalidate();
     utils.orders.invalidate();
     utils.dashboard.summary.invalidate();
+    // Party balances and ledgers include what was just saved.
+    utils.party.invalidate();
     utils.dashboard.shippingSummary.invalidate();
     utils.item.list.invalidate();
     if (editInvoiceId) {
       utils.invoice.getById.invalidate({ id: editInvoiceId });
+    }
+    // A note or return changes what is left to pay on the invoice it is
+    // against: its panel and the payment form must not show the old balance.
+    if (referenceDocumentId) {
+      utils.invoice.getById.invalidate({ id: referenceDocumentId });
+      utils.payment.unpaidInvoices.invalidate();
     }
   }
 
@@ -1089,7 +1097,7 @@ export function DocumentCreator({
           {items.map((li) => {
             const calc = calcLine(li);
             return (
-              <div key={li.id} className="rounded-xl border border-border-light bg-surface-1/50 px-4 py-3 space-y-2">
+              <div key={li.id} data-testid="document-line" className="rounded-xl border border-border-light bg-surface-1/50 px-4 py-3 space-y-2">
                 {/* Row 1: Product (searchable combobox) + unit selector + delete */}
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
@@ -1405,7 +1413,7 @@ export function DocumentCreator({
           <div className="w-80 space-y-2.5">
             <div className="flex justify-between text-sm">
               <span className="text-text-secondary">Subtotal</span>
-              <span className="tabular-nums font-medium text-text-primary">
+              <span data-testid="document-subtotal" className="tabular-nums font-medium text-text-primary">
                 {formatCurrency(totals.subtotal)}
               </span>
             </div>
@@ -1419,7 +1427,7 @@ export function DocumentCreator({
             )}
             <div className="flex justify-between text-sm">
               <span className="text-text-secondary">Tax</span>
-              <span className="tabular-nums text-text-primary">
+              <span data-testid="document-tax" className="tabular-nums text-text-primary">
                 {formatCurrency(totals.taxTotal)}
               </span>
             </div>
@@ -1431,6 +1439,8 @@ export function DocumentCreator({
                 <div className="inline-flex rounded-md border border-border-light overflow-hidden">
                   <button
                     type="button"
+                    aria-label="Discount in rupees"
+                    aria-pressed={invoiceDiscountType === "amount"}
                     onClick={() => setInvoiceDiscountType("amount")}
                     className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${invoiceDiscountType === "amount" ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400" : "text-text-tertiary hover:text-text-secondary"}`}
                   >
@@ -1438,6 +1448,8 @@ export function DocumentCreator({
                   </button>
                   <button
                     type="button"
+                    aria-label="Discount in percent"
+                    aria-pressed={invoiceDiscountType === "percent"}
                     onClick={() => setInvoiceDiscountType("percent")}
                     className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${invoiceDiscountType === "percent" ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400" : "text-text-tertiary hover:text-text-secondary"}`}
                   >
@@ -1448,6 +1460,7 @@ export function DocumentCreator({
               <input
                 type="number"
                 className="input w-28 text-right tabular-nums text-sm py-1"
+                aria-label="Document discount"
                 value={invoiceDiscount}
                 onChange={(e) => setInvoiceDiscount(e.target.value)}
                 step="0.01"
@@ -1481,6 +1494,7 @@ export function DocumentCreator({
                           }}
                           className="input py-1 text-xs w-28"
                           placeholder="Label"
+                          aria-label={`Charge ${idx + 1} name`}
                         />
                         <button
                           type="button"
@@ -1503,6 +1517,7 @@ export function DocumentCreator({
                       setCharges(next);
                     }}
                     readOnly={!!charge.shipmentId}
+                    aria-label={`${charge.label || `Charge ${idx + 1}`} amount`}
                     className={`input w-28 text-right tabular-nums py-1 text-xs ${charge.shipmentId ? "opacity-60 cursor-not-allowed" : ""}`}
                     step="0.01"
                     min="0"
@@ -1559,6 +1574,7 @@ export function DocumentCreator({
               <input
                 type="number"
                 className="input w-32 text-right tabular-nums"
+                aria-label="Round off"
                 value={roundOff}
                 onChange={(e) => {
                   setRoundOff(e.target.value);
@@ -1571,7 +1587,7 @@ export function DocumentCreator({
               <span className="text-sm font-semibold text-text-primary">
                 Total
               </span>
-              <span className="text-lg font-bold tabular-nums text-text-primary">
+              <span data-testid="document-total" className="text-lg font-bold tabular-nums text-text-primary">
                 {formatCurrency(totals.total)}
               </span>
             </div>
@@ -1581,8 +1597,9 @@ export function DocumentCreator({
         {/* Notes and terms */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="label">Notes</label>
+            <label className="label" htmlFor={`${dateInputId}-notes`}>Notes</label>
             <textarea
+              id={`${dateInputId}-notes`}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={4}
@@ -1591,8 +1608,9 @@ export function DocumentCreator({
             />
           </div>
           <div>
-            <label className="label">Terms &amp; conditions</label>
+            <label className="label" htmlFor={`${dateInputId}-terms`}>Terms &amp; conditions</label>
             <textarea
+              id={`${dateInputId}-terms`}
               value={terms}
               onChange={(e) => setTerms(e.target.value)}
               rows={4}

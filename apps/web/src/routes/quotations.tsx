@@ -4,6 +4,8 @@ import { z } from "zod";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { DocumentListPage } from "@/components/DocumentListPage";
+import type { DocumentType } from "@/components/DocumentCreator";
+import { getDocumentTypeLabel } from "@/lib/utils";
 
 import { FileEditIcon } from "@hugeicons/core-free-icons";
 export const Route = createFileRoute("/quotations")({
@@ -25,11 +27,15 @@ function QuotationsPage() {
   const utils = trpc.useUtils();
 
   const convertMutation = trpc.document.convert.useMutation({
-    onSuccess: () => {
-      toast.success("Converted to invoice");
+    onSuccess: (res) => {
+      toast.success(`${getDocumentTypeLabel(res.documentType)} ${res.invoiceNumber} created`);
       utils.invoice.list.invalidate();
+      utils.salesOrder.list.invalidate();
+      utils.party.invalidate();
       setConvertingId(null);
-      navigate({ to: "/invoices" });
+      // Open what was made, where it lives.
+      if (res.documentType === "sales_order") navigate({ to: "/sales-orders", search: { id: res.id } });
+      else navigate({ to: "/invoices", search: { id: res.id } });
     },
     onError: (err) => {
       toast.error("Failed to convert", err.message);
@@ -37,9 +43,9 @@ function QuotationsPage() {
     },
   });
 
-  function handleConvert(id: string) {
+  function handleConvert(id: string, target: DocumentType) {
     setConvertingId(id);
-    convertMutation.mutate({ sourceDocumentId: id, targetDocumentType: "invoice" });
+    convertMutation.mutate({ sourceDocumentId: id, targetDocumentType: target });
   }
 
   return (
@@ -61,7 +67,16 @@ function QuotationsPage() {
         col4Variant: "dueDate",
         col4Header: "Due Date",
         markSent: true,
-        convert: { convertingId, onConvert: handleConvert },
+        // A quotation the customer accepts becomes an order to deliver
+        // against, or is billed straight away.
+        convert: {
+          convertingId,
+          onConvert: handleConvert,
+          targets: [
+            { type: "sales_order", label: "Sales Order" },
+            { type: "invoice", label: "Invoice" },
+          ],
+        },
       }}
     />
   );

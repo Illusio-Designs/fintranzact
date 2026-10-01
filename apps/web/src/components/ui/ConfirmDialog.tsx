@@ -10,6 +10,8 @@ interface ConfirmDialogProps {
   title: string;
   description?: string;
   confirmLabel?: string;
+  /** Label of the button that backs out (default "Cancel"). */
+  cancelLabel?: string;
   variant?: "danger" | "default";
   loading?: boolean;
 }
@@ -21,6 +23,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   variant = "default",
   loading = false,
 }: ConfirmDialogProps) {
@@ -50,7 +53,7 @@ export function ConfirmDialog({
           onClick={onCancel}
           disabled={loading}
         >
-          Cancel
+          {cancelLabel}
         </button>
         <button
           type="button"

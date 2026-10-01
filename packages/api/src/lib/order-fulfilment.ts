@@ -35,6 +35,19 @@ export function notOrderDocument() {
   return sql`${invoices.documentType} NOT IN ('sales_order', 'purchase_order', 'goods_receipt_note')`;
 }
 
+/**
+ * Documents a party's balance is made of: bills (invoices, debit notes) and
+ * what adjusts them (credit notes, returns). Quotations, proformas and
+ * delivery challans are not bills — a challan's goods are billed on the
+ * invoice made from it — and orders and GRNs move no money either.
+ */
+export const BILL_DOCUMENT_TYPES = ["invoice", "debit_note", "credit_note", "sales_return", "purchase_return"] as const;
+
+/** Condition that keeps only documents that count toward what a party owes. */
+export function billDocument() {
+  return sql`${invoices.documentType} IN ('invoice', 'debit_note', 'credit_note', 'sales_return', 'purchase_return')`;
+}
+
 /** What each pending-tracked document can be converted into, and so is fulfilled by. */
 export const FULFILLED_BY: Record<PendingTrackedDocumentType, DocumentType[]> = {
   sales_order: ["delivery_challan", "invoice"],

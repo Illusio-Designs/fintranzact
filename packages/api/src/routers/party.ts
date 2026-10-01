@@ -23,7 +23,7 @@ import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPClient, IRPError, type IRPGstinDetails } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
-import { notOrderDocument } from "../lib/order-fulfilment.js";
+import { billDocument } from "../lib/order-fulfilment.js";
 
 const IRP_TAXPAYER_TYPES: Record<string, PartyGstType> = {
   REG: "regular",
@@ -94,11 +94,16 @@ export const partyRouter = router({
         // Parties where opening_balance + unpaid invoice balance > 0
         conditions.push(sql`(
           ${parties.openingBalance}::numeric + COALESCE((
-            SELECT SUM(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)
+            SELECT SUM(CASE WHEN ${invoices.documentType} IN ('credit_note', 'sales_return', 'purchase_return')
+              THEN -(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)
+              ELSE (${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)
+            END)
             FROM ${invoices}
             WHERE ${invoices.partyId} = ${parties.id}
               AND ${invoices.businessId} = ${parties.businessId}
+              AND ${billDocument()}
               AND ${invoices.status} NOT IN ('paid', 'cancelled')
+              AND ${invoices.deletedAt} IS NULL
           ), 0)
         ) > 0`);
       } else if (effectiveFilter === "overdue") {
@@ -139,7 +144,7 @@ export const partyRouter = router({
         .from(invoices)
         .where(and(
           eq(invoices.businessId, ctx.businessId),
-          notOrderDocument(),
+          billDocument(),
           sql`${invoices.status} NOT IN ('cancelled')`,
           isNull(invoices.deletedAt),
         ))
@@ -216,7 +221,7 @@ export const partyRouter = router({
         .where(and(
           eq(invoices.partyId, input.id),
           eq(invoices.businessId, ctx.businessId),
-          notOrderDocument(),
+          billDocument(),
           sql`${invoices.status} NOT IN ('cancelled')`,
           isNull(invoices.deletedAt),
         ));

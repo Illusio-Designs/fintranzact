@@ -34,6 +34,7 @@ function PurchaseReturnsPage() {
         col4Variant: "refInvoice",
         col4Header: "Ref. Invoice",
         markSent: true,
+        cancellable: true,
       }}
     />
   );

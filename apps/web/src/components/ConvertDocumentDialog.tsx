@@ -73,6 +73,7 @@ export function ConvertDocumentDialog({
       utils.goodsReceiptNote.list.invalidate();
       utils.orders.invalidate();
       utils.item.list.invalidate();
+      utils.party.invalidate();
       onClose();
     },
     onError: (err) => toast.error("Failed to convert", err.message),

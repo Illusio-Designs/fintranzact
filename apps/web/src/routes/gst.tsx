@@ -77,20 +77,23 @@ function GSTReportsPage() {
         description={reportDesc}
       />
 
-      {/* Tab bar */}
-      <div className="mb-6">
+      {/* Tab bar — nine reports don't fit a phone: the bar scrolls sideways
+          on its own instead of the page. */}
+      <div className="mb-6 overflow-x-auto" data-testid="gst-report-tabs">
         <PillTabs
           tabs={tabs}
           value={activeTab}
           onChange={(v) => setActiveTab(v as ReportTab)}
+          className="w-max"
         />
       </div>
 
       {/* Period selector — only shown for GST tabs */}
       {(activeTab === "gstr1" || activeTab === "gstr3b") && (
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-3 mb-6">
           <Select
             className="input w-40"
+            aria-label="Month"
             value={month}
             onChange={(e) => setMonth(Number(e.target.value))}
           >
@@ -100,6 +103,7 @@ function GSTReportsPage() {
           </Select>
           <Select
             className="input w-28"
+            aria-label="Year"
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
           >
@@ -108,7 +112,7 @@ function GSTReportsPage() {
             ))}
           </Select>
 
-          <div className="ml-4">
+          <div className="sm:ml-4">
             <SegmentedControl
               tabs={[
                 { value: "gstr1", label: tab1Label },

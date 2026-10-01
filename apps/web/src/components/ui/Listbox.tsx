@@ -138,8 +138,12 @@ export function Listbox({
         if (open) setActiveIndex(options.length - 1);
         break;
       case "Escape":
-        e.preventDefault();
-        closeDropdown();
+        // An open list closes on its own; the dialog it sits in stays open.
+        if (open) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeDropdown();
+        }
         break;
       case "Tab":
         if (open) closeDropdown();

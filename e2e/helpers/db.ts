@@ -251,6 +251,150 @@ export async function priceLevelNamed(businessId: string, name: string) {
   return row as { id: string; name: string } | undefined;
 }
 
+// ── Sales documents ──────────────────────────────────────────────
+
+export type DocRow = {
+  id: string;
+  document_type: string;
+  type: string;
+  status: string;
+  invoice_number: string;
+  party_id: string;
+  reference_document_id: string | null;
+  subtotal: string;
+  tax_amount: string;
+  discount_amount: string;
+  additional_charges: string;
+  charges: Array<{ label: string; amount: string }> | null;
+  round_off: string;
+  total_amount: string;
+  amount_paid: string;
+  delivery_method: string | null;
+  stock_mode: string;
+  e_invoice_status: string | null;
+  deleted_at: Date | null;
+};
+
+const DOC_COLUMNS = `id, document_type, type, status, invoice_number, party_id, reference_document_id, subtotal, tax_amount,
+  discount_amount, additional_charges, charges, round_off, total_amount, amount_paid, delivery_method, stock_mode,
+  e_invoice_status, deleted_at`;
+
+/** A party's documents of one kind, oldest first. */
+export async function documentsOf(partyId: string, documentType: string) {
+  return (await db().unsafe(
+    `select ${DOC_COLUMNS} from invoices where party_id = $1 and document_type = $2 order by created_at`,
+    [partyId, documentType],
+  )) as unknown as DocRow[];
+}
+
+export async function documentById(id: string) {
+  const [row] = await db().unsafe(`select ${DOC_COLUMNS} from invoices where id = $1`, [id]);
+  return row as unknown as DocRow | undefined;
+}
+
+export type DocLine = {
+  item_id: string | null;
+  item_name: string;
+  quantity: string;
+  free_quantity: string;
+  unit_price: string;
+  tax_percent: string;
+  tax_amount: string;
+  total_amount: string;
+  batch_number: string | null;
+};
+
+/** A document's lines with the batch each took (sort order). */
+export async function documentLines(id: string) {
+  return (await db()`
+    select ii.item_id, ii.item_name, ii.quantity, ii.free_quantity, ii.unit_price, ii.tax_percent, ii.tax_amount,
+           ii.total_amount, b.batch_number
+    from invoice_items ii left join item_batches b on b.id = ii.batch_id
+    where ii.invoice_id = ${id} order by ii.sort_order, b.batch_number`) as unknown as DocLine[];
+}
+
+/** An item's stock: the stored total and what each batch holds (from its movements). */
+export async function itemStock(itemId: string) {
+  const [item] = await db()`select stock_quantity from items where id = ${itemId}`;
+  const batches = (await db()`
+    select coalesce(b.batch_number, '(unbatched)') as batch, sum(sm.quantity)::text as qty
+    from stock_movements sm left join item_batches b on b.id = sm.batch_id
+    where sm.item_id = ${itemId} group by 1 order by 1`) as unknown as Array<{ batch: string; qty: string }>;
+  return {
+    total: Number((item as { stock_quantity: string }).stock_quantity),
+    byBatch: Object.fromEntries(batches.map((b) => [b.batch, Number(b.qty)])),
+  };
+}
+
+/** Stock a document moved, net per item and batch (negative = out). */
+export async function documentStockMoves(documentId: string) {
+  const rows = (await db()`
+    select sm.item_id, coalesce(b.batch_number, '(unbatched)') as batch, sum(sm.quantity)::text as qty
+    from stock_movements sm left join item_batches b on b.id = sm.batch_id
+    where sm.reference_id = ${documentId}
+    group by 1, 2 order by 2`) as unknown as Array<{ item_id: string; batch: string; qty: string }>;
+  return rows.map((r) => ({ itemId: r.item_id, batch: r.batch, qty: Number(r.qty) }));
+}
+
+/** Payments from a party with what each was allocated to. */
+export async function paymentsOf(partyId: string) {
+  return (await db()`
+    select p.id, p.amount, p.mode, p.deleted_at,
+           coalesce(json_agg(json_build_object('invoiceId', pa.invoice_id, 'amount', pa.amount)) filter (where pa.id is not null), '[]') as allocations
+    from payments p left join payment_allocations pa on pa.payment_id = p.id
+    where p.party_id = ${partyId} group by p.id order by p.created_at`) as unknown as Array<{
+    id: string;
+    amount: string;
+    mode: string;
+    deleted_at: Date | null;
+    allocations: Array<{ invoiceId: string; amount: string | number }>;
+  }>;
+}
+
+/**
+ * What a customer owes from the books, worked out here rather than by the
+ * app: opening balance + sale invoices and debit notes − credit notes and
+ * sales returns − payments received. Quotations, orders, proformas and
+ * challans are not bills and never count; cancelled or deleted documents
+ * don't either.
+ */
+export async function customerBookBalance(partyId: string): Promise<number> {
+  const [row] = await db()`
+    select
+      (select opening_balance from parties where id = ${partyId})
+      + coalesce((select sum(case when document_type in ('invoice', 'debit_note') then total_amount
+                                  else -total_amount end)
+                  from invoices
+                  where party_id = ${partyId} and type = 'sale'
+                    and document_type in ('invoice', 'debit_note', 'credit_note', 'sales_return')
+                    and status <> 'cancelled' and deleted_at is null), 0)
+      - coalesce((select sum(amount) from payments where party_id = ${partyId} and deleted_at is null), 0)
+      as balance`;
+  return Number((row as { balance: string }).balance);
+}
+
+export async function businessRow(businessId: string) {
+  const [row] = await db()`
+    select id, state_code, custom_shipping_methods, e_way_bill_enabled, e_way_bill_threshold
+    from businesses where id = ${businessId}`;
+  return row as {
+    id: string;
+    state_code: string | null;
+    custom_shipping_methods: Array<{ id: string; label: string; hasTracking: boolean }> | null;
+    e_way_bill_enabled: boolean;
+    e_way_bill_threshold: string | null;
+  };
+}
+
+export async function ewayBillConfig(businessId: string) {
+  const [row] = await db()`select gstin, is_enabled, is_sandbox from eway_bill_configs where business_id = ${businessId}`;
+  return row as { gstin: string; is_enabled: boolean; is_sandbox: boolean } | undefined;
+}
+
+export async function ewayBillsFor(invoiceId: string) {
+  return (await db()`select id, status from eway_bills where invoice_id = ${invoiceId}`) as unknown as Array<{ id: string; status: string }>;
+}
+
 // ── Test plumbing (no UI exists for these) ───────────────────────
 
 /** Make an invoice look `hours` old (role rules depend on its age). */

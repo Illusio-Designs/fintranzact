@@ -110,6 +110,11 @@ export function resolveBusinessStateCode(values: {
   return INDIAN_STATES.find((s) => s.name.toLowerCase() === name)?.code;
 }
 
+/** Errors of several wizard steps at once (editing shows them together). */
+export function validateSteps(steps: number[], values: BusinessStepValues) {
+  return Object.assign({}, ...steps.map((step) => validateBusinessStep(step, values))) as Record<string, string>;
+}
+
 export function validateBusinessStep(
   step: number,
   values: BusinessStepValues,
@@ -651,8 +656,8 @@ export function BusinessForm({
     </>
   );
 
-  const stepContent = (() => {
-    switch (currentStep) {
+  const renderStep = (step: number) => {
+    switch (step) {
       // ==========================================================
       // STEP 1 — BUSINESS DETAILS
       // ==========================================================
@@ -1044,10 +1049,11 @@ export function BusinessForm({
                   </p>
 
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-text-primary">
+                    <label htmlFor="business-ewb-threshold" className="text-sm font-medium text-text-primary">
                       E-Way Bill Threshold (₹)
                     </label>
                     <input
+                      id="business-ewb-threshold"
                       type="number"
                       min="0"
                       step="0.01"
@@ -1468,12 +1474,27 @@ export function BusinessForm({
           </div>
         );
     }
-  })();
+  };
+
+  // Onboarding walks through the steps one at a time. Editing an existing
+  // business shows its details, statutory & compliance settings (GSTIN,
+  // e-invoice, e-way bill and its threshold) and corporate tax details on
+  // one form, so all of them stay editable after setup.
+  const editSteps = [0, 1, 2];
+  const stepContent = onboardingMode ? (
+    renderStep(currentStep)
+  ) : (
+    <div className="space-y-8">
+      {editSteps.map((step) => (
+        <div key={step}>{renderStep(step)}</div>
+      ))}
+    </div>
+  );
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const stepErrors = validateBusinessStep(currentStep, {
+    const stepErrors = validateSteps(onboardingMode ? [currentStep] : editSteps, {
       name,
       legalName,
       businessType,

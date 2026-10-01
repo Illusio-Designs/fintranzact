@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { trpc, getBusinessId } from "@/lib/trpc";
-import { formatDate, cn } from "@/lib/utils";
+import { formatDate, formatCurrency, cn } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
 import { Badge } from "@/components/ui/Badge";
 import { toast } from "@/hooks/useToast";
@@ -13,6 +13,8 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { Listbox } from "@/components/ui/Listbox";
 import { InputField } from "@/components/ui/FormField";
 import { Spinner } from "@/components/ui/Spinner";
+import { Combobox } from "@/components/ui/Combobox";
+import { useDebounce } from "@/hooks/useDebounce";
 
 export const Route = createFileRoute("/eway-bills")({
   component: EWayBillsPage,
@@ -191,6 +193,21 @@ function EWayBillsPage() {
 
   const [detailEwbId, setDetailEwbId] = useState<string | null>(null);
 
+  // The invoice to generate for, picked by number or customer.
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const debouncedInvoiceSearch = useDebounce(invoiceSearch, 300);
+  const { data: saleInvoices, isFetching: invoicesFetching } = trpc.invoice.list.useQuery(
+    { type: "sale", search: debouncedInvoiceSearch || undefined, page: 1, limit: 20 },
+    { enabled: showGenerateModal },
+  );
+  const invoiceOptions = (saleInvoices?.data ?? [])
+    .filter((inv: { status: string }) => inv.status !== "cancelled" && inv.status !== "draft")
+    .map((inv: { id: string; invoiceNumber: string; partyName?: string | null; totalAmount: string }) => ({
+      value: inv.id,
+      label: inv.invoiceNumber,
+      description: `${inv.partyName ?? ""} · ${formatCurrency(inv.totalAmount)}`,
+    }));
+
   const tabs: Array<{ value: EWBTab; label: string }> = [
     { value: "dashboard", label: "All E-Way Bills" },
     { value: "expiring", label: "Expiring Soon" },
@@ -253,7 +270,7 @@ function EWayBillsPage() {
 
   function validateGenerate(): boolean {
     const errs: Partial<GenerateFormState> = {};
-    if (!generateForm.invoiceId.trim()) errs.invoiceId = "Invoice ID is required";
+    if (!generateForm.invoiceId.trim()) errs.invoiceId = "Pick the invoice";
     if (!generateForm.vehicleNumber.trim()) errs.vehicleNumber = "Vehicle number is required";
     if (!generateForm.distance || isNaN(parseInt(generateForm.distance)) || parseInt(generateForm.distance) < 1) {
       errs.distance = "Valid distance in km is required";
@@ -419,14 +436,20 @@ function EWayBillsPage() {
         }
       >
         <div className="space-y-4">
-          <InputField
-            label="Invoice ID"
-            placeholder="Paste the invoice UUID"
-            value={generateForm.invoiceId}
-            onChange={(e) => setGenerateForm((f) => ({ ...f, invoiceId: e.target.value }))}
-            error={generateErrors.invoiceId}
-            required
-          />
+          <div>
+            <Combobox
+              label="Invoice"
+              required
+              value={generateForm.invoiceId}
+              onChange={(id) => setGenerateForm((f) => ({ ...f, invoiceId: id }))}
+              options={invoiceOptions}
+              placeholder="Search invoice number or customer..."
+              emptyMessage="No issued sale invoices found"
+              onQueryChange={setInvoiceSearch}
+              isLoading={invoicesFetching && !!debouncedInvoiceSearch}
+            />
+            {generateErrors.invoiceId && <p className="mt-1 text-xs text-red-600">{generateErrors.invoiceId}</p>}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <InputField
               label="Vehicle Number"

@@ -6,7 +6,7 @@ import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { valueStock } from "../lib/stock-valuation.js";
-import { notOrderDocument } from "../lib/order-fulfilment.js";
+import { billDocument } from "../lib/order-fulfilment.js";
 
 
 export const dashboardRouter = router({
@@ -95,7 +95,7 @@ export const dashboardRouter = router({
         .where(and(
           eq(invoices.businessId, ctx.businessId),
           eq(invoices.type, "sale"),
-          notOrderDocument(),
+          billDocument(),
           isNull(invoices.deletedAt),
           sql`${invoices.status} NOT IN ('paid', 'cancelled')`,
         )),
@@ -108,7 +108,7 @@ export const dashboardRouter = router({
         .where(and(
           eq(invoices.businessId, ctx.businessId),
           eq(invoices.type, "purchase"),
-          notOrderDocument(),
+          billDocument(),
           isNull(invoices.deletedAt),
           sql`${invoices.status} NOT IN ('paid', 'cancelled')`,
         )),

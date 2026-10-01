@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -118,9 +118,24 @@ export function RecordPaymentPanel({
 
   // ── Pre-fill logic ──────────────────────────────────────────────────────────
 
+  // The invoice this opening of the panel was pre-filled for. Cleared on
+  // close, so opening it again for the same invoice (a second instalment)
+  // pre-fills it again.
+  const preselectedFor = useRef<string | null>(null);
+  // Set once the user ticks invoices or edits what goes to each; the
+  // pre-fill never overrides that.
+  const userPicked = useRef(false);
+  // An amount typed in this opening of the panel.
+  const typedAmount = useRef<string | null>(null);
+
   // When panel opens, reset state (or populate from editData)
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      preselectedFor.current = null;
+      userPicked.current = false;
+      typedAmount.current = null;
+      return;
+    }
 
     if (isEditMode && editData) {
       setPartyId(editData.partyId);
@@ -167,19 +182,21 @@ export function RecordPaymentPanel({
 
   // Pre-select invoice once unpaid invoices load (when coming from "Record Payment" on an invoice)
   useEffect(() => {
-    if (
-      preSelectedInvoiceId &&
-      unpaidInvoices &&
-      !checkedInvoices.has(preSelectedInvoiceId)
-    ) {
-      const target = unpaidInvoices.find((inv) => inv.id === preSelectedInvoiceId);
-      if (target) {
-        const balanceAmt = preSelectedAmount ?? target.balance;
-        setCheckedInvoices(new Set([preSelectedInvoiceId]));
-        setAllocations({ [preSelectedInvoiceId]: balanceAmt });
-      }
+    if (!open || isEditMode || !preSelectedInvoiceId || !unpaidInvoices) return;
+    if (preselectedFor.current === preSelectedInvoiceId || userPicked.current) return;
+    const target = unpaidInvoices.find((inv) => inv.id === preSelectedInvoiceId);
+    if (target) {
+      preselectedFor.current = preSelectedInvoiceId;
+      // An amount typed before the invoices had loaded goes to this invoice
+      // (up to its balance) rather than being left unallocated.
+      const typed = typedAmount.current !== null ? parseFloat(typedAmount.current) : NaN;
+      const balanceAmt = Number.isFinite(typed) && typed > 0
+        ? Math.min(typed, parseFloat(target.balance)).toFixed(2)
+        : preSelectedAmount ?? target.balance;
+      setCheckedInvoices(new Set([preSelectedInvoiceId]));
+      setAllocations({ [preSelectedInvoiceId]: balanceAmt });
     }
-  }, [preSelectedInvoiceId, unpaidInvoices]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, isEditMode, preSelectedInvoiceId, preSelectedAmount, unpaidInvoices]);
 
   // Set default account once loaded
   useEffect(() => {
@@ -209,6 +226,7 @@ export function RecordPaymentPanel({
 
   const handleToggleInvoice = useCallback(
     (invoiceId: string, balance: string) => {
+      userPicked.current = true;
       setCheckedInvoices((prev) => {
         const next = new Set(prev);
         if (next.has(invoiceId)) {
@@ -230,6 +248,7 @@ export function RecordPaymentPanel({
 
   const handleAllocationChange = useCallback(
     (invoiceId: string, value: string) => {
+      userPicked.current = true;
       setAllocations((a) => ({ ...a, [invoiceId]: value }));
       setAmountOverridden(false);
     },
@@ -237,6 +256,7 @@ export function RecordPaymentPanel({
   );
 
   const handleAmountChange = (value: string) => {
+    typedAmount.current = value;
     setManualAmount(value);
     setAmountOverridden(true);
 
@@ -286,6 +306,8 @@ export function RecordPaymentPanel({
     utils.invoice.list.invalidate();
     utils.invoice.getById.invalidate();
     utils.dashboard.summary.invalidate();
+    // Party balances and ledgers include the payment.
+    utils.party.invalidate();
     utils.bankAccount.list.invalidate();
     utils.bankAccount.summary.invalidate();
   };

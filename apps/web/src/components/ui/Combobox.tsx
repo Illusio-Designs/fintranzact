@@ -212,8 +212,10 @@ export function Combobox({
         }
         break;
       case "Escape":
-        e.preventDefault();
+        // An open list closes on its own; the dialog it sits in stays open.
         if (open) {
+          e.preventDefault();
+          e.stopPropagation();
           setOpen(false);
           setQuery("");
         }
