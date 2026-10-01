@@ -99,6 +99,8 @@ test.describe("Delete Confirmation Flows", () => {
     await waitForSearchResults(page);
 
     const rows = page.locator("tbody tr");
+    // The search is debounced: wait for the seeded row, not just any response.
+    await expect(rows.filter({ hasText: uniqueCategory }).first()).toBeVisible();
     const initialCount = await rows.count();
     test.skip(initialCount === 0, "Seeded expense not found in list");
 
@@ -114,10 +116,9 @@ test.describe("Delete Confirmation Flows", () => {
     await expect(page.locator(".btn-danger")).toBeVisible({ timeout: 5_000 });
     await page.locator(".btn-danger").click();
 
-    // The server deletes successfully ("0 expenses" label appears), but the stale
-    // table row stays in DOM due to a React Query cache rendering issue.
-    // Assert the delete was acknowledged by checking the "0 expenses" footer.
-    await expect(page.getByText(/0 expenses/i)).toBeVisible({ timeout: 10_000 });
+    // The deleted expense's row leaves the list (it used to linger after the
+    // refetch; useInfiniteList now drops records that are gone).
+    await expect(rows).toHaveCount(initialCount - 1, { timeout: 10_000 });
   });
 
   test("draft invoice row shows delete action on hover", async ({ page }) => {
