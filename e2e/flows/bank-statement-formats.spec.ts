@@ -150,6 +150,7 @@ test.describe("Bank reconciliation — statement formats", () => {
     await page
       .getByTestId("statement-file-input")
       .setInputFiles({ name: "old.xls", mimeType: "application/vnd.ms-excel", buffer: Buffer.from("x") });
-    await expect(page.getByText(/\.xls\) files aren't supported/)).toBeVisible();
+    // The toast and its screen-reader announcement both carry the message.
+    await expect(page.getByText(/\.xls\) files aren't supported/).first()).toBeVisible();
   });
 });
