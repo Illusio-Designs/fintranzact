@@ -292,7 +292,7 @@ test.describe("J8 money", () => {
     await page.getByRole("button", { name: "Upload & Map" }).click();
     await choose(page, page.getByRole("combobox", { name: "Bank Account" }), "HDFC Current — HDFC Bank");
     const chooser = page.waitForEvent("filechooser");
-    await page.getByText("Drag & drop a CSV file here").click();
+    await page.getByText("Drag & drop a statement here").click();
     await (await chooser).setFiles({ name: "hdfc-oct.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
     await expect(page.getByText("hdfc-oct.csv")).toBeVisible();
     await expectNoHorizontalScroll(page, "statement upload");
