@@ -17,6 +17,7 @@ import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { Spinner } from "@/components/ui/Spinner";
 import { Pagination } from "@/components/ui/Pagination";
 import { usePageSearch } from "@/lib/page-search";
+import { STATEMENT_FILE_ACCEPT, StatementFileError, statementFileToCsv } from "@/lib/bank-statement-file";
 
 export const Route = createFileRoute("/bank-reconciliation")({
   component: BankReconciliationPage,
@@ -311,7 +312,7 @@ function HubTab({
           <div className="p-5">
             <EmptyState
               title="No imports yet"
-              description="Upload a bank statement CSV to get started"
+              description="Upload a bank statement to get started"
               action={
                 <button className="btn-primary" onClick={onUpload}>
                   Import statement
@@ -354,6 +355,11 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
   const [isDragging, setIsDragging] = useState(false);
   const [csvContent, setCsvContent] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
+  const [isConverting, setIsConverting] = useState(false);
+  // A password-protected PDF waiting for its password.
+  const [passwordFile, setPasswordFile] = useState<File | null>(null);
+  const [pdfPassword, setPdfPassword] = useState("");
+  const fileToken = useRef(0);
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const [importId, setImportId] = useState<string>("");
   const [headers, setHeaders] = useState<string[]>([]);
@@ -426,29 +432,43 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
     onError: (err) => toast.error(err.message),
   });
 
-  function handleFile(file: File) {
-    if (!file.name.toLowerCase().endsWith(".csv") && file.type !== "text/csv") {
-      toast.error("Please upload a CSV file");
-      return;
-    }
+  async function handleFile(file: File, password?: string) {
+    // A newer pick wins over a slow conversion still running.
+    const token = ++fileToken.current;
     setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setCsvContent(e.target?.result as string);
-    };
-    reader.readAsText(file, "UTF-8");
+    setCsvContent(null);
+    setIsConverting(true);
+    try {
+      const csv = await statementFileToCsv(file, { password });
+      if (token !== fileToken.current) return;
+      setCsvContent(csv);
+      setPasswordFile(null);
+      setPdfPassword("");
+    } catch (err) {
+      if (token !== fileToken.current) return;
+      if (err instanceof StatementFileError && (err.code === "password_required" || err.code === "password_incorrect")) {
+        setPasswordFile(file);
+        if (err.code === "password_incorrect") toast.error(err.message);
+      } else {
+        setPasswordFile(null);
+        setFileName("");
+        toast.error(err instanceof StatementFileError ? err.message : "Couldn't read this file");
+      }
+    } finally {
+      if (token === fileToken.current) setIsConverting(false);
+    }
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    if (file) void handleFile(file);
   }
 
   function handleUpload() {
     if (!csvContent || !selectedAccountId) {
-      toast.error("Select a bank account and upload a CSV file");
+      toast.error("Select a bank account and upload a statement file");
       return;
     }
     uploadMutation.mutate({
@@ -762,7 +782,7 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
       <div>
         <h2 className="text-base font-semibold text-text-primary mb-1">Upload Bank Statement</h2>
         <p className="text-sm text-text-secondary">
-          Upload a CSV exported from your bank's internet banking portal.
+          Upload the statement you downloaded from net banking: CSV, Excel (.xlsx), OFX, QFX, QIF or PDF.
         </p>
       </div>
 
@@ -778,7 +798,7 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-secondary mb-1">CSV File *</label>
+          <label className="block text-sm font-medium text-text-secondary mb-1">Statement File *</label>
           <div
             className={cn(
               "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
@@ -794,15 +814,17 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
             {fileName ? (
               <div>
                 <p className="text-sm font-medium text-text-primary">{fileName}</p>
-                <p className="text-xs text-text-secondary mt-1">Click to change file</p>
+                <p className="text-xs text-text-secondary mt-1">
+                  {isConverting ? "Reading file..." : "Click to change file"}
+                </p>
               </div>
             ) : (
               <div>
                 <p className="text-sm text-text-secondary">
-                  Drag & drop a CSV file here, or <span className="text-brand-600 font-medium">browse</span>
+                  Drag & drop a statement here, or <span className="text-brand-600 font-medium">browse</span>
                 </p>
                 <p className="text-xs text-text-tertiary mt-1">
-                  Supports CSV exports from HDFC, SBI, ICICI, Axis, Kotak, and most Indian banks
+                  CSV, Excel (.xlsx), OFX, QFX, QIF or PDF from HDFC, SBI, ICICI, Axis, Kotak, and most Indian banks
                 </p>
               </div>
             )}
@@ -810,20 +832,45 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv,text/csv"
+            accept={STATEMENT_FILE_ACCEPT}
             className="hidden"
+            data-testid="statement-file-input"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) handleFile(file);
+              if (file) void handleFile(file);
+              // Let the same file be picked again after an error.
+              e.target.value = "";
             }}
           />
         </div>
+
+        {passwordFile && (
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (pdfPassword) void handleFile(passwordFile, pdfPassword);
+            }}
+          >
+            <InputField
+              label="PDF password"
+              type="password"
+              autoComplete="off"
+              value={pdfPassword}
+              onChange={(e) => setPdfPassword(e.target.value)}
+            />
+            <p className="text-xs text-text-tertiary">Banks often use your date of birth or customer ID.</p>
+            <button type="submit" className="btn-secondary" disabled={!pdfPassword || isConverting}>
+              {isConverting ? <><Spinner size="sm" /> Opening...</> : "Open PDF"}
+            </button>
+          </form>
+        )}
       </div>
 
       <button
         className="btn-primary"
         onClick={handleUpload}
-        disabled={uploadMutation.isPending || !csvContent || !selectedAccountId}
+        disabled={uploadMutation.isPending || isConverting || !csvContent || !selectedAccountId}
       >
         {uploadMutation.isPending ? <><Spinner size="sm" /> Parsing...</> : "Upload & Detect Columns"}
       </button>

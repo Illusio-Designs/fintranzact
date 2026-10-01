@@ -27,7 +27,7 @@ import {
   bankStatementLines,
   bankTransactions,
 } from "@fintranzact/db";
-import { money } from "@fintranzact/shared";
+import { money, ofxToRows, qifToRows, rowsToCsv, sheetToRows } from "@fintranzact/shared";
 import {
   createTestWorld,
   createBankAccount,
@@ -869,5 +869,99 @@ describe("Bank Reconciliation — expense created from a line", () => {
       .where(eq(bankStatementLines.id, line.id));
     expect(refreshed!.matchStatus).toBe("created");
     expect(refreshed!.matchedBankTransactionId).toBe(txns[0]!.id);
+  });
+});
+
+// ── Converted statement formats (OFX, QIF, Excel) ────────────────────────────
+//
+// The web app turns OFX/QFX, QIF, Excel and PDF statements into CSV in the
+// browser with the @fintranzact/shared converters, then calls uploadCSV. The
+// converters' column names must be ones the API auto-maps.
+
+describe("Bank Reconciliation — converted statement formats", () => {
+  let plainAccount: TestBankAccount;
+
+  beforeAll(async () => {
+    // No IFSC or bank name, so no bank template is suggested and the
+    // header heuristics decide the mapping.
+    plainAccount = await createBankAccount(getTenantTestDb(), world.business1.id, {
+      accountName: "Converted Formats Account",
+      accountNumber: "99990000111122",
+      ifsc: null,
+      bankName: null,
+    });
+  });
+
+  async function importConverted(fileName: string, csvContent: string) {
+    const caller = callerForRamesh();
+    const upload = await caller.bankRecon.uploadCSV({ bankAccountId: plainAccount.id, fileName, csvContent });
+    const m = upload.detectedMapping;
+    await caller.bankRecon.confirmMapping({
+      importId: upload.importId,
+      csvContent,
+      columnMapping: {
+        date: m.date!,
+        narration: m.narration!,
+        debit: m.debit,
+        credit: m.credit,
+        reference: m.reference,
+        balance: m.balance,
+        dateFormat: m.dateFormat ?? "DD/MM/YYYY",
+        skipRows: m.skipRows ?? 1,
+      },
+    });
+    const lines = await getTenantTestDb()
+      .select()
+      .from(bankStatementLines)
+      .where(eq(bankStatementLines.importId, upload.importId));
+    return { upload, lines: lines.sort((a, b) => a.lineNumber - b.lineNumber) };
+  }
+
+  it("auto-maps every column of an OFX statement and imports its lines", async () => {
+    const csv = rowsToCsv(
+      ofxToRows(
+        [
+          "OFXHEADER:100",
+          "<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>",
+          "<STMTTRN><DTPOSTED>20260401<TRNAMT>-1500.00<FITID>OFX001<NAME>Office, Supplies</STMTTRN>",
+          "<STMTTRN><DTPOSTED>20260402<TRNAMT>25000<FITID>OFX002<NAME>Client Payment</STMTTRN>",
+          "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>",
+        ].join("\n"),
+      ),
+    );
+    const { upload, lines } = await importConverted("april.ofx", csv);
+
+    expect(upload.detectedTemplate).toBeNull();
+    expect(upload.detectedMapping).toMatchObject({ date: 0, narration: 1, reference: 2, debit: 3, credit: 4 });
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({ narration: "Office, Supplies", referenceNumber: "OFX001", debit: "1500.00", credit: "0.00" });
+    expect(lines[1]).toMatchObject({ narration: "Client Payment", referenceNumber: "OFX002", debit: "0.00", credit: "25000.00" });
+    expect(lines[0]!.transactionDate.getDate()).toBe(1);
+    expect(lines[0]!.transactionDate.getMonth()).toBe(3);
+  });
+
+  it("imports a QIF statement", async () => {
+    const csv = rowsToCsv(qifToRows("!Type:Bank\nD1/4'26\nT-2,000.00\nPATM WDL\nN000123\n^\n"));
+    const { upload, lines } = await importConverted("april.qif", csv);
+
+    expect(upload.detectedMapping).toMatchObject({ date: 0, narration: 1, reference: 2, debit: 3, credit: 4 });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ narration: "ATM WDL", referenceNumber: "000123", debit: "2000.00" });
+  });
+
+  it("imports an Excel sheet from its header row", async () => {
+    const csv = rowsToCsv(
+      sheetToRows([
+        ["Statement of Account", null],
+        ["Account No", "99990000111122"],
+        ["Txn Date", "Description", "Debit", "Credit", "Balance"],
+        [new Date(Date.UTC(2026, 3, 3)), "Bank charges", 118, null, 9882],
+      ]),
+    );
+    const { upload, lines } = await importConverted("april.xlsx", csv);
+
+    expect(upload.headers).toEqual(["Txn Date", "Description", "Debit", "Credit", "Balance"]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ narration: "Bank charges", debit: "118.00", credit: "0.00", balance: "9882.00" });
   });
 });
