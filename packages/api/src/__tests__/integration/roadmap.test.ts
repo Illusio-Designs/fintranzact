@@ -9,8 +9,8 @@ import { roadmapItems, systemConfig } from "@fintranzact/db";
 import { getControlDb, getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createUser, createTenant, addMember, createBusiness, type TestUser, type TestTenant, type TestBusiness } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
-import { ensureRoadmapSeeded, resetRoadmapSeedCache, roadmapAdditionKey } from "../../lib/roadmap.js";
-import { ROADMAP_ADDITIONS, ROADMAP_SEED } from "../../lib/roadmap-seed.js";
+import { ensureRoadmapSeeded, resetRoadmapSeedCache, roadmapAdditionKey, roadmapProgressKey } from "../../lib/roadmap.js";
+import { ROADMAP_ADDITIONS, ROADMAP_PROGRESS, ROADMAP_SEED } from "../../lib/roadmap-seed.js";
 import { roadmapRank } from "@fintranzact/shared";
 
 const ADMIN_EMAIL = "roadmap.admin@fintranzact.com";
@@ -55,15 +55,18 @@ describe("starting roadmap", () => {
   it("fills an empty board the first time it is opened", async () => {
     const list = await adminCaller().platform.roadmapList();
     expect(list.data).toHaveLength(ROADMAP_SEED.length);
-    expect(ROADMAP_SEED.length).toBe(67);
+    expect(ROADMAP_SEED.length).toBe(70);
     expect(new Set(list.data.map((i) => i.title))).toEqual(new Set(ROADMAP_SEED.map((s) => s.title)));
-    expect(list.counts.planned).toBe(ROADMAP_SEED.length);
-    expect(list.stageCounts).toEqual({ before_launch: 17, after_launch: 50 });
+    // Items built since the roadmap was written arrive already moved.
+    expect(list.counts.done).toBe(1);
+    expect(list.counts.in_progress).toBe(5);
+    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 6);
+    expect(list.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
     expect(list.categories).toEqual(expect.arrayContaining(["Payroll", "Inventory", "GST", "Mobile", "Platform", "Accounting", "Banking"]));
     for (const item of list.data) {
       expect(item.description.length, item.title).toBeGreaterThan(80);
       expect(item.checklist.length, item.title).toBeGreaterThanOrEqual(4);
-      expect(item.checklist.every((c) => c.done === false)).toBe(true);
+      if (item.status === "planned") expect(item.checklist.every((c) => c.done === false), item.title).toBe(true);
     }
 
     const byTitle = (start: string) => list.data.find((i) => i.title.startsWith(start))!;
@@ -129,10 +132,10 @@ describe("starting roadmap", () => {
 
   it("filters by launch stage", async () => {
     const before = await adminCaller().platform.roadmapList({ launchStage: "before_launch" });
-    expect(before.data).toHaveLength(17);
+    expect(before.data).toHaveLength(18);
     expect(before.data.every((i) => i.launchStage === "before_launch")).toBe(true);
-    expect(before.counts.planned).toBe(17);
-    expect(before.stageCounts).toEqual({ before_launch: 17, after_launch: 50 });
+    expect(before.counts.planned).toBe(13);
+    expect(before.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
   });
 
   it("seeds only once, even if the board is emptied later", async () => {
@@ -172,6 +175,52 @@ describe("starting roadmap", () => {
     resetRoadmapSeedCache();
     expect(await ensureRoadmapSeeded()).toBe(0);
     expect((await adminCaller().platform.roadmapList()).data).toHaveLength(ROADMAP_SEED.length - 1);
+  });
+
+  it("marks finished and started work on an older board, once", async () => {
+    await forgetSeed();
+    await adminCaller().platform.roadmapList();
+    const db = getControlDb();
+    // An older board: seeded before the progress batch existed.
+    await db.update(roadmapItems).set({ status: "planned" });
+    const rows = await db.select().from(roadmapItems);
+    for (const row of rows) {
+      await db.update(roadmapItems).set({ checklist: row.checklist.map((c) => ({ ...c, done: false })) }).where(eq(roadmapItems.id, row.id));
+    }
+    // An admin already moved one of the items on their own.
+    await db.update(roadmapItems).set({ status: "dropped" }).where(eq(roadmapItems.title, "Store policy pages"));
+    await db.delete(systemConfig).where(eq(systemConfig.key, roadmapProgressKey(ROADMAP_PROGRESS[0]!.key)));
+    resetRoadmapSeedCache();
+
+    expect(await ensureRoadmapSeeded()).toBe(0);
+    const list = (await adminCaller().platform.roadmapList()).data;
+    const byTitle = (title: string) => list.find((i) => i.title === title)!;
+    const bank = byTitle("Bank statement import: Excel, OFX/QIF and PDF");
+    expect(bank.status).toBe("done");
+    expect(bank.checklist.every((c) => c.done)).toBe(true);
+    expect(byTitle("P3. Checkout & subscription billing").status).toBe("in_progress");
+    const exports = byTitle("Multi-currency and export invoices");
+    expect(exports.status).toBe("in_progress");
+    expect(exports.checklist.filter((c) => c.done).map((c) => c.text)).toEqual(["Export invoice under LUT/bond", "Export with IGST paid"]);
+    const store = byTitle("Store policy pages");
+    expect(store.status).toBe("dropped");
+    expect(store.checklist.filter((c) => c.done).map((c) => c.text)).toEqual(["Pre-fill from business details"]);
+
+    // Applied once: undoing it by hand later sticks.
+    await db.update(roadmapItems).set({ status: "planned" }).where(eq(roadmapItems.id, bank.id));
+    resetRoadmapSeedCache();
+    await ensureRoadmapSeeded();
+    expect((await adminCaller().platform.roadmapList()).data.find((i) => i.id === bank.id)!.status).toBe("planned");
+  });
+
+  it("names only real titles and checklist lines in progress batches", () => {
+    for (const batch of ROADMAP_PROGRESS) {
+      for (const update of batch.updates) {
+        const item = ROADMAP_SEED.find((i) => i.title === update.title);
+        expect(item, update.title).toBeDefined();
+        for (const line of update.done) expect(item!.checklist, `${update.title}: ${line}`).toContain(line);
+      }
+    }
   });
 
   it("does not seed over a board that already has items", async () => {
