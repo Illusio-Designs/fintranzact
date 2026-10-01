@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../trpc.js";
 import { hsnSearchSchema } from "@fintranzact/shared";
-import { searchHsn, isValidHsn, validateHsnForTurnover } from "../lib/hsn-data.js";
+import { searchHsn, describeHsn, validateHsnForTurnover } from "../lib/hsn-data.js";
 
 export const hsnRouter = router({
   search: publicProcedure
@@ -13,7 +13,8 @@ export const hsnRouter = router({
   validate: publicProcedure
     .input(z.object({ hsn: z.string().min(2).max(8) }))
     .query(({ input }) => {
-      return { valid: isValidHsn(input.hsn) };
+      const details = describeHsn(input.hsn);
+      return details ? { valid: true as const, details } : { valid: false as const };
     }),
 
   validateForTurnover: publicProcedure

@@ -29,6 +29,7 @@ import {
   uid,
 } from "../../helpers/journey";
 import { seedOwner, type SeededOwner } from "../../helpers/journey-seed";
+import { choose } from "../../helpers/journey-ui";
 import {
   invoiceLines,
   invoicePartyIds,
@@ -407,7 +408,7 @@ test.describe("J3 masters — items (dark theme)", () => {
     // ── Simple product: HSN, SKU, barcode, stock group, opening stock ─
     let panel = await startItem(page, names.laptop);
     await panel.getByLabel(/^Sale Price/).fill("55000");
-    await panel.getByLabel("Tax %").fill("18");
+    await choose(page, panel.getByRole("combobox", { name: "GST rate" }), "18%");
     await openSection(panel, "Identification");
     await panel.getByLabel("SKU").fill(`LAP-${id}`);
     await panel.getByLabel("HSN / SAC Code").fill("8471");
@@ -443,7 +444,7 @@ test.describe("J3 masters — items (dark theme)", () => {
     // ── Variant product: Size × Colour ──────────────────────────
     panel = await startItem(page, names.tee);
     await panel.getByLabel(/^Sale Price/).fill("499");
-    await panel.getByLabel("Tax %").fill("5");
+    await choose(page, panel.getByRole("combobox", { name: "GST rate" }), "5%");
     await openSection(panel, "Product Variants");
     await panel.getByPlaceholder("e.g. Size, Color, Material").fill("Size");
     await panel.getByRole("button", { name: "+ Add", exact: true }).click();
@@ -495,7 +496,7 @@ test.describe("J3 masters — items (dark theme)", () => {
     // ── Batch-tracked medicine with expiry and an opening batch ─
     panel = await startItem(page, names.pcm);
     await panel.getByLabel(/^Sale Price/).fill("30");
-    await panel.getByLabel("Tax %").fill("12");
+    await choose(page, panel.getByRole("combobox", { name: "GST rate" }), "12%");
     await openSection(panel, "Identification");
     await panel.getByLabel("HSN / SAC Code").fill("3004");
     await openSection(panel, "Stock");
@@ -515,7 +516,7 @@ test.describe("J3 masters — items (dark theme)", () => {
     panel = await startItem(page, names.install);
     await panel.getByRole("button", { name: "Service", exact: true }).click();
     await panel.getByLabel(/^Sale Price/).fill("1500");
-    await panel.getByLabel("Tax %").fill("18");
+    await choose(page, panel.getByRole("combobox", { name: "GST rate" }), "18%");
     await openSection(panel, "Identification");
     await panel.getByLabel("HSN / SAC Code").fill("998713");
     await expect(panel.getByRole("button", { name: /^Stock/ })).toHaveCount(0);

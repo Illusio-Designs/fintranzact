@@ -34,7 +34,7 @@ import {
   uid,
 } from "../../helpers/journey";
 import { seedOwner } from "../../helpers/journey-seed";
-import { dialog, listRow } from "../../helpers/journey-ui";
+import { dialog, istIsoDate, listRow } from "../../helpers/journey-ui";
 import { adminSection, hasPlatformAdmin, NO_ADMIN_REASON, signInAsPlatformAdmin } from "../../helpers/admin";
 import { db } from "../../helpers/db";
 import { partnerByEmail, partnerPayoutsOf, planOverride, roadmapItemsTitled, tenantPlan } from "../../helpers/settings-db";
@@ -178,7 +178,7 @@ test.describe("J13 platform admin", () => {
     await expect(partner).toContainText("Nobody has signed up with this code yet.");
 
     // ── Payouts: record this month, then mark it paid ───────────
-    const month = new Date().toISOString().slice(0, 7);
+    const month = istIsoDate().slice(0, 7);
     await partner.getByLabel("Month").fill(month);
     await partner.getByLabel("Amount (₹)").fill("1500");
     await partner.getByRole("button", { name: "Record payout" }).click();

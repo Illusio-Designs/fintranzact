@@ -28,7 +28,7 @@ test.describe("Items — Create", () => {
 
     // Open Identification disclosure and fill HSN
     await dialog.getByText("Identification").click();
-    await dialog.getByPlaceholder("HSN/SAC code").fill("8471");
+    await dialog.getByLabel("HSN / SAC Code").fill("8471");
 
     // Submit
     await dialog.getByRole("button", { name: /create item/i }).click();

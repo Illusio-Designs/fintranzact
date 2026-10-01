@@ -61,9 +61,10 @@ export type ThemeMode = "light" | "dark";
 /**
  * The browser clock's start for a journey: real "now" when India time already
  * gives the wanted theme (with at least 30 minutes before it switches), else
- * the nearest moment on the same UTC calendar date that does. Staying on the
- * server's UTC date keeps the app's "This month" / "today" filters seeing the
- * records the API creates during the journey.
+ * a moment on the same India (IST) date that does. The app and the API both
+ * date records by IST, so the browser must stay on the server's IST day: a
+ * form defaulting to the browser's "today" and a record the API stamps with
+ * the real time (a transfer, an auto-raised invoice) then land on one date.
  *
  *   light (06:00–18:59 IST), dark (19:00–05:59 IST)
  */
@@ -74,9 +75,7 @@ export function instantFor(mode: ThemeMode, now = new Date()): Date {
   const istDay = Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate());
   const at = (dayOffset: number, hh: number, mm: number) =>
     new Date(istDay + dayOffset * 86_400_000 + (hh * 60 + mm) * 60_000 - IST);
-  // Before 05:30 IST the UTC date is still the previous IST day's.
   if (mode === "light") {
-    if (m < 330) return at(-1, 12, 0);
     if (m < 360) return at(0, 6, 30);
     if (m < 1110) return now;
     return at(0, 12, 0);

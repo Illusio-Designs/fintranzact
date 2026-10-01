@@ -399,6 +399,17 @@ export class FintranzactClient {
       cmp08(input: { year: number; quarter: number }) {
         return c.query<{ taxableValue: string; taxPayable: string; quarterStart: string; quarterEnd: string }>("gst.cmp08", input);
       },
+      /** HSN / SAC codes matching a code prefix or description words. */
+      hsnSearch(input: { query: string; type?: "goods" | "services"; limit?: number }) {
+        return c.query<Array<{ hsn: string; description: string; type: "goods" | "services" }>>("hsn.search", input);
+      },
+      /** Whether a code is a real HSN / SAC code, and what it stands for. */
+      hsnValidate(input: { hsn: string }) {
+        return c.query<
+          | { valid: true; details: { code: string; type: "goods" | "services"; description: string; match: "code" | "heading"; subCodes?: number } }
+          | { valid: false }
+        >("hsn.validate", input);
+      },
     };
   }
 
