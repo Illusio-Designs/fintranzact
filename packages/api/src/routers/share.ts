@@ -72,7 +72,9 @@ export const shareRouter = router({
 
   /** Stop the live link working. Sharing again makes a new link. */
   revoke: memberProcedure.input(input).mutation(async ({ ctx, input }) => {
-    requireCan(ctx.ability, "update", "Invoice");
+    // Same permission as creating a link: anyone who can see the document
+    // can share it, so they can also stop sharing it.
+    requireCan(ctx.ability, "read", "Invoice");
     const doc = await assertDocument(ctx, input.documentId);
     const revoked = await revokeShareLink(ctx.tenantId, doc.id);
     if (revoked) {

@@ -124,7 +124,7 @@ describe("starting roadmap", () => {
     expect(list.find((i) => i.title.startsWith("P2."))!.description).toContain("read-only");
     expect(list.find((i) => i.title.startsWith("Payroll add-on billing"))!.priceNote).toContain("₹49");
     expect(list.find((i) => i.title.startsWith("Store Pro"))!.priceNote).toContain("₹499");
-    expect(list.find((i) => i.title.startsWith("AI business assistant — Phase 1"))!.priceNote).toContain("₹299");
+    expect(list.find((i) => i.title.startsWith("AI business assistant — Phase 1"))!.priceNote).toContain("₹399");
   });
 
   it("filters by launch stage", async () => {

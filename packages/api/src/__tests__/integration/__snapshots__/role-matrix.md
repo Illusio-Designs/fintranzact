@@ -362,7 +362,7 @@
 | selfImport.request | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | share.create | mutation | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
 | share.get | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
-| share.revoke | mutation | authorized | update:Invoice | ✓ | ✓ | ✓ | ✓ | ✗ |
+| share.revoke | mutation | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
 | shipment.create | mutation | authorized | create:Invoice | ✓ | ✓ | ✓ | ✓ | ✗ |
 | shipment.delete | mutation | authorized | delete:Invoice | ✓ | ✓ | ✓ | ✗ | ✗ |
 | shipment.getById | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |

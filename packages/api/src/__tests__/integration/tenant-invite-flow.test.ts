@@ -441,10 +441,9 @@ describe("tenant.pendingInvitations", () => {
     expect(emails).toContain("pending.charlie@kiran.in");
   });
 
-  it("sellers can also list pending invitations (read-only)", async () => {
+  it("sellers see no pending invitations (invitee emails are for owners and admins)", async () => {
     const caller = callerForTenant(sellerSession.id, seller, tenant1.id);
-    const pending = await caller.tenant.pendingInvitations();
-    expect(pending.length).toBeGreaterThanOrEqual(2);
+    expect(await caller.tenant.pendingInvitations()).toEqual([]);
   });
 
   it("requires tenantId in context — BAD_REQUEST without tenant", async () => {

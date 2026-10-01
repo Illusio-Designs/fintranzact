@@ -21,6 +21,7 @@ import { createInvoiceSchema, updateInvoiceStatusSchema, paginationSchema, docum
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
+import { assertNotLockedByGovernment, getGovernmentLock } from "../lib/government-lock.js";
 import { assertInBusiness } from "../lib/business-scope.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
@@ -289,7 +290,8 @@ export const invoiceRouter = router({
       // Saved choice first; older documents only show it in their movements.
       const warehouseId = invoice.warehouseId ?? await getDocumentWarehouseId(ctx.db, ctx.businessId, invoice);
 
-      return { ...invoice, status: effectiveStatus, lineItems: lineItemsWithUnit, party: party ?? null, relatedDocuments: relatedDocs, totalAdjusted, warehouseId };
+      const governmentLock = await getGovernmentLock(ctx.db, ctx.businessId, invoice.id);
+      return { ...invoice, status: effectiveStatus, lineItems: lineItemsWithUnit, party: party ?? null, relatedDocuments: relatedDocs, totalAdjusted, warehouseId, governmentLock };
     }),
 
   create: memberProcedure.input(createInvoiceSchema).mutation(async ({ input, ctx }) => {
@@ -821,6 +823,9 @@ export const invoiceRouter = router({
     .input(z.object({ id: z.string().uuid(), ...updateInvoiceStatusSchema.shape }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Invoice");
+      if (input.status === "cancelled") {
+        await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "cancel");
+      }
       // Fetch current status before the update for audit metadata
       const [before] = await ctx.db.select({ status: invoices.status })
         .from(invoices)
@@ -898,6 +903,7 @@ export const invoiceRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Invoice");
+      await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "edit");
       const updated = await ctx.db.transaction(async (tx) => {
         // 1. Fetch existing invoice
         const [existing] = await tx.select()
@@ -1196,6 +1202,7 @@ export const invoiceRouter = router({
 
       if (!inv) return { success: true };
       if (inv.deletedAt) return { success: true }; // already soft-deleted
+      await assertNotLockedByGovernment(ctx.db, ctx.businessId, input.id, "delete");
 
       // seller_manager: can only delete unpaid invoices created within the last 2 hours
       if (ctx.role === "seller_manager") {

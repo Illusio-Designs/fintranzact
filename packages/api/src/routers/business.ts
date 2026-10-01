@@ -426,12 +426,19 @@ export const businessRouter = router({
         createdByUserId: ctx.user.id,
       }).returning();
 
-      // Automatically assign the creator as an admin of the new business.
-      await tx.insert(businessMembers).values({
-        businessId: biz.id,
-        userId: ctx.user.id,
-        role: "admin",
-      });
+      // The creator, and every owner/admin of the organisation, can open the
+      // new business. Other members get access only when it is granted.
+      const orgAdmins = await controlDb
+        .select({ userId: tenantMembers.userId })
+        .from(tenantMembers)
+        .where(and(
+          eq(tenantMembers.tenantId, ctx.tenantId),
+          inArray(tenantMembers.role, ["owner", "superadmin", "admin"]),
+        ));
+      const adminIds = new Set([ctx.user.id, ...orgAdmins.map((m) => m.userId)]);
+      await tx.insert(businessMembers).values(
+        [...adminIds].map((userId) => ({ businessId: biz.id, userId, role: "admin" as const })),
+      );
 
       // Every business starts with one "Main" warehouse built from the
       // address given at registration, used for all stock movements.
