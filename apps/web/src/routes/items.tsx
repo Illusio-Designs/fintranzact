@@ -23,6 +23,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Listbox } from "@/components/ui/Listbox";
+import { gstRateOptions, gstRateValue } from "@/lib/gst-rates";
 import { Combobox } from "@/components/ui/Combobox";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
@@ -788,14 +789,11 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
             placeholder="0.00"
           />
           <div className="flex flex-col gap-1">
-            <InputField
-              label="Tax %"
-              type="number"
-              step="0.01"
-              min="0"
-              value={taxPercent}
-              onChange={(e) => setTaxPercent(e.target.value)}
-              placeholder="0"
+            <Listbox
+              label="GST rate"
+              value={gstRateValue(taxPercent)}
+              onChange={setTaxPercent}
+              options={gstRateOptions(taxPercent)}
             />
             <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer mt-0.5">
               <input
@@ -1380,14 +1378,11 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
             placeholder="0.00"
           />
           <div className="flex flex-col gap-1">
-            <InputField
-              label="Tax %"
-              type="number"
-              step="0.01"
-              min="0"
-              value={taxPercent}
-              onChange={(e) => setTaxPercent(e.target.value)}
-              placeholder="0"
+            <Listbox
+              label="GST rate"
+              value={gstRateValue(taxPercent)}
+              onChange={setTaxPercent}
+              options={gstRateOptions(taxPercent)}
             />
             <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer mt-0.5">
               <input
