@@ -252,6 +252,8 @@ export const test = base.extend<{ guard: ConsoleGuard; theme: ThemeMode }, { dbP
   // Signed-out context by default; journeys sign up or log in themselves.
   storageState: { cookies: [], origins: [] },
   theme: ["light", { option: true }],
+  // Playwright reads fixture dependencies from the first parameter's pattern.
+  // oxlint-disable-next-line no-empty-pattern
   guard: async ({}, use) => {
     const guard = new ConsoleGuard();
     await use(guard);
@@ -264,6 +266,7 @@ export const test = base.extend<{ guard: ConsoleGuard; theme: ThemeMode }, { dbP
     await use(context);
   },
   dbPool: [
+    // oxlint-disable-next-line no-empty-pattern
     async ({}, use) => {
       await use();
       await closeDb();
