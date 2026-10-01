@@ -1,7 +1,7 @@
 export * from "./validators.js";
 export * from "./party-compliance.js";
 export * from "./money.js";
-export { calcLineItem, calcInvoiceTotals, allocatePaise, chargeTaxRateFor, chargeSupplyOf } from "./calc.js";
+export { calcLineItem, calcInvoiceTotals, taxOn, allocatePaise, chargeTaxRateFor, chargeSupplyOf } from "./calc.js";
 export type { LineItemInput, LineItemResult, InvoiceTotalsInput, InvoiceTotals, AllocatedLine } from "./calc.js";
 export { calculateGatewayCharge } from "./gateway.js";
 export type { GatewayChargeConfig, GatewayChargeRate, GatewayChargeResult } from "./gateway.js";

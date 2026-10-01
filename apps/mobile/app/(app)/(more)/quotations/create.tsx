@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { trpc } from "../../../../src/lib/trpc";
+import { useIntraState } from "../../../../src/hooks/useIntraState";
 import { formatCurrency } from "../../../../src/lib/utils";
 import { calcInvoiceTotals } from "@fintranzact/shared";
 import { makeStyles } from "../../../../src/lib/makeStyles";
@@ -270,6 +271,8 @@ export default function QuotationCreateScreen() {
   const colors = useColors();
   const router = useRouter();
   const [selectedParty, setSelectedParty] = useState<{ id: string; name: string } | null>(null);
+  // Intra-state: CGST and SGST each rounded at half the rate, as the server saves it.
+  const intraState = useIntraState(selectedParty?.id);
   const [invoiceDate, setInvoiceDate] = useState(todayDate());
   const [dueDate, setDueDate] = useState(in30daysDate());
   const [notes, setNotes] = useState("");
@@ -305,8 +308,9 @@ export default function QuotationCreateScreen() {
         taxPercent: li.taxPercent || "0",
         discountPercent: li.discountPercent || "0",
       })),
+      intraState,
     });
-  }, [lineItems]);
+  }, [lineItems, intraState]);
 
   const handleLineChange = useCallback((index: number, field: keyof LineItem, value: string) => {
     setLineItems((prev) => {

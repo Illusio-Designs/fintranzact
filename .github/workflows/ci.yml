@@ -199,12 +199,18 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
 
+      # apt mirrors occasionally stall for many minutes. Cap the install and
+      # carry on if it is slow or fails: the runner image ships Google
+      # Chrome, so Chromium's shared libraries are already present.
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 8
+        run: npx playwright install --with-deps chromium || npx playwright install chromium
 
       - name: Install Playwright system dependencies
         if: steps.pw-cache.outputs.cache-hit == 'true'
+        timeout-minutes: 6
+        continue-on-error: true
         run: npx playwright install-deps chromium
 
       - name: Push schema to test DB

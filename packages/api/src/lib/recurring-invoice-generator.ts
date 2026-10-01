@@ -10,6 +10,7 @@ import {
   recurringInvoiceTemplates, recurringInvoiceRuns,
 } from "@fintranzact/db";
 import { calcLineItem, calcInvoiceTotals } from "@fintranzact/shared";
+import { documentIsIntraState } from "./document-totals.js";
 import type { TenantDatabase } from "../trpc.js";
 import { documentStockDirection, resolveDocumentWarehouseId, syncDocumentStock } from "./inventory-service.js";
 import { resolveLineBatches } from "./batches.js";
@@ -142,6 +143,8 @@ export async function generateInvoiceFromTemplate(
       strict: false,
     });
 
+    // Intra-state: CGST and SGST are each rounded at half the rate.
+    const intraState = await documentIsIntraState(tx, template.businessId, template.partyId);
     // Calculate line item totals
     const processedItems = lineItems.map((li, idx) => {
       const calc = calcLineItem({
@@ -149,6 +152,7 @@ export async function generateInvoiceFromTemplate(
         unitPrice: li.unitPrice,
         taxPercent: li.taxPercent || "0",
         discountPercent: li.discountPercent || "0",
+        intraState,
       });
       return {
         itemId: li.itemId || null,
@@ -182,6 +186,7 @@ export async function generateInvoiceFromTemplate(
       invoiceDiscount: "0",
       invoiceDiscountType: "amount",
       roundOff: "0",
+      intraState,
     });
     const additionalCharges = totals.chargesTotal;
 

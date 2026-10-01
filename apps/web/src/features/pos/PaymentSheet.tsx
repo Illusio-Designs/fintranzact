@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import type { POSCart } from "./state";
 import { computeCartTotals } from "./state";
+import { useIntraState } from "./useIntraState";
 import {
   TENDERS,
   TENDER_LABEL,
@@ -47,7 +48,8 @@ export function PaymentSheet({ open, cart, onClose, onFinalized }: Props) {
   const createInvoice = trpc.invoice.create.useMutation();
   const createPayment = trpc.payment.create.useMutation();
 
-  const totals = computeCartTotals(cart.lineItems);
+  const intraState = useIntraState(cart.partyId);
+  const totals = computeCartTotals(cart.lineItems, intraState);
   const remainder = splitRemainder(split, totals.total);
   const splitReady = mode !== "split" || remainder === 0;
 

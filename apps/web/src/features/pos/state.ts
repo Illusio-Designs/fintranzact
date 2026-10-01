@@ -16,6 +16,7 @@
  */
 
 import { useSyncExternalStore } from "react";
+import { calcInvoiceTotals, money } from "@fintranzact/shared";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -306,21 +307,32 @@ export interface CartTotals {
   total: number;       // subtotal - discount + tax
 }
 
-export function computeCartTotals(lineItems: POSLineItem[]): CartTotals {
-  let subtotal = 0;
-  let discount = 0;
-  let tax = 0;
-  for (const li of lineItems) {
-    const qty = parseFloat(li.quantity) || 0;
-    const price = parseFloat(li.unitPrice) || 0;
-    const gross = qty * price;
-    const disc = gross * ((parseFloat(li.discountPercent) || 0) / 100);
-    const net = gross - disc;
-    const lineTax = net * ((parseFloat(li.taxPercent) || 0) / 100);
-    subtotal += gross;
-    discount += disc;
-    tax += lineTax;
-  }
-  const total = subtotal - discount + tax;
-  return { subtotal, discount, tax, total };
+/** A number-ish input as the shared calc expects it ("" / junk → "0"). */
+function num(v: string): string {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? String(n) : "0";
+}
+
+/**
+ * The cart's totals the way the server prices the invoice (shared
+ * calcInvoiceTotals, paise-exact). `intraState`: the sale is intra-state, so
+ * each line's CGST and SGST are rounded at half the rate (see taxOn).
+ */
+export function computeCartTotals(lineItems: POSLineItem[], intraState?: boolean): CartTotals {
+  const t = calcInvoiceTotals({
+    lineItems: lineItems.map((li) => ({
+      quantity: num(li.quantity),
+      unitPrice: num(li.unitPrice),
+      taxPercent: num(li.taxPercent),
+      discountPercent: num(li.discountPercent),
+    })),
+    intraState,
+  });
+  const discount = money.toNumber(t.lineDiscountTotal);
+  return {
+    subtotal: money.toNumber(money.add(t.subtotal, t.lineDiscountTotal)),
+    discount,
+    tax: money.toNumber(t.taxTotal),
+    total: money.toNumber(t.total),
+  };
 }

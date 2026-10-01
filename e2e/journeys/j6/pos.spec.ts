@@ -12,14 +12,15 @@
  *   (Sales Register, Payment Summary) and GSTR-1's B2CS table. A second
  *   window opens the register in the dark theme.
  *
- * Amounts (all walk-in sales, Maharashtra business, so CGST + SGST):
+ * Amounts (all walk-in sales, Maharashtra business, so CGST + SGST — each
+ * taken at half the rate and rounded on its own, so the two are equal):
  *   1 cash   shampoo 1 × ₹250 @18% + biscuits 2 × ₹45 @5% + slippers 1 × ₹1,200 @12%
  *            = ₹1,540 + ₹45 + ₹4.50 + ₹144 = ₹1,733.50
- *   2 UPI    biscuits 3 × ₹45 @5% = ₹135 + ₹6.75 = ₹141.75
+ *   2 UPI    biscuits 3 × ₹45 @5% = ₹135 + 2 × ₹3.38 (2.5% of ₹135 = 3.375) = ₹141.76
  *   3 card   slippers 2 × ₹1,200 @12% = ₹2,400 + ₹288 = ₹2,688
- *   4 split  shampoo 2 × ₹250 @18% + biscuits 1 × ₹45 @5% = ₹545 + ₹92.25 = ₹637.25
- *            paid ₹300 cash + ₹200 UPI + ₹137.25 card
- *   Taxable ₹4,620, tax ₹580.50: 18% ₹750 / ₹135, 12% ₹3,600 / ₹432, 5% ₹270 / ₹13.50.
+ *   4 split  shampoo 2 × ₹250 @18% + biscuits 1 × ₹45 @5% = ₹545 + ₹90 + 2 × ₹1.13 = ₹637.26
+ *            paid ₹300 cash + ₹200 UPI + ₹137.26 card
+ *   Taxable ₹4,620, tax ₹580.52: 18% ₹750 / ₹135, 12% ₹3,600 / ₹432, 5% ₹270 / ₹13.52.
  *
  * Same-state treatment: the walk-in customer has no GSTIN and carries the
  * business's own state, so every sale is intra-state B2C (CGST = SGST, no
@@ -206,9 +207,9 @@ test.describe("J6 point of sale", () => {
     await biscuitsLine.getByRole("button", { name: "Increase quantity" }).click();
     await biscuitsLine.getByRole("button", { name: "Increase quantity" }).click();
     await expect(biscuitsLine).toContainText("× 3 pcs");
-    await expectCartTotals(page, 135, 6.75, 141.75);
+    await expectCartTotals(page, 135, 6.76, 141.76);
     const sale2 = "INV-00002";
-    await pay(page, owner.businessId, sale2, 141.75, "UPI");
+    await pay(page, owner.businessId, sale2, 141.76, "UPI");
     await expectTileStock(page, biscuits, 195, "pcs");
 
     // ── Sale 3: by search and tap, paid by card ──────────────────
@@ -227,22 +228,22 @@ test.describe("J6 point of sale", () => {
     await scan(page, shampoo, 1);
     await scan(page, shampoo, 2);
     await scan(page, biscuits, 1);
-    await expectCartTotals(page, 545, 92.25, 637.25);
+    await expectCartTotals(page, 545, 92.26, 637.26);
     // The sheet will not take more or less than the total.
     await page.getByRole("button", { name: "Pay · F9" }).click();
     let sheet = page.getByRole("dialog", { name: "Take Payment" });
     await sheet.getByRole("radio", { name: "Split" }).click();
     await sheet.getByLabel("Cash amount").fill("300");
-    await expect(sheet.getByTestId("pos-split-remainder")).toHaveText(`${inr(337.25)} still to pay`);
+    await expect(sheet.getByTestId("pos-split-remainder")).toHaveText(`${inr(337.26)} still to pay`);
     await expect(sheet.getByRole("button", { name: "Confirm Split" })).toBeDisabled();
     await sheet.getByLabel("UPI amount").fill("200");
     await sheet.getByLabel("Card amount").fill("150");
-    await expect(sheet.getByTestId("pos-split-remainder")).toHaveText("₹12.75 more than the total");
+    await expect(sheet.getByTestId("pos-split-remainder")).toHaveText("₹12.74 more than the total");
     await expect(sheet.getByRole("button", { name: "Confirm Split" })).toBeDisabled();
     await sheet.getByRole("button", { name: "Cancel" }).click();
     await expect(sheet).toBeHidden();
     const sale4 = "INV-00004";
-    await pay(page, owner.businessId, sale4, 637.25, { Cash: "300", UPI: "200", Card: "137.25" });
+    await pay(page, owner.businessId, sale4, 637.26, { Cash: "300", UPI: "200", Card: "137.26" });
     await expectTileStock(page, shampoo, 37, "pcs");
     await expectTileStock(page, biscuits, 194, "pcs");
 
@@ -268,9 +269,9 @@ test.describe("J6 point of sale", () => {
     expect(sales.map((s) => s.invoice_number)).toEqual([sale1, sale2, sale3, sale4]);
     expect(sales.map((s) => [s.subtotal, s.tax_amount, s.total_amount, s.amount_paid, s.status, s.source])).toEqual([
       ["1540.00", "193.50", "1733.50", "1733.50", "paid", "pos"],
-      ["135.00", "6.75", "141.75", "141.75", "paid", "pos"],
+      ["135.00", "6.76", "141.76", "141.76", "paid", "pos"],
       ["2400.00", "288.00", "2688.00", "2688.00", "paid", "pos"],
-      ["545.00", "92.25", "637.25", "637.25", "paid", "pos"],
+      ["545.00", "92.26", "637.26", "637.26", "paid", "pos"],
     ]);
     const [inv1, inv2, inv3, inv4] = sales;
     const lines1 = await documentLines(inv1.id);
@@ -298,11 +299,11 @@ test.describe("J6 point of sale", () => {
       payments.map((p) => [p.mode, p.amount, p.allocations.map((a) => [a.invoiceId, Number(a.amount)])]),
     ).toEqual([
       ["cash", "1733.50", [[inv1.id, 1733.5]]],
-      ["upi", "141.75", [[inv2.id, 141.75]]],
+      ["upi", "141.76", [[inv2.id, 141.76]]],
       ["credit_card", "2688.00", [[inv3.id, 2688]]],
       ["cash", "300.00", [[inv4.id, 300]]],
       ["upi", "200.00", [[inv4.id, 200]]],
-      ["credit_card", "137.25", [[inv4.id, 137.25]]],
+      ["credit_card", "137.26", [[inv4.id, 137.26]]],
     ]);
 
     // GST: by rate from the lines; the walk-in is unregistered and in the
@@ -311,7 +312,7 @@ test.describe("J6 point of sale", () => {
     expect(gst.rows).toEqual([
       { rate: 18, taxable: 750, tax: 135 },
       { rate: 12, taxable: 3600, tax: 432 },
-      { rate: 5, taxable: 270, tax: 13.5 },
+      { rate: 5, taxable: 270, tax: 13.52 },
     ]);
     expect(gst.buyer_gstin).toBeNull();
     expect(gst.seller).toBe("27");
@@ -321,7 +322,7 @@ test.describe("J6 point of sale", () => {
     await page.getByRole("button", { name: "Exit POS" }).click();
     await expect(page.getByRole("heading", { name: "Invoices", level: 1 })).toBeVisible();
     await expectNoHorizontalScroll(page, "Invoices");
-    for (const [number, total] of [[sale1, 1733.5], [sale2, 141.75], [sale3, 2688], [sale4, 637.25]] as const) {
+    for (const [number, total] of [[sale1, 1733.5], [sale2, 141.76], [sale3, 2688], [sale4, 637.26]] as const) {
       const row = listRow(page, number);
       await expect(row).toContainText("Walk-in Customer");
       await expect(row).toContainText(inr(total));
@@ -337,8 +338,8 @@ test.describe("J6 point of sale", () => {
     await openPage(page, "Payments");
     const cardRow = page.getByRole("row").filter({ hasText: inr(2688) });
     await expect(cardRow).toContainText("Credit Card");
-    await expect(page.getByRole("row").filter({ hasText: inr(137.25) })).toContainText("Credit Card");
-    await expect(page.getByRole("row").filter({ hasText: inr(141.75) })).toContainText("UPI");
+    await expect(page.getByRole("row").filter({ hasText: inr(137.26) })).toContainText("Credit Card");
+    await expect(page.getByRole("row").filter({ hasText: inr(141.76) })).toContainText("UPI");
 
     // ── Business Reports ─────────────────────────────────────────
     await openReport(page, "Sales Register");
@@ -347,16 +348,16 @@ test.describe("J6 point of sale", () => {
     const summary = (label: string) =>
       page.locator("p").filter({ hasText: new RegExp(`^${label}$`) }).locator("xpath=following-sibling::p[1]");
     await expect(summary("Subtotal")).toHaveText(inr(4620));
-    await expect(summary("Total Tax")).toHaveText(inr(580.5));
-    await expect(summary("Total Amount")).toHaveText(inr(5200.5));
+    await expect(summary("Total Tax")).toHaveText(inr(580.52));
+    await expect(summary("Total Amount")).toHaveText(inr(5200.52));
     await expectNoHorizontalScroll(page, "Sales Register");
 
     await openReport(page, "Payment Summary");
-    await expect(summary("Total Received")).toHaveText(inr(5200.5));
+    await expect(summary("Total Received")).toHaveText(inr(5200.52));
     const byMode = page.getByRole("table").first();
     await expect(byMode.getByRole("row").filter({ hasText: /^Cash/ })).toContainText(inr(2033.5));
-    await expect(byMode.getByRole("row").filter({ hasText: /^UPI/ })).toContainText(inr(341.75));
-    await expect(byMode.getByRole("row").filter({ hasText: /^Credit Card/ })).toContainText(inr(2825.25));
+    await expect(byMode.getByRole("row").filter({ hasText: /^UPI/ })).toContainText(inr(341.76));
+    await expect(byMode.getByRole("row").filter({ hasText: /^Credit Card/ })).toContainText(inr(2825.26));
     await expectNoHorizontalScroll(page, "Payment Summary");
 
     // ── GSTR-1: B2C (small), same state — CGST + SGST, no IGST ───
@@ -366,12 +367,12 @@ test.describe("J6 point of sale", () => {
     const rateRow = (rate: string) => b2cs.getByRole("row").filter({ has: page.getByRole("cell", { name: rate, exact: true }) });
     await expect(rateRow("18%").getByRole("cell")).toHaveText(["18%", "Intra-state", "27", inr(750), inr(67.5), inr(67.5), inr(0)]);
     await expect(rateRow("12%").getByRole("cell")).toHaveText(["12%", "Intra-state", "27", inr(3600), inr(216), inr(216), inr(0)]);
-    // Each invoice splits its own tax, CGST taking an odd paisa (half up):
-    // the 5% tax of ₹4.50, ₹6.75 and ₹2.25 splits 2.25/2.25, 3.38/3.37 and
-    // 1.13/1.12, so the rate adds up to ₹6.76 + ₹6.74 = ₹13.50.
-    await expect(rateRow("5%").getByRole("cell")).toHaveText(["5%", "Intra-state", "27", inr(270), inr(6.76), inr(6.74), inr(0)]);
+    // CGST and SGST are each 2.5% rounded on its own, so they are equal: the
+    // 5% tax of ₹90, ₹135 and ₹45 is 2 × ₹2.25, 2 × ₹3.38 and 2 × ₹1.13,
+    // ₹6.76 + ₹6.76 = ₹13.52 for the rate.
+    await expect(rateRow("5%").getByRole("cell")).toHaveText(["5%", "Intra-state", "27", inr(270), inr(6.76), inr(6.76), inr(0)]);
     await expect(summary("CGST")).toHaveText(inr(290.26));
-    await expect(summary("SGST")).toHaveText(inr(290.24));
+    await expect(summary("SGST")).toHaveText(inr(290.26));
     await expect(summary("IGST")).toHaveText(inr(0));
     await expectNoHorizontalScroll(page, "GST Returns");
   });

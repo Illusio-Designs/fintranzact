@@ -1,5 +1,5 @@
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
-import { withAllocatedLines } from "./document-totals.js";
+import { documentIsIntraState, withAllocatedLines } from "./document-totals.js";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -394,6 +394,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             strict: true,
           });
 
+          // Intra-state: CGST and SGST are each rounded at half the rate.
+          const intraState = await documentIsIntraState(tx, ctx.businessId, input.partyId);
           // Calculate line item totals using fixed-point arithmetic
           const processedItems = lineItems.map((li, idx) => {
             const calc = calcLineItem({
@@ -401,6 +403,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent || "0",
               discountPercent: li.discountPercent || "0",
+              intraState,
             });
             return {
               itemId: li.itemId || null,
@@ -436,6 +439,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             invoiceDiscount: input.invoiceDiscount || "0",
             invoiceDiscountType: input.invoiceDiscountType || "amount",
             roundOff: input.roundOff || "0",
+            intraState,
           });
           const additionalCharges = totals.chargesTotal;
           const roundOff = input.roundOff || "0";

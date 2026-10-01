@@ -1,5 +1,5 @@
 import { eq, and, sql, asc, desc, inArray, isNull } from "drizzle-orm";
-import { saveAllocatedLines, withAllocatedLines } from "../lib/document-totals.js";
+import { documentIsIntraState, saveAllocatedLines, withAllocatedLines } from "../lib/document-totals.js";
 import { z } from "zod";
 import { documentStockDirection, getDocumentWarehouseId, getDefaultWarehouse, resolveDocumentWarehouseId, resolveInvoiceWarehouse, syncDocumentStock } from "../lib/inventory-service.js";
 import { resolveLineBatches } from "../lib/batches.js";
@@ -444,6 +444,8 @@ export const invoiceRouter = router({
         strict: true,
       });
 
+      // Intra-state: CGST and SGST are each rounded at half the rate.
+      const intraState = await documentIsIntraState(tx, ctx.businessId, partyCheck);
       // Calculate line item totals using fixed-point arithmetic
       const processedItems = lineItems.map((li, idx) => {
         const calc = calcLineItem({
@@ -451,6 +453,7 @@ export const invoiceRouter = router({
           unitPrice: li.unitPrice,
           taxPercent: li.taxPercent || "0",
           discountPercent: li.discountPercent || "0",
+          intraState,
         });
         return {
           itemId: li.itemId || null,
@@ -486,6 +489,7 @@ export const invoiceRouter = router({
         invoiceDiscount: input.invoiceDiscount || "0",
         invoiceDiscountType: input.invoiceDiscountType || "amount",
         roundOff: input.roundOff || "0",
+        intraState,
       });
       const additionalCharges = totals.chargesTotal;
       const roundOff = input.roundOff || "0";
@@ -972,6 +976,10 @@ export const invoiceRouter = router({
 
         // 2. Build update payload
         const updates: Record<string, any> = { updatedAt: new Date() };
+        // Intra-state (with the party the invoice will have): CGST and SGST
+        // are each rounded at half the rate.
+        const partyChanged = !!input.partyId && input.partyId !== existing.partyId;
+        const intraState = await documentIsIntraState(tx, ctx.businessId, input.partyId ?? existing.partyId);
 
         if (input.partyId && input.partyId !== existing.partyId) {
           // Payments and credit notes/returns were made by (or to) the old
@@ -1077,6 +1085,7 @@ export const invoiceRouter = router({
               unitPrice: li.unitPrice,
               taxPercent: li.taxPercent || "0",
               discountPercent: li.discountPercent || "0",
+              intraState: intraState,
             });
             return {
               invoiceId: input.id,
@@ -1122,7 +1131,9 @@ export const invoiceRouter = router({
           input.lineItems ||
           input.charges !== undefined ||
           input.invoiceDiscount !== undefined ||
-          input.roundOff !== undefined
+          input.roundOff !== undefined ||
+          // Another party may move the supply between intra- and inter-state.
+          partyChanged
         ) {
           const linesForTotals = lineItems ?? await tx
             .select({
@@ -1159,6 +1170,7 @@ export const invoiceRouter = router({
             invoiceDiscount: input.invoiceDiscount ?? existing.discountAmount ?? "0",
             invoiceDiscountType: input.invoiceDiscount !== undefined ? input.invoiceDiscountType || "amount" : "amount",
             roundOff: roundOffStr,
+            intraState: intraState,
           });
 
           updates.subtotal = totals.subtotal;

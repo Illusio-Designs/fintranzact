@@ -48,7 +48,9 @@ export function placeOfSupplyCode(seller: GstStateParty, buyer: GstStateParty): 
 /**
  * Split an intra-state tax amount into CGST and SGST: CGST is half, rounded
  * to the paisa (half up); SGST is the rest, so the two always add up to the
- * tax exactly.
+ * tax exactly. Documents saved since intra-state tax is taken as two halves
+ * rounded on their own (calc.ts taxOn) carry an even number of paise, so
+ * they split equally; an odd paisa only shows on older documents.
  */
 export function splitIntraStateTax(tax: number | string): { cgst: number; sgst: number } {
   const p = Math.round(Number(tax || 0) * 100);

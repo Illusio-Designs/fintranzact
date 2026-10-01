@@ -15,6 +15,7 @@ import {
   userEntered,
   gstStateCodeSql,
   intraStateSql,
+  taxMatchesSql,
 } from "../sql-fragments.js";
 
 const INVOICE_WRITERS = [
@@ -61,7 +62,7 @@ export const documentTables: TableCoverage[] = [
         `SELECT i.business_id, i.id::text, i.document_type || ' ' || i.invoice_number || ' has no lines'
          FROM invoices i WHERE NOT EXISTS (SELECT 1 FROM invoice_items li WHERE li.invoice_id = i.id)`),
       rule("invoices", "subtotal-and-tax-match-lines", "error",
-        "calcInvoiceTotals: subtotal = Σ line values after line discounts (before the document discount); the document discount is spread over the lines (their saved taxable values fall short of the line values by exactly discount_amount — or not at all on documents saved before discounts were spread); tax_amount = Σ line tax + tax on the charges at the highest line rate (0 on documents saved before charges were taxed).",
+        "calcInvoiceTotals: subtotal = Σ line values after line discounts (before the document discount); the document discount is spread over the lines (their saved taxable values fall short of the line values by exactly discount_amount — or not at all on documents saved before discounts were spread); tax_amount = Σ line tax + tax on the charges at the highest line rate (0 on documents saved before charges were taxed; intra-state, CGST + SGST each rounded at half the rate — taxOn).",
         INVOICE_WRITERS.concat("shipment.create / update (charge sync)"),
         `WITH l AS (
            SELECT li.invoice_id,
@@ -81,7 +82,7 @@ export const documentTables: TableCoverage[] = [
             OR (ABS((l.gross - l.taxable) - i.discount_amount::numeric) > ${MONEY_TOLERANCE}
                 AND ABS(l.gross - l.taxable) > ${MONEY_TOLERANCE})
             OR (ABS(i.tax_amount::numeric - l.tax) > ${MONEY_TOLERANCE}
-                AND ABS(i.tax_amount::numeric - l.tax - ROUND(i.additional_charges::numeric * l.max_rate / 100, 2)) > ${MONEY_TOLERANCE})`),
+                AND NOT ${taxMatchesSql("(i.tax_amount::numeric - l.tax)", "i.additional_charges::numeric", "l.max_rate")})`),
       rule("invoices", "total-formula", "error",
         "total_amount = subtotal + tax_amount − discount_amount + additional_charges + round_off.",
         INVOICE_WRITERS,
@@ -296,14 +297,14 @@ export const documentTables: TableCoverage[] = [
     table: "invoice_items",
     rules: [
       rule("invoice_items", "line-math", "error",
-        "A line's saved taxable value (total − tax) is its value after the line discount less its share of the document discount (never more, never negative), and tax_amount = that taxable value × tax% rounded to the paisa (calcInvoiceTotals / withAllocatedLines).",
+        "A line's saved taxable value (total − tax) is its value after the line discount less its share of the document discount (never more, never negative), and tax_amount = that taxable value × tax% rounded to the paisa, or — intra-state — CGST + SGST each at half the rate rounded on its own (calcInvoiceTotals / withAllocatedLines / taxOn).",
         INVOICE_WRITERS,
         `SELECT inv.business_id, li.id::text,
                 inv.invoice_number || ' line ' || li.sort_order || ': taxable ' || (li.total_amount::numeric - li.tax_amount::numeric) ||
                 ' of ' || ${lineTaxable("li")} || ', tax ' || li.tax_amount || ' vs ' ||
                 ROUND((li.total_amount::numeric - li.tax_amount::numeric) * li.tax_percent::numeric / 100, 2)
          FROM invoice_items li JOIN invoices inv ON inv.id = li.invoice_id
-         WHERE ABS(li.tax_amount::numeric - ROUND((li.total_amount::numeric - li.tax_amount::numeric) * li.tax_percent::numeric / 100, 2)) > ${MONEY_TOLERANCE}
+         WHERE NOT ${taxMatchesSql("li.tax_amount::numeric", "(li.total_amount::numeric - li.tax_amount::numeric)", "li.tax_percent::numeric")}
             OR li.total_amount::numeric - li.tax_amount::numeric > ${lineTaxable("li")} + ${MONEY_TOLERANCE}
             OR li.total_amount::numeric - li.tax_amount::numeric < -${MONEY_TOLERANCE}`),
       rule("invoice_items", "values-in-range", "error",
