@@ -88,6 +88,11 @@ export function istToday(): Date {
   return new Date(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate());
 }
 
+/** Today in India as an ISO date (YYYY-MM-DD), the date the app shows and stamps. */
+export function istIsoDate(): string {
+  return new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+}
+
 /** ISO date `months` months from today in India (the day capped at 28), as the calendar's PageDown steps it. */
 export function isoMonthsAhead(months: number, from = istToday()) {
   const d = new Date(from.getFullYear(), from.getMonth() + months, Math.min(from.getDate(), 28));

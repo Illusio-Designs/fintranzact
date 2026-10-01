@@ -38,7 +38,7 @@ import {
   uid,
 } from "../../helpers/journey";
 import { seedOwner } from "../../helpers/journey-seed";
-import { dialog, inr, listRow, openBusiness, openPage, pick, choose, fillLine } from "../../helpers/journey-ui";
+import { dialog, inr, istIsoDate, listRow, openBusiness, openPage, pick, choose, fillLine } from "../../helpers/journey-ui";
 import { documentLines, documentStockMoves, itemStock, salesTaxByRate } from "../../helpers/db";
 import {
   apiKeysOf,
@@ -338,7 +338,7 @@ test.describe("J11 settings", () => {
       `${itemA},2499,1600,5,5208,Pieces`,
       `${itemB},899,500,12,5007,Pieces`,
     ].join("\n");
-    const today = new Date().toISOString().slice(0, 10);
+    const today = istIsoDate();
     const invoicesCsv = [
       "Invoice No,Invoice Date,Party Name,Subtotal,Tax Amount,Total Amount",
       `OLD-${id}-1,${today},${custA},10000,500,10500`,
