@@ -156,6 +156,19 @@ export async function invoicePartyIds(invoiceIds: string[]) {
   }>;
 }
 
+export async function invoiceLines(invoiceId: string) {
+  return (await db()`
+    select item_id, item_name, quantity, unit_price, tax_percent, total_amount from invoice_items
+    where invoice_id = ${invoiceId} order by sort_order`) as unknown as Array<{
+    item_id: string | null;
+    item_name: string;
+    quantity: string;
+    unit_price: string;
+    tax_percent: string;
+    total_amount: string;
+  }>;
+}
+
 export async function recurringTemplatesOf(partyId: string) {
   return (await db()`select id, name from recurring_invoice_templates where party_id = ${partyId}`) as unknown as Array<{ id: string; name: string }>;
 }
@@ -169,7 +182,7 @@ export type ItemRow = {
   sku: string | null;
   barcode: string | null;
   unit: string;
-  unit_variants: Array<{ unit: string; conversionFactor: string; salePrice?: string }> | null;
+  unit_variants: Array<{ unit: string; conversionFactor: number; salePrice?: string }> | null;
   variant_attributes: string[] | null;
   sale_price: string | null;
   purchase_price: string | null;

@@ -7,7 +7,7 @@
  *     password, are allowed one pattern at a time with `guard.allow`);
  *   - runs at 1280px ("journeys-desktop") and 390px ("journeys-phone"), and
  *     on the phone checks each screen for page-level horizontal scroll;
- *   - pins the browser clock so the app's India-time theme is light or dark
+ *   - sets the browser clock so the app's India-time theme is light or dark
  *     on purpose (the app has no manual toggle: light 06:00–18:59 IST).
  *
  * External services are never reached: Cloudflare Turnstile and Google Fonts
@@ -59,24 +59,30 @@ export class ConsoleGuard {
 export type ThemeMode = "light" | "dark";
 
 /**
- * A moment on the current (or previous) India calendar day whose India time
- * gives the requested theme. Never in the future, so dates the app defaults
- * to are never ahead of the server's.
+ * The browser clock's start for a journey: real "now" when India time already
+ * gives the wanted theme (with at least 30 minutes before it switches), else
+ * the nearest moment on the same UTC calendar date that does. Staying on the
+ * server's UTC date keeps the app's "This month" / "today" filters seeing the
+ * records the API creates during the journey.
+ *
+ *   light (06:00–18:59 IST), dark (19:00–05:59 IST)
  */
 export function instantFor(mode: ThemeMode, now = new Date()): Date {
   const IST = 330 * 60_000;
   const ist = new Date(now.getTime() + IST);
-  const minutes = ist.getUTCHours() * 60 + ist.getUTCMinutes();
-  const isLight = minutes >= 6 * 60 && minutes < 19 * 60;
-  if ((mode === "light") === isLight) return now;
-  const day = Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate());
-  if (mode === "dark") {
-    // Light now (06:00–18:59 IST): 05:50 IST today was dark.
-    return new Date(day + (5 * 60 + 50) * 60_000 - IST);
+  const m = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  const istDay = Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate());
+  const at = (dayOffset: number, hh: number, mm: number) =>
+    new Date(istDay + dayOffset * 86_400_000 + (hh * 60 + mm) * 60_000 - IST);
+  // Before 05:30 IST the UTC date is still the previous IST day's.
+  if (mode === "light") {
+    if (m < 330) return at(-1, 12, 0);
+    if (m < 360) return at(0, 6, 30);
+    if (m < 1110) return now;
+    return at(0, 12, 0);
   }
-  // Dark now: 18:50 IST today (evening) or yesterday (small hours) was light.
-  const lightDay = minutes >= 19 * 60 ? day : day - 86_400_000;
-  return new Date(lightDay + (18 * 60 + 50) * 60_000 - IST);
+  if (m < 330 || m >= 1140) return now;
+  return at(0, 19, 30);
 }
 
 const TURNSTILE_STUB = `window.turnstile = {
@@ -99,9 +105,13 @@ export async function stubExternalServices(context: BrowserContext) {
   );
 }
 
-/** Freeze Date for the context at a moment giving `mode`; timers keep running. */
+/**
+ * Start the context's clock at a moment giving `mode` and let it run, so
+ * timers, toasts and "x seconds ago" behave normally.
+ */
 export async function pinTheme(context: BrowserContext, mode: ThemeMode) {
-  await context.clock.setFixedTime(instantFor(mode));
+  await context.clock.install({ time: instantFor(mode) });
+  await context.clock.resume();
 }
 
 export async function expectTheme(page: Page, mode: ThemeMode) {
@@ -187,6 +197,10 @@ export function toast(page: Page, text: string | RegExp) {
 export async function navTo(page: Page, label: string | RegExp) {
   const sidebar = page.getByTestId("app-sidebar");
   if (isPhone(page)) {
+    // Toasts sit over the top bar on a phone and pause while the pointer
+    // rests on them (where the last tap was). Lift the pointer off so they
+    // time out, as they do for a finger.
+    await page.mouse.move(1, (page.viewportSize()?.height ?? 800) - 1);
     await page.getByRole("button", { name: "Open navigation menu" }).click();
   }
   await sidebar.getByRole("link", { name: label, exact: typeof label === "string" }).click();

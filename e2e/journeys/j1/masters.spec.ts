@@ -29,7 +29,19 @@ import {
   uid,
 } from "../../helpers/journey";
 import { seedOwner, type SeededOwner } from "../../helpers/journey-seed";
-import { invoicePartyIds, partiesNamed, recurringTemplatesOf } from "../../helpers/db";
+import {
+  invoiceLines,
+  invoicePartyIds,
+  itemBatches,
+  itemsNamed,
+  itemVariants,
+  partiesNamed,
+  priceLevelNamed,
+  priceListEntries,
+  recurringTemplatesOf,
+  stockGroupNamed,
+  stockMovements,
+} from "../../helpers/db";
 
 async function openBusiness(page: Page, owner: SeededOwner) {
   await page.goto("/");
@@ -58,10 +70,12 @@ async function savedParty(businessId: string, name: string) {
 }
 
 /** Choose `label` in one of the app's dropdowns (a combobox with a listbox). */
-async function pickOption(page: Page, combobox: ReturnType<Page["getByRole"]>, label: string) {
+async function pickOption(page: Page, combobox: ReturnType<Page["getByRole"]>, label: string | RegExp) {
   await combobox.click();
-  await page.getByRole("option", { name: label, exact: true }).click();
-  await expect(combobox).toContainText(label);
+  await page.getByRole("option", { name: label, exact: typeof label === "string" }).click();
+  // Searchable pickers are text inputs; the others are buttons showing the choice.
+  if ((await combobox.evaluate((el) => el.tagName)) === "INPUT") await expect(combobox).toHaveValue(label);
+  else await expect(combobox).toContainText(label);
 }
 
 /** Expand a collapsed section of the party / item form. */
@@ -290,5 +304,304 @@ test.describe("J3 masters", () => {
     await expect(toast(page, "Party deleted")).toBeVisible();
     await expect(row).toHaveCount(0);
     await expect.poll(async () => (await partiesNamed(owner.businessId, supplier)).length).toBe(0);
+  });
+});
+
+/** Pick an ISO date (YYYY-MM-DD) in the app's calendar popover. */
+async function pickDate(page: Page, trigger: ReturnType<Page["getByRole"]>, iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const label = `${d} ${months[m - 1]} ${y}`;
+  await trigger.click();
+  const calendar = page.getByRole("dialog", { name: "Choose date" });
+  for (let i = 0; i < 36; i++) {
+    const cell = calendar.getByRole("gridcell", { name: label, exact: true });
+    if (await cell.count()) {
+      await cell.click();
+      return;
+    }
+    // Compare with a day shown in the middle of the month grid.
+    const shown = await calendar.getByRole("gridcell").nth(15).getAttribute("aria-label");
+    const [sd, sm, sy] = (shown ?? "").split(" ");
+    const shownKey = Number(sy) * 12 + months.indexOf(sm);
+    void sd;
+    await calendar.getByRole("button", { name: shownKey < y * 12 + (m - 1) ? "Next month" : "Previous month" }).click();
+  }
+  throw new Error(`could not reach ${label} in the calendar`);
+}
+
+async function openItemsPage(page: Page) {
+  await navTo(page, "Stock Items");
+  await expect(page.getByRole("heading", { name: "Stock Items", level: 1 })).toBeVisible();
+  await expectNoHorizontalScroll(page, "stock items");
+}
+
+async function startItem(page: Page, name: string) {
+  await page.getByRole("button", { name: /Add Item/ }).first().click();
+  const panel = page.getByRole("dialog", { name: "Add Item" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByLabel(/^Item Name/)).toHaveValue("");
+  await panel.getByLabel(/^Item Name/).fill(name);
+  return panel;
+}
+
+async function saveItem(page: Page, panel: ReturnType<Page["getByRole"]>, businessId: string, name: string) {
+  await panel.getByRole("button", { name: "Create Item" }).click();
+  await expect(toast(page, "Item created")).toBeVisible();
+  await expect(panel).toBeHidden();
+  await expect.poll(async () => (await itemsNamed(businessId, name)).length, { message: `item ${name} saved` }).toBe(1);
+  return (await itemsNamed(businessId, name))[0];
+}
+
+test.describe("J3 masters — items (dark theme)", () => {
+  test.use({ theme: "dark" });
+  test.setTimeout(300_000);
+
+  test("items: simple with HSN/SKU/barcode/stock group, variants, alternate units, batches with expiry, service, price level, edit, delete rules", async ({
+    context,
+    page,
+  }) => {
+    const owner = await seedOwner(context, "j3i");
+    const id = uid();
+    const names = {
+      laptop: `J3 Laptop ${id}`,
+      tee: `J3 Tee ${id}`,
+      rice: `J3 Rice ${id}`,
+      pcm: `J3 Paracetamol ${id}`,
+      install: `J3 Installation ${id}`,
+    };
+    await openBusiness(page, owner);
+    await expectTheme(page, "dark");
+
+    // ── Switch barcodes on (Settings → Barcodes) ────────────────
+    await navTo(page, "Settings");
+    await page.getByRole("button", { name: "Barcodes", exact: true }).filter({ visible: true }).click();
+    const barcodeSwitch = page.getByRole("switch", { name: "Use barcodes" });
+    await expect(page.getByText(/Barcode fields, scanning|Off — nothing barcode-related/)).toBeVisible();
+    if ((await barcodeSwitch.getAttribute("aria-checked")) !== "true") {
+      await barcodeSwitch.click();
+    }
+    await expect(page.getByText("Barcode fields, scanning, labels and Physical stock are on for this business.")).toBeVisible();
+    await expect(barcodeSwitch).toHaveAttribute("aria-checked", "true");
+    await expectNoHorizontalScroll(page, "settings: barcodes");
+
+    // ── Stock groups: Electronics › Laptops ─────────────────────
+    await navTo(page, "Stock Groups");
+    await expect(page.getByRole("heading", { name: "Stock Groups", level: 1 })).toBeVisible();
+    for (const [group, under] of [[`Electronics ${id}`, ""], [`Laptops ${id}`, `Electronics ${id}`]]) {
+      await page.getByRole("button", { name: "+ Add group" }).click();
+      const dlg = page.getByRole("dialog", { name: "Add stock group" });
+      await dlg.getByLabel(/^Name/).fill(group);
+      if (under) await pickOption(page, dlg.getByRole("combobox", { name: "Under" }), under);
+      await dlg.getByRole("button", { name: "Save" }).click();
+      await expect(dlg).toBeHidden();
+      await expect(page.getByRole("row").filter({ hasText: group })).toBeVisible();
+    }
+    await expectNoHorizontalScroll(page, "stock groups");
+    const electronics = await stockGroupNamed(owner.businessId, `Electronics ${id}`);
+    const laptops = await stockGroupNamed(owner.businessId, `Laptops ${id}`);
+    expect(laptops?.parent_id).toBe(electronics?.id);
+
+    await openItemsPage(page);
+
+    // ── Simple product: HSN, SKU, barcode, stock group, opening stock ─
+    let panel = await startItem(page, names.laptop);
+    await panel.getByLabel(/^Sale Price/).fill("55000");
+    await panel.getByLabel("Tax %").fill("18");
+    await openSection(panel, "Identification");
+    await panel.getByLabel("SKU").fill(`LAP-${id}`);
+    await panel.getByLabel("HSN / SAC Code").fill("8471");
+    await panel.getByLabel("Barcode", { exact: true }).fill("8901234567897");
+    // Sub-groups are listed indented under their parent ("└ Laptops").
+    await pickOption(page, panel.getByRole("combobox", { name: "Stock group" }), new RegExp(`└ Laptops ${id}$`));
+    await openSection(panel, "Purchase");
+    await panel.getByLabel("Purchase Price (₹)").fill("48000");
+    await openSection(panel, "Stock");
+    await panel.getByLabel("Stock Quantity").fill("10");
+    await panel.getByLabel("Low Stock Alert").fill("2");
+    await expectNoHorizontalScroll(page, "add item");
+    const laptop = await saveItem(page, panel, owner.businessId, names.laptop);
+    expect(laptop).toMatchObject({
+      item_type: "product",
+      item_mode: "simple",
+      hsn: "8471",
+      sku: `LAP-${id}`,
+      barcode: "8901234567897",
+      unit: "pcs",
+      sale_price: "55000.00",
+      purchase_price: "48000.00",
+      tax_percent: "18.00",
+      stock_quantity: "10.000",
+      stock_group_id: laptops!.id,
+    });
+    expect(await stockMovements(laptop.id)).toEqual([expect.objectContaining({ quantity: "10.000", batch_number: null })]);
+    const laptopRow = page.getByRole("row").filter({ hasText: names.laptop });
+    await expect(laptopRow).toContainText("8901234567897");
+    await expect(laptopRow).toContainText("₹55,000.00");
+    await expect(laptopRow).toContainText("10");
+
+    // ── Variant product: Size × Colour ──────────────────────────
+    panel = await startItem(page, names.tee);
+    await panel.getByLabel(/^Sale Price/).fill("499");
+    await panel.getByLabel("Tax %").fill("5");
+    await openSection(panel, "Product Variants");
+    await panel.getByPlaceholder("e.g. Size, Color, Material").fill("Size");
+    await panel.getByRole("button", { name: "+ Add", exact: true }).click();
+    for (const v of ["S", "M"]) {
+      await panel.getByPlaceholder("Add Size value and press Enter").fill(v);
+      await panel.getByPlaceholder("Add Size value and press Enter").press("Enter");
+    }
+    await panel.getByPlaceholder("e.g. Size, Color, Material").fill("Color");
+    await panel.getByRole("button", { name: "+ Add", exact: true }).click();
+    await panel.getByPlaceholder("Add Color value and press Enter").fill("Red");
+    await panel.getByPlaceholder("Add Color value and press Enter").press("Enter");
+    await panel.getByRole("button", { name: "Generate All Combinations" }).click();
+    const variantRows = panel.getByRole("row").filter({ has: page.getByPlaceholder("SKU", { exact: true }) });
+    await expect(variantRows).toHaveCount(2);
+    await variantRows.nth(0).getByPlaceholder("SKU").fill(`TEE-S-${id}`);
+    await variantRows.nth(0).getByRole("spinbutton").nth(1).fill("5");
+    await variantRows.nth(1).getByPlaceholder("SKU").fill(`TEE-M-${id}`);
+    await variantRows.nth(1).getByRole("spinbutton").nth(0).fill("549");
+    await variantRows.nth(1).getByRole("spinbutton").nth(1).fill("7");
+    const tee = await saveItem(page, panel, owner.businessId, names.tee);
+    expect(tee).toMatchObject({ item_mode: "variants", variant_attributes: ["Size", "Color"], tax_percent: "5.00" });
+    const teeVariants = await itemVariants(tee.id);
+    expect(teeVariants.map((v) => [v.attribute_values, v.sku, v.sale_price, v.stock_quantity])).toEqual([
+      // A blank variant price means "use the item's default price".
+      [{ Size: "S", Color: "Red" }, `TEE-S-${id}`, null, "5.000"],
+      [{ Size: "M", Color: "Red" }, `TEE-M-${id}`, "549.00", "7.000"],
+    ]);
+    const teePrices = await owner.api.query("pricing.resolve", {
+      lines: teeVariants.map((v) => ({ itemId: tee.id, variantId: v.id, quantity: "1" })),
+    });
+    expect(teePrices.lines.map((l: { unitPrice: string }) => Number(l.unitPrice))).toEqual([499, 549]);
+
+    // ── Alternate units: rice by the kg, also sold by the 25 kg bag ─
+    panel = await startItem(page, names.rice);
+    await panel.getByLabel(/^Sale Price/).fill("60");
+    await pickOption(page, panel.getByRole("combobox", { name: "Unit" }), "Kilograms (KG)");
+    await openSection(panel, "Alternate Units");
+    const altUnits = panel.getByRole("region", { name: /^Alternate Units/ });
+    await altUnits.getByRole("button", { name: "+ Add alternate unit" }).click();
+    await pickOption(page, altUnits.getByRole("combobox", { name: "Unit" }), "Bag");
+    await altUnits.getByLabel("1 bag = ? kg").fill("25");
+    // The bag's price follows from the kg price: 25 × ₹60.
+    await expect(altUnits.getByLabel("Sale Price (₹)")).toHaveValue("1500.00");
+    await expect(panel.getByText("1 bag = 25 kg → ₹1500.00 each")).toBeVisible();
+    const rice = await saveItem(page, panel, owner.businessId, names.rice);
+    expect(rice).toMatchObject({ item_mode: "alt_units", unit: "kg", sale_price: "60.00" });
+    expect(rice.unit_variants).toEqual([{ unit: "bag", conversionFactor: 25, salePrice: "1500.00" }]);
+
+    // ── Batch-tracked medicine with expiry and an opening batch ─
+    panel = await startItem(page, names.pcm);
+    await panel.getByLabel(/^Sale Price/).fill("30");
+    await panel.getByLabel("Tax %").fill("12");
+    await openSection(panel, "Identification");
+    await panel.getByLabel("HSN / SAC Code").fill("3004");
+    await openSection(panel, "Stock");
+    await panel.getByLabel("Stock Quantity").fill("100");
+    await openSection(panel, "Batches & expiry");
+    await panel.getByLabel(/^Track batches/).check();
+    await panel.getByLabel(/^Track expiry/).check();
+    await panel.getByLabel("Batch no.").fill(`PCM-${id}`);
+    await pickDate(page, panel.getByLabel(/^Expiry/), "2027-06-30");
+    await pickDate(page, panel.getByLabel("Mfg date"), "2026-01-15");
+    const pcm = await saveItem(page, panel, owner.businessId, names.pcm);
+    expect(pcm).toMatchObject({ track_batches: true, track_expiry: true, stock_quantity: "100.000", hsn: "3004" });
+    expect(await itemBatches(pcm.id)).toEqual([{ batch_number: `PCM-${id}`, expiry_date: "2027-06-30", mfg_date: "2026-01-15" }]);
+    expect(await stockMovements(pcm.id)).toEqual([expect.objectContaining({ quantity: "100.000", batch_number: `PCM-${id}` })]);
+
+    // ── Service: no stock ───────────────────────────────────────
+    panel = await startItem(page, names.install);
+    await panel.getByRole("button", { name: "Service", exact: true }).click();
+    await panel.getByLabel(/^Sale Price/).fill("1500");
+    await panel.getByLabel("Tax %").fill("18");
+    await openSection(panel, "Identification");
+    await panel.getByLabel("HSN / SAC Code").fill("998713");
+    await expect(panel.getByRole("button", { name: /^Stock/ })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: /^Batches/ })).toHaveCount(0);
+    const service = await saveItem(page, panel, owner.businessId, names.install);
+    expect(service).toMatchObject({ item_type: "service", hsn: "998713", stock_quantity: "0.000" });
+    expect(await stockMovements(service.id)).toEqual([]);
+
+    // The Services tab lists only the service.
+    await page.getByRole("button", { name: "Services", exact: true }).click();
+    await expect(page.getByRole("row").filter({ hasText: names.install })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: names.laptop })).toHaveCount(0);
+    await page.getByRole("button", { name: "All", exact: true }).click();
+
+    // ── Price level: Wholesale rate for the laptop, for one customer ─
+    await navTo(page, "Price Levels");
+    await expect(page.getByRole("heading", { name: "Price Levels", level: 1 })).toBeVisible();
+    await page.getByRole("button", { name: "+ New level" }).click();
+    const levelForm = page.getByRole("dialog", { name: "New price level" });
+    await levelForm.getByLabel(/^Name/).fill(`Wholesale ${id}`);
+    await levelForm.getByRole("button", { name: "Save" }).click();
+    await expect(toast(page, "Price level created")).toBeVisible();
+    await page.getByLabel(`${names.laptop} price on Wholesale ${id}`).fill("52000");
+    await page.getByRole("button", { name: "Save 1 change" }).click();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expectNoHorizontalScroll(page, "price levels");
+    expect(await priceListEntries(`Wholesale ${id}`, laptop.id)).toEqual([expect.objectContaining({ price: "52000.00" })]);
+
+    const dealer = await owner.api.mutate<{ id: string; name: string }>("party.create", {
+      name: `J3 Dealer ${id}`, type: "customer", state: "Maharashtra", stateCode: "27",
+    });
+    await openPartiesPage(page);
+    await (await findParty(page, dealer.name)).click();
+    const dealerPanel = page.getByRole("dialog", { name: dealer.name });
+    await pickOption(page, dealerPanel.getByRole("combobox", { name: "Price level" }), `Wholesale ${id}`);
+    await expect(toast(page, "Price level updated")).toBeVisible();
+    await dealerPanel.getByRole("button", { name: "Close" }).click();
+    const level = await priceLevelNamed(owner.businessId, `Wholesale ${id}`);
+    await expect.poll(async () => (await partiesNamed(owner.businessId, dealer.name))[0].price_level_id).toBe(level!.id);
+    // What a sale to this dealer is priced at, and to anyone else.
+    const quote = await owner.api.query("pricing.resolve", { partyId: dealer.id, lines: [{ itemId: laptop.id, quantity: "1" }] });
+    expect(quote.priceLevel?.name).toBe(`Wholesale ${id}`);
+    expect(quote.lines[0]).toMatchObject({ source: "level" });
+    expect(Number(quote.lines[0].unitPrice)).toBe(52000);
+    const walkIn = await owner.api.query("pricing.resolve", { lines: [{ itemId: laptop.id, quantity: "1" }] });
+    expect(walkIn.lines[0]).toMatchObject({ source: "item" });
+    expect(Number(walkIn.lines[0].unitPrice)).toBe(55000);
+
+    // ── Edit an item ────────────────────────────────────────────
+    await openItemsPage(page);
+    await page.getByRole("row").filter({ hasText: names.laptop }).click();
+    const itemPanel = page.getByRole("dialog", { name: names.laptop });
+    await itemPanel.getByRole("button", { name: "Edit Item" }).click();
+    const edit = page.getByRole("dialog", { name: "Edit Item" });
+    await expect(edit.getByLabel(/^Item Name/)).toHaveValue(names.laptop);
+    await edit.getByLabel(/^Sale Price/).fill("56000");
+    await openSection(edit, "Identification");
+    await edit.getByLabel("HSN / SAC Code").fill("84713010");
+    await edit.getByRole("button", { name: "Save Changes" }).click();
+    await expect(toast(page, "Item updated")).toBeVisible();
+    await expect.poll(async () => (await itemsNamed(owner.businessId, names.laptop))[0].sale_price).toBe("56000.00");
+    expect((await itemsNamed(owner.businessId, names.laptop))[0]).toMatchObject({ hsn: "84713010", stock_quantity: "10.000", stock_group_id: laptops!.id });
+    await expect(page.getByRole("row").filter({ hasText: names.laptop })).toContainText("₹56,000.00");
+
+    // ── Delete rules: a sold item is retired (kept on its invoices) ─
+    const sold = await owner.api.mutate<{ id: string }>("invoice.create", {
+      type: "sale",
+      partyId: dealer.id,
+      invoiceDate: new Date().toISOString(),
+      lineItems: [{ itemId: laptop.id, itemName: names.laptop, quantity: "1", unitPrice: "52000.00", taxPercent: "18.00", discountPercent: "0", conversionFactor: "1" }],
+      invoiceDiscount: "0",
+      invoiceDiscountType: "amount",
+      additionalCharges: "0",
+      roundOff: "0",
+    });
+    await page.reload();
+    for (const name of [names.laptop, names.install]) {
+      const r = page.getByRole("row").filter({ hasText: name });
+      await r.getByRole("button", { name: "Delete item" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
+      await expect(toast(page, "Item deleted")).toBeVisible();
+      await expect(r).toHaveCount(0);
+      await expect.poll(async () => (await itemsNamed(owner.businessId, name))[0].deleted_at).not.toBeNull();
+    }
+    const [line] = await invoiceLines(sold.id);
+    expect(line).toMatchObject({ item_id: laptop.id, item_name: names.laptop, quantity: "1.000" });
+    expect(await stockMovements(laptop.id)).toContainEqual(expect.objectContaining({ quantity: "-1.000" }));
   });
 });

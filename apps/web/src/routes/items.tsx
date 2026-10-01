@@ -642,6 +642,9 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
     onSuccess: () => {
       utils.item.list.invalidate();
       toast.success("Item created");
+      // The panel stays mounted: the next item starts blank instead of
+      // inheriting this one's barcode, stock, batches and variants.
+      resetForm();
       onClose();
     },
     onError: (err) => {
