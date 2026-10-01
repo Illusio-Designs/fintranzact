@@ -9,7 +9,8 @@ import { auditLog, bankAccounts, bankTransactions, invoices, itcLedgerEntries, i
 import { createCallerFactory } from "../../trpc.js";
 import { appRouter } from "../../router.js";
 import { createUser, createTenant, addMember } from "../helpers/fixtures.js";
-import { getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
+import { getTenantTestDb, getTestClient, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
+import { runAudit } from "../../lib/data-audit/runner.js";
 
 const callerFactory = createCallerFactory(appRouter);
 
@@ -295,5 +296,22 @@ describe("the Walk-in Customer carries the business's state (place of supply)", 
       .where(and(eq(parties.businessId, businessId), eq(parties.name, "Walk-in Customer")));
     expect(walkIn!.state).toBe("Maharashtra");
     expect(walkIn!.stateCode).toBe("27");
+  });
+});
+
+describe("itc_ledger_entries — ITC taken back by purchase returns and debit notes (J5)", () => {
+  it("passes the audit: each return or note has an entry of minus its tax, split like the bill's", async () => {
+    const line = (quantity: string) => ({ itemId: product.id, itemName: "Bottle", quantity, unitPrice: "100", taxPercent: "18", discountPercent: "0" });
+    const bill = await c.invoice.create({ partyId: interSupplier.id, type: "purchase", lineItems: [line("10")] } as InvoiceInput);
+    const ret = await c.purchaseReturn.create({
+      partyId: interSupplier.id, type: "purchase", referenceDocumentId: bill.id, lineItems: [line("2")],
+    } as never);
+    const note = await c.debitNote.create({ partyId: supplier.id, type: "purchase", lineItems: [line("1")] } as never);
+    const entry = async (id: string) => (await db().select().from(itcLedgerEntries).where(eq(itcLedgerEntries.invoiceId, id)))[0]!;
+    expect([(await entry(ret.id)).igst, (await entry(note.id)).cgst, (await entry(note.id)).sgst]).toEqual(["-36.00", "-9.00", "-9.00"]);
+
+    // The rules used to allow ITC entries only on purchase invoices, equal to their tax.
+    const report = await runAudit(getTestClient(), { businessIds: [businessId], only: ["itc_ledger_entries"] });
+    expect(report.results.map((r) => `${r.rule.id} (${r.count})`)).toEqual([]);
   });
 });

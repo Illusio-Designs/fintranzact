@@ -134,12 +134,13 @@ function ITCPage() {
         description="Track, manage, and utilize ITC across return periods"
       />
 
-      {/* Tab bar */}
-      <div className="mb-6">
+      {/* Tab bar — scrolls on its own on a phone, like the GST page's */}
+      <div className="mb-6 overflow-x-auto" data-testid="itc-tabs">
         <PillTabs
           tabs={tabs}
           value={activeTab}
           onChange={(v) => setActiveTab(v as ITCTab)}
+          className="w-max"
         />
       </div>
 

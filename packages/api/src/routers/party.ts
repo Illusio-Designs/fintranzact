@@ -23,7 +23,7 @@ import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPClient, IRPError, type IRPGstinDetails } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
-import { billDocument } from "../lib/order-fulfilment.js";
+import { billDocument, reducesBalance, reducingDocument } from "../lib/order-fulfilment.js";
 
 const IRP_TAXPAYER_TYPES: Record<string, PartyGstType> = {
   REG: "regular",
@@ -94,7 +94,7 @@ export const partyRouter = router({
         // Parties where opening_balance + unpaid invoice balance > 0
         conditions.push(sql`(
           ${parties.openingBalance}::numeric + COALESCE((
-            SELECT SUM(CASE WHEN ${invoices.documentType} IN ('credit_note', 'sales_return', 'purchase_return')
+            SELECT SUM(CASE WHEN ${reducingDocument()}
               THEN -(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)
               ELSE (${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)
             END)
@@ -135,7 +135,7 @@ export const partyRouter = router({
         .select({
           partyId: invoices.partyId,
           balance: sql<string>`COALESCE(SUM(
-            CASE WHEN ${invoices.documentType} IN ('credit_note', 'sales_return', 'purchase_return')
+            CASE WHEN ${reducingDocument()}
               THEN -(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)
               ELSE (${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)
             END
@@ -209,10 +209,11 @@ export const partyRouter = router({
 
       if (!party) return null;
 
-      // Calculate balance: CN/SR/PR reduce the outstanding, invoices/DN add to it
+      // Calculate balance: credit notes, returns and purchase-side debit notes
+      // reduce the outstanding; invoices and sale debit notes add to it
       const [balanceResult] = await ctx.db.select({
         netBalance: sql<string>`coalesce(sum(
-          CASE WHEN ${invoices.documentType} IN ('credit_note', 'sales_return', 'purchase_return')
+          CASE WHEN ${reducingDocument()}
             THEN -(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)
             ELSE (${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric)
           END
@@ -606,12 +607,11 @@ export const partyRouter = router({
         invoice: "", credit_note: "Credit Note", sales_return: "Sales Return",
         purchase_return: "Purchase Return", debit_note: "Debit Note",
       };
-      const isReduction = (dt: string) => ["credit_note", "sales_return", "purchase_return"].includes(dt);
 
       const entries = [
         ...partyInvoices.map(inv => {
           const label = DOC_LABELS[inv.documentType] || (inv.type === "sale" ? "Sale Invoice" : "Purchase Invoice");
-          const reduce = isReduction(inv.documentType);
+          const reduce = reducesBalance(inv.documentType, inv.type);
           // Sale invoice = debit; sale credit note = credit (reversal). Mirror for purchase.
           const isSaleDir = inv.type === "sale";
           const debit = (isSaleDir && !reduce) || (!isSaleDir && reduce) ? inv.totalAmount : "0";
@@ -726,12 +726,11 @@ export const partyRouter = router({
         invoice: "", credit_note: "Credit Note", sales_return: "Sales Return",
         purchase_return: "Purchase Return", debit_note: "Debit Note",
       };
-      const isReduction = (dt: string) => ["credit_note", "sales_return", "purchase_return"].includes(dt);
 
       const entries = [
         ...partyInvoices.map(inv => {
           const label = DOC_LABELS[inv.documentType] || (inv.type === "sale" ? "Sale Invoice" : "Purchase Invoice");
-          const reduce = isReduction(inv.documentType);
+          const reduce = reducesBalance(inv.documentType, inv.type);
           const isSaleDir = inv.type === "sale";
           const debit = (isSaleDir && !reduce) || (!isSaleDir && reduce) ? inv.totalAmount : "0";
           const credit = debit === "0" ? inv.totalAmount : "0";
@@ -954,7 +953,7 @@ export const partyRouter = router({
       requireCan(ctx.ability, "read", "Party");
       // Verify party belongs to this business
       const [party] = await ctx.db
-        .select({ id: parties.id, openingBalance: parties.openingBalance })
+        .select({ id: parties.id, openingBalance: parties.openingBalance, type: parties.type })
         .from(parties)
         .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
         .limit(1);
@@ -966,6 +965,7 @@ export const partyRouter = router({
       const offset = (input.page - 1) * input.limit;
 
       const openingBalanceNum = money.toNumber(party.openingBalance);
+      const paysSupplier = party.type === "supplier" ? sql`TRUE` : sql`FALSE`;
 
       // Build date filter conditions inline
       const fromDate = input.fromDate ? new Date(input.fromDate) : null;
@@ -1032,7 +1032,8 @@ export const partyRouter = router({
 
           UNION ALL
 
-          -- Purchase credit notes / purchase returns: debit (reduces what we owe)
+          -- Purchase credit notes, purchase returns and our debit notes to the
+          -- supplier: debit (reduce what we owe)
           SELECT
             invoice_date AS entry_date,
             document_type::text AS entry_type,
@@ -1045,7 +1046,7 @@ export const partyRouter = router({
           WHERE party_id = ${input.partyId}
             AND business_id = ${ctx.businessId}
             AND type = 'purchase'
-            AND document_type IN ('credit_note', 'purchase_return')
+            AND document_type IN ('credit_note', 'purchase_return', 'debit_note')
             AND status NOT IN ('cancelled')
             AND deleted_at IS NULL
 
@@ -1068,39 +1069,24 @@ export const partyRouter = router({
             AND status NOT IN ('cancelled')
             AND deleted_at IS NULL
 
-          UNION ALL
-
-          -- Purchase debit notes: credit (we owe more)
-          SELECT
-            invoice_date AS entry_date,
-            'debit_note'::text AS entry_type,
-            invoice_number AS document_number,
-            id AS document_id,
-            0::numeric AS debit,
-            total_amount::numeric AS credit,
-            status
-          FROM invoices
-          WHERE party_id = ${input.partyId}
-            AND business_id = ${ctx.businessId}
-            AND type = 'purchase'
-            AND document_type = 'debit_note'
-            AND status NOT IN ('cancelled')
-            AND deleted_at IS NULL
 
           UNION ALL
 
           -- Payments received from customer: credit
+          -- Payments: received from a customer, credit; made to a supplier,
+          -- debit (as the ledger report has them). Deleted ones don't count.
           SELECT
             payment_date AS entry_date,
             'payment'::text AS entry_type,
             coalesce(payment_number, id::text) AS document_number,
             id AS document_id,
-            0::numeric AS debit,
-            amount::numeric AS credit,
+            CASE WHEN ${paysSupplier} THEN amount::numeric ELSE 0::numeric END AS debit,
+            CASE WHEN ${paysSupplier} THEN 0::numeric ELSE amount::numeric END AS credit,
             NULL AS status
           FROM payments
           WHERE party_id = ${input.partyId}
             AND business_id = ${ctx.businessId}
+            AND deleted_at IS NULL
         ),
         filtered AS (
           SELECT * FROM ledger

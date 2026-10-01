@@ -361,8 +361,18 @@ export function DocumentCreator({
     if (fallback) setWarehouseId(fallback);
   }, [inventorySettings, warehouseId, isEditing, documentType, invoiceType]);
 
+  // The document the form was last filled from. A background refetch of the
+  // same document (window focus, a list invalidated elsewhere) must not put
+  // back lines the user removed or quantities they changed.
+  const filledFrom = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!editData) return;
+    if (!editData) {
+      filledFrom.current = null;
+      return;
+    }
+    if (filledFrom.current === editData.id) return;
+    filledFrom.current = editData.id;
     setPartyId(editData.partyId);
     if (isEditing && editData.warehouseId) setWarehouseId(editData.warehouseId);
     if (isEditing) {
@@ -510,7 +520,7 @@ export function DocumentCreator({
       baselineRef.current = formSnapshotRef.current;
     });
     return () => { cancelled = true; };
-  }, [editData]);
+  }, [editData?.id]);
 
   const isDirty =
     baselineRef.current !== null && baselineRef.current !== formSnapshot;

@@ -134,6 +134,7 @@ export function ConvertDocumentDialog({
                 <button
                   key={t.type}
                   type="button"
+                  aria-pressed={target === t.type}
                   onClick={() => setTarget(t.type)}
                   className={cn(
                     "flex-1 py-1.5 px-3 rounded-lg text-sm font-medium transition-colors border",

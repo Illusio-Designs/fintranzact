@@ -388,24 +388,36 @@ export const moneyTables: TableCoverage[] = [
          WHERE i.type = 'purchase' AND i.document_type = 'invoice' AND i.deleted_at IS NULL AND i.status <> 'cancelled'
            AND i.tax_amount::numeric > 0 AND b.gst_registration_type <> 'composition'
            AND NOT EXISTS (SELECT 1 FROM itc_ledger_entries e WHERE e.invoice_id = i.id)`),
+      rule("itc_ledger_entries", "reversal-has-itc", "error",
+        "Every live purchase-side document that takes ITC back (goods returned to the supplier, the supplier's credit note, our debit note) with tax > 0 has its negative ITC entry, in a non-composition business.",
+        ["purchaseReturn / creditNote / debitNote create (syncReversingItc)", "document.convert / returnRejected"],
+        `SELECT i.business_id, i.id::text, i.invoice_number || ' (' || i.document_type || ', tax ' || i.tax_amount || ') takes no ITC back'
+         FROM invoices i JOIN businesses b ON b.id = i.business_id
+         WHERE i.type = 'purchase' AND i.document_type IN ('purchase_return', 'credit_note', 'debit_note')
+           AND i.deleted_at IS NULL AND i.status <> 'cancelled'
+           AND i.tax_amount::numeric > 0 AND b.gst_registration_type <> 'composition'
+           AND NOT EXISTS (SELECT 1 FROM itc_ledger_entries e WHERE e.invoice_id = i.id)`),
       rule("itc_ledger_entries", "matches-invoice-tax", "error",
-        "A live ITC entry claims exactly its purchase invoice's tax (charges' tax included), split CGST+SGST (CGST half rounded half-up, splitIntraStateTax) for an intra-state supply or IGST otherwise — isIntraStateSupply — with the invoice's reverse-charge flag.",
-        ["invoice.create (purchase)", "invoice.update (lines/party change)"],
+        "A live ITC entry claims exactly its purchase invoice's tax (charges' tax included) — or, for a document that takes ITC back (purchase return, supplier credit note, our debit note), exactly minus its tax — split CGST+SGST (CGST half rounded half-up, splitIntraStateTax) for an intra-state supply or IGST otherwise — isIntraStateSupply — with the document's reverse-charge flag.",
+        ["invoice.create (purchase)", "invoice.update (lines/party change)", "syncReversingItc (returns and notes)"],
         `SELECT e.business_id, e.id::text, i.invoice_number || ': cgst ' || e.cgst || ' sgst ' || e.sgst || ' igst ' || e.igst ||
-                ' vs tax ' || i.tax_amount || CASE WHEN ${intraStateSql("b", "p")} THEN ' (intra-state)' ELSE ' (inter-state)' END
+                ' vs tax ' || i.tax_amount || CASE WHEN i.document_type <> 'invoice' THEN ' taken back' ELSE '' END ||
+                CASE WHEN ${intraStateSql("b", "p")} THEN ' (intra-state)' ELSE ' (inter-state)' END
          FROM itc_ledger_entries e JOIN invoices i ON i.id = e.invoice_id
          JOIN businesses b ON b.id = i.business_id JOIN parties p ON p.id = i.party_id
          WHERE e.status <> 'reversed' AND i.deleted_at IS NULL AND i.status <> 'cancelled'
-           AND (ABS(e.cgst::numeric + e.sgst::numeric + e.igst::numeric - i.tax_amount::numeric) > ${MONEY_TOLERANCE}
+           AND (ABS(e.cgst::numeric + e.sgst::numeric + e.igst::numeric
+                    - CASE WHEN i.document_type = 'invoice' THEN i.tax_amount::numeric ELSE -i.tax_amount::numeric END) > ${MONEY_TOLERANCE}
              OR e.is_reverse_charge <> i.is_reverse_charge
              OR (${intraStateSql("b", "p")} AND (e.igst::numeric <> 0 OR ABS(e.cgst::numeric - e.sgst::numeric) > ${MONEY_TOLERANCE}))
              OR (NOT ${intraStateSql("b", "p")} AND (e.cgst::numeric <> 0 OR e.sgst::numeric <> 0)))`),
       rule("itc_ledger_entries", "invoice-is-purchase", "error",
-        "ITC is only taken on a purchase invoice of the same business.",
-        ["invoice.create (purchase)"],
+        "ITC is only taken on a purchase invoice of the same business, and only taken back on a purchase return, the supplier's credit note or our debit note.",
+        ["invoice.create (purchase)", "syncReversingItc (returns and notes)"],
         `SELECT e.business_id, e.id::text, 'linked to ' || i.type || ' ' || i.document_type || ' of business ' || i.business_id
          FROM itc_ledger_entries e JOIN invoices i ON i.id = e.invoice_id
-         WHERE i.type <> 'purchase' OR i.document_type <> 'invoice' OR i.business_id <> e.business_id`),
+         WHERE i.type <> 'purchase' OR i.business_id <> e.business_id
+            OR i.document_type NOT IN ('invoice', 'purchase_return', 'credit_note', 'debit_note')`),
       rule("itc_ledger_entries", "reversed-when-cancelled", "error",
         "The ITC of a cancelled or deleted purchase invoice is reversed.",
         ["invoice.updateStatus (cancel) / invoice.delete"],

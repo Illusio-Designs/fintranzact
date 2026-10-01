@@ -662,17 +662,15 @@ export async function generateGSTR1(
   };
 }
 
+/** Purchase-side documents that give ITC: tax invoices. */
+const ITC_DOCUMENTS = ["invoice"] as const;
 /**
- * Purchase-side documents that give ITC: tax invoices and debit notes (the
- * supplier charging more — they add to what we owe, as in the party ledger).
- */
-const ITC_DOCUMENTS = ["invoice", "debit_note"] as const;
-/**
- * Purchase-side documents that take ITC back: the supplier's credit notes and
+ * Purchase-side documents that take ITC back: the supplier's credit notes,
  * goods returned to the supplier (a purchase return, or a return made from a
- * purchase invoice). They reduce what we owe, as in the party ledger.
+ * purchase invoice) and our debit notes claiming value back. They reduce what
+ * we owe, as in the party ledger (order-fulfilment reducesBalance).
  */
-const ITC_REVERSING_DOCUMENTS = ["credit_note", "sales_return", "purchase_return"] as const;
+const ITC_REVERSING_DOCUMENTS = ["credit_note", "sales_return", "purchase_return", "debit_note"] as const;
 
 export async function generateGSTR3B(
   businessId: string,

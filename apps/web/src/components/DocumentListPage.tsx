@@ -643,7 +643,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                   </table>
                 </div>
                 {selectedFulfilment.rejections.length > 0 && (
-                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs dark:border-amber-900 dark:bg-amber-950/30">
+                  <div data-testid="grn-rejections" className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs dark:border-amber-900 dark:bg-amber-950/30">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium text-amber-800 dark:text-amber-300">Rejected on receipt</p>
                       {selectedDoc.status !== "cancelled" && selectedFulfilment.rejections.some((r) => r.open > 0) && (

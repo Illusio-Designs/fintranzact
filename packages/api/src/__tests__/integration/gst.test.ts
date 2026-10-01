@@ -1039,7 +1039,7 @@ describe("GSTR-3B — credit/debit notes adjust outward tax (3.1) and ITC (4)", 
     await doc("7000.00", "sale", "sales_order", "NT-SO-1");
     await doc("7000.00", "sale", "delivery_challan", "NT-DC-1");
 
-    // Inward: 10,000 invoice + 500 supplier debit note − 1,000 supplier credit note − 2,000 returned
+    // Inward: 10,000 invoice − 500 our debit note − 1,000 supplier credit note − 2,000 returned
     await doc("10000.00", "purchase", "invoice", "NT-PI-1");
     await doc("500.00", "purchase", "debit_note", "NT-PDN-1");
     await doc("1000.00", "purchase", "credit_note", "NT-PCN-1");
@@ -1069,15 +1069,17 @@ describe("GSTR-3B — credit/debit notes adjust outward tax (3.1) and ITC (4)", 
     expect(report.taxPayable.sgst).toBeCloseTo(1350, 2);
   });
 
-  it("table 4 ITC adds supplier debit notes and takes back credit notes and returns", async () => {
+  it("table 4 ITC takes back our debit notes, the supplier's credit notes and returns", async () => {
     const report = await caller().gst.gstr3b({ year: NOTE_YEAR, month: NOTE_MONTH });
 
-    // 1,800 + 90 − 180 − 360 = 1,350 ITC → 675 CGST + 675 SGST
-    expect(report.itc.cgst).toBeCloseTo(675, 2);
-    expect(report.itc.sgst).toBeCloseTo(675, 2);
+    // A purchase-side debit note is ours to the supplier, claiming value back
+    // (it reduces what we owe, as the ledger and derived journal post it):
+    // 1,800 − 90 − 180 − 360 = 1,170 ITC → 585 CGST + 585 SGST
+    expect(report.itc.cgst).toBeCloseTo(585, 2);
+    expect(report.itc.sgst).toBeCloseTo(585, 2);
     expect(report.itc.igst).toBeCloseTo(0, 2);
-    expect(report.itc.total).toBeCloseTo(1350, 2);
-    expect(report.netTax.total).toBeCloseTo(2700 - 1350, 2);
+    expect(report.itc.total).toBeCloseTo(1170, 2);
+    expect(report.netTax.total).toBeCloseTo(2700 - 1170, 2);
   });
 });
 

@@ -33,6 +33,7 @@ import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 import { assertLineExtras, lineExtras } from "../lib/line-extras.js";
 import { resolveDeliveryMethod } from "../lib/delivery-methods.js";
 import { recomputeInvoiceStatus, recomputeReferencedInvoice } from "../lib/invoice-status.js";
+import { syncReversingItc } from "../lib/itc-reversal.js";
 
 /**
  * Keep a purchase invoice's live ITC entry equal to the invoice after an edit:
@@ -856,6 +857,7 @@ export const invoiceRouter = router({
           });
           // A cancelled or reinstated note or return changes what settles its invoice.
           await recomputeReferencedInvoice(tx, ctx.businessId, updated);
+          await syncReversingItc(tx, ctx.businessId, input.id);
         }
         return updated;
       });
@@ -1163,6 +1165,8 @@ export const invoiceRouter = router({
 
         // 5. Apply update
         const [result] = await tx.update(invoices).set(updates).where(eq(invoices.id, input.id)).returning();
+        // An edited return or note to a supplier takes back its new tax.
+        await syncReversingItc(tx, ctx.businessId, result.id);
 
         // A new total changes how much of it is settled: for a note or return,
         // on the invoice it adjusts; for an invoice, on itself.
@@ -1251,6 +1255,7 @@ export const invoiceRouter = router({
         const [deleted] = await tx.select({ documentType: invoices.documentType, referenceDocumentId: invoices.referenceDocumentId })
           .from(invoices).where(eq(invoices.id, input.id)).limit(1);
         if (deleted) await recomputeReferencedInvoice(tx, ctx.businessId, deleted);
+        await syncReversingItc(tx, ctx.businessId, input.id);
       });
 
       await logAudit(ctx.db, {

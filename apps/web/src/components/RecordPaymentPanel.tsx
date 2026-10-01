@@ -57,6 +57,19 @@ export function accountTypeToMode(type: string): "cash" | "bank" | "upi" | "cheq
   return "bank";
 }
 
+/**
+ * Whether a payment pays a supplier: the first of the picked bills (in the
+ * order they are listed) is a purchase. With none picked, the party's open
+ * bills say which way it goes.
+ */
+export function isPayingOut(
+  unpaid: ReadonlyArray<{ id: string; type: string }>,
+  checked: ReadonlySet<string>,
+): boolean {
+  const first = unpaid.find((inv) => checked.has(inv.id)) ?? unpaid[0];
+  return first?.type === "purchase";
+}
+
 // Gateway payment mode options
 const GATEWAY_PAYMENT_MODES = [
   { value: "credit_card", label: "Credit Card" },
@@ -214,6 +227,10 @@ export function RecordPaymentPanel({
     .reduce((sum, [, amt]) => sum + (parseFloat(amt) || 0), 0);
 
   const displayAmount = amountOverridden ? manualAmount : allocatedTotal.toFixed(2);
+
+  // Money goes out when the payment settles purchase bills (the server makes
+  // it a withdrawal by the first bill it is allocated to), else it comes in.
+  const paysOut = isPayingOut(unpaidInvoices ?? [], checkedInvoices);
 
   // When allocations change and user hasn't manually overridden, sync amount
   useEffect(() => {
@@ -702,7 +719,7 @@ export function RecordPaymentPanel({
 
         {/* ── Receive Into (Account Selector) ────────────────────────────── */}
         <div>
-          <p className="label mb-2">Receive into</p>
+          <p className="label mb-2">{paysOut ? "Pay from" : "Receive into"}</p>
           {!bankAccountsData?.length ? (
             <div
               className="rounded-xl border border-dashed border-border-light px-4 py-4 text-center"

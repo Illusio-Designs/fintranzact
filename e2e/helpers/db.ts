@@ -395,6 +395,94 @@ export async function ewayBillsFor(invoiceId: string) {
   return (await db()`select id, status from eway_bills where invoice_id = ${invoiceId}`) as unknown as Array<{ id: string; status: string }>;
 }
 
+// ── Purchases ───────────────────────────────────────────────────
+
+/** A purchase document's lines: accepted, free and rejected goods, and the batch each came in. */
+export async function receivedLines(id: string) {
+  return (await db()`
+    select ii.item_id, ii.quantity, ii.free_quantity, ii.rejected_quantity, ii.rejection_reason, ii.unit_price,
+           ii.tax_amount, ii.total_amount, b.batch_number, b.expiry_date::text as expiry_date
+    from invoice_items ii left join item_batches b on b.id = ii.batch_id
+    where ii.invoice_id = ${id} order by ii.sort_order`) as unknown as Array<{
+    item_id: string | null;
+    quantity: string;
+    free_quantity: string;
+    rejected_quantity: string | null;
+    rejection_reason: string | null;
+    unit_price: string;
+    tax_amount: string;
+    total_amount: string;
+    batch_number: string | null;
+    expiry_date: string | null;
+  }>;
+}
+
+/** Documents made from `sourceId` (conversions, returns of rejected goods), oldest first. */
+export async function documentsMadeFrom(sourceId: string) {
+  return (await db().unsafe(
+    `select ${DOC_COLUMNS} from invoices where reference_document_id = $1 order by created_at`,
+    [sourceId],
+  )) as unknown as DocRow[];
+}
+
+/** Payments made to a supplier, each with its allocations and the bank movement behind it. */
+export async function supplierPayments(partyId: string) {
+  return (await db()`
+    select p.id, p.amount, p.mode, p.bank_account_id,
+           coalesce((select json_agg(json_build_object('invoiceId', pa.invoice_id, 'amount', pa.amount::numeric))
+                     from payment_allocations pa where pa.payment_id = p.id), '[]') as allocations,
+           (select json_agg(json_build_object('type', bt.type, 'amount', bt.amount::numeric, 'accountId', bt.bank_account_id))
+            from bank_transactions bt where bt.reference_type = 'payment' and bt.reference_id = p.id) as bank
+    from payments p where p.party_id = ${partyId} and p.deleted_at is null order by p.created_at`) as unknown as Array<{
+    id: string;
+    amount: string;
+    mode: string;
+    bank_account_id: string | null;
+    allocations: Array<{ invoiceId: string; amount: number }>;
+    bank: Array<{ type: string; amount: number; accountId: string }> | null;
+  }>;
+}
+
+export async function bankBalance(accountId: string) {
+  const [row] = await db()`select current_balance from bank_accounts where id = ${accountId}`;
+  return Number((row as { current_balance: string }).current_balance);
+}
+
+/** The ITC ledger's rows for these documents (an invoice's credit, a return's reversal). */
+export async function itcEntries(documentIds: string[]) {
+  return (await db()`
+    select invoice_id, return_period, status, cgst::numeric as cgst, sgst::numeric as sgst, igst::numeric as igst
+    from itc_ledger_entries where invoice_id = any(${documentIds}::uuid[]) order by created_at`) as unknown as Array<{
+    invoice_id: string;
+    return_period: string;
+    status: string;
+    cgst: string;
+    sgst: string;
+    igst: string;
+  }>;
+}
+
+/**
+ * What the business owes a supplier from the books, worked out here rather
+ * than by the app: opening balance + purchase invoices − the supplier's credit
+ * notes, goods returned (purchase returns) and our debit notes − payments
+ * made. Orders and GRNs are not bills; cancelled or deleted documents don't
+ * count.
+ */
+export async function supplierBookBalance(partyId: string): Promise<number> {
+  const [row] = await db()`
+    select
+      (select opening_balance from parties where id = ${partyId})
+      + coalesce((select sum(case when document_type = 'invoice' then total_amount else -total_amount end)
+                  from invoices
+                  where party_id = ${partyId} and type = 'purchase'
+                    and document_type in ('invoice', 'credit_note', 'purchase_return', 'debit_note')
+                    and status <> 'cancelled' and deleted_at is null), 0)
+      - coalesce((select sum(amount) from payments where party_id = ${partyId} and deleted_at is null), 0)
+      as balance`;
+  return Number((row as { balance: string }).balance);
+}
+
 // ── Test plumbing (no UI exists for these) ───────────────────────
 
 /** Make an invoice look `hours` old (role rules depend on its age). */

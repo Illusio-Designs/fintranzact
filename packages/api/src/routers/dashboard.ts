@@ -6,7 +6,7 @@ import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { valueStock } from "../lib/stock-valuation.js";
-import { billDocument } from "../lib/order-fulfilment.js";
+import { billDocument, reducingDocument } from "../lib/order-fulfilment.js";
 
 
 export const dashboardRouter = router({
@@ -101,9 +101,10 @@ export const dashboardRouter = router({
         )),
 
       // Payable = current outstanding balance (balance sheet metric, NOT period-scoped)
-      // Purchase returns reduce the payable balance; invoices and debit notes add to it.
+      // Purchase returns, the supplier's credit notes and our debit notes reduce
+      // the payable balance; invoices add to it.
       ctx.db.select({
-        total: sql<string>`coalesce(sum(CASE WHEN ${invoices.documentType} IN ('purchase_return') THEN -(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric) ELSE (${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric) END), 0)::text`,
+        total: sql<string>`coalesce(sum(CASE WHEN ${reducingDocument()} THEN -(${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric) ELSE (${invoices.totalAmount}::numeric - ${invoices.amountPaid}::numeric) END), 0)::text`,
       }).from(invoices)
         .where(and(
           eq(invoices.businessId, ctx.businessId),
