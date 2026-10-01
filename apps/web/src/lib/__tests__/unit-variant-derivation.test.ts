@@ -250,3 +250,13 @@ describe("Bug A regression — ImportWizard unit-conflict resolution", () => {
     expect(fallback("100", "abc")).toBe("100");
   });
 });
+
+describe("switchFactorForVariant — Items → Switch base unit", () => {
+  it("inverts the variant's Direction A factor (1 bag = 25 kg → 1 kg = 0.04 bag)", async () => {
+    const { switchFactorForVariant } = await import("../unit-variant-derivation");
+    expect(switchFactorForVariant(25)).toBeCloseTo(0.04, 10);
+    expect(switchFactorForVariant("0.001")).toBeCloseTo(1000, 6); // 1 g = 0.001 kg → 1 kg = 1000 g
+    expect(switchFactorForVariant(0)).toBe(0);
+    expect(switchFactorForVariant(null)).toBe(0);
+  });
+});

@@ -19,6 +19,7 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { withAudit } from "../lib/audit.js";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -193,7 +194,7 @@ export const itcRouter = router({
    */
   markBlocked: adminProcedure
     .input(markItcBlockedSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "ITC");
 
       const [entry] = await ctx.db
@@ -227,14 +228,14 @@ export const itcRouter = router({
         .returning();
 
       return updated;
-    }),
+    }, (r, input) => ({ action: "itc.markBlocked", entityType: "itcLedgerEntry", entityId: r?.id ?? null, metadata: { invoiceId: input.invoiceId, blockReason: input.blockReason } }))),
 
   /**
    * Unblock ITC: move a blocked entry back to available.
    */
   markEligible: adminProcedure
     .input(markItcEligibleSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "ITC");
 
       const [entry] = await ctx.db
@@ -267,7 +268,7 @@ export const itcRouter = router({
         .returning();
 
       return updated;
-    }),
+    }, (r, input) => ({ action: "itc.markEligible", entityType: "itcLedgerEntry", entityId: r?.id ?? null, metadata: { invoiceId: input.invoiceId } }))),
 
   /**
    * Aging alerts: purchase invoices with available ITC approaching or past
@@ -332,7 +333,7 @@ export const itcRouter = router({
    */
   recordUtilization: adminProcedure
     .input(recordItcUtilizationSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "ITC");
 
       // Calculate total available ITC for the period
@@ -582,7 +583,7 @@ export const itcRouter = router({
       });
 
       return result;
-    }),
+    }, (r, input) => [{ action: "itc.recordUtilization", entityType: "itcUtilization", entityId: r.utilization.id, metadata: { returnPeriod: input.returnPeriod } }, ...(r.journalEntry ? [{ action: "journal.create", entityType: "journalEntry", entityId: r.journalEntry.id, metadata: { source: "itc.recordUtilization" } }] : [])])),
 
   /**
    * GSTR-3B Table 4 breakdown for a given month.

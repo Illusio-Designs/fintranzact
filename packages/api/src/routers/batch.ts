@@ -13,7 +13,7 @@ import { itemBatches, items, itemVariants } from "@fintranzact/db";
 import { batchFieldsSchema, dateOnlyStr } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
-import { logAudit } from "../lib/audit.js";
+import { logAudit, withAudit } from "../lib/audit.js";
 import { assertBatchFields, businessDay, findOrCreateBatch } from "../lib/batches.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,7 +124,7 @@ export const batchRouter = router({
       itemId: z.string().uuid(),
       variantId: z.string().uuid().nullish(),
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(withAudit(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
       return ctx.db.transaction(async (tx: Tx) => {
         const item = await assertItem(tx, ctx.businessId, input.itemId, input.variantId);
@@ -154,7 +154,7 @@ export const batchRouter = router({
           requireExpiry: item.trackExpiry,
         });
       });
-    }),
+    }, (r) => ({ action: "batch.create", entityType: "item_batch", entityId: r.id, metadata: { batchNumber: r.batchNumber, itemId: r.itemId } }))),
 
   /** Correct a batch's number, dates or MRP. */
   update: memberProcedure
@@ -210,7 +210,7 @@ export const batchRouter = router({
   /** Remove a batch nothing refers to (typed in by mistake). */
   delete: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(withAudit(async ({ ctx, input }) => {
       requireCan(ctx.ability, "delete", "Item");
       return ctx.db.transaction(async (tx: Tx) => {
         const batch = await getBatch(tx, ctx.businessId, input.id);
@@ -224,5 +224,5 @@ export const batchRouter = router({
         await tx.delete(itemBatches).where(eq(itemBatches.id, batch.id));
         return { success: true };
       });
-    }),
+    }, (_r, input) => ({ action: "batch.delete", entityType: "item_batch", entityId: input.id }))),
 });

@@ -206,3 +206,14 @@ export function recomputeSingleRow(
     };
   });
 }
+
+/**
+ * The factor item.switchBaseUnit expects when an existing alternate unit
+ * becomes the base: how many of the NEW unit make one current base unit.
+ * A variant's own factor runs the other way (base units in one of it), so
+ * "1 BAG = 25 KG" switches with 1 / 25 = 0.04. Returns 0 for a bad factor.
+ */
+export function switchFactorForVariant(conversionFactor: number | string | undefined | null): number {
+  const cf = parseCF(conversionFactor);
+  return cf && cf > 0 ? 1 / cf : 0;
+}

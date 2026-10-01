@@ -46,7 +46,7 @@ setup("authenticate", async ({ page, request }) => {
         name: "E2E Test Business",
         gstRegistrationType: "regular",
         gstin: "27AABCU9603R1ZM",
-        pan: "AAACE0000A",
+        pan: "AABCU9603R", // characters 3–12 of the GSTIN
         phone: "9876500000",
         email: email,
         address: "123 Test Road",

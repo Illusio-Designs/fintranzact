@@ -481,7 +481,7 @@ txn = resp.json()["result"]["data"]["json"]`,
       },
       gotchas: [
         "The account balance is updated atomically using `SELECT...FOR UPDATE`. Concurrent transactions on the same account are serialized.",
-        "For deposits and transfers, the amount is added to `currentBalance`. For withdrawals, it is subtracted. There is no overdraft check.",
+        "For deposits, the amount is added to `currentBalance`. For withdrawals and single `transfer` rows (money sent out of this account), it is subtracted — the same way the statement's running balance reads them. To move money between two of the business's own accounts use `bankAccount.transfer`, which writes both sides. There is no overdraft check.",
         "Amount must be a string (decimal). Passing a number will fail Zod validation.",
         "Typically you do not call this directly. Payments and expenses auto-create bank transactions when a bank account is selected.",
       ],

@@ -19,10 +19,19 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
+    // A pre-installed Chromium whose revision differs from the pinned
+    // Playwright's (sandboxes, CI images): point at its binary.
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+      ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } }
+      : {}),
   },
 
   projects: [
-    { name: "setup", testMatch: /global-setup\.ts/ },
+    // "data-audit" runs after every project that depends on setup has
+    // finished: the Layer 4 data completeness audit over what the web
+    // journeys saved (see data-audit.teardown.ts).
+    { name: "setup", testMatch: /global-setup\.ts/, teardown: "data-audit" },
+    { name: "data-audit", testMatch: /data-audit\.teardown\.ts/ },
     {
       name: "chromium",
       use: {

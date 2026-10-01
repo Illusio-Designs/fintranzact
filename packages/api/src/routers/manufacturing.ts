@@ -41,6 +41,7 @@ import {
 import { unitKey, valueStock } from "../lib/stock-valuation.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { assertWarehousePermission, assertWarehouses } from "./stock.js";
+import { withAudit } from "../lib/audit.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
@@ -459,7 +460,7 @@ export const manufacturingRouter = router({
 
   bomCreate: memberProcedure
     .input(bomInput)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(withAudit(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
       return ctx.db.transaction(async (tx: Tx) => {
         const info = await validateBom(tx, ctx.businessId, input);
@@ -482,11 +483,11 @@ export const manufacturingRouter = router({
         if (bom.isDefault) await makeOnlyDefault(tx, ctx.businessId, bom.id, unit);
         return { id: bom.id as string };
       });
-    }),
+    }, (r, input) => ({ action: "manufacturing.bomCreate", entityType: "bom", entityId: r.id, metadata: { name: input.name, itemId: input.itemId } }))),
 
   bomUpdate: memberProcedure
     .input(bomInput.extend({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(withAudit(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
       return ctx.db.transaction(async (tx: Tx) => {
         const [existing] = await tx
@@ -512,12 +513,12 @@ export const manufacturingRouter = router({
         if (input.isDefault && input.isActive) await makeOnlyDefault(tx, ctx.businessId, input.id, unit);
         return { id: input.id };
       });
-    }),
+    }, (_r, input) => ({ action: "manufacturing.bomUpdate", entityType: "bom", entityId: input.id, metadata: { name: input.name } }))),
 
   /** Delete a BOM. Journals made from it keep their own lines. */
   bomDelete: memberProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(withAudit(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
       const deleted = await ctx.db
         .delete(boms)
@@ -525,7 +526,7 @@ export const manufacturingRouter = router({
         .returning({ id: boms.id });
       if (deleted.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "BOM not found" });
       return { ok: true };
-    }),
+    }, (_r, input) => ({ action: "manufacturing.bomDelete", entityType: "bom", entityId: input.id }))),
 
   /**
    * What a production run would use: the BOM's components scaled to the
@@ -621,7 +622,7 @@ export const manufacturingRouter = router({
       })).max(20).default([]),
       notes: z.string().max(1000).nullish(),
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(withAudit(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
       const produce = parseFloat(input.quantity);
       const date = input.date ? new Date(input.date) : new Date();
@@ -787,7 +788,7 @@ export const manufacturingRouter = router({
           unitCost: unitCost.toFixed(4),
         };
       });
-    }),
+    }, (r, input) => ({ action: "manufacturing.manufacture", entityType: "manufacturingJournal", entityId: r.id, metadata: { journalNumber: r.journalNumber, quantity: input.quantity, totalCost: r.totalCost } }))),
 
   /** Manufacturing journals, newest first. */
   journals: viewerProcedure
@@ -893,7 +894,7 @@ export const manufacturingRouter = router({
    */
   cancel: memberProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(withAudit(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
       return ctx.db.transaction(async (tx: Tx) => {
         const [journal] = await tx
@@ -967,5 +968,5 @@ export const manufacturingRouter = router({
         }).where(eq(manufacturingJournals.id, journal.id));
         return { id: journal.id as string };
       });
-    }),
+    }, (_r, input) => ({ action: "manufacturing.cancel", entityType: "manufacturingJournal", entityId: input.id }))),
 });

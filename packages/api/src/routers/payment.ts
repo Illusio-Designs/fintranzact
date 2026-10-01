@@ -193,7 +193,7 @@ export const paymentRouter = router({
     requireCan(ctx.ability, "create", "Payment");
     const payment = await ctx.db.transaction(async (tx) => {
       // Security: validate that partyId belongs to the current business.
-      const [partyCheck] = await tx.select({ id: parties.id })
+      const [partyCheck] = await tx.select({ id: parties.id, type: parties.type })
         .from(parties)
         .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
         .limit(1);
@@ -300,14 +300,15 @@ export const paymentRouter = router({
 
         if (account) {
           // Determine direction: sale payments are deposits, purchase payments are withdrawals.
-          // Check the type of the first linked invoice if any.
-          let txType: "deposit" | "withdrawal" = "deposit";
+          // Check the type of the first linked invoice if any; a payment on
+          // account follows the party (paid to a supplier = money out).
+          let txType: "deposit" | "withdrawal" = partyCheck.type === "supplier" ? "withdrawal" : "deposit";
           if (effectiveAllocations.length > 0) {
             const [inv] = await tx.select({ type: invoices.type })
               .from(invoices)
               .where(eq(invoices.id, effectiveAllocations[0].invoiceId))
               .limit(1);
-            if (inv?.type === "purchase") txType = "withdrawal";
+            txType = inv?.type === "purchase" ? "withdrawal" : "deposit";
           }
 
           const newBalance =
@@ -590,11 +591,16 @@ export const paymentRouter = router({
           .for("update").limit(1);
 
         if (account) {
+          // Same direction rule as create: the first invoice's side, else the party's.
           let txType: "deposit" | "withdrawal" = "deposit";
           if (newAllocations.length > 0) {
             const [inv] = await tx.select({ type: invoices.type }).from(invoices)
               .where(eq(invoices.id, newAllocations[0].invoiceId)).limit(1);
             if (inv?.type === "purchase") txType = "withdrawal";
+          } else {
+            const [party] = await tx.select({ type: parties.type }).from(parties)
+              .where(eq(parties.id, existing.partyId)).limit(1);
+            if (party?.type === "supplier") txType = "withdrawal";
           }
           const newBal = txType === "deposit"
             ? money.add(account.currentBalance, newAmount)
@@ -872,7 +878,9 @@ export const paymentRouter = router({
             paymentDate: payments.paymentDate,
             paymentNumber: payments.paymentNumber,
             invoiceId: payments.invoiceId,
+            partyType: parties.type,
           }).from(payments)
+            .innerJoin(parties, eq(parties.id, payments.partyId))
             .where(and(
               eq(payments.id, paymentId),
               eq(payments.businessId, ctx.businessId),
@@ -889,14 +897,14 @@ export const paymentRouter = router({
             .set({ bankAccountId: input.bankAccountId })
             .where(eq(payments.id, paymentId));
 
-          // Determine deposit/withdrawal based on linked invoice type
-          let txType: "deposit" | "withdrawal" = "deposit";
+          // Determine deposit/withdrawal based on linked invoice type (else the party's side)
+          let txType: "deposit" | "withdrawal" = pmt.partyType === "supplier" ? "withdrawal" : "deposit";
           if (pmt.invoiceId) {
             const [inv] = await tx.select({ type: invoices.type })
               .from(invoices)
               .where(eq(invoices.id, pmt.invoiceId))
               .limit(1);
-            if (inv?.type === "purchase") txType = "withdrawal";
+            txType = inv?.type === "purchase" ? "withdrawal" : "deposit";
           }
 
           totalDeposited = txType === "deposit"

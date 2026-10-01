@@ -136,7 +136,15 @@ export const bankAccountRouter = router({
 
         const [result] = await tx
           .update(bankAccounts)
-          .set({ ...input.data, updatedAt: new Date() })
+          .set({
+            ...input.data,
+            // The balance is opening balance + postings, so moving the
+            // opening balance moves the balance by the same amount.
+            ...(input.data.openingBalance !== undefined
+              ? { currentBalance: sql`${bankAccounts.currentBalance}::numeric + (${input.data.openingBalance}::numeric - ${bankAccounts.openingBalance}::numeric)` }
+              : {}),
+            updatedAt: new Date(),
+          })
           .where(
             and(
               eq(bankAccounts.id, input.id),
@@ -326,8 +334,12 @@ export const bankAccountRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "Bank account not found" });
         }
 
+        // Only a deposit brings money in. A single "transfer" row is money
+        // sent out of this account (a two-sided move between the business's
+        // own accounts is bankAccount.transfer) — the same reading as the
+        // statement's running balance, recomputeDerived and every reversal.
         const newBalance =
-          input.type === "deposit" || input.type === "transfer"
+          input.type === "deposit"
             ? money.add(account.currentBalance, input.amount)
             : money.sub(account.currentBalance, input.amount);
 

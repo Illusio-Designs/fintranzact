@@ -1,6 +1,6 @@
 import { eq, and, ilike, or, sql, desc, asc, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { parties, invoices, payments, expenses, items, invoiceItems, eInvoiceConfigs } from "@fintranzact/db";
+import { parties, invoices, payments, expenses, items, invoiceItems, eInvoiceConfigs, shipments } from "@fintranzact/db";
 import {
   createPartySchema,
   updatePartySchema,
@@ -449,6 +449,11 @@ export const partyRouter = router({
           .set({ partyId: input.targetId })
           .where(and(eq(payments.partyId, input.sourceId), eq(payments.businessId, ctx.businessId)));
 
+        // Shipments go with their invoices (deleting the source would blank them).
+        await tx.update(shipments)
+          .set({ partyId: input.targetId, updatedAt: new Date() })
+          .where(and(eq(shipments.partyId, input.sourceId), eq(shipments.businessId, ctx.businessId)));
+
         // Merge opening balances
         const mergedBalance = money.add(source.openingBalance || "0", target.openingBalance || "0");
 
@@ -461,6 +466,12 @@ export const partyRouter = router({
         if (!target.billingAddress && source.billingAddress) updates.billingAddress = source.billingAddress;
         if (!target.city && source.city) updates.city = source.city;
         if (!target.state && source.state) updates.state = source.state;
+        // The state code decides CGST+SGST vs IGST: take the source's, or the
+        // one the (possibly just copied) GSTIN carries.
+        if (!target.stateCode) {
+          const stateCode = source.stateCode || stateCodeFromGstin((updates.gstin as string | undefined) ?? target.gstin);
+          if (stateCode) updates.stateCode = stateCode;
+        }
         if (!target.pincode && source.pincode) updates.pincode = source.pincode;
         if (!target.category && source.category) updates.category = source.category;
         // Keep both parties' shipping addresses: the target's default stays,
