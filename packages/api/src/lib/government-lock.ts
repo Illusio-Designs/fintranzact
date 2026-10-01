@@ -6,7 +6,7 @@ import type { TenantDatabase } from "../trpc.js";
 type Db = Pick<TenantDatabase, "select">;
 
 /** Why a document is locked by a government filing, or null when it isn't. */
-export type GovernmentLock = { kind: "e_invoice"; irn: string } | { kind: "eway_bill"; ewbNumber: string | null };
+export type GovernmentLock = { kind: "e_invoice"; irn: string } | { kind: "eway_bill"; ewbNumber: string | null; ewayBillId: string };
 
 /**
  * A document reported to the government (an e-invoice IRN or a live e-way
@@ -21,7 +21,7 @@ export async function getGovernmentLock(db: Db, businessId: string, documentId: 
   if (!doc) return null;
   if (doc.eInvoiceStatus === "generated" && doc.irn) return { kind: "e_invoice", irn: doc.irn };
 
-  const [bill] = await db.select({ ewbNumber: ewayBills.ewbNumber })
+  const [bill] = await db.select({ id: ewayBills.id, ewbNumber: ewayBills.ewbNumber })
     .from(ewayBills)
     .where(and(
       eq(ewayBills.businessId, businessId),
@@ -29,7 +29,7 @@ export async function getGovernmentLock(db: Db, businessId: string, documentId: 
       inArray(ewayBills.status, ["generated", "active"]),
     ))
     .limit(1);
-  return bill ? { kind: "eway_bill", ewbNumber: bill.ewbNumber } : null;
+  return bill ? { kind: "eway_bill", ewbNumber: bill.ewbNumber, ewayBillId: bill.id } : null;
 }
 
 export async function assertNotLockedByGovernment(

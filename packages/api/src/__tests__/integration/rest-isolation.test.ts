@@ -132,6 +132,91 @@ describe("GET /api/invoices/:id/pdf", () => {
   });
 });
 
+describe("invoice designs on the invoice PDF", () => {
+  const path = (id: string, q = "") => `/api/invoices/${id}/pdf?format=a4${q}`;
+  const pageCount = (pdf: string) => (pdf.match(/\/Type \/Page\b/g) ?? []).length;
+
+  it("prints in the business's chosen design, with copies and thermal widths from the query", async () => {
+    const sql = getTestClient();
+    await sql`UPDATE businesses SET invoice_template = 'tally' WHERE id = ${world.a1.id}`;
+    try {
+      const one = await request(path(world.a1.ids.invoice!), { as: world.usersA.owner, business: world.a1.id });
+      expect(one.status).toBe(200);
+      expect(one.headers.get("content-type")).toBe("application/pdf");
+      const single = await bodyText(one);
+      expect(single.startsWith("%PDF-")).toBe(true);
+      const three = await bodyText(await request(path(world.a1.ids.invoice!, "&copies=original,duplicate,triplicate"), { as: world.usersA.owner, business: world.a1.id }));
+      expect(pageCount(three)).toBe(pageCount(single) * 3);
+      for (const width of ["58", "80"]) {
+        const res = await request(`/api/invoices/${world.a1.ids.invoice!}/pdf?format=thermal&width=${width}`, { as: world.usersA.owner, business: world.a1.id });
+        expect(res.status).toBe(200);
+        const mediaWidth = Number(/\/MediaBox \[0 0 ([\d.]+)/.exec(await bodyText(res))?.[1]);
+        expect(mediaWidth).toBeCloseTo(Number(width) * 72 / 25.4, 0);
+      }
+    } finally {
+      await sql`UPDATE businesses SET invoice_template = 'classic' WHERE id = ${world.a1.id}`;
+    }
+  });
+});
+
+describe("GET /api/invoice-templates/preview", () => {
+  it("renders a sample in the asked-for design for the caller's own business", async () => {
+    const res = await request("/api/invoice-templates/preview?template=modern", { as: world.usersA.seller, business: world.a1.id });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/pdf");
+    const pdf = await bodyText(res);
+    expect(pdf.startsWith("%PDF-")).toBe(true);
+    expect(pdf).not.toContain(CANARY);
+    const thermal = await request("/api/invoice-templates/preview?format=thermal&width=58", { as: world.usersA.seller, business: world.a1.id });
+    expect(thermal.status).toBe(200);
+  });
+
+  it("refuses unknown designs, foreign and non-member businesses, and anonymous callers", async () => {
+    expect((await request("/api/invoice-templates/preview?template=fancy", { as: world.usersA.owner, business: world.a1.id })).status).toBe(400);
+    expect((await request("/api/invoice-templates/preview", { as: world.usersA.owner, business: world.b1.id })).status).toBe(403);
+    expect((await request("/api/invoice-templates/preview", { as: world.usersA.seller, business: world.a2.id })).status).toBe(403);
+    expect((await request("/api/invoice-templates/preview", { business: world.a1.id })).status).toBe(401);
+  });
+});
+
+describe("GET /api/eway-bills/:id/pdf", () => {
+  const ewbIds: Record<string, string> = {};
+  beforeAll(async () => {
+    const sql = getTestClient();
+    for (const b of [world.a1, world.a2, world.b1]) {
+      const [row] = await sql<{ id: string }[]>`
+        INSERT INTO eway_bills (business_id, invoice_id, ewb_number, ewb_date, valid_upto, status, vehicle_number, transport_mode, distance)
+        VALUES (${b.id}, ${b.ids.invoice!}, ${b === world.b1 ? "999988887777" : "181744026633"}, now(), now() + interval '1 day', 'generated', 'GJ05BX4471', 'road', 120)
+        RETURNING id`;
+      ewbIds[b.tag] = row!.id;
+    }
+  });
+  const path = (b: SweepBusiness) => `/api/eway-bills/${ewbIds[b.tag]}/pdf`;
+
+  it("prints the caller's own e-way bill", async () => {
+    const res = await request(path(world.a1), { as: world.usersA.seller, business: world.a1.id });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/pdf");
+    const pdf = await bodyText(res);
+    expect(pdf.startsWith("%PDF-")).toBe(true);
+    expect(pdf).not.toContain(CANARY);
+  });
+
+  it("also prints it on the invoice: the e-way bill and vehicle reach the invoice PDF data", async () => {
+    const res = await request(`/api/invoices/${world.a1.ids.invoice!}/pdf?format=a4`, { as: world.usersA.owner, business: world.a1.id });
+    expect(res.status).toBe(200);
+  });
+
+  it("refuses foreign businesses and does not find foreign e-way bills", async () => {
+    expect((await request(path(world.b1), { as: world.usersA.owner, business: world.b1.id })).status).toBe(403);
+    expect((await request(path(world.b1), { as: world.usersA.owner, business: world.a1.id })).status).toBe(404);
+    expect((await request(path(world.a2), { as: world.usersA.seller, business: world.a2.id })).status).toBe(403);
+    expect((await request(path(world.a2), { as: world.usersA.seller, business: world.a1.id })).status).toBe(404);
+    expect((await request("/api/eway-bills/not-a-uuid/pdf", { as: world.usersA.seller, business: world.a1.id })).status).toBe(404);
+    expect((await request(path(world.a1), { business: world.a1.id })).status).toBe(401);
+  });
+});
+
 describe("GET /api/parties/:id/ledger.pdf", () => {
   const path = (id: string) => `/api/parties/${id}/ledger.pdf`;
 

@@ -4,6 +4,7 @@ import { InputField } from "@/components/ui/FormField";
 import { toast } from "@/hooks/useToast";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon } from "@hugeicons/core-free-icons";
+import { InvoiceDesignSection } from "./InvoiceDesignSection";
 
 interface DocumentsTabProps {
   biz: any;
@@ -91,6 +92,8 @@ export function DocumentsTab({ biz }: DocumentsTabProps) {
 
   return (
     <div className="space-y-6">
+      <InvoiceDesignSection biz={biz} />
+
       {/* Prefixes */}
       <div className="card overflow-hidden">
         <div className="px-6 py-4 border-b border-border-light flex items-center justify-between">

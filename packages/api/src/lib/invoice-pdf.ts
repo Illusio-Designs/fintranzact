@@ -2,6 +2,10 @@ import PDFDocument from "pdfkit";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { chargeSupplyOf, isIntraStateSupply, money, splitIntraStateTax } from "@fintranzact/shared";
+import { copyLabel, type InvoiceCopy, type InvoiceTemplate, type ThermalWidth } from "@fintranzact/shared";
+import { buildModel } from "./invoice-templates/model.js";
+import { designFor, renderDesign } from "./invoice-templates/render.js";
+import { renderThermal } from "./invoice-templates/thermal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONT_REGULAR = resolve(__dirname, "../../fonts/NotoSans-Regular.ttf");
@@ -111,6 +115,48 @@ export interface InvoicePDFData {
   // may strip the Buffer subclass on transfer.
   logoBuffer?: Buffer | Uint8Array;
   signatureBuffer?: Buffer | Uint8Array;
+
+  // ── Fields used by the invoice designs (lib/invoice-templates) ──
+  /** invoice | quotation | proforma | credit_note | debit_note | delivery_challan | … */
+  documentType?: string;
+  /** The document's own round-off (total already includes it). */
+  roundOff?: string;
+  isReverseCharge?: boolean;
+  partyShippingAddress?: string;
+  partyPincode?: string;
+  /** regular | composition | unregistered | sez | overseas | uin */
+  partyGstRegistrationType?: string;
+  businessLutArn?: string;
+  businessIecCode?: string;
+  businessCin?: string;
+  businessLlpin?: string;
+  /** Every line is a service: copies use the services labels (Rule 48). */
+  isServices?: boolean;
+  /** E-invoice registration, when the invoice has an IRN. */
+  eInvoice?: {
+    irn: string;
+    ackNumber?: string;
+    ackDate?: string;
+    /** Signed QR from the IRP, pre-rendered as a PNG data URL. */
+    qrDataUrl?: string;
+  };
+  /** The invoice's live e-way bill, if one was generated. */
+  eWayBill?: {
+    number: string;
+    date?: string;
+    validUpto?: string;
+    vehicleNumber?: string;
+    transportMode?: string;
+    transporterName?: string;
+    transporterId?: string;
+    distance?: number;
+  };
+  /** Print choices: design, copies and thermal roll width. */
+  print?: {
+    template?: InvoiceTemplate;
+    copies?: InvoiceCopy[];
+    thermalWidth?: ThermalWidth;
+  };
 }
 
 export type PDFFormat = "a5" | "a4" | "thermal";
@@ -329,6 +375,18 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   // ── Page outer border ──────────────────────────────────────
   borderedRect(doc, margin - 4, margin - 4, contentW + 8, pageH - margin * 2 + 8, cBorder, 0.75);
 
+  // Long invoices continue on new pages: every section checks it fits before
+  // drawing (PDFKit would otherwise start a page for each text call past the
+  // bottom margin).
+  const pageBottom = pageH - margin - 18;
+  const ensure = (h: number): boolean => {
+    if (y + h <= pageBottom) return false;
+    doc.addPage();
+    borderedRect(doc, margin - 4, margin - 4, contentW + 8, pageH - margin * 2 + 8, cBorder, 0.75);
+    y = margin;
+    return true;
+  };
+
   // ── Title banner ──────────────────────────────────────────
   filledRect(doc, margin - 4, y - 4, contentW + 8, 28, cAccent);
   doc.fontSize(13).fillColor("#ffffff").font("NotoSans-Bold")
@@ -542,22 +600,26 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   const COL_QTY  = COL_RATE - 38;
   const DESCW = COL_QTY - COL_DESC - 8;
 
-  // Table header row
+  // Table header row (repeated at the top of every continuation page)
   const tableHeaderH = 20;
-  filledRect(doc, margin - 4, y, contentW + 8, tableHeaderH, cHeaderBg);
+  const drawTableHeader = () => {
+    filledRect(doc, margin - 4, y, contentW + 8, tableHeaderH, cHeaderBg);
 
-  doc.fontSize(7).fillColor(cMuted).font("NotoSans-Bold");
-  doc.text("#", COL_IDX, y + 6, { width: 16 });
-  if (showHsn) doc.text("HSN/SAC", COL_HSN, y + 6, { width: 44 });
-  doc.text("DESCRIPTION", COL_DESC, y + 6, { width: DESCW });
-  doc.text("QTY", COL_QTY, y + 6, { width: 36, align: "right" });
-  doc.text("RATE", COL_RATE, y + 6, { width: 62, align: "right" });
-  doc.text("TAX%", COL_TAXPCT, y + 6, { width: 28, align: "right" });
-  doc.text("TAX AMT", COL_TAXAMT, y + 6, { width: 54, align: "right" });
-  doc.text("AMOUNT", COL_AMT, y + 6, { width: 60, align: "right" });
+    doc.fontSize(7).fillColor(cMuted).font("NotoSans-Bold");
+    doc.text("#", COL_IDX, y + 6, { width: 16 });
+    if (showHsn) doc.text("HSN/SAC", COL_HSN, y + 6, { width: 44 });
+    doc.text("DESCRIPTION", COL_DESC, y + 6, { width: DESCW });
+    doc.text("QTY", COL_QTY, y + 6, { width: 36, align: "right" });
+    doc.text("RATE", COL_RATE, y + 6, { width: 62, align: "right" });
+    doc.text("TAX%", COL_TAXPCT, y + 6, { width: 28, align: "right" });
+    doc.text("TAX AMT", COL_TAXAMT, y + 6, { width: 54, align: "right" });
+    doc.text("AMOUNT", COL_AMT, y + 6, { width: 60, align: "right" });
 
-  y += tableHeaderH;
-  hLine(doc, margin - 4, y, contentW + 8, cBorder);
+    y += tableHeaderH;
+    hLine(doc, margin - 4, y, contentW + 8, cBorder);
+  };
+  ensure(tableHeaderH + 30);
+  drawTableHeader();
 
   // Table rows
   //
@@ -568,8 +630,11 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   // to accommodate the extra line so neighbouring columns don't overlap.
   data.lineItems.forEach((item, i) => {
     const hasNote = !!(item.description && item.description.trim().length > 0);
-    const noteH = hasNote ? 9 : 0;
-    const rowH = 18 + noteH;
+    // Long names wrap: the row grows with them instead of running into the next.
+    const nameH = doc.fontSize(8).font("NotoSans").heightOfString(item.itemName, { width: DESCW });
+    const noteH = hasNote ? doc.fontSize(6.5).heightOfString(item.description!, { width: DESCW - 4 }) + 1 : 0;
+    const rowH = Math.max(18, nameH + 9) + noteH;
+    if (ensure(rowH)) drawTableHeader();
     if (i % 2 === 1) {
       filledRect(doc, margin - 4, y, contentW + 8, rowH, "#f9fafb");
     }
@@ -594,7 +659,7 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
       // Slightly indented muted secondary line under the item name. Uses
       // size 6.5 to match the existing tax-summary label convention.
       doc.fontSize(6.5).fillColor(cMuted).font("NotoSans")
-        .text(item.description!, COL_DESC + 4, rowY + 10, { width: DESCW - 4 });
+        .text(item.description!, COL_DESC + 4, rowY + Math.max(10, nameH + 1), { width: DESCW - 4 });
     }
 
     y += rowH;
@@ -606,6 +671,7 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   // ── GST Breakdown table (only for registered, when tax > 0) ──
   if (gstMode && parseFloat(data.taxAmount) > 0) {
     const breakdown = buildGstBreakdown(data);
+    ensure(16 + breakdown.length * 14 + 6);
 
     filledRect(doc, margin - 4, y, contentW * 0.62 + 8, 16, cHeaderBg);
     doc.fontSize(6.5).fillColor(cMuted).font("NotoSans-Bold")
@@ -655,6 +721,7 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   const _totalsTop = y;
   // Re-position y for the bottom of totals after they are drawn
 
+  ensure(10 * 13 + 30);
   const totalLabelX = margin + contentW * 0.6;
   const totalValX   = margin + contentW - 60;
   const totalLabelW = totalValX - totalLabelX - 8;
@@ -718,6 +785,7 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   y += 8;
 
   // ── Amount in words ───────────────────────────────────────
+  ensure(20);
   filledRect(doc, margin - 4, y, contentW + 8, 14, cBg);
   doc.fontSize(7.5).fillColor(cMuted).font("NotoSans-Bold")
     .text("Amount in words: ", margin, y + 3);
@@ -733,6 +801,7 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   const hasPaymentInfo = data.type === "sale" && (data.bankAccountNumber || data.upiId);
 
   if (hasPaymentInfo) {
+    ensure(110);
     const payLeft = margin;
     const _payRight = margin + contentW * 0.5 + 10;
     const payColW  = contentW * 0.5 - 10;
@@ -798,6 +867,12 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   }
 
   // ── Terms & Notes | Signatory (two-column bottom) ─────────
+  doc.fontSize(7).font("NotoSans");
+  ensure(Math.max(
+    100,
+    40 + (data.termsAndConditions ? doc.heightOfString(data.termsAndConditions, { width: contentW * 0.6 }) : 0)
+      + (data.notes ? doc.heightOfString(data.notes, { width: contentW * 0.6 }) : 0),
+  ));
   const bottomLeft  = margin;
   const bottomRight = margin + contentW * 0.6 + 4;
   const bottomLeftW = contentW * 0.6;
@@ -851,6 +926,7 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   y += 1;
 
   // ── Footer ────────────────────────────────────────────────
+  ensure(26);
   const footerY = Math.min(y, pageH - margin);
   doc.fontSize(7).fillColor(cLight).font("NotoSans")
     .text("This is a computer-generated invoice and does not require a physical signature.",
@@ -1278,217 +1354,8 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   }
 }
 
-// ── Thermal Receipt (80mm) ─────────────────────────────────────
-
-function generateThermalReceipt(doc: InstanceType<typeof PDFDocument>, data: InvoicePDFData) {
-  const pageW = 226; // ~80mm at 72 DPI
-  const margin = 8;
-  const contentW = pageW - margin * 2;
-  let y = margin;
-
-  const colorBlack = "#000000";
-  const colorGray = "#555555";
-
-  const gstMode = isGstRegistered(data);
-  const sameState = isSameState(data);
-
-  // Vector rule — no Unicode box-drawing characters that render as squares
-  function separator() {
-    doc.save();
-    doc.strokeColor("#bbbbbb").lineWidth(0.5)
-      .moveTo(margin, y).lineTo(margin + contentW, y).stroke();
-    doc.restore();
-    y += 6;
-  }
-
-  // ── Header ───────────────────────────────────────────────────
-  // Optional logo centered above the business name. Thermal receipts are
-  // narrow (80mm ≈ 226pt), so the slot is wide-but-short; wide logos render
-  // well, tall logos are gently scaled down. Skipped entirely when absent.
-  const THERMAL_LOGO_W = 120;
-  const THERMAL_LOGO_H = 40;
-  const thermalLogoX = margin + (contentW - THERMAL_LOGO_W) / 2;
-  if (drawLogo(doc, data.logoBuffer, thermalLogoX, y, THERMAL_LOGO_W, THERMAL_LOGO_H, "center")) {
-    y += THERMAL_LOGO_H + 4;
-  }
-
-  doc.fontSize(10).fillColor(colorBlack).font("NotoSans-Bold")
-    .text(data.businessName.toUpperCase(), margin, y, { width: contentW, align: "center" });
-  y += 14;
-
-  if (data.businessAddress) {
-    doc.fontSize(6).fillColor(colorGray).font("NotoSans")
-      .text(data.businessAddress, margin, y, { width: contentW, align: "center" });
-    y += 9;
-  }
-
-  const cityLine = [data.businessCity, data.businessState].filter(Boolean).join(", ");
-  if (cityLine) {
-    doc.fontSize(6).fillColor(colorGray).font("NotoSans")
-      .text(cityLine, margin, y, { width: contentW, align: "center" });
-    y += 9;
-  }
-
-  if (data.businessPhone) {
-    doc.fontSize(6).fillColor(colorGray).font("NotoSans")
-      .text(`Ph: ${data.businessPhone}`, margin, y, { width: contentW, align: "center" });
-    y += 9;
-  }
-
-  if (gstMode && data.businessGstin) {
-    doc.fontSize(6).fillColor(colorBlack).font("NotoSans-Bold")
-      .text(`GSTIN: ${data.businessGstin}`, margin, y, { width: contentW, align: "center" });
-    y += 9;
-  }
-
-  y += 4;
-  separator();
-
-  // ── Invoice info ─────────────────────────────────────────────
-  // GST-registered businesses get TAX INVOICE / BILL OF SUPPLY;
-  // unregistered businesses get plain INVOICE
-  const thermalTitle = gstMode
-    ? getInvoiceTitle(data)
-    : (data.type === "purchase" ? "PURCHASE INVOICE" : "INVOICE");
-
-  doc.fontSize(8).fillColor(colorBlack).font("NotoSans-Bold")
-    .text(thermalTitle, margin, y, { width: contentW, align: "center" });
-  y += 12;
-
-  doc.fontSize(6).font("NotoSans").fillColor(colorBlack);
-  doc.text(`No: ${data.invoiceNumber}`, margin, y);
-  doc.text(fmtDate(data.invoiceDate), margin, y, { width: contentW, align: "right" });
-  y += 9;
-
-  doc.text(`To: ${data.partyName}`, margin, y, { width: contentW });
-  y += 9;
-
-  if (data.partyGstin) {
-    doc.fontSize(6).fillColor(colorGray).font("NotoSans")
-      .text(`GSTIN: ${data.partyGstin}`, margin, y);
-    y += 9;
-  }
-
-  separator();
-
-  // ── Items header ─────────────────────────────────────────────
-  doc.fontSize(6).font("NotoSans-Bold").fillColor(colorBlack);
-  doc.text("ITEM", margin, y);
-  doc.text("QTY", margin + contentW * 0.5, y, { width: 30, align: "right" });
-  doc.text("AMT", margin + contentW * 0.7, y, { width: contentW * 0.3, align: "right" });
-  y += 8;
-  separator();
-
-  // ── Line items ───────────────────────────────────────────────
-  for (let i = 0; i < data.lineItems.length; i++) {
-    const item = data.lineItems[i];
-    const nameW = contentW * 0.48;
-
-    doc.fontSize(6).font("NotoSans").fillColor(colorBlack)
-      .text(item.itemName, margin, y, { width: nameW });
-    const nameH = doc.heightOfString(item.itemName, { width: nameW });
-
-    const qtyTextThermal = item.unit
-      ? `${parseFloat(item.quantity).toString()} ${item.unit}`
-      : parseFloat(item.quantity).toString();
-    doc.fontSize(6).font("NotoSans")
-      .text(qtyTextThermal, margin + contentW * 0.5, y, { width: 30, align: "right" });
-    doc.fontSize(6).font("NotoSans")
-      .text(fmt(item.totalAmount), margin + contentW * 0.7, y, { width: contentW * 0.3, align: "right" });
-
-    y += Math.max(nameH, 8) + 1;
-
-    // Optional free-text notes line, indented and muted. Skipped when null
-    // or empty so receipts stay compact.
-    if (item.description && item.description.trim().length > 0) {
-      doc.fontSize(5).fillColor(colorGray).font("NotoSans")
-        .text(item.description, margin + 4, y, { width: contentW - 4 });
-      y += doc.heightOfString(item.description, { width: contentW - 4 }) + 1;
-    }
-
-    // Sub-line: HSN (if GST mode) + rate + tax
-    let subLine = `@ ${fmt(item.unitPrice)} + ${item.taxPercent}% tax`;
-    if (gstMode && data.lineItemHsn?.[i]) {
-      subLine = `HSN: ${data.lineItemHsn[i]}  ` + subLine;
-    }
-    doc.fontSize(5).fillColor(colorGray).font("NotoSans")
-      .text(subLine, margin + 4, y);
-    y += 9;
-  }
-
-  separator();
-
-  // ── Totals ───────────────────────────────────────────────────
-  // NotoSans used throughout so fmt() ₹ symbol renders correctly
-  function totalLine(label: string, value: string, bold = false) {
-    const fs = bold ? 8 : 6;
-    const font = bold ? "NotoSans-Bold" : "NotoSans";
-    doc.fontSize(fs).font(font).fillColor(colorBlack)
-      .text(label, margin, y);
-    doc.fontSize(fs).font(font).fillColor(colorBlack)
-      .text(fmt(value), margin, y, { width: contentW, align: "right" });
-    y += bold ? 12 : 9;
-  }
-
-  totalLine("Subtotal", data.subtotal);
-  if (parseFloat(data.discountAmount) > 0) {
-    totalLine("Discount", `-${data.discountAmount}`);
-  }
-  if (parseFloat(data.additionalCharges || "0") > 0) {
-    totalLine("Charges", data.additionalCharges || "0");
-  }
-
-  if (gstMode && parseFloat(data.taxAmount) > 0) {
-    // Show CGST/SGST or IGST breakdown for GST-registered businesses
-    const breakdown = buildGstBreakdown(data);
-    for (const row of breakdown) {
-      if (sameState) {
-        if (row.cgst > 0) {
-          totalLine(`CGST (${parseFloat(row.rate) / 2}%)`, row.cgst.toFixed(2));
-          totalLine(`SGST (${parseFloat(row.rate) / 2}%)`, row.sgst.toFixed(2));
-        }
-      } else {
-        if (row.igst > 0) {
-          totalLine(`IGST (${row.rate}%)`, row.igst.toFixed(2));
-        }
-      }
-    }
-  } else {
-    totalLine("Tax", data.taxAmount);
-  }
-
-  separator();
-  totalLine("TOTAL", data.totalAmount, true);
-
-  if (parseFloat(data.amountPaid) > 0) {
-    totalLine("Paid", data.amountPaid);
-    const balance = parseFloat(data.totalAmount) - parseFloat(data.amountPaid);
-    if (balance > 0) totalLine("Balance Due", balance.toFixed(2), true);
-  }
-
-  separator();
-
-  // ── Notes ────────────────────────────────────────────────────
-  if (data.notes) {
-    doc.fontSize(5).fillColor(colorGray).font("NotoSans")
-      .text(data.notes, margin, y, { width: contentW, align: "center" });
-    y += doc.heightOfString(data.notes, { width: contentW }) + 6;
-  }
-
-  // ── Footer ───────────────────────────────────────────────────
-  doc.fontSize(5).fillColor(colorGray).font("NotoSans")
-    .text("Thank you for your business!", margin, y, { width: contentW, align: "center" });
-  y += 8;
-  doc.text("Computer generated invoice", margin, y, { width: contentW, align: "center" });
-  y += 8;
-  if (!data.isPaidPlan) {
-    doc.fontSize(5).font("NotoSans").fillColor("#b0b0b0")
-      .text("Fintranzact", margin, y, { width: contentW, align: "center" });
-    y += 8;
-  } else {
-    y += 4;
-  }
-}
+// ── Thermal Receipt ────────────────────────────────────────────
+// 58 mm and 80 mm receipts live in invoice-templates/thermal.ts.
 
 // ── Status stamp ──────────────────────────────────────────────
 // Renders a diagonal watermark-style stamp (PAID, OVERDUE, etc.) on the page.
@@ -1617,38 +1484,26 @@ export function withQuantityNotes(data: InvoicePDFData): InvoicePDFData {
 }
 
 export function generateInvoicePDF(input: InvoicePDFData, format: PDFFormat = "a5"): InstanceType<typeof PDFDocument> {
-  const data = withMrpNotes(withBatchNotes(withQuantityNotes(input)));
-  let docSize: string | number[];
-  let docMargin: number;
-
-  if (format === "a4") {
-    docSize = "A4";
-    docMargin = 36;
-  } else if (format === "a5") {
-    docSize = [595.28, 419.53]; // A5 landscape (width × height)
-    docMargin = 28;
-  } else {
-    // Thermal: calculate height dynamically to avoid large blank space.
-    // Estimate based on fixed chrome (~200pt) plus per-item rows (~30pt each),
-    // optional GSTIN line, GST tax breakdown lines, notes, and paid/balance lines.
-    const gstMode = data.gstRegistrationType === "regular" || data.gstRegistrationType === "composition";
-    const taxBreakdownLines = gstMode && parseFloat(data.taxAmount) > 0
-      ? new Set(data.lineItems.map((li) => li.taxPercent)).size * 2 // CGST+SGST per rate
-      : 0;
-    const estimatedHeight =
-      200 +
-      data.lineItems.length * 30 +
-      (gstMode && data.businessGstin ? 10 : 0) +
-      taxBreakdownLines * 9 +
-      (parseFloat(data.discountAmount) > 0 ? 9 : 0) +
-      (parseFloat(data.additionalCharges || "0") > 0 ? 9 : 0) +
-      (parseFloat(data.amountPaid) > 0 ? 18 : 0) +
-      (data.notes ? 20 : 0) +
-      // Logo slot: fixed 40pt box + 4pt bottom gap, only when a logo is set
-      (data.logoBuffer && data.logoBuffer.length > 0 ? 44 : 0);
-    docSize = [226, Math.max(300, estimatedHeight)];
-    docMargin = 8;
+  if (format === "thermal") {
+    const doc = renderThermal(input, input.print?.thermalWidth ?? 80);
+    if (input.status) {
+      doc.switchToPage(0);
+      renderStatusStamp(doc, input.status, doc.page.width, doc.page.height);
+    }
+    return doc;
   }
+
+  // A4: the business's chosen design. Bills of supply, export invoices and
+  // quotations / proforma invoices get their own layout whatever is chosen.
+  if (format === "a4") {
+    const model = buildModel(input, input.print?.copies ?? []);
+    const design = designFor(model, input.print?.template ?? "classic");
+    if (design !== "classic") return renderDesign(input, design, model);
+  }
+
+  const data = withMrpNotes(withBatchNotes(withQuantityNotes(input)));
+  const docSize: string | number[] = format === "a4" ? "A4" : [595.28, 419.53]; // A5 landscape (width × height)
+  const docMargin = format === "a4" ? 36 : 28;
 
   const doc = new PDFDocument({
     size: docSize,
@@ -1666,15 +1521,24 @@ export function generateInvoicePDF(input: InvoicePDFData, format: PDFFormat = "a
   doc.registerFont("NotoSans", FONT_REGULAR);
   doc.registerFont("NotoSans-Bold", FONT_BOLD);
 
-  if (format === "a4") {
-    generateA4Invoice(doc, data);
-  } else if (format === "thermal") {
-    generateThermalReceipt(doc, data);
-  } else {
-    generateA5Invoice(doc, data);
-  }
+  // Copies (Rule 48): one page set per copy, labelled at the top right. With
+  // no copies asked for, the classic layout prints once without a label.
+  const services = !!data.isServices;
+  const labels = (format === "a4" ? data.print?.copies ?? [] : [])
+    .map((c) => copyLabel(c, services))
+    .filter((l): l is string => !!l);
+  const sets = labels.length ? labels : [""];
+  const ranges: Array<{ label: string; from: number; to: number }> = [];
 
-  // Add status stamp on A5 and thermal only — A4 is a formal GST document, no watermark
+  sets.forEach((label, k) => {
+    if (k > 0) doc.addPage();
+    const from = doc.bufferedPageRange().count - 1;
+    if (format === "a4") generateA4Invoice(doc, data);
+    else generateA5Invoice(doc, data);
+    ranges.push({ label, from, to: doc.bufferedPageRange().count });
+  });
+
+  // Add status stamp on A5 only — A4 is a formal GST document, no watermark
   if (data.status && format !== "a4") {
     const totalStampPages = doc.bufferedPageRange().count;
     for (let i = 0; i < totalStampPages; i++) {
@@ -1683,21 +1547,24 @@ export function generateInvoicePDF(input: InvoicePDFData, format: PDFFormat = "a
     }
   }
 
-  // Add page numbers if multi-page (not on thermal receipts)
-  if (format !== "thermal") {
-    const totalPages = doc.bufferedPageRange().count;
-    if (totalPages > 1) {
-      for (let i = 0; i < totalPages; i++) {
-        doc.switchToPage(i);
-        const pageWidth = doc.page.width;
-        const pageHeight = doc.page.height;
-        doc.fontSize(7).font("NotoSans").fillColor("#9ca3af")
-          .text(
-            `Page ${i + 1} of ${totalPages}`,
-            0, pageHeight - 20,
-            { width: pageWidth, align: "center" }
-          );
+  // Copy labels, and page numbers when a copy runs to more than one page.
+  for (const { label, from, to } of ranges) {
+    const pages = to - from;
+    for (let i = from; i < to; i++) {
+      doc.switchToPage(i);
+      const pageWidth = doc.page.width;
+      const pageHeight = doc.page.height;
+      const bottom = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0;
+      if (label) {
+        doc.fontSize(7).font("NotoSans-Bold").fillColor("#111827")
+          .text(label, pageWidth - docMargin - 220, docMargin - 22, { width: 224, align: "right", lineBreak: false });
       }
+      if (pages > 1) {
+        doc.fontSize(7).font("NotoSans").fillColor("#9ca3af")
+          .text(`Page ${i - from + 1} of ${pages}`, 0, pageHeight - 20, { width: pageWidth, align: "center", lineBreak: false });
+      }
+      doc.page.margins.bottom = bottom;
     }
   }
 

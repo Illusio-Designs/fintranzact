@@ -5,9 +5,11 @@
  *   e-way bills switched on with portal login and the business's own
  *   threshold → logo uploaded from the Business tab and a signature from the
  *   edit form → Documents: invoice prefix "J11S", next number 101, standard
- *   terms → Shipping: a custom "Dunzo Express" method with tracking → a new
+ *   terms, the Tally invoice design and 58 mm receipts (previewed as a PDF)
+ *   → Shipping: a custom "Dunzo Express" method with tracking → a new
  *   invoice picks that method, gets J11S-00101, the terms pre-filled, IGST to
- *   a Karnataka buyer, and moves stock → Barcodes: Code 128 + many per item,
+ *   a Karnataka buyer, moves stock and downloads as a PDF in the Tally
+ *   design, once and with all three copies → Barcodes: Code 128 + many per item,
  *   locked → Point-of-Sale switched on → e-Invoicing settings: test before
  *   saving, save sandbox credentials, re-save without retyping the password,
  *   test again → Data: Generic CSV import of parties, items and invoices
@@ -210,6 +212,34 @@ test.describe("J11 settings", () => {
     biz = await businessProfile(owner.businessId);
     expect(biz).toMatchObject({ invoice_prefix: "J11S", next_invoice_number: 101, default_terms_and_conditions: terms });
 
+    // ── Documents: invoice design and thermal roll ──────────────
+    // Nothing changes until the owner picks: the classic layout and 80 mm.
+    expect(biz).toMatchObject({ invoice_template: "classic", thermal_width: 80 });
+    const design = page.getByTestId("invoice-design");
+    const designs = design.getByRole("radiogroup", { name: "Invoice design" });
+    await expect(designs.getByRole("radio")).toHaveCount(10);
+    await expect(designs.getByRole("radio", { name: "Classic", exact: true })).toBeChecked();
+    await design.getByText("Tally Classic", { exact: true }).click();
+    await expect(designs.getByRole("radio", { name: "Tally Classic" })).toBeChecked();
+    await design.getByText("58 mm", { exact: true }).click();
+    await expect(design.getByRole("radio", { name: "58 mm" })).toBeChecked();
+    await expectNoHorizontalScroll(page, "settings / invoice design");
+    // The preview is a sample invoice in the picked design, opened in a new tab.
+    const previewResponse = page.waitForResponse((r) => r.url().includes("/api/invoice-templates/preview?template=tally"));
+    const previewTab = page.context().waitForEvent("page");
+    await design.getByRole("button", { name: "Preview PDF" }).click();
+    const preview = await previewResponse;
+    expect(preview.status()).toBe(200);
+    expect(preview.headers()["content-type"]).toBe("application/pdf");
+    // (The page read the body into a blob; fetch the same preview to look inside.)
+    const previewPdf = await page.request.get(preview.url(), { headers: { "x-business-id": owner.businessId } });
+    expect((await previewPdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
+    await (await previewTab).close();
+    await design.getByRole("button", { name: "Save invoice design" }).click();
+    await expect(toast(page, "Invoice design saved")).toBeVisible();
+    await expect(design.getByRole("button", { name: "Save invoice design" })).toBeHidden();
+    expect(await businessProfile(owner.businessId)).toMatchObject({ invoice_template: "tally", thermal_width: 58 });
+
     // ── Shipping: the business's own delivery method ────────────
     await settingsTab(page, "Shipping");
     await page.getByPlaceholder("e.g. Dunzo, Porter, Local Tempo").fill("Dunzo Express");
@@ -256,6 +286,25 @@ test.describe("J11 settings", () => {
     const detail = dialog(page, "Invoice J11S-00101");
     await expect(detail.getByText("Dunzo Express")).toBeVisible();
     await expectNoHorizontalScroll(page, "invoice detail");
+    // The invoice PDF comes out in the chosen (Tally) design, as a PDF.
+    await detail.getByRole("button", { name: "Download PDF" }).click();
+    const pdfResponse = page.waitForResponse((r) => /\/api\/invoices\/[0-9a-f-]+\/pdf\?format=a4$/.test(r.url()));
+    const [pdfDownload] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "GST Invoice (A4)" }).click(),
+    ]);
+    expect((await pdfResponse).headers()["content-type"]).toBe("application/pdf");
+    expect(pdfDownload.suggestedFilename()).toBe("J11S-00101_a4.pdf");
+    const invoicePdf = await readDownload(pdfDownload);
+    expect(invoicePdf.subarray(0, 5).toString()).toBe("%PDF-");
+    // All three copies (original, duplicate, triplicate) in one file: three times the pages.
+    await detail.getByRole("button", { name: "Download PDF" }).click();
+    const [copiesDownload] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "GST Invoice, all copies" }).click(),
+    ]);
+    const pagesOf = (pdf: Buffer) => (pdf.toString("latin1").match(/\/Type \/Page\b/g) ?? []).length;
+    expect(pagesOf(await readDownload(copiesDownload))).toBe(pagesOf(invoicePdf) * 3);
     await detail.getByRole("button", { name: "Close", exact: true }).click();
     await navTo(page, "Settings");
     await settingsTab(page, "Documents");

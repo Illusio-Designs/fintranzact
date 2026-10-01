@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { INVOICE_TEMPLATES } from "./invoice-templates.js";
 import {
   GSTIN_REGEX,
   PAN_REGEX,
@@ -194,6 +195,10 @@ export const createBusinessSchema = z.object({
   annualTurnover: z.number().nonnegative().nullable().optional(),
   defaultRoundOff: z.boolean().default(true),
   defaultTermsAndConditions: z.string().max(2000).nullable().optional(),
+  // Print settings (Settings → Documents → Invoice design). No defaults here:
+  // the columns default to "classic" / 80 mm, and update must not reset them.
+  invoiceTemplate: z.enum(INVOICE_TEMPLATES).optional(),
+  thermalWidth: z.union([z.literal(58), z.literal(80)]).optional(),
 
   // Settings → Shipping: user-defined delivery methods shown in the invoice form.
   customShippingMethods: z

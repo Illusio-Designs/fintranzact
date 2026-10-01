@@ -180,6 +180,11 @@ export const businesses = pgTable("businesses", {
   // business under Settings → Documents.
   defaultRoundOff: boolean("default_round_off").default(true).notNull(),
   defaultTermsAndConditions: text("default_terms_and_conditions"),
+  // Printed invoice design (see INVOICE_TEMPLATES in @fintranzact/shared).
+  // "classic" is the original A4 layout, so nothing changes until chosen.
+  invoiceTemplate: text("invoice_template").default("classic").notNull(),
+  // Thermal receipt roll width in mm: 58 or 80.
+  thermalWidth: integer("thermal_width").default(80).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
