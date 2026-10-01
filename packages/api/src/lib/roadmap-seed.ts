@@ -1820,10 +1820,135 @@ const BANK_FEEDS: RoadmapSeedItem[] = [
   ),
 ];
 
+// ── Invoice follow-ups (Oct 2026) ────────────────────────────────────
+
+const INVOICE_FOLLOW_UPS: RoadmapSeedItem[] = [
+  feature(
+    "after_launch",
+    "medium",
+    "GST",
+    "Compensation cess on items and invoices",
+    `Items such as tobacco, aerated drinks and some vehicles carry GST compensation cess on top of GST. Invoices have no cess field today, so no invoice design prints a cess line.
+
+- Cess rate on the item: percentage, amount per unit, or both
+- Cess worked out on each invoice, purchase and note line, shown in the totals and the tax summary of every invoice design
+- Cess in GSTR-1 (B2B, B2CL, B2CS, HSN summary), GSTR-3B and e-invoice / e-way bill payloads
+- Cess input credit on purchases
+- Rates and the items they apply to change often — verify with CA before building`,
+    [
+      "Cess rate fields on items (ad valorem and per unit)",
+      "Cess on sales, purchase and note lines",
+      "Cess line in totals and tax summary of every invoice design",
+      "Cess in GSTR-1, GSTR-3B and HSN summary",
+      "Cess in e-invoice and e-way bill payloads",
+      "Cess input credit on purchases",
+      "CA verification of rates",
+    ],
+  ),
+  feature(
+    "after_launch",
+    "low",
+    "Sales",
+    "Order and dispatch details on invoices",
+    `Tally-style invoices have boxes for the buyer's order and dispatch details. The "Tally" invoice design prints these boxes, but they stay empty because invoices don't store the details yet.
+
+- Buyer's order number and date
+- Delivery note number and date, dispatch document number
+- Dispatched through, destination, terms of delivery
+- Fill from the sales order or delivery challan the invoice was made from
+- Printed in the Tally design and shown in the invoice details`,
+    [
+      "Fields on invoices: buyer's order no./date, delivery note no./date",
+      "Fields on invoices: dispatch doc no., dispatched through, destination, terms of delivery",
+      "Copy from sales order / delivery challan when converting",
+      "Print in the Tally design and other designs that have room",
+      "Show and edit in the invoice form and details",
+    ],
+  ),
+  feature(
+    "before_launch",
+    "medium",
+    "GST",
+    "HSN / SAC verification through Sandbox.co.in",
+    `Item HSN / SAC codes are checked today against the official CBIC list bundled with the app (12,604 HSN and 496 SAC codes). Once the Sandbox.co.in connection is live, check codes against Sandbox too, so new or withdrawn codes are caught without an app update.
+
+- Look up the code on Sandbox when an item is saved, falling back to the bundled list if Sandbox is down
+- Show Sandbox's description in the HSN details card
+- Refresh the bundled list from Sandbox periodically
+- Sandbox keys only in environment settings, never in code`,
+    [
+      "HSN lookup through the Sandbox provider adapter",
+      "Fall back to the bundled CBIC list when Sandbox is unavailable",
+      "Sandbox description in the HSN details card",
+      "Periodic refresh of the bundled list",
+      "Tests with a mocked Sandbox response",
+    ],
+  ),
+];
+
 /** Batches added after the first seed, each put on an older board once. */
 export const ROADMAP_ADDITIONS: { key: string; items: RoadmapSeedItem[] }[] = [
   { key: "2026-10-government-filing", items: GOVERNMENT_FILING },
   { key: "2026-10-bank-feeds", items: BANK_FEEDS },
+  { key: "2026-10-invoice-follow-ups", items: INVOICE_FOLLOW_UPS },
+];
+
+/** Progress on a board item: its new status and the checklist lines now done. */
+export interface RoadmapProgress {
+  title: string;
+  status: RoadmapStatus;
+  done: string[];
+}
+
+/**
+ * Progress made after the roadmap was written, applied once per board (each
+ * batch by its key). A status moves only while the item is still "idea" or
+ * "planned", so an admin's own change is never overwritten; checklist lines
+ * are ticked by their exact text.
+ */
+export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
+  {
+    key: "2026-10-01",
+    updates: [
+      {
+        // Released in #42.
+        title: "Bank statement import: Excel, OFX/QIF and PDF",
+        status: "done",
+        done: BANK_FEEDS[0]!.checklist,
+      },
+      {
+        // The sign-up plan page opens a demo checkout (#49); real Razorpay
+        // subscriptions are still to come.
+        title: "P3. Checkout & subscription billing",
+        status: "in_progress",
+        done: [],
+      },
+      {
+        // Export invoices print the LUT / IGST-paid endorsement (#50).
+        title: "Multi-currency and export invoices",
+        status: "in_progress",
+        done: ["Export invoice under LUT/bond", "Export with IGST paid"],
+      },
+      {
+        // The CMP-08 screen exists; the composition rate is still a fixed 1%.
+        title: "GSTR-4 annual return for composition dealers",
+        status: "in_progress",
+        done: ["CMP-08 quarterly statement data"],
+      },
+      {
+        // Invoice PDFs carry a UPI QR for the balance due.
+        title: "Payment reminders, Razorpay payment links and UPI QR on invoices",
+        status: "in_progress",
+        done: ["UPI QR with amount on invoice PDF"],
+      },
+      {
+        // The store footer has privacy and refund policies filled from the business.
+        title: "Store policy pages",
+        status: "in_progress",
+        done: ["Pre-fill from business details"],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */
