@@ -127,7 +127,7 @@ jobs:
 
   # E2E runs in parallel jobs (each with its own database and servers),
   # then "E2E Tests" reports the combined result. The long journeys get
-  # their own jobs per screen size so they don't pile into one shard.
+  # their own jobs (4 per screen size) so they don't pile into one shard.
   e2e-shard:
     name: E2E (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -139,10 +139,14 @@ jobs:
           - { name: "routes 1/3", project: chromium, shard: 1/3 }
           - { name: "routes 2/3", project: chromium, shard: 2/3 }
           - { name: "routes 3/3", project: chromium, shard: 3/3 }
-          - { name: "journeys desktop 1/2", project: journeys-desktop, shard: 1/2 }
-          - { name: "journeys desktop 2/2", project: journeys-desktop, shard: 2/2 }
-          - { name: "journeys phone 1/2", project: journeys-phone, shard: 1/2 }
-          - { name: "journeys phone 2/2", project: journeys-phone, shard: 2/2 }
+          - { name: "journeys desktop 1/4", project: journeys-desktop, shard: 1/4 }
+          - { name: "journeys desktop 2/4", project: journeys-desktop, shard: 2/4 }
+          - { name: "journeys desktop 3/4", project: journeys-desktop, shard: 3/4 }
+          - { name: "journeys desktop 4/4", project: journeys-desktop, shard: 4/4 }
+          - { name: "journeys phone 1/4", project: journeys-phone, shard: 1/4 }
+          - { name: "journeys phone 2/4", project: journeys-phone, shard: 2/4 }
+          - { name: "journeys phone 3/4", project: journeys-phone, shard: 3/4 }
+          - { name: "journeys phone 4/4", project: journeys-phone, shard: 4/4 }
 
     services:
       postgres:
