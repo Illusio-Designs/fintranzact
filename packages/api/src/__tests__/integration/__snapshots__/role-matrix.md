@@ -182,7 +182,7 @@
 | invoice.getById | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
 | invoice.lastDeliveryMethod | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
 | invoice.list | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
-| invoice.update | mutation | authorized | update:Invoice | ✓ | ✓ | ✓ | ✓ | ✗ |
+| invoice.update | mutation | authorized | update:Invoice (+ sellers can't edit invoices) | ✓ | ✓ | ✓ | ✗ | ✗ |
 | invoice.updateStatus | mutation | authorized | update:Invoice | ✓ | ✓ | ✓ | ✓ | ✗ |
 | itc.agingAlerts | query | authorized | read:ITC | ✓ | ✓ | ✗ | ✗ | ✓ |
 | itc.dashboard | query | authorized | read:ITC | ✓ | ✓ | ✗ | ✗ | ✓ |

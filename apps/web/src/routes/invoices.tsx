@@ -507,6 +507,9 @@ function InvoiceDetailPanel({
     onError: (err) => toast.error("Failed to update status", err.message),
   });
 
+  // Sellers can view invoices but not edit them.
+  const { data: me } = trpc.auth.me.useQuery();
+
   if (!invoiceId) return null;
 
   // Compute how much has been credited/returned against this invoice (combined limit)
@@ -548,7 +551,7 @@ function InvoiceDetailPanel({
         invoice ? (
           <div className="flex items-center justify-between gap-3">
             <div className="flex gap-2">
-              {invoice.status !== "paid" && !invoice.governmentLock && (
+              {invoice.status !== "paid" && !invoice.governmentLock && me?.role !== "seller" && (
                 <button
                   onClick={() => {
                     onClose();
