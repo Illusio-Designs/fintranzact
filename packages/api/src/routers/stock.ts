@@ -27,6 +27,7 @@ import {
 import { paginationSchema } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { audited } from "../lib/audit.js";
 import {
   ensureDefaultWarehouse,
   getNegativeStockPolicy,
@@ -212,6 +213,8 @@ export async function applyStockAdjustment(
     referenceType?: "STOCK_ADJUSTMENT" | "PHYSICAL_STOCK";
     /** Refuse to take the warehouse below zero. */
     enforceWarehouseBalance?: boolean;
+    /** Receives the id of every stock_adjustments row written (for the audit log). */
+    collect?: string[];
     /** Batch the stock goes into or comes out of. Without one, stock taken
      *  from an item that tracks batches comes out of its batches earliest
      *  expiry first; stock added goes to the unbatched pool. */
@@ -266,6 +269,7 @@ export async function applyStockAdjustment(
     }).returning();
     running += piece.quantity;
     first ??= adjustment;
+    input.collect?.push(adjustment.id);
 
     // Updates the warehouse balance and the item total together.
     await recordStockMovement(tx, {
@@ -451,6 +455,7 @@ async function postCountLines(
   warehouseId: string,
   lines: Array<{ itemId: string; variantId: string | null; scanned: string }>,
   note: string | null,
+  collect?: string[],
 ) {
   const reason = note?.trim() ? `${PHYSICAL_REASON} (scan): ${note.trim()}` : `${PHYSICAL_REASON} (scan)`;
   const date = new Date();
@@ -470,6 +475,7 @@ async function postCountLines(
       date,
       user: ctx.user,
       referenceType: "PHYSICAL_STOCK",
+      collect,
     });
     adjusted++;
   }
@@ -612,7 +618,7 @@ export const stockRouter = router({
       const ids = [input.sourceWarehouseId, input.destinationWarehouseId];
       const date = input.date ? new Date(input.date) : new Date();
 
-      return ctx.db.transaction(async (tx: Tx) => {
+      return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
         await assertWarehouses(tx, ctx.businessId, ids);
         await assertWarehousePermission(tx, ctx, ids, "canTransfer");
         const referenceId = crypto.randomUUID();
@@ -656,7 +662,12 @@ export const stockRouter = router({
           }
         }
         return { referenceId };
-      });
+      }), (r) => ({
+        action: "stock.transfer",
+        entityType: "stockTransfer",
+        entityId: r.referenceId,
+        metadata: { sourceWarehouseId: input.sourceWarehouseId, destinationWarehouseId: input.destinationWarehouseId, lines: input.lines.length },
+      }));
     }),
 
   /** The stock transfer journal, newest first. */
@@ -724,7 +735,8 @@ export const stockRouter = router({
     .mutation(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
       const date = input.date ? new Date(input.date) : new Date();
-      return ctx.db.transaction(async (tx: Tx) => {
+      const adjustmentIds: string[] = [];
+      return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
         await assertWarehouses(tx, ctx.businessId, [input.warehouseId]);
         await assertWarehousePermission(tx, ctx, [input.warehouseId], "canAdjust");
         for (const line of input.lines) {
@@ -757,10 +769,16 @@ export const stockRouter = router({
             date,
             user: { id: ctx.user.id, name: ctx.user.name },
             enforceWarehouseBalance: true,
+            collect: adjustmentIds,
           });
         }
         return { count: input.lines.length };
-      });
+      }), () => adjustmentIds.map((id) => ({
+        action: "stock.adjust",
+        entityType: "stockAdjustment",
+        entityId: id,
+        metadata: { warehouseId: input.warehouseId, reason: input.reason },
+      })));
     }),
 
   /** Adjustment log across all items; `kind` narrows to physical counts. */
@@ -820,7 +838,8 @@ export const stockRouter = router({
       requireCan(ctx.ability, "update", "Item");
       const date = input.date ? new Date(input.date) : new Date();
       const reason = input.note?.trim() ? `${PHYSICAL_REASON}: ${input.note.trim()}` : PHYSICAL_REASON;
-      return ctx.db.transaction(async (tx: Tx) => {
+      const adjustmentIds: string[] = [];
+      return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
         await assertWarehouses(tx, ctx.businessId, [input.warehouseId]);
         await assertWarehousePermission(tx, ctx, [input.warehouseId], "canAdjust");
         let adjusted = 0;
@@ -839,11 +858,17 @@ export const stockRouter = router({
             date,
             user: { id: ctx.user.id, name: ctx.user.name },
             referenceType: "PHYSICAL_STOCK",
+            collect: adjustmentIds,
           });
           adjusted++;
         }
         return { checked: input.counts.length, adjusted };
-      });
+      }), () => adjustmentIds.map((id) => ({
+        action: "stock.verify",
+        entityType: "stockAdjustment",
+        entityId: id,
+        metadata: { warehouseId: input.warehouseId, reason },
+      })));
     }),
 
   /** Inventory settings: the negative stock policy and default warehouses. */
@@ -869,8 +894,8 @@ export const stockRouter = router({
     .mutation(async ({ ctx, input }) => {
       // A business-wide rule, so the same permission as editing the business.
       requireCan(ctx.ability, "update", "Business");
-      await ctx.db.transaction(async (tx: Tx) => {
-        await ensureDefaultWarehouse(tx, ctx.businessId);
+      const settingsId = await ctx.db.transaction(async (tx: Tx) => {
+        const current = await ensureDefaultWarehouse(tx, ctx.businessId);
         await tx
           .update(inventorySettings)
           .set({
@@ -879,7 +904,11 @@ export const stockRouter = router({
             updatedAt: new Date(),
           })
           .where(eq(inventorySettings.businessId, ctx.businessId));
+        return current.id as string;
       });
+      await audited(ctx, async () => null, () => ({
+        action: "stock.updateSettings", entityType: "inventorySettings", entityId: settingsId, metadata: { ...input },
+      }));
       return { ok: true };
     }),
 
@@ -968,12 +997,13 @@ export const stockRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
-      return ctx.db.transaction(async (tx: Tx) => {
+      const adjustmentIds: string[] = [];
+      return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
         await assertWarehouses(tx, ctx.businessId, [input.warehouseId]);
         if (input.post) await assertWarehousePermission(tx, ctx, [input.warehouseId], "canAdjust");
         const report = await buildCountReport(tx, ctx.businessId, input.warehouseId, input.scans);
         const adjusted = input.post
-          ? await postCountLines(tx, { businessId: ctx.businessId, user: { id: ctx.user.id, name: ctx.user.name } }, input.warehouseId, report.lines, input.note ?? null)
+          ? await postCountLines(tx, { businessId: ctx.businessId, user: { id: ctx.user.id, name: ctx.user.name } }, input.warehouseId, report.lines, input.note ?? null, adjustmentIds)
           : 0;
         const [row] = await tx.insert(physicalStockCounts).values({
           businessId: ctx.businessId,
@@ -992,7 +1022,12 @@ export const stockRouter = router({
           createdByName: ctx.user.name,
         }).returning({ id: physicalStockCounts.id });
         return { id: row.id, adjusted };
-      });
+      }), (r) => ({
+        action: input.post ? "stock.countPost" : "stock.countFinish",
+        entityType: "physicalStockCount",
+        entityId: r.id,
+        metadata: { warehouseId: input.warehouseId, adjusted: r.adjusted, adjustmentIds },
+      }));
     }),
 
   /** Post a saved count's differences later. */
@@ -1000,7 +1035,8 @@ export const stockRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       requireCan(ctx.ability, "update", "Item");
-      return ctx.db.transaction(async (tx: Tx) => {
+      const adjustmentIds: string[] = [];
+      return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
         const [count] = await tx
           .select()
           .from(physicalStockCounts)
@@ -1011,12 +1047,17 @@ export const stockRouter = router({
         if (count.status === "posted") throw new TRPCError({ code: "BAD_REQUEST", message: "This count is already posted" });
         await assertWarehouses(tx, ctx.businessId, [count.warehouseId]);
         await assertWarehousePermission(tx, ctx, [count.warehouseId], "canAdjust");
-        const adjusted = await postCountLines(tx, { businessId: ctx.businessId, user: { id: ctx.user.id, name: ctx.user.name } }, count.warehouseId, count.lines, count.note);
+        const adjusted = await postCountLines(tx, { businessId: ctx.businessId, user: { id: ctx.user.id, name: ctx.user.name } }, count.warehouseId, count.lines, count.note, adjustmentIds);
         await tx.update(physicalStockCounts)
           .set({ status: "posted", postedAt: new Date(), adjustedCount: adjusted })
           .where(eq(physicalStockCounts.id, count.id));
         return { id: count.id, adjusted };
-      });
+      }), (r) => ({
+        action: "stock.countPost",
+        entityType: "physicalStockCount",
+        entityId: r.id,
+        metadata: { adjusted: r.adjusted, adjustmentIds },
+      }));
     }),
 
   /** Past counts, newest first. */

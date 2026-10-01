@@ -6,7 +6,7 @@ import { createItemSchema, updateItemSchema, paginationSchema, itemTypes, itemMo
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
-import { logAudit } from "../lib/audit.js";
+import { audited, logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { documentStockDirection, ensureDefaultWarehouse, recordOpeningStock, updateStockBalance } from "../lib/inventory-service.js";
 import { applyStockAdjustment } from "./stock.js";
@@ -65,6 +65,8 @@ async function setStockTotal(
     current: string;
     target: string;
     user: { id: string; name: string | null };
+    /** Receives the ids of the stock adjustments written (for the audit log). */
+    collect?: string[];
   },
 ) {
   const delta = Math.round((parseFloat(input.target) - parseFloat(input.current)) * 1000) / 1000;
@@ -79,6 +81,7 @@ async function setStockTotal(
     reason: "Stock edited on item",
     date: new Date(),
     user: input.user,
+    collect: input.collect,
   });
 }
 
@@ -359,14 +362,18 @@ export const itemRouter = router({
 
         // Move old base unit to variants (with reverse conversion factor)
         const existingVariants = (item.unitVariants as any[] || []);
+        // A unit variant's conversionFactor is how many BASE units one of it
+        // holds (UnitVariantEditor "Direction A"; stock = qty × factor). One
+        // old base unit is `factor` new base units, so every alternate unit
+        // now holds `factor` times as many base units as before.
         // Remove the new unit from variants if it was already there
-        const filteredVariants = existingVariants.filter(
-          (v: any) => v.unit.toLowerCase() !== input.newUnit.toLowerCase()
-        );
+        const filteredVariants = existingVariants
+          .filter((v: any) => v.unit.toLowerCase() !== input.newUnit.toLowerCase())
+          .map((v: any) => ({ ...v, conversionFactor: v.conversionFactor * factor }));
         // Add old base unit as a variant
         const oldBaseAsVariant = {
           unit: oldUnit,
-          conversionFactor: 1 / factor, // 1 old unit = 1/factor of the new base
+          conversionFactor: factor, // 1 old unit = factor new base units
           salePrice: oldSalePrice || "0",
           purchasePrice: oldPurchasePrice || undefined,
         };
@@ -383,11 +390,11 @@ export const itemRouter = router({
           updatedAt: new Date(),
         }).where(eq(items.id, input.id)).returning();
 
-        // Update conversionFactor on all existing invoice line items for this item
-        // Old line items were in the old unit. Now base is new unit.
-        // If a line item had conversionFactor=1 (was in old base), it should now be 1/factor
-        // If it had a custom factor, multiply by 1/factor
-        // Warehouse balances and movement history are in base units too.
+        // Existing invoice lines keep their quantity in the unit they were
+        // billed in; their conversion factor (base units per that unit) grows
+        // by `factor` like the unit variants above, and a line billed in the
+        // old base unit now names it. Warehouse balances and movement history
+        // are in base units too.
         await tx.execute(sql`
           UPDATE stock_balances SET quantity = ROUND(quantity::numeric * ${factor}, 3), updated_at = NOW()
           WHERE business_id = ${ctx.businessId} AND item_id = ${input.id} AND variant_id IS NULL
@@ -399,9 +406,10 @@ export const itemRouter = router({
 
         await tx.execute(sql`
           UPDATE invoice_items SET
-            conversion_factor = COALESCE(conversion_factor, 1) * ${(1 / factor).toFixed(6)}
+            conversion_factor = COALESCE(conversion_factor, 1)::numeric * ${factor},
+            selected_unit = COALESCE(selected_unit, ${oldUnit})
           WHERE item_id = ${input.id}
-            AND (selected_unit IS NULL OR selected_unit = ${oldUnit})
+            AND variant_id IS NULL
             AND invoice_id IN (SELECT id FROM invoices WHERE business_id = ${ctx.businessId})
         `);
 
@@ -432,6 +440,7 @@ export const itemRouter = router({
       // the public API. Re-activation would require an explicit restore
       // endpoint, which is deferred per FIXES.md.
       const { stockQuantity, stockGroupId, category, openingBatch: _openingBatch, ...data } = input.data;
+      const adjustmentIds: string[] = [];
       const item = await ctx.db.transaction(async (tx) => {
         const [before] = await tx.select({ stockQuantity: items.stockQuantity, trackBatches: items.trackBatches })
           .from(items)
@@ -453,6 +462,7 @@ export const itemRouter = router({
             current: before.stockQuantity,
             target: stockQuantity,
             user: { id: ctx.user.id, name: ctx.user.name },
+            collect: adjustmentIds,
           });
         }
 
@@ -482,7 +492,7 @@ export const itemRouter = router({
         action: "item.update",
         entityType: "item",
         entityId: item.id,
-        metadata: { name: item.name },
+        metadata: { name: item.name, ...(adjustmentIds.length ? { adjustmentIds } : {}) },
         ipAddress: ctx.ipAddress,
       });
 
@@ -938,6 +948,7 @@ export const itemRouter = router({
       if (input.data.mrp !== undefined) updates.mrp = input.data.mrp || null;
       if (input.data.lowStockAlert !== undefined) updates.lowStockAlert = input.data.lowStockAlert || null;
 
+      const adjustmentIds: string[] = [];
       const variant = await ctx.db.transaction(async (tx) => {
         if (input.data.stockQuantity !== undefined) {
           await setStockTotal(tx, {
@@ -947,6 +958,7 @@ export const itemRouter = router({
             current: existing.stockQuantity,
             target: input.data.stockQuantity,
             user: { id: ctx.user.id, name: ctx.user.name },
+            collect: adjustmentIds,
           });
         }
         const [updated] = await tx.update(itemVariants)
@@ -962,7 +974,7 @@ export const itemRouter = router({
         action: "item.updateVariant",
         entityType: "itemVariant",
         entityId: input.variantId,
-        metadata: { variantId: input.variantId },
+        metadata: { variantId: input.variantId, ...(adjustmentIds.length ? { adjustmentIds } : {}) },
         ipAddress: ctx.ipAddress,
       });
 
@@ -1270,7 +1282,8 @@ export const itemRouter = router({
 
       // Goes through the warehouse-aware path so the item total, the default
       // adjustment warehouse's balance and the adjustment log stay in step.
-      return ctx.db.transaction(async (tx) => {
+      const adjustmentIds: string[] = [];
+      return audited(ctx, () => ctx.db.transaction(async (tx) => {
         const settings = await ensureDefaultWarehouse(tx, ctx.businessId);
         return applyStockAdjustment(tx, {
           businessId: ctx.businessId,
@@ -1282,8 +1295,12 @@ export const itemRouter = router({
           reason: input.reason || null,
           date: input.adjustmentDate ? new Date(input.adjustmentDate) : new Date(),
           user: { id: ctx.user!.id, name: ctx.user!.name },
+          collect: adjustmentIds,
         });
-      });
+      }), () => adjustmentIds.map((id) => ({
+        action: "item.adjustStock", entityType: "stockAdjustment", entityId: id,
+        metadata: { itemId: input.itemId, quantity: input.quantity, reason: input.reason ?? null },
+      })));
     }),
 
   stockAdjustmentHistory: viewerProcedure

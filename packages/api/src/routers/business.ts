@@ -453,10 +453,14 @@ export const businessRouter = router({
       // partyId for anonymous retail sales, but cheap enough to always create
       // so offices that later enable POS don't need a separate seeding step.
       // `ensureWalkInParty` mutation covers existing businesses lazily.
+      // Its state is the business's own: an over-the-counter sale is supplied
+      // where the shop is, so GST on it is CGST+SGST, not IGST.
       await tx.insert(parties).values({
         businessId: biz.id,
         type: "customer",
         name: "Walk-in Customer",
+        state: biz.state,
+        stateCode: biz.stateCode,
         openingBalance: "0",
       });
 
@@ -768,12 +772,21 @@ export const businessRouter = router({
 
       if (existing) return { id: existing.id, created: false };
 
+      const [biz] = await ctx.db
+        .select({ state: businesses.state, stateCode: businesses.stateCode })
+        .from(businesses)
+        .where(eq(businesses.id, input.id))
+        .limit(1);
+
       const [created] = await ctx.db
         .insert(parties)
         .values({
           businessId: input.id,
           type: "customer",
           name: "Walk-in Customer",
+          // Over-the-counter sales are supplied in the business's own state.
+          state: biz?.state ?? null,
+          stateCode: biz?.stateCode ?? null,
           openingBalance: "0",
         })
         .returning({ id: parties.id });

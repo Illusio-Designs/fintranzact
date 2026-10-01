@@ -11,6 +11,8 @@ import {
   itemVariants,
   businesses,
   parties,
+  payments,
+  paymentAllocations,
   shipments,
   itcLedgerEntries,
   eInvoiceConfigs,
@@ -30,6 +32,61 @@ import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 import { assertLineExtras, lineExtras } from "../lib/line-extras.js";
 import { resolveDeliveryMethod } from "../lib/delivery-methods.js";
 import { recomputeInvoiceStatus, recomputeReferencedInvoice } from "../lib/invoice-status.js";
+
+/**
+ * Keep a purchase invoice's live ITC entry equal to the invoice after an edit:
+ * the claim is its tax, split CGST+SGST for a supplier in the business's
+ * state and IGST otherwise, in the invoice's month. Mirrors the entry
+ * invoice.create writes. Reversed/utilised entries are history and left alone.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function syncPurchaseItc(tx: any, businessId: string, invoiceId: string) {
+  const [inv] = await tx.select({
+    type: invoices.type,
+    documentType: invoices.documentType,
+    taxAmount: invoices.taxAmount,
+    invoiceDate: invoices.invoiceDate,
+    isReverseCharge: invoices.isReverseCharge,
+    partyStateCode: parties.stateCode,
+    partyState: parties.state,
+    partyGstin: parties.gstin,
+  }).from(invoices)
+    .innerJoin(parties, eq(parties.id, invoices.partyId))
+    .where(and(eq(invoices.id, invoiceId), eq(invoices.businessId, businessId)))
+    .limit(1);
+  if (!inv || inv.type !== "purchase" || inv.documentType !== "invoice") return;
+
+  const [biz] = await tx.select({
+    gstRegistrationType: businesses.gstRegistrationType,
+    stateCode: businesses.stateCode,
+    state: businesses.state,
+    gstin: businesses.gstin,
+  }).from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  if (biz?.gstRegistrationType === "composition") return;
+
+  // Same place-of-supply and CGST/SGST rules as invoice.create (shared).
+  const sameState = isIntraStateSupply(biz ?? {}, { stateCode: inv.partyStateCode, state: inv.partyState, gstin: inv.partyGstin });
+  const taxPaise = Math.round(parseFloat(inv.taxAmount) * 100);
+  const intra = splitIntraStateTax(inv.taxAmount);
+  const split = sameState
+    ? { cgst: intra.cgst.toFixed(2), sgst: intra.sgst.toFixed(2), igst: "0" }
+    : { cgst: "0", sgst: "0", igst: money.add(inv.taxAmount, 0) };
+  const returnPeriod = istReturnPeriod(inv.invoiceDate);
+
+  const live = await tx.update(itcLedgerEntries)
+    .set({ ...split, returnPeriod, isReverseCharge: inv.isReverseCharge, updatedAt: new Date() })
+    .where(and(
+      eq(itcLedgerEntries.invoiceId, invoiceId),
+      eq(itcLedgerEntries.businessId, businessId),
+      inArray(itcLedgerEntries.status, ["available", "blocked"]),
+    ))
+    .returning({ id: itcLedgerEntries.id });
+  if (live.length === 0 && taxPaise > 0) {
+    await tx.insert(itcLedgerEntries).values({
+      businessId, invoiceId, returnPeriod, status: "available", ...split, cess: "0", isReverseCharge: inv.isReverseCharge,
+    });
+  }
+}
 
 export const invoiceRouter = router({
   list: viewerProcedure
@@ -900,6 +957,30 @@ export const invoiceRouter = router({
         // 2. Build update payload
         const updates: Record<string, any> = { updatedAt: new Date() };
 
+        if (input.partyId && input.partyId !== existing.partyId) {
+          // Payments and credit notes/returns were made by (or to) the old
+          // party; moving the invoice would leave them pointing at someone
+          // else's bill. Same rule as editing a paid invoice.
+          const [paid] = await tx.select({ id: paymentAllocations.id })
+            .from(paymentAllocations)
+            .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
+            .where(and(eq(paymentAllocations.invoiceId, input.id), isNull(payments.deletedAt)))
+            .limit(1);
+          const [adjusted] = await tx.select({ id: invoices.id })
+            .from(invoices)
+            .where(and(
+              eq(invoices.referenceDocumentId, input.id),
+              isNull(invoices.deletedAt),
+              sql`${invoices.status} <> 'cancelled'`,
+            ))
+            .limit(1);
+          if (paid || adjusted) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "This invoice has payments or documents made against it. Remove them before changing the party." });
+          }
+          // A shipment goes to the invoice's party.
+          await tx.update(shipments).set({ partyId: input.partyId, updatedAt: new Date() })
+            .where(and(eq(shipments.invoiceId, input.id), eq(shipments.businessId, ctx.businessId)));
+        }
         if (input.partyId) updates.partyId = input.partyId;
         if (input.invoiceDate) updates.invoiceDate = new Date(input.invoiceDate);
         if (input.dueDate !== undefined) updates.dueDate = input.dueDate ? new Date(input.dueDate) : null;
@@ -1080,6 +1161,11 @@ export const invoiceRouter = router({
             const status = await recomputeInvoiceStatus(tx, ctx.businessId, result.id);
             if (status) result.status = status;
           }
+        }
+
+        // A purchase's input tax credit follows its tax, party and date.
+        if (existing.status !== "cancelled" && !existing.deletedAt && (input.lineItems || input.partyId || input.invoiceDate)) {
+          await syncPurchaseItc(tx, ctx.businessId, input.id);
         }
 
         return result;

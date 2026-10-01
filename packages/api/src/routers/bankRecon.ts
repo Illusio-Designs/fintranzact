@@ -56,6 +56,7 @@ import {
   type DetectionResult,
   type DetectionWarning,
 } from "../lib/bank-templates/index.js";
+import { withAudit } from "../lib/audit.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -127,7 +128,7 @@ export const bankReconRouter = router({
       fileName: z.string().min(1).max(255),
       csvContent: z.string().min(1).max(10_000_000), // 10 MB max
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankReconciliation");
 
       // Verify bank account belongs to this business
@@ -218,7 +219,7 @@ export const bankReconRouter = router({
         detectionWarning,
         totalRows: rows.length - 1,
       };
-    }),
+    }, (r, input) => ({ action: "bankRecon.uploadCSV", entityType: "bankStatementImport", entityId: r.importId, metadata: { fileName: input.fileName, bankAccountId: input.bankAccountId } }))),
 
   /**
    * Step 2: Confirm column mapping.
@@ -229,7 +230,7 @@ export const bankReconRouter = router({
       csvContent: z.string().min(1).max(10_000_000),
       templateId: z.string().uuid().optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       // Verify import belongs to this business
@@ -458,7 +459,7 @@ export const bankReconRouter = router({
         matchedLines: matchedCount,
         unmatchedLines: parsedLines.length - matchedCount,
       };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.confirmMapping", entityType: "bankStatementImport", entityId: input.importId }))),
 
   /**
    * List all imports for a bank account (or all accounts if omitted).
@@ -581,7 +582,7 @@ export const bankReconRouter = router({
     .input(z.object({
       lineId: z.string().uuid(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [line] = await ctx.db
@@ -609,7 +610,7 @@ export const bankReconRouter = router({
       await updateImportCounts(ctx.db, line.importId);
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.confirmMatch", entityType: "bankStatementLine", entityId: input.lineId }))),
 
   /**
    * Manually link a statement line to a payment or expense.
@@ -624,7 +625,7 @@ export const bankReconRouter = router({
       (d) => [d.paymentId, d.expenseId, d.bankTransactionId].filter(Boolean).length === 1,
       { message: "Provide exactly one of paymentId, expenseId, or bankTransactionId" },
     ))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [line] = await ctx.db
@@ -655,14 +656,14 @@ export const bankReconRouter = router({
       await updateImportCounts(ctx.db, line.importId);
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.manualMatch", entityType: "bankStatementLine", entityId: input.lineId, metadata: { paymentId: input.paymentId ?? null, expenseId: input.expenseId ?? null, bankTransactionId: input.bankTransactionId ?? null } }))),
 
   /**
    * Undo a match — revert line back to unmatched.
    */
   unmatch: adminProcedure
     .input(z.object({ lineId: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [line] = await ctx.db
@@ -696,7 +697,7 @@ export const bankReconRouter = router({
       await updateImportCounts(ctx.db, line.importId);
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.unmatch", entityType: "bankStatementLine", entityId: input.lineId }))),
 
   /**
    * Create an expense from an unmatched debit line and link it.
@@ -706,7 +707,7 @@ export const bankReconRouter = router({
       lineId: z.string().uuid(),
       expense: createExpenseSchema,
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "Expense");
 
       const [line] = await ctx.db
@@ -819,14 +820,14 @@ export const bankReconRouter = router({
       await updateImportCounts(ctx.db, line.importId);
 
       return newExpense;
-    }),
+    }, (r, input) => [{ action: "expense.create", entityType: "expense", entityId: r.id, metadata: { amount: r.amount, category: r.category, source: "bankRecon.createExpense", lineId: input.lineId } }, { action: "bankRecon.createExpense", entityType: "bankStatementLine", entityId: input.lineId, metadata: { expenseId: r.id } }])),
 
   /**
    * Mark a statement line as ignored (no matching needed).
    */
   ignoreLine: adminProcedure
     .input(z.object({ lineId: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [line] = await ctx.db
@@ -850,7 +851,7 @@ export const bankReconRouter = router({
       await updateImportCounts(ctx.db, line.importId);
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.ignoreLine", entityType: "bankStatementLine", entityId: input.lineId }))),
 
   /**
    * Bank Reconciliation Statement (BRS): compare bank balance (closing balance
@@ -1001,7 +1002,7 @@ export const bankReconRouter = router({
       label: z.string().max(255).optional(),
       fileFormat: z.enum(["csv", "xlsx", "pdf"]).optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankReconciliation");
 
       const bankSlug = input.bankSlug ?? `custom_${randomUUID()}`;
@@ -1025,7 +1026,7 @@ export const bankReconRouter = router({
         .returning();
 
       return template!;
-    }),
+    }, (r) => ({ action: "bankRecon.templateCreate", entityType: "bankStatementTemplate", entityId: r.id, metadata: { bankSlug: r.bankSlug } }))),
 
   /**
    * Fork a seeded or existing template into a user-editable copy.
@@ -1035,7 +1036,7 @@ export const bankReconRouter = router({
       templateId: z.string().uuid(),
       label: z.string().max(255).optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankReconciliation");
 
       const [source] = await ctx.db
@@ -1081,7 +1082,7 @@ export const bankReconRouter = router({
         .returning();
 
       return forked!;
-    }),
+    }, (r, input) => ({ action: "bankRecon.templateFork", entityType: "bankStatementTemplate", entityId: r.id, metadata: { forkedFrom: input.templateId } }))),
 
   /**
    * Update a custom/forked template. Seeded templates cannot be modified.
@@ -1106,7 +1107,7 @@ export const bankReconRouter = router({
       label: z.string().max(255).optional(),
       isActive: z.boolean().optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [existing] = await ctx.db
@@ -1145,14 +1146,14 @@ export const bankReconRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "bankRecon.templateUpdate", entityType: "bankStatementTemplate", entityId: input.id }))),
 
   /**
    * Delete a custom/forked template. Seeded templates cannot be deleted.
    */
   templateDelete: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "BankReconciliation");
 
       const [existing] = await ctx.db
@@ -1180,7 +1181,7 @@ export const bankReconRouter = router({
         .where(eq(bankStatementTemplates.id, input.id));
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.templateDelete", entityType: "bankStatementTemplate", entityId: input.id }))),
 
   // ── Categorization Rules ────────────────────────────────────────────────────
 
@@ -1212,7 +1213,7 @@ export const bankReconRouter = router({
 
   ruleCreate: adminProcedure
     .input(bankCategorizationRuleSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankReconciliation");
       await assertRuleRefs(ctx.db, ctx.businessId, input);
 
@@ -1225,7 +1226,7 @@ export const bankReconRouter = router({
         .returning();
 
       return rule!;
-    }),
+    }, (r) => ({ action: "bankRecon.ruleCreate", entityType: "bankCategorizationRule", entityId: r.id, metadata: { action: r.action, matchValue: r.matchValue } }))),
 
   ruleUpdate: adminProcedure
     .input(z.object({
@@ -1234,7 +1235,7 @@ export const bankReconRouter = router({
         isActive: z.boolean().optional(),
       }),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "BankReconciliation");
 
       const [existing] = await ctx.db
@@ -1258,11 +1259,11 @@ export const bankReconRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "bankRecon.ruleUpdate", entityType: "bankCategorizationRule", entityId: input.id }))),
 
   ruleDelete: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "delete", "BankReconciliation");
 
       const [existing] = await ctx.db
@@ -1283,7 +1284,7 @@ export const bankReconRouter = router({
         .where(eq(bankCategorizationRules.id, input.id));
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "bankRecon.ruleDelete", entityType: "bankCategorizationRule", entityId: input.id }))),
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -31,6 +31,7 @@ import {
   type UiUnitVariant,
   recomputeOnBasePriceChange,
   toPayloadVariant,
+  switchFactorForVariant,
 } from "@/lib/unit-variant-derivation";
 import { Icon } from "@/components/ui/Icon";
 import { ArrowDown01Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
@@ -2393,10 +2394,13 @@ function SwitchUnitModal({
   unitVariants: Array<{ unit: string; conversionFactor: number; salePrice: string }>;
   onClose: () => void;
 }) {
-  // Default to the first alt unit if one exists
+  // A unit variant's conversionFactor is how many base units one of it holds
+  // ("1 BAG = 25 KG"). switchBaseUnit wants the other way round — how many
+  // new units make one current base unit ("1 KG = 0.04 BAG") — so switching
+  // to an existing variant sends 1 / its factor.
   const defaultVariant = unitVariants.length > 0 ? unitVariants[0] : null;
   const [newUnit, setNewUnit] = useState(defaultVariant?.unit || "");
-  const [conversionFactor, setConversionFactor] = useState(defaultVariant ? String(defaultVariant.conversionFactor) : "");
+  const [conversionFactor, setConversionFactor] = useState("");
   const [isCustom, setIsCustom] = useState(!defaultVariant);
   const utils = trpc.useUtils();
 
@@ -2415,7 +2419,6 @@ function SwitchUnitModal({
     const variant = unitVariants.find((v) => v.unit === unit);
     if (variant) {
       setNewUnit(unit);
-      setConversionFactor(String(variant.conversionFactor));
       setIsCustom(false);
     }
   }
@@ -2426,7 +2429,12 @@ function SwitchUnitModal({
     setIsCustom(true);
   }
 
-  const factor = parseFloat(conversionFactor) || 0;
+  const pickedVariant = isCustom ? null : unitVariants.find((v) => v.unit === newUnit) ?? null;
+  // New units per current base unit.
+  const factor = pickedVariant
+    ? switchFactorForVariant(pickedVariant.conversionFactor)
+    : parseFloat(conversionFactor) || 0;
+  const shown = (n: number) => String(parseFloat(n.toPrecision(6)));
 
   return (
     <Modal open={true} onClose={onClose} title="Switch Base Unit" className="max-w-md">
@@ -2456,7 +2464,7 @@ function SwitchUnitModal({
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{v.unit.toUpperCase()}</span>
                     <span className="text-xs text-text-tertiary">
-                      1 {currentUnit.toUpperCase()} = {v.conversionFactor} {v.unit.toUpperCase()}
+                      1 {v.unit.toUpperCase()} = {v.conversionFactor} {currentUnit.toUpperCase()}
                     </span>
                   </div>
                 </button>
@@ -2506,7 +2514,8 @@ function SwitchUnitModal({
           <div className="rounded-lg bg-surface-1 border border-border-light px-4 py-3 text-xs space-y-1">
             <p className="font-medium text-text-primary">Preview</p>
             <p className="text-text-secondary">
-              1 {currentUnit.toUpperCase()} = {factor} {newUnit.toUpperCase()}
+              1 {currentUnit.toUpperCase()} = {shown(factor)} {newUnit.toUpperCase()}
+              {factor > 0 && factor < 1 && <> (1 {newUnit.toUpperCase()} = {shown(1 / factor)} {currentUnit.toUpperCase()})</>}
             </p>
             <p className="text-text-secondary">
               Old base ({currentUnit.toUpperCase()}) becomes a unit variant

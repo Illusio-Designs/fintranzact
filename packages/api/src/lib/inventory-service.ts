@@ -397,9 +397,11 @@ export async function syncDocumentStock(
                * ${direction} AS qty
       FROM invoice_items li
       LEFT JOIN item_variants v ON v.id = li.variant_id
+      JOIN items it ON it.id = COALESCE(li.item_id, v.item_id)
       WHERE li.invoice_id = ${doc.id}
         AND ${holdsStock ? sql`TRUE` : sql`FALSE`}
-        AND COALESCE(li.item_id, v.item_id) IS NOT NULL
+        -- Services carry no stock.
+        AND it.item_type <> 'service'
       GROUP BY 1, 2, 3
     ),
     held AS (
@@ -547,7 +549,9 @@ export async function postNewDocumentsStock(
       FROM invoices i
       JOIN invoice_items li ON li.invoice_id = i.id
       LEFT JOIN item_variants v ON v.id = li.variant_id
+      JOIN items it ON it.id = COALESCE(li.item_id, v.item_id)
       WHERE i.business_id = ${input.businessId}
+        AND it.item_type <> 'service'
         AND i.id IN ${input.documentIds}
         AND i.stock_mode = 'tracked'
         AND i.deleted_at IS NULL

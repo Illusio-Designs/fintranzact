@@ -39,6 +39,7 @@ import { IRPClient, IRPError } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 import { encryptEInvoiceConfig, decryptEInvoiceConfig } from "../lib/field-encryption.js";
+import { audited, withAudit } from "../lib/audit.js";
 
 // ── Shared helper ─────────────────────────────────────────────────────────────
 
@@ -236,7 +237,7 @@ export const eInvoiceRouter = router({
    */
   configure: adminProcedure
     .input(eInvoiceConfigSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EInvoice");
 
       const existing = await ctx.db
@@ -290,7 +291,7 @@ export const eInvoiceRouter = router({
         })
         .returning();
       return decryptEInvoiceConfig(created!);
-    }),
+    }, (r) => ({ action: "eInvoice.configure", entityType: "eInvoiceConfig", entityId: r.id, metadata: { gstin: r.gstin, isEnabled: r.isEnabled } }))),
 
   /**
    * Get IRP config for this business (masks password).
@@ -355,7 +356,7 @@ export const eInvoiceRouter = router({
    */
   generate: adminProcedure
     .input(z.object({ invoiceId: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EInvoice");
 
       // Pre-validate status before delegating to shared helper
@@ -376,14 +377,14 @@ export const eInvoiceRouter = router({
       }
 
       return generateIRNForInvoice(input.invoiceId, ctx.businessId, ctx.db);
-    }),
+    }, (_r, input) => ({ action: "eInvoice.generate", entityType: "invoice", entityId: input.invoiceId }))),
 
   /**
    * Cancel an IRN. Only valid within 24 hours of generation.
    */
   cancel: adminProcedure
     .input(cancelEInvoiceSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EInvoice");
 
       // Fetch config and decrypt credentials
@@ -464,7 +465,7 @@ export const eInvoiceRouter = router({
         .returning();
 
       return updated;
-    }),
+    }, (_r, input) => ({ action: "eInvoice.cancel", entityType: "invoice", entityId: input.invoiceId, metadata: { cancelReason: input.cancelReason } }))),
 
   /**
    * Retry a failed e-invoice submission.
@@ -472,7 +473,7 @@ export const eInvoiceRouter = router({
    */
   retryFailed: adminProcedure
     .input(z.object({ invoiceId: z.string().uuid() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EInvoice");
 
       const [invoice] = await ctx.db
@@ -500,7 +501,7 @@ export const eInvoiceRouter = router({
 
       // Run the generate logic inline (reuse same helper)
       return generateIRNForInvoice(invoice.id, ctx.businessId, ctx.db);
-    }),
+    }, (_r, input) => ({ action: "eInvoice.retryFailed", entityType: "invoice", entityId: input.invoiceId }))),
 
   /**
    * Dashboard: list invoices with e-invoice status, counts, filters.
@@ -684,6 +685,8 @@ export const eInvoiceRouter = router({
       }
     }
 
-    return results;
+    return audited(ctx, async () => results, (r) => failedInvoices.map((inv) => ({
+      action: "eInvoice.retryFailed", entityType: "invoice", entityId: inv.id, metadata: { bulk: true, ...r },
+    })));
   }),
 });

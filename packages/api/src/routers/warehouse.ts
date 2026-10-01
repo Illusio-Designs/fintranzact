@@ -16,6 +16,7 @@ import {
 
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { mapDbRole, requireCan } from "../lib/permissions.js";
+import { withAudit } from "../lib/audit.js";
 
 /** Roles that manage every warehouse without per-warehouse grants (as stock.ts). */
 const ADMIN_ROLES = new Set(["admin", "superadmin"]);
@@ -114,7 +115,7 @@ export const warehouseRouter = router({
                 status: z.string().max(50).default("active"),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -157,7 +158,7 @@ export const warehouseRouter = router({
                 .returning();
 
             return premise;
-        }),
+        }, (r) => ({ action: "warehouse.premiseCreate", entityType: "premise", entityId: r.id, metadata: { name: r.name, code: r.code } }))),
 
     premiseUpdate: memberProcedure
         .input(
@@ -171,7 +172,7 @@ export const warehouseRouter = router({
                 status: z.string().max(50).optional(),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -237,7 +238,7 @@ export const warehouseRouter = router({
                 .returning();
 
             return updated;
-        }),
+        }, (r, input) => ({ action: "warehouse.premiseUpdate", entityType: "premise", entityId: input.id, metadata: { ...input } }))),
 
     premiseDelete: memberProcedure
         .input(
@@ -245,7 +246,7 @@ export const warehouseRouter = router({
                 id: z.string().uuid(),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -291,7 +292,7 @@ export const warehouseRouter = router({
                 success: true,
                 id: deleted.id,
             };
-        }),
+        }, (_r, input) => ({ action: "warehouse.premiseDelete", entityType: "premise", entityId: input.id }))),
 
     // ============================================================
     // WAREHOUSES
@@ -382,7 +383,7 @@ export const warehouseRouter = router({
                 status: z.string().max(50).default("active"),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -443,7 +444,7 @@ export const warehouseRouter = router({
                 .returning();
 
             return warehouse;
-        }),
+        }, (r) => ({ action: "warehouse.warehouseCreate", entityType: "warehouse", entityId: r.id, metadata: { name: r.name, code: r.code } }))),
 
     warehouseUpdate: memberProcedure
         .input(
@@ -457,7 +458,7 @@ export const warehouseRouter = router({
                 status: z.string().max(50).optional(),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -559,7 +560,7 @@ export const warehouseRouter = router({
                 .returning();
 
             return updated;
-        }),
+        }, (_r, input) => ({ action: "warehouse.warehouseUpdate", entityType: "warehouse", entityId: input.id, metadata: { ...input } }))),
 
     warehouseDelete: memberProcedure
         .input(
@@ -567,7 +568,7 @@ export const warehouseRouter = router({
                 id: z.string().uuid(),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -613,7 +614,7 @@ export const warehouseRouter = router({
                 success: true,
                 id: deleted.id,
             };
-        }),
+        }, (_r, input) => ({ action: "warehouse.warehouseDelete", entityType: "warehouse", entityId: input.id }))),
 
     // ============================================================
     // WAREHOUSE LOCATIONS
@@ -682,7 +683,7 @@ export const warehouseRouter = router({
                 status: z.string().max(50).default("active"),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -775,7 +776,7 @@ export const warehouseRouter = router({
                 .returning();
 
             return location;
-        }),
+        }, (r) => ({ action: "warehouse.locationCreate", entityType: "warehouseLocation", entityId: r.id, metadata: { name: r.name, code: r.code, warehouseId: r.warehouseId } }))),
 
     locationUpdate: memberProcedure
         .input(
@@ -795,7 +796,7 @@ export const warehouseRouter = router({
                 status: z.string().max(50).optional(),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -924,7 +925,7 @@ export const warehouseRouter = router({
                 .returning();
 
             return updated;
-        }),
+        }, (_r, input) => ({ action: "warehouse.locationUpdate", entityType: "warehouseLocation", entityId: input.id, metadata: { ...input } }))),
 
     locationDelete: memberProcedure
         .input(
@@ -932,7 +933,7 @@ export const warehouseRouter = router({
                 id: z.string().uuid(),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -986,7 +987,7 @@ export const warehouseRouter = router({
                 success: true,
                 id: deleted.id,
             };
-        }),
+        }, (_r, input) => ({ action: "warehouse.locationDelete", entityType: "warehouseLocation", entityId: input.id }))),
 
     warehousePermissionCreate: memberProcedure
         .input(
@@ -999,7 +1000,7 @@ export const warehouseRouter = router({
                 canAdjust: z.boolean().default(false),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -1088,7 +1089,7 @@ export const warehouseRouter = router({
                 .returning();
 
             return permission;
-        }),
+        }, (r) => ({ action: "warehouse.permissionCreate", entityType: "warehousePermission", entityId: r.id, metadata: { warehouseId: r.warehouseId, businessMemberId: r.businessMemberId } }))),
 
     // ============================================================
     // INVENTORY SETTINGS
@@ -1125,7 +1126,7 @@ export const warehouseRouter = router({
                 stockAdjustmentWarehouseId: z.string().uuid().nullable().optional(),
             }),
         )
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
         requireCan(ctx.ability, "manage", "Business");
             if (!ctx.businessId) {
                 throw new TRPCError({
@@ -1218,7 +1219,7 @@ export const warehouseRouter = router({
                 .returning();
 
             return created;
-        }),
+        }, (r, input) => ({ action: "warehouse.inventorySettingsUpdate", entityType: "inventorySettings", entityId: r?.id ?? null, metadata: { ...input } }))),
 
     // ============================================================
     // PER-MEMBER WAREHOUSE ACCESS
@@ -1294,7 +1295,7 @@ export const warehouseRouter = router({
             canTransfer: z.boolean(),
             canAdjust: z.boolean(),
         }))
-        .mutation(async ({ input, ctx }) => {
+        .mutation(withAudit(async ({ input, ctx }) => {
             requireCan(ctx.ability, "manage", "Business");
             const [[warehouse], [member]] = await Promise.all([
                 ctx.db.select({ id: warehouses.id }).from(warehouses)
@@ -1334,5 +1335,5 @@ export const warehouseRouter = router({
                 });
             }
             return { ok: true };
-        }),
+        }, (_r, input) => ({ action: "warehouse.accessSet", entityType: "warehousePermission", entityId: input.warehouseId, metadata: { ...input } }))),
 });

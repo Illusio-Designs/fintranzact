@@ -50,6 +50,7 @@ import { EWBClient, computeValidUpto } from "../lib/ewb-client.js";
 import { decryptEwbConfig } from "../lib/field-encryption.js";
 import { mapInvoiceToEWB } from "../lib/invoice-to-ewb.js";
 import type { TransportDetails, InvoiceForEWB, LineItemForEWB } from "../lib/invoice-to-ewb.js";
+import { withAudit } from "../lib/audit.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -151,7 +152,7 @@ export const ewayBillRouter = router({
    */
   generate: adminProcedure
     .input(generateEwayBillSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EWayBill");
 
       // ── 1. Fetch invoice ─────────────────────────────────────────────────────
@@ -364,7 +365,7 @@ export const ewayBillRouter = router({
         .returning();
 
       return newEwb!;
-    }),
+    }, (r, input) => ({ action: "ewayBill.generate", entityType: "ewayBill", entityId: r.id, metadata: { invoiceId: input.invoiceId, ewbNumber: r.ewbNumber } }))),
 
   /**
    * Cancel an E-Way Bill.
@@ -372,7 +373,7 @@ export const ewayBillRouter = router({
    */
   cancel: adminProcedure
     .input(cancelEwayBillSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EWayBill");
 
       const [ewb] = await ctx.db
@@ -433,7 +434,7 @@ export const ewayBillRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "ewayBill.cancel", entityType: "ewayBill", entityId: input.ewayBillId, metadata: { cancelReason: input.cancelReason } }))),
 
   /**
    * Update vehicle number (Part-B update).
@@ -441,7 +442,7 @@ export const ewayBillRouter = router({
    */
   updateVehicle: adminProcedure
     .input(updateEwbVehicleSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EWayBill");
 
       const [ewb] = await ctx.db
@@ -520,7 +521,7 @@ export const ewayBillRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "ewayBill.updateVehicle", entityType: "ewayBill", entityId: input.ewayBillId, metadata: { vehicleNumber: input.vehicleNumber } }))),
 
   /**
    * Extend EWB validity.
@@ -536,7 +537,7 @@ export const ewayBillRouter = router({
         remainingDistance: z.number().int().min(1),
       }),
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "EWayBill");
 
       const [ewb] = await ctx.db
@@ -622,7 +623,7 @@ export const ewayBillRouter = router({
         .returning();
 
       return updated!;
-    }),
+    }, (_r, input) => ({ action: "ewayBill.extend", entityType: "ewayBill", entityId: input.ewayBillId }))),
 
   /**
    * Get E-Way Bill details for a specific invoice.
