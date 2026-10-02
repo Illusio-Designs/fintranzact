@@ -62,6 +62,11 @@ export function caRoleMutationAllowed(role: string, path: string): boolean {
   return CA_FILING_MUTATIONS.includes(path);
 }
 
+/** The refusal message for a CA role (use with caRoleMutationAllowed on tenant-base mutations). */
+export function caRoleRefusalMessage(role: string): string {
+  return role === "auditor" ? CA_READ_ONLY_MESSAGE : CA_FILING_ONLY_MESSAGE;
+}
+
 /** Marking a GST return as filed: the owner-side lock permission, or the filing permission. */
 export function canMarkGstFiled(ability: AppAbility): boolean {
   return ability.can("create", "PeriodLock") || ability.can("create", "GstReport");

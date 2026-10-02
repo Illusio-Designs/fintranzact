@@ -93,7 +93,7 @@
 | business.create | mutation | tenant | — (+ requireTenantAdmin) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | business.deleteLogo | mutation | tenant | — (+ requireTenantAdmin) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | business.deleteSignature | mutation | tenant | — (+ requireTenantAdmin) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| business.ensureWalkInParty | mutation | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| business.ensureWalkInParty | mutation | tenant | — (+ not for accountant (read-only/filing) roles) | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | business.exportData | mutation | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | business.getById | query | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | business.list | query | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

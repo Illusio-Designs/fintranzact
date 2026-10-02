@@ -28,6 +28,33 @@ If the Fintranzact app is installed, the invitation deep link opens the app dire
 5. **Existing user:** clicks the link, the invitation is accepted immediately, and the invited organization is auto-selected in their session.
 6. The invitation expires after **7 days** if not accepted.
 
+## Invite your CA
+
+Your accountant (CA) can have their own login to your books without sharing your password. Only the **owner** of the organization can invite a CA; admins cannot.
+
+<ForDesktop>
+1. Go to **Settings → Team** and click **Invite my CA** (next to **Invite member**).
+2. Enter your CA's email address. Capital letters don't matter.
+3. Choose what they can do:
+   - **View only** (Accountant, read-only): can view everything and download reports. Cannot change anything.
+   - **View and file returns** (Accountant, filing): can view everything, prepare and file GST returns, and download reports. Cannot create or edit sales, purchases, payments or other records.
+4. Click **Send invite**. We email your CA, and you also get a link you can copy and send yourself.
+</ForDesktop>
+
+<ForMobile>
+1. Open **More → Settings → Team** and tap **Invite my CA**.
+2. Enter your CA's email address and choose **View only** or **View and file returns**.
+3. Tap **Send Invitation**. We email your CA and the invitation shows as pending until they accept.
+</ForMobile>
+
+Good to know:
+
+- The invitation email says you have invited them as your accountant, shows the access level, and tells them you can remove access at any time and that their activity is logged.
+- Accountants don't use up your team-member limit, and pending CA invitations don't either. An organization can have up to **3** accountants (including pending invitations).
+- Only the owner can change a member to or from an accountant role in the Team list, and remove access by removing the member. Accountant roles appear with a small **CA** badge.
+- If your CA signs up through your link, they can also create their own firm afterwards to manage all their clients in one place.
+- Accountant roles are covered by the "owners, admins and accountants" two-factor policy.
+
 ## Accepting invitations
 
 <ForDesktop>
@@ -64,7 +91,9 @@ Available roles at invitation time:
 | `admin` | Full access to all businesses and settings |
 | `seller_manager` | Manage the sales team and see all invoices |
 | `seller` | Create invoices and record payments |
-| `accountant` | Read-only access to reports and ledgers |
+| `accountant` | Accountant (bookkeeping): payments, expenses, bank; read-only elsewhere |
+
+Accountant roles for your CA (`auditor` and `ca_filing`) are invited with **Invite my CA**, see above.
 
 After accepting, the invited organization is automatically selected in the user's session.
 
@@ -77,7 +106,7 @@ Invitation emails are sent automatically using:
 
 Each invitation email contains:
 
-- The inviter's name
+- The inviter's name (accountant invitations say "has invited you as their accountant" and show the access level)
 - The organization name
 - An **Accept** button linking to the app
 - A 7-day expiry notice
@@ -95,7 +124,7 @@ The number of team members (including pending invitations) is limited by your pl
 | Business | Unlimited |
 | Enterprise | Unlimited |
 
-If you reach the limit, you must upgrade your plan or revoke an existing invitation before sending a new one.
+Accountant (CA) members and invitations are not counted. If you reach the limit, you must upgrade your plan or revoke an existing invitation before sending a new one.
 
 ## CLI and MCP reference
 

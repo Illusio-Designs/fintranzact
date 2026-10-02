@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 import { listProcedures } from "./helpers/sweep-procs.js";
 import {
   CA_FILING_MUTATIONS, caRoleMutationAllowed, canMarkGstFiled, defineAbilityFor,
+  caRoleRefusalMessage, CA_READ_ONLY_MESSAGE, CA_FILING_ONLY_MESSAGE,
 } from "../lib/permissions.js";
 
 const procs = listProcedures();
@@ -74,5 +75,20 @@ describe("canMarkGstFiled", () => {
   });
   it("is false for everyone else", () => {
     for (const role of ["auditor", "seller", "seller_manager", ""]) expect(can(role), role).toBe(false);
+  });
+});
+
+describe("tenant-base mutations a CA role could reach", () => {
+  it("business.ensureWalkInParty is not allowlisted, so both CA roles are refused by its inline check", () => {
+    expect(CA_FILING_MUTATIONS).not.toContain("business.ensureWalkInParty");
+    expect(caRoleMutationAllowed("auditor", "business.ensureWalkInParty")).toBe(false);
+    expect(caRoleMutationAllowed("ca_filing", "business.ensureWalkInParty")).toBe(false);
+    expect(caRoleMutationAllowed("accountant", "business.ensureWalkInParty")).toBe(true);
+    expect(byPath.get("business.ensureWalkInParty")?.base).toBe("tenant");
+  });
+
+  it("caRoleRefusalMessage names the right restriction", () => {
+    expect(caRoleRefusalMessage("auditor")).toBe(CA_READ_ONLY_MESSAGE);
+    expect(caRoleRefusalMessage("ca_filing")).toBe(CA_FILING_ONLY_MESSAGE);
   });
 });

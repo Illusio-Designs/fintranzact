@@ -925,6 +925,7 @@ resp = httpx.post(
 walk_in_id = resp.json()["result"]["data"]["json"]["id"]`,
       },
       gotchas: [
+        "Refused (FORBIDDEN) for the accountant read-only and filing roles (`auditor`, `ca_filing`): it creates a record.",
         "Any authenticated member of the organization can call this — there is no admin, CASL or business-membership check, and the business ID is not verified to exist.",
         "The match is on an exact `name = \"Walk-in Customer\"` and `type = \"customer\"`. Renaming that party makes the next call create a new one.",
         "There is no lock, so two simultaneous first calls can create two walk-in parties; merge them with `party.merge`.",

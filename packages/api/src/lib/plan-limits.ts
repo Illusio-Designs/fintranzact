@@ -7,11 +7,11 @@
  * Self-hosted defaults to "free" plan — same limits apply including PDF branding.
  */
 
-import { eq, and, gt, gte, isNull, count, sql } from "drizzle-orm";
+import { eq, and, gt, gte, isNull, count, sql, inArray, notInArray } from "drizzle-orm";
 import { controlDb, tenants, tenantMembers, invitations } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 import { businesses, recurringInvoiceRuns } from "@fintranzact/db";
-import { PLAN_LIMITS, type PlanLimits } from "@fintranzact/shared";
+import { PLAN_LIMITS, CA_ROLES, type PlanLimits } from "@fintranzact/shared";
 import { getPlanLimits } from "./plan-catalog.js";
 import { getEntitlements, assertWritable } from "./entitlements.js";
 import { limitError } from "./entitlement-error.js";
@@ -135,6 +135,8 @@ export async function enforceBusinessLimit(tenantId: string, tenantDb: TenantDat
 /**
  * Enforce team member limit.
  * Counts current members + pending invitations against the plan limit.
+ * Accountant (CA) roles are outside the limit (see countsTowardTeamLimit in
+ * invite-rules.ts); they have their own per-organisation cap.
  */
 export async function enforceTeamMemberLimit(tenantId: string): Promise<void> {
   const limits = await getTenantLimits(tenantId);
@@ -142,10 +144,11 @@ export async function enforceTeamMemberLimit(tenantId: string): Promise<void> {
 
   const [[members], [pending]] = await Promise.all([
     controlDb.select({ count: count() }).from(tenantMembers)
-      .where(eq(tenantMembers.tenantId, tenantId)),
+      .where(and(eq(tenantMembers.tenantId, tenantId), notInArray(tenantMembers.role, [...CA_ROLES]))),
     controlDb.select({ count: count() }).from(invitations)
       .where(and(
         eq(invitations.tenantId, tenantId),
+        notInArray(invitations.role, [...CA_ROLES]),
         gt(invitations.expiresAt, new Date()),
         isNull(invitations.acceptedAt),
       )),
@@ -157,6 +160,22 @@ export async function enforceTeamMemberLimit(tenantId: string): Promise<void> {
       `Your plan allows up to ${limits.maxTeamMembers} team members (including pending invites). Upgrade to invite more.`,
     );
   }
+}
+
+/** Accountant (CA) members and unexpired pending CA invitations of an organisation. */
+export async function countCaSlots(tenantId: string): Promise<{ memberCaCount: number; pendingCaCount: number }> {
+  const [[members], [pending]] = await Promise.all([
+    controlDb.select({ count: count() }).from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, tenantId), inArray(tenantMembers.role, [...CA_ROLES]))),
+    controlDb.select({ count: count() }).from(invitations)
+      .where(and(
+        eq(invitations.tenantId, tenantId),
+        inArray(invitations.role, [...CA_ROLES]),
+        gt(invitations.expiresAt, new Date()),
+        isNull(invitations.acceptedAt),
+      )),
+  ]);
+  return { memberCaCount: members?.count ?? 0, pendingCaCount: pending?.count ?? 0 };
 }
 
 /**

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { invalidateEntitlements } from "../lib/entitlements-cache.js";
 import { TRPCError } from "@trpc/server";
 import { controlDb, getTenantDb, tenants, tenantMembers, invitations, users, sessions, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
-import { eq, and, gt, isNull, desc } from "drizzle-orm";
+import { eq, and, gt, isNull, desc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { createHash } from "node:crypto";
 import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
@@ -11,11 +11,12 @@ import { invalidateTwoFactorGateMember, invalidateTwoFactorGateTenant } from "..
 import { getGateMembership, getTwoFactorRequirementForCaller } from "../lib/two-factor-gate.js";
 import { setSecurityPolicy, type PolicyDeps } from "../lib/two-factor-policy.js";
 import { recordSecurityEvent } from "../lib/security-events.js";
-import { TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS } from "@fintranzact/shared";
+import { TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS, caRoleDescription, memberRoleLabel, isCaRole } from "@fintranzact/shared";
 import { emailService } from "../lib/email.js";
 import { isPaidPlan, isSelfServePlan } from "../lib/plan-catalog.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
-import { effectiveOwnerPlan, enforceTeamMemberLimit, enforceOrgCreationLimit, assertOwnedOrgsWritable, getLimits } from "../lib/plan-limits.js";
+import { effectiveOwnerPlan, enforceTeamMemberLimit, countCaSlots, enforceOrgCreationLimit, assertOwnedOrgsWritable, getLimits } from "../lib/plan-limits.js";
+import { checkInviteRules, checkRoleChangeRules, countsTowardTeamLimit, normalizeInviteEmail } from "../lib/invite-rules.js";
 import { backfillLegacyBusinessMembers, grantTenantBusinessesToMember } from "../lib/business-membership.js";
 
 /** A member who joins through an invitation can open the organisation's businesses. */
@@ -24,6 +25,16 @@ async function openTenantBusinessesFor(tenantId: string, userId: string, role: s
   // Legacy businesses (no members yet) first get the whole team, as on first use.
   await backfillLegacyBusinessMembers(db, tenantId);
   await grantTenantBusinessesToMember(db, tenantId, userId, role);
+}
+
+/** Case-insensitive e-mail match (rows written before invites were lowercased may be mixed case). */
+function emailIs(column: typeof users.email | typeof invitations.email, normalized: string) {
+  return sql`lower(${column}) = ${normalized}`;
+}
+
+/** What an invitation shows the invitee: the role's label and, for an accountant role, what it can do. */
+function roleInfo(role: string) {
+  return { roleLabel: memberRoleLabel(role), accessDescription: caRoleDescription(role) };
 }
 
 function hashInvitationToken(token: string): string {
@@ -243,15 +254,17 @@ export const tenantRouter = router({
       id: invitations.id,
       tenantName: tenants.name,
       role: invitations.role,
+      invitedByName: users.name,
     })
       .from(invitations)
       .innerJoin(tenants, eq(tenants.id, invitations.tenantId))
+      .leftJoin(users, eq(users.id, invitations.invitedBy))
       .where(and(
-        eq(invitations.email, ctx.user.email.toLowerCase()),
+        emailIs(invitations.email, normalizeInviteEmail(ctx.user.email)),
         isNull(invitations.acceptedAt),
         gt(invitations.expiresAt, new Date()),
       ));
-    return pending;
+    return pending.map((p) => ({ ...p, ...roleInfo(p.role) }));
   }),
 
   // Accept invitation by ID (for users who see their pending invites in-app,
@@ -264,7 +277,7 @@ export const tenantRouter = router({
         .from(invitations)
         .where(and(
           eq(invitations.id, input.invitationId),
-          eq(invitations.email, ctx.user.email.toLowerCase()),
+          emailIs(invitations.email, normalizeInviteEmail(ctx.user.email)),
           isNull(invitations.acceptedAt),
           gt(invitations.expiresAt, new Date()),
         ))
@@ -413,11 +426,13 @@ export const tenantRouter = router({
   // Invite a member
   inviteMember: tenantProcedure
     .input(z.object({
-      email: z.string().email(),
+      // Trimmed and lowercased once, so every lookup and comparison below (and
+      // the invitee's own list) sees the same address however it was typed.
+      email: z.string().trim().toLowerCase().email(),
       role: z.enum(["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"]).default("seller"),
     }))
     .mutation(async ({ input, ctx }) => {
-      // Check caller has permission (owner/superadmin or admin)
+      // Check caller has permission (owner/superadmin or admin; CA roles: owner/superadmin only)
       const [callerMembership] = await controlDb.select({ role: tenantMembers.role })
         .from(tenantMembers)
         .where(and(
@@ -426,16 +441,20 @@ export const tenantRouter = router({
         ))
         .limit(1);
 
-      if (!callerMembership || !["owner", "superadmin", "admin"].includes(callerMembership.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only owners and admins can invite members" });
-      }
+      const caSlots = isCaRole(input.role) ? await countCaSlots(ctx.tenantId) : { memberCaCount: 0, pendingCaCount: 0 };
+      const rules = checkInviteRules({
+        inviterRole: callerMembership?.role,
+        targetRole: input.role,
+        ...caSlots,
+      });
+      if (!rules.ok) throw new TRPCError({ code: rules.code, message: rules.message });
 
-      // Enforce team member limit before proceeding
-      await enforceTeamMemberLimit(ctx.tenantId);
+      // Enforce team member limit before proceeding (accountant roles are outside it)
+      if (countsTowardTeamLimit(input.role)) await enforceTeamMemberLimit(ctx.tenantId);
 
       // Check if already a member
       const [existingUser] = await controlDb.select({ id: users.id })
-        .from(users).where(eq(users.email, input.email)).limit(1);
+        .from(users).where(emailIs(users.email, input.email)).limit(1);
 
       if (existingUser) {
         const [existingMember] = await controlDb.select({ id: tenantMembers.id })
@@ -456,7 +475,7 @@ export const tenantRouter = router({
         .from(invitations)
         .where(and(
           eq(invitations.tenantId, ctx.tenantId),
-          eq(invitations.email, input.email),
+          emailIs(invitations.email, input.email),
           isNull(invitations.acceptedAt),
           gt(invitations.expiresAt, new Date()),
         ))
@@ -498,12 +517,13 @@ export const tenantRouter = router({
         inviteUrl,
         tenant?.name ?? "Organization",
         inviter?.name ?? null,
+        input.role,
       ).catch((err) => {
         console.error("[invite] Failed to send invitation email:", err);
       });
 
       // Return the raw token — this is what gets sent via email
-      return { token: rawToken, expiresAt };
+      return { token: rawToken, inviteUrl, role: input.role, expiresAt };
     }),
 
   // Accept an invitation
@@ -520,6 +540,7 @@ export const tenantRouter = router({
         role: invitations.role,
         tenantId: invitations.tenantId,
         acceptedAt: invitations.acceptedAt,
+        invitedBy: invitations.invitedBy,
       })
         .from(invitations)
         .where(and(
@@ -535,9 +556,15 @@ export const tenantRouter = router({
         .where(eq(tenants.id, invitation.tenantId))
         .limit(1);
 
+      const [inviter] = invitation.invitedBy
+        ? await controlDb.select({ name: users.name }).from(users).where(eq(users.id, invitation.invitedBy)).limit(1)
+        : [];
+
       return {
         tenantName: tenant?.name ?? "Organization",
         role: invitation.role,
+        invitedByName: inviter?.name ?? null,
+        ...roleInfo(invitation.role),
       };
     }),
 
@@ -560,7 +587,7 @@ export const tenantRouter = router({
       // Verify the invitation email matches the authenticated user
       const [currentUser] = await controlDb.select({ email: users.email })
         .from(users).where(eq(users.id, ctx.user.id)).limit(1);
-      if (!currentUser || currentUser.email.toLowerCase() !== invitation.email.toLowerCase()) {
+      if (!currentUser || normalizeInviteEmail(currentUser.email) !== normalizeInviteEmail(invitation.email)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "This invitation was sent to a different email address" });
       }
 
@@ -654,7 +681,7 @@ export const tenantRouter = router({
       ))
       .orderBy(desc(invitations.createdAt));
 
-    return pending;
+    return pending.map((p) => ({ ...p, ...roleInfo(p.role) }));
   }),
 
   // Revoke a pending invitation
@@ -779,6 +806,16 @@ export const tenantRouter = router({
       if (targetMembership && ["owner", "superadmin"].includes(targetMembership.role)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Cannot change the role of a superadmin" });
       }
+
+      // Accountant (CA) roles: owner/superadmin only, to or from one; capped per organisation.
+      const caSlots = isCaRole(input.role) ? await countCaSlots(ctx.tenantId) : { memberCaCount: 0, pendingCaCount: 0 };
+      const rules = checkRoleChangeRules({
+        actorRole: callerMembership.role,
+        currentRole: targetMembership?.role,
+        newRole: input.role,
+        ...caSlots,
+      });
+      if (!rules.ok) throw new TRPCError({ code: rules.code, message: rules.message });
 
       await controlDb.update(tenantMembers)
         .set({ role: input.role })

@@ -60,9 +60,10 @@ export function registerTenantTools(server: McpServer, client: FintranzactClient
     "tenant_invite_member",
     [
       "Invite a user to join the current tenant by email address.",
-      "Requires admin or owner role in the current tenant.",
-      "The invitation link is valid for 7 days. The raw token is returned exactly once — save it to send via email.",
-      "Available roles: 'admin' (full access), 'seller_manager' (manage sales team), 'seller' (create invoices), 'accountant' (bookkeeping: payments, expenses, bank), 'auditor' (read-only accountant), 'ca_filing' (read-only accountant who can also prepare and file GST returns).",
+      "Requires admin or owner role in the current tenant. Inviting a CA ('auditor' or 'ca_filing') requires the owner: admins are refused.",
+      "The invitation link is valid for 7 days; the invitee is also emailed (accountant roles get an accountant-specific email). The raw token is returned exactly once.",
+      "CA roles are for the business's accountant: at most 3 per organisation, not counted towards the plan's team-member limit, removable at any time, and their activity is logged.",
+      "Available roles: 'admin' (full access), 'seller_manager' (manage sales team), 'seller' (create invoices), 'accountant' (bookkeeping: payments, expenses, bank), 'auditor' (accountant, read-only: views everything and downloads reports), 'ca_filing' (accountant, filing: as auditor plus prepares and files GST returns).",
     ].join(" "),
     {
       email: z.string().email()
@@ -112,7 +113,7 @@ export function registerTenantTools(server: McpServer, client: FintranzactClient
   server.tool(
     "tenant_update_member_role",
     [
-      "Change the role of an existing tenant member. Requires admin or owner role.",
+      "Change the role of an existing tenant member. Requires admin or owner role; moving someone to or from a CA role ('auditor', 'ca_filing') requires the owner.",
       "Cannot change the role of a superadmin or owner.",
       "Available roles: 'admin' (full access), 'seller_manager', 'seller', 'accountant' (bookkeeping), 'auditor' (read-only), 'ca_filing' (read-only plus GST filing).",
     ].join(" "),

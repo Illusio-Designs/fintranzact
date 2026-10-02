@@ -111,6 +111,8 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   "business.uploadSignature": { allow: ADMINS, why: "requireTenantAdmin" },
   "business.deleteSignature": { allow: ADMINS, why: "requireTenantAdmin" },
   "business.deleteLogo": { allow: ADMINS, why: "requireTenantAdmin" },
+  // Creates a record on the tenant base (no CASL check): refused for the CA roles by an inline caRoleMutationAllowed check.
+  "business.ensureWalkInParty": { allow: ["owner", "admin", "seller_manager", "seller", "accountant"], why: "not for accountant (read-only/filing) roles" },
   "business.setPosEnabled": { allow: ADMINS, why: "requireTenantAdmin" },
   "business.updateSequenceNumber": { allow: ADMINS, why: "requireTenantAdmin" },
   // Stock movements: non-admins also need a per-warehouse grant, which the

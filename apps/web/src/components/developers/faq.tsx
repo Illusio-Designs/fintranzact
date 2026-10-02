@@ -156,7 +156,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "How do I give my CA access?",
     answer:
-      "Invite your CA with `tenant.inviteMember` and the `accountant` role. They get the money side (payments, expenses, bank accounts, reports and GST) and read-only access to invoices, parties and items, using their own login. Remove access at any time with `tenant.removeMember`.",
+      "As the organization owner, invite your CA with `tenant.inviteMember` and the `auditor` role (read-only: views everything and downloads reports) or `ca_filing` (the same, plus preparing and filing GST returns). They get their own login and an accountant-specific email; admins cannot invite a CA. A CA does not count towards your plan's team-member limit (up to 3 per organization). Remove access at any time with `tenant.removeMember`; their activity is logged. Use the bookkeeping `accountant` role if they should also keep your books (payments, expenses, bank).",
     relatedGroups: ["tenant"],
     personas: ["business-owner"],
   },

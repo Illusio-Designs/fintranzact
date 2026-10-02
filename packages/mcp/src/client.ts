@@ -645,7 +645,7 @@ export class FintranzactClient {
         return c.query<unknown[]>("tenant.members");
       },
       inviteMember(email: string, role: string) {
-        return c.mutate<{ token: string; expiresAt: Date }>("tenant.inviteMember", { email, role });
+        return c.mutate<{ token: string; inviteUrl: string; role: string; expiresAt: Date }>("tenant.inviteMember", { email, role });
       },
       removeMember(userId: string) {
         return c.mutate<{ success: boolean }>("tenant.removeMember", { userId });

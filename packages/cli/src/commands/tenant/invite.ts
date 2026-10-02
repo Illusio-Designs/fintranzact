@@ -2,12 +2,14 @@ import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT, success } from "../../output.js";
 
-const VALID_ROLES = ["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"] as const;
-type TenantRole = typeof VALID_ROLES[number];
+import { VALID_ROLES, inviteLinkOf, inviteSuccessLine, type TenantRole } from "./roles.js";
 
 interface InviteResult {
+  token?: string;
   inviteToken?: string;
+  inviteUrl?: string;
   inviteLink?: string;
+  role?: string;
   message?: string;
 }
 
@@ -34,11 +36,12 @@ export async function tenantInviteCommand(email: string, opts: InviteOpts): Prom
       return;
     }
 
-    success(`Invited ${email} as ${role}`);
-    if (result.inviteLink) {
-      console.log(`  Invite link: ${result.inviteLink}`);
-    } else if (result.inviteToken) {
-      console.log(`  Invite token: ${result.inviteToken}`);
+    success(inviteSuccessLine(email, role));
+    const link = inviteLinkOf(result);
+    if (link) {
+      console.log(`  Invite link: ${link}`);
+    } else if (result.token ?? result.inviteToken) {
+      console.log(`  Invite token: ${result.token ?? result.inviteToken}`);
     }
     if (result.message) {
       console.log(`  ${result.message}`);

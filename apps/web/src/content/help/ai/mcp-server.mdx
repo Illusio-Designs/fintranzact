@@ -1584,13 +1584,15 @@ Available roles:
 - `admin` — full access to all businesses and settings
 - `seller_manager` — manage the sales team and see all invoices
 - `seller` — create invoices and record payments
-- `accountant` — read-only access to reports and ledgers
+- `accountant` — accountant (bookkeeping): payments, expenses, bank; read-only elsewhere
+- `auditor` — your CA, read-only: views everything and downloads reports. Owner only, max 3 CAs per organization, not counted towards the plan team limit
+- `ca_filing` — your CA, filing: as `auditor`, plus prepares and files GST returns. Owner only, same limits
 
 **Input:**
 ```typescript
 {
   email: string; // email address to invite
-  role: "admin" | "seller_manager" | "seller" | "accountant"; // default "seller"
+  role: "admin" | "seller_manager" | "seller" | "accountant" | "auditor" | "ca_filing"; // default "seller"
 }
 ```
 
@@ -1608,7 +1610,7 @@ Change the role of an existing tenant member. Requires admin or owner role.
 ```typescript
 {
   user_id: string;
-  role: "admin" | "seller_manager" | "seller" | "accountant";
+  role: "admin" | "seller_manager" | "seller" | "accountant" | "auditor" | "ca_filing";
 }
 ```
 

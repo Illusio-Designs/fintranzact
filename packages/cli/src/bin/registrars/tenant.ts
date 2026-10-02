@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { ROLE_HELP } from "../../commands/tenant/roles.js";
 
 export function registerTenantCommands(program: Command): void {
   // ── tenant ────────────────────────────────────────────────────────────────
@@ -26,9 +27,10 @@ export function registerTenantCommands(program: Command): void {
 
   tenant
     .command("invite <email>")
-    .description("Invite a user to the tenant")
+    .description("Invite a user to the tenant (to invite your CA use --role auditor or ca_filing; owner only)")
     .option("--role <role>", "Role: admin, seller_manager, seller, accountant, auditor, ca_filing (default: seller)")
     .option("--json", "JSON output")
+    .addHelpText("after", `\n${ROLE_HELP}\n`)
     .action(async (email, opts) => {
       const { tenantInviteCommand } = await import("../../commands/tenant/invite.js");
       await tenantInviteCommand(email, { role: opts.role, json: opts.json });
@@ -48,6 +50,7 @@ export function registerTenantCommands(program: Command): void {
     .command("update-role <userId> <role>")
     .description("Update a member's role (admin, seller_manager, seller, accountant, auditor, ca_filing)")
     .option("--json", "JSON output")
+    .addHelpText("after", `\n${ROLE_HELP}\n`)
     .action(async (userId, role, opts) => {
       const { tenantUpdateRoleCommand } = await import("../../commands/tenant/update-role.js");
       await tenantUpdateRoleCommand(userId, role, { json: opts.json });

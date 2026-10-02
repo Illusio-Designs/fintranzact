@@ -4,17 +4,12 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { Listbox } from "@/components/ui/Listbox";
 import { toast } from "@/hooks/useToast";
 import { cn, formatDate } from "@/lib/utils";
-import { formatRole } from "@/lib/roles";
+import { memberRoleOptions, canEditMemberRole, isCaManager, STAFF_ROLE_OPTIONS, type InvitableRole } from "@/lib/team-roles";
+import { caRoleDescription } from "@fintranzact/shared";
+import { RoleBadge } from "./RoleBadge";
+import { InviteLinkBox } from "./InviteLinkBox";
+import { InviteCaDialog } from "./InviteCaDialog";
 import { TwoFactorPolicyCard } from "./TwoFactorPolicyCard";
-
-const roleOptions = [
-  { value: "admin", label: formatRole("admin") },
-  { value: "seller_manager", label: formatRole("seller_manager") },
-  { value: "seller", label: formatRole("seller") },
-  { value: "accountant", label: formatRole("accountant") },
-  { value: "auditor", label: formatRole("auditor") },
-  { value: "ca_filing", label: formatRole("ca_filing") },
-];
 
 function TeamSection() {
   const { data: session } = trpc.auth.me.useQuery();
@@ -26,6 +21,7 @@ function TeamSection() {
   });
   const utils = trpc.useUtils();
   const [showInvite, setShowInvite] = useState(false);
+  const [showInviteCa, setShowInviteCa] = useState(false);
 
   const removeMember = trpc.tenant.removeMember.useMutation({
     onSuccess: () => {
@@ -54,6 +50,7 @@ function TeamSection() {
   const { data: me } = trpc.auth.me.useQuery();
   const callerMember = members?.find((m) => m.userEmail === me?.user?.email);
   const canManage = callerMember?.role === "owner" || callerMember?.role === "superadmin" || callerMember?.role === "admin";
+  const canInviteCa = isCaManager(callerMember?.role);
   // Owners and admins see who has set up two-factor (the API omits it for everyone else).
   const showTwoFactor = canManage && !!members?.some((m) => m.twoFactorEnabled !== undefined);
 
@@ -71,9 +68,16 @@ function TeamSection() {
             </p>
           </div>
           {canManage && (
-            <button className="btn-primary btn-sm" onClick={() => setShowInvite(true)}>
-              + Invite
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button className="btn-secondary btn-sm" onClick={() => setShowInvite(true)}>
+                + Invite member
+              </button>
+              {canInviteCa && (
+                <button className="btn-primary btn-sm" onClick={() => setShowInviteCa(true)}>
+                  Invite my CA
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -98,14 +102,12 @@ function TeamSection() {
                   <tr key={inv.id}>
                     <td className="text-text-secondary break-all">{inv.email}</td>
                     <td>
-                      <span className={cn(
-                        "px-2 py-0.5 rounded text-2xs font-medium",
-                        inv.role === "admin"
-                          ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400"
-                          : "bg-surface-2 text-text-secondary",
-                      )}>
-                        {formatRole(inv.role)}
-                      </span>
+                      <RoleBadge role={inv.role} />
+                      {caRoleDescription(inv.role) && (
+                        <p data-testid="pending-access" className="mt-1 max-w-xs text-xs text-text-tertiary">
+                          {caRoleDescription(inv.role)}
+                        </p>
+                      )}
                     </td>
                     <td className="hidden sm:table-cell text-text-secondary text-xs">
                       {formatDate(inv.createdAt)}
@@ -159,18 +161,7 @@ function TeamSection() {
                   </td>
                   <td className="hidden sm:table-cell text-text-secondary">{m.userEmail}</td>
                   <td>
-                    <span
-                      className={cn(
-                        "px-2 py-0.5 rounded text-2xs font-medium",
-                        m.role === "owner" || m.role === "superadmin"
-                          ? "bg-brand-600/[0.08] text-brand-700 dark:text-brand-400"
-                          : m.role === "admin"
-                            ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400"
-                            : "bg-surface-2 text-text-secondary",
-                      )}
-                    >
-                      {formatRole(m.role)}
-                    </span>
+                    <RoleBadge role={m.role} />
                   </td>
                   <td className="hidden sm:table-cell text-text-secondary text-xs">
                     {m.acceptedAt ? formatDate(m.acceptedAt) : "Pending"}
@@ -194,15 +185,17 @@ function TeamSection() {
                     <td className="text-right">
                       {m.role !== "owner" && m.role !== "superadmin" && m.userEmail !== me?.user?.email && (
                         <div className="flex flex-wrap items-center justify-end gap-2">
-                          <div className="w-28">
-                            <Listbox
-                              value={m.role}
-                              onChange={(role) =>
-                                updateRole.mutate({ userId: m.userId, role: role as "admin" | "seller_manager" | "seller" | "accountant" | "auditor" | "ca_filing" })
-                              }
-                              options={roleOptions}
-                            />
-                          </div>
+                          {canEditMemberRole(callerMember?.role, m.role) && (
+                            <div className="w-28">
+                              <Listbox
+                                value={m.role}
+                                onChange={(role) =>
+                                  updateRole.mutate({ userId: m.userId, role: role as InvitableRole })
+                                }
+                                options={memberRoleOptions(callerMember?.role)}
+                              />
+                            </div>
+                          )}
                           <button
                             onClick={() => removeMember.mutate({ userId: m.userId })}
                             disabled={removeMember.isPending}
@@ -223,6 +216,7 @@ function TeamSection() {
       </div>
 
       <InviteModal open={showInvite} onClose={() => setShowInvite(false)} />
+      <InviteCaDialog open={showInviteCa} onClose={() => setShowInviteCa(false)} />
     </>
   );
 }
@@ -253,7 +247,7 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    inviteMutation.mutate({ email, role: role as "admin" | "seller_manager" | "seller" | "accountant" | "auditor" | "ca_filing" });
+    inviteMutation.mutate({ email, role: role as InvitableRole });
   }
 
   return (
@@ -261,6 +255,7 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
       open={open}
       onClose={handleClose}
       title="Invite Team Member"
+      description="For your staff. To give your accountant access, use Invite my CA."
       footer={
         inviteResult ? (
           <div className="flex justify-end gap-3">
@@ -293,29 +288,7 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
               We've sent an invitation email to {email}. You can also share the link below.
             </p>
           </div>
-          <div>
-            <label className="label" htmlFor="invite-link">Invite Link</label>
-            <div className="flex gap-2">
-              <input
-                id="invite-link"
-                readOnly
-                value={`${window.location.origin}${inviteResult.inviteLink}`}
-                className="input flex-1 font-mono text-xs"
-              />
-              <button
-                type="button"
-                className="btn-secondary shrink-0"
-                onClick={() => {
-                  navigator.clipboard.writeText(
-                    `${window.location.origin}${inviteResult.inviteLink}`,
-                  );
-                  toast.success("Copied to clipboard");
-                }}
-              >
-                Copy
-              </button>
-            </div>
-          </div>
+          <InviteLinkBox link={`${window.location.origin}${inviteResult.inviteLink}`} />
         </div>
       ) : (
         <form id="invite-member-form" onSubmit={handleSubmit} className="space-y-4">
@@ -337,7 +310,7 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
               label="Role"
               value={role}
               onChange={setRole}
-              options={roleOptions}
+              options={STAFF_ROLE_OPTIONS}
             />
           </div>
         </form>
