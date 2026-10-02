@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { businesses, compositionSettings } from "@fintranzact/db";
 import {
-  compositionCategories, compositionRateFor, defaultCompositionRules, financialYearLabel, financialYearOf,
+  compositionCategories, defaultCompositionRules, financialYearLabel, financialYearOf, istDateParts,
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { withAudit } from "../lib/audit.js";
@@ -15,6 +15,14 @@ import { generateGSTR1, generateGSTR3B, gstr1ToCSV, gstr1ToPortalJson } from "..
 import { generateGSTR9, gstr9ToPortalJson } from "../lib/gstr9-generator.js";
 
 const fyInput = z.string().regex(/^\d{4}-\d{2}$/, "Use a financial year like 2026-27");
+const amount = z.string().regex(/^\d{1,10}(\.\d{1,2})?$/, "Use an amount like 50 or 2000.00");
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2027-06-30");
+const cmp08PaidInput = z.object({
+  1: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+  2: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+  3: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+  4: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+}).optional();
 const percent = z.string().regex(/^\d{1,3}(\.\d{1,3})?$/).refine((v) => parseFloat(v) <= 100, "At most 100%");
 
 function assertRealYear(fy: string): void {
@@ -141,11 +149,11 @@ export const gstRouter = router({
         ...q,
         quarterStart: q.quarterStart.toISOString(),
         quarterEnd: q.quarterEnd.toISOString(),
-        dueDate: q.dueDate?.toISOString() ?? null,
+        dueDate: q.dueDate.toISOString(),
       };
     }),
 
-  /** All four quarters of a financial year (Q4 has no CMP-08: its tax goes in GSTR-4). */
+  /** All four quarters of a financial year (CMP-08 is filed for all four quarters, Q4 included). */
   cmp08Year: viewerProcedure
     .input(z.object({ year: z.number().int().min(2020).max(2099) }))
     .query(async ({ input, ctx }) => {
@@ -158,7 +166,7 @@ export const gstRouter = router({
           ...q,
           quarterStart: q.quarterStart.toISOString(),
           quarterEnd: q.quarterEnd.toISOString(),
-          dueDate: q.dueDate?.toISOString() ?? null,
+          dueDate: q.dueDate.toISOString(),
         });
       }
       return { financialYear: fy, quarters };
@@ -166,24 +174,30 @@ export const gstRouter = router({
 
   /**
    * GSTR-4 annual return tables for a composition taxpayer. `cmp08Paid` is the
-   * total actually paid through CMP-08 per quarter (the app has no payment
+   * total actually paid through CMP-08 per quarter, Q1-Q4 (the app has no payment
    * tracking); a missing quarter is assumed paid in full and `paidAssumed` says so.
+   * Return: `{ ...report, dueDate, cmp08Summary.quarters[].dueDate }` as ISO strings.
    */
   gstr4: viewerProcedure
     .input(z.object({
       financialYear: fyInput,
-      cmp08Paid: z.object({
-        1: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
-        2: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
-        3: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
-      }).optional(),
+      cmp08Paid: cmp08PaidInput,
+      /** When GSTR-4 is filed and the balance paid: interest on the balance and the late fee are worked out only with it. */
+      filedOn: z.coerce.date().optional(),
     }))
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Report");
       assertRealYear(input.financialYear);
       try {
-        const r = await loadGstr4(ctx.db, ctx.businessId, input.financialYear, input.cmp08Paid);
-        return { ...r, dueDate: r.dueDate.toISOString() };
+        const r = await loadGstr4(ctx.db, ctx.businessId, input.financialYear, input.cmp08Paid, input.filedOn);
+        return {
+          ...r,
+          dueDate: r.dueDate.toISOString(),
+          cmp08Summary: {
+            ...r.cmp08Summary,
+            quarters: r.cmp08Summary.quarters.map((q) => ({ ...q, dueDate: q.dueDate.toISOString() })),
+          },
+        };
       } catch (e) {
         if (e instanceof Gstr4NotApplicableError) {
           throw new TRPCError({ code: "PRECONDITION_FAILED", message: e.message });
@@ -200,17 +214,15 @@ export const gstRouter = router({
   gstr4Json: viewerProcedure
     .input(z.object({
       financialYear: fyInput,
-      cmp08Paid: z.object({
-        1: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
-        2: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
-        3: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
-      }).optional(),
+      cmp08Paid: cmp08PaidInput,
+      /** When GSTR-4 is filed and the balance paid: interest on the balance and the late fee are worked out only with it. */
+      filedOn: z.coerce.date().optional(),
     }))
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Report");
       assertRealYear(input.financialYear);
       try {
-        const r = await loadGstr4(ctx.db, ctx.businessId, input.financialYear, input.cmp08Paid);
+        const r = await loadGstr4(ctx.db, ctx.businessId, input.financialYear, input.cmp08Paid, input.filedOn);
         const [biz] = await ctx.db.select({ gstin: businesses.gstin }).from(businesses)
           .where(eq(businesses.id, ctx.businessId)).limit(1);
         return {
@@ -225,7 +237,11 @@ export const gstRouter = router({
       }
     }),
 
-  /** The composition category and rate for a year, with the defaults to pick from. */
+  /**
+   * The composition category and every compliance value for a year: the
+   * effective value, whether it is the built-in default or this business's
+   * override, the default itself, and when the defaults were last reviewed.
+   */
   compositionSettings: viewerProcedure
     .input(z.object({ financialYear: fyInput.optional() }).default({}))
     .query(async ({ input, ctx }) => {
@@ -233,28 +249,85 @@ export const gstRouter = router({
       const fy = input.financialYear ?? financialYearLabel(financialYearOf(new Date(), 4));
       assertRealYear(fy);
       const setting = await loadCompositionSetting(ctx.db, ctx.businessId, fy);
+      const r = setting.resolved;
+      const day = (d: Date) => {
+        const p = istDateParts(d);
+        return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+      };
       return {
         financialYear: fy,
         category: setting.category,
         rateOverride: setting.rateOverride,
         configured: setting.configured,
-        rate: compositionRateFor(setting.category, setting.rateOverride, fy),
+        rate: r.rate,
         categories: defaultCompositionRules(fy),
+        effective: {
+          rate: r.rate,
+          cmp08DueDay: r.cmp08DueDay,
+          gstr4DueDate: day(r.gstr4DueDate),
+          interestRatePercent: r.interestRatePercent,
+          lateFeePerDay: r.lateFee.perDay,
+          lateFeeCap: r.lateFee.cap,
+          lateFeeNilPerDay: r.lateFee.nilPerDay,
+          lateFeeNilCap: r.lateFee.nilCap,
+        },
+        defaults: {
+          rate: r.defaults.rate,
+          cmp08DueDay: r.defaults.cmp08DueDay,
+          gstr4DueDate: day(r.defaults.gstr4DueDate),
+          interestRatePercent: r.defaults.interestRatePercent,
+          lateFeePerDay: r.defaults.lateFee.perDay,
+          lateFeeCap: r.defaults.lateFee.cap,
+          lateFeeNilPerDay: r.defaults.lateFee.nilPerDay,
+          lateFeeNilCap: r.defaults.lateFee.nilCap,
+        },
+        sources: r.sources,
+        meta: r.meta,
       };
     }),
 
-  /** Set the composition category (and, if the rate changed, the rate) for a financial year. */
+  /**
+   * Set the composition category and the per-year overrides of the built-in
+   * compliance defaults. For every override, null resets it to the built-in
+   * default and leaving it out keeps what is saved (`rate` is the exception:
+   * leaving it out resets it, as before).
+   */
   updateCompositionSettings: adminProcedure
     .input(z.object({
       financialYear: fyInput,
       category: z.enum(compositionCategories),
       /** Percent; leave out to use the category default. */
       rate: percent.nullish(),
+      gstr4DueDate: isoDay.nullish(),
+      interestRate: percent.nullish(),
+      lateFeePerDay: amount.nullish(),
+      lateFeeCap: amount.nullish(),
+      lateFeeNilPerDay: amount.nullish(),
+      lateFeeNilCap: amount.nullish(),
+      cmp08DueDay: z.number().int().min(1).max(28).nullish(),
     }))
     .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Business");
       assertRealYear(input.financialYear);
-      const values = { category: input.category, rate: input.rate ?? null, updatedAt: new Date() };
+      if (input.gstr4DueDate) {
+        const [y, m, d] = input.gstr4DueDate.split("-").map(Number);
+        const check = new Date(Date.UTC(y!, m! - 1, d!));
+        if (check.getUTCMonth() !== m! - 1 || check.getUTCDate() !== d!) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "GSTR-4 due date is not a real date" });
+        }
+      }
+      const values = {
+        category: input.category,
+        rate: input.rate ?? null,
+        ...(input.gstr4DueDate !== undefined && { gstr4DueDate: input.gstr4DueDate }),
+        ...(input.interestRate !== undefined && { interestRate: input.interestRate }),
+        ...(input.lateFeePerDay !== undefined && { lateFeePerDay: input.lateFeePerDay }),
+        ...(input.lateFeeCap !== undefined && { lateFeeCap: input.lateFeeCap }),
+        ...(input.lateFeeNilPerDay !== undefined && { lateFeeNilPerDay: input.lateFeeNilPerDay }),
+        ...(input.lateFeeNilCap !== undefined && { lateFeeNilCap: input.lateFeeNilCap }),
+        ...(input.cmp08DueDay !== undefined && { cmp08DueDay: input.cmp08DueDay }),
+        updatedAt: new Date(),
+      };
       const [row] = await ctx.db
         .insert(compositionSettings)
         .values({ businessId: ctx.businessId, financialYear: input.financialYear, ...values })
@@ -265,6 +338,12 @@ export const gstRouter = router({
       action: "gst.updateCompositionSettings",
       entityType: "composition_settings",
       entityId: row.id,
-      metadata: { financialYear: input.financialYear, category: input.category, rate: input.rate ?? null },
+      metadata: {
+        financialYear: input.financialYear, category: input.category, rate: input.rate ?? null,
+        gstr4DueDate: row.gstr4DueDate, interestRate: row.interestRate,
+        lateFeePerDay: row.lateFeePerDay, lateFeeCap: row.lateFeeCap,
+        lateFeeNilPerDay: row.lateFeeNilPerDay, lateFeeNilCap: row.lateFeeNilCap,
+        cmp08DueDay: row.cmp08DueDay,
+      },
     }))),
 });

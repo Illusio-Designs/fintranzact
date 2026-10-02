@@ -36,7 +36,74 @@ export interface TdsSectionRule {
   /** 194Q: tax is only on the amount above the yearly threshold, not from the first rupee. */
   excessOnly: boolean;
   note: string;
+  /** Section of the Income-tax Act 2025 (tax year 2026-27 onward), e.g. "393(1) Table 6(i)". Display only. */
+  actSection?: string;
+  /** Payment code used on challans and returns from tax year 2026-27 (e.g. "1023/1024"). Display only. */
+  paymentCode?: string;
 }
+
+/** First financial year governed by the Income-tax Act 2025 (in force from 1 April 2026). */
+export const INCOME_TAX_ACT_2025_FIRST_FY = "2026-27";
+
+/** True when the year falls under the Income-tax Act 2025. Blank or unreadable years count as the old Act. */
+export function isIncomeTaxAct2025Year(financialYear: string): boolean {
+  const start = parseInt(financialYear.slice(0, 4), 10);
+  return Number.isFinite(start) && start >= parseInt(INCOME_TAX_ACT_2025_FIRST_FY.slice(0, 4), 10);
+}
+
+/** Where the built-in defaults of a year came from and how fresh they are. */
+export interface TaxRulesMeta {
+  sourceNotes: string[];
+  /** ISO date the defaults were last checked against sources. */
+  lastReviewed: string;
+  /** Always true: every value is from secondary sources and must be confirmed by a CA. */
+  verifyWithCA: boolean;
+  /** Plain-language note on the legal framework of the year (shown above the table). */
+  actNote: string;
+}
+
+const COMMON_SOURCES = [
+  "taxguru.in: TCS rate chart tax year 2026-27 under Income-tax Act, 2025 (secondary source)",
+  "taxguru.in: TCS rates rationalised from 1 April 2026 (secondary source)",
+  "terra-insight.com / taxroutine.com / karnanica.com: TDS payment codes 1001-1092 (secondary sources)",
+  "calcguru.in, saral.pro, tdsman.com: 194C / 194H under s.393 (secondary sources)",
+];
+
+const TDS_META_LEGACY: TaxRulesMeta = {
+  sourceNotes: ["Rates and thresholds as of Finance Act 2025 (effective 1 Apr 2025). Existing built-in values; confirm with a CA."],
+  lastReviewed: "2026-10-02",
+  verifyWithCA: true,
+  actNote: "Income-tax Act, 1961: section 194C, 194J, 194H, 194I, 194Q.",
+};
+
+const TDS_META_ACT_2025: TaxRulesMeta = {
+  sourceNotes: [
+    ...COMMON_SOURCES,
+    "Rates and thresholds of the TDS sections shown here appear unchanged from 2025-26; only the section reference and payment code change.",
+    "194H commission: the payment code and table row are not confirmed (one source says 1006, others differ), so none is shown.",
+  ],
+  lastReviewed: "2026-10-02",
+  verifyWithCA: true,
+  actNote:
+    "From 1 April 2026 the Income-tax Act, 2025 applies: non-salary TDS is section 393 with four-digit payment codes. " +
+    "The old section numbers (194C ...) are kept as the ids here. Form and certificate names for these years are to be confirmed with your CA.",
+};
+
+/** Source notes and last-reviewed date of the built-in TDS defaults for a financial year. */
+export function tdsRulesMetaFor(financialYear: string): TaxRulesMeta {
+  return isIncomeTaxAct2025Year(financialYear) ? TDS_META_ACT_2025 : TDS_META_LEGACY;
+}
+
+/** New-Act reference of each TDS section (secondary sources; verify with a CA). Applied for FY 2026-27 onward only. */
+const ACT_2025_REFS: Record<string, { actSection: string; paymentCode?: string }> = {
+  "194Q": { actSection: "393(1) Table 8(ii)", paymentCode: "1031" },
+  "194C": { actSection: "393(1) Table 6(i)", paymentCode: "1023/1024" },
+  "194J_TECH": { actSection: "393(1) Table 6(iii)", paymentCode: "1026" },
+  "194J_PROF": { actSection: "393(1) Table 6(iii)", paymentCode: "1027" },
+  "194H": { actSection: "393(1)" },
+  "194I_PM": { actSection: "393(1) Table 2(ii)", paymentCode: "1008" },
+  "194I_LB": { actSection: "393(1) Table 2(ii)", paymentCode: "1009" },
+};
 
 // Thresholds after Finance Act 2025 (effective 1 Apr 2025). Verify yearly.
 const THRESHOLDS: Record<string, Pick<TdsSectionRule, "singleThreshold" | "aggregateThreshold" | "basis" | "excessOnly">> = {
@@ -49,17 +116,27 @@ const THRESHOLDS: Record<string, Pick<TdsSectionRule, "singleThreshold" | "aggre
   "194I_LB": { singleThreshold: null, aggregateThreshold: "600000", basis: "payments", excessOnly: false },
 };
 
-/** Default section rules for a financial year ("2026-27"). */
-export function defaultTdsSectionRules(_financialYear: string): TdsSectionRule[] {
-  return tdsSections.map((s: TdsSection) => ({
-    code: s.code,
-    label: s.label,
-    rate: s.rate,
-    individualRate: s.individualRate,
-    rateWithoutPan: s.rateWithoutPan,
-    ...(THRESHOLDS[s.code] ?? { singleThreshold: null, aggregateThreshold: null, basis: "payments" as const, excessOnly: false }),
-    note: s.note,
-  }));
+/**
+ * Built-in section rules for a financial year ("2026-27"). Years before 2026-27
+ * use the Income-tax Act 1961 values; from 2026-27 the values are the same but
+ * carry the Income-tax Act 2025 reference and payment code. The old code
+ * (194C ...) stays the stable id. A business can still override any value.
+ */
+export function defaultTdsSectionRules(financialYear: string): TdsSectionRule[] {
+  const act2025 = isIncomeTaxAct2025Year(financialYear);
+  return tdsSections.map((s: TdsSection) => {
+    const ref = act2025 ? ACT_2025_REFS[s.code] : undefined;
+    return {
+      code: s.code,
+      label: s.label,
+      rate: s.rate,
+      individualRate: s.individualRate,
+      rateWithoutPan: s.rateWithoutPan,
+      ...(THRESHOLDS[s.code] ?? { singleThreshold: null, aggregateThreshold: null, basis: "payments" as const, excessOnly: false }),
+      note: ref ? `${s.note} Income-tax Act 2025: s.${ref.actSection}${ref.paymentCode ? `, payment code ${ref.paymentCode}` : ""}.` : s.note,
+      ...(ref ? { actSection: ref.actSection, ...(ref.paymentCode ? { paymentCode: ref.paymentCode } : {}) } : {}),
+    };
+  });
 }
 
 // ── Periods and due dates ──────────────────────────────────────

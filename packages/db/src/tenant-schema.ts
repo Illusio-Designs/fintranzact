@@ -960,6 +960,15 @@ export const compositionSettings = pgTable("composition_settings", {
   financialYear: text("financial_year").notNull(),
   category: text("category").notNull(),
   rate: numeric("rate", { precision: 6, scale: 3 }),
+  // Per-year overrides of the built-in compliance defaults (shared composition.ts
+  // COMPOSITION_DEFAULTS). Null = follow the default for that year.
+  gstr4DueDate: date("gstr4_due_date"),
+  interestRate: numeric("interest_rate", { precision: 6, scale: 3 }),
+  lateFeePerDay: numeric("late_fee_per_day", { precision: 12, scale: 2 }),
+  lateFeeCap: numeric("late_fee_cap", { precision: 12, scale: 2 }),
+  lateFeeNilPerDay: numeric("late_fee_nil_per_day", { precision: 12, scale: 2 }),
+  lateFeeNilCap: numeric("late_fee_nil_cap", { precision: 12, scale: 2 }),
+  cmp08DueDay: integer("cmp08_due_day"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [

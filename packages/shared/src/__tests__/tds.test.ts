@@ -4,6 +4,8 @@ import {
   defaultTdsSectionRules,
   tdsDepositDueDate,
   tdsFinancialYear,
+  tdsRulesMetaFor,
+  isIncomeTaxAct2025Year,
   tdsFinancialYearRange,
   tdsQuarter,
   tdsQuarterRange,
@@ -23,6 +25,42 @@ describe("defaultTdsSectionRules", () => {
     expect(rule("194H").aggregateThreshold).toBe("20000");
     expect(rule("194I_LB").aggregateThreshold).toBe("600000");
     expect(rule("194Q")).toMatchObject({ aggregateThreshold: "5000000", excessOnly: true, basis: "purchases", rate: "0.1" });
+  });
+});
+
+describe("year-versioned defaults", () => {
+  const rulesFor = (fy: string) => defaultTdsSectionRules(fy);
+
+  it("keeps rates and limits the same across the Act change, for every section", () => {
+    const strip = (r: TdsSectionRule[]) => r.map(({ actSection: _a, paymentCode: _p, note: _n, ...rest }) => rest);
+    expect(strip(rulesFor("2026-27"))).toEqual(strip(rulesFor("2025-26")));
+  });
+
+  it("adds the Income-tax Act 2025 reference and payment code from 2026-27 only", () => {
+    expect(rulesFor("2025-26").every((r) => r.actSection === undefined && r.paymentCode === undefined)).toBe(true);
+    const next = Object.fromEntries(rulesFor("2026-27").map((r) => [r.code, r]));
+    expect(next["194C"]).toMatchObject({ actSection: "393(1) Table 6(i)", paymentCode: "1023/1024" });
+    expect(next["194J_PROF"]).toMatchObject({ paymentCode: "1027" });
+    expect(next["194J_TECH"]).toMatchObject({ paymentCode: "1026" });
+    expect(next["194I_LB"]).toMatchObject({ paymentCode: "1009" });
+    expect(next["194Q"]).toMatchObject({ actSection: "393(1) Table 8(ii)", paymentCode: "1031" });
+    expect(next["194H"].paymentCode).toBeUndefined(); // not confirmed
+    expect(next["194C"].note).toMatch(/393\(1\) Table 6\(i\)/);
+    expect(next["194C"].label).toBe(rulesFor("2025-26").find((r) => r.code === "194C")!.label);
+  });
+
+  it("knows which years fall under the 2025 Act", () => {
+    expect(isIncomeTaxAct2025Year("2025-26")).toBe(false);
+    expect(isIncomeTaxAct2025Year("2026-27")).toBe(true);
+    expect(isIncomeTaxAct2025Year("")).toBe(false);
+    expect(tdsRulesMetaFor("2026-27")).toMatchObject({ lastReviewed: "2026-10-02", verifyWithCA: true });
+    expect(tdsRulesMetaFor("2026-27").actNote).toMatch(/393/);
+  });
+
+  it("computes 194C identically in both years", () => {
+    const run = (fy: string) => computeTds({ ...base, section: rulesFor(fy).find((s) => s.code === "194C")!, amount: "50000" });
+    expect(run("2025-26")).toEqual(run("2026-27"));
+    expect(run("2026-27")).toMatchObject({ rate: "2", tds: "1000.00" });
   });
 });
 

@@ -14,6 +14,7 @@
 
 import { money } from "./money.js";
 import { istDateParts, istStartOfDay } from "./dates.js";
+import { isIncomeTaxAct2025Year, type TaxRulesMeta } from "./tds.js";
 
 export interface TcsSectionRule {
   code: string;
@@ -25,6 +26,10 @@ export interface TcsSectionRule {
   /** TCS applies only when the line's value is above this (motor vehicles: ₹10 lakh). null = no limit. */
   singleThreshold: string | null;
   note: string;
+  /** Section of the Income-tax Act 2025 (tax year 2026-27 onward). Display only. */
+  actSection?: string;
+  /** Payment code from tax year 2026-27, where a source gave one. Display only. */
+  paymentCode?: string;
 }
 
 const noPanRate = (rate: string) => String(Math.max(parseFloat(rate) * 2, 5));
@@ -43,9 +48,75 @@ const SECTIONS: Array<Omit<TcsSectionRule, "rateWithoutPan"> & { rateWithoutPan?
 
 export const tcsSectionCodes = SECTIONS.map((s) => s.code) as [string, ...string[]];
 
-/** Default TCS sections for a financial year ("2026-27"). */
-export function defaultTcsSectionRules(_financialYear: string): TcsSectionRule[] {
-  return SECTIONS.map((s) => ({ ...s, rateWithoutPan: s.rateWithoutPan ?? noPanRate(s.rate) }));
+/**
+ * Rates from 1 April 2026 (Finance Act 2026; secondary sources, verify with a CA).
+ * Sections not listed keep their earlier rate. Timber and other forest produce:
+ * some sources print 2% instead of 2.5%; the older 2.5% is kept and flagged.
+ */
+const RATES_FROM_2026_27: Record<string, string> = {
+  "206C_ALCOHOL": "2",
+  "206C_TENDU": "2",
+  "206C_SCRAP": "2",
+  "206C_MINERALS": "2",
+};
+
+/** Payment codes under the Income-tax Act 2025 where a secondary source gave one. */
+const PAYMENT_CODES_2026_27: Record<string, string> = {
+  "206C_ALCOHOL": "1068",
+  "206C_SCRAP": "1073",
+};
+
+const TCS_META_LEGACY: TaxRulesMeta = {
+  sourceNotes: ["Rates as before 1 April 2026 (Income-tax Act 1961, s.206C). Existing built-in values; confirm with a CA."],
+  lastReviewed: "2026-10-02",
+  verifyWithCA: true,
+  actNote: "Income-tax Act, 1961: section 206C (the old 206C(1H) charge on sales above Rs 50 lakh ended on 1 April 2025).",
+};
+
+const TCS_META_ACT_2025: TaxRulesMeta = {
+  sourceNotes: [
+    "taxguru.in: TCS rate chart tax year 2026-27 under Income-tax Act, 2025 (secondary source)",
+    "taxguru.in: TCS rates rationalised from 1 April 2026 (secondary source)",
+    "Alcohol, scrap, coal / lignite / iron ore 1% to 2%; tendu leaves 5% to 2% (Finance Act 2026).",
+    "Timber and other forest produce: some sources say 2%, others leave it unchanged; the older 2.5% is kept. UNCONFIRMED: check with a CA and use the per-year override.",
+    "Parking / toll / mining 2% and motor vehicles 1% above Rs 10 lakh: no change found.",
+    "Payment codes: only alcohol (1068) and scrap (1073) were found; others are blank.",
+  ],
+  lastReviewed: "2026-10-02",
+  verifyWithCA: true,
+  actNote:
+    "From 1 April 2026 TCS is section 394 of the Income-tax Act, 2025. The old s.206C codes are kept as the ids here. " +
+    "Return and certificate form names for these years are to be confirmed with your CA.",
+};
+
+/** Source notes and last-reviewed date of the built-in TCS defaults for a financial year. */
+export function tcsRulesMetaFor(financialYear: string): TaxRulesMeta {
+  return isIncomeTaxAct2025Year(financialYear) ? TCS_META_ACT_2025 : TCS_META_LEGACY;
+}
+
+/**
+ * Built-in TCS sections for a financial year ("2026-27"). Before 2026-27 the
+ * s.206C rates apply; from 2026-27 the section 394 rates. A blank year gives
+ * the older rates (used only to list names). A business can override per year.
+ */
+export function defaultTcsSectionRules(financialYear: string): TcsSectionRule[] {
+  const act2025 = isIncomeTaxAct2025Year(financialYear);
+  return SECTIONS.map((s) => {
+    const rate = (act2025 ? RATES_FROM_2026_27[s.code] : undefined) ?? s.rate;
+    const code = act2025 ? PAYMENT_CODES_2026_27[s.code] : undefined;
+    return {
+      ...s,
+      rate,
+      rateWithoutPan: noPanRate(rate),
+      ...(act2025
+        ? {
+            actSection: "394(1)",
+            ...(code ? { paymentCode: code } : {}),
+            note: `${s.note} Income-tax Act 2025: s.394(1)${code ? `, payment code ${code}` : ""}.`,
+          }
+        : {}),
+    };
+  });
 }
 
 export function tcsRateForSection(section: TcsSectionRule, hasPan: boolean): string {

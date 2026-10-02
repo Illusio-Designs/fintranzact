@@ -1,6 +1,6 @@
 ---
 title: GSTR-4 and CMP-08 for composition dealers
-description: Set your composition category and rate, read the quarterly CMP-08 figures, review the GSTR-4 annual return tables, enter what you paid, and download the summary or a best-effort portal JSON.
+description: Set your composition category, rate, due dates and late fee for the year, read the quarterly CMP-08 figures, review the GSTR-4 annual return tables, enter what you paid and when you filed, and download the summary or a best-effort portal JSON.
 sidebar:
   order: 8
 ---
@@ -10,12 +10,12 @@ import { ForCA } from "@/components/help/mdx";
 If your GST registration type is **Composition**, you pay a flat percentage of your turnover instead of collecting GST from customers. You pay it every quarter with **CMP-08** and file one yearly return, **GSTR-4**. The **GST** page shows a **CMP-08** tab and a **GSTR-4** tab for composition businesses (also under **Reports**, GST returns).
 
 <ForCA>
-Rates, due dates and the interest rate are defaults held in Fintranzact and change by government notification. Confirm them with your CA before each financial year and before filing. The JSON file is best effort: see the last section.
+Rates, due dates, the interest rate and the late fee are defaults held in Fintranzact, researched from secondary sources, and they change by government notification. Every one can be edited per financial year in the settings card. Confirm them with your CA before each financial year and before filing. Table and row numbers and the JSON file are best effort: see the last section.
 </ForCA>
 
-## 1. Pick your composition category and rate
+## 1. Pick your category and check the settings
 
-At the top of both tabs, **Composition category** sets the rate for the financial year chosen:
+At the top of both tabs, the settings card sets the values for the financial year chosen. **Composition category** gives the rate:
 
 | Category | Default rate on turnover |
 |---|---|
@@ -23,7 +23,18 @@ At the top of both tabs, **Composition category** sets the rate for the financia
 | Restaurant (not serving alcohol) | 5% (2.5% + 2.5%) |
 | Other service provider | 6% (3% + 3%) |
 
-These are defaults. You can type a different rate (for example if the Government changes it) and click **Save**. Until you save a category, the manufacturer or trader rate is used. Only an admin can change it. **Confirm the category and rate with your CA.**
+Below it are the other values, each showing whether it is the **Default** or **Overridden** (with the default beside it) and a **Reset** link:
+
+| Setting | Default |
+|---|---|
+| Rate (% of turnover) | by category, above |
+| CMP-08 due day | the 18th of the month after the quarter |
+| GSTR-4 due date | 30 June after the financial year (since FY 2024-25; 30 April before) |
+| Interest | 18% a year on tax paid late |
+| GSTR-4 late fee per day / cap | 50 a day (25 central + 25 state), at most 2,000 |
+| Nil return late fee per day / cap | 20 a day, at most 500 |
+
+Type a different value (for example a notified extension of the GSTR-4 date) and click **Save**: CMP-08 and GSTR-4 change at once. A value you set back to the default follows the default again. The card shows the date the defaults were last reviewed. Only an admin can change them. **Confirm every value with your CA.**
 
 ## 2. CMP-08: the quarterly statement
 
@@ -32,31 +43,35 @@ Choose the financial year and quarter. The tab shows:
 - **Outward supplies**: sale invoices plus debit notes, less credit notes and sales returns, in the quarter.
 - **Composition tax payable** at your rate, split into central and state tax.
 - **Reverse charge tax** on purchases you flagged as reverse charge.
-- **Interest** and the **due date**: the 18th of the month after the quarter (Q1 18 July, Q2 18 October, Q3 18 January).
+- **Interest** and the **due date**: the 18th of the month after the quarter (Q1 18 July, Q2 18 October, Q3 18 January, Q4 18 April). CMP-08 is filed for all four quarters, January to March included.
 
-Interest is worked out only if a payment date is known. Fintranzact does not record CMP-08 payments, so it normally shows no interest. January to March has no CMP-08: that tax is paid with GSTR-4.
+Interest is worked out only if a payment date is known. Fintranzact does not record CMP-08 payments, so it normally shows no interest.
 
 ## 3. GSTR-4: the annual return
 
 Choose the financial year. The tab shows:
 
 - **Table 4, inward supplies**: from registered suppliers (other than reverse charge), from registered suppliers under reverse charge, from unregistered suppliers, and import of services. The tax you owe appears only on reverse-charge and import rows. A purchase is "registered" when the supplier has a GSTIN or a registered type. Mark purchases from unregistered suppliers as **reverse charge** when that applies: Fintranzact does not do it for you.
-- **Table 5, outward turnover** by quarter and **Table 6, tax by rate**, taken from the four CMP-08 quarters.
-- **Tax payable and paid**: total payable for the year, what you paid through CMP-08, the **balance to pay with GSTR-4** (January to March and anything unpaid), and interest.
+- **Table 5, summary of self-assessed liability per CMP-08**: turnover, composition tax and reverse charge tax for each of the four quarters.
+- **Table 6, tax rate-wise**: outward supplies at your rate, and inward supplies under reverse charge.
+- **Table 7, TDS / TCS credit received**: Fintranzact holds no such data, so it shows zero. Take it from the portal.
+- **Table 8, tax, interest and late fee**: total payable for the year, what you paid through CMP-08, the **balance to pay with GSTR-4**, interest and the late fee.
 
-The due date is **30 April** after the financial year. It has been extended in the past: check the current date with your CA.
+The due date is **30 June** after the financial year (since FY 2024-25; some websites still say 30 April). It is often extended: if so, change the **GSTR-4 due date** in the settings card.
 
-### Enter what you paid through CMP-08
+### Enter what you paid and when you file
 
-Fintranzact does not know what you paid. For Q1 to Q3, type the amount you paid in each quarter. A quarter left empty is **assumed paid in full**, and the page shows an **Assumed paid** warning until every quarter has an amount. The balance is only as correct as these amounts, so enter them from your challans.
+Fintranzact does not know what you paid. For each quarter (Q1 to Q4), type the amount you paid through CMP-08. A quarter left empty is **assumed paid in full**, and the page shows an **Assumed paid** warning until every quarter has an amount. The balance is only as correct as these amounts, so enter them from your challans.
+
+Enter **Filed / paid on** to see interest on the balance and the **late fee**. Without a date both show 0 and say "Enter filing date". The late fee is 50 a day up to 2,000 (nil return: 20 a day up to 500), changeable in the settings.
 
 ### What is not tracked
 
-- Exempt, nil-rated and non-GST outward supplies, and cess: shown as zero.
-- Late fee and interest on the GSTR-4 balance: not computed.
+- Exempt, nil-rated and non-GST outward supplies, cess and TDS/TCS credit: shown as zero.
+- Interest on the balance runs from the GSTR-4 due date, which is an approximation.
 - Goods and services imports are not told apart: all purchases from overseas parties are reported as import of services.
 
 ## 4. Export
 
 - **Export CSV** and **Print** give a readable summary of all the tables to hand to your CA.
-- **Download JSON** gives a file shaped like the GST portal offline utility's upload. **This is best effort.** The amount keys (`txval`, `camt`, `samt`, `iamt`, `csamt`, `rt`) and the `gstin` and `fy` header follow the portal's usual convention, but the table keys and the tax-paid section have not been checked against the portal's current schema. Compare the file with the GST offline tool before you upload it, or use the CSV to key the figures in.
+- **Download JSON** gives a file shaped like the GST portal offline utility's upload. **This is best effort.** The amount keys (`txval`, `camt`, `samt`, `iamt`, `csamt`, `rt`) and the `gstin` and `fy` header follow the portal's usual convention, but the table keys and the tax-paid section have not been checked against the portal's current schema. Table numbers 4 to 8 follow secondary sources and the exact row numbers are best effort. Compare the file with the GST offline tool before you upload it, or use the CSV to key the figures in.

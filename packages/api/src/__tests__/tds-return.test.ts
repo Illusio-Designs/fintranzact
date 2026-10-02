@@ -116,3 +116,15 @@ describe("buildTdsReturn challan CSV", () => {
     expect(lines[3]).toBe(",Total,,,7050.00,50.00,7000.00");
   });
 });
+
+describe("recorded deductions keep their stored rate", () => {
+  it("prints the rate stored on the row, not today's default for that year", () => {
+    // A scrap sale recorded at 1% in 2025-26 stays 1% in the return even though the 2026-27 default is 2%.
+    const r = buildTdsReturn({
+      ...base, financialYear: "2025-26", quarter: 4 as const,
+      rows: [row({ sectionCode: "206C_SCRAP", rate: "1.000", baseAmount: "100000.00", amount: "1000.00" })],
+    });
+    expect(r.deducteeCsv).toContain("1000.00");
+    expect(r.deducteeCsv).not.toContain("2000.00");
+  });
+});

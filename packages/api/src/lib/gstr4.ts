@@ -4,12 +4,20 @@
  * Data only: the portal JSON and the UI page are separate. The outward side and
  * the tax payable are NOT re-derived here: they come from the four CMP-08
  * quarters (buildCmp08Quarter / loadCmp08Quarter), so the two can never differ.
+ * All four quarters have a CMP-08 (Q4 due 18 April); GSTR-4 reconciles them.
+ *
+ * Table layout (best known from secondary sources; verify against the GST
+ * offline tool): Table 4 inward supplies (4A registered non-RCM, 4B registered
+ * RCM, 4C unregistered, 4D import of services); Table 5 summary of
+ * self-assessed liability per CMP-08 (four quarters); Table 6 tax rate-wise
+ * inward (RCM) and outward supplies; Table 7 TDS/TCS credit received (the app
+ * has no such data: zero); Table 8 tax, interest and late fee payable / paid.
+ * Due date, interest rate and late fee come from the resolved composition
+ * settings (business FY override -> built-in versioned default).
  *
  * UNCERTAIN MAPPINGS (verify with a CA against the current GSTR-4 form):
- *  - Table numbering and the Table 4 sub-rows follow the post-2021 form
- *    (4A registered non-RCM, 4B registered RCM, 4C unregistered, 4D import of
- *    services); the app has no explicit GSTR-4 field, so rows are keyed by
- *    meaning, not by portal code.
+ *  - The app has no explicit GSTR-4 field, so rows are keyed by meaning, not
+ *    by portal code.
  *  - A purchase counts as "registered" when the supplier party has a GSTIN or a
  *    registration type of regular/composition/sez/uin; "overseas" parties are
  *    import of services (the app cannot tell goods from services, so imports of
@@ -23,15 +31,20 @@
  *    the app (CMP-08 taxes all outward turnover), so those rows are zero.
  *  - Purchases from a composition supplier (bill of supply) are shown under
  *    "registered"; the form may want them in a separate exempt/nil row.
- *  - Late fee for GSTR-4 is applicable but not computed (field = 0).
+ *  - Late fee is computed only when a filing date is given; interest on the
+ *    balance runs from the GSTR-4 due date (approximation: unpaid tax is really
+ *    late from its own CMP-08 due date).
  */
 
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { businesses, invoices, parties } from "@fintranzact/db";
 import type { TenantDatabase } from "@fintranzact/db";
-import { compositionQuarterRange, gstr4DueDate, isIntraStateSupply, money, splitIntraStateTax } from "@fintranzact/shared";
+import {
+  compositionInterest, compositionQuarterRange, gstr4LateFee, isIntraStateSupply, money, resolveCompositionSettings, splitIntraStateTax,
+  type Gstr4LateFee, type ResolvedCompositionSettings,
+} from "@fintranzact/shared";
 import { buildBusinessDateFilter } from "./business-date.js";
-import { cmp08DocumentValue, loadCmp08Quarter, type Cmp08Document, type Cmp08Quarter } from "./cmp08.js";
+import { cmp08DocumentValue, loadCmp08Quarter, loadCompositionSetting, type Cmp08Document, type Cmp08Quarter } from "./cmp08.js";
 
 const PURCHASE_ADDING = ["invoice"] as const;
 const PURCHASE_REDUCING = ["credit_note", "sales_return", "purchase_return", "debit_note"] as const;
@@ -56,15 +69,19 @@ export interface Gstr4Input {
   financialYear: string;
   /** True when the business is registered under the composition scheme. */
   isComposition: boolean;
-  /** The four CMP-08 quarters in order (Q4's figures are the GSTR-4 part). */
+  /** The four CMP-08 quarters in order. */
   quarters: Cmp08Quarter[];
+  /** Effective settings (due date, interest, late fee); default: the built-in defaults for the year, composition category from quarters. */
+  settings?: ResolvedCompositionSettings;
+  /** When GSTR-4 is / was filed and the balance paid: interest on the balance and the late fee are worked out only when known. */
+  filedOn?: Date | null;
   /** Purchase documents of the whole year (cancelled/deleted already left out). */
   purchases: Gstr4PurchaseDocument[];
   /**
    * Total (outward composition tax + RCM tax) actually paid through CMP-08 per
    * quarter. A quarter left out is assumed paid in full.
    */
-  cmp08Paid?: { 1?: string; 2?: string; 3?: string };
+  cmp08Paid?: { 1?: string; 2?: string; 3?: string; 4?: string };
 }
 
 export interface Gstr4InwardRow {
@@ -84,20 +101,33 @@ export interface Gstr4Report {
   financialYear: string;
   isComposition: boolean;
   dueDate: Date;
+  /** "override" when the business set the due date for the year (e.g. a notified extension). */
+  dueDateSource: "default" | "override";
   /** Table 4: inward supplies. */
   inward: { rows: Gstr4InwardRow[]; totalTaxableValue: string; totalRcmTax: string };
-  /** Table 5: outward supplies by the composition taxpayer. */
-  outward: {
-    quarters: { quarter: 1 | 2 | 3 | 4; taxableValue: string; rate: string; tax: string }[];
+  /** Table 5: summary of self-assessed liability per CMP-08, four quarters. */
+  cmp08Summary: {
+    quarters: {
+      quarter: 1 | 2 | 3 | 4; taxableValue: string; rate: string;
+      compositionTax: string; rcmTax: string; totalTax: string; dueDate: Date;
+    }[];
     taxableValue: string;
-    tax: string;
+    compositionTax: string;
+    rcmTax: string;
+    totalTax: string;
+  };
+  /** Table 6: tax rate-wise, outward (composition rate; usually one row) and inward under reverse charge. */
+  rateWise: {
+    outward: { rate: string; taxableValue: string; centralTax: string; stateTax: string; integratedTax: string; tax: string }[];
+    inwardRcm: { taxableValue: string; centralTax: string; stateTax: string; integratedTax: string; tax: string };
     /** Not tracked by the app: always zero. */
     exempt: string;
     nilRated: string;
     nonGst: string;
   };
-  /** Table 6: tax-rate-wise summary (composition rate is single, so usually one row). */
-  rateWise: { rate: string; taxableValue: string; centralTax: string; stateTax: string; integratedTax: string; tax: string }[];
+  /** Table 7: TDS / TCS credit received. Not held by the app: zero. */
+  tdsTcs: { tds: string; tcs: string; note: string };
+  /** Table 8: tax, interest and late fee payable / paid. */
   taxPaid: {
     /** Composition tax on outward supplies for the year (sum of the four quarters). */
     compositionTaxPayable: string;
@@ -106,15 +136,24 @@ export interface Gstr4Report {
     totalPayable: string;
     quarters: { quarter: 1 | 2 | 3 | 4; payable: string; paid: string; paidAssumed: boolean }[];
     paidThroughCmp08: string;
-    /** True when any of Q1-Q3 was assumed paid in full because no amount was given. */
+    /** True when any quarter was assumed paid in full because no amount was given. */
     paidAssumed: boolean;
-    /** Balance to pay with GSTR-4 (Q4 and any unpaid earlier tax). */
+    /** Balance still to pay with GSTR-4 (tax not paid through CMP-08). */
     balancePayable: string;
     /** Paid more than payable: carried as cash-ledger balance, not refunded here. */
     excessPaid: string;
+    /** Interest total: CMP-08 interest known from payment dates + interest on the balance. */
     interest: string;
+    /** Interest on the balance from the GSTR-4 due date to the filing date. */
+    interestOnBalance: string;
+    interestRatePercent: string;
     interestNote: string;
+    /** Late fee, CGST + SGST; "0.00" until a filing date is given. */
     lateFee: string;
+    lateFeeDetail: Gstr4LateFee | null;
+    /** True when the return has no turnover and no tax (the lower nil late fee applies). */
+    nilReturn: boolean;
+    filingDateKnown: boolean;
     lateFeeNote: string;
   };
   notes: string[];
@@ -146,13 +185,14 @@ export function classifyGstr4Purchase(doc: Pick<Gstr4PurchaseDocument, "isRevers
 export function buildGstr4(input: Gstr4Input): Gstr4Report {
   const { financialYear, quarters } = input;
   const notes: string[] = [
-    "Outward turnover and composition tax come from the four CMP-08 quarters.",
+    "Table 5 turnover and composition tax come from the four CMP-08 quarters (all four are filed, Q4 due 18 April).",
     "Exempt, nil-rated and non-GST outward supplies are not tracked separately; shown as zero.",
     "Cess is not tracked on documents; shown as zero.",
+    "Table 7 (TDS/TCS credit received) has no data in Fintranzact: shown as zero.",
   ];
   if (!input.isComposition) notes.push("This business is not registered under the composition scheme: GSTR-4 does not apply.");
 
-  // Table 4
+  // Table 4: inward supplies
   const acc = new Map<Gstr4InwardKind, { taxable: string; cgst: string; sgst: string; igst: string; count: number }>();
   for (const k of ROW_ORDER) acc.set(k, { taxable: "0.00", cgst: "0.00", sgst: "0.00", igst: "0.00", count: 0 });
   for (const doc of input.purchases) {
@@ -188,9 +228,16 @@ export function buildGstr4(input: Gstr4Input): Gstr4Report {
   if (hasOverseas) notes.push("Purchases from overseas parties are all reported as import of services; the app cannot tell goods from services.");
 
   // Table 5 / 6 straight from CMP-08
-  const outQuarters = quarters.map((q) => ({ quarter: q.quarter, taxableValue: q.taxableValue, rate: q.rate, tax: q.taxPayable }));
   const outTaxable = money.sum(quarters.map((q) => q.taxableValue));
   const outTax = money.sum(quarters.map((q) => q.taxPayable));
+  const rcmTaxPayable = money.sum(quarters.map((q) => q.rcm.tax));
+  const cmp08Summary = {
+    quarters: quarters.map((q) => ({
+      quarter: q.quarter, taxableValue: q.taxableValue, rate: q.rate,
+      compositionTax: q.taxPayable, rcmTax: q.rcm.tax, totalTax: money.add(q.taxPayable, q.rcm.tax), dueDate: q.dueDate,
+    })),
+    taxableValue: outTaxable, compositionTax: outTax, rcmTax: rcmTaxPayable, totalTax: money.add(outTax, rcmTaxPayable),
+  };
   const rateMap = new Map<string, { taxable: string; cgst: string; sgst: string; igst: string; tax: string }>();
   for (const q of quarters) {
     const r = rateMap.get(q.rate) ?? { taxable: "0.00", cgst: "0.00", sgst: "0.00", igst: "0.00", tax: "0.00" };
@@ -201,19 +248,27 @@ export function buildGstr4(input: Gstr4Input): Gstr4Report {
     r.tax = money.add(r.tax, q.taxPayable);
     rateMap.set(q.rate, r);
   }
-  const rateWise = [...rateMap.entries()].map(([rate, r]) => ({
-    rate, taxableValue: r.taxable, centralTax: r.cgst, stateTax: r.sgst, integratedTax: r.igst, tax: r.tax,
-  }));
+  const rateWise = {
+    outward: [...rateMap.entries()].map(([rate, r]) => ({
+      rate, taxableValue: r.taxable, centralTax: r.cgst, stateTax: r.sgst, integratedTax: r.igst, tax: r.tax,
+    })),
+    inwardRcm: {
+      taxableValue: money.sum(quarters.map((q) => q.rcm.taxableValue)),
+      centralTax: money.sum(quarters.map((q) => q.rcm.centralTax)),
+      stateTax: money.sum(quarters.map((q) => q.rcm.stateTax)),
+      integratedTax: money.sum(quarters.map((q) => q.rcm.integratedTax)),
+      tax: rcmTaxPayable,
+    },
+    exempt: "0.00", nilRated: "0.00", nonGst: "0.00",
+  };
 
-  // Tax paid
-  const rcmTaxPayable = money.sum(quarters.map((q) => q.rcm.tax));
+  // Table 8: tax paid
   const totalPayable = money.add(outTax, rcmTaxPayable);
   let paidAssumed = false;
   let paidThrough = "0.00";
   const quarterPay = quarters.map((q) => {
     const payable = money.add(q.taxPayable, q.rcm.tax);
-    if (q.quarter === 4) return { quarter: q.quarter, payable, paid: "0.00", paidAssumed: false };
-    const given = input.cmp08Paid?.[q.quarter as 1 | 2 | 3];
+    const given = input.cmp08Paid?.[q.quarter];
     const assumed = given == null;
     if (assumed) paidAssumed = true;
     const paid = money.add(assumed ? payable : given, 0);
@@ -224,27 +279,50 @@ export function buildGstr4(input: Gstr4Input): Gstr4Report {
   const diff = money.sub(totalPayable, paidThrough);
   const balance = money.isPositive(diff) ? diff : "0.00";
   const excess = money.isPositive(diff) ? "0.00" : money.sub("0", diff);
-  const interest = money.sum(quarters.map((q) => q.interest));
+
+  const settings = input.settings ?? resolveCompositionSettings(financialYear, quarters[0]?.category);
+  const dueDate = settings.gstr4DueDate;
+  const filedOn = input.filedOn ?? null;
+  const cmp08Interest = money.sum(quarters.map((q) => q.interest));
+  const interestOnBalance = filedOn
+    ? compositionInterest(balance, dueDate, filedOn, parseFloat(settings.interestRatePercent))
+    : "0.00";
+  const nilReturn = !money.isPositive(outTaxable) && !money.isPositive(totalPayable);
+  const lateFeeDetail = filedOn ? gstr4LateFee(dueDate, filedOn, nilReturn, settings.lateFee) : null;
 
   return {
     financialYear,
     isComposition: input.isComposition,
-    dueDate: gstr4DueDate(financialYear),
+    dueDate,
+    dueDateSource: settings.sources.gstr4DueDate,
     inward: {
       rows,
       totalTaxableValue: money.sum(rows.map((r) => r.taxableValue)),
       totalRcmTax: money.sum(rows.map((r) => r.tax)),
     },
-    outward: { quarters: outQuarters, taxableValue: outTaxable, tax: outTax, exempt: "0.00", nilRated: "0.00", nonGst: "0.00" },
+    cmp08Summary,
     rateWise,
+    tdsTcs: {
+      tds: "0.00", tcs: "0.00",
+      note: "TDS/TCS credit received is not held by Fintranzact for this table: enter it from the portal.",
+    },
     taxPaid: {
       compositionTaxPayable: outTax, rcmTaxPayable, totalPayable,
       quarters: quarterPay, paidThroughCmp08: paidThrough, paidAssumed,
       balancePayable: balance, excessPaid: excess,
-      interest,
-      interestNote: "Interest is only what CMP-08 could work out from known payment dates; late interest on the GSTR-4 balance is not computed.",
-      lateFee: "0.00",
-      lateFeeNote: "Late fee for GSTR-4 is applicable after the due date but is not computed here.",
+      interest: money.add(cmp08Interest, interestOnBalance),
+      interestOnBalance,
+      interestRatePercent: settings.interestRatePercent,
+      interestNote: filedOn
+        ? `Interest at ${settings.interestRatePercent}% a year: CMP-08 interest from known payment dates, plus interest on the balance from the GSTR-4 due date to the filing date.`
+        : "Enter the date GSTR-4 is filed and the balance paid to work out interest on the balance. CMP-08 interest shows only for quarters with a known payment date.",
+      lateFee: lateFeeDetail?.fee ?? "0.00",
+      lateFeeDetail,
+      nilReturn,
+      filingDateKnown: filedOn !== null,
+      lateFeeNote: filedOn
+        ? `Late fee ${nilReturn ? "(nil return) " : ""}${settings.lateFee[nilReturn ? "nilPerDay" : "perDay"]} a day, at most ${settings.lateFee[nilReturn ? "nilCap" : "cap"]}.`
+        : "Enter the filing date to compute the late fee.",
     },
     notes,
   };
@@ -261,6 +339,7 @@ export class Gstr4NotApplicableError extends Error {
 export async function loadGstr4(
   db: TenantDatabase, businessId: string, financialYear: string,
   cmp08Paid?: Gstr4Input["cmp08Paid"],
+  filedOn?: Date | null,
 ): Promise<Gstr4Report> {
   const [biz] = await db.select({
     stateCode: businesses.stateCode, state: businesses.state, gstin: businesses.gstin,
@@ -309,5 +388,6 @@ export async function loadGstr4(
     ),
   }));
 
-  return buildGstr4({ financialYear, isComposition: true, quarters, purchases, cmp08Paid });
+  const { resolved } = await loadCompositionSetting(db, businessId, financialYear);
+  return buildGstr4({ financialYear, isComposition: true, quarters, purchases, cmp08Paid, settings: resolved, filedOn });
 }

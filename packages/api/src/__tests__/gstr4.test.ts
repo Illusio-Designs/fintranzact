@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { resolveCompositionSettings } from "@fintranzact/shared";
 import { buildCmp08Quarter, type Cmp08Document } from "../lib/cmp08.js";
 import { buildGstr4, classifyGstr4Purchase, type Gstr4PurchaseDocument } from "../lib/gstr4.js";
 
@@ -51,12 +52,17 @@ describe("buildGstr4", () => {
       quarters: quarters([[sale("invoice", "100000")], [sale("invoice", "50000"), sale("credit_note", "10000")], [], [sale("invoice", "20000")]]),
       purchases: [],
     });
-    expect(r.outward.quarters.map((q) => q.taxableValue)).toEqual(["100000.00", "40000.00", "0.00", "20000.00"]);
-    expect(r.outward.taxableValue).toBe("160000.00");
-    expect(r.outward.tax).toBe("1600.00");
-    expect(r.rateWise).toEqual([{ rate: "1", taxableValue: "160000.00", centralTax: "800.00", stateTax: "800.00", integratedTax: "0.00", tax: "1600.00" }]);
-    expect(r.outward.exempt).toBe("0.00");
-    expect(r.dueDate.toISOString()).toBe("2027-04-29T18:30:00.000Z");
+    expect(r.cmp08Summary.quarters.map((q) => q.taxableValue)).toEqual(["100000.00", "40000.00", "0.00", "20000.00"]);
+    expect(r.cmp08Summary.quarters.map((q) => q.dueDate.toISOString())).toEqual([
+      "2026-07-17T18:30:00.000Z", "2026-10-17T18:30:00.000Z", "2027-01-17T18:30:00.000Z", "2027-04-17T18:30:00.000Z",
+    ]);
+    expect(r.cmp08Summary.taxableValue).toBe("160000.00");
+    expect(r.cmp08Summary.compositionTax).toBe("1600.00");
+    expect(r.rateWise.outward).toEqual([{ rate: "1", taxableValue: "160000.00", centralTax: "800.00", stateTax: "800.00", integratedTax: "0.00", tax: "1600.00" }]);
+    expect(r.rateWise.exempt).toBe("0.00");
+    expect(r.tdsTcs).toMatchObject({ tds: "0.00", tcs: "0.00" });
+    expect(r.dueDate.toISOString()).toBe("2027-06-29T18:30:00.000Z"); // 30 Jun 2027 IST
+    expect(r.dueDateSource).toBe("default");
   });
 
   const withTax = () => quarters(
@@ -64,31 +70,76 @@ describe("buildGstr4", () => {
     [[], [{ ...sale("invoice", "1000"), taxAmount: "180", interState: false }], [], []],
   );
 
-  it("assumes Q1-Q3 paid in full when no amount is given and leaves Q4 as the balance", () => {
+  it("assumes every quarter paid in full when no amount is given (Q4 has a CMP-08 too)", () => {
     const r = buildGstr4({ financialYear: FY, isComposition: true, quarters: withTax(), purchases: [] });
     expect(r.taxPaid.paidAssumed).toBe(true);
     expect(r.taxPaid.compositionTaxPayable).toBe("4000.00");
     expect(r.taxPaid.rcmTaxPayable).toBe("180.00");
     expect(r.taxPaid.totalPayable).toBe("4180.00");
-    expect(r.taxPaid.paidThroughCmp08).toBe("3180.00");
-    expect(r.taxPaid.balancePayable).toBe("1000.00");
+    expect(r.taxPaid.paidThroughCmp08).toBe("4180.00");
+    expect(r.taxPaid.balancePayable).toBe("0.00");
     expect(r.taxPaid.lateFee).toBe("0.00");
+    expect(r.taxPaid.filingDateKnown).toBe(false);
+    expect(r.taxPaid.lateFeeNote).toMatch(/Enter the filing date/);
   });
 
   it("uses given paid amounts and flags assumption only for the missing ones", () => {
-    const r = buildGstr4({ financialYear: FY, isComposition: true, quarters: withTax(), purchases: [], cmp08Paid: { 1: "500", 2: "1180", 3: "1000" } });
+    const r = buildGstr4({ financialYear: FY, isComposition: true, quarters: withTax(), purchases: [], cmp08Paid: { 1: "500", 2: "1180", 3: "1000", 4: "0" } });
     expect(r.taxPaid.paidAssumed).toBe(false);
     expect(r.taxPaid.paidThroughCmp08).toBe("2680.00");
     expect(r.taxPaid.balancePayable).toBe("1500.00");
     const partial = buildGstr4({ financialYear: FY, isComposition: true, quarters: withTax(), purchases: [], cmp08Paid: { 1: "1000" } });
     expect(partial.taxPaid.paidAssumed).toBe(true);
-    expect(partial.taxPaid.quarters.map((q) => q.paidAssumed)).toEqual([false, true, true, false]);
+    expect(partial.taxPaid.quarters.map((q) => q.paidAssumed)).toEqual([false, true, true, true]);
   });
 
   it("reports excess payment instead of a negative balance", () => {
     const r = buildGstr4({ financialYear: FY, isComposition: true, quarters: quarters(), purchases: [], cmp08Paid: { 1: "100" } });
     expect(r.taxPaid.balancePayable).toBe("0.00");
     expect(r.taxPaid.excessPaid).toBe("100.00");
+  });
+
+  describe("late fee and interest on the balance", () => {
+    const paid = { 1: "1000", 2: "1180", 3: "1000", 4: "0" } as const; // balance 1000
+    const filed = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d, 6));
+
+    it("shows nothing until a filing date is given", () => {
+      const r = buildGstr4({ financialYear: FY, isComposition: true, quarters: withTax(), purchases: [], cmp08Paid: paid });
+      expect(r.taxPaid).toMatchObject({ lateFee: "0.00", lateFeeDetail: null, interestOnBalance: "0.00", filingDateKnown: false });
+    });
+    it("charges 50 a day (non-nil) and interest on the balance after the due date (30 Jun)", () => {
+      const r = buildGstr4({ financialYear: FY, isComposition: true, quarters: withTax(), purchases: [], cmp08Paid: paid, filedOn: filed(2027, 7, 10) });
+      expect(r.taxPaid.nilReturn).toBe(false);
+      expect(r.taxPaid.lateFee).toBe("500.00");
+      expect(r.taxPaid.lateFeeDetail).toMatchObject({ daysLate: 10, centralTax: "250.00", stateTax: "250.00" });
+      expect(r.taxPaid.interestOnBalance).toBe("4.93"); // 1000 x 18% x 10 / 365
+      expect(r.taxPaid.interest).toBe("4.93");
+    });
+    it("is nil when filed on time", () => {
+      const r = buildGstr4({ financialYear: FY, isComposition: true, quarters: withTax(), purchases: [], cmp08Paid: paid, filedOn: filed(2027, 6, 30) });
+      expect(r.taxPaid).toMatchObject({ lateFee: "0.00", interestOnBalance: "0.00", filingDateKnown: true });
+    });
+    it("uses the nil-return amounts when there is no turnover and no tax", () => {
+      const r = buildGstr4({ financialYear: FY, isComposition: true, quarters: quarters(), purchases: [], filedOn: filed(2027, 7, 10) });
+      expect(r.taxPaid.nilReturn).toBe(true);
+      expect(r.taxPaid.lateFee).toBe("200.00");
+      const capped = buildGstr4({ financialYear: FY, isComposition: true, quarters: quarters(), purchases: [], filedOn: filed(2027, 12, 31) });
+      expect(capped.taxPaid.lateFee).toBe("500.00");
+      expect(capped.taxPaid.lateFeeDetail?.capped).toBe(true);
+    });
+    it("caps a non-nil fee at 2,000", () => {
+      const r = buildGstr4({ financialYear: FY, isComposition: true, quarters: withTax(), purchases: [], filedOn: filed(2027, 12, 31) });
+      expect(r.taxPaid.lateFee).toBe("2000.00");
+    });
+    it("follows the resolved settings: edited due date, per-day and cap change the output at once", () => {
+      const settings = resolveCompositionSettings(FY, "manufacturer_trader", { gstr4DueDate: "2027-07-31", lateFeePerDay: "100", lateFeeCap: "700", interestRate: "12" });
+      const r = buildGstr4({ financialYear: FY, isComposition: true, quarters: withTax(), purchases: [], cmp08Paid: paid, settings, filedOn: filed(2027, 8, 10) });
+      expect(r.dueDate.toISOString()).toBe("2027-07-30T18:30:00.000Z");
+      expect(r.dueDateSource).toBe("override");
+      expect(r.taxPaid.lateFee).toBe("700.00"); // 10 x 100 capped at 700
+      expect(r.taxPaid.interestOnBalance).toBe("3.29"); // 1000 x 12% x 10 / 365
+      expect(r.taxPaid.interestRatePercent).toBe("12");
+    });
   });
 
   it("flags a non-composition business", () => {

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeTcs,
   defaultTcsSectionRules,
+  tcsRulesMetaFor,
   tcsDepositDueDate,
   tcsRateForSection,
   tcsReturnDueDate,
@@ -10,16 +11,43 @@ import {
 } from "../tcs.js";
 import { formatIstDate } from "../dates.js";
 
-const rule = (code: string): TcsSectionRule => defaultTcsSectionRules("2026-27").find((s) => s.code === code)!;
+const rule = (code: string): TcsSectionRule => defaultTcsSectionRules("2025-26").find((s) => s.code === code)!;
 
 describe("defaultTcsSectionRules", () => {
-  it("covers each s.206C case with its rate", () => {
-    const rates = Object.fromEntries(defaultTcsSectionRules("2026-27").map((s) => [s.code, s.rate]));
+  it("covers each s.206C case with its rate (2025-26, old rates)", () => {
+    const rates = Object.fromEntries(defaultTcsSectionRules("2025-26").map((s) => [s.code, s.rate]));
     expect(rates).toEqual({
       "206C_ALCOHOL": "1", "206C_TENDU": "5", "206C_TIMBER_LEASE": "2.5", "206C_TIMBER_OTHER": "2.5", "206C_FOREST": "2.5",
       "206C_SCRAP": "1", "206C_MINERALS": "1", "206C_PARKING": "2", "206C_VEHICLE": "1",
     });
     expect(tcsSectionCodes).toHaveLength(9);
+  });
+
+  it("uses the Finance Act 2026 rates from 2026-27, same codes", () => {
+    const next = defaultTcsSectionRules("2026-27");
+    expect(next.map((s) => s.code)).toEqual(defaultTcsSectionRules("2025-26").map((s) => s.code));
+    expect(Object.fromEntries(next.map((s) => [s.code, s.rate]))).toEqual({
+      "206C_ALCOHOL": "2", "206C_TENDU": "2", "206C_TIMBER_LEASE": "2.5", "206C_TIMBER_OTHER": "2.5", "206C_FOREST": "2.5",
+      "206C_SCRAP": "2", "206C_MINERALS": "2", "206C_PARKING": "2", "206C_VEHICLE": "1",
+    });
+    expect(defaultTcsSectionRules("2031-32").find((s) => s.code === "206C_SCRAP")!.rate).toBe("2");
+  });
+
+  it("shows the new-Act reference only from 2026-27", () => {
+    const scrapOld = defaultTcsSectionRules("2025-26").find((s) => s.code === "206C_SCRAP")!;
+    const scrapNew = defaultTcsSectionRules("2026-27").find((s) => s.code === "206C_SCRAP")!;
+    expect(scrapOld.actSection).toBeUndefined();
+    expect(scrapOld.paymentCode).toBeUndefined();
+    expect(scrapOld.note).not.toMatch(/2025/);
+    expect(scrapNew).toMatchObject({ actSection: "394(1)", paymentCode: "1073" });
+    expect(scrapNew.label).toBe(scrapOld.label);
+    expect(scrapNew.note).toMatch(/394\(1\)/);
+  });
+
+  it("carries review metadata for each year", () => {
+    expect(tcsRulesMetaFor("2026-27")).toMatchObject({ lastReviewed: "2026-10-02", verifyWithCA: true });
+    expect(tcsRulesMetaFor("2026-27").actNote).toMatch(/394/);
+    expect(tcsRulesMetaFor("2025-26").actNote).toMatch(/206C/);
   });
 
   it("uses twice the rate, or 5%, whichever is higher, when the buyer has no PAN (s.206CC)", () => {
@@ -30,7 +58,7 @@ describe("defaultTcsSectionRules", () => {
   });
 
   it("only limits motor vehicles, at ₹10 lakh", () => {
-    const limits = defaultTcsSectionRules("2026-27").filter((s) => s.singleThreshold != null).map((s) => [s.code, s.singleThreshold]);
+    const limits = defaultTcsSectionRules("2025-26").filter((s) => s.singleThreshold != null).map((s) => [s.code, s.singleThreshold]);
     expect(limits).toEqual([["206C_VEHICLE", "1000000"]]);
   });
 });

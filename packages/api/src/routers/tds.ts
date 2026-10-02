@@ -23,6 +23,9 @@ import {
   defaultTdsSectionRules,
   money,
   defaultTcsSectionRules,
+  isIncomeTaxAct2025Year,
+  tcsRulesMetaFor,
+  tdsRulesMetaFor,
   panFromGstin,
   tcsSectionCodes,
   tdsFinancialYear,
@@ -60,6 +63,7 @@ function defaultRules(kind: "tds" | "tcs", fy: string): TdsSectionRule[] {
   return defaultTcsSectionRules(fy).map((s) => ({
     code: s.code, label: s.label, rate: s.rate, rateWithoutPan: s.rateWithoutPan,
     singleThreshold: s.singleThreshold, aggregateThreshold: null, basis: "payments" as const, excessOnly: false, note: s.note,
+    actSection: s.actSection, paymentCode: s.paymentCode,
   }));
 }
 
@@ -103,7 +107,14 @@ export const tdsRouter = router({
           defaults: def,
         };
       });
-      return { financialYear: fy, kind: input.kind ?? "tds", sections };
+      const meta = (input.kind ?? "tds") === "tcs" ? tcsRulesMetaFor(fy) : tdsRulesMetaFor(fy);
+      return {
+        financialYear: fy,
+        kind: input.kind ?? "tds",
+        sections,
+        /** Where the built-in defaults of this year came from; every value is secondary-source and needs a CA's check. */
+        meta: { ...meta, newAct: isIncomeTaxAct2025Year(fy) },
+      };
     }),
 
   /** Override a section's rates / limits for one year, or switch it off. Unset fields keep the default. */

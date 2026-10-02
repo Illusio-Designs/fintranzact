@@ -9,17 +9,19 @@
  * charge is declared in the same statement.
  *
  * `buildCmp08Quarter` is pure; `loadCmp08Quarter` reads the documents.
- * Rates, due dates and interest rate come from @fintranzact/shared
- * composition.ts: verify them yearly with a CA.
+ * CMP-08 is filed for ALL four quarters (Q1 18 Jul, Q2 18 Oct, Q3 18 Jan, Q4
+ * 18 Apr by default). Rates, due dates and interest rate are resolved by
+ * @fintranzact/shared resolveCompositionSettings (business FY override ->
+ * built-in versioned default): verify them yearly with a CA.
  */
 
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { businesses, compositionSettings, invoices, parties } from "@fintranzact/db";
 import type { TenantDatabase } from "@fintranzact/db";
 import {
-  cmp08DueDate, compositionInterest, compositionQuarterRange, compositionRateFor, DEFAULT_COMPOSITION_CATEGORY,
+  cmp08DueDate, compositionInterest, compositionQuarterRange, DEFAULT_COMPOSITION_CATEGORY, resolveCompositionSettings,
   isIntraStateSupply, money, splitIntraStateTax,
-  type CompositionCategory,
+  type CompositionCategory, type CompositionOverrides, type ResolvedCompositionSettings,
 } from "@fintranzact/shared";
 import { buildBusinessDateFilter } from "./business-date.js";
 
@@ -52,8 +54,10 @@ export interface Cmp08Input {
   /** Purchase documents of the quarter that are liable to reverse charge. */
   rcm: Cmp08RcmDocument[];
   category: CompositionCategory;
-  /** Rate override (percent) from composition settings; null = category default. */
+  /** Rate override (percent) from composition settings; null = category default. Shorthand for overrides.rate. */
   rateOverride?: string | null;
+  /** The business's overrides for the FY (rate, CMP-08 due day, interest rate); null/absent = built-in default. */
+  overrides?: CompositionOverrides;
   /** When the tax was actually paid; interest is worked out only when it is known. */
   paidOn?: Date | null;
 }
@@ -75,11 +79,13 @@ export interface Cmp08Quarter {
   rcm: { taxableValue: string; centralTax: string; stateTax: string; integratedTax: string; tax: string };
   /** Interest on late payment; "0.00" while the payment date is unknown. */
   interest: string;
-  interestBasis: "paid_on_time_or_not_late" | "paid_late" | "payment_date_unknown" | "no_cmp08_for_quarter";
-  /** Null for Q4: the tax for Jan-Mar goes in the annual return GSTR-4. */
-  dueDate: Date | null;
-  /** False for Q4. */
-  cmp08Applicable: boolean;
+  /** Interest rate (percent a year) used. */
+  interestRatePercent: string;
+  interestBasis: "paid_on_time_or_not_late" | "paid_late" | "payment_date_unknown";
+  /** 18 Jul / 18 Oct / 18 Jan / 18 Apr by default (or the business's overridden day). */
+  dueDate: Date;
+  /** Always true: CMP-08 is filed for all four quarters, Jan-Mar included. Kept for API compatibility. */
+  cmp08Applicable: true;
 }
 
 /** Value of supply of a document: lines less the document discount, plus the charges billed with it. */
@@ -89,7 +95,10 @@ export function cmp08DocumentValue(doc: Cmp08Document): string {
 
 /** Pure: CMP-08 figures for one quarter. */
 export function buildCmp08Quarter(input: Cmp08Input): Cmp08Quarter {
-  const rate = compositionRateFor(input.category, input.rateOverride, input.financialYear);
+  const settings = resolveCompositionSettings(input.financialYear, input.category, {
+    ...input.overrides, rate: input.overrides?.rate ?? input.rateOverride,
+  });
+  const rate = settings.rate;
 
   let taxable = "0.00";
   for (const doc of input.outward) {
@@ -117,16 +126,14 @@ export function buildCmp08Quarter(input: Cmp08Input): Cmp08Quarter {
   }
   const rcmTax = money.sum([rcmCgst, rcmSgst, rcmIgst]);
 
-  const dueDate = cmp08DueDate(input.financialYear, input.quarter);
+  const dueDate = cmp08DueDate(input.financialYear, input.quarter, settings.cmp08DueDay);
   const liableForInterest = money.add(taxPayable, rcmTax);
   let interest = "0.00";
   let interestBasis: Cmp08Quarter["interestBasis"];
-  if (!dueDate) {
-    interestBasis = "no_cmp08_for_quarter";
-  } else if (!input.paidOn) {
+  if (!input.paidOn) {
     interestBasis = "payment_date_unknown";
   } else {
-    interest = compositionInterest(liableForInterest, dueDate, input.paidOn);
+    interest = compositionInterest(liableForInterest, dueDate, input.paidOn, parseFloat(settings.interestRatePercent));
     interestBasis = money.isPositive(interest) ? "paid_late" : "paid_on_time_or_not_late";
   }
 
@@ -142,23 +149,40 @@ export function buildCmp08Quarter(input: Cmp08Input): Cmp08Quarter {
     taxPayable,
     rcm: { taxableValue: rcmTaxable, centralTax: rcmCgst, stateTax: rcmSgst, integratedTax: rcmIgst, tax: rcmTax },
     interest,
+    interestRatePercent: settings.interestRatePercent,
     interestBasis,
     dueDate,
-    cmp08Applicable: dueDate !== null,
+    cmp08Applicable: true,
   };
 }
 
-/** The business's composition category and rate override for a financial year. */
+/** The business's composition category and per-year overrides, with the effective (resolved) values. */
 export async function loadCompositionSetting(
   db: TenantDatabase, businessId: string, financialYear: string,
-): Promise<{ category: CompositionCategory; rateOverride: string | null; configured: boolean }> {
+): Promise<{
+  category: CompositionCategory; rateOverride: string | null; configured: boolean;
+  overrides: CompositionOverrides; resolved: ResolvedCompositionSettings;
+}> {
   const [row] = await db.select().from(compositionSettings)
     .where(and(eq(compositionSettings.businessId, businessId), eq(compositionSettings.financialYear, financialYear)))
     .limit(1);
+  const category = (row?.category as CompositionCategory | undefined) ?? DEFAULT_COMPOSITION_CATEGORY;
+  const overrides: CompositionOverrides = {
+    rate: row?.rate ?? null,
+    gstr4DueDate: row?.gstr4DueDate ?? null,
+    interestRate: row?.interestRate ?? null,
+    lateFeePerDay: row?.lateFeePerDay ?? null,
+    lateFeeCap: row?.lateFeeCap ?? null,
+    lateFeeNilPerDay: row?.lateFeeNilPerDay ?? null,
+    lateFeeNilCap: row?.lateFeeNilCap ?? null,
+    cmp08DueDay: row?.cmp08DueDay ?? null,
+  };
   return {
-    category: (row?.category as CompositionCategory | undefined) ?? DEFAULT_COMPOSITION_CATEGORY,
+    category,
     rateOverride: row?.rate != null ? String(Number(row.rate)) : null,
     configured: !!row,
+    overrides,
+    resolved: resolveCompositionSettings(financialYear, category, overrides),
   };
 }
 
@@ -222,7 +246,7 @@ export async function loadCmp08Quarter(
 
   const result = buildCmp08Quarter({
     financialYear, quarter, outward, rcm,
-    category: setting.category, rateOverride: setting.rateOverride, paidOn,
+    category: setting.category, overrides: setting.overrides, paidOn,
   });
   return { ...result, quarterStart: from, quarterEnd: to, configured: setting.configured };
 }

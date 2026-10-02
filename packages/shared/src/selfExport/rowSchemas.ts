@@ -837,6 +837,13 @@ export const compositionSettingRowSchema = z.object({
   financialYear: z.string(),
   category: z.enum(["manufacturer_trader", "restaurant", "other_service"]),
   rate: money3Nullable,
+  gstr4DueDate: z.string().nullable(),
+  interestRate: money3Nullable,
+  lateFeePerDay: money2Nullable,
+  lateFeeCap: money2Nullable,
+  lateFeeNilPerDay: money2Nullable,
+  lateFeeNilCap: money2Nullable,
+  cmp08DueDay: z.number().int().nullable(),
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
 });
