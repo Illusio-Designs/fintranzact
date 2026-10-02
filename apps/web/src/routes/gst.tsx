@@ -609,10 +609,11 @@ function CMP08View() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4">
                 <StatCard label="Outward supplies (turnover)" value={fmtStr(data.taxableValue)} />
                 <StatCard
-                  label={`Composition tax payable @ ${data.rate}%`}
+                  label="Composition tax payable"
                   value={fmtStr(data.taxPayable)}
                   valueColor="text-amber-600"
                   subItems={[
+                    { label: "Rate", value: `${data.rate}%` },
                     { label: "Central tax", value: fmtStr(data.centralTax) },
                     { label: "State / UT tax", value: fmtStr(data.stateTax) },
                   ]}
