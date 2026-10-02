@@ -18,7 +18,7 @@ type Alert = {
   tone: "danger" | "warning" | "info";
   title: string;
   body: string;
-  to?: "/invoices" | "/items" | "/gst";
+  to?: "/invoices" | "/items" | "/gst" | "/tds";
 };
 
 const SEEN_KEY = "fintranzact:seen-alerts";
@@ -53,11 +53,13 @@ export function NotificationsBell({
   businessId,
   canSeeInvoices,
   canSeeItems,
+  canSeeTds = false,
   isGstRegistered,
 }: {
   businessId: string | null;
   canSeeInvoices: boolean;
   canSeeItems: boolean;
+  canSeeTds?: boolean;
   isGstRegistered: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -70,6 +72,11 @@ export function NotificationsBell({
   );
   const { data: lowStock } = trpc.item.lowStockCount.useQuery(undefined, {
     enabled: !!businessId && canSeeItems,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const { data: tdsDue } = trpc.tds.reminders.useQuery(undefined, {
+    enabled: !!businessId && canSeeTds,
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
@@ -116,6 +123,22 @@ export function NotificationsBell({
         }
       }
     }
+    // TDS/TCS deposits and returns due within a week or overdue. Dates follow current rules.
+    for (const item of tdsDue?.items ?? []) {
+      if (item.daysUntil > REMIND_DAYS) continue;
+      const due = new Date(item.dueDate);
+      const when = item.daysUntil < 0
+        ? `overdue by ${-item.daysUntil} day${item.daysUntil === -1 ? "" : "s"}`
+        : item.daysUntil === 0 ? "due today" : `due in ${item.daysUntil} day${item.daysUntil > 1 ? "s" : ""}`;
+      list.push({
+        id: `tds:${businessId}:${item.key}:${item.daysUntil < 0 ? "overdue" : item.daysUntil === 0 ? "today" : "soon"}`,
+        icon: Calendar03Icon,
+        tone: item.overdue ? "danger" : "warning",
+        title: `${item.title} ${when}`,
+        body: `${formatCurrency(item.amount)} by ${formatDateShort(due)}. Verify due dates with your CA.`,
+        to: "/tds",
+      });
+    }
     if (maintenance?.startsAt && !maintenance.enabled && new Date(maintenance.startsAt) > new Date()) {
       list.push({
         id: `maintenance:${maintenance.startsAt}`,
@@ -126,7 +149,7 @@ export function NotificationsBell({
       });
     }
     return list;
-  }, [status, lowStock, maintenance, isGstRegistered, businessId]);
+  }, [status, lowStock, tdsDue, maintenance, isGstRegistered, businessId]);
 
   const unseen = alerts.filter((a) => !seen.includes(a.id)).length;
 

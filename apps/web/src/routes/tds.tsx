@@ -21,7 +21,7 @@ export const Route = createFileRoute("/tds")({
   component: TdsPage,
 });
 
-type Tab = "overview" | "deductions" | "challans" | "return" | "settings";
+type Tab = "overview" | "deductions" | "challans" | "return" | "certificates" | "settings";
 /** TDS (tax we deduct on purchases) or TCS (tax we collect on sales). */
 type Kind = "tds" | "tcs";
 
@@ -87,6 +87,7 @@ function TdsPage() {
             { value: "deductions", label: "Deductions" },
             { value: "challans", label: "Challans" },
             { value: "return", label: "Return data" },
+            { value: "certificates", label: "Certificates" },
             { value: "settings", label: "Sections & limits" },
           ]}
           value={tab}
@@ -97,6 +98,7 @@ function TdsPage() {
       {tab === "deductions" && <DeductionsTab fy={fy} kind={kind} />}
       {tab === "challans" && <ChallansTab fy={fy} kind={kind} />}
       {tab === "return" && <ReturnDataTab fy={fy} kind={kind} />}
+      {tab === "certificates" && <CertificatesTab fy={fy} kind={kind} />}
       {tab === "settings" && <SettingsTab fy={fy} kind={kind} />}
     </div>
   );
@@ -587,6 +589,92 @@ function ReturnDataTab({ fy, kind }: { fy: string; kind: Kind }) {
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+// ── Certificates ──────────────────────────────────────────────
+
+/** Download a base64 PDF the server generated. */
+function downloadPdf(filename: string, base64: string) {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function CertificatesTab({ fy, kind }: { fy: string; kind: Kind }) {
+  const [quarter, setQuarter] = useState<number>(tdsQuarter(new Date()));
+  const [busy, setBusy] = useState<string | null>(null);
+  const utils = trpc.useUtils();
+  const word = kind === "tcs" ? "TCS" : "TDS";
+  const { data, isLoading, error } = trpc.tds.certificateParties.useQuery({ financialYear: fy, quarter, kind });
+
+  async function download(partyId: string) {
+    setBusy(partyId);
+    try {
+      const r = await utils.tds.certificate.fetch({ financialYear: fy, quarter, kind, partyId });
+      downloadPdf(r.filename, r.base64);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create the statement");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Select className="input w-28" value={quarter} onChange={(e) => setQuarter(Number(e.target.value))} aria-label="Quarter">
+          {[1, 2, 3, 4].map((q) => <option key={q} value={q}>Q{q}</option>)}
+        </Select>
+      </div>
+      <div className="card px-4 py-3 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300" role="note">
+        These are statements generated from your books ({kind === "tcs" ? "Form 27D" : "Form 16A"} style). They are not the certificates issued through TRACES,
+        which the Income Tax Department issues after the quarterly return is filed and processed.
+      </div>
+      {isLoading ? <Loading /> : error ? <ErrorCard message={error.message} /> : data && data.length === 0 ? (
+        <EmptyState title={`No ${word} in Q${quarter}`} description={`No ${word} was ${kind === "tcs" ? "collected" : "deducted"} in this quarter.`} />
+      ) : data && (
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{kind === "tcs" ? "Buyer" : "Deductee"}</th><th>PAN</th>
+                  <th className="text-right">Entries</th><th className="text-right">{word}</th>
+                  <th className="text-right">Deposited</th><th className="text-right">Pending</th><th />
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((r) => (
+                  <tr key={r.partyId}>
+                    <td className="font-medium">{r.partyName}</td>
+                    <td className="font-mono">{r.pan || "—"}</td>
+                    <td className="text-right tabular-nums">{r.count}</td>
+                    <td className="text-right tabular-nums">{formatCurrency(r.total)}</td>
+                    <td className="text-right tabular-nums">{formatCurrency(r.deposited)}</td>
+                    <td className="text-right tabular-nums">{formatCurrency(r.pending)}</td>
+                    <td className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => download(r.partyId)}
+                        disabled={busy === r.partyId}
+                        className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium disabled:opacity-50"
+                      >
+                        {busy === r.partyId ? "Preparing…" : "Download PDF"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -439,11 +439,14 @@
 | target.list | query | authorized | read:SalesTarget | ✓ | ✓ | ✓ | ✓ | ✗ |
 | target.myTargets | query | authorized | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | target.update | mutation | authorized | manage:SalesTarget | ✓ | ✓ | ✓ | ✗ | ✗ |
+| tds.certificate | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.certificateParties | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.challans | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.createChallan | mutation | authorized | create:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.deductions | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.deleteChallan | mutation | authorized | delete:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.preview | query | authorized | read:Payment | ✓ | ✓ | ✓ | ✓ | ✓ |
+| tds.reminders | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.resetSection | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.returnData | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.sections | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |

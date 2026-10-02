@@ -22,12 +22,8 @@ import {
   money,
   defaultTcsSectionRules,
   panFromGstin,
-  tcsDepositDueDate,
-  tcsReturnDueDate,
   tcsSectionCodes,
-  tdsDepositDueDate,
   tdsFinancialYear,
-  tdsReturnDueDate,
   tdsSectionCodes,
   type TdsSectionRule,
 } from "@fintranzact/shared";
@@ -37,6 +33,8 @@ import { withAudit } from "../lib/audit.js";
 import { previewPartyTds } from "../lib/tds-service.js";
 import { buildTdsReturn } from "../lib/tds-return.js";
 import { loadTcsSectionRules, tcsForLines } from "../lib/tcs-service.js";
+import { depositDue, depositsDueFromMonths, loadTdsReminders, returnDue } from "../lib/tds-reminders.js";
+import { buildCertificateData, certificateToBuffer } from "../lib/tds-certificate.js";
 
 const fyInput = z.string().regex(/^\d{4}-\d{2}$/, "Use a financial year like 2026-27");
 const rupees = z.string().regex(/^\d{1,13}(\.\d{1,2})?$/);
@@ -45,10 +43,6 @@ const quarter = z.number().int().min(1).max(4);
 /** The ledger the call is about: tax we deduct (TDS) or tax we collect on sales (TCS). */
 const kindInput = z.enum(["tds", "tcs"]).default("tds");
 const allSectionCodes = [...tdsSectionCodes, ...tcsSectionCodes] as [string, ...string[]];
-
-/** Deposit and return due dates differ between TDS and TCS (no March exception; 27EQ dates). */
-const depositDue = (kind: "tds" | "tcs", d: Date | string) => (kind === "tcs" ? tcsDepositDueDate(d) : tdsDepositDueDate(d));
-const returnDue = (kind: "tds" | "tcs", fy: string, q: 1 | 2 | 3 | 4) => (kind === "tcs" ? tcsReturnDueDate(fy, q) : tdsReturnDueDate(fy, q));
 
 /** The section defaults for a ledger, in one shape (TCS has no individual rate or yearly limit). */
 function defaultRules(kind: "tds" | "tcs", fy: string): TdsSectionRule[] {
@@ -360,17 +354,133 @@ export const tdsRouter = router({
             returnDueDate: returnDue(kind, fy, q.quarter as 1 | 2 | 3 | 4),
           })),
           // Tax still to deposit, by the month it was deducted, with the day it is due.
-          depositsDue: byMonth
-            .filter((m) => money.isPositive(m.pending))
-            .map((m) => {
-              const dueDate = depositDue(kind, `${m.month}-15T12:00:00+05:30`);
-              return { month: m.month, pending: m.pending, dueDate, overdue: dueDate.getTime() < now };
-            }),
+          depositsDue: depositsDueFromMonths(kind, byMonth, now),
         },
         receivable: {
           total: money.sum(receivable.map((r) => r.total)),
           bySection: receivable,
         },
+      };
+    }),
+
+    /**
+   * Upcoming and overdue deposits and returns (TDS and TCS) for the business:
+   * the same items the due-date reminder emails are about. Due dates follow the
+   * current rules: verify with a CA.
+   */
+  reminders: viewerProcedure.query(async ({ ctx }) => {
+    requireCan(ctx.ability, "read", "Tds");
+    const items = await loadTdsReminders(ctx.db, ctx.businessId);
+    return { items, note: "Verify due dates with your CA." };
+  }),
+
+  // ── Certificates (statements from the books, not TRACES) ────────
+
+  /** Parties with tax deducted (TDS) or collected (TCS) in a quarter, with their totals. */
+  certificateParties: viewerProcedure
+    .input(z.object({ kind: kindInput, financialYear: fyInput, quarter }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Tds");
+      assertRealYear(input.financialYear);
+      const rows = await ctx.db
+        .select({
+          partyId: parties.id,
+          partyName: parties.name,
+          pan: parties.pan,
+          count: sql<number>`COUNT(*)::int`,
+          total: sql<string>`COALESCE(SUM(${taxDeductions.amount}), 0.00)::text`,
+          deposited: sql<string>`COALESCE(SUM(${taxDeductions.amount}) FILTER (WHERE ${taxDeductions.challanId} IS NOT NULL), 0.00)::text`,
+        })
+        .from(taxDeductions)
+        .innerJoin(parties, eq(parties.id, taxDeductions.partyId))
+        .where(and(
+          eq(taxDeductions.businessId, ctx.businessId),
+          eq(taxDeductions.kind, input.kind),
+          eq(taxDeductions.direction, "payable"),
+          eq(taxDeductions.financialYear, input.financialYear),
+          eq(taxDeductions.quarter, input.quarter),
+        ))
+        .groupBy(parties.id, parties.name, parties.pan)
+        .orderBy(parties.name);
+      return rows.map((r) => ({ ...r, pending: money.sub(r.total, r.deposited) }));
+    }),
+
+  /**
+   * One party's statement for a quarter as a base64 PDF: Form 16A style (TDS)
+   * or Form 27D style (TCS), generated from the books. Not the TRACES-issued
+   * certificate, which exists only after the return is filed.
+   */
+  certificate: viewerProcedure
+    .input(z.object({ kind: kindInput, partyId: z.string().uuid(), financialYear: fyInput, quarter }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Tds");
+      assertRealYear(input.financialYear);
+
+      const [[biz], [party], rows] = await Promise.all([
+        ctx.db
+          .select({
+            name: businesses.name, legalName: businesses.legalName, tan: businesses.tan, pan: businesses.pan,
+            address: businesses.address, addressLine1: businesses.addressLine1, addressLine2: businesses.addressLine2,
+            city: businesses.city, state: businesses.state, pincode: businesses.pincode,
+          })
+          .from(businesses)
+          .where(eq(businesses.id, ctx.businessId))
+          .limit(1),
+        ctx.db
+          .select({ name: parties.name, pan: parties.pan })
+          .from(parties)
+          .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
+          .limit(1),
+        ctx.db
+          .select({
+            sectionCode: taxDeductions.sectionCode,
+            deductedOn: taxDeductions.deductedOn,
+            baseAmount: taxDeductions.baseAmount,
+            amount: taxDeductions.amount,
+            challanBsr: taxChallans.bsrCode,
+            challanNumber: taxChallans.challanNumber,
+            challanDate: taxChallans.depositedOn,
+          })
+          .from(taxDeductions)
+          .leftJoin(taxChallans, eq(taxChallans.id, taxDeductions.challanId))
+          .where(and(
+            eq(taxDeductions.businessId, ctx.businessId),
+            eq(taxDeductions.partyId, input.partyId),
+            eq(taxDeductions.kind, input.kind),
+            eq(taxDeductions.direction, "payable"),
+            eq(taxDeductions.financialYear, input.financialYear),
+            eq(taxDeductions.quarter, input.quarter),
+          )),
+      ]);
+      if (!party || !biz) throw new TRPCError({ code: "NOT_FOUND", message: "Party not found" });
+      if (rows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No tax was recorded for this party in that quarter" });
+      }
+
+      const address = [biz.addressLine1 || biz.address, biz.addressLine2, biz.city, biz.state, biz.pincode].filter(Boolean).join(", ");
+      const data = buildCertificateData({
+        kind: input.kind,
+        deductor: { name: biz.legalName || biz.name, tan: biz.tan, pan: biz.pan, address },
+        deductee: { name: party.name, pan: party.pan },
+        financialYear: input.financialYear,
+        quarter: input.quarter as 1 | 2 | 3 | 4,
+        sectionLabels: Object.fromEntries(defaultRules(input.kind, input.financialYear).map((r) => [r.code, r.label])),
+        rows: rows.map((r) => ({
+          sectionCode: r.sectionCode,
+          deductedOn: r.deductedOn,
+          baseAmount: r.baseAmount,
+          amount: r.amount,
+          challan: r.challanBsr ? { bsrCode: r.challanBsr, challanNumber: r.challanNumber!, depositedOn: r.challanDate! } : null,
+        })),
+      });
+      const pdf = await certificateToBuffer(data);
+      const safe = party.name.replace(/[^0-9A-Za-z]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "party";
+      return {
+        filename: `${input.kind}-statement-${safe}-Q${input.quarter}-${input.financialYear}.pdf`,
+        contentType: "application/pdf" as const,
+        base64: pdf.toString("base64"),
+        totals: data.totals,
+        notes: data.notes,
       };
     }),
 

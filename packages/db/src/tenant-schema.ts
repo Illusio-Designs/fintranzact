@@ -1006,6 +1006,19 @@ export const taxDeductions = pgTable("tax_deductions", {
   index("tax_deductions_challan_idx").on(t.challanId),
 ]);
 
+// Which TDS/TCS due-date reminder emails have gone out, so the scheduler sends
+// each one once. item_key names the item (e.g. "deposit:tds:2026-27:2026-09");
+// day_offset is 7 (within a week of the due date), 0 (due today) or -1 (overdue).
+export const tdsReminderLog = pgTable("tds_reminder_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  itemKey: text("item_key").notNull(),
+  dayOffset: integer("day_offset").notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("tds_reminder_log_item_idx").on(t.businessId, t.itemKey, t.dayOffset),
+]);
+
 // ── Expenses ───────────────────────────────────────────────────
 
 export const expenses = pgTable("expenses", {
