@@ -163,6 +163,10 @@ describe("TDS on expenses", () => {
     await expect(c.expense.update({ id: e.id, data: { tdsAmount: "600" } })).rejects.toThrow(/already deposited/i);
     await expect(c.expense.delete({ id: e.id })).rejects.toThrow(/already deposited/i);
     expect((await expenseRow(e.id)).tdsAmount).toBe("500.00");
+
+    // The challan was inserted directly (no audit entry), so remove it before the data audit runs.
+    await db().update(taxDeductions).set({ challanId: null }).where(eq(taxDeductions.id, d!.id));
+    await db().delete(taxChallans).where(eq(taxChallans.id, ch!.id));
   });
 
   it("removes the deduction when the expense is deleted", async () => {
