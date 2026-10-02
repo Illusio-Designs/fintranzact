@@ -7,7 +7,10 @@ import {
   SECURITY_EVENT_TYPES,
   TRUSTED_DEVICE_DAYS,
   TWO_FACTOR_POLICIES,
+  TWO_FACTOR_SETUP_PATH,
   lockoutDuration,
+  twoFactorBannerText,
+  twoFactorFromError,
   twoFactorRequiredForMember,
 } from "../two-factor.js";
 
@@ -102,5 +105,33 @@ describe("twoFactorRequiredForMember", () => {
   });
   it("negative grace is treated as zero", () => {
     expect(twoFactorRequiredForMember({ ...base, graceDays: -3, now: t0 }).blocked).toBe(true);
+  });
+});
+
+describe("enforcement error shape and banner text", () => {
+  const data = { twoFactor: { required: true, reason: "two_factor_setup_required", setupPath: "/settings?tab=account&pane=security" } };
+
+  it("twoFactorFromError reads error.data.twoFactor and nothing else", () => {
+    expect(twoFactorFromError({ data })).toEqual(data.twoFactor);
+    expect(twoFactorFromError({ data: {} })).toBeNull();
+    expect(twoFactorFromError({ data: { twoFactor: { required: true, reason: "other" } } })).toBeNull();
+    expect(twoFactorFromError({ data: { twoFactor: { required: false, reason: "two_factor_setup_required" } } })).toBeNull();
+    expect(twoFactorFromError(null)).toBeNull();
+  });
+
+  it("falls back to the default setup path when it is missing or not a path", () => {
+    expect(twoFactorFromError({ data: { twoFactor: { ...data.twoFactor, setupPath: undefined } } })?.setupPath).toBe(TWO_FACTOR_SETUP_PATH);
+    expect(twoFactorFromError({ data: { twoFactor: { ...data.twoFactor, setupPath: "https://evil.example" } } })?.setupPath).toBe(TWO_FACTOR_SETUP_PATH);
+  });
+
+  it("twoFactorBannerText: nothing, grace with date, blocked", () => {
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    expect(twoFactorBannerText(null, fmt)).toBeNull();
+    expect(twoFactorBannerText({ required: false, blocked: false, graceEndsAt: null }, fmt)).toBeNull();
+    expect(twoFactorBannerText({ required: true, blocked: false, graceEndsAt: new Date("2026-07-01T00:00:00Z") }, fmt)).toEqual({
+      kind: "grace",
+      text: "Your organisation requires two-factor authentication. Set it up by 2026-07-01.",
+    });
+    expect(twoFactorBannerText({ required: true, blocked: true, graceEndsAt: null }, fmt)?.kind).toBe("blocked");
   });
 });

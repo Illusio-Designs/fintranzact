@@ -1,6 +1,8 @@
 import { useState } from "react";
 import dayjs from "dayjs";
 import { trpc } from "@/lib/trpc";
+import { useTwoFactorRequirement } from "@/hooks/useTwoFactorRequirement";
+import { policyCoversRole, policyLabel } from "@/lib/two-factor-enforcement";
 import { clearTrustedDeviceToken } from "@/lib/desktop-session";
 import { SetupDialog } from "./security/SetupDialog";
 import { ReauthDialog, type ReauthMode } from "./security/ReauthDialog";
@@ -13,6 +15,10 @@ export function SecurityTab() {
   const [setupOpen, setSetupOpen] = useState(false);
   const [reauth, setReauth] = useState<ReauthMode | null>(null);
   const email = me?.user?.email ?? "";
+  // When the organisation requires 2FA of this user, say so up front instead of
+  // letting "Turn off" fail (the server refuses it either way).
+  const { policy } = useTwoFactorRequirement();
+  const enforced = policyCoversRole(policy, me?.role);
 
   const locked = status?.lockedUntil && new Date(status.lockedUntil).getTime() > Date.now() ? status.lockedUntil : null;
   const remaining = status?.backupCodesRemaining ?? 0;
@@ -47,7 +53,13 @@ export function SecurityTab() {
                   <button type="button" className="btn-secondary btn-sm" onClick={() => setReauth("regenerate")}>
                     New backup codes
                   </button>
-                  <button type="button" className="btn-secondary btn-sm text-red-600" onClick={() => setReauth("disable")}>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm text-red-600"
+                    onClick={() => setReauth("disable")}
+                    disabled={enforced}
+                    title={enforced ? "Your organisation requires two-factor authentication" : undefined}
+                  >
                     Turn off
                   </button>
                 </>
@@ -60,6 +72,12 @@ export function SecurityTab() {
           )}
         </div>
 
+        {enforced && status?.enabled && (
+          <p data-testid="two-factor-enforced-note" className="mt-4 rounded-lg bg-surface-2 px-4 py-3 text-sm text-text-secondary">
+            Your organisation requires two-factor authentication ({policyLabel(policy).toLowerCase()}), so it cannot be turned off here.
+            Ask an owner of the organisation to relax the policy first.
+          </p>
+        )}
         {isLoading && <p className="mt-4 text-sm text-text-tertiary">Loading…</p>}
         {isError && <p className="mt-4 text-sm text-red-600">Could not load your two-factor status. Refresh and try again.</p>}
         {status?.enabled && (

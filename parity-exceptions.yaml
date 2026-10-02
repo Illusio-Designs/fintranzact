@@ -229,6 +229,8 @@ exceptions:
       - tenant.myInvitations
       - tenant.acceptById
       - tenant.peekInvitation
+      # Organisation security policy is an owner task on the web (Settings -> Team).
+      - tenant.setSecurityPolicy
       # Plan choice is a step of the web signup flow (/auth/plan-selection);
       # mobile users pick a plan on the web.
       - tenant.updatePlan
@@ -607,6 +609,11 @@ exceptions:
       - tenant.create
       - tenant.myInvitations
       - tenant.peekInvitation
+      # Organisation security policy is an owner task on the web; sessions that
+      # lack 2FA get a clear two_factor_required error instead.
+      - tenant.setSecurityPolicy
+      # The two-factor banner is a UI concern; scripts see the two_factor_required error.
+      - tenant.current
       # Plan choice is part of web signup; scripts must not change billing plans.
       - tenant.updatePlan
       # Platform admin (operators only, set by PLATFORM_ADMIN_EMAIL) is a
@@ -903,6 +910,11 @@ exceptions:
       - tenant.create
       - tenant.myInvitations
       - tenant.peekInvitation
+      # Organisation security policy is an owner task on the web; agents must not
+      # change it. Sessions that lack 2FA get a clear two_factor_required error.
+      - tenant.setSecurityPolicy
+      # The two-factor banner is a UI concern; agents see the two_factor_required error.
+      - tenant.current
       # Plan choice is part of web signup; agents must not change billing plans.
       - tenant.updatePlan
       # Platform admin (operators only, set by PLATFORM_ADMIN_EMAIL) is a

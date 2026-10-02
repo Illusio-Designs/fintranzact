@@ -52,6 +52,24 @@ After five wrong codes in a row, code checks pause for 15 minutes. Repeated lock
 
 Go to **Settings → Account → Security → Turn off**. You need your password and a code from your app (or a backup code). If your organisation requires two-factor authentication, you cannot turn it off; ask your organisation owner.
 
+## Require two-factor authentication for your team
+
+Organisation owners can make two-factor authentication compulsory. Go to **Settings → Team → Two-factor authentication** and choose who must use it:
+
+- **Off**: it stays optional.
+- **Owners and admins**: owners, superadmins and admins must use it.
+- **Everyone**: every member must use it.
+
+You also choose a **grace period** (0 to 30 days, 7 by default). Members who have not set it up see a banner with the deadline. After the deadline they are blocked from the organisation, and can only open **Settings → Account → Security** to set it up. As soon as they finish they are back in. Choosing 0 days blocks them straight away.
+
+- You must turn on two-factor for your own account first, so you cannot lock yourself out.
+- The **Team** list shows who has set it up (**On** or **Not set up**) and how many members still need to. Owners and admins can see this; other members cannot.
+- Raising the policy (or changing the grace period) starts a new grace period for everyone. Lowering it keeps the existing one. Turning it **Off** blocks nobody.
+- Only the owner can change the policy. Admins can see it.
+- Members cannot turn two-factor off while it is required of them.
+- **API keys are not affected.** The command line and AI assistants that sign in with a password are, so they should use an API key instead.
+- A blocked member who lost their phone can use a backup code to sign in and finish setup, or contact support for a reset (see above).
+
 ## Related
 
 - [Settings](/help/settings)

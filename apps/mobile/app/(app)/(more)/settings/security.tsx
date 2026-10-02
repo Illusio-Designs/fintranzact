@@ -178,6 +178,9 @@ function SetupSheet({ visible, onClose, email }: { visible: boolean; onClose: ()
       setCodes(r.backupCodes);
       utils.auth.twoFactorStatus.invalidate();
       utils.auth.me.invalidate();
+      // An organisation that requires 2FA stops blocking at once.
+      utils.tenant.current.invalidate();
+      utils.business.list.invalidate();
     },
   });
 

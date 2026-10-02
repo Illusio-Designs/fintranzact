@@ -160,6 +160,9 @@ export const platformRouter = router({
           status: tenants.status,
           partnerId: tenants.partnerId,
           createdAt: tenants.createdAt,
+          // So the admin can see the organisation's two-factor policy.
+          twoFactorPolicy: tenants.twoFactorPolicy,
+          twoFactorGraceDays: tenants.twoFactorGraceDays,
         })
         .from(tenants)
         .where(eq(tenants.id, input.id))

@@ -89,6 +89,7 @@ describe("mutation gate split", () => {
       "share.revoke",
       "tenant.removeMember",
       "tenant.revokeInvitation",
+      "tenant.setSecurityPolicy",
     ]);
   });
 });

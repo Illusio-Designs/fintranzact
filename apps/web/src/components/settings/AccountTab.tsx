@@ -720,8 +720,12 @@ const ACCOUNT_TABS = [
   { value: "security", label: "Security" },
 ];
 
-export function AccountTab() {
-  const [tab, setTab] = useState("sessions");
+export function AccountTab({ initialPane }: { initialPane?: string } = {}) {
+  const [tab, setTab] = useState(() => (ACCOUNT_TABS.some((t) => t.value === initialPane) ? (initialPane as string) : "sessions"));
+  // A link to ?tab=account&pane=security while Account is already open.
+  useEffect(() => {
+    if (initialPane && ACCOUNT_TABS.some((t) => t.value === initialPane)) setTab(initialPane);
+  }, [initialPane]);
 
   return (
     <div className="space-y-6">

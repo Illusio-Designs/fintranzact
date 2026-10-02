@@ -68,6 +68,8 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   "tenant.acceptById",
   "tenant.removeMember",
   "tenant.revokeInvitation",
+  // Tightening security is never refused for plan reasons (owner only, see tenant.ts).
+  "tenant.setSecurityPolicy",
 
   // Revoking credentials and links is a safety action, never refused.
   "apiKey.revoke",

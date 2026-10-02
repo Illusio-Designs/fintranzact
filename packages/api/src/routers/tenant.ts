@@ -7,6 +7,11 @@ import { nanoid } from "nanoid";
 import { createHash } from "node:crypto";
 import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
 import { invalidateSessionCache, getSessionIdFromRequest } from "../context.js";
+import { invalidateTwoFactorGateMember, invalidateTwoFactorGateTenant } from "../lib/two-factor-gate-cache.js";
+import { getGateMembership, getTwoFactorRequirementForCaller } from "../lib/two-factor-gate.js";
+import { setSecurityPolicy, type PolicyDeps } from "../lib/two-factor-policy.js";
+import { recordSecurityEvent } from "../lib/security-events.js";
+import { TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS } from "@fintranzact/shared";
 import { emailService } from "../lib/email.js";
 import { isPaidPlan, isSelfServePlan } from "../lib/plan-catalog.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
@@ -43,6 +48,36 @@ async function autoSelectTenantInSession(req: Request, tenantId: string): Promis
 function generateSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) + "-" + nanoid(6);
 }
+
+const drizzlePolicyDeps: PolicyDeps = {
+  async getPolicy(tenantId) {
+    const [row] = await controlDb.select({
+      policy: tenants.twoFactorPolicy,
+      graceDays: tenants.twoFactorGraceDays,
+      enforcedAt: tenants.twoFactorEnforcedAt,
+    }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+    if (!row) return null;
+    return { policy: row.policy as (typeof TWO_FACTOR_POLICIES)[number], graceDays: row.graceDays ?? DEFAULT_TWO_FACTOR_GRACE_DAYS, enforcedAt: row.enforcedAt };
+  },
+  async getCaller(tenantId, userId) {
+    // Fresh, not cached: this decides who may change security settings.
+    const { entry } = await getGateMembership(tenantId, userId, { fresh: true });
+    return entry ? { role: entry.role, hasTwoFactor: entry.hasTwoFactor } : null;
+  },
+  async save(tenantId, next) {
+    await controlDb.update(tenants)
+      .set({
+        twoFactorPolicy: next.policy,
+        twoFactorGraceDays: next.graceDays,
+        twoFactorEnforcedAt: next.enforcedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId));
+  },
+  record: recordSecurityEvent,
+  invalidate: invalidateTwoFactorGateTenant,
+  now: () => new Date(),
+};
 
 export const tenantRouter = router({
   updatePlan: protectedProcedure
@@ -318,16 +353,30 @@ export const tenantRouter = router({
       status: tenants.status,
       createdAt: tenants.createdAt,
       updatedAt: tenants.updatedAt,
+      twoFactorPolicy: tenants.twoFactorPolicy,
+      twoFactorGraceDays: tenants.twoFactorGraceDays,
     })
       .from(tenants)
       .where(eq(tenants.id, ctx.tenantId))
       .limit(1);
-    return tenant ?? null;
+    if (!tenant) return null;
+    // What the caller must do about two-factor here. Always answered (this is
+    // one of the few calls a blocked member can still make) so clients can show
+    // the banner or redirect to the Security tab.
+    const twoFactorRequirement = await getTwoFactorRequirementForCaller({
+      tenantId: ctx.tenantId,
+      userId: ctx.user.id,
+      authTokenKind: ctx.authTokenKind,
+    });
+    return { ...tenant, twoFactorRequirement };
   }),
 
   // List members of current tenant
   members: tenantProcedure.query(async ({ ctx }) => {
-    const members = await controlDb.select({
+    // Who has set up two-factor is shown to owners and admins only.
+    const { entry: caller } = await getGateMembership(ctx.tenantId, ctx.user.id);
+    const showTwoFactor = !!caller && ["owner", "superadmin", "admin"].includes(caller.role);
+    const rows = await controlDb.select({
       id: tenantMembers.id,
       userId: tenantMembers.userId,
       role: tenantMembers.role,
@@ -335,12 +384,31 @@ export const tenantRouter = router({
       createdAt: tenantMembers.createdAt,
       userName: users.name,
       userEmail: users.email,
+      twoFactorEnabled: users.twoFactorEnabled,
     })
       .from(tenantMembers)
       .innerJoin(users, eq(users.id, tenantMembers.userId))
       .where(eq(tenantMembers.tenantId, ctx.tenantId));
-    return members;
+    return rows.map(({ twoFactorEnabled, ...member }) => ({ ...member, twoFactorEnabled: showTwoFactor ? twoFactorEnabled : undefined }));
   }),
+
+  // Require two-factor authentication for the organisation (owner only, like
+  // billing). The rules live in lib/two-factor-policy.ts.
+  setSecurityPolicy: tenantProcedure
+    .input(z.object({
+      policy: z.enum(TWO_FACTOR_POLICIES),
+      graceDays: z.number().int().min(0).max(30).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const next = await setSecurityPolicy(drizzlePolicyDeps, {
+        tenantId: ctx.tenantId,
+        actorId: ctx.user.id,
+        input,
+        ip: ctx.ipAddress ?? null,
+        userAgent: ctx.req.headers.get("user-agent"),
+      });
+      return { policy: next.policy, graceDays: next.graceDays, enforcedAt: next.enforcedAt };
+    }),
 
   // Invite a member
   inviteMember: tenantProcedure
@@ -654,6 +722,7 @@ export const tenantRouter = router({
           eq(tenantMembers.tenantId, ctx.tenantId),
           eq(tenantMembers.userId, input.userId),
         ));
+      invalidateTwoFactorGateMember(ctx.tenantId, input.userId);
 
       // Revoke the removed user's access immediately: clear the tenantId from
       // their sessions so the next request can't piggyback on the cached session.
@@ -717,6 +786,7 @@ export const tenantRouter = router({
           eq(tenantMembers.tenantId, ctx.tenantId),
           eq(tenantMembers.userId, input.userId),
         ));
+      invalidateTwoFactorGateMember(ctx.tenantId, input.userId);
 
       return { success: true };
     }),

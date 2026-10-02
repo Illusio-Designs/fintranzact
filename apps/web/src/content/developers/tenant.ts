@@ -266,6 +266,15 @@ httpx.post(
           plan: "pro",
           status: "active",
           createdAt: "2026-01-15T05:30:00.000Z",
+          twoFactorPolicy: "admins",
+          twoFactorGraceDays: 7,
+          twoFactorRequirement: {
+            required: true,
+            blocked: false,
+            graceEndsAt: "2026-02-01T05:30:00.000Z",
+            policy: "admins",
+            setupPath: "/settings?tab=account&pane=security",
+          },
         },
       },
       codeExamples: {
@@ -283,7 +292,9 @@ org = resp.json()["result"]["data"]["json"]`,
       },
       gotchas: [
         "Uses `tenantProcedure` — requires a session with a selected organization. Returns BAD_REQUEST \"No organization selected\" if no tenant is selected (UNAUTHORIZED only when there is no session at all).",
-        "The full `tenants` row is returned, so the response also contains `referralCode`, `updatedAt` and the tenant database connection fields (`dbName`, `dbHost`, `dbPort`, `dbUser`, `dbPassword` — the password encrypted at rest when `DB_ENCRYPTION_KEY` is set; all null in self-hosted mode).",
+        "An explicit column list is returned (`id`, `name`, `slug`, `referralCode`, `partnerId`, `plan`, `status`, `createdAt`, `updatedAt`, `twoFactorPolicy`, `twoFactorGraceDays`, `twoFactorRequirement`). The tenant database connection fields are never returned.",
+        "`twoFactorPolicy` is `off`, `admins` (owners, superadmins and admins) or `all`. `twoFactorRequirement` is what the CALLER must do: `required` (their role is covered and they have no two-factor), `blocked` (the grace period is over), `graceEndsAt` (the deadline, null when not required), `policy` and `setupPath`. It is always `required: false` for API keys, which never do two-factor.",
+        "This is one of the two organisation-scoped calls (with `billing.status`) that still work for a member who is blocked by the two-factor policy, so a client can show the banner or redirect to `setupPath`. Every other organisation-scoped call fails with FORBIDDEN and `error.data.twoFactor = { required: true, reason: \"two_factor_setup_required\", setupPath }`.",
         "Returns `null` if the tenant row no longer exists (edge case after deletion).",
       ],
     },
@@ -306,6 +317,7 @@ org = resp.json()["result"]["data"]["json"]`,
             createdAt: "2026-01-15T05:30:00.000Z",
             userName: "Rahul Sharma",
             userEmail: "rahul@guptaenterprises.in",
+            twoFactorEnabled: true,
           },
           {
             id: "membership-uuid-2",
@@ -338,6 +350,43 @@ for m in members:
       gotchas: [
         "Uses `tenantProcedure` — requires a selected organization in the session.",
         "Returns all members regardless of role — filter client-side if needed.",
+        "`twoFactorEnabled` (whether the member has set up two-factor authentication) is returned ONLY to owner, superadmin and admin callers; for everyone else it is `undefined`.",
+      ],
+    },
+    {
+      id: "tenant-set-security-policy",
+      method: "mutation",
+      path: "tenant.setSecurityPolicy",
+      title: "Set Two-Factor Policy",
+      description: "Require two-factor authentication in the selected organization: for nobody (`off`), for owners, superadmins and admins (`admins`), or for every member (`all`). Members who have not set it up get a grace period, then are blocked from the organization until they do. Only the organization owner (or a superadmin) can call it, and only if their own account has two-factor on. Recorded in the security trail as `2fa.policy_changed`.",
+      auth: "protected",
+      input: [
+        { name: "policy", type: "enum", required: true, description: "Who must use two-factor authentication.", enumValues: ["off", "admins", "all"] },
+        { name: "graceDays", type: "number", required: false, description: "Days members have to set it up before they are blocked (0 to 30). Omit to keep the current value (7 by default). 0 blocks at once." },
+      ],
+      output: {
+        description: "The stored policy.",
+        example: { policy: "all", graceDays: 7, enforcedAt: "2026-06-15T12:00:00.000Z" },
+      },
+      codeExamples: {
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.setSecurityPolicy \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -d '{"json":{"policy":"all","graceDays":7}}'`,
+        javascript: `await trpc.tenant.setSecurityPolicy.mutate({ policy: "all", graceDays: 7 });`,
+        python: `import httpx
+
+resp = httpx.post(
+    "${API_BASE_URL}/api/trpc/tenant.setSecurityPolicy",
+    headers={"Authorization": f"Bearer {session_token}"},
+    json={"json": {"policy": "all", "graceDays": 7}},
+)`,
+      },
+      gotchas: [
+        "Owner and superadmin only (FORBIDDEN for everyone else). A policy other than `off` is refused with BAD_REQUEST \"Turn on two-factor authentication for your own account first.\" unless the caller has two-factor on, so nobody can lock themselves out.",
+        "Tightening (`off` to `admins` or `all`, or `admins` to `all`) and changing `graceDays` while a policy is on restart everyone's grace period (`enforcedAt` becomes now). Relaxing keeps it. `off` clears it and blocks nobody.",
+        "Uses `tenantProcedure` and is allowed while the organization is read-only (tightening security is never refused for plan reasons).",
+        "API keys are never subject to the policy. A member who is blocked can still sign in, list and select organizations, call `tenant.current` and `billing.status`, and set up two-factor; see `tenant.current`.",
       ],
     },
     {

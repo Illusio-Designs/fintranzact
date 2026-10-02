@@ -488,6 +488,7 @@
 | tenant.removeMember | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ |
 | tenant.revokeInvitation | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ |
 | tenant.select | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| tenant.setSecurityPolicy | mutation | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | tenant.updateMemberRole | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ |
 | tenant.updatePlan | mutation | protected | — (+ plans are changed by the platform team only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | warehouse.accessList | query | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ |

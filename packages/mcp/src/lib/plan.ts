@@ -95,3 +95,29 @@ export function formatPlanRequired(err: PlanRequiredError): string {
   }
   return `The organisation's plan limit has been reached. ${err.message} Ask the organisation owner to upgrade: ${err.upgradeUrl}`;
 }
+
+// ── Two-factor required ─────────────────────────────────────────────────────
+// An organisation that requires two-factor authentication refuses a session
+// that has not set it up (FORBIDDEN with `error.data.twoFactor`). API keys
+// never are, so the way out here is an API key or the web/mobile app. Keep in
+// sync with packages/shared/src/two-factor.ts.
+
+export const TWO_FACTOR_REQUIRED_REASON = "two_factor_setup_required";
+
+export const TWO_FACTOR_REQUIRED_MESSAGE =
+  "Your organisation requires two-factor authentication. Turn it on in the web or mobile app (Settings → Account → Security) or use an API key.";
+
+export interface TwoFactorRequiredError {
+  code: "two_factor_required";
+  message: string;
+}
+
+/** True when a tRPC error object carries `data.twoFactor.required` with the stable reason. */
+export function parseTwoFactorRequired(raw: unknown): boolean {
+  const tf = (raw as { data?: { twoFactor?: { required?: unknown; reason?: unknown } } } | null)?.data?.twoFactor;
+  return !!tf && tf.required === true && tf.reason === TWO_FACTOR_REQUIRED_REASON;
+}
+
+export function formatTwoFactorRequired(): string {
+  return TWO_FACTOR_REQUIRED_MESSAGE;
+}

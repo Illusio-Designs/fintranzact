@@ -107,3 +107,62 @@ export function twoFactorRequiredForMember(input: TwoFactorRequirementInput): Tw
   const graceEndsAt = new Date(start.getTime() + days * DAY_MS);
   return { required: true, blocked: now.getTime() >= graceEndsAt.getTime(), graceEndsAt };
 }
+
+// ── Request-time enforcement (shared wording and error shape) ───────────────
+
+/** Where a user sets 2FA up: Settings, Account tab, Security pane. */
+export const TWO_FACTOR_SETUP_PATH = "/settings?tab=account&pane=security";
+export const TWO_FACTOR_REQUIRED_REASON = "two_factor_setup_required";
+export const TWO_FACTOR_REQUIRED_MESSAGE =
+  "Your organisation requires two-factor authentication. Set it up in Settings → Account → Security to continue.";
+/** Shown by the CLI and MCP, which cannot set 2FA up themselves. */
+export const TWO_FACTOR_REQUIRED_CLI_MESSAGE =
+  "Your organisation requires two-factor authentication. Turn it on in the web or mobile app (Settings → Account → Security) or use an API key.";
+
+/** `error.data.twoFactor` on a refused request (mirrors `error.data.entitlement`). */
+export interface TwoFactorErrorData {
+  required: true;
+  reason: typeof TWO_FACTOR_REQUIRED_REASON;
+  setupPath: string;
+}
+
+/** Reads `error.data.twoFactor` from a client error; null for every other error. */
+export function twoFactorFromError(error: unknown): TwoFactorErrorData | null {
+  const data = (error as { data?: { twoFactor?: Partial<TwoFactorErrorData> } } | null)?.data;
+  const tf = data?.twoFactor;
+  if (!tf || tf.required !== true || tf.reason !== TWO_FACTOR_REQUIRED_REASON) return null;
+  return {
+    required: true,
+    reason: TWO_FACTOR_REQUIRED_REASON,
+    setupPath: typeof tf.setupPath === "string" && tf.setupPath.startsWith("/") ? tf.setupPath : TWO_FACTOR_SETUP_PATH,
+  };
+}
+
+/**
+ * Calls a user can still make while blocked, on the organisation-scoped bases
+ * (everything on the protected/public bases never reaches the gate): just
+ * enough for a client to render the "set up two-factor" prompt.
+ */
+export const TWO_FACTOR_GATE_ALLOWED_PATHS: readonly string[] = ["tenant.current", "billing.status"];
+
+/** `tenant.current().twoFactorRequirement`: what the caller must do in the selected organisation. */
+export interface TwoFactorRequirementView {
+  required: boolean;
+  blocked: boolean;
+  graceEndsAt: Date | null;
+  policy: TwoFactorPolicy;
+  setupPath: string;
+}
+
+/** Banner wording shared by web and mobile. null = nothing to show. */
+export function twoFactorBannerText(
+  req: Pick<TwoFactorRequirementView, "required" | "blocked" | "graceEndsAt"> | null | undefined,
+  formatDate: (d: Date) => string,
+): { kind: "grace" | "blocked"; text: string } | null {
+  if (!req || !req.required) return null;
+  if (req.blocked) {
+    return { kind: "blocked", text: "Your organisation requires two-factor authentication. Set it up now to keep using Fintranzact." };
+  }
+  const when = req.graceEndsAt ? ` by ${formatDate(new Date(req.graceEndsAt))}` : "";
+  return { kind: "grace", text: `Your organisation requires two-factor authentication. Set it up${when}.` };
+}

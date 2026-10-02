@@ -8,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 
 const h = vi.hoisted(() => ({
   status: { current: null as any },
+  policy: { current: "off" as string },
   devices: { current: [] as any[] },
   begin: vi.fn(),
   confirm: vi.fn(),
@@ -42,7 +43,7 @@ vi.mock("@/lib/trpc", async () => {
         return { auth: { me: inv, twoFactorStatus: inv, listTrustedDevices: inv, listSessions: inv } };
       },
       auth: {
-        me: { useQuery: () => ({ data: { user: { email: "me@firm.in" }, twoFactor: { enabled: !!h.status.current?.enabled } } }) },
+        me: { useQuery: () => ({ data: { user: { email: "me@firm.in" }, role: "seller", twoFactor: { enabled: !!h.status.current?.enabled } } }) },
         twoFactorStatus: { useQuery: () => ({ data: h.status.current, isLoading: false, isError: false }) },
         listTrustedDevices: { useQuery: () => ({ data: h.devices.current, isLoading: false, isError: false }) },
         twoFactorBeginSetup: {
@@ -67,6 +68,9 @@ vi.mock("@/lib/trpc", async () => {
     },
   };
 });
+vi.mock("@/hooks/useTwoFactorRequirement", () => ({
+  useTwoFactorRequirement: () => ({ policy: h.policy.current, requirement: { required: false, blocked: false }, graceDays: 7, isLoading: false }),
+}));
 vi.mock("@/lib/isDesktop", () => ({ isDesktop: () => false }));
 vi.mock("@/lib/desktop-session", () => ({
   clearTrustedDeviceToken: h.clearTrusted,
@@ -84,6 +88,7 @@ const trpcError = (message: string, code: string) => Object.assign(new Error(mes
 beforeEach(() => {
   vi.clearAllMocks();
   h.status.current = STATUS_OFF;
+  h.policy.current = "off";
   h.devices.current = [];
   h.begin.mockResolvedValue({
     otpauthUri: "otpauth://totp/x",
@@ -113,6 +118,24 @@ describe("status card", () => {
     expect(screen.getByText(/Backup codes left/)).toBeInTheDocument();
     expect(screen.getByText(/generate new ones soon/)).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(/Code checks are paused until/);
+  });
+});
+
+describe("organisation enforcement", () => {
+  it("explains why Turn off is unavailable when the policy covers this member", () => {
+    h.status.current = STATUS_ON;
+    h.policy.current = "all";
+    render(<SecurityTab />);
+    expect(screen.getByRole("button", { name: "Turn off" })).toBeDisabled();
+    expect(screen.getByTestId("two-factor-enforced-note")).toHaveTextContent("Your organisation requires two-factor authentication");
+  });
+
+  it("leaves Turn off available under an admins-only policy for a seller", () => {
+    h.status.current = STATUS_ON;
+    h.policy.current = "admins";
+    render(<SecurityTab />);
+    expect(screen.getByRole("button", { name: "Turn off" })).toBeEnabled();
+    expect(screen.queryByTestId("two-factor-enforced-note")).toBeNull();
   });
 });
 

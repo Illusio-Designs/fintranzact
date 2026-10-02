@@ -18,6 +18,7 @@ import {
 import { LOCKOUT_FAILURE_THRESHOLD, lockoutDuration } from "@fintranzact/shared";
 import * as argon2 from "argon2";
 import { recordSecurityEvent } from "./security-events.js";
+import { invalidateTwoFactorGateUser } from "./two-factor-gate-cache.js";
 import { rotateSessionsOnPrivilegeEvent } from "./session-rotation.js";
 import { renderQrDataUrl, type TwoFactorDeps, type TwoFactorStore } from "./two-factor.js";
 import { newOpaqueToken } from "./two-factor-codes.js";
@@ -141,6 +142,10 @@ export const drizzleTwoFactorStore: TwoFactorStore = {
       await tx.delete(twoFactorBackupCodes).where(eq(twoFactorBackupCodes.userId, userId));
       await tx.insert(twoFactorBackupCodes).values(codeHashes.map((codeHash) => ({ userId, codeHash })));
       return true;
+    }).then((ok) => {
+      // The organisation gate caches the 2FA flag; forget it so access returns at once.
+      if (ok) invalidateTwoFactorGateUser(userId);
+      return ok;
     });
   },
 
@@ -161,6 +166,7 @@ export const drizzleTwoFactorStore: TwoFactorStore = {
         .where(and(eq(trustedDevices.userId, userId), isNull(trustedDevices.revokedAt)));
       await tx.update(users).set({ twoFactorEnabled: false, updatedAt: now }).where(eq(users.id, userId));
     });
+    invalidateTwoFactorGateUser(userId);
   },
 
   async membershipPolicies(userId) {

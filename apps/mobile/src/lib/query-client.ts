@@ -2,11 +2,18 @@ import { QueryClient, QueryCache, MutationCache } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
 import { useAuthStore } from "../stores/auth";
 import { handleEntitlementError } from "./entitlement";
+import { handleTwoFactorError } from "./two-factor-enforcement";
 
 /** Entitlement refusals get one prompt, and billing.status is refreshed so the banner is current. */
 function handleEntitlement(error: unknown) {
   if (handleEntitlementError(error)) {
     void queryClient.invalidateQueries({ queryKey: [["billing", "status"]] });
+    return;
+  }
+  // The organisation requires two-factor authentication: one Alert with a way
+  // to the Security screen, and the requirement is refreshed for the banner.
+  if (handleTwoFactorError(error)) {
+    void queryClient.invalidateQueries({ queryKey: [["tenant", "current"]] });
   }
 }
 

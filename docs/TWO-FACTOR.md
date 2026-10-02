@@ -1,6 +1,6 @@
 # Two-factor authentication
 
-Status: **enrolment API (part 2), sign-in challenge with trusted devices (part 3), the web and desktop screens (part 4) and the mobile screens (part 5) built.** Organisation enforcement at login and platform-admin reset follow in later parts. The CLI already prompts for a code.
+Status: **enrolment API (part 2), sign-in challenge with trusted devices (part 3), the web and desktop screens (part 4), the mobile screens (part 5) and organisation enforcement (part 6) built.** Platform-admin reset follows in a later part. The CLI already prompts for a code.
 
 ## Model
 
@@ -115,6 +115,41 @@ User-facing help: `apps/web/src/content/help/settings/two-factor-authentication.
 
 `fintranzact login` calls `auth.verifyTwoFactor` when the account has two-factor on. The code comes from `--code <code>`, the `FINTRANZACT_2FA_CODE` environment variable, or an interactive prompt (up to three tries); with none of those and no terminal it exits with a hint. The CLI sends `client: "cli"` and never remembers a device. API keys and MCP are unaffected. (This also fixed an older mismatch: the CLI read `sessionId` from the login response, which the API has always called `sessionToken`.)
 
+## Organisation enforcement
+
+An organisation owner can require 2FA. The policy is three columns on control `tenants`: `two_factor_policy`, `two_factor_enforced_at`, `two_factor_grace_days`.
+
+| Policy | Covers |
+|---|---|
+| `off` (default) | nobody |
+| `admins` | roles `owner`, `superadmin`, `admin` |
+| `all` | every member |
+
+**Grace period.** A covered member without 2FA has `max(enforced_at, member's joined date) + grace_days` to set it up (`twoFactorRequiredForMember`, `packages/shared/src/two-factor.ts`). Until then nothing is refused and the countdown is exposed; from the deadline on they are **blocked**. `grace_days = 0` blocks at once. A new member's clock starts when they join.
+
+**Who can change it.** `tenant.setSecurityPolicy({ policy, graceDays? })` (`tenantProcedure`, owner and superadmin only, like billing; `graceDays` 0 to 30, omitted = keep). Rules (`lib/two-factor-policy.ts`, unit tested with a faked store):
+
+- The caller must have 2FA on to set anything but `off` ("Turn on two-factor authentication for your own account first."). This also covers the "only owner with no 2FA, grace 0" lock-out.
+- `enforced_at` becomes now when the policy is **tightened** (`off` to `admins`/`all`, `admins` to `all`) or `graceDays` changes while a policy is on (everyone's grace restarts). Relaxing keeps it. `off` clears it (nothing is blocked).
+- No change = no write and no event. A real change records `2fa.policy_changed` (actor, tenant, `from`/`to` policy and grace days, `enforcedAt`) and invalidates the gate cache for the organisation.
+- It is in `READ_ONLY_EXEMPT` (works while read-only) and in the role sweep as owner-only.
+
+**The gate.** `twoFactorGate` in `trpc.ts` sits after `hasTenantAccess` and before `entitlementGate` on `tenantProcedure`, `businessProcedure` and `authorizedProcedure`. The decision is the pure `twoFactorGateDecision` (`lib/two-factor-gate.ts`): skip API keys (`ctx.authTokenKind === null`), users with 2FA, policy off or not covering the role, and users with no membership (platform admins); otherwise block from the deadline on, except for the allowlist. Data: ONE control query per request (membership + policy + `users.two_factor_enabled`) cached 30 s per (organisation, user) (`lib/two-factor-gate-cache.ts`, same style as the entitlements cache). Invalidated when a policy changes (tenant), 2FA is enabled or disabled (user, inside the 2FA store), or a member is removed or changes role. The cache is per process, so a change on another instance is seen within 30 s, except that a cached "blocked" verdict is re-read once before it refuses, so someone who has just turned 2FA on is never kept out. A missing membership is never cached.
+
+**Error shape.** `FORBIDDEN`, message `Your organisation requires two-factor authentication. Set it up in Settings → Account → Security to continue.`, and `error.data.twoFactor = { required: true, reason: "two_factor_setup_required", setupPath: "/settings?tab=account&pane=security" }` (added by the errorFormatter, like `data.entitlement`). Clients read it with `twoFactorFromError` (`@fintranzact/shared`).
+
+**What a blocked user can still do.** Everything on `protectedProcedure`/`publicProcedure` never reaches the gate: `auth.*` (sign in/out, `auth.me`, enrolment: `twoFactorBeginSetup`, `twoFactorConfirmSetup`, backup codes), `tenant.list`, `tenant.select`, `billing.overview` and friends. On the organisation-scoped bases only the allowlist `TWO_FACTOR_GATE_ALLOWED_PATHS` passes: `tenant.current` and `billing.status` (the client needs them to render the setup prompt). Everything else, reads included, is refused. They are unblocked the moment enrolment is confirmed.
+
+**Status for clients.** `tenant.current` returns `twoFactorPolicy`, `twoFactorGraceDays` and `twoFactorRequirement: { required, blocked, graceEndsAt, policy, setupPath }` for the caller (always `required: false` for API keys). `tenant.members` returns `twoFactorEnabled` per member to owner, superadmin and admin callers only. `platform.tenant` includes the policy and grace days.
+
+**API keys are exempt by design** (they never do 2FA). A CLI/MCP session signed in with a password is gated: the clients map `data.twoFactor.required` to a distinct `two_factor_required` error ("...Turn it on in the web or mobile app (Settings → Account → Security) or use an API key."); the CLI exits with `EXIT.TWO_FACTOR_REQUIRED` (11). REST routes outside tRPC (store, webhooks) are not behind this gate.
+
+**Clients.**
+- Web: Settings → Team has the policy card (owner edits with a confirmation that explains the effect; admins read-only), a Two-factor column (On / Not set up) and "N of M members still need to set up". `TwoFactorBanner` (mounted beside `BillingBanner`) shows the deadline during grace and a red alert when blocked; the root effect (priority 2b, after complete-profile) redirects a blocked user to Settings → Account → Security from any page except settings, auth, pricing, invite, help and public pages. Settings accepts `?tab=account&pane=security`. A blocked user's Settings page shows only the Account tab. `handleTwoFactorError` (central query/mutation handler) toasts with a "Set up two-factor" action (deduped). The Security tab disables "Turn off" with an explanation when the policy covers the user.
+- Mobile: `TwoFactorBanner` in `(app)/_layout.tsx`, `twoFactorBannerFor` (pure), `handleTwoFactorError` (Alert, deduped, opens the Security screen). A blocked member skips the business-list wait and is sent to the Security screen once.
+
+**Lockout recovery.** A blocked user signs in normally and sets 2FA up (a backup code works at sign-in for someone who lost their phone). If they have neither, a platform admin resets their 2FA (part 7) or an owner relaxes the policy (an owner who is themselves blocked cannot call `tenant.setSecurityPolicy`: another owner, or a platform admin, does it).
+
 ## Key handling
 
 - TOTP secrets are encrypted with `ENCRYPTION_KEY`. It is **required for 2FA**: without it (outside `NODE_ENV=test`) setup and verification fail closed rather than storing a secret in plaintext.
@@ -123,4 +158,4 @@ User-facing help: `apps/web/src/content/help/settings/two-factor-authentication.
 
 ## Tests
 
-`src/__tests__/two-factor.test.ts` (faked data layer), `two-factor-login.test.ts` (challenge, attempts, lockout, trusted devices, cookie rules; faked data layer), `two-factor-router.test.ts` (API-key rejection), `two-factor-codes.test.ts`, `totp.test.ts`, and `integration/two-factor-enrolment.test.ts` / `integration/two-factor-login.test.ts` (real Postgres). The CLI has `packages/cli/src/__tests__/two-factor-login.test.ts`.
+`src/__tests__/two-factor.test.ts` (faked data layer), `two-factor-login.test.ts` (challenge, attempts, lockout, trusted devices, cookie rules; faked data layer), `two-factor-router.test.ts` (API-key rejection), `two-factor-codes.test.ts`, `totp.test.ts`, `two-factor-gate.test.ts` (pure gate decision, allowlist, error shape, cache invalidation), `two-factor-policy.test.ts` (setSecurityPolicy rules), and `integration/two-factor-enforcement.test.ts` (policy, blocked/unblocked, API key, members flag; real Postgres), and `integration/two-factor-enrolment.test.ts` / `integration/two-factor-login.test.ts` (real Postgres). The CLI has `packages/cli/src/__tests__/two-factor-login.test.ts`.

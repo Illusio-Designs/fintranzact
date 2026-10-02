@@ -4,8 +4,8 @@
  */
 
 import superjson from "superjson";
-import { parseEntitlement, buildBillingUrl, formatPlanRequired } from "./plan.js";
-import { handlePlanRequired } from "./output.js";
+import { parseEntitlement, buildBillingUrl, formatPlanRequired, parseTwoFactorRequired, formatTwoFactorRequired } from "./plan.js";
+import { handlePlanRequired, handleTwoFactorRequired } from "./output.js";
 
 export interface ClientConfig {
   apiUrl: string;
@@ -20,6 +20,7 @@ export type FintranzactError =
   | { code: "unauthorized"; message: string }
   | { code: "forbidden"; message: string }
   | { code: "plan_required"; reason: string; message: string; upgradeUrl: string }
+  | { code: "two_factor_required"; message: string }
   | { code: "not_found"; resource: string }
   | { code: "validation_failed"; fields: Record<string, string[]> }
   | { code: "network_error"; message: string }
@@ -41,6 +42,8 @@ export function formatFintranzactError(err: FintranzactError): string {
       return `Permission denied: ${err.message}`;
     case "plan_required":
       return formatPlanRequired(err);
+    case "two_factor_required":
+      return formatTwoFactorRequired();
     case "not_found":
       return `Not found: ${err.resource}`;
     case "validation_failed":
@@ -69,6 +72,8 @@ export function normalizeTrpcError(raw: unknown, apiUrl?: string): FintranzactEr
 
   if (code === "UNAUTHORIZED") return { code: "unauthorized", message };
   if (code === "FORBIDDEN") {
+    // The organisation requires 2FA and this session has none: not a permissions problem either.
+    if (parseTwoFactorRequired(raw)) return { code: "two_factor_required", message };
     // An entitlement refusal (read-only, plan limit, add-on, suspended) is not a permissions problem.
     const ent = parseEntitlement(raw);
     if (ent) {
@@ -165,6 +170,7 @@ export class FintranzactClient {
       // Plan-required refusals are handled centrally: every command's catch-all
       // would otherwise print them as a generic failure with exit code 1.
       if (normalized.code === "plan_required") handlePlanRequired(normalized);
+      if (normalized.code === "two_factor_required") handleTwoFactorRequired(normalized);
       throw new FintranzactApiError(normalized);
     }
 
