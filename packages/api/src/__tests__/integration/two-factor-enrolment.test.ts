@@ -34,6 +34,16 @@ function callerFor(sessionId: string) {
   return factory({ ...base, req });
 }
 
+/**
+ * The replay guard rejects any TOTP step at or before the last one used, and only
+ * the steps within one of now are accepted, so a test that makes several attempts
+ * inside one 30-second window runs out of valid steps. Clear the guard to stand in
+ * for time passing between attempts.
+ */
+async function resetReplayGuard(): Promise<void> {
+  await getControlDb().update(userTwoFactor).set({ lastUsedStep: null }).where(eq(userTwoFactor.userId, userId));
+}
+
 async function currentCode(offsetSteps = 0): Promise<string> {
   const [row] = await getControlDb().select().from(userTwoFactor).where(eq(userTwoFactor.userId, userId));
   return totpAt(decryptTotpSecret(row.secretEnc), Date.now() + offsetSteps * 30_000);
@@ -132,8 +142,10 @@ describe("two-factor enrolment, end to end", () => {
       expiresAt: new Date(Date.now() + 86_400_000),
     });
     const extra = (await createSession(userId, tenantId)).id;
-    await expect(callerFor(currentSession).auth.twoFactorDisable({ password: "wrong-password", code: await currentCode(2) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await callerFor(currentSession).auth.twoFactorDisable({ password: PASSWORD, code: await currentCode(2) });
+    await resetReplayGuard();
+    await expect(callerFor(currentSession).auth.twoFactorDisable({ password: "wrong-password", code: await currentCode(0) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await resetReplayGuard();
+    await callerFor(currentSession).auth.twoFactorDisable({ password: PASSWORD, code: await currentCode(0) });
 
     expect(await db.select().from(userTwoFactor).where(eq(userTwoFactor.userId, userId))).toHaveLength(0);
     expect(await db.select().from(twoFactorBackupCodes).where(eq(twoFactorBackupCodes.userId, userId))).toHaveLength(0);
