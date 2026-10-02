@@ -32,6 +32,7 @@ import { useColors } from "../../../../src/contexts/ThemeContext";
 import { fonts } from "../../../../src/lib/theme";
 import { Card, Skeleton, QueryError } from "../../../../src/components/ui";
 import { formatDateTime } from "../../../../src/lib/utils";
+import { activityRows } from "../../../../src/lib/security-activity";
 import { clearTrustedDeviceToken, getTrustedDeviceToken } from "../../../../src/lib/trusted-device";
 
 /* ─── Small pieces ─────────────────────────────────────────────────────────── */
@@ -470,6 +471,38 @@ function TrustedDevices() {
   );
 }
 
+/* ─── Recent security activity ─────────────────────────────────────────────── */
+
+function SecurityActivity() {
+  const s = useS();
+  const q = trpc.auth.securityActivity.useQuery({ limit: 20 });
+  const rows = activityRows(q.data ?? []);
+  return (
+    <View style={{ gap: 10 }}>
+      <Text style={s.sectionTitle}>Recent security activity</Text>
+      {q.isLoading ? (
+        <Skeleton width="100%" height={60} borderRadius={12} />
+      ) : q.isError ? (
+        <QueryError message="Failed to load security activity" onRetry={q.refetch} />
+      ) : rows.length === 0 ? (
+        <Card><Text style={s.empty}>Nothing yet</Text></Card>
+      ) : (
+        <View style={s.list}>
+          {rows.map((r, i) => (
+            <View key={r.id} style={[s.deviceRow, i < rows.length - 1 && s.rowBorder]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.deviceName, r.attention && s.attention]}>{r.title}</Text>
+                {r.detail ? <Text style={s.meta}>{r.detail}</Text> : null}
+              </View>
+              <Text style={s.meta}>{r.when}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 /* ─── Screen ───────────────────────────────────────────────────────────────── */
 
 export default function SecurityScreen() {
@@ -532,6 +565,8 @@ export default function SecurityScreen() {
         )}
 
         {enabled && <TrustedDevices />}
+
+        <SecurityActivity />
       </ScrollView>
 
       <SetupSheet visible={setupOpen} onClose={() => setSetupOpen(false)} email={email} />
@@ -614,6 +649,7 @@ const useS = makeStyles((colors) => ({
     backgroundColor: colors.successBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
     borderWidth: 1, borderColor: "rgba(16, 185, 129, 0.3)",
   },
+  attention: { color: colors.danger },
   badgeText: { fontSize: 10, fontWeight: "700", color: colors.success },
   revokeBtn: {
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.dangerBg,

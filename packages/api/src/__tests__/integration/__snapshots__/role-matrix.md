@@ -26,6 +26,7 @@
 | auth.revokeAllTrustedDevices | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.revokeSession | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.revokeTrustedDevice | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.securityActivity | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.twoFactorBeginSetup | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.twoFactorConfirmSetup | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.twoFactorDisable | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -316,6 +317,7 @@
 | platform.plans | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.recordPayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.resetPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.resetTwoFactor | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapCreate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapDelete | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapList | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -323,6 +325,7 @@
 | platform.roadmapUpdate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.sandboxQuota | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.securityEvents | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.subscriptions | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |

@@ -549,6 +549,33 @@ access_token = data["accessToken"]`,
       relatedEndpoints: ["auth-me"],
     },
     {
+      id: "auth-security-activity",
+      method: "query",
+      path: "auth.securityActivity",
+      title: "Security Activity",
+      description: "The signed-in user's own recent security events (two-factor setup, sign-ins with a code, wrong codes, lockouts, backup-code use, trusted devices, and resets by a platform administrator), newest first. Only safe fields are returned: never a code, secret or raw user agent.",
+      auth: "protected",
+      input: [
+        { name: "limit", type: "number", required: false, description: "How many events to return. Default 20, clamped to 1-100." },
+      ],
+      output: {
+        description: "Events, newest first.",
+        example: [
+          { id: "0c1f6e0a-1d7b-4f5e-9a55-2b7d9a6f1c11", type: "2fa.verified", label: "Signed in with a verification code", createdAt: "2026-10-02T09:30:00.000Z", ip: "203.0.113.7", device: "Chrome 126 on macOS", method: "totp" },
+        ],
+      },
+      codeExamples: {
+        curl: `curl "${API_BASE_URL}/api/trpc/auth.securityActivity?input=%7B%22json%22%3A%7B%22limit%22%3A20%7D%7D" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
+        javascript: `const events = await trpc.auth.securityActivity.query({ limit: 20 });`,
+      },
+      gotchas: [
+        "Shows only the caller's own events. Organisation owners cannot read their members' events here; platform admins use an internal view.",
+        "`method` is `totp`, `backup_code` or `trusted_device` for sign-in events and null otherwise. `device` is a short summary such as \"Chrome 126 on macOS\".",
+      ],
+      relatedEndpoints: ["auth-two-factor-status"],
+    },
+    {
       id: "auth-two-factor-begin-setup",
       method: "mutation",
       path: "auth.twoFactorBeginSetup",

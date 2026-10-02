@@ -68,6 +68,64 @@ export const SECURITY_EVENT_LABELS: Record<SecurityEventType, string> = {
   "2fa.policy_changed": "Organisation two-factor policy changed",
 };
 
+// ── Platform-admin reset: identity verification ─────────────────────────────
+
+export const RESET_VERIFICATION_METHODS = [
+  "video_call",
+  "government_id_matched",
+  "callback_registered_phone",
+  "owner_attestation",
+  "support_ticket",
+] as const;
+export type ResetVerificationMethod = (typeof RESET_VERIFICATION_METHODS)[number];
+
+export const RESET_VERIFICATION_METHOD_LABELS: Record<ResetVerificationMethod, string> = {
+  video_call: "Video call with the user",
+  government_id_matched: "Government ID matched to the account",
+  callback_registered_phone: "Call back on the registered phone number",
+  owner_attestation: "Organisation owner vouched for the user",
+  support_ticket: "Verified through a support ticket",
+};
+
+export const RESET_IDENTITY_CHECKS = [
+  "name_matches_account",
+  "email_ownership_confirmed",
+  "recent_invoice_or_gstin_detail_confirmed",
+  "last_login_detail_confirmed",
+  "organisation_owner_vouched",
+] as const;
+export type ResetIdentityCheck = (typeof RESET_IDENTITY_CHECKS)[number];
+
+export const RESET_IDENTITY_CHECK_LABELS: Record<ResetIdentityCheck, string> = {
+  name_matches_account: "Full name matches the account",
+  email_ownership_confirmed: "Ownership of the account email confirmed",
+  recent_invoice_or_gstin_detail_confirmed: "A recent invoice or GSTIN detail confirmed",
+  last_login_detail_confirmed: "A recent sign-in detail confirmed (time, device or place)",
+  organisation_owner_vouched: "Organisation owner vouched for them",
+};
+
+export const MIN_RESET_CHECKS = 2;
+export const MIN_RESET_REASON_LENGTH = 20;
+
+/** Pure validation shared by the API and the web form. Returns messages (empty = valid). */
+export function validateResetVerification(v: {
+  method: string;
+  checks: readonly string[];
+  reason: string;
+}): string[] {
+  const errors: string[] = [];
+  if (!(RESET_VERIFICATION_METHODS as readonly string[]).includes(v.method)) errors.push("Choose how the user was verified.");
+  const valid = new Set(v.checks.filter((c) => (RESET_IDENTITY_CHECKS as readonly string[]).includes(c)));
+  if (valid.size < MIN_RESET_CHECKS) errors.push(`Confirm at least ${MIN_RESET_CHECKS} identity checks.`);
+  if (v.reason.trim().length < MIN_RESET_REASON_LENGTH) errors.push(`Give a reason of at least ${MIN_RESET_REASON_LENGTH} characters.`);
+  return errors;
+}
+
+/** Whether the typed email confirms the target (case-insensitive, trimmed). */
+export function resetEmailConfirmed(typed: string, targetEmail: string): boolean {
+  return typed.trim().toLowerCase() === targetEmail.trim().toLowerCase();
+}
+
 // ── Enforcement ─────────────────────────────────────────────────────────────
 
 export interface TwoFactorRequirementInput {

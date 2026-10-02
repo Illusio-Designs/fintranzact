@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   status: { current: null as any },
   policy: { current: "off" as string },
   devices: { current: [] as any[] },
+  activity: { current: [] as any[] },
   begin: vi.fn(),
   confirm: vi.fn(),
   disable: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("@/lib/trpc", async () => {
       auth: {
         me: { useQuery: () => ({ data: { user: { email: "me@firm.in" }, role: "seller", twoFactor: { enabled: !!h.status.current?.enabled } } }) },
         twoFactorStatus: { useQuery: () => ({ data: h.status.current, isLoading: false, isError: false }) },
+        securityActivity: { useQuery: () => ({ data: h.activity.current, isLoading: false, isError: false }) },
         listTrustedDevices: { useQuery: () => ({ data: h.devices.current, isLoading: false, isError: false }) },
         twoFactorBeginSetup: {
           useMutation: (opts: any = {}) => {
@@ -90,6 +92,7 @@ beforeEach(() => {
   h.status.current = STATUS_OFF;
   h.policy.current = "off";
   h.devices.current = [];
+  h.activity.current = [];
   h.begin.mockResolvedValue({
     otpauthUri: "otpauth://totp/x",
     qrDataUrl: "data:image/png;base64,AAAA",
@@ -299,5 +302,26 @@ describe("trusted devices", () => {
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Revoke all" }));
     await waitFor(() => expect(h.revokeAll).toHaveBeenCalled());
     await waitFor(() => expect(h.clearTrusted).toHaveBeenCalled());
+  });
+});
+
+describe("recent security activity", () => {
+  it("shows an empty state", () => {
+    render(<SecurityTab />);
+    expect(within(screen.getByTestId("security-activity")).getByText("Nothing yet.")).toBeInTheDocument();
+  });
+
+  it("lists events with label, detail and relative time", () => {
+    h.activity.current = [
+      { id: "e1", type: "2fa.verified", label: "Signed in with a verification code", createdAt: new Date(Date.now() - 5 * 60_000).toISOString(), ip: "203.0.113.7", device: "Chrome 126 on macOS", method: "totp" },
+      { id: "e2", type: "2fa.reset_by_admin", label: "Two-factor reset by a platform administrator", createdAt: new Date(Date.now() - 3 * 3600_000).toISOString(), ip: null, device: null, method: null },
+    ];
+    render(<SecurityTab />);
+    const card = screen.getByTestId("security-activity");
+    expect(within(card).getByText("Signed in with a verification code")).toBeInTheDocument();
+    expect(within(card).getByText("Chrome 126 on macOS · 203.0.113.7 · Authenticator app")).toBeInTheDocument();
+    expect(within(card).getByText("5m ago")).toBeInTheDocument();
+    expect(within(card).getByText("Two-factor reset by a platform administrator")).toBeInTheDocument();
+    expect(within(card).getByText("3h ago")).toBeInTheDocument();
   });
 });

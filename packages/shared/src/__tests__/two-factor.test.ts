@@ -135,3 +135,33 @@ describe("enforcement error shape and banner text", () => {
     expect(twoFactorBannerText({ required: true, blocked: true, graceEndsAt: null }, fmt)?.kind).toBe("blocked");
   });
 });
+
+import {
+  RESET_IDENTITY_CHECKS,
+  RESET_IDENTITY_CHECK_LABELS,
+  RESET_VERIFICATION_METHODS,
+  RESET_VERIFICATION_METHOD_LABELS,
+  resetEmailConfirmed,
+  validateResetVerification,
+} from "../two-factor";
+
+describe("reset verification", () => {
+  const ok = { method: "video_call", checks: ["name_matches_account", "last_login_detail_confirmed"], reason: "x".repeat(20) };
+  it("has a label for every method and check", () => {
+    for (const m of RESET_VERIFICATION_METHODS) expect(RESET_VERIFICATION_METHOD_LABELS[m]).toBeTruthy();
+    for (const c of RESET_IDENTITY_CHECKS) expect(RESET_IDENTITY_CHECK_LABELS[c]).toBeTruthy();
+  });
+  it("accepts method + two distinct checks + 20 char reason", () => {
+    expect(validateResetVerification(ok)).toEqual([]);
+  });
+  it("rejects each failure on its own", () => {
+    expect(validateResetVerification({ ...ok, method: "nope" })).toHaveLength(1);
+    expect(validateResetVerification({ ...ok, checks: ["name_matches_account"] })).toHaveLength(1);
+    expect(validateResetVerification({ ...ok, checks: ["name_matches_account", "name_matches_account", "zzz"] })).toHaveLength(1);
+    expect(validateResetVerification({ ...ok, reason: " ".repeat(10) + "short" })).toHaveLength(1);
+  });
+  it("matches the typed email case-insensitively", () => {
+    expect(resetEmailConfirmed(" Asha@Example.COM ", "asha@example.com")).toBe(true);
+    expect(resetEmailConfirmed("a@example.com", "asha@example.com")).toBe(false);
+  });
+});

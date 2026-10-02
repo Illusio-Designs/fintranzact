@@ -63,3 +63,32 @@ export function groupKey(key: string): string {
   const compact = key.replace(/\s+/g, "");
   return compact.replace(/(.{4})/g, "$1 ").trim();
 }
+
+// ── Security activity (web and mobile lists) ────────────────────────────────
+
+const ACTIVITY_METHOD_LABELS: Record<string, string> = {
+  totp: "Authenticator app",
+  backup_code: "Backup code",
+  trusted_device: "Trusted device",
+};
+
+/** "Chrome 126 on macOS · 203.0.113.7 · Authenticator app": the parts that are present. */
+export function securityActivityDetail(item: { device: string | null; ip: string | null; method: string | null }): string {
+  return [item.device, item.ip, item.method ? (ACTIVITY_METHOD_LABELS[item.method] ?? item.method) : null]
+    .filter((p): p is string => !!p)
+    .join(" · ");
+}
+
+/** "just now", "5m ago", "3h ago", "2d ago", else a short date. */
+export function relativeTime(iso: string, now: number = Date.now()): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const minutes = Math.floor((now - then) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}

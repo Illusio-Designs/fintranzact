@@ -1,6 +1,6 @@
 # Two-factor authentication
 
-Status: **enrolment API (part 2), sign-in challenge with trusted devices (part 3), the web and desktop screens (part 4), the mobile screens (part 5) and organisation enforcement (part 6) built.** Platform-admin reset follows in a later part. The CLI already prompts for a code.
+Status: **all seven parts built:** enrolment API, sign-in challenge with trusted devices, web and desktop screens, mobile screens, organisation enforcement, and (part 7) platform-admin reset with the audit views. The CLI prompts for a code. Integration tests and on-device checks have not been run yet.
 
 ## Model
 
@@ -148,7 +148,42 @@ An organisation owner can require 2FA. The policy is three columns on control `t
 - Web: Settings → Team has the policy card (owner edits with a confirmation that explains the effect; admins read-only), a Two-factor column (On / Not set up) and "N of M members still need to set up". `TwoFactorBanner` (mounted beside `BillingBanner`) shows the deadline during grace and a red alert when blocked; the root effect (priority 2b, after complete-profile) redirects a blocked user to Settings → Account → Security from any page except settings, auth, pricing, invite, help and public pages. Settings accepts `?tab=account&pane=security`. A blocked user's Settings page shows only the Account tab. `handleTwoFactorError` (central query/mutation handler) toasts with a "Set up two-factor" action (deduped). The Security tab disables "Turn off" with an explanation when the policy covers the user.
 - Mobile: `TwoFactorBanner` in `(app)/_layout.tsx`, `twoFactorBannerFor` (pure), `handleTwoFactorError` (Alert, deduped, opens the Security screen). A blocked member skips the business-list wait and is sent to the Security screen once.
 
-**Lockout recovery.** A blocked user signs in normally and sets 2FA up (a backup code works at sign-in for someone who lost their phone). If they have neither, a platform admin resets their 2FA (part 7) or an owner relaxes the policy (an owner who is themselves blocked cannot call `tenant.setSecurityPolicy`: another owner, or a platform admin, does it).
+**Lockout recovery.** A blocked user signs in normally and sets 2FA up (a backup code works at sign-in for someone who lost their phone). If they have neither, a platform admin resets their 2FA (see below) or an owner relaxes the policy (an owner who is themselves blocked cannot call `tenant.setSecurityPolicy`: another owner, or a platform admin, does it).
+
+## Platform-admin reset
+
+A user who has lost the phone **and** the backup codes cannot sign in. A platform admin (env-driven, `PLATFORM_ADMIN_EMAIL(S)`) resets their 2FA after checking identity. Web: Platform, Organisations, open the organisation, Members, **Reset 2FA** (shown only when the member has 2FA on and is not you).
+
+`platform.resetTwoFactor({ userId, tenantId?, confirmEmail, verification: { method, checks, reference?, reason } })` (`platformAdminProcedure`, in `READ_ONLY_EXEMPT` like the other `platform.*` mutations; logic in `lib/two-factor-reset.ts` with an injected store, unit tested):
+
+- **Never your own.** An admin cannot reset their own 2FA (`BAD_REQUEST`); ask another admin.
+- **Typed confirmation.** `confirmEmail` must equal the target's email (case-insensitive).
+- **Identity-check policy.** `method` is one of `video_call`, `government_id_matched`, `callback_registered_phone`, `owner_attestation`, `support_ticket`. `checks` must contain **at least two** distinct items of: `name_matches_account`, `email_ownership_confirmed`, `recent_invoice_or_gstin_detail_confirmed`, `last_login_detail_confirmed`, `organisation_owner_vouched`. `reason` is at least 20 characters; `reference` (ticket id) is optional. The lists, labels and the validator (`validateResetVerification`) live in `packages/shared/src/two-factor.ts` and are used by the API and the web form.
+- **Effect.** One transaction deletes `user_two_factor` and all `two_factor_backup_codes`, revokes every trusted device, deletes pending `two_factor_challenges` and sets `users.two_factor_enabled = false`. Then the gate cache is invalidated and **every** session of the user is revoked (`rotateSessionsOnPrivilegeEvent(userId)` with no kept session). The user signs in with the password alone.
+- **Who is told.** The user is emailed ("Two-factor authentication was reset on your Fintranzact account": platform support did it, when, that they were signed out, to set it up again, and to contact support if they did not ask for it). An email failure is logged and returned as `emailSent: false`; it does not undo the reset.
+- **Audit.** `2fa.reset_by_admin` in `security_events`: `actor_user_id` = the admin, `user_id` = the target, `tenant_id` when given, metadata `{method, checks, reference, reason, ip}`.
+- **Result.** `{ reset: true, emailSent, message }`. A user without 2FA gives `{ reset: false, message }` and nothing is changed or recorded.
+- **No grace needed afterwards.** If the user's organisation enforces 2FA, enforcement is computed from `enforced_at` / member start, so a past deadline still applies. That is fine: a blocked user can always reach `auth.*` (sign in, enrolment) and `tenant.current`, so they sign in with the password and set 2FA up again from Settings, Account, Security with no extra state.
+
+### Runbook: user lost their phone and backup codes
+
+1. Do not reset on a chat or email request alone. Pick a verification method and run it (video call; ID matched to the account; call back on the registered number; the organisation owner vouching from a known address; or a support ticket that went through one of these).
+2. Confirm at least two checks: name, ownership of the account email, a recent invoice or GSTIN detail, a recent sign-in detail, owner vouching.
+3. Open the organisation in the platform console, find the member, **Reset 2FA**. Choose the method, tick the checks, add the ticket reference, write the reason (what was checked), type the email, submit. If the user is you, ask another admin.
+4. Tell the user to sign in with their password and set up 2FA again. If the organisation requires 2FA they will be asked to do this straight away.
+5. Check the **Security activity** list in the organisation panel: the reset is highlighted with method, reference and reason.
+6. If the user says they never asked: treat the account as compromised (password reset, review sessions) and look at `2fa.*` events around the reset.
+
+## Audit trail
+
+`security_events` (control DB) holds user-level events; the tenant `audit_log` is business-scoped and does not fit them. Event types: `2fa.setup_started`, `2fa.enabled`, `2fa.disabled`, `2fa.verified` (metadata `method`: `totp` or `trusted_device`), `2fa.failed`, `2fa.locked`, `2fa.backup_used`, `2fa.backup_regenerated`, `2fa.device_trusted`, `2fa.device_revoked`, `2fa.reset_by_admin`, `2fa.policy_changed`. Labels are `SECURITY_EVENT_LABELS` in `@fintranzact/shared`.
+
+| Procedure | Who | Returns |
+|---|---|---|
+| `auth.securityActivity({ limit? })` (query, `protectedProcedure`) | the caller | Their **own** events only, newest first, limit 1 to 100 (default 20): `{id, type, label, createdAt, ip, device, method}`. Never codes, secrets, raw metadata or the raw user agent. Shown in Settings, Account, Security ("Recent security activity") and on the mobile Security screen. |
+| `platform.securityEvents({ userId?, tenantId?, type?, limit?, cursor? })` (query, `platformAdminProcedure`) | platform admins | `{ items, nextCursor }`, newest first, default 50, max 100. Items include `user`, `actor`, `tenantId`, `ip`, `userAgent` and full `metadata`. With `tenantId` it returns events recorded for that organisation **and** events about its members. Shown in the organisation panel ("Security activity", resets highlighted). `cursor` is the previous `nextCursor` (a timestamp). |
+
+`platform.tenant` members now include `twoFactorEnabled` (the 2FA on/off badge).
 
 ## Key handling
 
@@ -158,4 +193,4 @@ An organisation owner can require 2FA. The policy is three columns on control `t
 
 ## Tests
 
-`src/__tests__/two-factor.test.ts` (faked data layer), `two-factor-login.test.ts` (challenge, attempts, lockout, trusted devices, cookie rules; faked data layer), `two-factor-router.test.ts` (API-key rejection), `two-factor-codes.test.ts`, `totp.test.ts`, `two-factor-gate.test.ts` (pure gate decision, allowlist, error shape, cache invalidation), `two-factor-policy.test.ts` (setSecurityPolicy rules), and `integration/two-factor-enforcement.test.ts` (policy, blocked/unblocked, API key, members flag; real Postgres), and `integration/two-factor-enrolment.test.ts` / `integration/two-factor-login.test.ts` (real Postgres). The CLI has `packages/cli/src/__tests__/two-factor-login.test.ts`.
+`src/__tests__/two-factor.test.ts` (faked data layer), `two-factor-login.test.ts` (challenge, attempts, lockout, trusted devices, cookie rules; faked data layer), `two-factor-router.test.ts` (API-key rejection), `two-factor-codes.test.ts`, `totp.test.ts`, `two-factor-gate.test.ts` (pure gate decision, allowlist, error shape, cache invalidation), `two-factor-policy.test.ts` (setSecurityPolicy rules), `two-factor-reset.test.ts` (platform reset rules and email; faked store), `security-activity.test.ts` (own-events view, safe fields, limit clamp), `integration/two-factor-admin-reset.test.ts` (real Postgres), and `integration/two-factor-enforcement.test.ts` (policy, blocked/unblocked, API key, members flag; real Postgres), and `integration/two-factor-enrolment.test.ts` / `integration/two-factor-login.test.ts` (real Postgres). The CLI has `packages/cli/src/__tests__/two-factor-login.test.ts`.

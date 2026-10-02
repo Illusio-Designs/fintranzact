@@ -7,6 +7,7 @@
 import { and, count, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import {
   controlDb,
+  securityEvents,
   tenantMembers,
   tenants,
   trustedDevices,
@@ -22,6 +23,8 @@ import { invalidateTwoFactorGateUser } from "./two-factor-gate-cache.js";
 import { rotateSessionsOnPrivilegeEvent } from "./session-rotation.js";
 import { renderQrDataUrl, type TwoFactorDeps, type TwoFactorStore } from "./two-factor.js";
 import { newOpaqueToken } from "./two-factor-codes.js";
+import type { ActivityStore } from "./security-activity.js";
+import type { ResetStore } from "./two-factor-reset.js";
 import type { TwoFactorLoginDeps, TwoFactorLoginStore } from "./two-factor-login.js";
 
 export const drizzleTwoFactorStore: TwoFactorStore = {
@@ -320,3 +323,40 @@ export function createTwoFactorLoginDeps(
 ): TwoFactorLoginDeps {
   return { base, store: drizzleTwoFactorLoginStore, ...limiters, newToken: newOpaqueToken };
 }
+
+/** Platform-admin reset: everything about a user's 2FA in one transaction. */
+export const drizzleResetStore: ResetStore = {
+  async getTarget(userId) {
+    const [row] = await controlDb
+      .select({ id: users.id, email: users.email, name: users.name, twoFactorEnabled: users.twoFactorEnabled })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return row ?? null;
+  },
+
+  async clearTwoFactor(userId, now) {
+    await controlDb.transaction(async (tx) => {
+      await tx.delete(twoFactorBackupCodes).where(eq(twoFactorBackupCodes.userId, userId));
+      await tx.delete(userTwoFactor).where(eq(userTwoFactor.userId, userId));
+      await tx
+        .update(trustedDevices)
+        .set({ revokedAt: now })
+        .where(and(eq(trustedDevices.userId, userId), isNull(trustedDevices.revokedAt)));
+      await tx.delete(twoFactorChallenges).where(eq(twoFactorChallenges.userId, userId));
+      await tx.update(users).set({ twoFactorEnabled: false, updatedAt: now }).where(eq(users.id, userId));
+    });
+  },
+};
+
+/** Security activity: the caller's own events. */
+export const drizzleActivityStore: ActivityStore = {
+  async listForUser(userId, limit) {
+    return controlDb
+      .select()
+      .from(securityEvents)
+      .where(eq(securityEvents.userId, userId))
+      .orderBy(desc(securityEvents.createdAt))
+      .limit(limit);
+  },
+};

@@ -16,7 +16,8 @@ import { verifyTurnstile } from "../lib/turnstile.js";
 import { getClientKind } from "../lib/client-headers.js";
 import { enforceSessionLimit } from "../lib/plan-limits.js";
 import { createFixedWindowLimiter } from "../lib/fixed-window-limiter.js";
-import { createTwoFactorDeps, createTwoFactorLoginDeps } from "../lib/two-factor-store.js";
+import { createTwoFactorDeps, createTwoFactorLoginDeps, drizzleActivityStore } from "../lib/two-factor-store.js";
+import { ownSecurityActivity } from "../lib/security-activity.js";
 import {
   appendSetCookies,
   canRememberDevice,
@@ -995,6 +996,11 @@ export const authRouter = router({
     requireSession(ctx);
     return regenerateBackupCodes(twoFactorDeps, ctx.user.id, input, { event: eventContext(ctx) });
   }),
+
+  /** The caller's own recent security events (newest first). Safe fields only. */
+  securityActivity: protectedProcedure
+    .input(z.object({ limit: z.number().int().optional() }).optional())
+    .query(async ({ input, ctx }) => ownSecurityActivity(drizzleActivityStore, ctx.user.id, input?.limit)),
 
   // ── Me ───────────────────────────────────────────────────────
   me: publicProcedure.query(async ({ ctx }) => {

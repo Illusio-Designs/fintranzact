@@ -242,6 +242,8 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.resetTwoFactor
+      - platform.securityEvents
       - platform.plans
       - platform.savePlan
       - platform.resetPlan
@@ -594,6 +596,7 @@ exceptions:
       - auth.twoFactorConfirmSetup
       - auth.twoFactorDisable
       - auth.twoFactorStatus
+      - auth.securityActivity
       # Trusted-device management is an account-security screen. (The CLI does
       # call auth.verifyTwoFactor at sign-in, so that one is not excepted.)
       - auth.listTrustedDevices
@@ -624,6 +627,8 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.resetTwoFactor
+      - platform.securityEvents
       - platform.plans
       - platform.savePlan
       - platform.resetPlan
@@ -897,6 +902,7 @@ exceptions:
       - auth.twoFactorConfirmSetup
       - auth.twoFactorDisable
       - auth.twoFactorStatus
+      - auth.securityActivity
       - auth.updateName
       # MCP signs in with API keys only, so it never meets the sign-in challenge.
       - auth.verifyTwoFactor
@@ -925,6 +931,8 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.resetTwoFactor
+      - platform.securityEvents
       - platform.plans
       - platform.savePlan
       - platform.resetPlan

@@ -7,6 +7,7 @@ import { clearTrustedDeviceToken } from "@/lib/desktop-session";
 import { SetupDialog } from "./security/SetupDialog";
 import { ReauthDialog, type ReauthMode } from "./security/ReauthDialog";
 import { TrustedDevicesCard } from "./security/TrustedDevicesCard";
+import { SecurityActivityCard } from "./security/SecurityActivityCard";
 
 /** Settings → Account → Security: two-factor status, turn on/off, backup codes, trusted devices. */
 export function SecurityTab() {
@@ -107,6 +108,8 @@ export function SecurityTab() {
       </div>
 
       {status?.enabled && <TrustedDevicesCard />}
+
+      <SecurityActivityCard />
 
       <SetupDialog open={setupOpen} onClose={() => setSetupOpen(false)} email={email} />
       <ReauthDialog

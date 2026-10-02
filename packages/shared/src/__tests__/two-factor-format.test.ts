@@ -59,3 +59,22 @@ describe("backup codes file", () => {
     expect(groupKey("ABCDEFGHIJKLMNOP")).toBe("ABCD EFGH IJKL MNOP");
   });
 });
+
+import { relativeTime, securityActivityDetail } from "../two-factor-format";
+
+describe("security activity helpers", () => {
+  it("joins the parts that exist", () => {
+    expect(securityActivityDetail({ device: "Chrome 126 on macOS", ip: "1.2.3.4", method: "totp" })).toBe("Chrome 126 on macOS · 1.2.3.4 · Authenticator app");
+    expect(securityActivityDetail({ device: null, ip: null, method: null })).toBe("");
+    expect(securityActivityDetail({ device: null, ip: "1.2.3.4", method: "weird" })).toBe("1.2.3.4 · weird");
+  });
+  it("describes elapsed time", () => {
+    const now = Date.parse("2026-10-02T12:00:00Z");
+    expect(relativeTime("2026-10-02T11:59:40Z", now)).toBe("just now");
+    expect(relativeTime("2026-10-02T11:55:00Z", now)).toBe("5m ago");
+    expect(relativeTime("2026-10-02T09:00:00Z", now)).toBe("3h ago");
+    expect(relativeTime("2026-09-30T12:00:00Z", now)).toBe("2d ago");
+    expect(relativeTime("2026-01-05T12:00:00Z", now)).toMatch(/2026/);
+    expect(relativeTime("nope", now)).toBe("");
+  });
+});
