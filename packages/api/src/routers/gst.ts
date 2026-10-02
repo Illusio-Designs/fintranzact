@@ -8,6 +8,7 @@ import {
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { withAudit } from "../lib/audit.js";
 import { loadCmp08Quarter, loadCompositionSetting } from "../lib/cmp08.js";
+import { Gstr4NotApplicableError, loadGstr4 } from "../lib/gstr4.js";
 import { requireCan } from "../lib/permissions.js";
 import { generateGSTR1, generateGSTR3B, gstr1ToCSV, gstr1ToPortalJson } from "../lib/gst-reports.js";
 import { generateGSTR9, gstr9ToPortalJson } from "../lib/gstr9-generator.js";
@@ -160,6 +161,34 @@ export const gstRouter = router({
         });
       }
       return { financialYear: fy, quarters };
+    }),
+
+  /**
+   * GSTR-4 annual return tables for a composition taxpayer. `cmp08Paid` is the
+   * total actually paid through CMP-08 per quarter (the app has no payment
+   * tracking); a missing quarter is assumed paid in full and `paidAssumed` says so.
+   */
+  gstr4: viewerProcedure
+    .input(z.object({
+      financialYear: fyInput,
+      cmp08Paid: z.object({
+        1: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+        2: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+        3: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+      }).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Report");
+      assertRealYear(input.financialYear);
+      try {
+        const r = await loadGstr4(ctx.db, ctx.businessId, input.financialYear, input.cmp08Paid);
+        return { ...r, dueDate: r.dueDate.toISOString() };
+      } catch (e) {
+        if (e instanceof Gstr4NotApplicableError) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: e.message });
+        }
+        throw e;
+      }
     }),
 
   /** The composition category and rate for a year, with the defaults to pick from. */
