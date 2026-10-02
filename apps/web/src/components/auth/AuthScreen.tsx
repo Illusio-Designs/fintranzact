@@ -3,7 +3,13 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { AlertCircleIcon, CheckmarkCircle02Icon, Mail01Icon, Shield01Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
 import { isDesktop } from "@/lib/isDesktop";
-import { saveDesktopToken } from "@/lib/desktop-session";
+import {
+  clearTrustedDeviceToken,
+  getTrustedDeviceToken,
+  saveDesktopToken,
+  saveTrustedDeviceToken,
+} from "@/lib/desktop-session";
+import { TwoFactorStep, type VerifyResult } from "./TwoFactorStep";
 import { Logo } from "@/components/ui/Logo";
 import { Icon } from "@/components/ui/Icon";
 import { PasswordInput } from "@/components/ui/PasswordInput";
@@ -265,22 +271,50 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
     navigate({ to });
   }
 
+  // Set when the password was right but the account needs a second step.
+  const [challenge, setChallenge] = useState<{ token: string } | null>(null);
+  // Whether this login offered a remembered-device token (desktop), so a
+  // challenge anyway means the token is no longer good.
+  const sentTrustedTokenRef = useRef(false);
+
+  /** Same work after any successful sign-in: keychain, session cache, leave. */
+  async function finishLogin(data: { sessionToken?: string }) {
+    setSignedIn(true);
+    // Desktop uses Bearer auth; keep the token in the OS keychain (no-op on web).
+    if (isDesktop() && data?.sessionToken) await saveDesktopToken(data.sessionToken);
+    utils.auth.me.invalidate();
+    await leaveAfterSignIn("/");
+  }
+
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async (data) => {
-      // Two-factor accounts get a challenge instead of a session. The code
-      // screen is built in a later part; until then, stop here.
       if (data.twoFactorRequired) {
-        setError("Two-factor sign-in is not available in this version yet");
+        // The remembered-device token we sent was not accepted (expired,
+        // revoked, or for another account): forget it.
+        if (sentTrustedTokenRef.current) await clearTrustedDeviceToken();
+        setChallenge({ token: data.challengeToken });
         return;
       }
-      setSignedIn(true);
-      // Desktop uses Bearer auth; keep the token in the OS keychain (no-op on web).
-      if (isDesktop() && data?.sessionToken) await saveDesktopToken(data.sessionToken);
-      utils.auth.me.invalidate();
-      await leaveAfterSignIn("/");
+      await finishLogin(data);
     },
     onError: (e) => setError(e.message),
   });
+
+  async function handleVerified(data: VerifyResult, rememberDevice: boolean) {
+    if (isDesktop() && rememberDevice && data.trustedDeviceToken) {
+      await saveTrustedDeviceToken(data.trustedDeviceToken);
+    }
+    await finishLogin(data);
+  }
+
+  /** Back to the password step; the password is cleared, the email kept. */
+  function leaveSecondStep(message?: string) {
+    setChallenge(null);
+    setPassword("");
+    setInvalid(new Set());
+    if (message) toast.error(message);
+    requestAnimationFrame(() => document.getElementById(FIELD_ID.password)?.focus());
+  }
 
   const registerMutation = trpc.auth.register.useMutation({
     onSuccess: async (data) => {
@@ -294,14 +328,18 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
 
   const isPending = loginMutation.isPending || registerMutation.isPending || signedIn;
 
-  function handleLogin(e: FormEvent) {
+  async function handleLogin(e: FormEvent) {
     e.preventDefault();
     if (isPending) return;
     if (!email.trim()) return setError("Enter your email address", "email");
     if (!EMAIL_RE.test(email.trim())) return setError("Enter a valid email address", "email", "Example: name@business.in");
     if (!password) return setError("Enter your password", "password");
     setInvalid(new Set());
-    loginMutation.mutate({ email: email.trim(), password });
+    // Desktop: offer the remembered-device token from the keychain (no-op on web,
+    // where the HttpOnly cookie travels by itself).
+    const trustedDeviceToken = isDesktop() ? ((await getTrustedDeviceToken()) ?? undefined) : undefined;
+    sentTrustedTokenRef.current = !!trustedDeviceToken;
+    loginMutation.mutate({ email: email.trim(), password, ...(trustedDeviceToken ? { trustedDeviceToken } : {}) });
   }
 
   function handleRegister(e: FormEvent) {
@@ -354,169 +392,181 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
               <span className="font-display text-xl font-extrabold text-[#0f1b3d] dark:text-white">Fintranzact</span>
             </Link>
 
-            <div role="tablist" aria-label="Account" className="flex rounded-xl border border-border-light bg-surface-1 p-1">
-              {tab("/register", "Register", mode === "register")}
-              {tab("/login", "Log in", mode === "login")}
-            </div>
-
-            <h1 className="mt-7 font-display text-[30px] font-extrabold tracking-[-0.02em] text-[#0f1b3d] dark:text-white">
-              {mode === "login" ? "Welcome back" : "Create your account"}
-            </h1>
-            <p className="mt-2 text-[15px] text-text-tertiary">
-              {mode === "login" ? "Log in with your email and password." : "Free forever. No credit card needed."}
-            </p>
-
-            <div className="mt-6">
-              {search.invite && !search.error && (
-                <Banner tone="info">
-                  {mode === "login"
-                    ? "Log in to accept your invitation. New here? Register with the email address the invite was sent to."
-                    : "Create your account with the email address the invite was sent to, then accept the invitation."}
-                </Banner>
-              )}
-              {search.ref && mode === "register" && (
-                <Banner tone="info">
-                  Referral code <strong>{search.ref.toUpperCase()}</strong> will be applied to your new account.
-                </Banner>
-              )}
-            </div>
-
-            {mode === "login" ? (
-              <form onSubmit={handleLogin} noValidate className="flex flex-col gap-[18px]">
-                <Field label="Email address" htmlFor="auth-email">
-                  <input
-                    id="auth-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); markOk("email"); }}
-                    aria-invalid={invalid.has("email") || undefined}
-                    required
-                    autoFocus
-                    autoComplete="email"
-                    className="input h-[46px]"
-                    placeholder="you@yourcompany.com"
-                  />
-                </Field>
-                <Field
-                  label="Password"
-                  htmlFor="auth-password"
-                >
-                  <PasswordInput
-                    id="auth-password"
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); markOk("password"); }}
-                    aria-invalid={invalid.has("password") || undefined}
-                    required
-                    minLength={8}
-                    autoComplete="current-password"
-                    className="input h-[46px]"
-                    placeholder="Enter password"
-                  />
-                </Field>
-                <button type="submit" disabled={isPending} className={cn(PRIMARY, "mt-1.5")}>
-                  {loginMutation.isPending || signedIn ? "Logging in…" : "Log in"}
-                </button>
-                <p className="mt-2 text-center text-sm text-text-tertiary">
-                  New to Fintranzact?{" "}
-                  <Link to="/register" search={search} className="font-bold text-brand-700 hover:underline dark:text-brand-300">
-                    Create a free account
-                  </Link>
-                </p>
-              </form>
+            {mode === "login" && challenge ? (
+              <TwoFactorStep
+                challengeToken={challenge.token}
+                onVerified={handleVerified}
+                onBack={() => leaveSecondStep()}
+                onExpired={(message) => leaveSecondStep(message)}
+                disabled={signedIn}
+              />
             ) : (
-              <form onSubmit={handleRegister} noValidate className="flex flex-col gap-3.5">
-                <div className="grid gap-3.5 sm:grid-cols-2">
-                  <Field label="Username" htmlFor="auth-username">
+              <>
+              <div role="tablist" aria-label="Account" className="flex rounded-xl border border-border-light bg-surface-1 p-1">
+                {tab("/register", "Register", mode === "register")}
+                {tab("/login", "Log in", mode === "login")}
+              </div>
+
+              <h1 className="mt-7 font-display text-[30px] font-extrabold tracking-[-0.02em] text-[#0f1b3d] dark:text-white">
+                {mode === "login" ? "Welcome back" : "Create your account"}
+              </h1>
+              <p className="mt-2 text-[15px] text-text-tertiary">
+                {mode === "login" ? "Log in with your email and password." : "Free forever. No credit card needed."}
+              </p>
+
+              <div className="mt-6">
+                {search.invite && !search.error && (
+                  <Banner tone="info">
+                    {mode === "login"
+                      ? "Log in to accept your invitation. New here? Register with the email address the invite was sent to."
+                      : "Create your account with the email address the invite was sent to, then accept the invitation."}
+                  </Banner>
+                )}
+                {search.ref && mode === "register" && (
+                  <Banner tone="info">
+                    Referral code <strong>{search.ref.toUpperCase()}</strong> will be applied to your new account.
+                  </Banner>
+                )}
+              </div>
+
+              {mode === "login" ? (
+                <form onSubmit={handleLogin} noValidate className="flex flex-col gap-[18px]">
+                  <Field label="Email address" htmlFor="auth-email">
                     <input
-                      id="auth-username"
-                      value={username}
-                      onChange={(e) => { setUsername(e.target.value); markOk("username"); }}
-                      aria-invalid={invalid.has("username") || undefined}
+                      id="auth-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); markOk("email"); }}
+                      aria-invalid={invalid.has("email") || undefined}
                       required
                       autoFocus
-                      autoComplete="username"
+                      autoComplete="email"
                       className="input h-[46px]"
-                      placeholder="Enter username"
+                      placeholder="you@yourcompany.com"
                     />
                   </Field>
                   <Field
-                    label={
-                      <>
-                        Referral code <span className="text-text-tertiary">(optional)</span>
-                      </>
-                    }
-                    htmlFor="auth-referral"
+                    label="Password"
+                    htmlFor="auth-password"
                   >
-                    <input
-                      id="auth-referral"
-                      value={referralCode}
-                      onChange={(e) => setReferralCode(e.target.value)}
+                    <PasswordInput
+                      id="auth-password"
+                      value={password}
+                      onChange={(e) => { setPassword(e.target.value); markOk("password"); }}
+                      aria-invalid={invalid.has("password") || undefined}
+                      required
+                      minLength={8}
+                      autoComplete="current-password"
                       className="input h-[46px]"
-                      placeholder="Optional"
+                      placeholder="Enter password"
                     />
                   </Field>
-                </div>
-                <Field label="Email address" htmlFor="auth-email">
-                  <input
-                    id="auth-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); markOk("email"); }}
-                    aria-invalid={invalid.has("email") || undefined}
-                    required
-                    autoComplete="email"
-                    className="input h-[46px]"
-                    placeholder="you@yourcompany.com"
-                  />
-                </Field>
-                <Field label="Password" htmlFor="auth-password">
-                  <PasswordInput
-                    id="auth-password"
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); markOk("password"); }}
-                    aria-invalid={invalid.has("password") || undefined}
-                    required
-                    minLength={8}
-                    autoComplete="new-password"
-                    className="input h-[46px]"
-                    placeholder="Min 8 characters"
-                  />
-                  <PasswordStrength password={password} />
-                </Field>
-                <Field label="Retype password" htmlFor="auth-password-2">
-                  <PasswordInput
-                    id="auth-password-2"
-                    value={confirmPassword}
-                    onChange={(e) => { setConfirmPassword(e.target.value); markOk("confirm"); }}
-                    aria-invalid={invalid.has("confirm") || undefined}
-                    required
-                    minLength={8}
-                    autoComplete="new-password"
-                    className="input h-[46px]"
-                    placeholder="Retype password"
-                  />
-                </Field>
-                <button type="submit" disabled={isPending} className={cn(PRIMARY, "mt-1.5")}>
-                  {registerMutation.isPending || signedIn ? "Creating your account…" : "Create free account"}
-                </button>
-                <p className="text-center text-xs leading-relaxed text-text-tertiary">
-                  By creating an account you agree to our{" "}
-                  <Link to="/terms" className="font-semibold text-brand-700 hover:underline dark:text-brand-300">
-                    Terms
-                  </Link>{" "}
-                  and{" "}
-                  <Link to="/privacy" className="font-semibold text-brand-700 hover:underline dark:text-brand-300">
-                    Privacy policy
-                  </Link>
-                  .
-                </p>
-                <p className="mt-1 text-center text-sm text-text-tertiary">
-                  Already have an account?{" "}
-                  <Link to="/login" search={search} className="font-bold text-brand-700 hover:underline dark:text-brand-300">
-                    Log in
-                  </Link>
-                </p>
-              </form>
+                  <button type="submit" disabled={isPending} className={cn(PRIMARY, "mt-1.5")}>
+                    {loginMutation.isPending || signedIn ? "Logging in…" : "Log in"}
+                  </button>
+                  <p className="mt-2 text-center text-sm text-text-tertiary">
+                    New to Fintranzact?{" "}
+                    <Link to="/register" search={search} className="font-bold text-brand-700 hover:underline dark:text-brand-300">
+                      Create a free account
+                    </Link>
+                  </p>
+                </form>
+              ) : (
+                <form onSubmit={handleRegister} noValidate className="flex flex-col gap-3.5">
+                  <div className="grid gap-3.5 sm:grid-cols-2">
+                    <Field label="Username" htmlFor="auth-username">
+                      <input
+                        id="auth-username"
+                        value={username}
+                        onChange={(e) => { setUsername(e.target.value); markOk("username"); }}
+                        aria-invalid={invalid.has("username") || undefined}
+                        required
+                        autoFocus
+                        autoComplete="username"
+                        className="input h-[46px]"
+                        placeholder="Enter username"
+                      />
+                    </Field>
+                    <Field
+                      label={
+                        <>
+                          Referral code <span className="text-text-tertiary">(optional)</span>
+                        </>
+                      }
+                      htmlFor="auth-referral"
+                    >
+                      <input
+                        id="auth-referral"
+                        value={referralCode}
+                        onChange={(e) => setReferralCode(e.target.value)}
+                        className="input h-[46px]"
+                        placeholder="Optional"
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Email address" htmlFor="auth-email">
+                    <input
+                      id="auth-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); markOk("email"); }}
+                      aria-invalid={invalid.has("email") || undefined}
+                      required
+                      autoComplete="email"
+                      className="input h-[46px]"
+                      placeholder="you@yourcompany.com"
+                    />
+                  </Field>
+                  <Field label="Password" htmlFor="auth-password">
+                    <PasswordInput
+                      id="auth-password"
+                      value={password}
+                      onChange={(e) => { setPassword(e.target.value); markOk("password"); }}
+                      aria-invalid={invalid.has("password") || undefined}
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                      className="input h-[46px]"
+                      placeholder="Min 8 characters"
+                    />
+                    <PasswordStrength password={password} />
+                  </Field>
+                  <Field label="Retype password" htmlFor="auth-password-2">
+                    <PasswordInput
+                      id="auth-password-2"
+                      value={confirmPassword}
+                      onChange={(e) => { setConfirmPassword(e.target.value); markOk("confirm"); }}
+                      aria-invalid={invalid.has("confirm") || undefined}
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                      className="input h-[46px]"
+                      placeholder="Retype password"
+                    />
+                  </Field>
+                  <button type="submit" disabled={isPending} className={cn(PRIMARY, "mt-1.5")}>
+                    {registerMutation.isPending || signedIn ? "Creating your account…" : "Create free account"}
+                  </button>
+                  <p className="text-center text-xs leading-relaxed text-text-tertiary">
+                    By creating an account you agree to our{" "}
+                    <Link to="/terms" className="font-semibold text-brand-700 hover:underline dark:text-brand-300">
+                      Terms
+                    </Link>{" "}
+                    and{" "}
+                    <Link to="/privacy" className="font-semibold text-brand-700 hover:underline dark:text-brand-300">
+                      Privacy policy
+                    </Link>
+                    .
+                  </p>
+                  <p className="mt-1 text-center text-sm text-text-tertiary">
+                    Already have an account?{" "}
+                    <Link to="/login" search={search} className="font-bold text-brand-700 hover:underline dark:text-brand-300">
+                      Log in
+                    </Link>
+                  </p>
+                </form>
+              )}
+              </>
             )}
 
             <p className="mt-10 flex items-center justify-center gap-2 text-xs text-text-tertiary">

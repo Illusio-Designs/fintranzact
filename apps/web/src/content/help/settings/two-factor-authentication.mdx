@@ -1,0 +1,54 @@
+---
+title: "Two-factor authentication: set up, backup codes, trusted devices"
+description: How to turn on two-factor authentication with an authenticator app, keep your backup codes safe, trust a device for 30 days, and get back in if you lose your phone.
+sidebar:
+  order: 4
+---
+
+Two-factor authentication (2FA) adds a second check when you sign in. After your password, Fintranzact asks for a 6-digit code from an app on your phone. Someone who learns your password still cannot get into your account without your phone.
+
+## Set it up
+
+1. Go to **Settings → Account → Security** and choose **Turn on**.
+2. Open an authenticator app on your phone and add a new account by scanning the QR code. These apps work:
+   - Google Authenticator
+   - Microsoft Authenticator
+   - Authy
+   - any other app that supports time-based one-time passwords (TOTP)
+3. If you cannot scan the code, choose the setup key shown under it and type it into the app by hand.
+4. Enter the 6-digit code the app shows now, then choose **Verify and turn on**.
+5. Save your **backup codes** (see below) and tick **I have saved these codes**.
+
+When you turn 2FA on, your other signed-in devices are signed out. You stay signed in here.
+
+## Backup codes
+
+You get ten backup codes. Each one works **once**, in place of the app's 6-digit code, and looks like `K7P2MQ-9XD4HW`.
+
+- They are shown **only once**. Copy them, download the `.txt` file or print them, and keep them somewhere private, such as a password manager. Do not keep them only on the phone that holds the authenticator app.
+- At sign-in, choose **Use a backup code instead** and type the code. Dashes and capital letters are filled in for you.
+- When few are left, go to **Settings → Account → Security → New backup codes**. You will need your password and a current code from your app. The old codes stop working at once.
+
+## Trust this device for 30 days
+
+On the code screen you can tick **Trust this device for 30 days**. That browser or app then skips the code at sign-in for 30 days. Your password is still always required, and the 30 days are not extended by using the device.
+
+Trust only your own devices. To remove a device, or all of them, go to **Settings → Account → Security → Trusted devices** and choose **Revoke** or **Revoke all**. Turning 2FA off, or choosing "sign out everywhere", also removes every trusted device.
+
+## If you lose your phone
+
+1. **Use a backup code.** Sign in with your password, then choose **Use a backup code instead**. After you are in, go to **Settings → Account → Security**, turn 2FA off, and turn it on again with your new phone. This gives you new backup codes too.
+2. **No backup codes?** Ask your organisation owner to contact us, or contact Fintranzact support yourself. We check your identity before we reset two-factor for your account, so this can take a little time. Once it is reset you can sign in with your password and set up 2FA again.
+
+## Too many wrong codes
+
+After five wrong codes in a row, code checks pause for 15 minutes. Repeated lockouts last longer (1 hour, then 24 hours). The sign-in screen shows the time you can try again. After five wrong codes on one sign-in attempt you will be asked to enter your password again.
+
+## Turn it off
+
+Go to **Settings → Account → Security → Turn off**. You need your password and a code from your app (or a backup code). If your organisation requires two-factor authentication, you cannot turn it off; ask your organisation owner.
+
+## Related
+
+- [Settings](/help/settings)
+- [Team & Roles](/help/team)

@@ -1,0 +1,10 @@
+[[permission]]
+identifier = "allow-save-trusted-device-token"
+description = """
+Allows the main window to call save_trusted_device_token, which writes
+the two-factor trusted-device token to the OS keyring (keychain on macOS,
+Credential Manager on Windows, libsecret on Linux).
+No scope constraints are needed because this command operates only
+on a fixed service-name key derived from the app identifier.
+"""
+commands.allow = ["save_trusted_device_token"]

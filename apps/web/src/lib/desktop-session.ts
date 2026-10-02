@@ -148,6 +148,46 @@ export async function clearDesktopToken(): Promise<void> {
   }
 }
 
+// ── Two-factor trusted-device token (OS keychain, survives sign-out) ──────
+
+/**
+ * The server hands the desktop app a "trusted device" token in the verify
+ * response body (the web gets an HttpOnly cookie instead). It is kept in
+ * the OS keychain next to the session token, never in localStorage, and
+ * sent back on the next `auth.login` so the second step is skipped for 30
+ * days. Signing out keeps it (trust belongs to the device); it is cleared
+ * when the server rejects it or the user revokes this device. All three
+ * are no-ops outside the desktop app and swallow keychain errors.
+ */
+export async function saveTrustedDeviceToken(token: string): Promise<void> {
+  if (!isDesktop() || !token) return;
+  try {
+    await invoke("save_trusted_device_token", { token });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("Failed to persist trusted device token to keychain:", err);
+  }
+}
+
+export async function getTrustedDeviceToken(): Promise<string | null> {
+  if (!isDesktop()) return null;
+  try {
+    return (await invoke<string | null>("get_trusted_device_token")) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearTrustedDeviceToken(): Promise<void> {
+  if (!isDesktop()) return;
+  try {
+    await invoke("clear_trusted_device_token");
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("Failed to clear trusted device token from keychain:", err);
+  }
+}
+
 // ── Access token management ───────────────────────────────────────────────
 
 /**

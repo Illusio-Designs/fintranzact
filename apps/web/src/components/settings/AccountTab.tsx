@@ -13,6 +13,7 @@ import { parseUserAgent } from "@/lib/parse-user-agent";
 import { useInfiniteList } from "@/hooks/useInfiniteList";
 import { usePlans } from "@/lib/plans";
 import { Link } from "@tanstack/react-router";
+import { SecurityTab } from "./SecurityTab";
 
 // ── Action label map ──────────────────────────────────────────────────────────
 
@@ -138,7 +139,14 @@ function ProfileCard() {
 
   return (
     <div className="card px-6 py-5">
-      <h3 className="text-sm font-semibold text-text-primary mb-4">Your Profile</h3>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-semibold text-text-primary">Your Profile</h3>
+        {session?.twoFactor?.enabled && (
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+            Two-factor on
+          </span>
+        )}
+      </div>
       {/* One column on a phone, so a long email wraps instead of pushing the page sideways. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
         <div className="min-w-0">
@@ -709,6 +717,7 @@ const ACCOUNT_TABS = [
   { value: "sessions", label: "Sessions" },
   { value: "api-keys", label: "API Keys" },
   { value: "activity", label: "Activity Log" },
+  { value: "security", label: "Security" },
 ];
 
 export function AccountTab() {
@@ -722,6 +731,7 @@ export function AccountTab() {
         {tab === "sessions" && <SessionsContent />}
         {tab === "api-keys" && <ApiKeysContent />}
         {tab === "activity" && <ActivityLogContent />}
+        {tab === "security" && <SecurityTab />}
       </div>
     </div>
   );

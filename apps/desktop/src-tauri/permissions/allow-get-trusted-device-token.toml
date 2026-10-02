@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "allow-get-trusted-device-token"
+description = """
+Allows the main window to call get_trusted_device_token, which reads
+the two-factor trusted-device token from the OS keyring.
+Returns null (not an error) when no token is stored.
+"""
+commands.allow = ["get_trusted_device_token"]

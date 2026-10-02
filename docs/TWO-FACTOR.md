@@ -1,6 +1,6 @@
 # Two-factor authentication
 
-Status: **enrolment API (part 2) and sign-in challenge with trusted devices (part 3) built.** Organisation enforcement at login, platform-admin reset and the web/mobile/desktop screens follow in later parts. Until the web and mobile screens exist, those apps show "Two-factor sign-in is not available in this version yet" for a two-factor account; the CLI already prompts for a code.
+Status: **enrolment API (part 2), sign-in challenge with trusted devices (part 3) and the web and desktop screens (part 4) built.** Organisation enforcement at login, platform-admin reset and the mobile screens follow in later parts. Until the mobile screens exist, the mobile app shows "Two-factor sign-in is not available in this version yet" for a two-factor account; the CLI already prompts for a code.
 
 ## Model
 
@@ -88,6 +88,16 @@ The cookie is added with `Headers.append`, so the session cookie (written with `
 - `auth.revokeTrustedDevice({id})`: own devices only (`NOT_FOUND` otherwise). `auth.revokeAllTrustedDevices` also clears the `ftz_td` cookie. Both are in `READ_ONLY_EXEMPT`, as is `auth.verifyTwoFactor`.
 - **All of a user's devices are revoked** when: two-factor is disabled, a new secret is confirmed, and `auth.logoutAll` ("sign out everywhere", which also clears `ftz_td`). Regenerating backup codes leaves devices alone.
 - Trusted devices **never** satisfy a sensitive action: disable and regenerate need the password and a fresh authenticator code, and nothing in `lib/two-factor.ts` looks at a device (a test guards this).
+
+## Web and desktop clients
+
+**Sign-in second step** (`components/auth/AuthScreen.tsx`, `TwoFactorStep.tsx`): when `auth.login` returns `twoFactorRequired`, the form is swapped for a code screen. Six digits auto-submit (paste friendly); "Use a backup code instead" switches to a `XXXXXX-XXXXXX` field (formatter in `lib/two-factor.ts`); "Trust this device for 30 days" is off by default and sent as `rememberDevice`. Wrong code: inline message, field cleared, challenge kept (up to 5 attempts). Expired or used-up challenge: back to the password step with the server's message. Locked (`TOO_MANY_REQUESTS`): "Too many attempts. Try again at <time>", with the time read from the `(after <ISO>)` part of the server message. Success runs the same post-login code as a password login. None of the errors is `UNAUTHORIZED`, so the global redirect-to-login handler and the entitlement toasts ignore them.
+
+**Security settings** (Settings, Account, Security; `components/settings/SecurityTab.tsx` and `security/`): status card, enable dialog (QR + grouped manual key, confirm code, backup codes), disable and regenerate dialogs (password + code; an organisation-enforced refusal is shown inline), trusted devices with revoke and revoke all. Backup codes are shown once; the dialog cannot be closed until "I have saved these codes" is ticked. Download builds a client-side `fintranzact-backup-codes.txt` (account email, date, warning); Print opens a print window. The Account profile card shows a "Two-factor on" badge from `auth.me`.
+
+**Desktop**: the trusted-device token returned in the verify response body is stored in the OS keychain (service `in.fintranzact.app`, account `trusted_device_token`, never a plaintext fallback) through `save_trusted_device_token`, `get_trusted_device_token` and `clear_trusted_device_token` in `src-tauri/src/session.rs` (allow-listed under `src-tauri/permissions/` and `capabilities/default.json`). JS wrappers `saveTrustedDeviceToken`, `getTrustedDeviceToken`, `clearTrustedDeviceToken` live in `lib/desktop-session.ts` and are no-ops outside the desktop app. The token is sent as `trustedDeviceToken` on every `auth.login`. It survives sign-out (trust belongs to the device) and is cleared when the server answers a login that carried it with a challenge anyway (expired or revoked), when the user revokes this device, on "Revoke all", and when 2FA is turned off. The web uses the HttpOnly `ftz_td` cookie and needs no code.
+
+User-facing help: `apps/web/src/content/help/settings/two-factor-authentication.mdx`.
 
 ## CLI
 

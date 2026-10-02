@@ -1,4 +1,4 @@
-//! Desktop session-token storage backed by the OS credential manager.
+//! Desktop session-token and trusted-device-token storage backed by the OS credential manager.
 //!
 //! The desktop app uses Bearer-token auth (not HttpOnly cookies) so that
 //! the Tauri webview at `tauri.localhost` can talk to `${import.meta.env.API_URL}`
@@ -24,39 +24,68 @@ use keyring::Entry;
 
 const SERVICE: &str = "in.fintranzact.app";
 const ACCOUNT: &str = "session_token";
+// Two-factor "trusted device" token. Same service, separate account, so
+// signing out (which clears the session token) keeps the device trusted.
+const TRUSTED_DEVICE_ACCOUNT: &str = "trusted_device_token";
 
-fn entry() -> Result<Entry, String> {
-    Entry::new(SERVICE, ACCOUNT).map_err(|e| format!("keyring init failed: {e}"))
+fn entry_for(account: &str) -> Result<Entry, String> {
+    Entry::new(SERVICE, account).map_err(|e| format!("keyring init failed: {e}"))
 }
 
-#[tauri::command]
-pub fn save_session_token(token: String) -> Result<(), String> {
+fn save(account: &str, token: String) -> Result<(), String> {
     if token.is_empty() {
         return Err("empty token".into());
     }
-    entry()?
+    entry_for(account)?
         .set_password(&token)
         .map_err(|e| format!("keyring write failed: {e}"))
 }
 
-#[tauri::command]
-pub fn get_session_token() -> Result<Option<String>, String> {
-    match entry()?.get_password() {
+fn get(account: &str) -> Result<Option<String>, String> {
+    match entry_for(account)?.get_password() {
         Ok(token) => Ok(Some(token)),
-        // NoEntry means "no token stored yet" — not an error condition;
-        // the user just hasn't logged in on this machine.
+        // NoEntry means "nothing stored yet" — not an error condition.
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(e) => Err(format!("keyring read failed: {e}")),
     }
 }
 
-#[tauri::command]
-pub fn clear_session_token() -> Result<(), String> {
-    match entry()?.delete_credential() {
+fn clear(account: &str) -> Result<(), String> {
+    match entry_for(account)?.delete_credential() {
         Ok(()) => Ok(()),
         // Deleting a non-existent entry is not an error from the caller's
         // perspective — the end state is what was requested.
         Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(format!("keyring delete failed: {e}")),
     }
+}
+
+#[tauri::command]
+pub fn save_session_token(token: String) -> Result<(), String> {
+    save(ACCOUNT, token)
+}
+
+#[tauri::command]
+pub fn get_session_token() -> Result<Option<String>, String> {
+    get(ACCOUNT)
+}
+
+#[tauri::command]
+pub fn clear_session_token() -> Result<(), String> {
+    clear(ACCOUNT)
+}
+
+#[tauri::command]
+pub fn save_trusted_device_token(token: String) -> Result<(), String> {
+    save(TRUSTED_DEVICE_ACCOUNT, token)
+}
+
+#[tauri::command]
+pub fn get_trusted_device_token() -> Result<Option<String>, String> {
+    get(TRUSTED_DEVICE_ACCOUNT)
+}
+
+#[tauri::command]
+pub fn clear_trusted_device_token() -> Result<(), String> {
+    clear(TRUSTED_DEVICE_ACCOUNT)
 }
