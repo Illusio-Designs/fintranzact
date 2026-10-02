@@ -1,0 +1,48 @@
+---
+title: See what your CA did
+description: Where owners and admins see who was invited, who accepted, role changes, removals, when your CA last opened your books, what they downloaded and what they filed.
+sidebar:
+  order: 4
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+import { ForMobile } from "@/components/help/mdx";
+
+Your CA works in your books with their own login, and everything that matters is recorded. Owners and admins can see it; nobody else can.
+
+## The access log
+
+<ForDesktop>
+Go to **Settings → Team**. Under the members table is the **Access log**. Use the tabs to show only **Invites**, **Role changes**, **Removals**, **Opened** or **Downloads**, and click **Load more** for older events.
+</ForDesktop>
+
+<ForMobile>
+Open **More → Settings → Team**. The access log is under the list of members and shows the latest 25 events.
+</ForMobile>
+
+It shows, with who did it and when:
+
+- who was invited, and who withdrew an invitation
+- who accepted
+- when someone's access level was changed
+- when access was removed
+- when your CA **opened your books** (at most once an hour, so a busy day is a handful of lines, not hundreds)
+- which reports and files your CA **downloaded**, such as the GSTR-1 JSON, a party ledger CSV, a Tally export or a TDS certificate
+
+In the members list, each CA shows **Last opened** with how long ago they were last in your books, or **Never opened**.
+
+The access log is kept without a time limit, whatever your plan.
+
+## What your CA changed or filed
+
+When your CA with filing access saves or files a GST return, uploads or matches GSTR-2B, or marks a month as filed, it appears in the **activity log** under **Settings → Account**, with their name and access level (for example "Accountant (filing)"). Passcodes (OTPs) and signatory details are never written there. The activity log follows your plan's history window.
+
+## What is not recorded
+
+Looking at invoices, reports or screens is not logged. Downloads by you and your staff are not listed here either; the access log is about your accountant.
+
+## For developers and scripts
+
+- CLI: `fintranzact tenant access-log`
+- MCP: `tenant_access_log`
+- API: `tenant.accessLog`

@@ -18,6 +18,7 @@ import { makeStyles } from "../../../../src/lib/makeStyles";
 import { useColors } from "../../../../src/contexts/ThemeContext";
 import { QueryError, Skeleton, Card } from "../../../../src/components/ui";
 import { CA_ACCESS_NOTE, caRoleDescription, isCaRole } from "@fintranzact/shared";
+import { accessLogRows, caLastOpened } from "../../../../src/lib/access-log";
 import { CA_INVITE_CHOICES, STAFF_INVITE_ROLES, canChangeMemberRole, canManageCa, changeRoleOptions } from "../../../../src/lib/team-roles";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -112,6 +113,10 @@ export default function TeamScreen() {
   const canManage = ["owner", "superadmin", "admin"].includes(myRole);
   // Only the owner brings in a CA or changes a CA's access.
   const canInviteCa = canManageCa(myRole);
+
+  // The access log (latest 25) is for owners and admins; the API refuses everyone else.
+  const { data: accessLog } = trpc.tenant.accessLog.useQuery({ limit: 25 }, { enabled: canManage });
+  const logRows = useMemo(() => accessLogRows(accessLog?.items ?? [], me?.user?.id), [accessLog, me?.user?.id]);
 
   const inviteMutation = trpc.tenant.inviteMember.useMutation({
     onSuccess: (data) => {
@@ -307,6 +312,9 @@ export default function TeamScreen() {
                         <RoleBadge role={m.role} />
                       )}
                     </View>
+                    {canManage && caLastOpened(m, isCaRole) ? (
+                      <Text testID="last-opened" style={styles.accessText}>{caLastOpened(m, isCaRole)}</Text>
+                    ) : null}
                   </View>
                   {canManage && !isOwner && !isMe && (
                     <TouchableOpacity
@@ -390,6 +398,27 @@ export default function TeamScreen() {
                   </View>
                 );
               })}
+            </View>
+          </View>
+        )}
+
+        {canManage && (
+          <View style={styles.pendingSection} testID="access-log">
+            <Text style={styles.sectionLabel}>Access log</Text>
+            <View style={styles.membersList}>
+              {logRows.length === 0 ? (
+                <Text style={styles.emptyText}>Nothing here yet.</Text>
+              ) : (
+                logRows.map((r, idx) => (
+                  <View key={r.id} style={[styles.memberRow, idx !== logRows.length - 1 && styles.memberRowBorder]}>
+                    <Ionicons name={r.icon as never} size={18} color={r.attention ? colors.danger : colors.textMuted} />
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberEmail}>{r.text}</Text>
+                      <Text style={styles.accessText}>{r.when}</Text>
+                    </View>
+                  </View>
+                ))
+              )}
             </View>
           </View>
         )}

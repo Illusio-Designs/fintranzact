@@ -479,6 +479,7 @@
 | tds.verifyDeductee | query | authorized | read:Party | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.acceptById | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.acceptInvitation | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| tenant.accessLog | query | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | tenant.canCreateOrg | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.create | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.current | query | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

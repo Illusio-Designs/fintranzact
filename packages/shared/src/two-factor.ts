@@ -51,6 +51,12 @@ export const SECURITY_EVENT_TYPES = [
   "2fa.reset_by_admin",
   "2fa.policy_changed",
   "access.removed",
+  "access.invited",
+  "access.invite_revoked",
+  "access.accepted",
+  "access.role_changed",
+  "access.org_opened",
+  "access.export",
 ] as const;
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 
@@ -68,6 +74,12 @@ export const SECURITY_EVENT_LABELS: Record<SecurityEventType, string> = {
   "2fa.reset_by_admin": "Two-factor reset by a platform administrator",
   "2fa.policy_changed": "Organisation two-factor policy changed",
   "access.removed": "Member removed from the organisation",
+  "access.invited": "Member invited",
+  "access.invite_revoked": "Invitation withdrawn",
+  "access.accepted": "Invitation accepted",
+  "access.role_changed": "Member's access level changed",
+  "access.org_opened": "Accountant opened the organisation",
+  "access.export": "Accountant downloaded a report or export",
 };
 
 // ── Platform-admin reset: identity verification ─────────────────────────────

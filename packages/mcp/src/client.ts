@@ -656,6 +656,9 @@ export class FintranzactClient {
       pendingInvitations() {
         return c.query<unknown[]>("tenant.pendingInvitations");
       },
+      accessLog(input?: { cursor?: string; limit?: number; type?: string | string[] }) {
+        return c.query<{ items: Array<Record<string, unknown>>; nextCursor: string | null }>("tenant.accessLog", input);
+      },
       revokeInvitation(invitationId: string) {
         return c.mutate<{ success: boolean }>("tenant.revokeInvitation", { invitationId });
       },

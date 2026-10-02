@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { invalidateEntitlements } from "../lib/entitlements-cache.js";
 import { TRPCError } from "@trpc/server";
-import { controlDb, getTenantDb, tenants, tenantMembers, invitations, users, sessions, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
-import { eq, and, gt, isNull, desc, sql } from "drizzle-orm";
+import { controlDb, getTenantDb, tenants, tenantMembers, invitations, users, sessions, securityEvents, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
+import { eq, and, gt, isNull, desc, sql, inArray, like } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { createHash } from "node:crypto";
 import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
@@ -11,7 +11,7 @@ import { invalidateTwoFactorGateMember, invalidateTwoFactorGateTenant } from "..
 import { getGateMembership, getTwoFactorRequirementForCaller } from "../lib/two-factor-gate.js";
 import { setSecurityPolicy, type PolicyDeps } from "../lib/two-factor-policy.js";
 import { recordSecurityEvent } from "../lib/security-events.js";
-import { TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS, caRoleDescription, memberRoleLabel, isCaRole } from "@fintranzact/shared";
+import { TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS, ACCESS_EVENT_TYPES, caRoleDescription, memberRoleLabel, isCaRole } from "@fintranzact/shared";
 import { emailService } from "../lib/email.js";
 import { isPaidPlan, isSelfServePlan } from "../lib/plan-catalog.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
@@ -20,6 +20,8 @@ import { checkInviteRules, checkRoleChangeRules, countsTowardTeamLimit, normaliz
 import { removeTenantMember } from "../lib/member-removal.js";
 import { removalStore } from "../lib/member-removal-store.js";
 import { invalidateTenantMembership } from "../lib/tenant-membership.js";
+import { recordAccessEvent, recordOrgOpened } from "../lib/access-events.js";
+import { canViewAccessLog, clampAccessLimit, decodeAccessCursor, pageAccessRows, accessUserIds, toAccessLogItem } from "../lib/access-log.js";
 import { backfillLegacyBusinessMembers, grantTenantBusinessesToMember } from "../lib/business-membership.js";
 
 /** A member who joins through an invitation can open the organisation's businesses. */
@@ -38,6 +40,11 @@ function emailIs(column: typeof users.email | typeof invitations.email, normaliz
 /** What an invitation shows the invitee: the role's label and, for an accountant role, what it can do. */
 function roleInfo(role: string) {
   return { roleLabel: memberRoleLabel(role), accessDescription: caRoleDescription(role) };
+}
+
+/** Who/where for an access event raised by a signed-in request. */
+function accessWho(ctx: { user: { id: string }; ipAddress?: string | null; req: Request }, tenantId: string) {
+  return { actorId: ctx.user.id, tenantId, ip: ctx.ipAddress ?? null, userAgent: ctx.req.headers.get("user-agent") };
 }
 
 function hashInvitationToken(token: string): string {
@@ -318,6 +325,7 @@ export const tenantRouter = router({
           .where(eq(invitations.id, invitation.id));
       });
       await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
+      await recordAccessEvent({ kind: "accepted", ...accessWho(ctx, invitation.tenantId), role: invitation.role });
 
       const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
       return { tenantId: invitation.tenantId, tenantName };
@@ -328,7 +336,7 @@ export const tenantRouter = router({
     .input(z.object({ tenantId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       // Verify user is a member of this tenant
-      const [membership] = await controlDb.select({ id: tenantMembers.id })
+      const [membership] = await controlDb.select({ id: tenantMembers.id, role: tenantMembers.role })
         .from(tenantMembers)
         .where(and(
           eq(tenantMembers.tenantId, input.tenantId),
@@ -351,6 +359,10 @@ export const tenantRouter = router({
 
       // Invalidate cached session so the next request picks up the new tenant
       invalidateSessionCache(sessionId);
+
+      // A CA opening a client's books is logged for the owner (CA roles only,
+      // at most once an hour per person and organisation).
+      await recordOrgOpened({ ...ctx, tenantId: input.tenantId }, membership.role);
 
       return { success: true };
     }),
@@ -405,7 +417,29 @@ export const tenantRouter = router({
       .from(tenantMembers)
       .innerJoin(users, eq(users.id, tenantMembers.userId))
       .where(eq(tenantMembers.tenantId, ctx.tenantId));
-    return rows.map(({ twoFactorEnabled, ...member }) => ({ ...member, twoFactorEnabled: showTwoFactor ? twoFactorEnabled : undefined }));
+    // When each CA last opened the books (owners and admins only; null for non-CA members).
+    const showOpened = !!caller && canViewAccessLog(caller.role);
+    const caIds = showOpened ? rows.filter((r) => isCaRole(r.role)).map((r) => r.userId) : [];
+    const opened = new Map<string, Date>();
+    if (caIds.length > 0) {
+      const latest = await controlDb.select({
+        userId: securityEvents.userId,
+        at: sql<Date>`max(${securityEvents.createdAt})`.mapWith(securityEvents.createdAt),
+      })
+        .from(securityEvents)
+        .where(and(
+          eq(securityEvents.tenantId, ctx.tenantId),
+          eq(securityEvents.type, "access.org_opened"),
+          inArray(securityEvents.userId, caIds),
+        ))
+        .groupBy(securityEvents.userId);
+      for (const l of latest) if (l.userId && l.at) opened.set(l.userId, l.at);
+    }
+    return rows.map(({ twoFactorEnabled, ...member }) => ({
+      ...member,
+      twoFactorEnabled: showTwoFactor ? twoFactorEnabled : undefined,
+      lastOpenedAt: showOpened && isCaRole(member.role) ? (opened.get(member.userId) ?? null) : null,
+    }));
   }),
 
   // Require two-factor authentication for the organisation (owner only, like
@@ -523,6 +557,14 @@ export const tenantRouter = router({
         input.role,
       ).catch((err) => {
         console.error("[invite] Failed to send invitation email:", err);
+      });
+
+      await recordAccessEvent({
+        kind: "invited",
+        ...accessWho(ctx, ctx.tenantId),
+        role: input.role,
+        email: input.email,
+        inviteeUserId: existingUser?.id ?? null,
       });
 
       // Return the raw token — this is what gets sent via email
@@ -650,6 +692,7 @@ export const tenantRouter = router({
           .where(eq(invitations.id, invitation.id));
       });
       await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
+      await recordAccessEvent({ kind: "accepted", ...accessWho(ctx, invitation.tenantId), role: invitation.role });
 
       const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
       return { tenantId: invitation.tenantId, tenantName };
@@ -701,12 +744,17 @@ export const tenantRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Only owners and admins can revoke invitations" });
       }
 
-      await controlDb.delete(invitations)
+      const revoked = await controlDb.delete(invitations)
         .where(and(
           eq(invitations.id, input.invitationId),
           eq(invitations.tenantId, ctx.tenantId),
           isNull(invitations.acceptedAt),
-        ));
+        ))
+        .returning({ email: invitations.email, role: invitations.role });
+
+      for (const inv of revoked) {
+        await recordAccessEvent({ kind: "invite_revoked", ...accessWho(ctx, ctx.tenantId), role: inv.role, email: inv.email });
+      }
 
       return { success: true };
     }),
@@ -786,7 +834,74 @@ export const tenantRouter = router({
       invalidateTwoFactorGateMember(ctx.tenantId, input.userId);
       invalidateTenantMembership(ctx.tenantId, input.userId);
 
+      if (targetMembership && targetMembership.role !== input.role) {
+        const [target] = await controlDb.select({ email: users.email }).from(users).where(eq(users.id, input.userId)).limit(1);
+        await recordAccessEvent({
+          kind: "role_changed",
+          ...accessWho(ctx, ctx.tenantId),
+          targetUserId: input.userId,
+          from: targetMembership.role,
+          to: input.role,
+          email: target?.email ?? "",
+        });
+      }
+
       return { success: true };
+    }),
+
+  // The access log: who was invited, who accepted, role changes, removals, when
+  // a CA opened the books and what they downloaded. Owners and admins only.
+  // Reads the control security_events table, so the plan's audit retention
+  // window does not apply. Keyset paging on (createdAt ms, id).
+  accessLog: tenantProcedure
+    .input(z.object({
+      cursor: z.string().max(80).optional(),
+      limit: z.number().int().optional(),
+      type: z.union([z.enum(ACCESS_EVENT_TYPES), z.array(z.enum(ACCESS_EVENT_TYPES)).min(1).max(ACCESS_EVENT_TYPES.length)]).optional(),
+    }).optional())
+    .query(async ({ input, ctx }) => {
+      const [caller] = await controlDb.select({ role: tenantMembers.role })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, ctx.tenantId), eq(tenantMembers.userId, ctx.user.id)))
+        .limit(1);
+      if (!caller || !canViewAccessLog(caller.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only owners and admins can see the access log" });
+      }
+
+      const limit = clampAccessLimit(input?.limit);
+      const cursor = decodeAccessCursor(input?.cursor);
+      if (input?.cursor && !cursor) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid cursor" });
+
+      const types = input?.type === undefined ? null : Array.isArray(input.type) ? input.type : [input.type];
+      // Millisecond precision on both sides of the keyset so a row is never skipped or repeated.
+      const ms = sql`date_trunc('milliseconds', ${securityEvents.createdAt})`;
+      const conds = [
+        eq(securityEvents.tenantId, ctx.tenantId),
+        types ? inArray(securityEvents.type, types) : like(securityEvents.type, "access.%"),
+      ];
+      if (cursor) {
+        conds.push(sql`(${ms}, ${securityEvents.id}) < (${new Date(cursor.ms).toISOString()}::timestamptz, ${cursor.id}::uuid)`);
+      }
+      const fetched = await controlDb.select({
+        id: securityEvents.id,
+        userId: securityEvents.userId,
+        actorUserId: securityEvents.actorUserId,
+        type: securityEvents.type,
+        metadata: securityEvents.metadata,
+        createdAt: securityEvents.createdAt,
+      })
+        .from(securityEvents)
+        .where(and(...conds))
+        .orderBy(desc(ms), desc(securityEvents.id))
+        .limit(limit + 1);
+
+      const { rows, nextCursor } = pageAccessRows(fetched, limit);
+      const ids = accessUserIds(rows);
+      const people = ids.length > 0
+        ? await controlDb.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray(users.id, ids))
+        : [];
+      const byId = new Map(people.map((u) => [u.id, u]));
+      return { items: rows.map((r) => toAccessLogItem(r, byId)), nextCursor };
     }),
 });
 

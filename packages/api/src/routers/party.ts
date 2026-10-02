@@ -17,6 +17,7 @@ import {
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
+import { recordCaExport } from "../lib/access-events.js";
 import { assertPriceLevel } from "../lib/pricing.js";
 import { logAudit } from "../lib/audit.js";
 import { LOCKED_BOOKS_OPENING_BALANCE_MESSAGE, hasAnyLock } from "../lib/period-lock.js";
@@ -806,6 +807,7 @@ export const partyRouter = router({
         ? `_${input.fromDate.slice(0, 10)}`
         : "";
 
+      await recordCaExport(ctx, "party.ledgerReportCSV");
       return {
         csv,
         filename: `ledger_${safePartyName}${dateSuffix}.csv`,
@@ -948,6 +950,7 @@ export const partyRouter = router({
       const csv = [header, ...rows].join("\n");
 
       const dateSuffix = input.fromDate ? `_${input.fromDate.slice(0, 10)}` : "_all";
+      await recordCaExport(ctx, "party.tallyExport");
       return {
         csv,
         filename: `tally-export${dateSuffix}.csv`,

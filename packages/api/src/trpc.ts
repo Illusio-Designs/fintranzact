@@ -10,6 +10,7 @@ import { isFirstPartyRequestedWith } from "./lib/client-headers.js";
 import { entitlementDataOf, entitlementError } from "./lib/entitlement-error.js";
 import { getEntitlements } from "./lib/entitlements.js";
 import { gateDecision } from "./lib/entitlement-exempt.js";
+import { recordOrgOpened } from "./lib/access-events.js";
 import { requireTenantMembership } from "./lib/tenant-membership.js";
 import { checkTwoFactorGate } from "./lib/two-factor-gate.js";
 import { twoFactorDataOf, twoFactorRequiredError } from "./lib/two-factor-error.js";
@@ -356,6 +357,11 @@ function withPermissions() {
         message: permissionRole === "auditor" ? CA_READ_ONLY_MESSAGE : CA_FILING_ONLY_MESSAGE,
       });
     }
+
+    // A CA working in the books is logged for the owner as "opened this
+    // organisation": once an hour per person and organisation (in-process
+    // throttle, CA roles only; lib/access-events.ts). Never throws.
+    await recordOrgOpened({ user, tenantId, role: permissionRole, ipAddress: ctx.ipAddress, req: ctx.req });
 
     const ability = defineAbilityFor({
       userId: user.id,

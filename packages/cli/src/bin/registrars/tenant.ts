@@ -66,6 +66,18 @@ export function registerTenantCommands(program: Command): void {
     });
 
   tenant
+    .command("access-log")
+    .description("Who was invited, accepted, changed, removed, opened the books or downloaded a file (owners and admins)")
+    .option("--filter <name>", "all, invites, roles, removals, opened or downloads")
+    .option("--limit <n>", "How many events (max 100, default 25)")
+    .option("--cursor <cursor>", "Continue from a previous page")
+    .option("--json", "JSON output")
+    .action(async (opts) => {
+      const { accessLogCommand } = await import("../../commands/tenant/access-log.js");
+      await accessLogCommand(opts);
+    });
+
+  tenant
     .command("revoke-invitation <invitationId>")
     .description("Revoke a pending invitation")
     .option("--json", "JSON output")

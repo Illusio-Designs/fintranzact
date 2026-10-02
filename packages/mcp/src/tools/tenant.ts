@@ -7,12 +7,23 @@
  *   tenant_invite_member      — send an invitation to join the tenant
  *   tenant_remove_member      — remove a member from the tenant
  *   tenant_update_member_role — change a member's role
+ *   tenant_access_log         — who was invited/accepted/changed/removed, CA openings and downloads
  */
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { FintranzactClient } from "../client.js";
 import { wrapTool } from "../lib/errors.js";
+
+// Mirrors the Team tab filters (packages/shared access-log.ts); the MCP server does not depend on the shared package.
+const ACCESS_LOG_FILTERS: Record<string, string[] | null> = {
+  all: null,
+  invites: ["access.invited", "access.invite_revoked", "access.accepted"],
+  roles: ["access.role_changed"],
+  removals: ["access.removed"],
+  opened: ["access.org_opened"],
+  downloads: ["access.export"],
+};
 
 const MEMBER_ROLES = ["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"] as const;
 
@@ -150,6 +161,42 @@ export function registerTenantTools(server: McpServer, client: FintranzactClient
           text: invitations.length === 0
             ? "No pending invitations."
             : JSON.stringify(invitations, null, 2),
+        }],
+      };
+    })
+  );
+
+  server.tool(
+    "tenant_access_log",
+    [
+      "The organisation's access log, newest first: who was invited, who accepted, role changes, removals,",
+      "when an accountant (CA) opened the books and which reports they downloaded.",
+      "Only owners and admins can view it. What a CA changed or filed is in the audit trail (business_audit_trail).",
+      "Pass the returned next_cursor to get older events.",
+    ].join(" "),
+    {
+      filter: z.enum(["all", "invites", "roles", "removals", "opened", "downloads"]).optional()
+        .describe("Which kind of events (default all)."),
+      limit: z.number().int().min(1).max(100).optional().describe("How many events (default 25)."),
+      cursor: z.string().optional().describe("next_cursor from the previous page."),
+    },
+    wrapTool(async (input) => {
+      const types = input.filter ? ACCESS_LOG_FILTERS[input.filter] : null;
+      const result = await client.tenant.accessLog({
+        limit: input.limit,
+        cursor: input.cursor,
+        ...(types ? { type: types } : {}),
+      });
+      const items = result.items;
+      return {
+        content: [{
+          type: "text" as const,
+          text: items.length === 0
+            ? "No access events."
+            : JSON.stringify({
+                events: items.map((e) => ({ at: e.createdAt, type: e.type, label: e.label, actor: e.actor, subject: e.subject, details: e.metadata })),
+                next_cursor: result.nextCursor,
+              }, null, 2),
         }],
       };
     })

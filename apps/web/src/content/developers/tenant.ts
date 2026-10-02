@@ -322,6 +322,7 @@ org = resp.json()["result"]["data"]["json"]`,
             userName: "Rahul Sharma",
             userEmail: "rahul@guptaenterprises.in",
             twoFactorEnabled: true,
+            lastOpenedAt: null,
           },
           {
             id: "membership-uuid-2",
@@ -578,6 +579,58 @@ pending = resp.json()["result"]["data"]["json"]`,
         "Each row also carries `roleLabel` (e.g. \"Accountant (filing)\") and `accessDescription` (what an accountant CA role can do, `null` for other roles).",
       ],
       relatedEndpoints: ["tenant-invite-member", "tenant-revoke-invitation"],
+    },
+    {
+      id: "tenant-access-log",
+      method: "query",
+      path: "tenant.accessLog",
+      title: "Access Log",
+      description: "The organization's access log, newest first: who was invited, who accepted, role changes, removals, when an accountant (CA) opened the books and which reports they downloaded. Only owners, superadmins and admins can read it. It is kept without a time limit (it is not subject to the plan's audit retention). What a CA changed or filed is in business.auditTrail.",
+      auth: "protected",
+      input: [
+        { name: "cursor", type: "string", required: false, description: "nextCursor from the previous page (\"<createdAt ms>_<id>\"). Keyset paging: no events are skipped or repeated, even with equal timestamps." },
+        { name: "limit", type: "number", required: false, description: "Events per page (default 25, max 100)" },
+        { name: "type", type: "enum | enum[]", required: false, description: "Only these event types", enumValues: ["access.invited", "access.invite_revoked", "access.accepted", "access.role_changed", "access.removed", "access.org_opened", "access.export"] },
+      ],
+      output: {
+        description: "A page of events and the cursor for the next page (null on the last page). actor and subject are null when the user no longer exists. metadata holds only role, from, to, email and procedure.",
+        example: {
+          items: [
+            {
+              id: "event-uuid",
+              type: "access.export",
+              label: "Accountant downloaded a report or export",
+              createdAt: "2026-10-01T10:00:00.000Z",
+              actor: { id: "user-uuid", name: "Anita Shah", email: "anita@cafirm.in" },
+              subject: { id: "user-uuid", name: "Anita Shah", email: "anita@cafirm.in" },
+              metadata: { procedure: "gst.gstr1Json", role: "ca_filing" },
+            },
+          ],
+          nextCursor: null,
+        },
+      },
+      codeExamples: {
+        curl: `curl -G "${API_BASE_URL}/api/trpc/tenant.accessLog" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  --data-urlencode 'input={"json":{"limit":25,"type":["access.export"]}}'`,
+        javascript: `const { items, nextCursor } = await trpc.tenant.accessLog.query({ limit: 25 });
+for (const e of items) console.log(e.createdAt, e.label, e.actor?.name);`,
+        python: `import httpx, json
+
+resp = httpx.get(
+    "${API_BASE_URL}/api/trpc/tenant.accessLog",
+    params={"input": json.dumps({"json": {"limit": 25}})},
+    headers={"Authorization": f"Bearer {session_token}"},
+)
+page = resp.json()["result"]["data"]["json"]`,
+      },
+      gotchas: [
+        "Uses `tenantProcedure`, and an inline gate: FORBIDDEN unless the caller is owner, superadmin or admin.",
+        "Event types: invited, invite_revoked, accepted, role_changed, removed, org_opened (CA roles only, at most once an hour per person and organization), export (CA roles only: GSTR-1/9/4 JSON, GSTR-1 CSV, party ledger CSV, Tally CSV/XML, TDS certificate).",
+        "Reads are not logged. Downloads by non-CA roles are not logged.",
+        "`tenant.members` also returns `lastOpenedAt` per CA member (owners and admins only; null otherwise).",
+      ],
+      relatedEndpoints: ["tenant-members", "tenant-invite-member", "tenant-remove-member", "business-audit-trail"],
     },
     {
       id: "tenant-revoke-invitation",

@@ -1620,6 +1620,12 @@ List pending (unaccepted, non-expired) invitations for the current tenant. Retur
 
 **Input:** `{}` (no parameters)
 
+#### `tenant_access_log`
+
+The access log, newest first: invitations, acceptances, role changes, removals, when an accountant opened the books and what they downloaded. Owners and admins only.
+
+**Input:** `{ filter?: "all" | "invites" | "roles" | "removals" | "opened" | "downloads", limit?: number, cursor?: string }`. Pass the returned `next_cursor` for older events.
+
 #### `tenant_revoke_invitation`
 
 Revoke a pending invitation by its UUID. Only owners and admins can revoke invitations.

@@ -30,6 +30,7 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure, type TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { withAudit } from "../lib/audit.js";
 import {
   parseGSTR2BJSON,
   parseGSTR2BCSV,
@@ -220,10 +221,10 @@ export const gstr2bRouter = router({
    */
   upload: adminProcedure
     .input(gstr2bUploadSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "GstReport");
       return importGstr2b(ctx, input);
-    }),
+    }, (r) => ({ action: "gstr2b.upload", entityType: "gstr2b_upload", entityId: r.uploadId, metadata: { returnPeriod: r.returnPeriod, totalRecords: r.totalRecords } }))),
 
   /**
    * List past GSTR-2B uploads for this business.
@@ -589,7 +590,7 @@ export const gstr2bRouter = router({
    */
   linkInvoice: adminProcedure
     .input(gstr2bLinkInvoiceSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "GstReport");
 
       // Verify record belongs to this business
@@ -634,14 +635,14 @@ export const gstr2bRouter = router({
         .where(eq(gstr2bRecords.id, input.recordId));
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "gstr2b.linkInvoice", entityType: "gstr2b_record", entityId: input.recordId, metadata: { invoiceId: input.invoiceId } }))),
 
   /**
    * Mark a 2B record as intentionally ignored (e.g. RCM-paid, already handled).
    */
   ignoreRecord: adminProcedure
     .input(gstr2bIgnoreRecordSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "GstReport");
 
       const [record] = await ctx.db
@@ -660,5 +661,5 @@ export const gstr2bRouter = router({
         .where(eq(gstr2bRecords.id, input.recordId));
 
       return { success: true };
-    }),
+    }, (_r, input) => ({ action: "gstr2b.ignoreRecord", entityType: "gstr2b_record", entityId: input.recordId }))),
 });

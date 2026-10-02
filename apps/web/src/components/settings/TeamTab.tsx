@@ -5,11 +5,12 @@ import { Listbox } from "@/components/ui/Listbox";
 import { toast } from "@/hooks/useToast";
 import { cn, formatDate } from "@/lib/utils";
 import { memberRoleOptions, canEditMemberRole, isCaManager, STAFF_ROLE_OPTIONS, type InvitableRole } from "@/lib/team-roles";
-import { caRoleDescription } from "@fintranzact/shared";
+import { caRoleDescription, isCaRole, lastOpenedText, relativeTime } from "@fintranzact/shared";
 import { RoleBadge } from "./RoleBadge";
 import { InviteLinkBox } from "./InviteLinkBox";
 import { InviteCaDialog } from "./InviteCaDialog";
 import { TwoFactorPolicyCard } from "./TwoFactorPolicyCard";
+import { AccessLogCard } from "./AccessLogCard";
 
 function TeamSection() {
   const { data: session } = trpc.auth.me.useQuery();
@@ -162,6 +163,11 @@ function TeamSection() {
                   <td className="hidden sm:table-cell text-text-secondary">{m.userEmail}</td>
                   <td>
                     <RoleBadge role={m.role} />
+                    {canManage && isCaRole(m.role) && (
+                      <p data-testid="last-opened" className="mt-1 text-xs text-text-tertiary">
+                        {lastOpenedText(m.lastOpenedAt, (d) => relativeTime(d.toISOString()))}
+                      </p>
+                    )}
                   </td>
                   <td className="hidden sm:table-cell text-text-secondary text-xs">
                     {m.acceptedAt ? formatDate(m.acceptedAt) : "Pending"}
@@ -214,6 +220,8 @@ function TeamSection() {
           </table>
         )}
       </div>
+
+      {canManage && <AccessLogCard viewerId={me?.user?.id} />}
 
       <InviteModal open={showInvite} onClose={() => setShowInvite(false)} />
       <InviteCaDialog open={showInviteCa} onClose={() => setShowInviteCa(false)} />

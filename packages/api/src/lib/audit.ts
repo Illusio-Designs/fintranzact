@@ -1,5 +1,20 @@
 import { auditLog } from "@fintranzact/db";
+import { isCaRole } from "@fintranzact/shared";
 import type { TenantDatabase } from "../trpc.js";
+
+/**
+ * Put the actor's role into an entry's metadata when they act as a CA
+ * (auditor / ca_filing), so the owner's audit trail shows "by Anita Shah,
+ * Accountant (filing)". Other roles are left as they were (existing entries
+ * and their consumers are unchanged); an entry's own `role` is never replaced.
+ */
+export function withActorRole(
+  metadata: Record<string, unknown> | undefined,
+  role: string | null | undefined,
+): Record<string, unknown> | undefined {
+  if (!isCaRole(role) || (metadata && "role" in metadata)) return metadata;
+  return { ...metadata, role };
+}
 
 export async function logAudit(
   db: TenantDatabase,
@@ -11,6 +26,8 @@ export async function logAudit(
     entityId?: string | null;
     metadata?: Record<string, unknown>;
     ipAddress?: string | null;
+    /** Actor's role; recorded in metadata for CA roles. */
+    role?: string | null;
   }
 ) {
   try {
@@ -20,7 +37,7 @@ export async function logAudit(
       action: params.action,
       entityType: params.entityType,
       entityId: params.entityId || null,
-      metadata: params.metadata ? JSON.stringify(params.metadata) : null,
+      metadata: params.metadata || isCaRole(params.role) ? JSON.stringify(withActorRole(params.metadata, params.role)) : null,
       ipAddress: params.ipAddress || null,
     });
   } catch (err) {
@@ -41,6 +58,8 @@ type AuditCtx = {
   businessId: string;
   user: { id: string } | null;
   ipAddress?: string | null;
+  /** The actor's permission role, when the procedure's context carries it. */
+  role?: string | null;
 };
 
 /**
@@ -62,7 +81,7 @@ export async function audited<T>(
       action: e.action,
       entityType: e.entityType,
       entityId: e.entityId ?? null,
-      metadata: e.metadata,
+      metadata: withActorRole(e.metadata, ctx.role),
       ipAddress: ctx.ipAddress ?? null,
     });
   }

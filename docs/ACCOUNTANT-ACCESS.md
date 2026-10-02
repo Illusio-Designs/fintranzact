@@ -113,11 +113,64 @@ Removal deletes the accepted invitation, so the old link finds nothing. `tenant.
 
 ### Follow-ups (Part 4/5)
 
-`tenant.leave` (a CA dropping a client, event `access.left`) is deliberately not added here: it needs the web/mobile UI to avoid a parity gap. The access-log viewer and the remaining access event types are Part 4. Clients should treat the FORBIDDEN message like losing the organisation (Part 4/5 polish).
+`tenant.leave` (a CA dropping a client, event `access.left`) is deliberately not added here: it needs the web/mobile UI to avoid a parity gap. The access-log viewer and the remaining access event types are Part 4 (next section). Clients should treat the FORBIDDEN message like losing the organisation (Part 4/5 polish).
 
 ### Tests
 
 Unit: `member-removal.test.ts` (order, every step, e-mail failure ignored, tenant-DB failure stops early, guards, non-member no-op), `tenant-membership.test.ts` (15s positive cache, refusals not cached, invalidation, FORBIDDEN shape). Integration (need Postgres): `integration/tenant-access-removal.test.ts` (everything revoked, other organisation untouched, API key refused, stale session refused, old invite refused and new invite works, event recorded, admin may remove a CA, owner not removable) and the updated accept-invitation test in `tenant-invite-flow.test.ts`.
+
+## The access log (Part 4)
+
+"Access is logged": the owner can see who was invited, who accepted, role changes, removals, when their CA last opened the books, what they downloaded, and what they filed. Two places, by design.
+
+### What is recorded where
+
+| What | Where | Event / action |
+|---|---|---|
+| Invite sent | control `security_events` | `access.invited` (actor = inviter, subject = invitee when they already have an account, else null; metadata `role`, `email`) |
+| Invite withdrawn | `security_events` | `access.invite_revoked` (`role`, `email`) |
+| Invite accepted | `security_events` | `access.accepted` (actor = subject = the person; `role`). Only when a membership is created; re-clicking an old link records nothing |
+| Role changed | `security_events` | `access.role_changed` (subject = member; `from`, `to`, `email`). Setting the same role records nothing |
+| Removed | `security_events` | `access.removed` (Part 3) |
+| CA opened the organisation | `security_events` | `access.org_opened` (CA roles only, `role`) |
+| CA downloaded a report/export | `security_events` | `access.export` (CA roles only; `procedure`, `role`) |
+| What a CA changed or filed | tenant `audit_log` (business trail) | `gstReturns.*`, `gstr2b.*`, `period.lockGstMonth`, with `metadata.role` |
+
+Lifecycle events go to the control `security_events` table because they are about people and the organisation, not a business, and because that table has **no retention window**: the plan's `auditRetentionDays` only hides old rows of `business.auditTrail`, it never applies to the access log. `lib/access-events.ts` holds the pure builders (`buildAccessEvent`) and the recorders; `recordSecurityEvent` never throws, so a logging failure cannot break an invite or a download. Metadata is a fixed small shape (`role`, `email`, `from`, `to`, `procedure`): never tokens, invite links, codes or request inputs.
+
+### What is not recorded
+
+- **Reads are not logged.** Viewing an invoice or a report is not an event. The log answers "was my CA in my books, and what did they take or change", not "which screen did they open".
+- Downloads by the owner, admins and staff are not logged as `access.export`; only `auditor` / `ca_filing`.
+- Exports built in the browser from data already on screen (for example a table's own CSV button) cannot be seen by the server. Only the file-producing procedures are logged (below).
+
+### Opened the organisation: throttle
+
+`access.org_opened` is written when a CA role selects the organisation (`tenant.select`) and on the first request a CA role makes in an organisation (a hook inside `withPermissions`, which already resolves the role; no new middleware, so the role sweep's base matching is untouched). It is throttled to **once per hour per (user, organisation)** with an in-process `Map` (`shouldRecordOrgOpened`, pure with an injected clock; bounded at 5,000 entries). That keeps the table small (a CA working all day writes about 8 rows) and costs one map lookup per CA request. It is per API instance: with several instances a CA can produce one row per instance per hour. We accepted that rather than a database check on every request; "last opened" is still correct (the latest row). API keys resolve the same role, so a CA's key counts as opening the books too.
+
+### Downloads: `access.export`
+
+`recordCaExport(ctx, path)` is called by the handlers that return a file (and does nothing unless `ctx.role` is `auditor` / `ca_filing`): `gst.gstr1Json`, `gst.gstr1CSV`, `gst.gstr9Json`, `gst.gstr4Json`, `party.ledgerReportCSV`, `party.tallyExport` (CSV), `reports.tallyExport` (XML), `tds.certificate` (PDF). `business.exportData` is owner-only. `tds.returnData` is not logged: it is the data screen for a quarter (the CSV is part of the same response), so logging it would record every view. Labels for these paths are `EXPORT_PROCEDURE_LABELS` in `packages/shared/src/access-log.ts`; add a new download there and call `recordCaExport` from its handler.
+
+### Filings in the business audit trail
+
+`gstReturns.requestOtp`, `verifyOtp`, `saveGstr1`, `fileGstr1`, `saveGstr3b`, `fileGstr3b`, `pull2b`, `gstr2b.upload`, `linkInvoice`, `ignoreRecord` are wrapped in `withAudit` (`period.lockGstMonth` already was). Entity types: `gst_return` (no entity id; metadata `period`, and `referenceId` for the two file actions), `gstr2b_upload`, `gstr2b_record`. OTPs, the portal username, the signatory PAN and EVC codes are never put in metadata. `lib/audit.ts` now carries the actor's role: `audited()` / `logAudit()` add `metadata.role` when the actor is a CA role (`withActorRole`); other roles' entries are unchanged, and an entry's own `role` field is never replaced. The web and mobile activity log show the new action labels and "by Anita Shah · Accountant (filing)". These rows are business-scoped and fall under the plan's audit retention window like every other audit entry.
+
+### The viewer
+
+`tenant.accessLog({ cursor?, limit?, type? })` (query on the tenant base): owner / superadmin / admin only, FORBIDDEN otherwise (an inline gate like `pendingInvitations`; role-sweep `NON_CASL_GATES` entry, allow owner and admin; row added to `role-matrix.md`). Reads `security_events` where `tenant_id` is the organisation and `type like 'access.%'` (or the given type or list of types), newest first, default 25, max 100. Paging is a **keyset on (createdAt in whole milliseconds, id)**: cursor `"<ms>_<uuid>"`, and both the order and the comparison use `date_trunc('milliseconds', created_at)` with the id as tie-break, so rows with the same millisecond are never skipped or repeated (the older `platform.securityEvents` pages on `createdAt` alone and can skip same-instant rows). Returns `{ items: [{ id, type, label, createdAt, actor, subject, metadata }], nextCursor }`; actor/subject are `{ id, name, email }` or null (null-safe if the user was deleted); `metadata` is only `role`, `from`, `to`, `email`, `procedure`.
+
+`tenant.members` also returns `lastOpenedAt` for each CA member to owner/admin viewers (one grouped query on the latest `access.org_opened` per user); `null` for non-CA members, for CAs who have never opened the books, and for everyone else viewing.
+
+### Clients
+
+- Web: Team tab, **Access log** card under the members table (owner/admin): one sentence per event ("Anita Shah (CA) was invited as Accountant (read-only) by You"), icon, relative and absolute time, filter pills (All / Invites / Role changes / Removals / Opened / Downloads), **Load more**. CA rows show "Last opened 3h ago" or "Never opened". Sentences are built by `accessEventSentence` in `@fintranzact/shared`.
+- Mobile: Team screen, the latest 25 events and "Last opened" on CA rows (`src/lib/access-log.ts`).
+- CLI `fintranzact tenant access-log [--filter invites|roles|removals|opened|downloads] [--limit n] [--cursor c] [--json]` and MCP `tenant_access_log`.
+
+### Tests
+
+Unit: `access-events.test.ts` (builders and metadata shapes, no secrets, the throttle with an injected clock, `recordOrgOpened`, `recordCaExport` only for CA roles), `access-log.test.ts` (cursor, limit, gate, safe metadata, paging), `audit-role.test.ts` (role in metadata), shared `access-log.test.ts` and `two-factor.test.ts` (labels, 19 event types), web `AccessLogCard.test.tsx`, mobile `access-log.test.ts`, CLI `tenant-access-log.test.ts`. Integration (need Postgres; not run in the environment this was written in): `integration/tenant-access-log.test.ts` (events for invite, revoke, accept, role change, remove; accessLog gated to owner/admin, newest first, keyset with equal timestamps, type filter; a CA's `gst.gstr1Json` writes `access.export` and an owner's does not; throttle and `lastOpenedAt`; `period.lockGstMonth` by a CA writes an audit row with the role).
 
 ## Migration note
 

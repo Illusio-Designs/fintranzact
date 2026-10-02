@@ -21,6 +21,7 @@ vi.mock("@/lib/trpc", () => {
       tenant: {
         members: { useQuery: () => ({ data: h.members.current, isLoading: false }) },
         pendingInvitations: { useQuery: () => ({ data: h.pending.current }) },
+        accessLog: { useQuery: () => ({ data: { items: [], nextCursor: null }, isLoading: false, isError: false, isFetching: false }) },
         current: { useQuery: () => ({ data: { twoFactorPolicy: "off", twoFactorGraceDays: 7 } }) },
         removeMember: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
         updateMemberRole: { useMutation: () => ({ mutate: (i: any) => h.updateRole(i), isPending: false }) },

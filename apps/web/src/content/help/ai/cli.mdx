@@ -976,6 +976,18 @@ fintranzact tenant invitations
 fintranzact tenant invitations --json
 ```
 
+#### `fintranzact tenant access-log`
+
+Who was invited, accepted, changed, removed, opened the books or downloaded a file (owners and admins only).
+
+```bash
+fintranzact tenant access-log
+fintranzact tenant access-log --filter downloads --limit 50
+fintranzact tenant access-log --cursor <cursor>   # next page
+```
+
+Filters: `invites`, `roles`, `removals`, `opened`, `downloads`.
+
 #### `fintranzact tenant revoke-invitation`
 
 Revoke a pending invitation.

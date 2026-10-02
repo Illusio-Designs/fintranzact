@@ -36,6 +36,7 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { recordCaExport } from "../lib/access-events.js";
 import { withAudit } from "../lib/audit.js";
 import { previewPartyTds } from "../lib/tds-service.js";
 import { useSandboxProvider } from "../lib/gov-provider.js";
@@ -531,6 +532,7 @@ export const tdsRouter = router({
         })),
       });
       const pdf = await certificateToBuffer(data);
+      await recordCaExport(ctx, "tds.certificate");
       const safe = party.name.replace(/[^0-9A-Za-z]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "party";
       return {
         filename: `${input.kind}-statement-${safe}-Q${input.quarter}-${input.financialYear}.pdf`,
