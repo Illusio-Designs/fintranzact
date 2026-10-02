@@ -72,6 +72,7 @@
 | billing.config | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | billing.demoCheckout | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | billing.overview | query | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| billing.status | query | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | billing.subscribeAddon | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | billing.subscribePlan | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | billing.updateBillingDetails | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
