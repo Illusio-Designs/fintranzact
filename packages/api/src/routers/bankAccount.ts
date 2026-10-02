@@ -15,6 +15,7 @@ import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trp
 import { requireCan } from "../lib/permissions.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { logAudit } from "../lib/audit.js";
+import { LOCKED_BOOKS_OPENING_BALANCE_MESSAGE, assertPeriodOpen, hasAnyLock } from "../lib/period-lock.js";
 
 /** The India calendar day a timestamp falls on. */
 function dayOf(ts: SQLWrapper) {
@@ -65,6 +66,10 @@ export const bankAccountRouter = router({
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankAccount");
       const account = await ctx.db.transaction(async (tx) => {
+        // An opening balance reaches back to the start of the books, so it can't be added once a period is locked.
+        if (parseFloat(input.openingBalance ?? "0") !== 0 && await hasAnyLock(tx, ctx.businessId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: LOCKED_BOOKS_OPENING_BALANCE_MESSAGE });
+        }
         // If new account is default, clear existing defaults
         if (input.isDefault) {
           await tx
@@ -112,7 +117,7 @@ export const bankAccountRouter = router({
       const account = await ctx.db.transaction(async (tx) => {
         // Verify ownership
         const [existing] = await tx
-          .select({ id: bankAccounts.id })
+          .select({ id: bankAccounts.id, openingBalance: bankAccounts.openingBalance })
           .from(bankAccounts)
           .where(
             and(
@@ -124,6 +129,13 @@ export const bankAccountRouter = router({
 
         if (!existing) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Bank account not found" });
+        }
+
+        // The opening balance is where the whole history starts: part of closed books once any period is locked.
+        if (input.data.openingBalance !== undefined
+          && parseFloat(input.data.openingBalance) !== parseFloat(existing.openingBalance)
+          && await hasAnyLock(tx, ctx.businessId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: LOCKED_BOOKS_OPENING_BALANCE_MESSAGE });
         }
 
         // Handle isDefault toggle
@@ -329,6 +341,8 @@ export const bankAccountRouter = router({
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "BankTransaction");
       const txn = await ctx.db.transaction(async (tx) => {
+        // Nothing can be added to a locked period.
+        await assertPeriodOpen(tx, ctx.businessId, [input.transactionDate]);
         // Lock account row for atomic balance update
         const [account] = await tx
           .select({
@@ -408,6 +422,7 @@ export const bankAccountRouter = router({
       }
 
       const transferResult = await ctx.db.transaction(async (tx) => {
+        await assertPeriodOpen(tx, ctx.businessId, [input.transactionDate]);
         // Lock both accounts in a consistent order to prevent deadlocks
         const firstId =
           input.fromAccountId < input.toAccountId

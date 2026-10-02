@@ -117,6 +117,7 @@ function boldTotals(c: Ctx, y: number): number {
   const parts = [`Taxable ${rs(m.taxable)}`, ...taxRows(m).map(([l, v]) => `${l} ${rs(v)}`)];
   if (m.charges !== 0) parts.splice(1, 0, `incl. charges ${rs(m.charges)}`);
   if (m.billDiscount > 0) parts.splice(0, 0, `Discount ${rs(m.billDiscount)}`);
+  if (m.tcs > 0) parts.push(`TCS (s.206C) ${rs(m.tcs)}`);
   if (m.roundOff !== 0) parts.push(`Round off ${inr(m.roundOff)}`);
   let ly = y;
   ly += text(doc, parts.join(" · "), c.x0, ly, { w: lw, size: 7.2, color: "#666666" });
@@ -387,6 +388,7 @@ function denseSummary(c: Ctx, y: number): number {
   if (m.charges !== 0) rows.push({ cells: ["Charges", inr(m.charges)] });
   rows.push({ cells: ["Taxable", inr(m.taxable)] });
   for (const [l, v] of taxRows(m)) rows.push({ cells: [l, inr(v)] });
+  if (m.tcs > 0) rows.push({ cells: ["TCS (s.206C)", inr(m.tcs)] });
   if (m.roundOff !== 0) rows.push({ cells: ["Round off", inr(m.roundOff)] });
   rows.push({ cells: ["Net payable", rs(m.grand)], bold: true });
   if (m.paid > 0) { rows.push({ cells: ["Paid", inr(m.paid)] }); rows.push({ cells: ["Balance due", rs(m.balance)], bold: true }); }
@@ -549,6 +551,7 @@ function landscapeBottom(c: Ctx, y: number): number {
     const vw = textWidth(cc.doc, gv, 11, true);
     text(cc.doc, gl, xs[2]! + pad + w - vw - gw - 2, by + 3, { w: gw + 2, size: LS_SIZE });
     by += text(cc.doc, gv, xs[2]! + pad + w - vw - 1, by, { w: vw + 2, size: 11, bold: true, align: "right" });
+    if (m.tcs > 0) by += text(cc.doc, `(incl. TCS s.206C ${inr(m.tcs)})`, xs[2]! + pad, by, { w, size: 6.6, align: "right" });
     if (m.roundOff !== 0) by += text(cc.doc, `(incl. round off ${inr(m.roundOff)})`, xs[2]! + pad, by, { w, size: 6.6, align: "right" });
     if (m.paid > 0) by += text(cc.doc, `Paid ${rs(m.paid)} · Balance ${rs(m.balance)}`, xs[2]! + pad, by, { w, size: 6.6, align: "right" });
     return signatureBlock(cc, xs[2]! + pad, by + 8, w, { size: LS_SIZE, gap: 24 });

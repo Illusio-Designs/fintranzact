@@ -562,6 +562,9 @@ function InvoiceDetailPanel({
   const totalAdjusted = allRelated.reduce((sum: number, d: any) => sum + parseFloat(d.totalAmount), 0);
   const invoiceTotal = invoice ? parseFloat(invoice.totalAmount) : 0;
   const fullyAdjusted = totalAdjusted >= invoiceTotal;
+  // TDS deducted from the supplier on a purchase bill. It is settled against the bill, so
+  // "Amount Paid" below is the cash actually paid, and the TDS gets its own line.
+  const tdsAmount = invoice?.type === "purchase" ? parseFloat(invoice.tdsAmount ?? "0") || 0 : 0;
 
   const canConvert =
     invoice &&
@@ -821,6 +824,12 @@ function InvoiceDetailPanel({
                   <span className="tabular-nums text-text-primary">{formatCurrency(invoice.roundOff)}</span>
                 </div>
               )}
+              {parseFloat(invoice.tcsAmount ?? "0") > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">TCS collected (s.206C)</span>
+                  <span className="tabular-nums text-text-primary">{formatCurrency(invoice.tcsAmount)}</span>
+                </div>
+              )}
               <div className="pt-2 border-t border-border-light flex justify-between">
                 <span className="text-sm font-semibold text-text-primary">Total</span>
                 <span className="text-base font-bold tabular-nums text-text-primary">{formatCurrency(invoice.totalAmount)}</span>
@@ -831,10 +840,18 @@ function InvoiceDetailPanel({
                   <span className="tabular-nums text-purple-600">-{formatCurrency(invoice.totalAdjusted)}</span>
                 </div>
               )}
-              {parseFloat(invoice.amountPaid) > 0 && (
+              {tdsAmount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">
+                    TDS deducted{invoice.tdsSection ? ` (${invoice.tdsSection.replace("_", " ")})` : ""}
+                  </span>
+                  <span className="tabular-nums text-purple-600">-{formatCurrency(tdsAmount)}</span>
+                </div>
+              )}
+              {parseFloat(invoice.amountPaid) - tdsAmount > 0.005 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-text-secondary">Amount Paid</span>
-                  <span className="tabular-nums text-emerald-600">{formatCurrency(invoice.amountPaid)}</span>
+                  <span className="tabular-nums text-emerald-600">{formatCurrency(parseFloat(invoice.amountPaid) - tdsAmount)}</span>
                 </div>
               )}
               {balance > 0.01 && !isDraftLike && (

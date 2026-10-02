@@ -29,6 +29,8 @@ import { documentsEndpoints } from "./documents";
 import { ordersEndpoints } from "./orders";
 import { posEndpoints } from "./pos";
 import { shareEndpoints } from "./share";
+import { tdsEndpoints } from "./tds";
+import { periodEndpoints } from "./period";
 import { systemEndpoints } from "./system";
 import { warehouseEndpoints } from "./warehouse";
 import { stockEndpoints } from "./stock";
@@ -109,7 +111,7 @@ export const allSections: EndpointSection[] = [
   {
     id: "accounting",
     title: "Accounting",
-    groups: [accountEndpoints, journalEndpoints],
+    groups: [accountEndpoints, journalEndpoints, tdsEndpoints, periodEndpoints],
   },
   {
     id: "analytics",
@@ -168,6 +170,8 @@ export {
   ordersEndpoints,
   posEndpoints,
   shareEndpoints,
+  tdsEndpoints,
+  periodEndpoints,
   warehouseEndpoints,
   stockEndpoints,
   stockGroupEndpoints,

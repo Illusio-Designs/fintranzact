@@ -295,6 +295,20 @@
       "when": 1790939620968,
       "tag": "0041_subscription_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790945359898,
+      "tag": "0042_tds_tcs_period_locks",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790945593791,
+      "tag": "0043_seed_plans",
+      "breakpoints": true
     }
   ]
 }

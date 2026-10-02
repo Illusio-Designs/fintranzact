@@ -29,6 +29,7 @@ import { Listbox } from "@/components/ui/Listbox";
 import { gstRateOptions, gstRateValue } from "@/lib/gst-rates";
 import { Combobox } from "@/components/ui/Combobox";
 import { Disclosure } from "@/components/ui/Disclosure";
+import { TcsSectionField } from "@/components/TcsSectionField";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { SortableTh, type SortOption, type SortState } from "@/components/ui/Table";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
@@ -575,6 +576,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [barcode, setBarcode] = useState("");
   const [stockGroupId, setStockGroupId] = useState("");
   const [hsn, setHsn] = useState("");
+  const [tcsSection, setTcsSection] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [mrp, setMrp] = useState("");
@@ -734,6 +736,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
       barcode: barcode || undefined,
       stockGroupId: stockGroupId || undefined,
       hsn: hsn || undefined,
+      tcsSection: (tcsSection || undefined) as never,
       salePrice: salePrice || undefined,
       purchasePrice: purchasePrice || undefined,
       mrp: mrp || undefined,
@@ -860,7 +863,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
         <div className="space-y-1">
           <Disclosure
             label="Identification"
-            count={countFilled(sku, hsn, stockGroupId)}
+            count={countFilled(sku, hsn, stockGroupId, tcsSection)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -876,6 +879,9 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
             </div>
             <div className="mt-3">
               <StockGroupPicker value={stockGroupId} onChange={setStockGroupId} />
+            </div>
+            <div className="mt-3">
+              <TcsSectionField value={tcsSection} onChange={setTcsSection} />
             </div>
           </Disclosure>
 
@@ -1164,6 +1170,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
   const [barcode, setBarcode] = useState("");
   const [stockGroupId, setStockGroupId] = useState("");
   const [hsn, setHsn] = useState("");
+  const [tcsSection, setTcsSection] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [mrp, setMrp] = useState("");
@@ -1195,6 +1202,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
     setBarcode(item.barcode ?? "");
     setStockGroupId(item.stockGroupId ?? "");
     setHsn(item.hsn ?? "");
+    setTcsSection(item.tcsSection ?? "");
     setSalePrice(item.salePrice ?? "");
     setPurchasePrice(item.purchasePrice ?? "");
     setMrp(item.mrp ?? "");
@@ -1320,6 +1328,8 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         // Only when changed, so saving never touches a group set elsewhere.
         ...(stockGroupId !== (item?.stockGroupId ?? "") ? { stockGroupId: stockGroupId || null } : {}),
         hsn: hsn || undefined,
+        // null clears the section when it is emptied.
+        tcsSection: (tcsSection || null) as never,
         salePrice: salePrice || undefined,
         purchasePrice: purchasePrice || undefined,
         mrp: mrp || null,
@@ -1451,7 +1461,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         <div className="space-y-1">
           <Disclosure
             label="Identification"
-            count={countFilled(sku, hsn, stockGroupId)}
+            count={countFilled(sku, hsn, stockGroupId, tcsSection)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -1468,6 +1478,9 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
             </div>
             <div className="mt-3">
               <StockGroupPicker value={stockGroupId} onChange={setStockGroupId} />
+            </div>
+            <div className="mt-3">
+              <TcsSectionField value={tcsSection} onChange={setTcsSection} />
             </div>
           </Disclosure>
 

@@ -8,10 +8,9 @@ import { StatCard } from "@/components/ui/StatCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField, SelectField } from "@/components/ui/FormField";
-import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
+import { SegmentedControl } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Listbox } from "@/components/ui/Listbox";
 import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
@@ -1711,18 +1710,3 @@ function AccountListSkeleton() {
   );
 }
 
-function TransactionTableSkeleton() {
-  return (
-    <div className="p-4 space-y-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-4">
-          <div className="skeleton h-3.5 w-20 rounded" />
-          <div className="skeleton h-3.5 flex-1 rounded" />
-          <div className="skeleton h-5 w-16 rounded-full" />
-          <div className="skeleton h-3.5 w-20 rounded ml-auto" />
-          <div className="skeleton h-3.5 w-20 rounded" />
-        </div>
-      ))}
-    </div>
-  );
-}

@@ -36,6 +36,7 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure, type TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { assertPeriodOpen } from "../lib/period-lock.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import {
@@ -363,7 +364,8 @@ export const bankReconRouter = router({
         ctx.db
           .select({
             id: payments.id,
-            amount: payments.amount,
+            // What reached the bank: the gross less any tax withheld (TDS).
+            amount: sql<string>`(${payments.amount}::numeric - ${payments.tdsAmount}::numeric)::text`,
             paymentDate: payments.paymentDate,
             referenceNumber: payments.referenceNumber,
             mode: payments.mode,
@@ -374,6 +376,7 @@ export const bankReconRouter = router({
             eq(payments.businessId, ctx.businessId),
             isNull(payments.deletedAt),
             paidThroughAccount(importRecord.bankAccountId),
+            sql`${payments.source} IS DISTINCT FROM 'tds'`, // a bill's TDS adjustment is not a bank movement
             ...buildBusinessDateFilter(payments, { from: fromDate, to: toDate }),
           )),
         ctx.db
@@ -764,6 +767,9 @@ export const bankReconRouter = router({
       if (!money.isPositive(line.debit)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Expenses can only be created from debit (withdrawal) lines" });
       }
+
+      // The new expense is dated on the expense or the statement line: nothing can be added to a locked period.
+      await assertPeriodOpen(ctx.db, ctx.businessId, [input.expense.expenseDate ?? line.transactionDate]);
 
       // The withdrawal happened on the statement's bank account.
       const [importRecord] = await ctx.db

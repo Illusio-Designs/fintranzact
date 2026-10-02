@@ -271,6 +271,16 @@
 | payment.unpaidInvoices | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
 | payment.untrackedPayments | query | authorized | read:Payment | ✓ | ✓ | ✓ | ✓ | ✓ |
 | payment.update | mutation | authorized | update:Payment | ✓ | ✓ | ✓ | ✓ | ✓ |
+| period.closeDetail | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
+| period.closes | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
+| period.closeYear | mutation | authorized | create:PeriodLock | ✓ | ✓ | ✗ | ✗ | ✓ |
+| period.closeYearPreview | query | authorized | create:PeriodLock | ✓ | ✓ | ✗ | ✗ | ✓ |
+| period.lockBooks | mutation | authorized | create:PeriodLock | ✓ | ✓ | ✗ | ✗ | ✓ |
+| period.lockGstMonth | mutation | authorized | create:PeriodLock | ✓ | ✓ | ✗ | ✗ | ✓ |
+| period.reopenYear | mutation | authorized | — (+ only the owner reopens a year) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| period.status | query | authorized | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| period.unlockBooks | mutation | authorized | — (+ only the owner unlocks a period) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| period.unlockGstMonth | mutation | authorized | — (+ only the owner unlocks a period) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | plan.list | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | platform.billingSummary | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.deletePayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -418,6 +428,17 @@
 | target.list | query | authorized | read:SalesTarget | ✓ | ✓ | ✓ | ✓ | ✗ |
 | target.myTargets | query | authorized | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | target.update | mutation | authorized | manage:SalesTarget | ✓ | ✓ | ✓ | ✗ | ✗ |
+| tds.challans | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.createChallan | mutation | authorized | create:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.deductions | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.deleteChallan | mutation | authorized | delete:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.preview | query | authorized | read:Payment | ✓ | ✓ | ✓ | ✓ | ✓ |
+| tds.resetSection | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.returnData | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.sections | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.summary | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.tcsPreview | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
+| tds.updateSection | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tenant.acceptById | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.acceptInvitation | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.canCreateOrg | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |

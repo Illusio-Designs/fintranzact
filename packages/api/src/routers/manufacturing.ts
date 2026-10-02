@@ -31,6 +31,7 @@ import {
 import { paginationSchema } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { assertPeriodOpen } from "../lib/period-lock.js";
 import {
   ensureDefaultWarehouse,
   getNegativeStockPolicy,
@@ -628,6 +629,8 @@ export const manufacturingRouter = router({
       const date = input.date ? new Date(input.date) : new Date();
 
       return ctx.db.transaction(async (tx: Tx) => {
+        // Nothing can be added to a locked period.
+        await assertPeriodOpen(tx, ctx.businessId, [input.date]);
         const bom = input.bomId ? await loadBom(tx, ctx.businessId, input.bomId) : null;
         if (bom && !bom.isActive) throw new TRPCError({ code: "BAD_REQUEST", message: "This BOM is inactive" });
         if (bom && input.itemId && (input.itemId !== bom.itemId || (input.variantId ?? null) !== bom.variantId)) {
@@ -904,6 +907,8 @@ export const manufacturingRouter = router({
           .for("update")
           .limit(1);
         if (!journal) throw new TRPCError({ code: "NOT_FOUND", message: "Manufacturing journal not found" });
+        // Cancelling reverses the journal's stock, so its own date must be open.
+        await assertPeriodOpen(tx, ctx.businessId, [journal.journalDate]);
         if (journal.status === "cancelled") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "This journal is already cancelled" });
         }

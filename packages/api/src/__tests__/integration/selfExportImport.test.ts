@@ -51,6 +51,9 @@ import {
   recurringInvoiceTemplates,
   eInvoiceConfigs,
   auditLog,
+  taxChallans,
+  taxDeductions,
+  tdsSectionSettings,
 } from "@fintranzact/db";
 import {
   getControlDb,
@@ -1559,6 +1562,193 @@ describe("Test 9: imported businesses are accessible via businessProcedure", () 
       const partyResult = await bizCaller.party.list({});
       expect(partyResult.data).toHaveLength(1);
       expect(partyResult.data[0]!.type).toBe("customer");
+    },
+    60_000,
+  );
+});
+
+// =============================================================================
+// TEST 10 — TDS data survives a backup and restore
+// =============================================================================
+
+describe("Test 10: TDS data round-trips through export and import", () => {
+  beforeEach(async () => {
+    await truncateAllTables();
+  });
+
+  it(
+    "keeps a supplier's TDS section, a bill's TDS, a payment's withheld tax, challans, deductions and section overrides",
+    async () => {
+      const db = getTenantTestDb();
+      const srcOwner = await createOwner("t10-src");
+      const srcTenant = await createTestTenant("Source Corp T10");
+      await enrollMember(srcTenant.id, srcOwner.id);
+      const biz = await seedBusiness(srcOwner.id, "T10A");
+
+      // A supplier on 194J with a constitution (it picks the individual rate).
+      const [supplier] = await db
+        .insert(parties)
+        .values({
+          businessId: biz.id,
+          type: "supplier",
+          name: "CA Associates",
+          openingBalance: "0.00",
+          pan: "AABCS1234D",
+          constitution: "proprietorship",
+          tdsSection: "194J_PROF",
+        })
+        .returning();
+
+      // A purchase bill carrying 6,000 of TDS, settled by its system payment.
+      const bill = await seedInvoice(biz.id, supplier!.id, "70800.00", {
+        type: "purchase",
+        tdsMode: "manual",
+        tdsSection: "194J_PROF",
+        tdsAmount: "6000.00",
+        amountPaid: "6000.00",
+      });
+      const [sysPayment] = await db
+        .insert(payments)
+        .values({
+          businessId: biz.id,
+          partyId: supplier!.id,
+          invoiceId: bill.id,
+          amount: "6000.00",
+          discount: "0.00",
+          tdsAmount: "0.00",
+          tdsSection: "194J_PROF",
+          mode: "other",
+          paymentDate: new Date(),
+          source: "tds",
+          paymentNumber: `TDS-${bill.invoiceNumber}`,
+        })
+        .returning();
+      await db.insert(paymentAllocations).values({ paymentId: sysPayment!.id, invoiceId: bill.id, amount: "6000.00" });
+
+      // A payment that withheld tax itself (an advance).
+      const [advance] = await db
+        .insert(payments)
+        .values({
+          businessId: biz.id,
+          partyId: supplier!.id,
+          amount: "10000.00",
+          discount: "0.00",
+          tdsAmount: "1000.00",
+          tdsSection: "194J_PROF",
+          mode: "bank",
+          paymentDate: new Date(),
+        })
+        .returning();
+
+      const [challan] = await db
+        .insert(taxChallans)
+        .values({
+          businessId: biz.id,
+          kind: "tds",
+          financialYear: "2026-27",
+          quarter: 3,
+          challanNumber: "00041",
+          bsrCode: "0510308",
+          depositedOn: new Date("2026-11-05T06:30:00Z"),
+          amount: "7050.00",
+          interest: "50.00",
+          notes: "Q3 deposit",
+        })
+        .returning();
+      await db.insert(taxDeductions).values([
+        {
+          businessId: biz.id, kind: "tds", direction: "payable", partyId: supplier!.id, paymentId: sysPayment!.id,
+          invoiceId: bill.id, sectionCode: "194J_PROF", financialYear: "2026-27", quarter: 3,
+          baseAmount: "60000.00", rate: "10.000", amount: "6000.00", hasPan: true,
+          deductedOn: new Date("2026-10-15T06:30:00Z"), challanId: challan!.id,
+        },
+        {
+          businessId: biz.id, kind: "tds", direction: "payable", partyId: supplier!.id, paymentId: advance!.id,
+          sectionCode: "194J_PROF", financialYear: "2026-27", quarter: 3,
+          baseAmount: "10000.00", rate: "10.000", amount: "1000.00", hasPan: true,
+          deductedOn: new Date("2026-10-20T06:30:00Z"),
+        },
+      ]);
+      await db.insert(tdsSectionSettings).values({
+        businessId: biz.id, financialYear: "2026-27", sectionCode: "194J_PROF",
+        rate: "12.500", aggregateThreshold: "75000.00", isActive: true,
+      });
+
+      // TCS: an item with a section, and a sale that collected it.
+      const [scrapItem] = await db
+        .insert(items)
+        .values({ businessId: biz.id, name: "Metal scrap", unit: "pcs", itemMode: "simple", taxPercent: "18.00", tcsSection: "206C_SCRAP" })
+        .returning();
+      const buyer = await seedParty(biz.id, "customer");
+      const tcsSale = await seedInvoice(biz.id, buyer.id, "119000.00", { tcsMode: "auto", tcsAmount: "1000.00" });
+      await db.insert(taxDeductions).values({
+        businessId: biz.id, kind: "tcs", direction: "payable", partyId: buyer.id, invoiceId: tcsSale.id,
+        sectionCode: "206C_SCRAP", financialYear: "2026-27", quarter: 3, baseAmount: "100000.00", rate: "1.000",
+        amount: "1000.00", hasPan: true, deductedOn: new Date("2026-10-20T06:30:00Z"),
+      });
+
+      // ── Export ──────────────────────────────────────────────────────────
+      const exportCaller = buildCaller({
+        userId: srcOwner.id, email: srcOwner.email, name: "T10 Owner", tenantId: srcTenant.id,
+      });
+      const { token: exportToken } = await exportCaller.selfExport.request({ tenantId: srcTenant.id });
+      const exportRes = await httpExport(srcTenant.id, exportToken);
+      expect(exportRes.status).toBe(200);
+      const tarGzBytes = Buffer.from(await exportRes.arrayBuffer());
+
+      // The new tables are in the archive.
+      const entries = await unpackTarGz(tarGzBytes);
+      for (const name of ["tax_challans", "tax_deductions", "tds_section_settings"]) {
+        expect(entries.has(`${name}.ndjson`), `${name}.ndjson in the export`).toBe(true);
+      }
+
+      // ── Wipe and import into a fresh tenant ─────────────────────────────
+      const { getTestClient } = await import("../helpers/test-db.js");
+      await getTestClient()`TRUNCATE TABLE businesses CASCADE`;
+      const tgtOwner = await createOwner("t10-tgt");
+      const tgtTenant = await createTestTenant("Target Corp T10");
+      await enrollMember(tgtTenant.id, tgtOwner.id);
+      const importToken = await signImportTokenDirect(tgtTenant.id, tgtOwner.id);
+      const importRes = await httpImport(tgtTenant.id, importToken, tarGzBytes);
+      expect(importRes.status).toBe(200);
+
+      // ── Everything came back ────────────────────────────────────────────
+      const [party] = await db.select().from(parties).where(eq(parties.id, supplier!.id));
+      expect(party).toMatchObject({ tdsSection: "194J_PROF", constitution: "proprietorship" });
+
+      const [billBack] = await db.select().from(invoices).where(eq(invoices.id, bill.id));
+      expect(billBack).toMatchObject({ tdsMode: "manual", tdsSection: "194J_PROF", tdsAmount: "6000.00", amountPaid: "6000.00" });
+
+      const [sysBack] = await db.select().from(payments).where(eq(payments.id, sysPayment!.id));
+      expect(sysBack).toMatchObject({ source: "tds", tdsSection: "194J_PROF", amount: "6000.00", tdsAmount: "0.00" });
+      const [advBack] = await db.select().from(payments).where(eq(payments.id, advance!.id));
+      expect(advBack).toMatchObject({ tdsAmount: "1000.00", tdsSection: "194J_PROF" });
+
+      const [challanBack] = await db.select().from(taxChallans).where(eq(taxChallans.id, challan!.id));
+      expect(challanBack).toMatchObject({
+        kind: "tds", financialYear: "2026-27", quarter: 3, challanNumber: "00041", bsrCode: "0510308",
+        amount: "7050.00", interest: "50.00", notes: "Q3 deposit",
+      });
+      expect(challanBack!.depositedOn.toISOString()).toBe("2026-11-05T06:30:00.000Z");
+
+      const deductions = await db.select().from(taxDeductions);
+      expect(deductions).toHaveLength(3); // two TDS, one TCS
+      const linked = deductions.find((d) => d.paymentId === sysPayment!.id)!;
+      expect(linked).toMatchObject({
+        direction: "payable", partyId: supplier!.id, invoiceId: bill.id, sectionCode: "194J_PROF",
+        baseAmount: "60000.00", rate: "10.000", amount: "6000.00", hasPan: true, challanId: challan!.id,
+      });
+      expect(deductions.find((d) => d.paymentId === advance!.id)!.challanId).toBeNull();
+
+      const [override] = await db.select().from(tdsSectionSettings);
+      expect(override).toMatchObject({ sectionCode: "194J_PROF", rate: "12.500", aggregateThreshold: "75000.00", singleThreshold: null, isActive: true });
+
+      // TCS survived too: the item's section, the sale's TCS and its ledger row.
+      const [scrapBack] = await db.select().from(items).where(eq(items.id, scrapItem!.id));
+      expect(scrapBack).toMatchObject({ tcsSection: "206C_SCRAP" });
+      const [saleBack] = await db.select().from(invoices).where(eq(invoices.id, tcsSale.id));
+      expect(saleBack).toMatchObject({ tcsMode: "auto", tcsAmount: "1000.00", totalAmount: "119000.00" });
+      expect(deductions.find((d) => d.kind === "tcs")).toMatchObject({ direction: "payable", sectionCode: "206C_SCRAP", amount: "1000.00", invoiceId: tcsSale.id });
     },
     60_000,
   );

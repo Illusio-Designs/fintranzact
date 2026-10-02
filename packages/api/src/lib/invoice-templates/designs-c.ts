@@ -89,6 +89,7 @@ function a5Totals(c: Ctx, y: number): number {
   const lw = c.cw - gw - 10;
   let ly = y;
   ly += text(doc, m.words, c.x0, ly, { w: lw, size: 6.6 });
+  if (m.tcs > 0) ly += text(doc, `TCS (s.206C) ${inr(m.tcs)}`, c.x0, ly, { w: lw, size: 6.6 });
   if (m.roundOff !== 0) ly += text(doc, `Round off ${inr(m.roundOff)}`, c.x0, ly, { w: lw, size: 6.6 });
   if (m.paid > 0) ly += text(doc, `Paid ${rs(m.paid)} · Balance ${rs(m.balance)}`, c.x0, ly, { w: lw, size: 6.6, bold: true });
   const gy = Math.max(y, ly - gh);
@@ -444,6 +445,7 @@ function estimateItems(c: Ctx, y: number, newPage: (c: Ctx) => number): number {
   const tail: Row[] = [];
   if (m.charges !== 0) tail.push({ cells: ["", { text: "Charges", align: "right" }, "", "", inr(m.charges)] });
   if (m.hasTax) tail.push({ cells: ["", { text: "Estimated GST", align: "right" }, "", "", inr(m.tax)] });
+  if (m.tcs > 0) tail.push({ cells: ["", { text: "TCS (s.206C)", align: "right" }, "", "", inr(m.tcs)] });
   if (m.roundOff !== 0) tail.push({ cells: ["", { text: "Round off", align: "right" }, "", "", inr(m.roundOff)] });
   tail.push({ bold: true, cells: ["", { text: "Estimated total", align: "right" }, "", "", rs(m.grand)] });
   return drawTable(c, y, {

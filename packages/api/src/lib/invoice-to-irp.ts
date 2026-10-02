@@ -59,6 +59,8 @@ export interface IRPInvoice {
   discountAmount: string | null;
   additionalCharges: string | null;
   roundOff: string | null;
+  /** TCS (s.206C) collected with the sale; part of the total, reported as other charges. */
+  tcsAmount?: string | null;
   totalAmount: string;
   isReverseCharge: boolean;
 }
@@ -253,6 +255,10 @@ export function mapInvoiceToIRP(
     });
     othChrg = 0;
   }
+
+  // TCS is collected on top of the goods and GST: the IRP wants it as other charges so the
+  // invoice value still adds up.
+  othChrg = round2(othChrg + n(invoice.tcsAmount));
 
   // Aggregate ValDtls from itemList (sum of individual items)
   const assVal = round2(itemList.reduce((sum, item) => sum + item.AssAmt, 0));

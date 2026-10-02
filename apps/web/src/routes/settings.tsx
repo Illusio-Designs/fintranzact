@@ -8,6 +8,7 @@ import { BusinessTab, BusinessForm } from "@/components/settings/BusinessTab";
 import { DocumentsTab } from "@/components/settings/DocumentsTab";
 import { TeamTab } from "@/components/settings/TeamTab";
 import { SalesTargetsTab } from "@/components/settings/SalesTargetsTab";
+import { PeriodLocksTab } from "@/components/settings/PeriodLocksTab";
 import { DataTab } from "@/components/settings/DataTab";
 import { AccountTab } from "@/components/settings/AccountTab";
 import { BillingTab } from "@/components/settings/BillingTab";
@@ -260,6 +261,7 @@ function SettingsPage() {
           {tab === "shipping" && biz && <ShippingTab biz={biz} />}
           {tab === "team" && <TeamTab />}
           {tab === "targets" && <SalesTargetsTab />}
+          {tab === "locks" && <PeriodLocksTab />}
           {tab === "data" && <DataTab />}
           {tab === "account" && <AccountTab />}
           {tab === "billing" && isOwner && <BillingTab />}

@@ -22,6 +22,7 @@ import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trp
 import { logAudit } from "./audit.js";
 import { documentStockDirection, resolveDocumentWarehouseId, resolveInvoiceWarehouse, syncDocumentStock } from "./inventory-service.js";
 import { resolveLineBatches } from "./batches.js";
+import { assertPeriodOpen } from "./period-lock.js";
 import { lineBatchDetails } from "./batch-display.js";
 import { requireCan } from "./permissions.js";
 import { assertNotLockedByGovernment } from "./government-lock.js";
@@ -391,6 +392,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           // Lines of batch-tracked items get their batch (see lib/batches).
           const stockDoc = { documentType: docType, type: config.fixedType ?? input.type, warehouseId: input.warehouseId ?? null };
           const docDate = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
+          // Nothing can be added to a locked period.
+          await assertPeriodOpen(tx, ctx.businessId, [docDate]);
           const direction = movesStock ? documentStockDirection(stockDoc) : 0;
           const lineItems = await resolveLineBatches(tx, {
             businessId: ctx.businessId,
@@ -598,10 +601,11 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
         }
         const { doc, fromStatus } = await ctx.db.transaction(async (tx) => {
           const [before] = await tx
-            .select({ status: invoices.status })
+            .select({ status: invoices.status, invoiceDate: invoices.invoiceDate })
             .from(invoices)
             .where(and(eq(invoices.id, input.id), eq(invoices.businessId, ctx.businessId)))
             .limit(1);
+          await assertPeriodOpen(tx, ctx.businessId, [before?.invoiceDate]);
 
           if (input.status === "cancelled" && before && before.status !== "cancelled") {
             await assertNotBilled(tx, ctx.businessId, { id: input.id, documentType: docType });
@@ -686,6 +690,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
 
           // Already soft-deleted — return early
           if (doc.deletedAt) return { success: true, invoiceNumber: doc.invoiceNumber, deleted: false };
+          await assertPeriodOpen(tx, ctx.businessId, [doc.invoiceDate]);
 
           // seller_manager: same limit as invoice.delete — unpaid, within 2 hours of creation
           if (ctx.role === "seller_manager") {

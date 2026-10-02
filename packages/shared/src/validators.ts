@@ -12,6 +12,7 @@ import {
   msmeCategories,
   tdsSectionCodes,
 } from "./party-compliance.js";
+import { tcsSectionCodes } from "./tcs.js";
 
 // ── Common ─────────────────────────────────────────────────────
 
@@ -392,6 +393,8 @@ export const batchFieldsSchema = z.object({
 const createItemBaseSchema = z.object({
   name: z.string().min(1).max(200),
   hsn: z.string().max(20).optional(),
+  // TCS section (s.206C) for specified goods such as scrap; null clears it.
+  tcsSection: z.enum(tcsSectionCodes).nullable().optional(),
   sku: z.string().max(50).optional(),
   // Scannable code. Printable ASCII only — Code 128 encodes exactly that
   // range, and it keeps stray whitespace from a scanner out of the value.
@@ -588,6 +591,16 @@ export const createInvoiceSchema = z.object({
    * attribute a sale to its channel.
    */
   source: z.enum(["pos", "online_store", "webhook"]).optional(),
+  /**
+   * TDS we deduct on a purchase bill, worked out when it is credited:
+   * auto (from the supplier's TDS section and the year's limits), none, or
+   * manual (tdsSection + tdsAmount entered here).
+   */
+  tdsMode: z.enum(["auto", "none", "manual"]).default("auto"),
+  tdsSection: z.enum(tdsSectionCodes).optional(),
+  tdsAmount: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
+  /** TCS (s.206C) on a sale: `auto` collects it on lines whose item has a TCS section; `none` collects none. */
+  tcsMode: z.enum(["auto", "none"]).default("auto"),
 });
 
 export const updateInvoiceStatusSchema = z.object({
@@ -615,6 +628,12 @@ export const createPaymentSchema = z.object({
   bankAccountId: z.string().uuid().optional(),
   // Multi-invoice allocation: allocate a single payment across multiple invoices
   allocations: z.array(paymentAllocationSchema).optional(),
+  // Income tax withheld from `amount` (we deduct it from a supplier, or a
+  // customer deducts it from us). The bank moves amount - tdsAmount.
+  tdsAmount: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).default("0"),
+  tdsSection: z.enum(tdsSectionCodes).optional(),
+  // Taxable value the TDS was worked out on, when it differs from the amount (e.g. excluding GST).
+  tdsBase: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
 });
 
 export const updatePaymentSchema = z.object({
@@ -628,6 +647,9 @@ export const updatePaymentSchema = z.object({
   bankAccountId: z.string().uuid().optional().nullable(),
   // Replace all allocations (reverse old, apply new)
   allocations: z.array(paymentAllocationSchema).optional(),
+  tdsAmount: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
+  tdsSection: z.enum(tdsSectionCodes).optional().nullable(),
+  tdsBase: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional().nullable(),
 });
 
 // ── Expense ────────────────────────────────────────────────────

@@ -73,6 +73,8 @@ export interface GenerateEWBPayload {
   sgstValue: number;
   igstValue: number;
   cessValue: number;
+  /** Other value in the invoice that is not goods or tax, e.g. TCS collected with the sale. */
+  otherValue?: number;
   transMode: string;    // "1" = road, "2" = rail, "3" = air, "4" = ship
   transDistance: number;
   transporterId?: string;

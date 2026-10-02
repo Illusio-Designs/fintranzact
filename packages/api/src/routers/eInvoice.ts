@@ -35,7 +35,8 @@ import type { TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
-import { IRPClient, IRPError } from "../lib/irp-client.js";
+import { IRPError } from "../lib/irp-client.js";
+import { createIRPClient } from "../lib/gov-provider.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 import { encryptEInvoiceConfig, decryptEInvoiceConfig } from "../lib/field-encryption.js";
@@ -131,6 +132,7 @@ async function generateIRNForInvoice(
         documentType: invoice.documentType,
         subtotal: invoice.subtotal,
         taxAmount: invoice.taxAmount,
+        tcsAmount: invoice.tcsAmount,
         discountAmount: invoice.discountAmount,
         additionalCharges: invoice.additionalCharges,
         roundOff: invoice.roundOff,
@@ -188,7 +190,7 @@ async function generateIRNForInvoice(
     .where(eq(invoices.id, invoiceId));
 
   try {
-    const client = new IRPClient(config, db);
+    const client = createIRPClient(config, db);
     const result = await client.generateIRN(irpJson);
 
     const [updated] = await db
@@ -353,7 +355,7 @@ export const eInvoiceRouter = router({
 
     try {
       const config = resolveIRPConfig(rawConfig);
-      const client = new IRPClient(config, ctx.db);
+      const client = createIRPClient(config, ctx.db);
       await client.authenticate();
       return { success: true, message: "Successfully connected to IRP" };
     } catch (err) {
@@ -459,7 +461,7 @@ export const eInvoiceRouter = router({
       }
 
       // Submit cancellation to IRP
-      const client = new IRPClient(config, ctx.db);
+      const client = createIRPClient(config, ctx.db);
       await client.cancelIRN(
         invoice.irn,
         input.cancelReason,

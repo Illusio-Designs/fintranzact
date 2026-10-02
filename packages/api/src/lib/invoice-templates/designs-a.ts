@@ -165,6 +165,7 @@ function tallyItems(c: Ctx, y: number, newPage: (c: Ctx) => number, o: { bos?: b
   } else if (m.charges !== 0) {
     tail.push(labelRow("Charges", inr(m.charges)));
   }
+  if (m.tcs > 0) tail.push(labelRow("TCS (s.206C)", inr(m.tcs)));
   if (m.roundOff !== 0) tail.push(labelRow("Round Off", inr(m.roundOff)));
   const units = new Set(m.lines.map((l) => l.unit));
   const total = empty();

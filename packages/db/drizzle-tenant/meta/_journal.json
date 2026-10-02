@@ -197,6 +197,13 @@
       "when": 1790883697137,
       "tag": "0027_invoice_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790945361962,
+      "tag": "0028_tds_tcs_period_locks",
+      "breakpoints": true
     }
   ]
 }

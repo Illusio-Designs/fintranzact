@@ -418,28 +418,36 @@ function PaymentsPage() {
                       <td className="font-medium">{p.partyName}</td>
                       <td className="text-text-secondary">{formatDate(p.paymentDate)}</td>
                       <td className="text-text-secondary">
-                        {paymentModeLabel(p.mode)}
+                        {p.source === "tds" ? "TDS deducted" : paymentModeLabel(p.mode)}
                       </td>
                       <td className="text-text-secondary text-xs">
                         {p.referenceNumber || "—"}
                       </td>
                       <td className="text-right tabular-nums font-semibold text-emerald-600">
                         {formatCurrency(p.amount)}
+                        {parseFloat(p.tdsAmount) > 0 && (
+                          <span className="block text-[11px] font-normal text-text-tertiary">
+                            incl. TDS {formatCurrency(p.tdsAmount)}
+                          </span>
+                        )}
                       </td>
                       <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <RowActions
-                          label={p.paymentNumber || p.partyName}
-                          items={tidyMenu([
-                            { label: "Open", hint: "Enter", onSelect: () => setSelectedPaymentId(p.id) },
-                            { label: "Edit payment", onSelect: () => setEditPaymentId(p.id) },
-                            { kind: "separator" },
-                            {
-                              label: "Delete payment",
-                              danger: true,
-                              onSelect: () => deleteConfirm.requestDelete(p.id, p.paymentNumber || p.partyName),
-                            },
-                          ])}
-                        />
+                        {/* A bill's TDS adjustment is managed from the bill, not edited here. */}
+                        {p.source !== "tds" && (
+                          <RowActions
+                            label={p.paymentNumber || p.partyName}
+                            items={tidyMenu([
+                              { label: "Open", hint: "Enter", onSelect: () => setSelectedPaymentId(p.id) },
+                              { label: "Edit payment", onSelect: () => setEditPaymentId(p.id) },
+                              { kind: "separator" },
+                              {
+                                label: "Delete payment",
+                                danger: true,
+                                onSelect: () => deleteConfirm.requestDelete(p.id, p.paymentNumber || p.partyName),
+                              },
+                            ])}
+                          />
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -509,7 +517,7 @@ function PaymentDetailPanel({
       title={isLoading ? "Loading…" : payment ? `Payment ${payment.paymentNumber || ""}` : "Payment"}
       description={payment ? `${payment.partyName} — ${formatDate(payment.paymentDate)}` : undefined}
       footer={
-        payment ? (
+        payment && payment.source !== "tds" ? (
           <div className="flex justify-end gap-2">
             <button
               onClick={() => onEdit(payment.id)}
@@ -540,6 +548,23 @@ function PaymentDetailPanel({
                 <DetailField label="Discount">
                   <p className="tabular-nums">{formatCurrency(payment.discount)}</p>
                 </DetailField>
+              )}
+              {payment.source === "tds" && (
+                <DetailField label="TDS deducted on the bill">
+                  <p className="text-sm text-text-secondary">
+                    Tax withheld from the supplier on the purchase bill and settled against it. No money moved. To change it, edit the bill&apos;s TDS.
+                  </p>
+                </DetailField>
+              )}
+              {parseFloat(payment.tdsAmount) > 0 && (
+                <>
+                  <DetailField label={`TDS withheld${payment.tdsSection ? ` (${payment.tdsSection.replace("_", " ")})` : ""}`}>
+                    <p className="tabular-nums">{formatCurrency(payment.tdsAmount)}</p>
+                  </DetailField>
+                  <DetailField label="Moved through the account">
+                    <p className="tabular-nums">{formatCurrency(parseFloat(payment.amount) - parseFloat(payment.tdsAmount))}</p>
+                  </DetailField>
+                </>
               )}
             </div>
             <div className="space-y-3">

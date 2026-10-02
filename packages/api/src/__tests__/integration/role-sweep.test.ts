@@ -119,6 +119,9 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   "invoice.update": { allow: ["owner", "admin", "seller_manager"], why: "sellers can't edit invoices" },
   "selfExport.request": { allow: ["owner"], why: "org owner only" },
   "selfImport.request": { allow: ["owner"], why: "org owner only" },
+  "period.unlockBooks": { allow: ["owner"], why: "only the owner unlocks a period" },
+  "period.unlockGstMonth": { allow: ["owner"], why: "only the owner unlocks a period" },
+  "period.reopenYear": { allow: ["owner"], why: "only the owner reopens a year" },
 };
 // Platform console: only platform admins (env-configured), never org roles.
 for (const p of listProcedures()) {
@@ -131,6 +134,10 @@ for (const p of listProcedures()) {
  */
 const NO_CASL_CHECK: Record<string, string> = {
   "target.myTargets": "self-scoped: returns only the caller's own sales targets",
+  "period.status": "read-only: every member sees which periods are locked so they know why an entry was blocked",
+  "period.unlockBooks": "owner-only, checked in the procedure (assertOwner)",
+  "period.unlockGstMonth": "owner-only, checked in the procedure (assertOwner)",
+  "period.reopenYear": "owner-only, checked in the procedure (assertOwner)",
 };
 
 // ── Sweep ────────────────────────────────────────────────────────────────────

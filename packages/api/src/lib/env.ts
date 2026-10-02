@@ -20,6 +20,11 @@ const checks: EnvCheck[] = [
     hint: "Required in production and multi-tenant mode for field-level encryption of sensitive credentials (e-invoice, carrier API keys). Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
   },
   {
+    key: "SANDBOX_API_KEY",
+    required: false,
+    hint: "Sandbox.co.in API key — enables e-invoice, e-way bill, GSTIN lookup and TDS/TCS filing (also set SANDBOX_API_SECRET)",
+  },
+  {
     key: "RESEND_API_KEY",
     required: false,
     condition: () => process.env.NODE_ENV === "production",
