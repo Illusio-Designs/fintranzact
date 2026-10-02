@@ -11,7 +11,7 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableScroll } from "@/components/ui/Table";
 import { usePageSize } from "@/hooks/usePageSize";
@@ -72,7 +72,7 @@ function ManufacturingPage() {
 
       <div className="card overflow-clip">
         {!data ? (
-          <SkeletonRows />
+          <TableSkeleton columns={[{ label: "No." }, { label: "Date" }, { label: "Item made" }, { label: "Quantity", align: "right" }, { label: "Components from → To" }, { label: "Cost", align: "right" }, { label: "Status", kind: "badge" }]} rows={6} />
         ) : data.data.length === 0 ? (
           <EmptyState
             title="Nothing manufactured yet"
@@ -566,7 +566,7 @@ function JournalDetail({ id, onClose }: { id: string | null; onClose: () => void
         }
       >
         {!j ? (
-          <SkeletonRows />
+          <TableSkeleton columns={[{ label: "Item" }, { label: "BOM", align: "right" }, { label: "Actual", align: "right" }, { label: "Value", align: "right" }]} rows={6} />
         ) : (
           <div className="space-y-5 text-sm">
             <div>

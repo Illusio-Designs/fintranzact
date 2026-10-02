@@ -1027,7 +1027,7 @@ function EditAccountSlideOver({
       }
     >
       {isLoading ? (
-        <div className="space-y-4 animate-pulse">
+        <div className="space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="space-y-1.5">
               <div className="skeleton h-3.5 w-24 rounded" />
@@ -1751,7 +1751,7 @@ function TransferModal({
 
 function AccountListSkeleton() {
   return (
-    <div className="p-4 space-y-3 animate-pulse">
+    <div className="p-4 space-y-3">
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="flex items-center justify-between">
           <div className="space-y-1.5 flex-1">
@@ -1767,7 +1767,7 @@ function AccountListSkeleton() {
 
 function TransactionTableSkeleton() {
   return (
-    <div className="p-4 space-y-3 animate-pulse">
+    <div className="p-4 space-y-3">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex items-center gap-4">
           <div className="skeleton h-3.5 w-20 rounded" />

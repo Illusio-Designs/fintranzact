@@ -2,13 +2,13 @@
  * Price List report: every item (and variant) with its sale price, MRP and
  * price on each price level as of a date. Rendered from the Reports page.
  */
+import { ReportSkeleton } from "./report-format";
 import { useState } from "react";
 import { Alert02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
 import { downloadCSV, formatCurrency, formatDate } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Spinner } from "@/components/ui/Spinner";
 import { Icon } from "@/components/ui/Icon";
 
 const money = (v: string | null | undefined) => (v ? formatCurrency(v) : "—");
@@ -53,9 +53,7 @@ export function PriceListReport({ asOf }: { asOf?: string }) {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Spinner size="md" className="text-brand-600" />
-        </div>
+        <ReportSkeleton summary={0} columns={[{ label: "Item" }, { label: "Unit" }, { label: "Sale price", align: "right" }, { label: "MRP", align: "right" }, { align: "right", kind: "button" }]} />
       ) : error || !data ? (
         <EmptyState
           icon={<Icon icon={Alert02Icon} size={20} className="text-text-tertiary" />}

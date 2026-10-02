@@ -3,6 +3,7 @@
  * whoever holds the link can read the document, pay by UPI and download the
  * PDF. Rendered outside the app shell for signed-in and signed-out visitors.
  */
+import { BootSplash } from "@/components/ui/BootSplash";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Download04Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
@@ -10,7 +11,6 @@ import { apiUrl } from "@/lib/api-url";
 import { formatCurrency, formatDate, getDocumentTypeLabel } from "@/lib/utils";
 import { Icon } from "@/components/ui/Icon";
 import { Logo } from "@/components/ui/Logo";
-import { Spinner } from "@/components/ui/Spinner";
 
 export const Route = createFileRoute("/i/$token")({
   component: SharedDocumentPage,
@@ -94,11 +94,7 @@ function SharedDocumentPage() {
   }, [state]);
 
   if (state.kind === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-1">
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    );
+    return <BootSplash className="bg-surface-1" />;
   }
 
   if (state.kind !== "ready") {

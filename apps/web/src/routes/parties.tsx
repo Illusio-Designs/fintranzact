@@ -2,7 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { usePageSearch } from "@/lib/page-search";
+import { useSaveTick } from "@/hooks/useSaveTick";
+import { SavedTick } from "@/components/ui/SavedTick";
 import { trpc } from "@/lib/trpc";
+import { useFlashRows } from "@/hooks/useFlashRows";
 import { formatCurrency, formatDate, getInitials, cn, downloadCSV, toISOString } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -39,7 +42,7 @@ import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { LinkButton } from "@/components/ui/LinkButton";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { Pagination } from "@/components/ui/Pagination";
@@ -107,19 +110,22 @@ function PartiesPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const { data, isFetching, isLoading } = trpc.party.list.useQuery({
+  const listInput = {
     search: debouncedSearch || undefined,
     filter: partyFilter as any,
     sortBy: sort.key,
     sortDir: sort.dir,
     page,
     limit: pageSize,
-  }, {
+  };
+  const { data, isFetching, isLoading, isPlaceholderData } = trpc.party.list.useQuery(listInput, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
   const rows = data?.data ?? [];
+  // Rows just added or saved glow green for a moment.
+  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   // Deleting the last row of the last page: step back a page.
@@ -244,7 +250,7 @@ function PartiesPage() {
 
       {/* Table */}
       {isLoading ? (
-        <SkeletonRows count={5} height="h-12" />
+        <TableSkeleton columns={[{ label: "Name", kind: "pair" }, { label: "Type", kind: "badge" }, { label: "Phone" }, { label: "GSTIN", kind: "mono" }, { label: "Balance", align: "right" }, { align: "right", kind: "button" }]} rows={5} />
       ) : !rows.length && !isFetching ? (
         <EmptyState
           title="No parties found"
@@ -284,7 +290,7 @@ function PartiesPage() {
                 {rows.map((party) => (
                   <tr
                     key={party.id}
-                    className="cursor-pointer"
+                    className={cn("cursor-pointer", flash.has(party.id) && "animate-row-flash")}
                     onClick={() => setSelectedPartyId(party.id)}
                   >
                     <td>
@@ -1368,14 +1374,18 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
     onError: (err) => toast.error(err.message),
   });
 
+  // The save button shows a tick before the panel closes.
+  const tick = useSaveTick();
   const createMutation = trpc.party.create.useMutation({
     onSuccess: () => {
       utils.party.list.invalidate();
       toast.success("Party created");
       // The panel stays mounted: start the next party from a blank form, not
       // with this one's phone, addresses and credit terms.
-      resetForm();
-      onClose();
+      tick.finish(() => {
+        resetForm();
+        onClose();
+      });
     },
     onError: (err) => {
       toast.error(err.message);
@@ -1387,7 +1397,7 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
       utils.party.list.invalidate();
       if (existing) utils.party.getById.invalidate({ id: existing.id });
       toast.success("Party updated");
-      onClose();
+      tick.finish(onClose);
     },
     onError: (err) => {
       toast.error(err.message);
@@ -1548,11 +1558,11 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
             Cancel
           </button>
           <button
-            className="btn-primary"
+            className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
             onClick={handleCreate}
-            disabled={saving || !name.trim()}
+            disabled={saving || tick.saved || !name.trim()}
           >
-            {existing
+            {tick.saved ? <SavedTick label={existing ? "Saved" : "Created"} /> : existing
               ? updateMutation.isPending ? "Saving…" : "Save Changes"
               : createMutation.isPending ? "Creating…" : "Create Party"}
           </button>

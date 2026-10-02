@@ -105,7 +105,7 @@ function urgencyBadgeColor(urgency: string): string {
 
 // ── Main Page ─────────────────────────────────────────────────
 
-function ITCPage() {
+export function ITCPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);

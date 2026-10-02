@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { useSlidingIndicator } from "@/hooks/useSlidingIndicator";
 
 interface Tab {
   value: string;
@@ -16,21 +17,33 @@ interface PillTabsProps {
 
 export function PillTabs({ tabs, value, onChange, size = "md", className }: PillTabsProps) {
   const isSmall = size === "sm";
+  // The selected pill's background glides between tabs.
+  const ind = useSlidingIndicator<HTMLDivElement>(value);
   return (
-    <div className={cn("flex items-center gap-0.5", isSmall && "bg-surface-1 rounded-md p-0.5", className)}>
+    <div ref={ind.ref} className={cn("relative flex items-center gap-0.5", isSmall && "bg-surface-1 rounded-md p-0.5", className)}>
+      <span
+        aria-hidden
+        style={ind.style}
+        className={cn(
+          "pointer-events-none absolute duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none",
+          isSmall ? "rounded-md bg-brand-50 shadow-sm dark:bg-brand-950" : "rounded-full bg-brand-50 dark:bg-brand-950",
+        )}
+      />
       {tabs.map((tab) => (
         <button
           key={tab.value}
+          data-value={tab.value}
           type="button"
           aria-pressed={tab.value === value}
           onClick={() => tab.value !== value && onChange(tab.value)}
           className={cn(
-            "font-medium transition-colors inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap",
+            "relative font-medium transition-colors inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap",
             isSmall ? "px-2 py-0.5 text-2xs rounded-md" : "h-8 px-3 text-ui rounded-full border",
             tab.value === value
-              ? isSmall
-                ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-400 shadow-sm"
-                : "border-transparent bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+              ? cn(
+                  isSmall ? "text-brand-700 dark:text-brand-400" : "border-transparent text-brand-700 dark:text-brand-300",
+                  !ind.ready && (isSmall ? "bg-brand-50 shadow-sm dark:bg-brand-950" : "bg-brand-50 dark:bg-brand-950"),
+                )
               : isSmall
                 ? "text-text-tertiary hover:text-text-secondary hover:bg-surface-2"
                 : "border-border-light text-text-secondary hover:text-text-primary hover:bg-surface-2"
@@ -70,19 +83,28 @@ interface SegmentedControlProps {
 }
 
 export function SegmentedControl({ tabs, value, onChange }: SegmentedControlProps) {
+  // The white "selected" card slides to the tab you pick instead of jumping.
+  const ind = useSlidingIndicator<HTMLDivElement>(value);
   return (
     <div
-      className="inline-flex rounded-lg p-0.5 bg-surface-1 border border-border-light"
+      ref={ind.ref}
+      className="relative inline-flex rounded-lg p-0.5 bg-surface-1 border border-border-light"
     >
+      <span
+        aria-hidden
+        style={ind.style}
+        className="pointer-events-none absolute rounded-md bg-surface-0 shadow-sm duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
+      />
       {tabs.map((tab) => (
         <button
           key={tab.value}
+          data-value={tab.value}
           type="button"
           onClick={() => tab.value !== value && onChange(tab.value)}
           className={cn(
-            "px-3 py-1.5 rounded-md text-sm font-medium transition",
+            "relative px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
             tab.value === value
-              ? "bg-surface-0 shadow-sm text-text-primary"
+              ? cn("text-text-primary", !ind.ready && "bg-surface-0 shadow-sm")
               : "text-text-tertiary hover:text-text-secondary"
           )}
         >

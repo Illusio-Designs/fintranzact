@@ -5,7 +5,15 @@ import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { AgingReportView, BalanceSheetView, PartyLedgerView, ProfitAndLossView, TallyExportView, TrialBalanceView } from "@/components/reports/AccountingReports";
 import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
 import { Fragment, useState, useRef, useEffect, type ReactNode } from "react";
-import { trpc } from "@/lib/trpc";
+import { trpc, getBusinessId } from "@/lib/trpc";
+import { SegmentedControl } from "@/components/ui/Tabs";
+import { canAccess } from "@/lib/permissions";
+import { EmbeddedReport } from "@/lib/embedded-report";
+import { GSTReportsPage } from "./gst";
+import { GSTR2BPage } from "./gstr2b";
+import { ITCPage } from "./itc";
+import { EInvoicingPage } from "./e-invoicing";
+import { EWayBillsPage } from "./eway-bills";
 import { formatCurrency, formatDate, downloadCSV, cn, formatDateInput, todayISODate } from "@/lib/utils";
 import { StatCard } from "@/components/ui/StatCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -16,7 +24,7 @@ import { useDateRange } from "@/hooks/useDateRange";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Analytics01Icon, ArrowRight01Icon, Cash01Icon, Clock01Icon, Download04Icon, FileEmpty01Icon, InformationCircleIcon, Invoice01Icon, MoneySend01Icon, Search01Icon, StarIcon, UserGroupIcon } from "@hugeicons/core-free-icons";
 
-import { Spinner } from "@/components/ui/Spinner";
+import { ReportSkeleton } from "@/components/reports/report-format";
 import {
   BatchStockReport,
   DeadStockReport,
@@ -77,7 +85,16 @@ type ReportId =
   | "trial-balance"
   | "ageing"
   | "party-ledger"
-  | "tally-export";
+  | "tally-export"
+  // Statutory: the GST and compliance pages, shown inside the Centre
+  | "gstr1"
+  | "gstr3b"
+  | "gstr9"
+  | "cmp08"
+  | "gstr2b"
+  | "itc"
+  | "e-invoices"
+  | "eway-bills";
 
 interface ReportDef {
   id: ReportId;
@@ -86,10 +103,18 @@ interface ReportDef {
   tabular: boolean; // true = table + CSV download, false = card/summary layout
   /** Has its own period controls, so the shared date range is hidden. */
   ownPeriod?: boolean;
+  /** Only for GST-registered businesses. */
+  gstOnly?: boolean;
+  /** Only for composition dealers (CMP-08). */
+  compositionOnly?: boolean;
+  /** Permission needed beyond Report:read, e.g. the e-invoicing page's. */
+  resource?: Parameters<typeof canAccess>[1];
 }
 
-/** Report categories, grouped the way accountants look for them. */
-const REPORT_GROUPS: Array<{ id: string; label: string; reports: ReportDef[] }> = [
+type ReportSide = "business" | "statutory";
+
+/** Report categories, grouped the way accountants look for them. Statutory ones sit on their own side, as in Tally. */
+const REPORT_GROUPS: Array<{ id: string; label: string; side?: ReportSide; reports: ReportDef[] }> = [
   {
     id: "overview",
     label: "Business overview",
@@ -148,13 +173,6 @@ const REPORT_GROUPS: Array<{ id: string; label: string; reports: ReportDef[] }> 
     ],
   },
   {
-    id: "tax",
-    label: "Taxes",
-    reports: [
-      { id: "tax-summary", label: "Tax Summary", description: "Tax collected and paid summary", tabular: true },
-    ],
-  },
-  {
     id: "cash",
     label: "Cash & payments",
     reports: [
@@ -171,7 +189,46 @@ const REPORT_GROUPS: Array<{ id: string; label: string; reports: ReportDef[] }> 
       { id: "tally-export", label: "Tally Export", description: "Masters and vouchers as Tally XML for your CA", tabular: false, ownPeriod: true },
     ],
   },
+  {
+    id: "gst-returns",
+    label: "GST returns",
+    side: "statutory",
+    reports: [
+      { id: "gstr1", label: "GSTR-1", description: "Outward supplies: B2B, B2C, credit notes and HSN summary, with JSON for the portal", tabular: false, ownPeriod: true, gstOnly: true, resource: "GstReport" },
+      { id: "gstr3b", label: "GSTR-3B", description: "Monthly summary of output tax, input tax credit and tax payable", tabular: false, ownPeriod: true, gstOnly: true, resource: "GstReport" },
+      { id: "gstr9", label: "GSTR-9", description: "Annual return for the financial year", tabular: false, ownPeriod: true, gstOnly: true, resource: "GstReport" },
+      { id: "cmp08", label: "CMP-08", description: "Quarterly statement for composition dealers", tabular: false, ownPeriod: true, gstOnly: true, compositionOnly: true, resource: "GstReport" },
+    ],
+  },
+  {
+    id: "itc",
+    label: "Input tax credit",
+    side: "statutory",
+    reports: [
+      { id: "gstr2b", label: "GSTR-2B Reconciliation", description: "Match what suppliers reported against your purchase bills", tabular: false, ownPeriod: true, gstOnly: true, resource: "GstReport" },
+      { id: "itc", label: "Input Tax Credit", description: "ITC available, claimed and reversed by return period", tabular: false, ownPeriod: true, gstOnly: true, resource: "ITC" },
+    ],
+  },
+  {
+    id: "e-docs",
+    label: "e-Invoices & e-Way Bills",
+    side: "statutory",
+    reports: [
+      { id: "e-invoices", label: "e-Invoice Register", description: "IRNs generated, pending and cancelled, with settings and bulk retry", tabular: false, ownPeriod: true, gstOnly: true, resource: "EInvoice" },
+      { id: "eway-bills", label: "e-Way Bill Register", description: "Active, expiring and cancelled e-way bills for goods movement", tabular: false, ownPeriod: true, gstOnly: true, resource: "EWayBill" },
+    ],
+  },
+  {
+    id: "tax",
+    label: "Tax summaries",
+    side: "statutory",
+    reports: [
+      { id: "tax-summary", label: "Tax Summary", description: "Tax collected and paid summary", tabular: true },
+    ],
+  },
 ];
+
+const sideOf = (groupId: string): ReportSide => REPORT_GROUPS.find((g) => g.id === groupId)?.side ?? "business";
 
 const ALL_REPORTS = REPORT_GROUPS.flatMap((g) => g.reports);
 
@@ -305,13 +362,7 @@ function DaybookReport({
     downloadCSV("daybook", headers, rows);
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    );
-  }
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Description" }, { label: "Ref #", kind: "mono" }, { label: "Mode", kind: "badge" }, { label: "Debit", align: "right" }, { label: "Credit", align: "right" }]} />;
 
   if (error || !data) {
     return (
@@ -642,13 +693,7 @@ function OutstandingReport({
     downloadCSV("outstanding-report", headers, rows);
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    );
-  }
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Party", kind: "pair" }, { label: "Current", align: "right" }, { label: "1–30 days", align: "right" }, { label: "31–60 days", align: "right" }, { label: "61–90 days", align: "right" }, { label: "90+ days", align: "right" }, { label: "Total", align: "right" }]} />;
 
   if (error || !data) {
     return (
@@ -790,13 +835,7 @@ function MsmePayablesReport() {
     downloadCSV("msme-payables", headers, rows);
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    );
-  }
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Supplier" }, { label: "Bill" }, { label: "Bill date" }, { label: "Outstanding", align: "right" }, { label: "Pay by" }, { label: "Days left", align: "right" }]} />;
   if (error || !data) {
     return <EmptyState title="Could not load MSME payables" description={error?.message ?? "Please try again."} />;
   }
@@ -1040,13 +1079,7 @@ function RegisterReport({
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    );
-  }
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Date" }, { label: "Invoice #", kind: "mono" }, { label: "Doc Type" }, { label: "Customer" }, { label: "GSTIN", kind: "mono" }, { label: "Subtotal", align: "right" }, { label: "Discount", align: "right" }, { label: "Tax", align: "right" }, { label: "Total", align: "right" }, { label: "Paid", align: "right" }, { label: "Status", kind: "badge" }]} />;
 
   if (error || !data) {
     return (
@@ -1408,13 +1441,7 @@ function PartyStatementReport({
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    );
-  }
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Date" }, { label: "Type", kind: "badge" }, { label: "Ref #", kind: "mono" }, { label: "Description" }, { label: "Debit", align: "right" }, { label: "Credit", align: "right" }, { label: "Balance", align: "right" }]} />;
 
   if (error || data === undefined) {
     return (
@@ -1694,13 +1721,7 @@ function StockSummaryReport() {
     downloadCSV("stock-summary", headers, rows);
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    );
-  }
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Item" }, { label: "Category" }, { label: "HSN / Unit" }, { label: "Stock", align: "right" }, { label: "Purchase Price", align: "right" }, { label: "Sale Price", align: "right" }, { label: "Stock Value", align: "right" }]} />;
 
   if (error || !data) {
     return (
@@ -2038,13 +2059,6 @@ interface ItemSalesData {
 
 // ── Shared loading / error / export helpers ───────────────────────
 
-function LoadingSpinner() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <Spinner size="md" className="text-brand-600" />
-    </div>
-  );
-}
 
 function ReportError({ title }: { title: string }) {
   return (
@@ -2129,7 +2143,7 @@ function PaymentSummaryReport({
     downloadCSV("payment-summary", headers, rows);
   }
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Mode", kind: "badge" }, { label: "Account" }, { label: "Count", align: "right" }, { label: "Total", align: "right" }]} />;
   if (error || !data) return <ReportError title="Could not load payment summary" />;
 
   const netPositive = parseFloat(data.summary.netCashMovement) >= 0;
@@ -2310,7 +2324,7 @@ function TaxSummaryReport({
     downloadCSV("tax-summary", headers, rows);
   }
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Tax %", align: "right" }, { label: "Invoices", align: "right" }, { label: "Taxable Amt", align: "right" }, { label: "Tax Amt", align: "right" }, { label: "Gross Amt", align: "right" }]} />;
   if (error || !data) return <ReportError title="Could not load tax summary" />;
 
   const netLiability = parseFloat(data.summary.netTaxLiability);
@@ -2460,7 +2474,7 @@ function ItemSalesReport({
     downloadCSV("item-wise-sales", headers, rows);
   }
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Item" }, { label: "Category" }, { label: "Qty Sold", align: "right" }, { label: "Revenue (excl. GST)", align: "right" }, { label: "Avg Price", align: "right" }, { label: "Invoices", align: "right" }, { label: "Customers", align: "right" }, { label: "Margin %", align: "right" }, { label: "Change", align: "right" }]} />;
   if (error || !data) return <ReportError title="Could not load item-wise sales" />;
 
   return (
@@ -2678,13 +2692,7 @@ function CollectionEfficiencyReport({
     { enabled: true }
   ) as { data: CollectionEfficiencyData | undefined; isLoading: boolean; error: unknown };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    );
-  }
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Month" }, { label: "Invoiced", align: "right" }, { label: "Collected", align: "right" }, { label: "Collection %", align: "right" }]} />;
 
   if (error || !data) {
     return (
@@ -2894,13 +2902,7 @@ function CashFlowReport({
     { enabled: !!(fromDate && toDate) }
   ) as { data: CashFlowStatementData | undefined; isLoading: boolean; error: unknown };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    );
-  }
+  if (isLoading) return <ReportSkeleton summary={3} statement={[4, 3, 3]} />;
 
   if (error || !data) {
     return (
@@ -3043,11 +3045,11 @@ function StickyPeriodHint({ visible }: { visible: boolean }) {
 
 // ── Main Reports Page ────────────────────────────────────────────
 
-const reportsSearchSchema = z.object({ report: z.string().optional() });
+const reportsSearchSchema = z.object({ report: z.string().optional(), side: z.enum(["business", "statutory"]).optional() });
 
 const REPORT_FAVS_KEY = "fintranzact_report_favourites";
 const REPORT_RECENT_KEY = "fintranzact_reports_recent";
-const DEFAULT_FAVS: ReportId[] = ["outstanding", "pnl", "sales-register", "tax-summary"];
+const DEFAULT_FAVS: ReportId[] = ["outstanding", "pnl", "sales-register", "tax-summary", "gstr1", "gstr3b", "gstr2b"];
 
 function readIds(key: string, fallback: ReportId[]): ReportId[] {
   try {
@@ -3066,10 +3068,15 @@ function writeIds(key: string, ids: ReportId[]) {
 }
 
 function StarButton({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
+  // A small pop when you star a report, so you can see it took.
+  const [pops, setPops] = useState(0);
   return (
     <button
       type="button"
-      onClick={onToggle}
+      onClick={() => {
+        if (!on) setPops((n) => n + 1);
+        onToggle();
+      }}
       aria-pressed={on}
       aria-label={`${on ? "Remove from" : "Add to"} favourites: ${label}`}
       className={cn(
@@ -3077,15 +3084,74 @@ function StarButton({ on, label, onToggle }: { on: boolean; label: string; onTog
         on ? "text-amber-500" : "text-text-tertiary hover:text-text-primary",
       )}
     >
-      <Icon icon={StarIcon} size={16} className={on ? "[&_path]:fill-current" : undefined} />
+      <span key={pops} className={cn("grid place-items-center", on && pops > 0 && "animate-star-pop")}>
+        <Icon icon={StarIcon} size={16} className={on ? "[&_path]:fill-current" : undefined} />
+      </span>
     </button>
   );
 }
 
+/** The next filing dates, so what's due is visible on the Statutory side. */
+function FilingCalendar({ composition, onOpen, canOpen }: { composition: boolean; onOpen: (id: ReportId) => void; canOpen: (id: ReportId) => boolean }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const monthName = (d: Date) => d.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+  // Returns for last month fall due this month (GSTR-1 on the 11th, GSTR-3B on the 20th).
+  const last = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const dueIn = (day: number) => new Date(today.getFullYear(), today.getMonth(), day);
+  const q = Math.floor(today.getMonth() / 3);
+  const fyStartYear = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
+  const items: { id: ReportId; title: string; due: Date }[] = composition
+    ? [{ id: "cmp08", title: "CMP-08 · last quarter", due: new Date(today.getFullYear(), q * 3, 18) }]
+    : [
+        { id: "gstr1", title: `GSTR-1 · ${monthName(last)}`, due: dueIn(11) },
+        { id: "gstr3b", title: `GSTR-3B · ${monthName(last)}`, due: dueIn(20) },
+      ];
+  items.push({ id: "gstr9", title: `GSTR-9 · FY ${fyStartYear - 1}-${String(fyStartYear).slice(2)}`, due: new Date(fyStartYear, 11, 31) });
+  const days = (d: Date) => Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  return (
+    <div aria-label="Filing calendar" role="group" className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+      {items.filter((it) => canOpen(it.id)).map((it) => {
+        const n = days(it.due);
+        return (
+          <button
+            key={it.id}
+            type="button"
+            onClick={() => onOpen(it.id)}
+            className="grid gap-0.5 rounded-xl border border-border-light bg-surface-0 px-4 py-3 text-left transition-[border-color,transform] duration-150 hover:-translate-y-0.5 hover:border-brand-300 motion-reduce:transform-none dark:hover:border-brand-700"
+          >
+            <span className="text-xs text-text-tertiary">{it.title}</span>
+            <span className="font-display text-[15px] font-bold text-text-primary">
+              {n < 0 ? "Was due" : "Due"} {it.due.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+            </span>
+            <span className={cn("text-ui font-semibold", n < 0 ? "text-text-tertiary" : n <= 10 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
+              {n < 0 ? "Check it was filed" : n === 0 ? "Today" : `In ${n} day${n === 1 ? "" : "s"}`}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ReportsPage() {
-  const { report } = Route.useSearch();
+  const { report, side: sideParam } = Route.useSearch();
   const navigate = useNavigate({ from: "/reports" });
-  const activeReport = ALL_REPORTS.some((r) => r.id === report) ? (report as ReportId) : null;
+
+  // Statutory reports depend on the business's GST registration and the role's permissions.
+  const { data: session } = trpc.auth.me.useQuery();
+  const { data: businesses } = trpc.business.list.useQuery();
+  const biz = businesses?.find((b) => b.id === getBusinessId()) ?? businesses?.[0];
+  const gstRegistered = !!biz && (biz.gstRegistrationType !== "unregistered" || !!biz.gstin);
+  const composition = biz?.gstRegistrationType === "composition";
+  const allowed = (r: ReportDef) =>
+    (!r.gstOnly || gstRegistered) &&
+    (!r.compositionOnly || composition) &&
+    (!r.resource || canAccess(session?.role, r.resource, "read"));
+  const groups = REPORT_GROUPS.map((g) => ({ ...g, reports: g.reports.filter(allowed) })).filter((g) => g.reports.length > 0);
+  const visibleReports = groups.flatMap((g) => g.reports);
+  // Until the business has loaded, a link to a statutory report still opens it.
+  const activeReport = (businesses && session ? visibleReports : ALL_REPORTS).some((r) => r.id === report) ? (report as ReportId) : null;
 
   const [favs, setFavs] = useState<ReportId[]>(() => readIds(REPORT_FAVS_KEY, DEFAULT_FAVS));
   const [recent, setRecent] = useState<ReportId[]>(() => readIds(REPORT_RECENT_KEY, []));
@@ -3123,10 +3189,10 @@ function ReportsPage() {
     }
     navigate({ search: { report: id } });
   };
-  const backToReports = (cat?: string) => {
-    if (cat) setCategory(cat);
+  const backToReports = (cat?: string, toSide: ReportSide = side) => {
+    setCategory(cat ?? "favourites");
     setQuery("");
-    navigate({ search: {} });
+    navigate({ search: toSide === "statutory" ? { side: "statutory" } : {} });
   };
 
   // "/" jumps to the report search from anywhere on the page, like Tally's Go To.
@@ -3144,6 +3210,9 @@ function ReportsPage() {
 
   const currentReport = activeReport ? ALL_REPORTS.find((r) => r.id === activeReport)! : null;
   const currentGroup = activeReport ? REPORT_GROUPS.find((g) => g.reports.some((r) => r.id === activeReport))! : null;
+  // Business or Statutory: the open report's side, else the switch's.
+  const side: ReportSide = currentGroup ? sideOf(currentGroup.id) : (sideParam ?? "business");
+  const sideLabel = side === "statutory" ? "Statutory" : "Business";
 
   useEffect(() => {
     document.title = `${currentReport ? currentReport.label : "Reports"} — Fintranzact`;
@@ -3217,6 +3286,20 @@ function ReportsPage() {
         return <PartyLedgerView />;
       case "tally-export":
         return <TallyExportView />;
+      // The compliance pages, as they are, inside the Centre.
+      case "gstr1":
+      case "gstr3b":
+      case "gstr9":
+      case "cmp08":
+        return <EmbeddedReport gstTab={activeReport}><GSTReportsPage /></EmbeddedReport>;
+      case "gstr2b":
+        return <EmbeddedReport><GSTR2BPage /></EmbeddedReport>;
+      case "itc":
+        return <EmbeddedReport><ITCPage /></EmbeddedReport>;
+      case "e-invoices":
+        return <EmbeddedReport><EInvoicingPage /></EmbeddedReport>;
+      case "eway-bills":
+        return <EmbeddedReport><EWayBillsPage /></EmbeddedReport>;
       default:
         return currentReport ? <PlaceholderReport report={currentReport} /> : null;
     }
@@ -3227,8 +3310,12 @@ function ReportsPage() {
     return (
       <div className="flex flex-col gap-4">
         <nav aria-label="Where you are" className="flex flex-wrap items-center gap-1.5 text-ui text-text-tertiary">
-          <button type="button" onClick={() => backToReports()} className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+          <button type="button" onClick={() => backToReports(undefined, "business")} className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
             Reports
+          </button>
+          <Icon icon={ArrowRight01Icon} size={12} />
+          <button type="button" onClick={() => backToReports()} className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+            {sideLabel}
           </button>
           <Icon icon={ArrowRight01Icon} size={12} />
           <button type="button" onClick={() => backToReports(currentGroup.id)} className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
@@ -3277,13 +3364,16 @@ function ReportsPage() {
 
   // ── Reports Centre ──
   const term = query.trim().toLowerCase();
-  const byId = (id: ReportId) => ALL_REPORTS.find((r) => r.id === id);
-  const groupOf = (id: ReportId) => REPORT_GROUPS.find((g) => g.reports.some((r) => r.id === id))?.label ?? "";
+  const sideGroups = groups.filter((g) => (g.side ?? "business") === side);
+  const sideReports = sideGroups.flatMap((g) => g.reports);
+  const byId = (id: ReportId) => sideReports.find((r) => r.id === id);
+  const groupOf = (id: ReportId) => groups.find((g) => g.reports.some((r) => r.id === id))?.label ?? "";
   let listTitle: string;
   let listNote: string;
   let list: ReportDef[];
   if (term) {
-    list = ALL_REPORTS.filter((r) => `${r.label} ${r.description} ${groupOf(r.id)}`.toLowerCase().includes(term));
+    // Search finds reports on both sides.
+    list = visibleReports.filter((r) => `${r.label} ${r.description} ${groupOf(r.id)}`.toLowerCase().includes(term));
     listTitle = `Results for “${query.trim()}”`;
     listNote = `${list.length} found`;
   } else if (category === "favourites") {
@@ -3295,10 +3385,10 @@ function ReportsPage() {
     listTitle = "Recently viewed";
     listNote = "The last reports you opened";
   } else {
-    const g = REPORT_GROUPS.find((x) => x.id === category) ?? REPORT_GROUPS[0];
-    list = g.reports;
-    listTitle = g.label;
-    listNote = `${g.reports.length} reports`;
+    const g = sideGroups.find((x) => x.id === category) ?? sideGroups[0];
+    list = g?.reports ?? [];
+    listTitle = g?.label ?? "";
+    listNote = `${list.length} report${list.length === 1 ? "" : "s"}`;
   }
   const showGroup = !!term || category === "favourites" || category === "recent";
   const emptyText = term
@@ -3307,6 +3397,8 @@ function ReportsPage() {
       ? "Reports you open will show up here."
       : "Star a report to add it here.";
 
+  const favCount = favs.filter((id) => byId(id)).length;
+  const recentCount = recent.filter((id) => byId(id)).length;
   const catButton = (id: string, label: string, count: number, icon?: ReactNode) => {
     const on = !term && category === id;
     return (
@@ -3335,7 +3427,17 @@ function ReportsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className={PAGE_TITLE_CLASS}>Reports</h1>
-          <p className="mt-0.5 text-sm text-text-tertiary">{ALL_REPORTS.length} reports. Star the ones you use most.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <SegmentedControl
+              tabs={[
+                { value: "business", label: "Business reports" },
+                { value: "statutory", label: "Statutory reports" },
+              ]}
+              value={side}
+              onChange={(v) => backToReports(undefined, v as ReportSide)}
+            />
+            <span className="text-ui text-text-tertiary">{sideReports.length} reports. Star the ones you use most.</span>
+          </div>
         </div>
         <label className="flex h-10 w-full max-w-sm items-center gap-2 rounded-xl border border-border-light bg-surface-0 px-3 focus-within:border-brand-400">
           <Icon icon={Search01Icon} size={16} className="shrink-0 text-text-tertiary" />
@@ -3352,15 +3454,19 @@ function ReportsPage() {
         </label>
       </div>
 
+      {side === "statutory" && gstRegistered && (
+        <FilingCalendar composition={composition} onOpen={openReport} canOpen={(id) => visibleReports.some((r) => r.id === id)} />
+      )}
+
       <div className="grid overflow-clip rounded-2xl border border-border-light bg-surface-0 lg:grid-cols-[220px_minmax(0,1fr)]">
         <nav
           aria-label="Report categories"
           className="flex gap-1 overflow-x-auto border-b border-border-light p-2 lg:flex-col lg:overflow-visible lg:border-b-0 lg:border-r"
         >
-          {catButton("favourites", "Favourites", favs.length, <Icon icon={StarIcon} size={15} className="text-amber-500 [&_path]:fill-current" />)}
-          {catButton("recent", "Recently viewed", recent.length, <Icon icon={Clock01Icon} size={15} className="text-text-tertiary" />)}
+          {catButton("favourites", "Favourites", favCount, <Icon icon={StarIcon} size={15} className="text-amber-500 [&_path]:fill-current" />)}
+          {catButton("recent", "Recently viewed", recentCount, <Icon icon={Clock01Icon} size={15} className="text-text-tertiary" />)}
           <div className="mx-2 my-1.5 hidden h-px bg-border-light lg:block" />
-          {REPORT_GROUPS.map((g) => catButton(g.id, g.label, g.reports.length))}
+          {sideGroups.map((g) => catButton(g.id, g.label, g.reports.length))}
         </nav>
 
         <section aria-live="polite" className="min-w-0">

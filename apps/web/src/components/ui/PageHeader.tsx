@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { useEmbeddedReport } from "@/lib/embedded-report";
 
 /** Page title style shared by every screen (matches the dashboard greeting). */
 export const PAGE_TITLE_CLASS =
@@ -11,6 +12,10 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
+  // Inside the Reports Centre the Centre shows the title; keep only the actions.
+  if (useEmbeddedReport()) {
+    return actions ? <div className="mb-4 flex flex-wrap items-center justify-end gap-2 [&>div]:flex-wrap">{actions}</div> : null;
+  }
   return (
     // Wraps on narrow screens: the actions drop below the title (and wrap
     // among themselves) instead of pushing the page sideways.

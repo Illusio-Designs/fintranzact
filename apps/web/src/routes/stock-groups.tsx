@@ -12,7 +12,7 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { Modal } from "@/components/ui/Modal";
 import { InputField, SelectField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { Icon } from "@/components/ui/Icon";
 import { indentedName, useStockGroups } from "@/components/inventory/StockGroups";
 
@@ -130,7 +130,7 @@ function StockGroupsPage() {
 
       <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
         {isLoading ? (
-          <div className="p-4"><SkeletonRows count={4} /></div>
+          <TableSkeleton columns={[{ label: "Group" }, { label: "Sub-groups", align: "right" }, { label: "Items", align: "right" }, { align: "right", kind: "button" }]} rows={5} />
         ) : all.length === 0 ? (
           <EmptyState
             icon={<Icon icon={FolderLibraryIcon} size={22} />}

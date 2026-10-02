@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableScroll } from "@/components/ui/Table";
 import { usePageSize } from "@/hooks/usePageSize";
@@ -174,7 +174,7 @@ function BillOfMaterialsPage() {
 
       <div className="card overflow-clip">
         {!data ? (
-          <SkeletonRows />
+          <TableSkeleton columns={[{ label: "Item made" }, { label: "BOM" }, { label: "Makes", align: "right" }, { label: "Components", align: "right" }, { label: "Status", kind: "badge" }]} rows={6} />
         ) : data.data.length === 0 ? (
           <EmptyState
             title={debounced ? "No BOMs match" : "No bills of material yet"}

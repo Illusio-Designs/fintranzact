@@ -1,3 +1,4 @@
+import { DetailSkeleton } from "@/components/ui/Skeleton";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { trpc, getBusinessId } from "@/lib/trpc";
@@ -188,7 +189,7 @@ const EMPTY_UPDATE_FORM: UpdateVehicleFormState = {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-function EWayBillsPage() {
+export function EWayBillsPage() {
   const [activeTab, setActiveTab] = useState<EWBTab>("dashboard");
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -956,9 +957,7 @@ function EWBDetailModal({
       <div className="space-y-5">
         <p className="text-sm text-text-secondary">Full details and vehicle update history</p>
         {isLoading ? (
-          <div className="flex justify-center py-8">
-            <Spinner />
-          </div>
+          <DetailSkeleton fields={8} lines={2} />
         ) : !data ? (
           <EmptyState title="No EWB" description="No E-Way Bill found for this invoice" />
         ) : (
@@ -1105,11 +1104,11 @@ function EWBTableSkeleton() {
     <div className="divide-y divide-border-light">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="px-4 py-3 flex items-center gap-4">
-          <div className="h-3 w-24 bg-surface-2 rounded animate-pulse" />
-          <div className="h-3 w-16 bg-surface-2 rounded animate-pulse" />
-          <div className="h-3 w-28 bg-surface-2 rounded animate-pulse flex-1" />
-          <div className="h-3 w-14 bg-surface-2 rounded animate-pulse" />
-          <div className="h-5 w-16 bg-surface-2 rounded animate-pulse" />
+          <div className="h-3 w-24 skeleton rounded" />
+          <div className="h-3 w-16 skeleton rounded" />
+          <div className="h-3 w-28 skeleton rounded flex-1" />
+          <div className="h-3 w-14 skeleton rounded" />
+          <div className="h-5 w-16 skeleton rounded" />
         </div>
       ))}
     </div>

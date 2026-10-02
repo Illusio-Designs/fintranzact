@@ -29,16 +29,41 @@ export async function openBusiness(page: Page, owner: SeededOwner) {
   await expect(page.getByTestId("app-sidebar")).toBeAttached({ timeout: 20_000 });
 }
 
+/**
+ * The GST and compliance pages left the sidebar for Reports → Statutory
+ * reports. Old sidebar labels open the matching report there.
+ */
+const STATUTORY: Record<string, string> = {
+  "GST Returns": "GSTR-1",
+  "Tax Reports": "Tax Summary",
+  "GSTR-2B Recon": "GSTR-2B Reconciliation",
+  "Input Tax Credit": "Input Tax Credit",
+  "e-Invoicing": "e-Invoice Register",
+  "E-Way Bills": "e-Way Bill Register",
+};
+
 /** A sidebar page, its heading, and (on a phone) no sideways scroll. */
 export async function openPage(page: Page, label: string, heading: string | RegExp = label) {
+  if (label in STATUTORY) return openStatutoryReport(page, STATUTORY[label]);
+  if (label === "Business Reports") label = "Reports";
   await navTo(page, label);
-  await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: heading === "Business Reports" ? "Reports" : heading, level: 1 })).toBeVisible();
   await expectNoHorizontalScroll(page, label);
 }
 
-/** Business Reports → one report, found with "Go to a report". */
+/** Reports → Statutory reports → one report. */
+export async function openStatutoryReport(page: Page, report: string) {
+  await navTo(page, "Reports");
+  await page.getByRole("button", { name: "Statutory reports" }).click();
+  await page.getByRole("searchbox", { name: "Go to a report" }).fill(report);
+  await page.getByRole("button", { name: report, exact: true }).click();
+  await expect(page.getByRole("heading", { name: report, level: 1 })).toBeVisible();
+  await expectNoHorizontalScroll(page, report);
+}
+
+/** Reports → one report, found with "Go to a report" (which searches both sides). */
 export async function openReport(page: Page, label: string) {
-  if (!page.url().endsWith("/reports")) await openPage(page, "Business Reports", /.+/);
+  if (!page.url().endsWith("/reports")) await openPage(page, "Reports", /.+/);
   // The Reports Centre lists one category at a time; "Go to a report" finds any.
   await page.getByRole("searchbox", { name: "Go to a report" }).fill(label);
   await page.getByRole("button", { name: label, exact: true }).click();

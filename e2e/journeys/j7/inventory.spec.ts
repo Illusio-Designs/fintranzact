@@ -62,7 +62,7 @@ import {
 
 /** Business Reports → one report, found with "Go to a report". */
 async function openReport(page: Page, label: string) {
-  if (!page.url().endsWith("/reports")) await openPage(page, "Business Reports", /.+/);
+  if (!page.url().endsWith("/reports")) await openPage(page, "Reports", /.+/);
   // The Reports Centre lists one category at a time; "Go to a report" finds any.
   await page.getByRole("searchbox", { name: "Go to a report" }).fill(label);
   await page.getByRole("button", { name: label, exact: true }).click();

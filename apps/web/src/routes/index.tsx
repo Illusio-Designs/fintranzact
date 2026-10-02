@@ -1,6 +1,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { CountUp } from "@/components/ui/CountUp";
+import { Bone, ChartSkeleton, KpiSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
 import {
   BarChart,
   Bar,
@@ -499,7 +501,7 @@ function SalesTrendChart({
   if (!hasData) {
     return (
       <ChartCard title="Sales & collections" icon={ChartBarLineIcon} responsive={false}>
-        <ChartEmpty />
+        <ChartEmpty loading={!raw} />
       </ChartCard>
     );
   }
@@ -583,7 +585,7 @@ function InvoiceStatusChart({ fromDate, toDate }: { fromDate?: string; toDate?: 
   if (!data || data.length === 0) {
     return (
       <ChartCard title="Invoice status" icon={Invoice03Icon} responsive={false}>
-        <ChartEmpty />
+        <ChartEmpty loading={!data} />
       </ChartCard>
     );
   }
@@ -631,7 +633,7 @@ function TopSellingChart({ fromDate, toDate }: { fromDate?: string; toDate?: str
           <PillTabs tabs={TOP_SELLING_TABS} value={itemType} onChange={setItemType} size="sm" />
         </PanelHeader>
         <div className="px-4 py-4" style={{ height: 260 }}>
-          <ChartEmpty />
+          <ChartEmpty loading={!raw} />
         </div>
       </div>
     );
@@ -708,7 +710,7 @@ function TopCustomersChart({ fromDate, toDate }: { fromDate?: string; toDate?: s
   if (!raw || raw.length === 0) {
     return (
       <ChartCard title="Top Customers" icon={UserGroupIcon} responsive={false}>
-        <ChartEmpty />
+        <ChartEmpty loading={!raw} />
       </ChartCard>
     );
   }
@@ -757,7 +759,9 @@ function TopCustomersChart({ fromDate, toDate }: { fromDate?: string; toDate?: s
   );
 }
 
-function ChartEmpty() {
+/** No rows for the period, or (while loading) the chart's outline shimmering instead. */
+function ChartEmpty({ loading = false }: { loading?: boolean }) {
+  if (loading) return <ChartSkeleton className="h-full min-h-[180px]" height={220} />;
   return (
     <div className="flex items-center justify-center h-full text-sm text-text-tertiary">
       No data for this period
@@ -791,7 +795,7 @@ function PaymentModeWidget({ fromDate, toDate }: { fromDate?: string; toDate?: s
   if (!data || data.length === 0) {
     return (
       <ChartCard title="Payment modes" icon={CreditCardIcon} responsive={false}>
-        <ChartEmpty />
+        <ChartEmpty loading={!data} />
       </ChartCard>
     );
   }
@@ -835,7 +839,11 @@ function CollectionEfficiencyWidget({ fromDate, toDate }: { fromDate?: string; t
           <IconCircle icon={Coins01Icon} tone="success" size="sm" />
           <p className="text-sm font-semibold text-text-primary">Collection Efficiency</p>
         </div>
-        <p className="text-sm text-text-tertiary mt-3">No invoices for this period</p>
+        {data ? (
+          <p className="text-sm text-text-tertiary mt-3">No invoices for this period</p>
+        ) : (
+          <div aria-hidden className="mt-3 grid gap-2"><Bone className="h-6 w-24" /><Bone className="h-2 w-full rounded-full" /></div>
+        )}
       </div>
     );
   }
@@ -901,7 +909,7 @@ function ExpenseCategoryWidget({ fromDate, toDate }: { fromDate?: string; toDate
   if (!data || data.categories.length === 0) {
     return (
       <ChartCard title="Expenses by Category" icon={PieChartIcon} responsive={false}>
-        <ChartEmpty />
+        <ChartEmpty loading={!data} />
       </ChartCard>
     );
   }
@@ -1091,7 +1099,7 @@ function SummaryCards({
               data-testid={`dashboard-${c.label.toLowerCase().replace(/\s+/g, "-")}`}
               className="mt-2.5 font-display text-[17px] font-extrabold leading-tight tracking-[-0.02em] tabular-nums text-text-primary sm:text-[22px] xl:text-[26px]"
             >
-              {formatCurrency(c.value)}
+              <CountUp value={parseFloat(c.value)} format={formatCurrency} />
             </p>
             <p className="mt-1 truncate text-xs text-text-tertiary">{c.note}</p>
           </Link>
@@ -1152,6 +1160,7 @@ function RecentInvoices() {
   // Roles without invoice access simply don't get this panel.
   if (isError) return null;
   const rows = data?.data ?? [];
+  const loading = !data;
 
   return (
     <div className={cn(PANEL, "overflow-hidden")}>
@@ -1160,7 +1169,9 @@ function RecentInvoices() {
           See all
         </Link>
       </PanelHeader>
-      {rows.length === 0 ? (
+      {loading ? (
+        <TableSkeleton rows={5} className="mt-3" columns={[{ label: "Invoice", kind: "mono" }, { label: "Party" }, { label: "Date" }, { label: "Amount", align: "right" }, { label: "Status", kind: "badge" }]} />
+      ) : rows.length === 0 ? (
         <p className="px-5 py-10 text-center text-sm text-text-tertiary">No sales invoices yet</p>
       ) : (
         <div className="mt-3 overflow-x-auto">
@@ -1264,18 +1275,54 @@ function greeting(hour: number) {
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function PageSkeleton() {
+  // The dashboard's own layout: greeting, the four figure cards, the four
+  // smaller ones, then the chart beside invoice status and the recent list.
   return (
-    <div className="space-y-4">
-      <div className="skeleton h-7 w-40" />
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="skeleton h-16 rounded-xl" />
+    <div role="status" aria-label="Loading dashboard" className="space-y-5">
+      <div aria-hidden className="flex items-end justify-between gap-4">
+        <div className="grid gap-2">
+          <Bone className="h-8 w-64" />
+          <Bone className="w-48 opacity-70" />
+        </div>
+        <Bone className="h-9 w-28 rounded-lg" />
+      </div>
+      <KpiSkeleton />
+      <div aria-hidden className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 rounded-2xl border border-border-light bg-surface-0 px-4 py-3">
+            <Bone className="h-5 w-5 rounded-md" />
+            <div className="grid flex-1 gap-1.5">
+              <Bone className="h-2.5 w-16 opacity-70" />
+              <Bone className="w-24" />
+            </div>
+          </div>
         ))}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="skeleton h-[292px] rounded-xl" />
-        ))}
+      <div aria-hidden className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="rounded-2xl border border-border-light bg-surface-0 p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <Bone className="h-4 w-40" />
+            <Bone className="w-32 opacity-70" />
+          </div>
+          <ChartSkeleton height={230} bars={8} />
+        </div>
+        <div className="grid content-start gap-4 rounded-2xl border border-border-light bg-surface-0 p-5">
+          <Bone className="h-4 w-32" />
+          <Bone className="h-3 w-full rounded-full" />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between gap-4">
+              <Bone className="w-20" />
+              <Bone className="w-24" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-2xl border border-border-light bg-surface-0">
+        <div aria-hidden className="px-5 py-4"><Bone className="h-4 w-36" /></div>
+        <TableSkeleton
+          rows={5}
+          columns={[{ label: "Invoice", kind: "mono" }, { label: "Party" }, { label: "Date" }, { label: "Amount", align: "right" }, { label: "Status", kind: "badge" }]}
+        />
       </div>
     </div>
   );

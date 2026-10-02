@@ -13,7 +13,7 @@ import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
@@ -147,7 +147,7 @@ function PriceLevelsPage() {
 
       <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
         {!levels || !grid ? (
-          <div className="p-4"><SkeletonRows /></div>
+          <TableSkeleton columns={[{ label: "Item" }, { label: "Sale price", align: "right" }, { label: "MRP", align: "right" }, { align: "right" }, { align: "right" }, { align: "right" }]} rows={6} />
         ) : levels.length === 0 ? (
           <EmptyState
             title="No price levels yet"

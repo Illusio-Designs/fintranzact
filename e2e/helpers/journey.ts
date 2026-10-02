@@ -206,14 +206,21 @@ export async function navTo(page: Page, label: string | RegExp) {
     await expect(page.getByLabel(/^Notifications/).locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
     await page.getByRole("button", { name: "Open navigation menu" }).click();
   }
-  await sidebar.getByRole("link", { name: label, exact: typeof label === "string" }).click();
+  // The sidebar is an accordion: open the link's group first if it's closed.
+  const link = sidebar.getByRole("link", { name: label, exact: typeof label === "string", includeHidden: true });
+  if (!(await link.isVisible())) {
+    await sidebar.locator("[data-nav-group]").filter({ has: link }).getByRole("button").first().click();
+  }
+  await link.click();
 }
 
 /** Labels of the links in the sidebar's main nav (what the role can see). */
 export async function sidebarLabels(page: Page): Promise<string[]> {
   const nav = page.getByTestId("app-sidebar-nav");
-  await expect(nav.getByRole("link").first()).toBeAttached();
-  const texts = await nav.getByRole("link").allInnerTexts();
+  // Links in closed accordion groups count too: the role can still open them.
+  const links = nav.getByRole("link", { includeHidden: true });
+  await expect(links.first()).toBeAttached();
+  const texts = await links.allTextContents();
   return texts.map((t) => t.trim()).filter(Boolean);
 }
 

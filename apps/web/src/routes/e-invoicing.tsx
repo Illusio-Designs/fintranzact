@@ -1,3 +1,4 @@
+import { DetailSkeleton } from "@/components/ui/Skeleton";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { usePageSearch } from "@/lib/page-search";
@@ -423,9 +424,7 @@ function SettingsTab() {
 
   if (isLoading) {
     return (
-      <div className="card p-8 flex items-center justify-center">
-        <Spinner size="md" />
-      </div>
+      <div className="card p-6"><DetailSkeleton fields={6} lines={0} label="Loading e-invoicing settings" /></div>
     );
   }
 
@@ -589,12 +588,12 @@ function DashboardSkeleton() {
   return (
     <div className="divide-y divide-border-light">
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-4 px-4 py-3 animate-pulse">
-          <div className="h-3 bg-surface-2 rounded w-24" />
-          <div className="h-3 bg-surface-2 rounded w-16" />
-          <div className="h-3 bg-surface-2 rounded w-32" />
-          <div className="h-3 bg-surface-2 rounded w-20 ml-auto" />
-          <div className="h-4 bg-surface-2 rounded-full w-16" />
+        <div key={i} className="flex items-center gap-4 px-4 py-3">
+          <div className="h-3 skeleton rounded w-24" />
+          <div className="h-3 skeleton rounded w-16" />
+          <div className="h-3 skeleton rounded w-32" />
+          <div className="h-3 skeleton rounded w-20 ml-auto" />
+          <div className="h-4 skeleton rounded-full w-16" />
         </div>
       ))}
     </div>
@@ -608,7 +607,7 @@ const MAIN_TABS: Array<{ value: EInvoiceTab; label: string }> = [
   { value: "settings", label: "Settings" },
 ];
 
-function EInvoicingPage() {
+export function EInvoicingPage() {
   const [activeTab, setActiveTab] = useState<EInvoiceTab>("dashboard");
 
   return (

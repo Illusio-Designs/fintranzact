@@ -1296,12 +1296,12 @@ function TemplateTableSkeleton() {
     <div className="divide-y divide-border-light">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="px-4 py-3 flex items-center gap-4">
-          <div className="h-3.5 w-32 bg-surface-2 rounded animate-pulse" />
-          <div className="h-3.5 w-24 bg-surface-2 rounded animate-pulse" />
-          <div className="h-5 w-16 bg-surface-2 rounded animate-pulse" />
-          <div className="h-5 w-14 bg-surface-2 rounded animate-pulse" />
-          <div className="h-3.5 w-20 bg-surface-2 rounded animate-pulse" />
-          <div className="h-3.5 w-12 bg-surface-2 rounded animate-pulse ml-auto" />
+          <div className="h-3.5 w-32 skeleton rounded" />
+          <div className="h-3.5 w-24 skeleton rounded" />
+          <div className="h-5 w-16 skeleton rounded" />
+          <div className="h-5 w-14 skeleton rounded" />
+          <div className="h-3.5 w-20 skeleton rounded" />
+          <div className="h-3.5 w-12 skeleton rounded ml-auto" />
         </div>
       ))}
     </div>

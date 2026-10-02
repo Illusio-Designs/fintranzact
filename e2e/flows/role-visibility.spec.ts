@@ -39,7 +39,7 @@ const ROLE_NAV_VISIBLE: Record<string, string[]> = {
     "Payments",
     "Cash & Bank",
     "Expenses",
-    "Business Reports",
+    "Reports",
   ],
 };
 
@@ -48,7 +48,7 @@ const ROLE_NAV_VISIBLE: Record<string, string[]> = {
  * section in the sidebar, so only sellers have hidden items.
  */
 const ROLE_NAV_HIDDEN = {
-  seller: ["Dashboard", "Cash & Bank", "Expenses", "GST Returns", "E-Way Bills"],
+  seller: ["Dashboard", "Cash & Bank", "Expenses"],
 };
 
 /**
@@ -144,9 +144,10 @@ test.describe("Role: Seller", () => {
     const sidebar = rolePage.locator("nav, aside").first();
 
     for (const item of ROLE_NAV_VISIBLE.seller) {
+      // In the DOM is enough: the sidebar is an accordion, so groups other than the current page's start closed.
       await expect(
         sidebar.getByText(item, { exact: true }).first(),
-      ).toBeVisible({ timeout: 5_000 });
+      ).toBeAttached({ timeout: 5_000 });
     }
   });
 
@@ -159,7 +160,7 @@ test.describe("Role: Seller", () => {
     for (const item of ROLE_NAV_HIDDEN.seller) {
       await expect(
         sidebar.getByText(item, { exact: true }),
-      ).not.toBeVisible();
+      ).toHaveCount(0);
     }
   });
 
@@ -270,9 +271,10 @@ test.describe("Role: Accountant", () => {
     const sidebar = rolePage.locator("nav, aside").first();
 
     for (const item of ROLE_NAV_VISIBLE.accountant) {
+      // In the DOM is enough: the sidebar is an accordion, so groups other than the current page's start closed.
       await expect(
         sidebar.getByText(item, { exact: true }).first(),
-      ).toBeVisible({ timeout: 5_000 });
+      ).toBeAttached({ timeout: 5_000 });
     }
   });
 

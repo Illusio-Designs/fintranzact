@@ -39,4 +39,21 @@ test.describe("Reports — Presence", () => {
     await page.getByRole("navigation", { name: "Where you are" }).getByRole("button", { name: "Reports" }).click();
     await expect(page.getByRole("heading", { name: "Reports", level: 1 })).toBeVisible();
   });
+
+  test("Statutory reports holds the GST and compliance reports", async ({ page }) => {
+    await page.getByRole("button", { name: "Statutory reports" }).click();
+    await expect(page).toHaveURL(/side=statutory/);
+    const rail = page.getByRole("navigation", { name: "Report categories" });
+    for (const group of ["GST returns", "Input tax credit", "e-Invoices & e-Way Bills", "Tax summaries"]) {
+      await expect(rail.getByRole("button", { name: new RegExp(`^${group}`) })).toBeVisible();
+    }
+    await expect(page.getByRole("group", { name: "Filing calendar" })).toBeVisible();
+    await rail.getByRole("button", { name: /^e-Invoices & e-Way Bills/ }).click();
+    await page.getByRole("button", { name: "e-Way Bill Register", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "e-Way Bill Register", level: 1 })).toBeVisible();
+    const trail = page.getByRole("navigation", { name: "Where you are" });
+    await expect(trail.getByRole("button", { name: "Statutory" })).toBeVisible();
+    // The page shows once: its own title gives way to the report's.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  });
 });

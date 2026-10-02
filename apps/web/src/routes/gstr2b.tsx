@@ -1,3 +1,4 @@
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
@@ -226,7 +227,7 @@ function UploadHistorySection({ onSelectUpload }: { onSelectUpload: (returnPerio
   );
   const totalPages = useTotalPages(data?.total ?? 0, pageSize, page, setPage);
 
-  if (isLoading) return <div className="py-8 flex justify-center"><Spinner /></div>;
+  if (isLoading) return <TableSkeleton rows={6} columns={[{ label: "Period" }, { label: "File" }, { label: "Total", align: "right" }, { label: "Matched", align: "right" }, { label: "Mismatch", align: "right" }, { label: "Not in Books", align: "right" }, { label: "Uploaded" }, { align: "right", kind: "button" }]} />;
 
   if (!data?.uploads.length) {
     return (
@@ -411,7 +412,7 @@ function ReconciliationSection({
         </Select>
       </div>
 
-      {isLoading && <div className="py-8 flex justify-center"><Spinner /></div>}
+      {isLoading && <TableSkeleton rows={6} columns={[{ label: "Supplier GSTIN" }, { label: "Supplier" }, { label: "Invoice #", kind: "mono" }, { label: "Date" }, { label: "Taxable", align: "right" }, { label: "CGST", align: "right" }, { label: "SGST", align: "right" }, { label: "IGST", align: "right" }, { label: "ITC", align: "center" }, { label: "Status", align: "center", kind: "badge" }, { align: "right", kind: "button" }]} />}
 
       {!isLoading && !records?.records.length && (
         <EmptyState title="No records" description="No records match the current filter." />
@@ -560,7 +561,7 @@ function MissingInBooksSection({ year, month }: { year: number; month: number })
     );
   }
 
-  if (isLoading) return <div className="py-8 flex justify-center"><Spinner /></div>;
+  if (isLoading) return <TableSkeleton rows={6} columns={[{ label: "Supplier GSTIN" }, { label: "Supplier" }, { label: "Invoice #", kind: "mono" }, { label: "Date" }, { label: "Taxable", align: "right" }, { label: "CGST", align: "right" }, { label: "SGST", align: "right" }, { label: "IGST", align: "right" }, { label: "ITC", align: "center" }]} />;
 
   if (!data?.records.length) {
     return (
@@ -656,7 +657,7 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
   );
   const totalPages = useTotalPages(data?.total ?? 0, pageSize, page, setPage);
 
-  if (isLoading) return <div className="py-8 flex justify-center"><Spinner /></div>;
+  if (isLoading) return <TableSkeleton rows={6} columns={[{ label: "Supplier GSTIN" }, { label: "Supplier" }, { label: "Invoice #", kind: "mono" }, { label: "Date" }, { label: "Amount", align: "right" }]} />;
 
   if (!data?.records.length) {
     return (
@@ -729,7 +730,7 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
 
 // ── Main Page ─────────────────────────────────────────────────
 
-function GSTR2BPage() {
+export function GSTR2BPage() {
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);

@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { usePageSearch } from "@/lib/page-search";
+import { useFlashRows } from "@/hooks/useFlashRows";
 import { trpc, getBusinessId } from "@/lib/trpc";
 import { cn, formatCurrency, formatDate, downloadCSV } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -15,7 +16,7 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { DetailSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
 import { DetailField } from "@/components/ui/DetailField";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
@@ -265,7 +266,7 @@ function PaymentsPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const { data, isFetching, isLoading } = trpc.payment.list.useQuery({
+  const listInput = {
     page,
     limit: pageSize,
     search: debouncedSearch || undefined,
@@ -273,12 +274,15 @@ function PaymentsPage() {
     toDate: dateRange.toDate,
     sortBy: sort.key,
     sortDir: sort.dir,
-  }, {
+  };
+  const { data, isFetching, isLoading, isPlaceholderData } = trpc.payment.list.useQuery(listInput, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
   const rows = data?.data ?? [];
+  // Rows just added or saved glow green for a moment.
+  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   // Deleting the last row of the last page: step back a page.
@@ -382,7 +386,7 @@ function PaymentsPage() {
         {/* Table */}
         {isLoading ? (
           <div className="p-4">
-            <SkeletonRows count={5} height="h-12" />
+            <TableSkeleton columns={[{ label: "Payment #", kind: "mono" }, { label: "Party" }, { label: "Date" }, { label: "Mode" }, { label: "Reference" }, { label: "Amount", align: "right" }, { align: "right", kind: "button" }]} rows={5} />
           </div>
         ) : !rows.length && !isFetching ? (
           <EmptyState
@@ -422,7 +426,7 @@ function PaymentsPage() {
                 </thead>
                 <tbody>
                   {rows.map((p) => (
-                    <tr key={p.id} className="cursor-pointer" onClick={() => setSelectedPaymentId(p.id)}>
+                    <tr key={p.id} className={cn("cursor-pointer", flash.has(p.id) && "animate-row-flash")} onClick={() => setSelectedPaymentId(p.id)}>
                       <td className="font-mono text-ui text-text-secondary">
                         {p.paymentNumber || "—"}
                       </td>
@@ -544,7 +548,7 @@ function PaymentDetailPanel({
       }
     >
       {isLoading ? (
-        <SkeletonRows count={4} height="h-8" className="space-y-3 animate-pulse" />
+        <DetailSkeleton />
       ) : !payment ? (
         <p className="text-text-tertiary text-sm">Payment not found.</p>
       ) : (

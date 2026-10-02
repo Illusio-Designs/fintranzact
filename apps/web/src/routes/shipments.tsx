@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DetailField } from "@/components/ui/DetailField";
 import { LinkButton } from "@/components/ui/LinkButton";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { DetailSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
 import { PillTabs } from "@/components/ui/Tabs";
 import { Icon } from "@/components/ui/Icon";
 import { DeliveryTruck01Icon } from "@hugeicons/core-free-icons";
@@ -262,7 +262,7 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
         }
       >
         {isLoading ? (
-          <SkeletonRows count={6} height="h-8" className="space-y-3 animate-pulse" />
+          <DetailSkeleton />
         ) : !s ? (
           <p className="text-text-tertiary text-sm">Shipment not found.</p>
         ) : (
@@ -547,7 +547,7 @@ function ShipmentsPage() {
         {/* Content */}
         {isLoading ? (
           <div className="p-4">
-            <SkeletonRows count={6} height="h-14" />
+            <TableSkeleton columns={[{ label: "Date" }, { label: "Invoice #", kind: "mono" }, { label: "Party" }, { label: "Mode", kind: "badge" }, { label: "Carrier" }, { label: "Tracking #", kind: "mono" }, { label: "Cost", align: "right" }, { label: "Status", kind: "badge" }]} rows={6} />
           </div>
         ) : !rows.length && !isFetching ? (
           <EmptyState

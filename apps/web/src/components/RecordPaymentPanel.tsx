@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useSaveTick } from "@/hooks/useSaveTick";
+import { SavedTick } from "@/components/ui/SavedTick";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -329,11 +331,13 @@ export function RecordPaymentPanel({
     utils.bankAccount.summary.invalidate();
   };
 
+  // The save button shows a tick before the panel closes.
+  const tick = useSaveTick();
   const createMutation = trpc.payment.create.useMutation({
     onSuccess: () => {
       invalidateAll();
       toast.success("Payment recorded");
-      onClose();
+      tick.finish(onClose);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -342,7 +346,7 @@ export function RecordPaymentPanel({
     onSuccess: () => {
       invalidateAll();
       toast.success("Payment updated");
-      onClose();
+      tick.finish(onClose);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -468,12 +472,14 @@ export function RecordPaymentPanel({
               Cancel
             </button>
             <button
-              className="btn-primary"
+              className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
               onClick={handleSubmit}
-              disabled={!canSubmit}
+              disabled={!canSubmit || tick.saved}
               type="button"
             >
-              {activeMutation.isPending
+              {tick.saved ? (
+                <SavedTick label={isEditMode ? "Saved" : "Recorded"} />
+              ) : activeMutation.isPending
                 ? (isEditMode ? "Saving…" : "Recording…")
                 : displayAmount && parseFloat(displayAmount) > 0
                   ? `${isEditMode ? "Save" : "Record"} ${formatCurrency(displayAmount)}`
@@ -531,7 +537,7 @@ export function RecordPaymentPanel({
             </div>
             <div className="rounded-xl border border-border-light overflow-hidden bg-surface-0">
               {loadingInvoices ? (
-                <div className="p-4 space-y-3 animate-pulse">
+                <div className="p-4 space-y-3">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="flex items-center gap-3">
                       <div className="skeleton h-4 w-4 rounded" />
