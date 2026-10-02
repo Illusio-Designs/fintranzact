@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { defaultTcsSectionRules, tdsFinancialYear, tdsQuarter, tdsSections } from "@fintranzact/shared";
 import type { RouterOutputs } from "@fintranzact/api";
 import { trpc } from "@/lib/trpc";
@@ -16,12 +16,13 @@ import { InputField } from "@/components/ui/FormField";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
+import { useDebounce } from "@/hooks/useDebounce";
 
 export const Route = createFileRoute("/tds")({
   component: TdsPage,
 });
 
-type Tab = "overview" | "deductions" | "challans" | "return" | "certificates" | "settings";
+type Tab = "overview" | "deductions" | "challans" | "return" | "certificates" | "26as" | "settings";
 /** TDS (tax we deduct on purchases) or TCS (tax we collect on sales). */
 type Kind = "tds" | "tcs";
 
@@ -56,6 +57,8 @@ function TdsPage() {
   const [fy, setFy] = useState(years[0]!);
   const [tab, setTab] = useState<Tab>("overview");
   const [kind, setKind] = useState<Kind>("tds");
+  // 26AS / AIS only lists tax deducted from us, so it is a TDS-only tab.
+  const activeTab: Tab = kind === "tcs" && tab === "26as" ? "overview" : tab;
 
   return (
     <div>
@@ -88,18 +91,20 @@ function TdsPage() {
             { value: "challans", label: "Challans" },
             { value: "return", label: "Return data" },
             { value: "certificates", label: "Certificates" },
+            ...(kind === "tds" ? [{ value: "26as", label: "26AS / AIS" }] : []),
             { value: "settings", label: "Sections & limits" },
           ]}
-          value={tab}
+          value={activeTab}
           onChange={(v) => setTab(v as Tab)}
         />
       </div>
-      {tab === "overview" && <OverviewTab fy={fy} kind={kind} />}
-      {tab === "deductions" && <DeductionsTab fy={fy} kind={kind} />}
-      {tab === "challans" && <ChallansTab fy={fy} kind={kind} />}
-      {tab === "return" && <ReturnDataTab fy={fy} kind={kind} />}
-      {tab === "certificates" && <CertificatesTab fy={fy} kind={kind} />}
-      {tab === "settings" && <SettingsTab fy={fy} kind={kind} />}
+      {activeTab === "overview" && <OverviewTab fy={fy} kind={kind} />}
+      {activeTab === "deductions" && <DeductionsTab fy={fy} kind={kind} />}
+      {activeTab === "challans" && <ChallansTab fy={fy} kind={kind} />}
+      {activeTab === "return" && <ReturnDataTab fy={fy} kind={kind} />}
+      {activeTab === "certificates" && <CertificatesTab fy={fy} kind={kind} />}
+      {activeTab === "26as" && <Tds26asTab fy={fy} />}
+      {activeTab === "settings" && <SettingsTab fy={fy} kind={kind} />}
     </div>
   );
 }
@@ -677,6 +682,208 @@ function CertificatesTab({ fy, kind }: { fy: string; kind: Kind }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── 26AS / AIS reconciliation ─────────────────────────────────
+
+type Rec26asRow = RouterOutputs["tds"]["reconciliation26as"]["rows"][number];
+type Status26as = Rec26asRow["status"];
+
+const STATUS_26AS: Record<Status26as, { label: string; color: string }> = {
+  matched: { label: "Matched", color: badgeColor("emerald") },
+  amount_differs: { label: "Amount differs", color: badgeColor("amber") },
+  missing_in_books: { label: "Missing in books", color: badgeColor("red") },
+  missing_in_26as: { label: "Missing in 26AS", color: badgeColor("orange") },
+  ignored: { label: "Ignored", color: badgeColorFallback },
+};
+
+function Tds26asTab({ fy }: { fy: string }) {
+  const utils = trpc.useUtils();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [filter, setFilter] = useState<Status26as | "all">("all");
+  const [linking, setLinking] = useState<Rec26asRow | null>(null);
+  const { data, isLoading, error } = trpc.tds.reconciliation26as.useQuery({ financialYear: fy });
+
+  const importMutation = trpc.tds.import26as.useMutation({
+    onSuccess: (r) => {
+      toast.success(`${r.imported} rows imported${r.skippedCount ? `, ${r.skippedCount} skipped` : ""}`);
+      if (r.skipped.length > 0) {
+        toast.error(`Skipped: ${r.skipped.slice(0, 3).map((x) => (x.line ? `line ${x.line}: ${x.reason}` : x.reason)).join("; ")}`);
+      }
+      utils.tds.reconciliation26as.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const ignoreMutation = trpc.tds.ignore26as.useMutation({
+    onSuccess: () => utils.tds.reconciliation26as.invalidate(),
+    onError: (e) => toast.error(e.message),
+  });
+
+  function onFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = (e) => importMutation.mutate({ financialYear: fy, content: String(e.target?.result ?? ""), fileName: file.name, format: "csv" });
+    reader.readAsText(file);
+  }
+
+  const rows = (data?.rows ?? []).filter((r) => filter === "all" || r.status === filter);
+
+  return (
+    <div className="space-y-4">
+      <div className="card px-4 py-3 text-sm text-text-secondary space-y-2" role="note">
+        <p>
+          Compare the TDS your customers deducted (as shown in Form 26AS or AIS) with the TDS receivable in your books for FY {fy}.
+          Only <strong>CSV</strong> files are supported, with the columns <em>Deductor Name, Deductor TAN, Section, Transaction Date,
+          Amount Paid/Credited, Tax Deducted, TDS Deposited</em>. The TRACES text file and AIS JSON are not supported.
+          Importing again replaces this year&apos;s rows.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            aria-label="Upload 26AS CSV"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={importMutation.isPending}
+            className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium disabled:opacity-50"
+          >
+            {importMutation.isPending ? "Importing…" : data && data.entryCount > 0 ? "Re-import 26AS CSV" : "Upload 26AS CSV"}
+          </button>
+          {data?.importedAt && <span className="text-xs text-text-tertiary">{data.entryCount} rows imported {formatDate(data.importedAt)}</span>}
+        </div>
+      </div>
+
+      {isLoading ? <Loading /> : error ? <ErrorCard message={error.message} /> : data && data.rows.length === 0 ? (
+        <EmptyState title="Nothing to reconcile" description={`No 26AS rows are imported and no TDS receivable is recorded for FY ${fy}.`} />
+      ) : data && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <StatCard label="Matched" value={String(data.counts.matched)} valueColor="text-emerald-600" />
+            <StatCard label="Amount differs" value={String(data.counts.amount_differs)} valueColor={data.counts.amount_differs > 0 ? "text-amber-600" : undefined} />
+            <StatCard label="Missing in books" value={String(data.counts.missing_in_books)} valueColor={data.counts.missing_in_books > 0 ? "text-red-600" : undefined} />
+            <StatCard label="Missing in 26AS" value={String(data.counts.missing_in_26as)} valueColor={data.counts.missing_in_26as > 0 ? "text-amber-600" : undefined} />
+            <StatCard label="26AS total / books" value={`${formatCurrency(data.total26as)} / ${formatCurrency(data.totalBooks)}`} />
+          </div>
+
+          <PillTabs
+            size="sm"
+            tabs={[
+              { value: "all", label: "All" },
+              ...(Object.keys(STATUS_26AS) as Status26as[]).map((s) => ({ value: s, label: `${STATUS_26AS[s].label} (${data.counts[s]})` })),
+            ]}
+            value={filter}
+            onChange={(v) => setFilter(v as Status26as | "all")}
+          />
+
+          {rows.length === 0 ? (
+            <EmptyState title="No rows" description="No rows have this status." />
+          ) : (
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Customer</th><th>Deductor (26AS)</th><th>TAN</th><th>Section</th><th>Qtr</th>
+                      <th className="text-right">26AS</th><th className="text-right">Books</th><th className="text-right">Difference</th>
+                      <th>Status</th><th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.key}>
+                        <td className="max-w-[180px] truncate">
+                          {r.partyName ?? <span className="text-text-tertiary">Not linked</span>}
+                          {r.matchedVia === "name" && <span className="ml-1 text-[11px] text-text-tertiary">(by name)</span>}
+                        </td>
+                        <td className="max-w-[180px] truncate">{r.deductorName ?? "—"}</td>
+                        <td className="font-mono text-[13px]">{r.deductorTan ?? "—"}</td>
+                        <td>{r.section}</td>
+                        <td>Q{r.quarter}</td>
+                        <td className="text-right tabular-nums">{formatCurrency(r.amount26as)}</td>
+                        <td className="text-right tabular-nums">{formatCurrency(r.booksAmount)}</td>
+                        <td className="text-right tabular-nums">{formatCurrency(r.difference)}</td>
+                        <td><Badge size="md" color={STATUS_26AS[r.status].color}>{STATUS_26AS[r.status].label}</Badge></td>
+                        <td className="text-right whitespace-nowrap space-x-2">
+                          {r.entryIds.length > 0 && r.status !== "ignored" && (
+                            <button type="button" onClick={() => setLinking(r)} className="text-xs font-medium text-brand-600 hover:underline">
+                              {r.partyId ? "Change customer" : "Link customer"}
+                            </button>
+                          )}
+                          {r.entryIds.length > 0 && (
+                            <button
+                              type="button"
+                              disabled={ignoreMutation.isPending}
+                              onClick={() => ignoreMutation.mutate({ entryIds: r.entryIds, ignored: r.status !== "ignored" })}
+                              className="text-xs font-medium text-text-secondary hover:underline disabled:opacity-50"
+                            >
+                              {r.status === "ignored" ? "Include" : "Ignore"}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {linking && <LinkCustomerModal row={linking} onClose={() => setLinking(null)} />}
+    </div>
+  );
+}
+
+function LinkCustomerModal({ row, onClose }: { row: Rec26asRow; onClose: () => void }) {
+  const utils = trpc.useUtils();
+  const [search, setSearch] = useState(row.deductorName ?? "");
+  const debounced = useDebounce(search, 300);
+  const [partyId, setPartyId] = useState(row.partyId ?? "");
+  const { data, isFetching } = trpc.party.list.useQuery({ type: "customer", search: debounced || undefined, page: 1, limit: 50 });
+  const link = trpc.tds.link26as.useMutation({
+    onSuccess: () => {
+      toast.success("Customer linked");
+      utils.tds.reconciliation26as.invalidate();
+      onClose();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  return (
+    <Modal open onClose={onClose} title="Link 26AS rows to a customer">
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (partyId) link.mutate({ entryIds: row.entryIds, partyId });
+        }}
+      >
+        <p className="text-xs text-text-tertiary">
+          {row.deductorName ?? "This deductor"} ({row.deductorTan}). Customers do not carry a TAN, so link it once: every row with the same TAN follows.
+        </p>
+        <InputField label="Search customers" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Select className="input w-full" value={partyId} onChange={(e) => setPartyId(e.target.value)} aria-label="Customer">
+          <option value="">{isFetching ? "Searching…" : "Choose a customer"}</option>
+          {(data?.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </Select>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium bg-surface-2 text-text-secondary">Cancel</button>
+          <button
+            type="submit"
+            disabled={link.isPending || !partyId}
+            className="px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium disabled:opacity-50"
+          >
+            {link.isPending ? "Saving…" : "Link"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

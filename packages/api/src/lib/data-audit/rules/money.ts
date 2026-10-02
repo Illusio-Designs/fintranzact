@@ -616,6 +616,30 @@ export const moneyTables: TableCoverage[] = [
     ],
   },
   {
+    table: "tds_reminder_log",
+    rules: [],
+    noExtraRequirements:
+      "Scheduler bookkeeping: one row per business, item key and day offset (unique index), business_id is a cascading FK; it holds no money and nothing reads it but the reminder scheduler.",
+  },
+  {
+    table: "tds_26as_entries",
+    rules: [
+      rule("tds_26as_entries", "valid", "error",
+        "A 26AS row has a TAN (4 letters, 5 digits, 1 letter), a section, a status of pending or ignored, a non-negative amount paid and tax (deposited tax too, when given), and the financial year and quarter its transaction date falls in (April-March, by Indian date); a linked party belongs to the same business.",
+        ["tds.import26as (26AS / AIS)", "tds.link26as / ignore26as"],
+        `SELECT e.business_id, e.id::text, e.deductor_tan || ' ' || e.section || ' ' || e.tax_deducted || ', ' || e.financial_year || ' Q' || e.quarter
+         FROM tds_26as_entries e
+         LEFT JOIN parties pp ON pp.id = e.party_id
+         CROSS JOIN LATERAL (SELECT e.txn_date AT TIME ZONE 'Asia/Kolkata' AS ist) x
+         CROSS JOIN LATERAL (SELECT CASE WHEN EXTRACT(MONTH FROM x.ist) >= 4 THEN EXTRACT(YEAR FROM x.ist)::int ELSE EXTRACT(YEAR FROM x.ist)::int - 1 END AS fy_start) y
+         WHERE e.deductor_tan !~ '^[A-Z]{4}[0-9]{5}[A-Z]$' OR e.section = '' OR e.status NOT IN ('pending', 'ignored')
+            OR e.amount_paid::numeric < 0 OR e.tax_deducted::numeric < 0 OR e.tax_deposited::numeric < 0
+            OR e.financial_year <> y.fy_start || '-' || LPAD(((y.fy_start + 1) % 100)::text, 2, '0')
+            OR e.quarter <> FLOOR(((EXTRACT(MONTH FROM x.ist)::int + 8) % 12) / 3) + 1
+            OR pp.business_id <> e.business_id`),
+    ],
+  },
+  {
     table: "period_locks",
     rules: [
       rule("period_locks", "valid", "error",

@@ -14,6 +14,7 @@ import {
   periodLocks,
   financialYearCloses,
   taxDeductions,
+  tds26asEntries,
   tdsSectionSettings,
   stockGroups,
   salesTargets,
@@ -384,6 +385,18 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
   {
     tableName: "tax_deductions",
     drizzleTable: taxDeductions,
+    redactedFields: [],
+    importable: true,
+    selfFkFields: [],
+    chunkSize: 5000,
+    recomputeOnImport: [],
+    scope: { type: "direct" },
+  },
+
+  // 16c. Form 26AS / AIS TDS rows — point at a party (nullable), so after parties.
+  {
+    tableName: "tds_26as_entries",
+    drizzleTable: tds26asEntries,
     redactedFields: [],
     importable: true,
     selfFkFields: [],

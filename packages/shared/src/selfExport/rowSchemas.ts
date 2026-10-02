@@ -892,6 +892,24 @@ export const taxDeductionRowSchema = z.object({
   createdAt: isoDatetime,
 });
 
+export const tds26asEntryRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  importBatchId: uuid,
+  financialYear: z.string(),
+  quarter: z.number().int(),
+  deductorTan: z.string(),
+  deductorName: z.string().nullable(),
+  section: z.string(),
+  txnDate: isoDatetime,
+  amountPaid: money2,
+  taxDeducted: money2,
+  taxDeposited: money2Nullable,
+  partyId: uuidNullable,
+  status: z.string(),
+  createdAt: isoDatetime,
+});
+
 // ── Registry map ──────────────────────────────────────────────────────────────
 
 export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
@@ -914,6 +932,7 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   tds_section_settings: tdsSectionSettingRowSchema,
   tax_challans: taxChallanRowSchema,
   tax_deductions: taxDeductionRowSchema,
+  tds_26as_entries: tds26asEntryRowSchema,
   period_locks: periodLockRowSchema,
   financial_year_closes: financialYearCloseRowSchema,
   bank_transactions: bankTransactionRowSchema,

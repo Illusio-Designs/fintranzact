@@ -445,7 +445,11 @@
 | tds.createChallan | mutation | authorized | create:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.deductions | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.deleteChallan | mutation | authorized | delete:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.ignore26as | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.import26as | mutation | authorized | create:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.link26as | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.preview | query | authorized | read:Payment | ✓ | ✓ | ✓ | ✓ | ✓ |
+| tds.reconciliation26as | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.reminders | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.resetSection | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.returnData | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |

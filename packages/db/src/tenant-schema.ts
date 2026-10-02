@@ -1019,6 +1019,36 @@ export const tdsReminderLog = pgTable("tds_reminder_log", {
   uniqueIndex("tds_reminder_log_item_idx").on(t.businessId, t.itemKey, t.dayOffset),
 ]);
 
+// Rows imported from a Form 26AS / AIS TDS export: what customers report as
+// deducted from us. Whether a row agrees with our books is worked out live
+// (tds.reconciliation26as); only the manual outcome is stored.
+//   party_id — the customer this deductor is, set by a manual link (or carried
+//              over from an earlier import with the same TAN); null = match by name.
+//   status   — "pending" (reconcile live) or "ignored" (left out of the sums).
+// Importing a financial year again replaces that year's rows.
+export const tds26asEntries = pgTable("tds_26as_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  importBatchId: uuid("import_batch_id").notNull(),
+  financialYear: text("financial_year").notNull(),
+  quarter: integer("quarter").notNull(),
+  deductorTan: text("deductor_tan").notNull(),
+  deductorName: text("deductor_name"),
+  // As printed in the file ("194C", "194J(b)"…).
+  section: text("section").notNull(),
+  txnDate: timestamp("txn_date", { withTimezone: true }).notNull(),
+  amountPaid: numeric("amount_paid", { precision: 15, scale: 2 }).default("0").notNull(),
+  taxDeducted: numeric("tax_deducted", { precision: 15, scale: 2 }).notNull(),
+  // Null when the file has no deposited column.
+  taxDeposited: numeric("tax_deposited", { precision: 15, scale: 2 }),
+  partyId: uuid("party_id").references(() => parties.id, { onDelete: "set null" }),
+  status: text("status").default("pending").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("tds_26as_entries_year_idx").on(t.businessId, t.financialYear, t.quarter),
+  index("tds_26as_entries_tan_idx").on(t.businessId, t.deductorTan),
+]);
+
 // ── Expenses ───────────────────────────────────────────────────
 
 export const expenses = pgTable("expenses", {

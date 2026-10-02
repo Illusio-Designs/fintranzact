@@ -8,6 +8,8 @@
  *   preview                                    what TDS a payment would carry
  *   deductions / summary                       the ledgers, with due dates
  *   challans / createChallan / deleteChallan   marking tax as deposited
+ *   import26as / reconciliation26as / link26as / ignore26as
+ *                                              Form 26AS / AIS (CSV) vs TDS receivable
  *
  * Sections, rates and thresholds change most Budgets: they are defaults in
  * code that each business can override per financial year. Verify with a CA.
@@ -16,7 +18,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { businesses, invoices, items, parties, taxChallans, taxDeductions, tdsSectionSettings } from "@fintranzact/db";
+import { businesses, invoices, items, parties, taxChallans, taxDeductions, tds26asEntries, tdsSectionSettings } from "@fintranzact/db";
 import {
   defaultTdsSectionRules,
   money,
@@ -24,6 +26,8 @@ import {
   panFromGstin,
   tcsSectionCodes,
   tdsFinancialYear,
+  tdsFinancialYearRange,
+  tdsQuarter,
   tdsSectionCodes,
   type TdsSectionRule,
 } from "@fintranzact/shared";
@@ -34,6 +38,8 @@ import { previewPartyTds } from "../lib/tds-service.js";
 import { buildTdsReturn } from "../lib/tds-return.js";
 import { loadTcsSectionRules, tcsForLines } from "../lib/tcs-service.js";
 import { depositDue, depositsDueFromMonths, loadTdsReminders, returnDue } from "../lib/tds-reminders.js";
+import { parse26asCsv } from "../lib/tds-26as-parser.js";
+import { reconcile26as } from "../lib/tds-26as.js";
 import { buildCertificateData, certificateToBuffer } from "../lib/tds-certificate.js";
 
 const fyInput = z.string().regex(/^\d{4}-\d{2}$/, "Use a financial year like 2026-27");
@@ -306,7 +312,7 @@ export const tdsRouter = router({
       const deposited = sql<string>`COALESCE(SUM(${taxDeductions.amount}) FILTER (WHERE ${taxDeductions.challanId} IS NOT NULL), 0.00)::text`;
       const total = sql<string>`COALESCE(SUM(${taxDeductions.amount}), 0.00)::text`;
 
-      const [bySection, byQuarter, byMonth, receivable] = await Promise.all([
+      const [bySection, byQuarter, byMonth, receivable, sectionQuarter] = await Promise.all([
         ctx.db
           .select({ sectionCode: taxDeductions.sectionCode, total, deposited })
           .from(taxDeductions)
@@ -334,6 +340,13 @@ export const tdsRouter = router({
           .where(and(base, eq(taxDeductions.direction, "receivable")))
           .groupBy(taxDeductions.sectionCode)
           .orderBy(taxDeductions.sectionCode),
+        // Section x quarter, for the Reports hub.
+        ctx.db
+          .select({ sectionCode: taxDeductions.sectionCode, quarter: taxDeductions.quarter, total, deposited })
+          .from(taxDeductions)
+          .where(and(base, eq(taxDeductions.direction, "payable")))
+          .groupBy(taxDeductions.sectionCode, taxDeductions.quarter)
+          .orderBy(taxDeductions.sectionCode, taxDeductions.quarter),
       ]);
 
       const now = Date.now();
@@ -349,6 +362,7 @@ export const tdsRouter = router({
           deposited: money.sum(bySection.map((s) => s.deposited)),
           pending: money.sub(money.sum(bySection.map((s) => s.total)), money.sum(bySection.map((s) => s.deposited))),
           bySection: bySection.map(withPending),
+          bySectionQuarter: sectionQuarter.map(withPending),
           byQuarter: byQuarter.map((q) => ({
             ...withPending(q),
             returnDueDate: returnDue(kind, fy, q.quarter as 1 | 2 | 3 | 4),
@@ -712,5 +726,179 @@ export const tdsRouter = router({
       entityType: "tax_challans",
       entityId: row.id,
       metadata: { challanNumber: row.challanNumber },
+    }))),
+
+  // ── Form 26AS / AIS reconciliation (TDS receivable) ─────────────
+
+  /**
+   * Import a Form 26AS / AIS TDS export (CSV only: see lib/tds-26as-parser.ts for
+   * the columns; the TRACES text file and AIS JSON are rejected). Replaces any
+   * rows imported earlier for the same financial year; customer links made on
+   * earlier rows are carried over by TAN. Rows dated outside the year are skipped.
+   */
+  import26as: adminProcedure
+    .input(z.object({
+      financialYear: fyInput,
+      content: z.string().min(1).max(20_000_000),
+      fileName: z.string().min(1).max(255),
+      format: z.enum(["csv"]).default("csv"),
+    }))
+    .mutation(withAudit(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "create", "Tds");
+      assertRealYear(input.financialYear);
+      let parsed;
+      try {
+        parsed = parse26asCsv(input.content);
+      } catch (err) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: err instanceof Error ? err.message : "Could not read the file" });
+      }
+      const range = tdsFinancialYearRange(input.financialYear);
+      const skipped = [...parsed.skipped];
+      const rows = parsed.rows.filter((r) => {
+        if (r.txnDate >= range.from && r.txnDate <= range.to) return true;
+        skipped.push({ line: 0, reason: `${r.deductorTan} ${r.section}: transaction date is outside ${input.financialYear}` });
+        return false;
+      });
+      if (rows.length === 0) {
+        const why = skipped.slice(0, 3).map((x) => x.reason).join("; ");
+        throw new TRPCError({ code: "BAD_REQUEST", message: `No usable rows for ${input.financialYear}${why ? `: ${why}` : ""}` });
+      }
+
+      const batchId = crypto.randomUUID();
+      const inserted = await ctx.db.transaction(async (tx) => {
+        // Customers linked by hand before, by TAN, from any year.
+        const linked = await tx
+          .select({ tan: tds26asEntries.deductorTan, partyId: tds26asEntries.partyId })
+          .from(tds26asEntries)
+          .where(and(eq(tds26asEntries.businessId, ctx.businessId), sql`${tds26asEntries.partyId} IS NOT NULL`));
+        const tanLinks = new Map<string, string>();
+        for (const l of linked) if (l.partyId && !tanLinks.has(l.tan)) tanLinks.set(l.tan, l.partyId);
+
+        await tx
+          .delete(tds26asEntries)
+          .where(and(eq(tds26asEntries.businessId, ctx.businessId), eq(tds26asEntries.financialYear, input.financialYear)));
+
+        const values = rows.map((r) => ({
+          businessId: ctx.businessId,
+          importBatchId: batchId,
+          financialYear: input.financialYear,
+          quarter: tdsQuarter(r.txnDate),
+          deductorTan: r.deductorTan,
+          deductorName: r.deductorName,
+          section: r.section,
+          txnDate: r.txnDate,
+          amountPaid: r.amountPaid,
+          taxDeducted: r.taxDeducted,
+          taxDeposited: r.taxDeposited,
+          partyId: tanLinks.get(r.deductorTan) ?? null,
+        }));
+        for (let i = 0; i < values.length; i += 500) await tx.insert(tds26asEntries).values(values.slice(i, i + 500));
+        return values.length;
+      });
+      return { batchId, financialYear: input.financialYear, fileName: input.fileName, imported: inserted, skipped: skipped.slice(0, 50), skippedCount: skipped.length };
+    }, (r) => ({
+      action: "tds.import26as",
+      entityType: "tds_26as_entries",
+      entityId: r.batchId,
+      metadata: { financialYear: r.financialYear, fileName: r.fileName, imported: r.imported, skipped: r.skippedCount },
+    }))),
+
+  /**
+   * 26AS rows vs the books' TDS receivable for a year, per customer + section +
+   * quarter: matched / amount_differs / missing_in_books / missing_in_26as, plus
+   * ignored rows. Computed live, so it follows later edits to the books.
+   */
+  reconciliation26as: viewerProcedure
+    .input(z.object({ financialYear: fyInput }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Tds");
+      assertRealYear(input.financialYear);
+      const [entries, partyRows, books] = await Promise.all([
+        ctx.db
+          .select()
+          .from(tds26asEntries)
+          .where(and(eq(tds26asEntries.businessId, ctx.businessId), eq(tds26asEntries.financialYear, input.financialYear))),
+        ctx.db
+          .select({ id: parties.id, name: parties.name, legalName: parties.legalName, tradeName: parties.tradeName })
+          .from(parties)
+          .where(eq(parties.businessId, ctx.businessId)),
+        ctx.db
+          .select({
+            partyId: taxDeductions.partyId,
+            sectionCode: taxDeductions.sectionCode,
+            quarter: taxDeductions.quarter,
+            amount: sql<string>`SUM(${taxDeductions.amount})::text`,
+          })
+          .from(taxDeductions)
+          .where(and(
+            eq(taxDeductions.businessId, ctx.businessId),
+            eq(taxDeductions.kind, "tds"),
+            eq(taxDeductions.direction, "receivable"),
+            eq(taxDeductions.financialYear, input.financialYear),
+          ))
+          .groupBy(taxDeductions.partyId, taxDeductions.sectionCode, taxDeductions.quarter),
+      ]);
+      const result = reconcile26as({
+        entries: entries.map((e) => ({
+          id: e.id,
+          deductorTan: e.deductorTan,
+          deductorName: e.deductorName,
+          section: e.section,
+          quarter: e.quarter,
+          taxDeducted: e.taxDeducted,
+          partyId: e.partyId,
+          status: e.status,
+        })),
+        parties: partyRows,
+        books,
+      });
+      const importedAt = entries.reduce<Date | null>((latest, e) => (!latest || e.createdAt > latest ? e.createdAt : latest), null);
+      return { financialYear: input.financialYear, entryCount: entries.length, importedAt, ...result };
+    }),
+
+  /** Point 26AS rows at a customer (or clear the link with partyId null). A link also covers other rows with the same TAN. */
+  link26as: adminProcedure
+    .input(z.object({ entryIds: z.array(z.string().uuid()).min(1).max(500), partyId: z.string().uuid().nullable() }))
+    .mutation(withAudit(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "update", "Tds");
+      if (input.partyId) {
+        const [party] = await ctx.db
+          .select({ id: parties.id })
+          .from(parties)
+          .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
+          .limit(1);
+        if (!party) throw new TRPCError({ code: "NOT_FOUND", message: "Customer not found" });
+      }
+      const rows = await ctx.db
+        .update(tds26asEntries)
+        .set({ partyId: input.partyId })
+        .where(and(eq(tds26asEntries.businessId, ctx.businessId), inArray(tds26asEntries.id, input.entryIds)))
+        .returning({ id: tds26asEntries.id });
+      if (rows.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "26AS rows not found" });
+      return { updated: rows.length, partyId: input.partyId, entryIds: rows.map((r) => r.id) };
+    }, (r) => ({
+      action: "tds.link26as",
+      entityType: "tds_26as_entries",
+      entityId: r.entryIds[0]!,
+      metadata: { updated: r.updated, partyId: r.partyId },
+    }))),
+
+  /** Leave 26AS rows out of the reconciliation (or put them back with ignored false). */
+  ignore26as: adminProcedure
+    .input(z.object({ entryIds: z.array(z.string().uuid()).min(1).max(500), ignored: z.boolean().default(true) }))
+    .mutation(withAudit(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "update", "Tds");
+      const rows = await ctx.db
+        .update(tds26asEntries)
+        .set({ status: input.ignored ? "ignored" : "pending" })
+        .where(and(eq(tds26asEntries.businessId, ctx.businessId), inArray(tds26asEntries.id, input.entryIds)))
+        .returning({ id: tds26asEntries.id });
+      if (rows.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "26AS rows not found" });
+      return { updated: rows.length, ignored: input.ignored, entryIds: rows.map((r) => r.id) };
+    }, (r) => ({
+      action: "tds.ignore26as",
+      entityType: "tds_26as_entries",
+      entityId: r.entryIds[0]!,
+      metadata: { updated: r.updated, ignored: r.ignored },
     }))),
 });
