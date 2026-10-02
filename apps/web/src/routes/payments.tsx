@@ -3,7 +3,8 @@ import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc, getBusinessId } from "@/lib/trpc";
-import { formatCurrency, formatDate, downloadCSV } from "@/lib/utils";
+import { formatCurrency, formatDate, downloadCSV, cn } from "@/lib/utils";
+import { useFlashRows } from "@/hooks/useFlashRows";
 import { toast } from "@/hooks/useToast";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -265,7 +266,7 @@ function PaymentsPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const { data, isFetching, isLoading } = trpc.payment.list.useQuery({
+  const listInput = {
     page,
     limit: pageSize,
     search: debouncedSearch || undefined,
@@ -273,10 +274,13 @@ function PaymentsPage() {
     toDate: dateRange.toDate,
     sortBy: sort.key,
     sortDir: sort.dir,
-  }, {
+  };
+  const { data, isFetching, isLoading, isPlaceholderData } = trpc.payment.list.useQuery(listInput, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
+  // Rows just added or saved glow green for a moment.
+  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
 
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -411,7 +415,7 @@ function PaymentsPage() {
                 </thead>
                 <tbody>
                   {rows.map((p) => (
-                    <tr key={p.id} className="cursor-pointer" onClick={() => setSelectedPaymentId(p.id)}>
+                    <tr key={p.id} className={cn("cursor-pointer", flash.has(p.id) && "animate-row-flash")} onClick={() => setSelectedPaymentId(p.id)}>
                       <td className="font-mono text-ui text-text-secondary">
                         {p.paymentNumber || "—"}
                       </td>

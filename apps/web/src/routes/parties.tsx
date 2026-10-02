@@ -4,6 +4,9 @@ import { useNavigate } from "@tanstack/react-router";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, getInitials, cn, downloadCSV, toISOString } from "@/lib/utils";
+import { useSaveTick } from "@/hooks/useSaveTick";
+import { SavedTick } from "@/components/ui/SavedTick";
+import { useFlashRows } from "@/hooks/useFlashRows";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
@@ -99,7 +102,7 @@ function PartiesPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const { data, isFetching, isLoading } = trpc.party.list.useQuery({
+  const listInput = {
     search: debouncedSearch || undefined,
     type: typeFilter === "all" ? undefined : typeFilter,
     filter: statusFilter === "all" ? undefined : statusFilter,
@@ -107,10 +110,13 @@ function PartiesPage() {
     sortDir: sort.dir,
     page,
     limit: pageSize,
-  }, {
+  };
+  const { data, isFetching, isLoading, isPlaceholderData } = trpc.party.list.useQuery(listInput, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
+  // Rows just added or saved glow green for a moment.
+  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
 
   // Tab counts ignore search and the balance filter, so they show what each tab holds.
   const { data: allCount } = trpc.party.list.useQuery({ page: 1, limit: 1 });
@@ -281,7 +287,7 @@ function PartiesPage() {
               {rows.map((party) => (
                 <tr
                   key={party.id}
-                  className="cursor-pointer"
+                  className={cn("cursor-pointer", flash.has(party.id) && "animate-row-flash")}
                   onClick={() => setSelectedPartyId(party.id)}
                 >
                   <td>
@@ -1356,14 +1362,18 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
     onError: (err) => toast.error(err.message),
   });
 
+  // The save button shows a tick before the panel closes.
+  const tick = useSaveTick();
   const createMutation = trpc.party.create.useMutation({
     onSuccess: () => {
       utils.party.list.invalidate();
       toast.success("Party created");
       // The panel stays mounted: start the next party from a blank form, not
       // with this one's phone, addresses and credit terms.
-      resetForm();
-      onClose();
+      tick.finish(() => {
+        resetForm();
+        onClose();
+      });
     },
     onError: (err) => {
       toast.error(err.message);
@@ -1375,7 +1385,7 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
       utils.party.list.invalidate();
       if (existing) utils.party.getById.invalidate({ id: existing.id });
       toast.success("Party updated");
-      onClose();
+      tick.finish(onClose);
     },
     onError: (err) => {
       toast.error(err.message);
@@ -1536,11 +1546,11 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
             Cancel
           </button>
           <button
-            className="btn-primary"
+            className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
             onClick={handleCreate}
-            disabled={saving || !name.trim()}
+            disabled={saving || tick.saved || !name.trim()}
           >
-            {existing
+            {tick.saved ? <SavedTick label={existing ? "Saved" : "Created"} /> : existing
               ? updateMutation.isPending ? "Saving…" : "Save Changes"
               : createMutation.isPending ? "Creating…" : "Create Party"}
           </button>

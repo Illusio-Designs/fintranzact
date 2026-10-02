@@ -7,6 +7,7 @@ import { invalidateStockViews } from "@/lib/stock-cache";
 import { useCan } from "@/lib/permissions";
 import { getBusinessId } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn } from "@/lib/utils";
+import { useFlashRows } from "@/hooks/useFlashRows";
 import { apiUrl } from "@/lib/api-url";
 import { openPdf } from "@/lib/open-pdf";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -1108,7 +1109,7 @@ function InvoicesPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const { data, isFetching, isLoading } = trpc.invoice.list.useQuery({
+  const listInput = {
     type,
     status: (status || undefined) as any,
     search: debouncedSearch || undefined,
@@ -1119,10 +1120,13 @@ function InvoicesPage() {
     ...filterParams(filters),
     page,
     limit: pageSize,
-  }, {
+  };
+  const { data, isFetching, isLoading, isPlaceholderData } = trpc.invoice.list.useQuery(listInput, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
+  // Rows just added or saved glow green for a moment.
+  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
 
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -1339,7 +1343,7 @@ function InvoicesPage() {
                     return (
                       <tr
                         key={inv.id}
-                        className="cursor-pointer"
+                        className={cn("cursor-pointer", flash.has(inv.id) && "animate-row-flash")}
                         onClick={() => setSelectedInvoiceId(inv.id)}
                       >
                         <td className="font-medium"><span className="block truncate max-w-[250px]">{inv.partyName}</span></td>
