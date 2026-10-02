@@ -1,14 +1,14 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc, getBusinessId } from "@/lib/trpc";
-import { formatCurrency, formatDate, downloadCSV } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, downloadCSV } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useDateRange } from "@/hooks/useDateRange";
-import { useInfiniteList } from "@/hooks/useInfiniteList";
+import { usePageSize } from "@/hooks/usePageSize";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -21,7 +21,10 @@ import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { RecordPaymentPanel } from "@/components/RecordPaymentPanel";
 import { Icon } from "@/components/ui/Icon";
-import { Cancel01Icon, Delete02Icon, StarIcon } from "@hugeicons/core-free-icons";
+import { Pagination } from "@/components/ui/Pagination";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
+import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { Cancel01Icon, StarIcon } from "@hugeicons/core-free-icons";
 import { paymentModeLabel } from "@/lib/payment-modes";
 
 const paymentsSearchSchema = z.object({
@@ -224,14 +227,25 @@ function SmartAssignBanner({ onAssigned }: { onAssigned: () => void }) {
   );
 }
 
-const PAYMENTS_PAGE_SIZE = 25;
+type PaymentSortKey = "date" | "amount" | "party";
+
+const SORT_OPTIONS: SortOption<PaymentSortKey>[] = [
+  { key: "date", dir: "desc", label: "Newest first" },
+  { key: "date", dir: "asc", label: "Oldest first" },
+  { key: "amount", dir: "desc", label: "Amount: high to low" },
+  { key: "amount", dir: "asc", label: "Amount: low to high" },
+  { key: "party", dir: "asc", label: "Party: A to Z" },
+];
 
 function PaymentsPage() {
   const [showPanel, setShowPanel] = useState(false);
   const [editPaymentId, setEditPaymentId] = useState<string | null>(null);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const deleteConfirm = useDeleteConfirmation();
+  const [sort, setSort] = useState<SortState<PaymentSortKey>>({ key: "date", dir: "desc" });
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("payments", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [search] = usePageSearch("Search by party or payment #…");
   const [exporting, setExporting] = useState(false);
   const dateRange = useDateRange("payments", "this-month");
@@ -246,30 +260,30 @@ function PaymentsPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
-  // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [debouncedSearch, dateRange.fromDate, dateRange.toDate]);
-
-  const loadMore = useCallback(() => setPage((p) => p + 1), []);
+  // Back to page 1 whenever filters, sort or rows per page change
+  useEffect(() => { setPage(1); }, [debouncedSearch, dateRange.fromDate, dateRange.toDate, sort.key, sort.dir, pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   const { data, isFetching, isLoading } = trpc.payment.list.useQuery({
     page,
-    limit: PAYMENTS_PAGE_SIZE,
+    limit: pageSize,
     search: debouncedSearch || undefined,
     fromDate: dateRange.fromDate,
     toDate: dateRange.toDate,
+    sortBy: sort.key,
+    sortDir: sort.dir,
   }, {
+    // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
-  const list = useInfiniteList({
-    key: "payments",
-    data: data?.data,
-    total: data?.total ?? 0,
-    page,
-    isFetching,
-    onLoadMore: loadMore,
-    resetDeps: [debouncedSearch, dateRange.fromDate, dateRange.toDate],
-  });
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // Deleting the last row of the last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+
   const utils = trpc.useUtils();
 
   const deleteMutation = trpc.payment.delete.useMutation({
@@ -307,6 +321,9 @@ function PaymentsPage() {
           search: debouncedSearch || undefined,
           fromDate: dateRange.fromDate,
           toDate: dateRange.toDate,
+          // The file matches what's on screen: same filters, same order.
+          sortBy: sort.key,
+          sortDir: sort.dir,
         });
         allData = [...allData, ...result.data];
         hasMore = allData.length < result.total;
@@ -348,7 +365,7 @@ function PaymentsPage() {
       {/* Smart auto-assign banner — one-time per business, shown only when assignments fire */}
       <SmartAssignBanner onAssigned={() => utils.payment.list.invalidate()} />
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
         {/* Filters */}
         <div className="border-b border-border-light px-4 py-2">
           <DateRangeBar
@@ -367,7 +384,7 @@ function PaymentsPage() {
           <div className="p-4">
             <SkeletonRows count={5} height="h-12" />
           </div>
-        ) : !list.items.length && !isFetching ? (
+        ) : !rows.length && !isFetching ? (
           <EmptyState
             title="No payments recorded yet"
             description="Record your first payment to start tracking cash flow."
@@ -379,27 +396,33 @@ function PaymentsPage() {
             }
           />
         ) : (
-          <div>
-            <div
-              ref={list.scrollRef}
-              onScroll={list.onScroll}
-              className="max-h-[600px] overflow-y-auto"
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
             >
-              <table className="data-table">
-                <thead className="sticky top-0 z-10">
+              <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
+            </Pagination>
+            <TableScroll ref={tableRef}>
+              <table className="data-table w-full">
+                <thead>
                   <tr>
                     <th>Payment #</th>
-                    <th>Party</th>
-                    <th>Date</th>
+                    <SortableTh sortKey="party" sort={sort} onSort={setSort}>Party</SortableTh>
+                    <SortableTh sortKey="date" sort={sort} onSort={setSort} firstDir="desc">Date</SortableTh>
                     <th>Mode</th>
                     <th>Reference</th>
-                    <th className="text-right">Amount</th>
-                    <th></th>
+                    <SortableTh sortKey="amount" sort={sort} onSort={setSort} firstDir="desc" align="right">Amount</SortableTh>
+                    <th className="text-right"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {list.items.map((p) => (
-                    <tr key={p.id} className="group cursor-pointer" onClick={() => setSelectedPaymentId(p.id)}>
+                  {rows.map((p) => (
+                    <tr key={p.id} className="cursor-pointer" onClick={() => setSelectedPaymentId(p.id)}>
                       <td className="font-mono text-ui text-text-secondary">
                         {p.paymentNumber || "—"}
                       </td>
@@ -415,51 +438,33 @@ function PaymentsPage() {
                         {formatCurrency(p.amount)}
                       </td>
                       <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            className="text-xs px-2 py-1 rounded font-medium text-text-secondary hover:bg-surface-2 transition-colors"
-                            onClick={() => setEditPaymentId(p.id)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="btn-icon text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
-                            onClick={() => deleteConfirm.requestDelete(p.id, p.paymentNumber || p.partyName)}
-                            aria-label="Delete payment"
-                          >
-                            <Icon icon={Delete02Icon} size={16} />
-                          </button>
-                        </div>
+                        <RowActions
+                          label={p.paymentNumber || p.partyName}
+                          items={tidyMenu([
+                            { label: "Open", hint: "Enter", onSelect: () => setSelectedPaymentId(p.id) },
+                            { label: "Edit payment", onSelect: () => setEditPaymentId(p.id) },
+                            { kind: "separator" },
+                            {
+                              label: "Delete payment",
+                              danger: true,
+                              onSelect: () => deleteConfirm.requestDelete(p.id, p.paymentNumber || p.partyName),
+                            },
+                          ])}
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {list.loadingMore && (
-                <div className="border-t border-border-light">
-                  <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                    <div className="h-3 bg-surface-2 rounded w-32" />
-                    <div className="h-3 bg-surface-2 rounded w-20" />
-                    <div className="h-3 bg-surface-2 rounded w-24" />
-                    <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
-                  </div>
-                </div>
-              )}
-              {list.hasMore && !list.loadingMore && (
-                <button
-                  type="button"
-                  onClick={list.loadMore}
-                  className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
-                >
-                  Load more
-                </button>
-              )}
-              {!list.hasMore && list.items.length > PAYMENTS_PAGE_SIZE && (
-                <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
-                  All {list.total.toLocaleString()} records loaded
-                </div>
-              )}
-            </div>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         )}
       </div>

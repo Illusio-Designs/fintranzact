@@ -13,6 +13,7 @@ import { applyStockAdjustment } from "./stock.js";
 import { findOrCreateBatch } from "../lib/batches.js";
 import { groupSubtreeSql, resolveItemGroup } from "../lib/stock-groups.js";
 import { hsnProblem } from "../lib/hsn-data.js";
+import { itemListOrder, itemSortSchema } from "../lib/item-list-order.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
@@ -96,6 +97,7 @@ export const itemRouter = router({
       category: z.string().nullish(),
       // A group and everything under it, or "none" for items in no group.
       stockGroupId: z.union([z.string().uuid(), z.literal("none")]).nullish(),
+      ...itemSortSchema,
       ...paginationSchema.shape,
     }))
     .query(async ({ input, ctx }) => {
@@ -131,7 +133,7 @@ export const itemRouter = router({
       const [data, [{ count }]] = await Promise.all([
         ctx.db.select().from(items)
           .where(and(...conditions))
-          .orderBy(desc(items.updatedAt))
+          .orderBy(...itemListOrder(input.sortBy, input.sortDir))
           .limit(input.limit)
           .offset(offset),
         ctx.db.select({ count: sql<number>`count(*)::int` }).from(items)

@@ -148,18 +148,19 @@ test.describe("Expenses — Mutation", () => {
     await expect(expenses.addSlideOver).not.toBeVisible({ timeout: 10_000 });
   });
 
-  // TODO: Flaky — hover action buttons sometimes don't appear in full-suite runs (timing/data-order)
-  test.skip("row hover shows edit and delete buttons", async ({ page }) => {
+  // The actions now sit in an always-visible "Actions" menu, so the old
+  // hover-timing flake no longer applies.
+  test("row Actions menu offers edit and delete", async ({ page }) => {
     const count = await expenses.rowCount();
-    test.skip(count === 0, "No expenses in the list to hover over");
+    test.skip(count === 0, "No expenses in the list");
 
     const firstRow = expenses.tableRows.first();
-    await firstRow.hover();
+    await firstRow.getByRole("button", { name: /^Actions for/ }).click();
 
-    await expect(page.getByRole("button", { name: "Edit expense" })).toBeVisible({
+    await expect(page.getByRole("menuitem", { name: "Edit" })).toBeVisible({
       timeout: 3_000,
     });
-    await expect(page.getByRole("button", { name: "Delete expense" })).toBeVisible({
+    await expect(page.getByRole("menuitem", { name: "Delete expense" })).toBeVisible({
       timeout: 3_000,
     });
   });

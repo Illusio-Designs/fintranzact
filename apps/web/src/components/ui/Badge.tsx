@@ -14,7 +14,7 @@ const SIZE_CLASSES = {
 
 export function Badge({ children, color, size = "sm", className }: BadgeProps) {
   return (
-    <span className={cn("inline-flex items-center", SIZE_CLASSES[size], color, className)}>
+    <span className={cn("inline-flex items-center whitespace-nowrap", SIZE_CLASSES[size], color, className)}>
       {children}
     </span>
   );

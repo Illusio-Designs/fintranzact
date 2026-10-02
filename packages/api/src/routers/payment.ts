@@ -10,6 +10,7 @@ import { assertInBusiness } from "../lib/business-scope.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
+import { paymentListOrder, paymentSortSchema } from "../lib/payment-list-order.js";
 import { processGatewayPayment, reverseGatewayPayment } from "../lib/gateway.js";
 
 /**
@@ -40,6 +41,7 @@ export const paymentRouter = router({
       fromDate: z.string().datetime().nullish(),
       toDate: z.string().datetime().nullish(),
       search: z.string().nullish(),
+      ...paymentSortSchema,
       ...paginationSchema.shape,
     }))
     .query(async ({ input, ctx }) => {
@@ -76,7 +78,7 @@ export const paymentRouter = router({
         }).from(payments)
           .innerJoin(parties, eq(parties.id, payments.partyId))
           .where(and(...conditions))
-          .orderBy(desc(payments.paymentDate))
+          .orderBy(...paymentListOrder(input.sortBy, input.sortDir))
           .limit(input.limit)
           .offset(offset),
         ctx.db.select({ count: sql<number>`count(*)::int` }).from(payments)

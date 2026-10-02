@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
@@ -7,6 +7,7 @@ import { formatCurrency, formatDate, getInitials, cn, downloadCSV, toISOString }
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
+import { usePageSize } from "@/hooks/usePageSize";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import {
   GSTIN_REGEX,
@@ -42,10 +43,12 @@ import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { Pagination } from "@/components/ui/Pagination";
+import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Icon } from "@/components/ui/Icon";
-import { Alert02Icon, ArrowRight01Icon, ArrowRight02Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, ArrowRight01Icon, ArrowRight02Icon, Cancel01Icon, Download04Icon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
 import { PhoneInput } from "@/components/ui/PhoneInput";
@@ -72,7 +75,14 @@ const PARTY_STATUS_FILTERS = [
   { value: "overdue", label: "Overdue" },
 ];
 
-const PARTIES_PAGE_SIZE = 20;
+type PartySortKey = "name" | "balance";
+
+const SORT_OPTIONS: SortOption<PartySortKey>[] = [
+  { key: "name", dir: "asc", label: "Name A to Z" },
+  { key: "name", dir: "desc", label: "Name Z to A" },
+  { key: "balance", dir: "desc", label: "Balance high to low" },
+  { key: "balance", dir: "asc", label: "Balance low to high" },
+];
 
 function countFilled(...values: string[]): number {
   return values.filter((v) => v.trim() !== "").length;
@@ -81,9 +91,10 @@ function countFilled(...values: string[]): number {
 function PartiesPage() {
   const [search] = usePageSearch("Search by name…");
   const [partyFilter, setPartyFilter] = useState("all");
-  const [sortBy, setSortBy] = useState<"name" | "balance">("name");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sort, setSort] = useState<SortState<PartySortKey>>({ key: "name", dir: "asc" });
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("parties", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const deleteConfirm = useDeleteConfirmation();
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null);
@@ -91,23 +102,28 @@ function PartiesPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
-  function toggleSort(col: "name" | "balance") {
-    if (sortBy === col && sortDir === "asc") setSortDir("desc");
-    else if (sortBy === col && sortDir === "desc") { setSortBy("name"); setSortDir("asc"); } // reset to default
-    else { setSortBy(col); setSortDir(col === "name" ? "asc" : "desc"); }
-  }
+  // Back to page 1 whenever search, filter, sort or rows per page change
+  useEffect(() => { setPage(1); }, [debouncedSearch, partyFilter, sort.key, sort.dir, pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  // Reset to page 1 whenever filters/sort change
-  useEffect(() => { setPage(1); }, [debouncedSearch, partyFilter, sortBy, sortDir]);
-
-  const { data, isLoading } = trpc.party.list.useQuery({
+  const { data, isFetching, isLoading } = trpc.party.list.useQuery({
     search: debouncedSearch || undefined,
     filter: partyFilter as any,
-    sortBy,
-    sortDir,
+    sortBy: sort.key,
+    sortDir: sort.dir,
     page,
-    limit: PARTIES_PAGE_SIZE,
+    limit: pageSize,
+  }, {
+    // Keep the current page on screen while the next one loads.
+    placeholderData: (prev) => prev,
   });
+
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // Deleting the last row of the last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const utils = trpc.useUtils();
 
@@ -189,17 +205,21 @@ function PartiesPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <PillTabs
-          tabs={PARTY_TYPE_TABS}
-          value={["all", "customer", "supplier"].includes(partyFilter) ? partyFilter : "all"}
-          onChange={setPartyFilter}
-        />
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="min-w-0 max-w-full overflow-x-auto">
           <PillTabs
-            tabs={PARTY_STATUS_FILTERS}
-            value={partyFilter}
-            onChange={(v) => setPartyFilter(partyFilter === v ? "all" : v)}
+            tabs={PARTY_TYPE_TABS}
+            value={["all", "customer", "supplier"].includes(partyFilter) ? partyFilter : "all"}
+            onChange={setPartyFilter}
           />
+        </div>
+        <div className="ml-auto flex min-w-0 max-w-full items-center gap-1.5">
+          <div className="min-w-0 max-w-full overflow-x-auto">
+            <PillTabs
+              tabs={PARTY_STATUS_FILTERS}
+              value={partyFilter}
+              onChange={(v) => setPartyFilter(partyFilter === v ? "all" : v)}
+            />
+          </div>
           {data && data.total > 0 && (
             <button
               onClick={exportPartiesCSV}
@@ -225,7 +245,7 @@ function PartiesPage() {
       {/* Table */}
       {isLoading ? (
         <SkeletonRows count={5} height="h-12" />
-      ) : !data?.data.length ? (
+      ) : !rows.length && !isFetching ? (
         <EmptyState
           title="No parties found"
           description="Add your first customer or supplier to get started."
@@ -237,74 +257,78 @@ function PartiesPage() {
           }
         />
       ) : (
-        <div className="card overflow-hidden">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th
-                  className="cursor-pointer select-none hover:text-text-primary transition-colors"
-                  onClick={() => toggleSort("name")}
-                >
-                  Name {sortBy === "name" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
-                </th>
-                <th>Type</th>
-                <th>Phone</th>
-                <th>GSTIN</th>
-                <th
-                  className="text-right cursor-pointer select-none hover:text-text-primary transition-colors"
-                  onClick={() => toggleSort("balance")}
-                >
-                  Balance {sortBy === "balance" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
-                </th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.data.map((party) => (
-                <tr
-                  key={party.id}
-                  className="group cursor-pointer"
-                  onClick={() => setSelectedPartyId(party.id)}
-                >
-                  <td>
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white ${party.type === "customer" ? "bg-emerald-500" : "bg-blue-500"}`}
-                      >
-                        {getInitials(party.name)}
-                      </div>
-                      <span className="font-medium">{party.name}</span>
-                    </div>
-                  </td>
-                  <td className="capitalize text-text-secondary">{party.type}</td>
-                  <td className="text-text-secondary">{party.phone || "—"}</td>
-                  <td className="font-mono text-ui text-text-secondary">
-                    {party.gstin || "—"}
-                  </td>
-                  <td className="text-right tabular-nums font-medium">
-                    {party.balance && party.balance !== "0"
-                      ? formatCurrency(party.balance)
-                      : "—"}
-                  </td>
-                  <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className="btn-icon opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
-                      onClick={() => confirmDelete(party.id, party.name)}
-                      aria-label="Delete party"
-                    >
-                      <Icon icon={Delete02Icon} size={16} />
-                    </button>
-                  </td>
+        <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
+          <Pagination
+            placement="top"
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={total}
+            pageSize={pageSize}
+          >
+            <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
+          </Pagination>
+          <TableScroll ref={tableRef}>
+            <table className="data-table w-full">
+              <thead>
+                <tr>
+                  <SortableTh sortKey="name" sort={sort} onSort={setSort}>Name</SortableTh>
+                  <th>Type</th>
+                  <th>Phone</th>
+                  <th>GSTIN</th>
+                  <SortableTh sortKey="balance" sort={sort} onSort={setSort} firstDir="desc" align="right">Balance</SortableTh>
+                  <th className="text-right"><span className="sr-only">Actions</span></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((party) => (
+                  <tr
+                    key={party.id}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedPartyId(party.id)}
+                  >
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white ${party.type === "customer" ? "bg-emerald-500" : "bg-blue-500"}`}
+                        >
+                          {getInitials(party.name)}
+                        </div>
+                        <span className="font-medium">{party.name}</span>
+                      </div>
+                    </td>
+                    <td className="capitalize text-text-secondary">{party.type}</td>
+                    <td className="text-text-secondary">{party.phone || "—"}</td>
+                    <td className="font-mono text-ui text-text-secondary">
+                      {party.gstin || "—"}
+                    </td>
+                    <td className="text-right tabular-nums font-medium">
+                      {party.balance && party.balance !== "0"
+                        ? formatCurrency(party.balance)
+                        : "—"}
+                    </td>
+                    <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <RowActions
+                        label={party.name}
+                        items={tidyMenu([
+                          { label: "Open", hint: "Enter", onSelect: () => setSelectedPartyId(party.id) },
+                          { kind: "separator" },
+                          { label: "Delete party", danger: true, onSelect: () => confirmDelete(party.id, party.name) },
+                        ])}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
           <Pagination
             page={page}
-            totalPages={Math.ceil(data.total / PARTIES_PAGE_SIZE)}
+            totalPages={totalPages}
             onPageChange={setPage}
-            total={data.total}
-            pageSize={PARTIES_PAGE_SIZE}
+            total={total}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
           />
         </div>
       )}

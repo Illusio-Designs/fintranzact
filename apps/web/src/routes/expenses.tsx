@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
-import { formatCurrency, formatDate, downloadCSV, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, downloadCSV, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
 import { Badge } from "@/components/ui/Badge";
 import { toast } from "@/hooks/useToast";
@@ -13,20 +13,29 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
-import { Icon } from "@/components/ui/Icon";
-import { Delete02Icon, PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
-import { useInfiniteList } from "@/hooks/useInfiniteList";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
+import { usePageSize } from "@/hooks/usePageSize";
+import { Pagination } from "@/components/ui/Pagination";
+import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
 
 export const Route = createFileRoute("/expenses")({
   component: ExpensesPage,
 });
 
-const EXPENSE_PAGE_SIZE = 25;
+type ExpenseSortKey = "date" | "amount" | "category";
+
+const SORT_OPTIONS: SortOption<ExpenseSortKey>[] = [
+  { key: "date", dir: "desc", label: "Newest first" },
+  { key: "date", dir: "asc", label: "Oldest first" },
+  { key: "amount", dir: "desc", label: "Amount: high to low" },
+  { key: "amount", dir: "asc", label: "Amount: low to high" },
+  { key: "category", dir: "asc", label: "Category: A to Z" },
+];
 
 const MODE_OPTIONS = [
   { value: "cash", label: "Cash" },
@@ -75,7 +84,10 @@ function ExpensesPage() {
   const [search] = usePageSearch("Search category or description…");
   const [categoryFilter, setCategoryFilter] = useState("");
   const dateRange = useDateRange("expenses", "this-month");
+  const [sort, setSort] = useState<SortState<ExpenseSortKey>>({ key: "date", dir: "desc" });
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("expenses", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editExpenseId, setEditExpenseId] = useState<string | null>(null);
   const deleteConfirm = useDeleteConfirmation();
@@ -85,11 +97,12 @@ function ExpensesPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
+  // Back to page 1 whenever filters, sort or rows per page change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, categoryFilter, dateRange.fromDate, dateRange.toDate]);
-
-  const loadMore = useCallback(() => setPage((p) => p + 1), []);
+  }, [debouncedSearch, categoryFilter, dateRange.fromDate, dateRange.toDate, sort.key, sort.dir, pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   useHotkeys([
     {
@@ -107,24 +120,23 @@ function ExpensesPage() {
 
   const { data, isFetching, isLoading } = trpc.expense.list.useQuery({
     page,
-    limit: EXPENSE_PAGE_SIZE,
+    limit: pageSize,
     search: debouncedSearch || undefined,
     category: categoryFilter || undefined,
     fromDate: dateRange.fromDate,
     toDate: dateRange.toDate,
+    sortBy: sort.key,
+    sortDir: sort.dir,
   }, {
+    // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
-  const list = useInfiniteList({
-    key: "expenses",
-    data: data?.data,
-    total: data?.total ?? 0,
-    page,
-    isFetching,
-    onLoadMore: loadMore,
-    resetDeps: [debouncedSearch, categoryFilter, dateRange.fromDate, dateRange.toDate],
-  });
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // Deleting the last row of the last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const { data: categories } = trpc.expense.categories.useQuery();
 
@@ -243,6 +255,9 @@ function ExpensesPage() {
           category: categoryFilter || undefined,
           fromDate: dateRange.fromDate,
           toDate: dateRange.toDate,
+          // The file matches what's on screen: same filters, same order.
+          sortBy: sort.key,
+          sortDir: sort.dir,
         });
         allData = [...allData, ...result.data];
         hasMore = allData.length < result.total;
@@ -286,7 +301,7 @@ function ExpensesPage() {
       />
 
       {/* Filters */}
-      <div className="card mb-5 overflow-hidden">
+      <div className="card mb-5 overflow-clip">
         <div className="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-border-light">
           <DateRangeBar
             preset={dateRange.preset}
@@ -302,18 +317,21 @@ function ExpensesPage() {
 
         {categoryTabs.length > 1 && (
           <div className="px-4 py-2 border-b border-border-light">
-            <PillTabs
-              tabs={categoryTabs}
-              value={categoryFilter}
-              onChange={setCategoryFilter}
-            />
+            {/* Many categories scroll sideways on phones instead of wrapping. */}
+            <div className="min-w-0 max-w-full overflow-x-auto">
+              <PillTabs
+                tabs={categoryTabs}
+                value={categoryFilter}
+                onChange={setCategoryFilter}
+              />
+            </div>
           </div>
         )}
 
         {/* Table */}
         {isLoading ? (
           <ExpenseTableSkeleton />
-        ) : !list.items.length && !isFetching ? (
+        ) : !rows.length && !isFetching ? (
           <EmptyState
             title="No expenses"
             description={
@@ -323,27 +341,33 @@ function ExpensesPage() {
             }
           />
         ) : (
-          <>
-            <div
-              ref={list.scrollRef}
-              onScroll={list.onScroll}
-              className="max-h-[600px] overflow-y-auto overflow-x-auto"
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
             >
-              <table className="data-table">
-                <thead className="sticky top-0 z-10">
+              <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
+            </Pagination>
+            <TableScroll ref={tableRef}>
+              <table className="data-table w-full">
+                <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Category</th>
+                    <SortableTh sortKey="date" sort={sort} onSort={setSort} firstDir="desc">Date</SortableTh>
+                    <SortableTh sortKey="category" sort={sort} onSort={setSort}>Category</SortableTh>
                     <th>Description</th>
                     <th>Mode</th>
                     <th>Reference</th>
-                    <th className="text-right">Amount</th>
-                    <th></th>
+                    <SortableTh sortKey="amount" sort={sort} onSort={setSort} firstDir="desc" align="right">Amount</SortableTh>
+                    <th className="text-right"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {list.items.map((exp) => (
-                    <tr key={exp.id} className="group">
+                  {rows.map((exp) => (
+                    <tr key={exp.id}>
                       <td className="text-text-secondary whitespace-nowrap">
                         {formatDate(exp.expenseDate)}
                       </td>
@@ -367,60 +391,34 @@ function ExpensesPage() {
                         {formatCurrency(exp.amount)}
                       </td>
                       <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => openEdit(exp)}
-                            className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors"
-                            aria-label="Edit expense"
-                          >
-                            <Icon icon={PencilEdit02Icon} size={14} />
-                          </button>
-                          <button
-                            onClick={() => deleteConfirm.requestDelete(exp.id, exp.description || exp.category)}
-                            className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
-                            aria-label="Delete expense"
-                          >
-                            <Icon icon={Delete02Icon} size={14} />
-                          </button>
-                        </div>
+                        {/* Rows don't open on click, so Edit is the way in. */}
+                        <RowActions
+                          label={exp.description || exp.category}
+                          items={tidyMenu([
+                            { label: "Edit", onSelect: () => openEdit(exp) },
+                            { kind: "separator" },
+                            {
+                              label: "Delete expense",
+                              danger: true,
+                              onSelect: () => deleteConfirm.requestDelete(exp.id, exp.description || exp.category),
+                            },
+                          ])}
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {list.loadingMore && (
-                <div className="border-t border-border-light">
-                  <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                    <div className="h-3 bg-surface-2 rounded w-32" />
-                    <div className="h-3 bg-surface-2 rounded w-20" />
-                    <div className="h-3 bg-surface-2 rounded w-24" />
-                    <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
-                  </div>
-                </div>
-              )}
-              {list.hasMore && !list.loadingMore && (
-                <button
-                  type="button"
-                  onClick={list.loadMore}
-                  className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
-                >
-                  Load more
-                </button>
-              )}
-              {!list.hasMore && list.items.length > EXPENSE_PAGE_SIZE && (
-                <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
-                  All {list.total.toLocaleString()} records loaded
-                </div>
-              )}
-            </div>
-
-            {/* Footer: total count */}
-            <div className="px-4 py-3 border-t border-border-light">
-              <p className="text-xs text-text-tertiary">
-                {list.total.toLocaleString()} expense{list.total !== 1 ? "s" : ""}
-              </p>
-            </div>
-          </>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
+          </div>
         )}
       </div>
 

@@ -31,19 +31,13 @@ test.describe("Delete Confirmation Flows", () => {
     await page.goto("/expenses");
     await waitForPageReady(page);
 
-    // Find expense row and hover to reveal actions
+    // Find expense row and open its Actions menu
     const rows = page.locator("tbody tr");
     const rowCount = await rows.count();
     test.skip(rowCount === 0, "No expense rows visible");
 
-    await rows.first().hover();
-
-    // Click delete button
-    const deleteBtn = rows.first().locator('[aria-label="Delete expense"]');
-    const isVisible = await deleteBtn.isVisible().catch(() => false);
-    test.skip(!isVisible, "Delete button not visible on hover");
-
-    await deleteBtn.click();
+    await rows.first().getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Delete expense" }).click();
 
     // Expect confirmation dialog
     await expect(page.getByText(/delete.*expense|are you sure/i).first()).toBeVisible({ timeout: 5_000 });
@@ -63,13 +57,8 @@ test.describe("Delete Confirmation Flows", () => {
     const initialCount = await rows.count();
     test.skip(initialCount === 0, "No expense rows");
 
-    await rows.first().hover();
-
-    const deleteBtn = rows.first().locator('[aria-label="Delete expense"]');
-    const isVisible = await deleteBtn.isVisible().catch(() => false);
-    test.skip(!isVisible, "Delete button not visible");
-
-    await deleteBtn.click();
+    await rows.first().getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Delete expense" }).click();
 
     // Wait for dialog
     await expect(page.getByText(/delete.*expense|are you sure/i).first()).toBeVisible({ timeout: 5_000 });
@@ -104,24 +93,18 @@ test.describe("Delete Confirmation Flows", () => {
     const initialCount = await rows.count();
     test.skip(initialCount === 0, "Seeded expense not found in list");
 
-    await rows.first().hover();
-
-    const deleteBtn = rows.first().locator('[aria-label="Delete expense"]');
-    const isVisible = await deleteBtn.isVisible().catch(() => false);
-    test.skip(!isVisible, "Delete button not visible");
-
-    await deleteBtn.click();
+    await rows.first().getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Delete expense" }).click();
 
     // Confirm deletion — click the danger-styled Delete button in the modal
     await expect(page.locator(".btn-danger")).toBeVisible({ timeout: 5_000 });
     await page.locator(".btn-danger").click();
 
-    // The deleted expense's row leaves the list (it used to linger after the
-    // refetch; useInfiniteList now drops records that are gone).
+    // The deleted expense's row leaves the list once the page is refetched.
     await expect(rows).toHaveCount(initialCount - 1, { timeout: 10_000 });
   });
 
-  test("draft invoice row shows delete action on hover", async ({ page }) => {
+  test("draft invoice row offers delete in its Actions menu", async ({ page }) => {
     const api = new ApiHelper(page, process.env.API_URL ?? "http://localhost:3000");
 
     // Seed party + item + invoice
@@ -140,11 +123,9 @@ test.describe("Delete Confirmation Flows", () => {
     const count = await row.count();
     test.skip(count === 0, "Invoice not found");
 
-    // Hover row to reveal actions
-    await row.hover();
-
-    // Draft invoice should have a delete button
-    const deleteBtn = row.locator('button:has(svg)').last();
-    await expect(deleteBtn).toBeVisible();
+    // A draft invoice's row menu offers delete
+    await row.getByRole("button", { name: /^Actions for/ }).click();
+    await expect(page.getByRole("menuitem", { name: "Delete invoice" })).toBeVisible();
+    await page.keyboard.press("Escape");
   });
 });

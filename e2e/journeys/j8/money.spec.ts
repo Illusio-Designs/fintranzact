@@ -385,7 +385,8 @@ test.describe("J8 money", () => {
     await openPage(page, "Expenses");
     await chooseDateRange(page, "All");
     const stationeryRow = listRow(page, "POS 4587XXXX STATIONERY MART");
-    await stationeryRow.getByRole("button", { name: "Delete expense" }).click();
+    await stationeryRow.getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Delete expense" }).click();
     const confirm = page.getByRole("alertdialog").or(page.getByRole("dialog")).filter({ hasText: /Delete/ });
     await expectNoHorizontalScroll(page, "delete expense");
     await confirm.getByRole("button", { name: /^Delete/ }).click();

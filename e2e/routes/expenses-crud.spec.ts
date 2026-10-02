@@ -68,16 +68,16 @@ test.describe("Expenses — Create", () => {
 // ═════════════════════════════════════════════════════════════════
 
 test.describe("Expenses — Edit", () => {
-  test("clicking edit button opens slide-over with title 'Edit Expense'", async ({ page }) => {
+  test("Edit in the row menu opens slide-over with title 'Edit Expense'", async ({ page }) => {
     await page.goto("/expenses");
 
     const rows = page.locator("tbody tr");
     const count = await rows.count();
     test.skip(count === 0, "No expenses to edit");
 
-    // Hover the first row to reveal action buttons
-    await rows.first().hover();
-    await page.getByRole("button", { name: "Edit expense" }).first().click();
+    // Open the first row's Actions menu
+    await rows.first().getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Edit" }).click();
 
     const dialog = page.locator('[role="dialog"]').first();
     await expect(dialog).toBeVisible({ timeout: 5_000 });
@@ -91,9 +91,9 @@ test.describe("Expenses — Edit", () => {
     const count = await rows.count();
     test.skip(count === 0, "No expenses to edit");
 
-    // Hover the first row and click edit
-    await rows.first().hover();
-    await page.getByRole("button", { name: "Edit expense" }).first().click();
+    // Open the first row's Actions menu and choose Edit
+    await rows.first().getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Edit" }).click();
 
     const dialog = page.locator('[role="dialog"]').first();
     await expect(dialog).toBeVisible({ timeout: 5_000 });
@@ -116,16 +116,16 @@ test.describe("Expenses — Edit", () => {
 // ═════════════════════════════════════════════════════════════════
 
 test.describe("Expenses — Delete", () => {
-  test("delete button opens delete confirmation dialog", async ({ page }) => {
+  test("Delete in the row menu opens delete confirmation dialog", async ({ page }) => {
     await page.goto("/expenses");
 
     const rows = page.locator("tbody tr");
     const count = await rows.count();
     test.skip(count === 0, "No expenses to delete");
 
-    // Hover the first row to reveal action buttons
-    await rows.first().hover();
-    await page.getByRole("button", { name: "Delete expense" }).first().click();
+    // Open the first row's Actions menu
+    await rows.first().getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Delete expense" }).click();
 
     // DeleteConfirmDialog should appear and mention the entity name
     const confirmDialog = page.locator('[role="dialog"]').first();
@@ -154,9 +154,9 @@ test.describe("Expenses — Delete", () => {
     const count = await rows.count();
     test.skip(count === 0, "Seeded expense not found in list");
 
-    // Hover and click delete
-    await rows.first().hover();
-    await page.getByRole("button", { name: "Delete expense" }).first().click();
+    // Open the row's Actions menu and choose delete
+    await rows.first().getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Delete expense" }).click();
 
     // Confirm deletion — click the danger-styled Delete button
     await expect(page.locator(".btn-danger")).toBeVisible({ timeout: 5_000 });

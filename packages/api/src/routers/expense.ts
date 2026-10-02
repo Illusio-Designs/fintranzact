@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, ilike, or, isNull, inArray } from "drizzle-orm";
+import { eq, and, sql, ilike, or, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { expenses, bankAccounts, bankTransactions, bankStatementLines } from "@fintranzact/db";
@@ -10,6 +10,7 @@ import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
+import { expenseListOrder, expenseSortSchema } from "../lib/expense-list-order.js";
 
 // Map payment mode to the bank account type(s) to search for.
 // Returns null when no bank debit should be created.
@@ -30,6 +31,7 @@ export const expenseRouter = router({
       search: z.string().optional(),
       fromDate: z.string().datetime().optional(),
       toDate: z.string().datetime().optional(),
+      ...expenseSortSchema,
       ...paginationSchema.shape,
     }))
     .query(async ({ input, ctx }) => {
@@ -51,7 +53,7 @@ export const expenseRouter = router({
       const [data, [{ count }]] = await Promise.all([
         ctx.db.select().from(expenses)
           .where(and(...conditions))
-          .orderBy(desc(expenses.expenseDate))
+          .orderBy(...expenseListOrder(input.sortBy, input.sortDir))
           .limit(input.limit)
           .offset(offset),
         ctx.db.select({ count: sql<number>`count(*)::int` }).from(expenses)
