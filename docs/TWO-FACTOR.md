@@ -1,6 +1,6 @@
 # Two-factor authentication
 
-Status: **enrolment API (part 2), sign-in challenge with trusted devices (part 3) and the web and desktop screens (part 4) built.** Organisation enforcement at login, platform-admin reset and the mobile screens follow in later parts. Until the mobile screens exist, the mobile app shows "Two-factor sign-in is not available in this version yet" for a two-factor account; the CLI already prompts for a code.
+Status: **enrolment API (part 2), sign-in challenge with trusted devices (part 3), the web and desktop screens (part 4) and the mobile screens (part 5) built.** Organisation enforcement at login and platform-admin reset follow in later parts. The CLI already prompts for a code.
 
 ## Model
 
@@ -98,6 +98,18 @@ The cookie is added with `Headers.append`, so the session cookie (written with `
 **Desktop**: the trusted-device token returned in the verify response body is stored in the OS keychain (service `in.fintranzact.app`, account `trusted_device_token`, never a plaintext fallback) through `save_trusted_device_token`, `get_trusted_device_token` and `clear_trusted_device_token` in `src-tauri/src/session.rs` (allow-listed under `src-tauri/permissions/` and `capabilities/default.json`). JS wrappers `saveTrustedDeviceToken`, `getTrustedDeviceToken`, `clearTrustedDeviceToken` live in `lib/desktop-session.ts` and are no-ops outside the desktop app. The token is sent as `trustedDeviceToken` on every `auth.login`. It survives sign-out (trust belongs to the device) and is cleared when the server answers a login that carried it with a challenge anyway (expired or revoked), when the user revokes this device, on "Revoke all", and when 2FA is turned off. The web uses the HttpOnly `ftz_td` cookie and needs no code.
 
 User-facing help: `apps/web/src/content/help/settings/two-factor-authentication.mdx`.
+
+## Mobile
+
+**Sign-in second step** (`apps/mobile/app/(auth)/login.tsx`, `src/components/auth/TwoFactorStep.tsx`): when `auth.login` returns `twoFactorRequired` the form is swapped for the code step. Six digits auto-submit (`keyboardType` number-pad, `textContentType` oneTimeCode, `autoComplete` sms-otp on Android and one-time-code on iOS); "Use a backup code instead" switches to a `XXXXXX-XXXXXX` field; "Trust this device for 30 days" is a switch, off by default. Errors map through the pure `mapVerifyError` (`src/lib/two-factor-login.ts`): wrong code stays on the step and clears the field, an expired challenge returns to the password step with the server message, a lockout disables the form and shows "Too many attempts. Try again at <time>". Success is the same as a password login (`useAuthStore.login`, `router.replace`).
+
+**Shared helpers**: the pure formatters (`formatTotpInput`, `formatBackupCodeInput`, `isCompleteBackupCode`, `parseUnlockTime`, `lockedMessage`, `backupCodesFileContent`, `groupKey`) live in `packages/shared/src/two-factor-format.ts` and are used by web (re-exported from `apps/web/src/lib/two-factor.ts`) and mobile.
+
+**Client kind**: mobile does not send `X-Fintranzact-Client`, so `buildLoginInput` and `buildVerifyInput` (`src/lib/trusted-device.ts`) always set `client: "mobile"`; the server then returns the trusted-device token in the response body.
+
+**Trusted-device token**: stored in expo-secure-store under `fintranzact_trusted_device_token` (all access wrapped in try/catch; a failure just means a code is asked for). Sent as `trustedDeviceToken` on every `auth.login`. It survives sign-out. It is cleared when a login that carried it still returns a challenge (expired or revoked), when 2FA is turned off, when the user revokes this device, and on "Revoke all".
+
+**Security screen** (Settings, Security, Two-factor authentication; `app/(app)/(more)/settings/security.tsx`, row shows On/Off from `auth.me`): status card; enable sheet (QR from the PNG data URL, grouped manual key with copy via expo-clipboard, authenticator-app hints, confirm code, then backup codes shown once with Copy and Save / Share through the React Native Share API; Done stays disabled until "I saved these codes" is switched on); disable (password + code, server refusals such as the organisation-enforced message shown inline); new backup codes (password + authenticator code only); trusted devices with a "This device" badge (the stored token is passed to `auth.listTrustedDevices` so `current` works), Revoke and Revoke all. No native dependency was added, so no dev-client rebuild is needed. Not yet exercised on a physical device.
 
 ## CLI
 

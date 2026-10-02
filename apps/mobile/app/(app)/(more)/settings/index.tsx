@@ -47,6 +47,7 @@ const GROUPS: { title: string; items: SettingItem[] }[] = [
     title: "Security",
     items: [
       { label: "Account", icon: "shield-checkmark-outline", description: "Password and active sessions", route: "/(more)/settings/account" },
+      { label: "Two-factor authentication", icon: "phone-portrait-outline", description: "Authenticator codes, backup codes", route: "/(more)/settings/security" },
       { label: "API keys", icon: "key-outline", description: "Connect other software", route: "/(more)/settings/api-keys" },
     ],
   },
@@ -169,6 +170,9 @@ export default function SettingsScreen() {
                   </View>
                   {item.label === "Appearance" ? (
                     <Text style={styles.settingValue}>{MODE_LABEL[mode]}</Text>
+                  ) : null}
+                  {item.route.endsWith("/security") && session ? (
+                    <Text style={styles.settingValue}>{session.twoFactor?.enabled ? "On" : "Off"}</Text>
                   ) : null}
                   <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                 </PressableRow>
