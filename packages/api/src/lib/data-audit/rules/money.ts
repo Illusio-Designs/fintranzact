@@ -548,6 +548,25 @@ export const moneyTables: TableCoverage[] = [
     ],
   },
   {
+    table: "composition_settings",
+    rules: [
+      rule("composition_settings", "valid", "error",
+        "A composition setting is for an April-March financial year (YYYY-YY, the second part the next year), a known category (manufacturer_trader, restaurant or other_service), and its rate, when set, is 0-100 percent.",
+        ["gst.updateCompositionSettings (composition scheme setting)"],
+        `SELECT s.business_id, s.id::text, s.financial_year || ' ' || s.category
+         FROM composition_settings s
+         WHERE s.financial_year !~ '^[0-9]{4}-[0-9]{2}$'
+            OR (s.financial_year ~ '^[0-9]{4}-[0-9]{2}$' AND LPAD(((SUBSTRING(s.financial_year, 1, 4)::int + 1) % 100)::text, 2, '0') <> SUBSTRING(s.financial_year, 6, 2))
+            OR s.category NOT IN ('manufacturer_trader', 'restaurant', 'other_service')
+            OR s.rate::numeric NOT BETWEEN 0 AND 100`),
+      rule("composition_settings", "audit-trail", "error",
+        "Every composition setting has an audit entry for the change that created or last changed it.",
+        ["gst.updateCompositionSettings (composition scheme setting)"],
+        `SELECT s.business_id, s.id::text, s.financial_year || ' composition setting has no audit entry'
+         FROM composition_settings s WHERE NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.entity_id = s.id AND a.action = 'gst.updateCompositionSettings')`),
+    ],
+  },
+  {
     table: "tds_section_settings",
     rules: [
       rule("tds_section_settings", "valid", "error",

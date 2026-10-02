@@ -949,6 +949,23 @@ export const tdsSectionSettings = pgTable("tds_section_settings", {
   uniqueIndex("tds_section_settings_year_code_idx").on(t.businessId, t.financialYear, t.sectionCode),
 ]);
 
+// GST composition scheme: the category a composition dealer is taxed under for
+// a financial year (manufacturer_trader / restaurant / other_service) and, when
+// the Government changes it, the rate to use instead of the code default
+// (@fintranzact/shared composition.ts). Null rate = use the category default.
+export const compositionSettings = pgTable("composition_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  // "2026-27" — always April to March.
+  financialYear: text("financial_year").notNull(),
+  category: text("category").notNull(),
+  rate: numeric("rate", { precision: 6, scale: 3 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("composition_settings_year_idx").on(t.businessId, t.financialYear),
+]);
+
 // Tax deposited with the government. One challan can cover many deductions.
 export const taxChallans = pgTable("tax_challans", {
   id: uuid("id").primaryKey().defaultRandom(),

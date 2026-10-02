@@ -155,12 +155,15 @@
 | govUsage.statements | query | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | govUsage.summary | query | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | gst.cmp08 | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
+| gst.cmp08Year | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
+| gst.compositionSettings | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr1 | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr1CSV | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr1Json | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr3b | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr9 | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
 | gst.gstr9Json | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
+| gst.updateCompositionSettings | mutation | authorized | update:Business | ✓ | ✓ | ✗ | ✗ | ✗ |
 | gstr2b.ignoreRecord | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
 | gstr2b.linkInvoice | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
 | gstr2b.missingIn2B | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |

@@ -831,6 +831,16 @@ export const tdsSectionSettingRowSchema = z.object({
   updatedAt: isoDatetime,
 });
 
+export const compositionSettingRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  financialYear: z.string(),
+  category: z.enum(["manufacturer_trader", "restaurant", "other_service"]),
+  rate: money3Nullable,
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
 export const taxChallanRowSchema = z.object({
   id: uuid,
   businessId: uuid,
@@ -930,6 +940,7 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   payments: paymentRowSchema,
   payment_allocations: paymentAllocationRowSchema,
   tds_section_settings: tdsSectionSettingRowSchema,
+  composition_settings: compositionSettingRowSchema,
   tax_challans: taxChallanRowSchema,
   tax_deductions: taxDeductionRowSchema,
   tds_26as_entries: tds26asEntryRowSchema,
