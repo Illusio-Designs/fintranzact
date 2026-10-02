@@ -2121,8 +2121,9 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
         // tenants, web banner and prompts, mobile handler and banner, and CLI/MCP
         // plan_required errors with a billing status command. Tests are written
         // (unit tests pass); the integration tests had not run against Postgres
-        // when this was ticked, so CI is their first verification. Kept in
-        // progress for that reason and for live checks after the trial start flow.
+        // when this was written, so the tests line is left unticked until CI has
+        // run them. Kept in progress for that and for live checks after the trial
+        // start flow.
         title: "P4. Plan & add-on access enforcement",
         status: "in_progress",
         done: [
@@ -2132,7 +2133,8 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
           "Mobile app: limits, add-ons and read-only handling",
           "CLI/MCP: same checks and clear errors",
           "Upgrade prompts in web and mobile",
-          "Tests for each plan, add-on and read-only case",
+          // "Tests for each plan, add-on and read-only case" stays unticked until CI has
+          // run the integration tests (read-only-gate, plan-enforcement, rest-entitlement).
         ],
       },
     ],
