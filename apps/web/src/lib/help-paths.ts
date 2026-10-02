@@ -118,6 +118,7 @@ export const HELP_NAV: HelpNavSection[] = [
       { label: "Remove your CA's access", slug: "team/remove-ca-access" },
       { label: "See what your CA did", slug: "team/access-log" },
       { label: "Work with many clients from one login", slug: "team/many-clients" },
+      { label: "CA partners and your clients", slug: "team/ca-partners" },
       { label: "Online Store", slug: "online-store" },
     ],
   },

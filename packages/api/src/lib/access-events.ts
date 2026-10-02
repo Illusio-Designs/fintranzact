@@ -19,7 +19,8 @@ export type AccessEventKind =
   | "accepted"
   | "role_changed"
   | "org_opened"
-  | "export";
+  | "export"
+  | "partner_attributed";
 
 interface Who {
   /** The signed-in person who did it. */
@@ -35,7 +36,8 @@ export type AccessEventParams =
   | (Who & { kind: "accepted"; role: string })
   | (Who & { kind: "role_changed"; from: string; to: string; email: string; targetUserId: string })
   | (Who & { kind: "org_opened"; role: string })
-  | (Who & { kind: "export"; procedure: string; role: string });
+  | (Who & { kind: "export"; procedure: string; role: string })
+  | (Who & { kind: "partner_attributed"; role: string; partnerName: string });
 
 /**
  * Build a `security_events` row for an access event. Metadata is a fixed,
@@ -58,6 +60,9 @@ export function buildAccessEvent(p: AccessEventParams): SecurityEventInput {
       return { ...base, type: "access.org_opened", userId: p.actorId, metadata: { role: p.role } };
     case "export":
       return { ...base, type: "access.export", userId: p.actorId, metadata: { procedure: p.procedure, role: p.role } };
+    case "partner_attributed":
+      // The CA accepting is the subject; the partner is named by company, never by contact details.
+      return { ...base, type: "access.partner_attributed", userId: p.actorId, metadata: { role: p.role, partnerName: p.partnerName } };
   }
 }
 

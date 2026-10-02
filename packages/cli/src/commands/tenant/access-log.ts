@@ -6,7 +6,7 @@ import type { ColumnDef } from "../../output.js";
 // Mirrors the Team tab filters (packages/shared access-log.ts); the CLI does not depend on the shared package.
 export const FILTERS: Record<string, string[] | null> = {
   all: null,
-  invites: ["access.invited", "access.invite_revoked", "access.accepted"],
+  invites: ["access.invited", "access.invite_revoked", "access.accepted", "access.partner_attributed"],
   roles: ["access.role_changed"],
   removals: ["access.removed", "access.left"],
   opened: ["access.org_opened"],

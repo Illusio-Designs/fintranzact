@@ -6,6 +6,7 @@ import type { RouterOutputs } from "@fintranzact/api";
 import { ArrowLeft01Icon, Award01Icon, Logout01Icon, UserShield01Icon } from "@hugeicons/core-free-icons";
 import { Logo } from "@/components/ui/Logo";
 import { Icon } from "@/components/ui/Icon";
+import { ManagedClientsSection } from "@/components/partner/ManagedClientsSection";
 import { PartnerBadge } from "@/components/ui/PartnerBadge";
 import { trpc, setBusinessId } from "@/lib/trpc";
 import { clearDesktopToken } from "@/lib/desktop-session";
@@ -232,6 +233,8 @@ function PartnerDashboard({ data }: { data: Extract<Portal, { kind: "partner" }>
           <p className="mt-3 text-sm text-text-secondary">{formatCurrency(stats.pendingPayout)} is on its way to you.</p>
         ) : null}
       </div>
+
+      {data.managedClients && <ManagedClientsSection clients={data.managedClients} more={data.managedClientsMore} />}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="overflow-hidden rounded-2xl border border-border-light bg-surface-0">

@@ -1,5 +1,19 @@
 # Accountant access: roles, permissions and the mutation backstop
 
+## Feature map: parts 1-6 and where each lives
+
+"Let a business invite its CA, and let a CA work across many clients with one login." Six parts, one roadmap item ("Accountant (CA) access across clients", batch `2026-10-02-ca-access`, kept in progress until the integration tests have run on Postgres).
+
+| Part | What | Where |
+|---|---|---|
+| 1 Roles | `auditor` (read-only), `ca_filing` (filing), CASL grants, mutation backstop | `lib/permissions.ts`, `trpc.ts` `withPermissions`; sections below |
+| 2 Invite my CA | Owner-only invite, two access levels, cap of 3, plan-limit exclusion, e-mail | `lib/invite-rules.ts`, `tenant.inviteMember`, `InviteCaDialog.tsx` |
+| 3 Removal | Revoke keys/grants/sessions, kill invite links, membership checked per request | `lib/member-removal.ts`, `lib/tenant-membership.ts` |
+| 4 Access log | `access.*` security events, filings in the audit trail, viewer | `lib/access-events.ts`, `tenant.accessLog`, `AccessLogCard.tsx` |
+| 5 Client switcher | Search, pins, recents, leave a client | `lib/client-switcher.ts`, `tenant.listClients/setPinned/leave`, `ClientSwitcher.tsx` |
+| 6 Partner link | CA badge, clients you manage, opt-in referral credit | `lib/partner-ca.ts`, `partner.portal`, section "Partner programme link (Part 6)" |
+
+
 Part 1 of "let a business invite its CA, and a CA work across many clients with one login" added the roles and the permission rules; Part 2 (below, "Invite my CA") adds the invite flow.
 
 ## The three accountant roles
@@ -214,6 +228,43 @@ Unit: `client-switcher.test.ts` (ordering with nulls last and pinned first, name
 ### Migrations
 
 `packages/db/drizzle/0053_user_tenant_prefs.sql` (unified, drizzle-kit generated with snapshot and journal) and `packages/db/drizzle-control/0016_user_tenant_prefs.sql` (hand-written, idempotent: `CREATE TABLE IF NOT EXISTS`, foreign keys guarded with `duplicate_object`, `CREATE INDEX IF NOT EXISTS`, journal entry).
+
+## Partner programme link (Part 6)
+
+A "CA partner" is an **approved** control-DB `partners` row with `partnerType = 'accountant'`. The only link between a person and a partner record is the e-mail (as in `partnerForUser`): a CA's team membership is not stored on the partner. `lib/partner-ca.ts` (pure, injected `CaPartnerStore`; real store `lib/partner-ca-store.ts`) holds the rules.
+
+### Matching: `findCaPartnerByEmail` / `findCaPartnersByEmails`
+
+Case-insensitive; approved and accountant only (pending, rejected, reseller, technology never match); newest approved record wins. **Verified e-mail:** if a user exists with that e-mail it must be `emailVerified` (approving a partner verifies it, as in `platform.updatePartner`). A missing user matches only with `allowUnregistered` (invite time, when the CA may not have signed up yet; the badge on pending invites uses it too). Accept time and the portal are strict. Batched: one partners query and one users query for any number of e-mails (no N+1).
+
+### 1. Badge (owner/admin only)
+
+`tenant.pendingInvitations` and `tenant.members` return `caPartner: { id, companyName } | null` (CA-role rows only; members only for owners/admins). Web Team tab shows **Registered CA partner** under the role on the pending invite and on the member row. The invitee sees nothing extra. There is **no lookup-by-e-mail endpoint**: that would reveal which e-mails are partners to anyone. The only place partner status is revealed to a caller about an arbitrary e-mail is the refusal below, and only to the owner inviting a CA with the credit box ticked.
+
+### 2. Clients you manage
+
+`partner.portal` (kind `partner`, accountant type only; otherwise `null`) returns `managedClients` (latest 100 by membership date, `managedClientsMore` when there are more) and the web partner portal renders the table: organisation, access level, since (membership accepted/created), last opened (`user_tenant_prefs.lastOpenedAt`), plan name; empty state explains the invite flow. Only active organisations where the **partner's own login** holds `auditor` / `ca_filing` (bookkeeping `accountant` is excluded). Who/when/plan only: no financial data. `toManagedClients` is the pure mapping. No new procedure, so no parity entry.
+
+### 3. Opt-in attribution (no automatic commission)
+
+Accepting a CA invite **never** sets `tenants.partnerId` and never credits commission by default. The owner can opt in on the invite:
+
+- `tenant.inviteMember({ ..., creditPartner?: boolean })` (web **Invite your CA**: unticked checkbox "This CA referred me to Fintranzact. Credit them as my partner."). Only meaningful for CA roles (ignored and stored null otherwise); ticked for an e-mail that is not an approved accountant partner is refused (BAD_REQUEST, `CREDIT_PARTNER_REFUSAL`). Stored as nullable boolean `invitations.credit_partner`.
+- On accept (`acceptInvitation` and `acceptById`, new memberships only) `attributePartnerOnAccept` credits only when `shouldAttributePartner({ creditPartner, partnerMatch, tenantPartnerId })`: the box was ticked, the accepter's e-mail **still** matches an approved, verified accountant partner, and `tenants.partnerId IS NULL`. The write is `UPDATE tenants SET partner_id = ... WHERE id = ? AND partner_id IS NULL`, so it is idempotent and race-safe; an existing referral is never overwritten.
+- Event `access.partner_attributed` (security_events; actor = subject = the CA; metadata `role`, `partnerName` = company only). Sentence: "Shah & Co was credited as the organisation's Fintranzact partner (requested by Anita)". It is in the access log's Invites filter. A failure never fails the accept (logged).
+- Commission and stats are unchanged: `getPartnerStats` counts active tenants by `tenants.partnerId`, so a credited organisation behaves exactly like one referred by code.
+
+Mobile's Invite my CA sheet does not offer the box (web only); the field is optional so mobile keeps working. CLI/MCP invites do not pass it.
+
+### Migrations
+
+`packages/db/drizzle/0054_invitation_credit_partner.sql` (unified, drizzle-kit generated with snapshot and journal) and `packages/db/drizzle-control/0017_invitation_credit_partner.sql` (hand-written, `ADD COLUMN IF NOT EXISTS`, journal entry).
+
+### Tests
+
+Unit: `partner-ca.test.ts` (matching rules, batching, every branch of `shouldAttributePartner`, invite-input rules, `attributePartnerOnAccept` with a fake store, managed-client mapping), `access-events.test.ts` (the new event), shared `access-log.test.ts` / `two-factor.test.ts` (21 event types, sentence), web `TeamTab.ca.test.tsx` (checkbox default off and sent, badges) and `ManagedClientsSection.test.tsx`. Integration (need Postgres; **not run in the environment this was written in**): `integration/tenant-ca-partner.test.ts` (credit on accept by token and by id with one event, none without the box, unapproved / non-accountant / stranger refused, existing partner never overwritten, badges, managed clients CA roles only, referral stats count a credited organisation).
+
+Roadmap: `roadmap.test.ts` expects one more `in_progress` item (12; `planned` is `ROADMAP_SEED.length - 14`).
 
 ## Migration note
 

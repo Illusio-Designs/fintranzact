@@ -7,6 +7,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { memberRoleOptions, canEditMemberRole, isCaManager, STAFF_ROLE_OPTIONS, type InvitableRole } from "@/lib/team-roles";
 import { caRoleDescription, isCaRole, lastOpenedText, relativeTime } from "@fintranzact/shared";
 import { RoleBadge } from "./RoleBadge";
+import { CaPartnerBadge } from "./CaPartnerBadge";
 import { InviteLinkBox } from "./InviteLinkBox";
 import { InviteCaDialog } from "./InviteCaDialog";
 import { TwoFactorPolicyCard } from "./TwoFactorPolicyCard";
@@ -109,6 +110,7 @@ function TeamSection() {
                           {caRoleDescription(inv.role)}
                         </p>
                       )}
+                      {canManage && <div><CaPartnerBadge partner={inv.caPartner} /></div>}
                     </td>
                     <td className="hidden sm:table-cell text-text-secondary text-xs">
                       {formatDate(inv.createdAt)}
@@ -168,6 +170,7 @@ function TeamSection() {
                         {lastOpenedText(m.lastOpenedAt, (d) => relativeTime(d.toISOString()))}
                       </p>
                     )}
+                    {canManage && isCaRole(m.role) && <div><CaPartnerBadge partner={m.caPartner} /></div>}
                   </td>
                   <td className="hidden sm:table-cell text-text-secondary text-xs">
                     {m.acceptedAt ? formatDate(m.acceptedAt) : "Pending"}

@@ -88,7 +88,7 @@ describe("AccessLogCard", () => {
     await user.click(screen.getByRole("button", { name: "Downloads" }));
     expect(h.calls.at(-1)).toEqual({ cursor: undefined, limit: 25, type: ["access.export"] });
     await user.click(screen.getByRole("button", { name: "Invites" }));
-    expect(h.calls.at(-1)).toEqual({ cursor: undefined, limit: 25, type: ["access.invited", "access.invite_revoked", "access.accepted"] });
+    expect(h.calls.at(-1)).toEqual({ cursor: undefined, limit: 25, type: ["access.invited", "access.invite_revoked", "access.accepted", "access.partner_attributed"] });
     await user.click(screen.getByRole("button", { name: "All" }));
     expect(h.calls.at(-1)).toEqual({ cursor: undefined, limit: 25 });
   });

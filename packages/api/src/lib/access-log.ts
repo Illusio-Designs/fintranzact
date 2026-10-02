@@ -54,9 +54,9 @@ export interface AccessUserRow {
   email: string | null;
 }
 
-const SAFE_KEYS = ["role", "from", "to", "email", "procedure"] as const;
+const SAFE_KEYS = ["role", "from", "to", "email", "procedure", "partnerName"] as const;
 
-/** Only the five short string fields the log shows; anything else in the row's metadata never leaves. */
+/** Only the six short string fields the log shows; anything else in the row's metadata never leaves. */
 export function safeAccessMetadata(metadata: unknown): AccessLogMetadata {
   const out: AccessLogMetadata = {};
   if (!metadata || typeof metadata !== "object") return out;

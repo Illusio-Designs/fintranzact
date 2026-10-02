@@ -120,6 +120,13 @@
       "when": 1791136100000,
       "tag": "0016_user_tenant_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791222500000,
+      "tag": "0017_invitation_credit_partner",
+      "breakpoints": true
     }
   ]
 }

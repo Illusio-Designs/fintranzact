@@ -177,6 +177,8 @@ export const invitations = pgTable("invitations", {
   invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  /** CA invites only: the owner asked to credit the CA, a partner, as the organisation's referrer on accept (opt-in, default none). */
+  creditPartner: boolean("credit_partner"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   uniqueIndex("invitations_token_idx").on(t.token),

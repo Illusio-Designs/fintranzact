@@ -102,7 +102,7 @@ describe("Invite your CA dialog", () => {
     await user.type(within(dialog).getByLabelText(/email address/i), "Anita.Shah@Firm.IN");
     await user.click(within(dialog).getByRole("radio", { name: /View and file returns/ }));
     await user.click(within(dialog).getByRole("button", { name: "Send invite" }));
-    expect(h.invite).toHaveBeenCalledWith({ email: "Anita.Shah@Firm.IN", role: "ca_filing" });
+    expect(h.invite).toHaveBeenCalledWith({ email: "Anita.Shah@Firm.IN", role: "ca_filing", creditPartner: false });
     expect(await within(dialog).findByTestId("ca-emailed")).toHaveTextContent("We emailed them at anita.shah@firm.in");
     expect((within(dialog).getByLabelText("Invite Link") as HTMLInputElement).value).toBe(`${window.location.origin}/invite/tok123`);
     expect(within(dialog).getByRole("button", { name: "Copy" })).toBeInTheDocument();
@@ -115,7 +115,32 @@ describe("Invite your CA dialog", () => {
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByLabelText(/email address/i), "ca@firm.in");
     await user.click(within(dialog).getByRole("button", { name: "Send invite" }));
-    expect(h.invite).toHaveBeenCalledWith({ email: "ca@firm.in", role: "auditor" });
+    expect(h.invite).toHaveBeenCalledWith({ email: "ca@firm.in", role: "auditor", creditPartner: false });
+  });
+});
+
+describe("credit my CA as a partner", () => {
+  it("is an unticked checkbox with helper text, and is sent when ticked", async () => {
+    const user = userEvent.setup();
+    render(<TeamTab />);
+    await user.click(screen.getByRole("button", { name: "Invite my CA" }));
+    const dialog = await screen.findByRole("dialog");
+    const box = within(dialog).getByRole("checkbox", { name: /This CA referred me to Fintranzact\. Credit them as my partner/ });
+    expect(box).not.toBeChecked();
+    expect(within(dialog).getByText(/registered Fintranzact partners/)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText(/email address/i), "ca@firm.in");
+    await user.click(box);
+    expect(box).toBeChecked();
+    await user.click(within(dialog).getByRole("button", { name: "Send invite" }));
+    expect(h.invite).toHaveBeenCalledWith({ email: "ca@firm.in", role: "auditor", creditPartner: true });
+  });
+
+  it("is not in the normal staff invite dialog", async () => {
+    const user = userEvent.setup();
+    render(<TeamTab />);
+    await user.click(screen.getByRole("button", { name: "+ Invite member" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByRole("checkbox")).toBeNull();
   });
 });
 
@@ -150,6 +175,33 @@ describe("badges and pending invitations", () => {
     const access = screen.getAllByTestId("pending-access");
     expect(access).toHaveLength(1);
     expect(access[0]).toHaveTextContent(/file GST returns/);
+  });
+});
+
+describe("Registered CA partner badge", () => {
+  const partner = { id: "p1", companyName: "Shah & Co" };
+
+  it("shows on a pending CA invitation and on a CA member row for the owner, and not for others", () => {
+    h.pending.current = [
+      { id: "i1", email: "ca@firm.in", role: "auditor", createdAt: new Date(), expiresAt: new Date(), caPartner: partner },
+      { id: "i2", email: "other@firm.in", role: "auditor", createdAt: new Date(), expiresAt: new Date(), caPartner: null },
+    ];
+    h.members.current[2] = member({ userEmail: "ca2@firm.in", role: "auditor", userName: "Anita", caPartner: partner });
+    render(<TeamTab />);
+    const badges = screen.getAllByTestId("ca-partner-badge");
+    expect(badges).toHaveLength(2);
+    expect(badges[0]).toHaveTextContent("Registered CA partner");
+    expect(badges[0]).toHaveTextContent("Shah & Co");
+    const rows = screen.getAllByRole("row");
+    expect(within(rows.find((r) => within(r).queryByText("other@firm.in"))!).queryByTestId("ca-partner-badge")).toBeNull();
+    expect(within(rows.find((r) => within(r).queryByText("Sam"))!).queryByTestId("ca-partner-badge")).toBeNull();
+  });
+
+  it("is hidden from a non-manager even if the data carried it", () => {
+    h.members.current[0] = member({ userEmail: "me@firm.in", role: "seller" });
+    h.members.current[2] = member({ userEmail: "ca2@firm.in", role: "auditor", userName: "Anita", caPartner: partner });
+    render(<TeamTab />);
+    expect(screen.queryByTestId("ca-partner-badge")).toBeNull();
   });
 });
 

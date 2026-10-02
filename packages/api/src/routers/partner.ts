@@ -1,8 +1,10 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq } from "drizzle-orm";
-import { controlDb, partners, partnerPayouts, tenants, users } from "@fintranzact/db";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { controlDb, partners, partnerPayouts, tenants, tenantMembers, userTenantPrefs, users } from "@fintranzact/db";
 import { partnerApplicationSchema } from "@fintranzact/shared";
 import { getPartnerStats } from "../lib/partner-program.js";
+import { CA_ROLES } from "@fintranzact/shared";
+import { MANAGED_CLIENTS_LIMIT, toManagedClients } from "../lib/partner-ca.js";
 import { getPlanCatalog } from "../lib/plan-catalog.js";
 import { router, publicProcedure, protectedProcedure } from "../trpc.js";
 import { verifyTurnstile } from "../lib/turnstile.js";
@@ -124,8 +126,40 @@ export const partnerRouter = router({
         .orderBy(desc(partnerPayouts.period)),
       getPlanCatalog(),
     ]);
-    const plans = new Map(catalog.map((p) => [p.id, p]));
+    const plans = new Map<string, (typeof catalog)[number]>(catalog.map((p) => [p.id, p]));
     const st = stats.get(partner.id)!;
+
+    // Clients you manage (accountant partners): organisations where THIS login holds a CA role.
+    // Who/when/plan only, never financial data. Latest 100 (one extra row tells "more").
+    let managedClients: ReturnType<typeof toManagedClients> | null = null;
+    let managedClientsMore = false;
+    if (partner.partnerType === "accountant") {
+      const rows = await controlDb
+        .select({
+          tenantId: tenants.id,
+          name: tenants.name,
+          plan: tenants.plan,
+          role: tenantMembers.role,
+          acceptedAt: tenantMembers.acceptedAt,
+          createdAt: tenantMembers.createdAt,
+          lastOpenedAt: userTenantPrefs.lastOpenedAt,
+        })
+        .from(tenantMembers)
+        .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+        .leftJoin(userTenantPrefs, and(eq(userTenantPrefs.tenantId, tenantMembers.tenantId), eq(userTenantPrefs.userId, tenantMembers.userId)))
+        .where(and(
+          eq(tenantMembers.userId, ctx.user.id),
+          inArray(tenantMembers.role, [...CA_ROLES]),
+          eq(tenants.status, "active"),
+        ))
+        .orderBy(desc(tenantMembers.createdAt))
+        .limit(MANAGED_CLIENTS_LIMIT + 1);
+      managedClientsMore = rows.length > MANAGED_CLIENTS_LIMIT;
+      managedClients = toManagedClients(
+        rows.slice(0, MANAGED_CLIENTS_LIMIT).map((r) => ({ ...r, since: r.acceptedAt ?? r.createdAt })),
+        (plan) => plans.get(plan)?.name ?? plan,
+      );
+    }
     return {
       kind: "partner" as const,
       email: user.email,
@@ -159,6 +193,9 @@ export const partnerRouter = router({
         joinedAt: t.createdAt.toISOString(),
       })),
       payouts: payouts.map((p) => ({ ...p, paidAt: p.paidAt?.toISOString() ?? null })),
+      /** null unless the partner type is accountant. */
+      managedClients,
+      managedClientsMore,
     };
   }),
 });

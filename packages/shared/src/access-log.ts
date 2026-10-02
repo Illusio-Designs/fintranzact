@@ -15,12 +15,13 @@ export const ACCESS_EVENT_TYPES = [
   "access.left",
   "access.org_opened",
   "access.export",
+  "access.partner_attributed",
 ] as const;
 export type AccessEventType = (typeof ACCESS_EVENT_TYPES)[number];
 
 export const ACCESS_LOG_FILTERS: ReadonlyArray<{ key: string; label: string; types: readonly AccessEventType[] | null }> = [
   { key: "all", label: "All", types: null },
-  { key: "invites", label: "Invites", types: ["access.invited", "access.invite_revoked", "access.accepted"] },
+  { key: "invites", label: "Invites", types: ["access.invited", "access.invite_revoked", "access.accepted", "access.partner_attributed"] },
   { key: "roles", label: "Role changes", types: ["access.role_changed"] },
   { key: "removals", label: "Removals", types: ["access.removed", "access.left"] },
   { key: "opened", label: "Opened", types: ["access.org_opened"] },
@@ -56,6 +57,8 @@ export interface AccessLogMetadata {
   to?: string;
   email?: string;
   procedure?: string;
+  /** access.partner_attributed: the partner (company) credited. */
+  partnerName?: string;
 }
 
 export interface AccessLogItem {
@@ -104,6 +107,8 @@ export function accessEventSentence(item: AccessLogItem, viewerId?: string | nul
       return `${actor}${isCaRole(m.role) ? " (CA)" : ""} opened this organisation`;
     case "access.export":
       return `${actor}${isCaRole(m.role) ? " (CA)" : ""} downloaded ${exportLabel(m.procedure)}`;
+    case "access.partner_attributed":
+      return `${m.partnerName ?? "The accountant"} was credited as the organisation's Fintranzact partner (requested by ${actor})`;
     default:
       return item.label;
   }

@@ -58,6 +58,7 @@ export const SECURITY_EVENT_TYPES = [
   "access.role_changed",
   "access.org_opened",
   "access.export",
+  "access.partner_attributed",
 ] as const;
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 
@@ -82,6 +83,7 @@ export const SECURITY_EVENT_LABELS: Record<SecurityEventType, string> = {
   "access.role_changed": "Member's access level changed",
   "access.org_opened": "Accountant opened the organisation",
   "access.export": "Accountant downloaded a report or export",
+  "access.partner_attributed": "Accountant credited as the organisation's Fintranzact partner",
 };
 
 // ── Platform-admin reset: identity verification ─────────────────────────────

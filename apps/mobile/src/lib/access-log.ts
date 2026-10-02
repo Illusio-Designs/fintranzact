@@ -19,6 +19,7 @@ const ICONS: Record<string, string> = {
   "access.left": "exit-outline",
   "access.org_opened": "log-in-outline",
   "access.export": "download-outline",
+  "access.partner_attributed": "ribbon-outline",
 };
 
 /** tenant.accessLog items to display rows (newest first, as the server sends them). */

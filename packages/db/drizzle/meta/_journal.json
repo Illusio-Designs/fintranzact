@@ -379,6 +379,13 @@
       "when": 1790972029605,
       "tag": "0053_user_tenant_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790973092646,
+      "tag": "0054_invitation_credit_partner",
+      "breakpoints": true
     }
   ]
 }

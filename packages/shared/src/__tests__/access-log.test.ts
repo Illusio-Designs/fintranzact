@@ -28,9 +28,9 @@ describe("access event types", () => {
     expect([...ACCESS_EVENT_TYPES].sort()).toEqual([...access].sort());
     for (const t of ACCESS_EVENT_TYPES) expect(SECURITY_EVENT_LABELS[t]).toBeTruthy();
   });
-  it("keeps the original 13 and adds seven", () => {
-    expect(SECURITY_EVENT_TYPES).toHaveLength(20);
-    for (const t of ["access.invited", "access.invite_revoked", "access.accepted", "access.role_changed", "access.org_opened", "access.export", "access.left"]) {
+  it("keeps the original 13 and adds eight", () => {
+    expect(SECURITY_EVENT_TYPES).toHaveLength(21);
+    for (const t of ["access.invited", "access.invite_revoked", "access.accepted", "access.role_changed", "access.org_opened", "access.export", "access.left", "access.partner_attributed"]) {
       expect(SECURITY_EVENT_TYPES).toContain(t);
     }
   });
@@ -66,6 +66,11 @@ describe("accessEventSentence", () => {
   });
   it("removed user who no longer exists uses the e-mail in metadata", () => {
     expect(accessEventSentence(item("access.removed", { subject: null, metadata: { role: "seller", email: "gone@x.in" } }))).toBe("Access removed for gone@x.in by Ravi");
+  });
+  it("partner_attributed names the partner company and who asked", () => {
+    expect(accessEventSentence(item("access.partner_attributed", { actor: person("ca", "Anita"), metadata: { role: "auditor", partnerName: "Shah & Co" } }), "owner"))
+      .toBe("Shah & Co was credited as the organisation's Fintranzact partner (requested by Anita)");
+    expect(accessEventSentence(item("access.partner_attributed", { actor: null, metadata: {} }))).toBe("The accountant was credited as the organisation's Fintranzact partner (requested by Someone)");
   });
   it("opened and downloaded", () => {
     const ca = person("ca", "Anita");

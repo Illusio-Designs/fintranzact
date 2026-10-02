@@ -24,6 +24,8 @@ import { logger } from "../lib/logger.js";
 import { recordAccessEvent, recordOrgOpened } from "../lib/access-events.js";
 import { canViewAccessLog, clampAccessLimit, decodeAccessCursor, pageAccessRows, accessUserIds, toAccessLogItem } from "../lib/access-log.js";
 import { CLIENT_SCOPES, orderAndPageClients, lastOpenedCutoff, decidePin, MAX_PINNED_TENANTS, type ClientRow } from "../lib/client-switcher.js";
+import { findCaPartnersByEmails, findCaPartnerByEmail, decideCreditPartner, attributePartnerOnAccept } from "../lib/partner-ca.js";
+import { partnerCaStore } from "../lib/partner-ca-store.js";
 import { backfillLegacyBusinessMembers, grantTenantBusinessesToMember } from "../lib/business-membership.js";
 
 /** A member who joins through an invitation can open the organisation's businesses. */
@@ -47,6 +49,40 @@ function roleInfo(role: string) {
 /** Who/where for an access event raised by a signed-in request. */
 function accessWho(ctx: { user: { id: string }; ipAddress?: string | null; req: Request }, tenantId: string) {
   return { actorId: ctx.user.id, tenantId, ip: ctx.ipAddress ?? null, userAgent: ctx.req.headers.get("user-agent") };
+}
+
+/**
+ * After a NEW membership from an invitation: honour the owner's opt-in to credit
+ * the CA (an approved accountant partner) as the organisation's partner. Never
+ * fails the accept; records `access.partner_attributed` only when it credited.
+ */
+async function creditPartnerAfterAccept(
+  ctx: { user: { id: string }; ipAddress?: string | null; req: Request },
+  invitation: { tenantId: string; role: string; email: string; creditPartner: boolean | null },
+): Promise<void> {
+  if (invitation.creditPartner !== true) return;
+  try {
+    const [u] = await controlDb.select({ email: users.email, emailVerified: users.emailVerified })
+      .from(users).where(eq(users.id, ctx.user.id)).limit(1);
+    if (!u) return;
+    const partner = await attributePartnerOnAccept(partnerCaStore, {
+      tenantId: invitation.tenantId,
+      role: invitation.role,
+      creditPartner: invitation.creditPartner,
+      email: u.email,
+      emailVerified: u.emailVerified,
+    });
+    if (partner) {
+      await recordAccessEvent({
+        kind: "partner_attributed",
+        ...accessWho(ctx, invitation.tenantId),
+        role: invitation.role,
+        partnerName: partner.companyName,
+      });
+    }
+  } catch (err) {
+    logger.error({ err, tenantId: invitation.tenantId }, "Could not credit the CA partner on accept");
+  }
 }
 
 function hashInvitationToken(token: string): string {
@@ -413,6 +449,7 @@ export const tenantRouter = router({
       });
       await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
       await recordAccessEvent({ kind: "accepted", ...accessWho(ctx, invitation.tenantId), role: invitation.role });
+      await creditPartnerAfterAccept(ctx, invitation);
 
       const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
       return { tenantId: invitation.tenantId, tenantName };
@@ -538,8 +575,13 @@ export const tenantRouter = router({
         .groupBy(securityEvents.userId);
       for (const l of latest) if (l.userId && l.at) opened.set(l.userId, l.at);
     }
+    // "Registered CA partner" badge: owners/admins only, CA members only, one batched lookup.
+    const partnerByEmail = showOpened
+      ? await findCaPartnersByEmails(partnerCaStore, rows.filter((r) => isCaRole(r.role)).map((r) => r.userEmail))
+      : new Map();
     return rows.map(({ twoFactorEnabled, ...member }) => ({
       ...member,
+      caPartner: (isCaRole(member.role) ? partnerByEmail.get(normalizeInviteEmail(member.userEmail)) : null) ?? null,
       twoFactorEnabled: showTwoFactor ? twoFactorEnabled : undefined,
       lastOpenedAt: showOpened && isCaRole(member.role) ? (opened.get(member.userId) ?? null) : null,
     }));
@@ -570,6 +612,8 @@ export const tenantRouter = router({
       // the invitee's own list) sees the same address however it was typed.
       email: z.string().trim().toLowerCase().email(),
       role: z.enum(["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"]).default("seller"),
+      // CA roles only (ignored otherwise): "This CA referred me to Fintranzact, credit them as my partner". Default off.
+      creditPartner: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       // Check caller has permission (owner/superadmin or admin; CA roles: owner/superadmin only)
@@ -588,6 +632,16 @@ export const tenantRouter = router({
         ...caSlots,
       });
       if (!rules.ok) throw new TRPCError({ code: rules.code, message: rules.message });
+
+      // Opt-in partner credit: only for a CA role, only for an approved CA partner's e-mail.
+      const credit = decideCreditPartner({
+        role: input.role,
+        creditPartner: input.creditPartner,
+        partnerMatch: input.creditPartner && isCaRole(input.role)
+          ? await findCaPartnerByEmail(partnerCaStore, input.email, { allowUnregistered: true })
+          : null,
+      });
+      if (!credit.ok) throw new TRPCError({ code: "BAD_REQUEST", message: credit.message });
 
       // Enforce team member limit before proceeding (accountant roles are outside it)
       if (countsTowardTeamLimit(input.role)) await enforceTeamMemberLimit(ctx.tenantId);
@@ -636,6 +690,7 @@ export const tenantRouter = router({
         token: tokenHash, // Store hash, never the raw token
         invitedBy: ctx.user.id,
         expiresAt,
+        creditPartner: credit.creditPartner,
       });
 
       // Fire-and-forget invitation email — failure doesn't block invite creation
@@ -796,6 +851,7 @@ export const tenantRouter = router({
       });
       await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
       await recordAccessEvent({ kind: "accepted", ...accessWho(ctx, invitation.tenantId), role: invitation.role });
+      await creditPartnerAfterAccept(ctx, invitation);
 
       const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
       return { tenantId: invitation.tenantId, tenantName };
@@ -827,7 +883,16 @@ export const tenantRouter = router({
       ))
       .orderBy(desc(invitations.createdAt));
 
-    return pending.map((p) => ({ ...p, ...roleInfo(p.role) }));
+    const partnerByEmail = await findCaPartnersByEmails(
+      partnerCaStore,
+      pending.filter((p) => isCaRole(p.role)).map((p) => p.email),
+      { allowUnregistered: true },
+    );
+    return pending.map((p) => ({
+      ...p,
+      ...roleInfo(p.role),
+      caPartner: (isCaRole(p.role) ? partnerByEmail.get(normalizeInviteEmail(p.email)) : null) ?? null,
+    }));
   }),
 
   // Revoke a pending invitation

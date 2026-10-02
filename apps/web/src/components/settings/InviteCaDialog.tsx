@@ -10,6 +10,7 @@ import { InviteLinkBox } from "./InviteLinkBox";
 export function InviteCaDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<CaRole>("auditor");
+  const [creditPartner, setCreditPartner] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const utils = trpc.useUtils();
 
@@ -26,6 +27,7 @@ export function InviteCaDialog({ open, onClose }: { open: boolean; onClose: () =
   function handleClose() {
     setEmail("");
     setRole("auditor");
+    setCreditPartner(false);
     setLink(null);
     onClose();
   }
@@ -67,7 +69,7 @@ export function InviteCaDialog({ open, onClose }: { open: boolean; onClose: () =
           id="invite-ca-form"
           onSubmit={(e) => {
             e.preventDefault();
-            invite.mutate({ email, role });
+            invite.mutate({ email, role, creditPartner });
           }}
           className="space-y-5"
         >
@@ -114,6 +116,24 @@ export function InviteCaDialog({ open, onClose }: { open: boolean; onClose: () =
               ))}
             </div>
           </fieldset>
+
+          <div>
+            <label className="flex cursor-pointer items-start gap-3 text-sm text-text-primary">
+              <input
+                type="checkbox"
+                checked={creditPartner}
+                onChange={(e) => setCreditPartner(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                This CA referred me to Fintranzact. Credit them as my partner.
+                <span className="mt-0.5 block text-xs text-text-secondary">
+                  Only for CAs who are registered Fintranzact partners. They then count this business as a referral.
+                  Leave it off and nothing changes for anyone.
+                </span>
+              </span>
+            </label>
+          </div>
 
           <p className="text-xs text-text-tertiary">{CA_ACCESS_NOTE}</p>
         </form>

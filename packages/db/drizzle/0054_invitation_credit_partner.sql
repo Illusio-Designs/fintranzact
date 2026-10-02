@@ -1,0 +1,1 @@
+ALTER TABLE "invitations" ADD COLUMN "credit_partner" boolean;

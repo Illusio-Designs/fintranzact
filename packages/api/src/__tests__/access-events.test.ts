@@ -43,6 +43,10 @@ describe("buildAccessEvent", () => {
     expect(buildAccessEvent({ kind: "org_opened", ...who, actorId: "u-ca", role: "auditor" })).toMatchObject({ type: "access.org_opened", userId: "u-ca", metadata: { role: "auditor" } });
     expect(buildAccessEvent({ kind: "export", ...who, actorId: "u-ca", role: "ca_filing", procedure: "gst.gstr1Json" })).toMatchObject({ type: "access.export", metadata: { procedure: "gst.gstr1Json", role: "ca_filing" } });
   });
+  it("partner_attributed: the accepting CA is actor and subject; metadata names the partner company", () => {
+    const e = buildAccessEvent({ kind: "partner_attributed", ...who, actorId: "u-ca", role: "auditor", partnerName: "Shah & Co" });
+    expect(e).toMatchObject({ type: "access.partner_attributed", actorUserId: "u-ca", userId: "u-ca", metadata: { role: "auditor", partnerName: "Shah & Co" } });
+  });
   it("metadata never carries tokens, links or input data", () => {
     const events = [
       buildAccessEvent({ kind: "invited", ...who, role: "auditor", email: "a@b.in" }),
@@ -51,8 +55,9 @@ describe("buildAccessEvent", () => {
       buildAccessEvent({ kind: "role_changed", ...who, targetUserId: "x", from: "auditor", to: "ca_filing", email: "a@b.in" }),
       buildAccessEvent({ kind: "org_opened", ...who, role: "auditor" }),
       buildAccessEvent({ kind: "export", ...who, role: "auditor", procedure: "gst.gstr1CSV" }),
+      buildAccessEvent({ kind: "partner_attributed", ...who, role: "auditor", partnerName: "Shah & Co" }),
     ];
-    const allowed = new Set(["role", "email", "from", "to", "procedure"]);
+    const allowed = new Set(["role", "email", "from", "to", "procedure", "partnerName"]);
     for (const e of events) {
       for (const k of Object.keys(e.metadata ?? {})) expect(allowed.has(k)).toBe(true);
       expect(JSON.stringify(e)).not.toMatch(/token|invite\/|otp|password/i);

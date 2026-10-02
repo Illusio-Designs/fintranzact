@@ -30,6 +30,7 @@ const ICONS: Record<string, { icon: IconSvgElement; tone: string }> = {
   "access.left": { icon: UserRemove01Icon, tone: "text-amber-600" },
   "access.org_opened": { icon: Login01Icon, tone: "text-violet-600" },
   "access.export": { icon: Download04Icon, tone: "text-violet-600" },
+  "access.partner_attributed": { icon: UserCheck01Icon, tone: "text-emerald-600" },
 };
 
 function Row({ item, viewerId }: { item: AccessLogItem; viewerId?: string | null }) {
