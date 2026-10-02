@@ -1608,8 +1608,9 @@ function RootLayout() {
                       inert={closed || undefined}
                       aria-hidden={closed || undefined}
                       className={cn(
-                        "grid transition-[grid-template-rows,opacity] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none",
-                        closed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100",
+                        // visibility flips after the close animation, so a closed group's links are truly hidden.
+                        "grid transition-[grid-template-rows,opacity,visibility] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none",
+                        closed ? "invisible grid-rows-[0fr] opacity-0" : "visible grid-rows-[1fr] opacity-100",
                       )}
                     >
                     <div className="min-h-0 overflow-hidden">
@@ -1870,8 +1871,10 @@ function RootLayout() {
 
           {/* Scrollable content */}
           <div data-testid="app-content" className="flex-1 overflow-y-auto">
-            {/* Each page rises in slightly when you move to it; the sidebar and top bar stay still. */}
-            <div key={pathname} className="max-w-[1400px] mx-auto px-6 py-6 animate-rise-in [animation-duration:200ms]">
+            {/* Each page rises in slightly when you move to it; the sidebar and top bar stay still.
+                Fill mode "backwards": once it ends the animation lets go of the page, so it
+                doesn't stay a layer of its own that traps the page's pop-ups under the panels. */}
+            <div key={pathname} className="max-w-[1400px] mx-auto px-6 py-6 animate-rise-in [animation-duration:200ms] [animation-fill-mode:backwards]">
               <Outlet />
             </div>
           </div>

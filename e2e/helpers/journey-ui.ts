@@ -33,7 +33,7 @@ export async function openBusiness(page: Page, owner: SeededOwner) {
  * The GST and compliance pages left the sidebar for Reports → Statutory
  * reports. Old sidebar labels open the matching report there.
  */
-const STATUTORY: Record<string, string> = {
+export const STATUTORY: Record<string, string> = {
   "GST Returns": "GSTR-1",
   "Tax Reports": "Tax Summary",
   "GSTR-2B Recon": "GSTR-2B Reconciliation",

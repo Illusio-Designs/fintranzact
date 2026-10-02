@@ -207,10 +207,15 @@ export async function navTo(page: Page, label: string | RegExp) {
     await page.getByRole("button", { name: "Open navigation menu" }).click();
   }
   // The sidebar is an accordion: open the link's group first if it's closed.
-  const link = sidebar.getByRole("link", { name: label, exact: typeof label === "string", includeHidden: true });
-  if (!(await link.isVisible())) {
-    await sidebar.locator("[data-nav-group]").filter({ has: link }).getByRole("button").first().click();
+  const name = { name: label, exact: typeof label === "string" };
+  const link = sidebar.getByRole("link", { ...name, includeHidden: true });
+  // The sidebar is an accordion: open the link's group if it is closed. Its
+  // panel says so (aria-hidden), and the header that opens it controls it.
+  const panelId = await link.evaluate((el) => el.closest('[id^="nav-section-"]')?.id ?? "");
+  if (panelId && (await sidebar.locator(`[id="${panelId}"]`).getAttribute("aria-hidden")) === "true") {
+    await sidebar.locator(`button[aria-controls="${panelId}"]`).click();
   }
+  await expect(link).toBeVisible();
   await link.click();
 }
 
