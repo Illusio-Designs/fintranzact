@@ -118,6 +118,7 @@ function draw(doc: Doc, m: InvoiceModel, g: Geo, y: number): number {
   // ── Totals ────────────────────────────────────────────────
   if (m.billDiscount > 0) LR("Discount", `-${inr(m.billDiscount)}`);
   if (m.charges !== 0) LR("Charges", inr(m.charges));
+  if (m.tcs > 0) LR("TCS (s.206C)", inr(m.tcs));
   if (m.roundOff !== 0) LR("Round off", inr(m.roundOff));
   LR("TOTAL", rs(m.grand), { size: g.big, bold: true });
   if (m.paid > 0) {

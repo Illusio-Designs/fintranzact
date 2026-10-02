@@ -2,7 +2,7 @@ import { eq, and, sql, desc, notInArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { payments, paymentAllocations, invoices, parties, businesses, bankAccounts, bankTransactions } from "@fintranzact/db";
-import { createPaymentSchema, updatePaymentSchema, paginationSchema, money } from "@fintranzact/shared";
+import { createPaymentSchema, updatePaymentSchema, paginationSchema, money, panFromGstin } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { applyInvoicePayment } from "../lib/invoice-status.js";
 import { requireCan } from "../lib/permissions.js";
@@ -12,6 +12,8 @@ import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { paymentListOrder, paymentSortSchema } from "../lib/payment-list-order.js";
 import { processGatewayPayment, reverseGatewayPayment } from "../lib/gateway.js";
+import { assertPeriodOpen, loadPeriodLockState, lockViolation } from "../lib/period-lock.js";
+import { TDS_PAYMENT_SOURCE, assertTdsNotDeposited, assertValidTds, netOfTds, recordPaymentTax, removePaymentTax } from "../lib/tds-service.js";
 
 /**
  * A payment can't settle more than was received: what it is allocated across
@@ -66,6 +68,9 @@ export const paymentRouter = router({
           paymentNumber: payments.paymentNumber,
           amount: payments.amount,
           discount: payments.discount,
+          tdsAmount: payments.tdsAmount,
+          tdsSection: payments.tdsSection,
+          source: payments.source,
           mode: payments.mode,
           paymentDate: payments.paymentDate,
           referenceNumber: payments.referenceNumber,
@@ -215,13 +220,27 @@ export const paymentRouter = router({
     requireCan(ctx.ability, "create", "Payment");
     const payment = await ctx.db.transaction(async (tx) => {
       // Security: validate that partyId belongs to the current business.
-      const [partyCheck] = await tx.select({ id: parties.id, type: parties.type })
+      const [partyCheck] = await tx.select({
+        id: parties.id,
+        type: parties.type,
+        pan: parties.pan,
+        gstin: parties.gstin,
+        tdsSection: parties.tdsSection,
+      })
         .from(parties)
         .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
         .limit(1);
       if (!partyCheck) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Party not found in this business" });
       }
+      // Nothing can be added to a locked period.
+      await assertPeriodOpen(tx, ctx.businessId, [input.paymentDate]);
+
+      // Tax withheld on this payment: from an advance to a supplier (not against a
+      // bill), or by a customer. TDS on a purchase bill is deducted on the bill.
+      const tdsSection = input.tdsSection ?? null;
+      const tdsAmount = input.tdsAmount ?? "0";
+      assertValidTds(input.amount, tdsAmount, tdsSection);
       // The account and the allocated invoices are stored on the payment and
       // its allocation rows, so they must be this business's too.
       await assertInBusiness(tx, bankAccounts, input.bankAccountId, ctx.businessId, "Bank account");
@@ -259,6 +278,8 @@ export const paymentRouter = router({
         invoiceId: primaryInvoiceId,
         amount: input.amount,
         discount: input.discount || "0",
+        tdsAmount,
+        tdsSection,
         mode: input.mode,
         referenceNumber: input.referenceNumber,
         paymentDate: input.paymentDate ? new Date(input.paymentDate) : new Date(),
@@ -308,6 +329,41 @@ export const paymentRouter = router({
         );
       }
 
+      // ── Direction, tax withheld, and what reaches the bank ───────────────
+      // Sale payments are deposits, purchase payments are withdrawals. The
+      // first linked invoice decides; a payment on account follows the party
+      // (paid to a supplier = money out).
+      let isOutflow = partyCheck.type === "supplier";
+      if (effectiveAllocations.length > 0) {
+        const [inv] = await tx.select({ type: invoices.type })
+          .from(invoices)
+          .where(eq(invoices.id, effectiveAllocations[0].invoiceId))
+          .limit(1);
+        isOutflow = inv?.type === "purchase";
+      }
+      if (isOutflow && effectiveAllocations.length > 0 && tdsSection) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "TDS on a purchase bill is deducted on the bill itself. Set it on the bill, or record an advance without allocating it to a bill.",
+        });
+      }
+      const bankAmount = netOfTds(input.amount, tdsAmount);
+      if (tdsSection) {
+        await recordPaymentTax(tx, {
+          businessId: ctx.businessId,
+          paymentId: payment.id,
+          partyId: input.partyId,
+          invoiceId: primaryInvoiceId,
+          direction: isOutflow ? "payable" : "receivable",
+          sectionCode: tdsSection,
+          amount: input.amount,
+          tdsAmount,
+          base: input.tdsBase,
+          paymentDate: payment.paymentDate,
+          hasPan: !!(partyCheck.pan?.trim() || panFromGstin(partyCheck.gstin)),
+        });
+      }
+
       // ── Bank account transaction ─────────────────────────────────────────
       if (input.bankAccountId) {
         const [account] = await tx
@@ -323,28 +379,18 @@ export const paymentRouter = router({
           .limit(1);
 
         if (account) {
-          // Determine direction: sale payments are deposits, purchase payments are withdrawals.
-          // Check the type of the first linked invoice if any; a payment on
-          // account follows the party (paid to a supplier = money out).
-          let txType: "deposit" | "withdrawal" = partyCheck.type === "supplier" ? "withdrawal" : "deposit";
-          if (effectiveAllocations.length > 0) {
-            const [inv] = await tx.select({ type: invoices.type })
-              .from(invoices)
-              .where(eq(invoices.id, effectiveAllocations[0].invoiceId))
-              .limit(1);
-            txType = inv?.type === "purchase" ? "withdrawal" : "deposit";
-          }
+          const txType: "deposit" | "withdrawal" = isOutflow ? "withdrawal" : "deposit";
 
           const newBalance =
             txType === "deposit"
-              ? money.add(account.currentBalance, input.amount)
-              : money.sub(account.currentBalance, input.amount);
+              ? money.add(account.currentBalance, bankAmount)
+              : money.sub(account.currentBalance, bankAmount);
 
           await tx.insert(bankTransactions).values({
             businessId: ctx.businessId,
             bankAccountId: input.bankAccountId,
             type: txType,
-            amount: input.amount,
+            amount: bankAmount,
             description: `Payment ${paymentNumber}`,
             referenceType: "payment",
             referenceId: payment.id,
@@ -372,7 +418,7 @@ export const paymentRouter = router({
             paymentId: payment.id,
             paymentNumber: payment.paymentNumber ?? payment.id,
             bankAccountId: input.bankAccountId,
-            amount: input.amount,
+            amount: bankAmount,
             mode: input.mode,
             paymentDate: payment.paymentDate,
           });
@@ -404,6 +450,9 @@ export const paymentRouter = router({
         paymentNumber: payments.paymentNumber,
         amount: payments.amount,
         discount: payments.discount,
+        tdsAmount: payments.tdsAmount,
+        tdsSection: payments.tdsSection,
+        source: payments.source,
         mode: payments.mode,
         paymentDate: payments.paymentDate,
         referenceNumber: payments.referenceNumber,
@@ -483,6 +532,13 @@ export const paymentRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Payment not found" });
       }
+      if (existing.source === TDS_PAYMENT_SOURCE) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "This is the TDS deducted on a purchase bill. Change the TDS on the bill instead." });
+      }
+      // Neither the old nor the new date may be in a locked period.
+      await assertPeriodOpen(tx, ctx.businessId, [existing.paymentDate, input.paymentDate]);
+      // Tax already deposited against a challan can not be re-worked.
+      await assertTdsNotDeposited(tx, ctx.businessId, existing.id);
 
       // 2. Reverse old invoice allocations (per-allocation for multi-invoice payments)
       const existingAllocations = await tx.select({
@@ -551,6 +607,9 @@ export const paymentRouter = router({
         "Invoice",
       );
       const newDate = input.paymentDate ? new Date(input.paymentDate) : existing.paymentDate;
+      const newTdsAmount = input.tdsAmount ?? existing.tdsAmount;
+      const newTdsSection = input.tdsSection === undefined ? existing.tdsSection : input.tdsSection;
+      assertValidTds(newAmount, newTdsAmount, newTdsSection);
 
       const primaryInvoiceId = input.allocations?.length
         ? input.allocations[0].invoiceId
@@ -560,6 +619,8 @@ export const paymentRouter = router({
         .set({
           amount: newAmount,
           discount: input.discount ?? existing.discount,
+          tdsAmount: newTdsAmount,
+          tdsSection: newTdsSection,
           mode: newMode,
           referenceNumber: input.referenceNumber === null ? null : (input.referenceNumber ?? existing.referenceNumber),
           notes: input.notes === null ? null : (input.notes ?? existing.notes),
@@ -609,6 +670,40 @@ export const paymentRouter = router({
         );
       }
 
+      // 5b. Same direction rule as create (the first invoice side, else the
+      // party), the tax withheld, and what reaches the bank.
+      const [updParty] = await tx.select({ type: parties.type, pan: parties.pan, gstin: parties.gstin }).from(parties)
+        .where(eq(parties.id, existing.partyId)).limit(1);
+      let isOutflow = updParty?.type === "supplier";
+      if (newAllocations.length > 0) {
+        const [inv] = await tx.select({ type: invoices.type }).from(invoices)
+          .where(eq(invoices.id, newAllocations[0].invoiceId)).limit(1);
+        isOutflow = inv?.type === "purchase";
+      }
+      if (isOutflow && newAllocations.length > 0 && newTdsSection) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "TDS on a purchase bill is deducted on the bill itself. Set it on the bill, or record an advance without allocating it to a bill.",
+        });
+      }
+      const bankAmount = netOfTds(newAmount, newTdsAmount);
+      await removePaymentTax(tx, ctx.businessId, existing.id);
+      if (newTdsSection) {
+        await recordPaymentTax(tx, {
+          businessId: ctx.businessId,
+          paymentId: existing.id,
+          partyId: existing.partyId,
+          invoiceId: primaryInvoiceId,
+          direction: isOutflow ? "payable" : "receivable",
+          sectionCode: newTdsSection,
+          amount: newAmount,
+          tdsAmount: newTdsAmount,
+          base: input.tdsBase ?? undefined,
+          paymentDate: newDate,
+          hasPan: !!(updParty?.pan?.trim() || panFromGstin(updParty?.gstin)),
+        });
+      }
+
       // 6. Create new bank transaction if bank account set
       if (newBankAccountId) {
         const [account] = await tx.select({ currentBalance: bankAccounts.currentBalance })
@@ -617,26 +712,16 @@ export const paymentRouter = router({
           .for("update").limit(1);
 
         if (account) {
-          // Same direction rule as create: the first invoice's side, else the party's.
-          let txType: "deposit" | "withdrawal" = "deposit";
-          if (newAllocations.length > 0) {
-            const [inv] = await tx.select({ type: invoices.type }).from(invoices)
-              .where(eq(invoices.id, newAllocations[0].invoiceId)).limit(1);
-            if (inv?.type === "purchase") txType = "withdrawal";
-          } else {
-            const [party] = await tx.select({ type: parties.type }).from(parties)
-              .where(eq(parties.id, existing.partyId)).limit(1);
-            if (party?.type === "supplier") txType = "withdrawal";
-          }
+          const txType: "deposit" | "withdrawal" = isOutflow ? "withdrawal" : "deposit";
           const newBal = txType === "deposit"
-            ? money.add(account.currentBalance, newAmount)
-            : money.sub(account.currentBalance, newAmount);
+            ? money.add(account.currentBalance, bankAmount)
+            : money.sub(account.currentBalance, bankAmount);
 
           await tx.insert(bankTransactions).values({
             businessId: ctx.businessId,
             bankAccountId: newBankAccountId,
             type: txType,
-            amount: newAmount,
+            amount: bankAmount,
             description: `Payment ${existing.paymentNumber} (edited)`,
             referenceType: "payment",
             referenceId: existing.id,
@@ -664,7 +749,7 @@ export const paymentRouter = router({
             paymentId: existing.id,
             paymentNumber: existing.paymentNumber ?? existing.id,
             bankAccountId: newBankAccountId,
-            amount: newAmount,
+            amount: bankAmount,
             mode: newMode,
             paymentDate: newDate,
           });
@@ -701,6 +786,14 @@ export const paymentRouter = router({
 
         // Already soft-deleted — return early
         if (payment.deletedAt) return { success: true, payment: null };
+
+        if (payment.source === TDS_PAYMENT_SOURCE) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "This is the TDS deducted on a purchase bill. Change the TDS on the bill instead." });
+        }
+        await assertPeriodOpen(tx, ctx.businessId, [payment.paymentDate]);
+        // Tax already deposited against a challan can not disappear with the payment.
+        await assertTdsNotDeposited(tx, ctx.businessId, payment.id);
+        await removePaymentTax(tx, ctx.businessId, payment.id);
 
         // Reverse invoice allocations (per-allocation for multi-invoice payments)
         const existingAllocations = await tx.select({
@@ -805,6 +898,7 @@ export const paymentRouter = router({
       const conditions = [
         eq(payments.businessId, ctx.businessId),
         sql`${payments.bankAccountId} IS NULL`,
+        sql`${payments.source} IS DISTINCT FROM 'tds'`,
         isNull(payments.deletedAt),
       ];
       if (input.search) {
@@ -875,6 +969,7 @@ export const paymentRouter = router({
           const matchConditions = [
             eq(payments.businessId, ctx.businessId),
             sql`${payments.bankAccountId} IS NULL`,
+        sql`${payments.source} IS DISTINCT FROM 'tds'`,
             isNull(payments.deletedAt),
           ];
           if (input.search) {
@@ -894,6 +989,11 @@ export const paymentRouter = router({
 
         if (paymentIds.length === 0) return { assigned: 0 };
 
+        // A payment dated in a locked period can't be changed: a bulk "assign all" skips those,
+        // a payment named on its own is refused.
+        const lockState = await loadPeriodLockState(tx, ctx.businessId);
+        let skippedLocked = 0;
+
         // Only the payments actually assigned are counted and audited.
         const assignedIds: string[] = [];
         for (const paymentId of paymentIds) {
@@ -911,11 +1011,17 @@ export const paymentRouter = router({
               eq(payments.id, paymentId),
               eq(payments.businessId, ctx.businessId),
               sql`${payments.bankAccountId} IS NULL`,
+        sql`${payments.source} IS DISTINCT FROM 'tds'`,
               isNull(payments.deletedAt),
             ))
             .limit(1);
 
           if (!pmt) continue; // already assigned, deleted or not found
+          const locked = lockViolation(lockState, pmt.paymentDate);
+          if (locked) {
+            if (input.allMatching) { skippedLocked++; continue; }
+            throw new TRPCError({ code: "FORBIDDEN", message: locked.message });
+          }
           assignedIds.push(pmt.id);
 
           // Update payment with bank account
@@ -962,7 +1068,7 @@ export const paymentRouter = router({
           })
           .where(eq(bankAccounts.id, input.bankAccountId));
 
-        return { assigned: assignedIds.length, paymentIds: assignedIds };
+        return { assigned: assignedIds.length, paymentIds: assignedIds, skippedLocked };
       });
 
       if (result.assigned > 0 && result.paymentIds?.length) {
@@ -977,6 +1083,6 @@ export const paymentRouter = router({
         });
       }
 
-      return { assigned: result.assigned };
+      return result.skippedLocked ? { assigned: result.assigned, skippedLocked: result.skippedLocked } : { assigned: result.assigned };
     }),
 });

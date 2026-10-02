@@ -58,7 +58,7 @@ function PartnerPortalPage() {
           <div className={cn("rounded-2xl px-5 py-4 text-[15px]", APPLICATION_TEXT[portal.status]?.tone)}>
             <p className="font-semibold">{APPLICATION_TEXT[portal.status]?.title}</p>
             <p className="mt-1">
-              {portal.companyName} · applied {formatDate(portal.appliedAt)}. {APPLICATION_TEXT[portal.status]?.body}
+              {portal.companyName ? `${portal.companyName} · applied` : "Applied"} {formatDate(portal.appliedAt)}. {APPLICATION_TEXT[portal.status]?.body}
             </p>
           </div>
         </div>
@@ -72,8 +72,9 @@ function PartnerPortalPage() {
             </p>
           ) : (
             <p className="text-[15px] text-text-tertiary">
-              Your email <strong className="text-text-primary">{portal.email}</strong> isn't verified yet. Sign out and sign in
-              again with an email link to open your partner portal.
+              Your email <strong className="text-text-primary">{portal.email}</strong> isn't verified yet. We verify a partner's
+              email when we approve their application; if you signed up after that, email support@fintranzact.com from this
+              address and we'll verify it.
             </p>
           )}
           <Link to="/partners/apply" className="btn-primary inline-flex">

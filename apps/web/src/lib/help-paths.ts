@@ -88,6 +88,8 @@ export const HELP_NAV: HelpNavSection[] = [
         ],
       },
       { label: "Journal Entries", slug: "accounting/journal-entries" },
+      { label: "TDS & TCS", slug: "accounting/tds" },
+      { label: "Period Locks & Year Close", slug: "accounting/period-locks" },
     ],
   },
   {

@@ -58,9 +58,9 @@ describe("starting roadmap", () => {
     expect(ROADMAP_SEED.length).toBe(70);
     expect(new Set(list.data.map((i) => i.title))).toEqual(new Set(ROADMAP_SEED.map((s) => s.title)));
     // Items built since the roadmap was written arrive already moved.
-    expect(list.counts.done).toBe(1);
-    expect(list.counts.in_progress).toBe(5);
-    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 6);
+    expect(list.counts.done).toBe(2);
+    expect(list.counts.in_progress).toBe(9);
+    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 11);
     expect(list.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
     expect(list.categories).toEqual(expect.arrayContaining(["Payroll", "Inventory", "GST", "Mobile", "Platform", "Accounting", "Banking"]));
     for (const item of list.data) {
@@ -134,7 +134,7 @@ describe("starting roadmap", () => {
     const before = await adminCaller().platform.roadmapList({ launchStage: "before_launch" });
     expect(before.data).toHaveLength(18);
     expect(before.data.every((i) => i.launchStage === "before_launch")).toBe(true);
-    expect(before.counts.planned).toBe(13);
+    expect(before.counts.planned).toBe(10);
     expect(before.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
   });
 

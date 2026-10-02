@@ -32,6 +32,8 @@ export interface InvoiceForEWB {
   /** Charges billed with the supply (part of its value, taxed at the main rate). */
   additionalCharges?: string | null;
   taxAmount: string;
+  /** TCS (s.206C) collected with the sale; reported as other value. */
+  tcsAmount?: string | null;
   totalAmount: string;
   isReverseCharge: boolean;
   // Party
@@ -310,6 +312,7 @@ export function mapInvoiceToEWB(
     sgstValue:      taxSplit.sgst,
     igstValue:      taxSplit.igst,
     cessValue:      0,
+    ...(money.isPositive(invoice.tcsAmount || "0") ? { otherValue: money.toNumber(money.add(invoice.tcsAmount || "0", 0)) } : {}),
     transMode:      transportModeCode(transport.transportMode),
     transDistance:  transport.distance,
     transporterId:  transport.transporterId,

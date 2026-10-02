@@ -46,11 +46,11 @@ test.describe("Delivery Challans — Presence", () => {
   });
 
   test("renders status tabs", async ({ page }) => {
-    await expect(page.getByRole("button", { name: /^all$/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^draft$/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^sent$/i })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /^all$/i })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /^draft$/i })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /^sent$/i })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /^cancelled$/i }),
+      page.getByRole("tab", { name: /^cancelled$/i }),
     ).toBeVisible();
   });
 
@@ -94,8 +94,8 @@ test.describe("Delivery Challans — Interaction", () => {
   });
 
   test("status tabs filter the list", async ({ page }) => {
-    await page.getByRole("button", { name: /^draft$/i }).click();
-    await page.getByRole("button", { name: /^all$/i }).click();
+    await page.getByRole("tab", { name: /^draft$/i }).click();
+    await page.getByRole("tab", { name: /^all$/i }).click();
   });
 
   test("type toggle switches between Sales and Purchases", async ({ page }) => {

@@ -81,6 +81,7 @@ export function totalLines(m: InvoiceModel, o: { withPaid?: boolean } = {}): Tot
   if (m.charges !== 0) out.push({ label: "Charges", value: rs(m.charges) });
   out.push({ label: "Taxable value", value: rs(m.taxable) });
   for (const [label, v] of taxRows(m)) out.push({ label, value: rs(v) });
+  if (m.tcs > 0) out.push({ label: "TCS (s.206C)", value: rs(m.tcs) });
   if (m.roundOff !== 0) out.push({ label: "Round off", value: `${m.roundOff > 0 ? "+" : ""}${inr(m.roundOff)}` });
   out.push({ label: "Grand total", value: rs(m.grand), grand: true });
   if (o.withPaid !== false && m.paid > 0) {

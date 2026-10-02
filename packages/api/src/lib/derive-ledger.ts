@@ -77,8 +77,9 @@ function splitTax(amount: string): [string, string] {
  * less GST — the lines after line and document discounts, plus charges and
  * round-off — so every entry balances.
  */
-function netValue(inv: { totalAmount: string; taxAmount: string }): string {
-  return money.sub(inv.totalAmount, inv.taxAmount);
+function netValue(inv: { totalAmount: string; taxAmount: string; tcsAmount?: string | null }): string {
+  // TCS collected with a sale is in the total but is not sales value: it is owed to the government.
+  return money.sub(money.sub(inv.totalAmount, inv.taxAmount), inv.tcsAmount || "0");
 }
 
 /** Build a DerivedEntryLine for the debit side. */
@@ -219,6 +220,7 @@ export async function deriveLedger(
     documentType: string;
     subtotal: string;
     taxAmount: string;
+    tcsAmount: string;
     totalAmount: string;
     partyState: string | null;
     partyStateCode: string | null;
@@ -234,6 +236,7 @@ export async function deriveLedger(
       status: invoices.status,
       subtotal: invoices.subtotal,
       taxAmount: invoices.taxAmount,
+      tcsAmount: invoices.tcsAmount,
       totalAmount: invoices.totalAmount,
       partyState: parties.state,
       partyStateCode: parties.stateCode,
@@ -274,6 +277,10 @@ export async function deriveLedger(
 
       lines.push(debitLine(receivable, totalAmt));
       lines.push(creditLine(sales, subtotal));
+      // TCS collected with the sale is a liability to the government, not income.
+      if (parseFloat(inv.tcsAmount ?? "0") > 0) {
+        lines.push(creditLine(getAccount(coa, "2210"), inv.tcsAmount));
+      }
 
       // Tax split
       if (parseFloat(taxStr) > 0) {
@@ -429,6 +436,8 @@ export async function deriveLedger(
     paymentNumber: string | null;
     paymentDate: Date;
     amount: string;
+    tdsAmount: string;
+    source: string | null;
     mode: string;
     partyType: string;
   }> = await db
@@ -437,6 +446,8 @@ export async function deriveLedger(
       paymentNumber: payments.paymentNumber,
       paymentDate: payments.paymentDate,
       amount: payments.amount,
+      tdsAmount: payments.tdsAmount,
+      source: payments.source,
       mode: payments.mode,
       partyType: parties.type,
     })
@@ -461,9 +472,31 @@ export async function deriveLedger(
     const payable = getAccount(coa, "2000");
     const pmtNum = pmt.paymentNumber ?? pmt.id.slice(0, 8);
 
+    // Tax withheld from the payment never reaches the bank: the party's balance
+    // is settled in full, the bank moves the net, and the tax sits in its own
+    // account (a credit we claim, or a liability we owe the government).
+    const tds = pmt.tdsAmount ?? "0";
+    const hasTds = parseFloat(tds) > 0;
+    const net = money.sub(amount, tds);
+
+    if (pmt.source === "tds") {
+      // TDS deducted on a purchase bill: it settles part of what we owe the
+      // supplier, and becomes tax we owe the government. No bank movement.
+      entries.push({
+        date: pmt.paymentDate,
+        narration: `TDS Deducted ${pmtNum}`,
+        sourceType: "payment",
+        sourceId: pmt.id,
+        sourceNumber: pmtNum,
+        lines: [debitLine(payable, amount), creditLine(getAccount(coa, "2200"), amount)],
+      });
+      continue;
+    }
+
     if (pmt.partyType === "customer") {
-      // Payment received: Dr Cash/Bank / Cr Receivable
-      lines.push(debitLine(cashOrBank, amount));
+      // Payment received: Dr Cash/Bank (net) + Dr TDS Receivable / Cr Receivable (gross)
+      lines.push(debitLine(cashOrBank, net));
+      if (hasTds) lines.push(debitLine(getAccount(coa, "1250"), tds));
       lines.push(creditLine(receivable, amount));
 
       entries.push({
@@ -475,9 +508,10 @@ export async function deriveLedger(
         lines,
       });
     } else {
-      // Payment made to supplier: Dr Payable / Cr Cash/Bank
+      // Payment made to supplier: Dr Payable (gross) / Cr Cash/Bank (net) + Cr TDS Payable
       lines.push(debitLine(payable, amount));
-      lines.push(creditLine(cashOrBank, amount));
+      lines.push(creditLine(cashOrBank, net));
+      if (hasTds) lines.push(creditLine(getAccount(coa, "2200"), tds));
 
       entries.push({
         date: pmt.paymentDate,

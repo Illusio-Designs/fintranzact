@@ -199,11 +199,12 @@ test.describe("J3 masters", () => {
     expect(sup).toMatchObject({ phone: null, email: null, billing_address: null, shipping_address: null, credit_limit: null, credit_period_days: null });
     expect(sup.additional_shipping_addresses ?? []).toEqual([]);
     await page.getByRole("searchbox", { name: "Search by name…" }).fill("");
-    await page.getByRole("button", { name: "Suppliers", exact: true }).click();
+    const partyType = page.getByRole("tablist", { name: "Party type" });
+    await partyType.getByRole("tab", { name: /^Suppliers/ }).click();
     row = page.getByRole("row").filter({ hasText: supplier });
     await expect(row).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: customer })).toHaveCount(0);
-    await page.getByRole("button", { name: "All", exact: true }).click();
+    await partyType.getByRole("tab", { name: /^All/ }).click();
 
     // ── A duplicate of the customer, already billed ─────────────
     await page.getByRole("button", { name: /Add Party/ }).first().click();
@@ -528,10 +529,11 @@ test.describe("J3 masters — items (dark theme)", () => {
     expect(await stockMovements(service.id)).toEqual([]);
 
     // The Services tab lists only the service.
-    await page.getByRole("button", { name: "Services", exact: true }).click();
+    const itemType = page.getByRole("tablist", { name: "Item type" });
+    await itemType.getByRole("tab", { name: "Services", exact: true }).click();
     await expect(page.getByRole("row").filter({ hasText: names.install })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: names.laptop })).toHaveCount(0);
-    await page.getByRole("button", { name: "All", exact: true }).click();
+    await itemType.getByRole("tab", { name: "All", exact: true }).click();
 
     // ── Price level: Wholesale rate for the laptop, for one customer ─
     await navTo(page, "Price Levels");

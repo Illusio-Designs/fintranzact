@@ -1976,6 +1976,73 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-02-tds",
+    updates: [
+      {
+        // Period locks and year-end close (TDS/TCS merge). The closing profit
+        // is carried in the frozen opening balances (Retained Earnings).
+        title: "Year-end closing and period lock",
+        status: "done",
+        done: [
+          "Lock-till date per business",
+          "Block create/edit/delete of entries in locked periods (all channels)",
+          "Audit lock for GST-filed months",
+          "Owner-only unlock with audit log entry",
+          "Year-end: carry forward ledger balances",
+          "Year-end: carry forward stock and outstanding",
+          "Profit transfer to capital / reserves on closing",
+          "Clear blocked-edit messages in the UI",
+        ],
+      },
+      {
+        // TDS on bills and payments, TDS receivable, TCS on sales, challans and
+        // 26Q/27EQ data. Still to come: TDS on expenses, due-date reminders,
+        // 26AS/AIS reconciliation and certificates.
+        title: "TDS & TCS on transactions",
+        status: "in_progress",
+        done: [
+          "TDS section master with rates and thresholds per financial year",
+          "Threshold tracking per party per year (single and aggregate)",
+          "194Q purchase-of-goods threshold tracking",
+          "No-PAN higher rate (s.206AA)",
+          "TDS on supplier payments and advances",
+          "TDS receivable when customers deduct (invoices and receipts)",
+          "TCS on sales under s.206C by item/party",
+          "TDS payable and TCS payable ledgers per section",
+          "Form 26Q quarterly data export",
+          "Form 27EQ quarterly data export",
+          "TDS/TCS reports: deducted, paid, pending",
+        ],
+      },
+      {
+        // Sandbox.co.in client and provider switch (GOV_API_PROVIDER); e-way
+        // bill from an IRN and GST returns are still to come.
+        title: "Connect e-invoice, e-way bill and GST returns through Sandbox.co.in",
+        status: "in_progress",
+        done: [
+          "Provider adapter so Sandbox can be swapped later",
+          "Replace direct NIC calls in irp-client.ts with Sandbox e-invoice APIs",
+          "E-invoice: generate IRN, fetch, cancel through Sandbox",
+          "Per-GSTIN e-invoice API username and password, stored encrypted",
+          "GSTIN verification on party create",
+        ],
+      },
+      {
+        // The Payroll add-on can be bought (Razorpay, Finvera GST invoice);
+        // the admin switch, editable price and employee counting are not built.
+        title: "Payroll add-on billing",
+        status: "in_progress",
+        done: ["Razorpay billing monthly/yearly with the plan", "GST invoice from Finvera Solutions LLP"],
+      },
+      {
+        // The Store Pro add-on can be bought; nothing is gated by it yet.
+        title: "Store Pro add-on billing",
+        status: "in_progress",
+        done: ["Razorpay subscription billing monthly/yearly"],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

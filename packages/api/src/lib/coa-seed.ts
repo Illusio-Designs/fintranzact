@@ -13,6 +13,7 @@ const DEFAULT_ACCOUNTS: SeedAccount[] = [
   { code: "1010", name: "Bank Accounts", accountType: "asset" },
   { code: "1100", name: "Accounts Receivable", accountType: "asset" },
   { code: "1200", name: "Inventory", accountType: "asset" },
+  { code: "1250", name: "TDS Receivable", accountType: "asset" },
   { code: "1300", name: "Advances to Suppliers", accountType: "asset" },
   { code: "1400", name: "Prepaid Expenses", accountType: "asset" },
   { code: "1500", name: "Fixed Assets", accountType: "asset" },
@@ -26,6 +27,7 @@ const DEFAULT_ACCOUNTS: SeedAccount[] = [
   { code: "2101", name: "Output SGST Payable", accountType: "liability" },
   { code: "2102", name: "Output IGST Payable", accountType: "liability" },
   { code: "2200", name: "TDS Payable", accountType: "liability" },
+  { code: "2210", name: "TCS Payable", accountType: "liability" },
   { code: "2300", name: "Other Current Liabilities", accountType: "liability" },
 
   // Equity

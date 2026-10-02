@@ -4,6 +4,7 @@ import { money } from "@fintranzact/shared";
 import { applyInvoicePayment } from "../../../lib/invoice-status.js";
 import type { TenantDatabase } from "../../../trpc.js";
 import type { CanonicalPayment } from "../types.js";
+import { loadPeriodLockState, lockViolation } from "../../../lib/period-lock.js";
 
 export interface PaymentsImportResult {
   created: number;
@@ -92,10 +93,19 @@ export async function runPaymentsImport(
   const allAllocations: InvoiceAllocation[] = [];
   let autoNumberCount = 0;
 
+  const lockState = await loadPeriodLockState(db, businessId);
+
   for (const pmt of canonicalPayments) {
     const partyId = partyByName.get(pmt.partyName.toLowerCase());
     if (!partyId) {
       errors.push(`Party "${pmt.partyName}" not found for payment`);
+      skipped++;
+      continue;
+    }
+
+    const locked = lockViolation(lockState, pmt.paymentDate);
+    if (locked) {
+      errors.push(`Payment from "${pmt.partyName}" skipped: ${locked.message}`);
       skipped++;
       continue;
     }

@@ -10,8 +10,10 @@ import { logger } from "../lib/logger.js";
 
 /**
  * The partner record for a signed-in user: the newest application made with
- * their email, but only once the email is verified (so registering someone
- * else's address never shows their partner details).
+ * their email. Until the email is verified (which approval does) only a
+ * pending or rejected application is returned, and the portal shows its
+ * status without the company's details, so registering someone else's
+ * address never shows their partner account.
  */
 async function partnerForUser(userId: string) {
   const [user] = await controlDb
@@ -20,11 +22,12 @@ async function partnerForUser(userId: string) {
     .where(eq(users.id, userId))
     .limit(1);
   if (!user) return { user: null, partner: null };
-  if (!user.emailVerified) return { user, partner: null };
   const email = user.email.trim().toLowerCase();
   const rows = await controlDb.select().from(partners).where(eq(partners.email, email)).orderBy(desc(partners.createdAt));
   // An approved record wins over an older or newer rejected / pending one.
-  return { user, partner: rows.find((r) => r.status === "approved") ?? rows[0] ?? null };
+  const partner = rows.find((r) => r.status === "approved") ?? rows[0] ?? null;
+  if (!user.emailVerified && partner?.status === "approved") return { user, partner: null };
+  return { user, partner };
 }
 
 /**
@@ -95,7 +98,7 @@ export const partnerRouter = router({
       return {
         kind: "application" as const,
         email: user.email,
-        companyName: partner.companyName,
+        companyName: user.emailVerified ? partner.companyName : null,
         status: partner.status as "pending" | "approved" | "rejected",
         appliedAt: partner.createdAt.toISOString(),
       };

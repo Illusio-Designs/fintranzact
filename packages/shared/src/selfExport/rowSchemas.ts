@@ -190,6 +190,9 @@ export const partyRowSchema = z.object({
   bankAccountNumber: z.string().nullable(),
   bankIfsc: z.string().nullable(),
   bankName: z.string().nullable(),
+  // Optional so backups made before these were exported still import.
+  constitution: z.string().nullable().optional(),
+  tdsSection: z.string().nullable().optional(),
   source: z.string().nullable(),
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
@@ -275,6 +278,8 @@ export const itemRowSchema = z.object({
   businessId: uuid,
   name: z.string(),
   hsn: z.string().nullable(),
+  // TCS section for specified goods. Optional so older backups still import.
+  tcsSection: z.string().nullable().optional(),
   sku: z.string().nullable(),
   unit: unit,
   itemMode: itemMode,
@@ -375,6 +380,13 @@ export const invoiceRowSchema = z.object({
   createdByName: z.string().nullable(),
   deliveryMethod: z.string().nullable(),
   isReverseCharge: z.boolean(),
+  // TDS on a purchase bill. Optional so backups made before TDS still import.
+  tdsMode: z.enum(["auto", "none", "manual"]).optional(),
+  tdsSection: z.string().nullable().optional(),
+  tdsAmount: money2.optional(),
+  // TCS collected on a sale (included in totalAmount). Optional so older backups still import.
+  tcsMode: z.enum(["auto", "none"]).optional(),
+  tcsAmount: money2.optional(),
   source: z.string().nullable(),
   irn: z.string().nullable(),
   irnAckNumber: z.string().nullable(),
@@ -423,6 +435,9 @@ export const paymentRowSchema = z.object({
   partyId: uuid,
   amount: money2,
   discount: money2,
+  // Tax withheld from the payment. Optional so backups made before TDS still import.
+  tdsAmount: money2.optional(),
+  tdsSection: z.string().nullable().optional(),
   mode: paymentMode,
   referenceNumber: z.string().nullable(),
   paymentDate: isoDatetime,
@@ -794,6 +809,83 @@ export const gstr2bRecordRowSchema = z.object({
   createdAt: isoDatetime,
 });
 
+// ── Income-tax TDS ────────────────────────────────────────────────────────────
+
+export const tdsSectionSettingRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  financialYear: z.string(),
+  sectionCode: z.string(),
+  rate: money3Nullable,
+  individualRate: money3Nullable,
+  rateWithoutPan: money3Nullable,
+  singleThreshold: money2Nullable,
+  aggregateThreshold: money2Nullable,
+  isActive: z.boolean(),
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
+export const taxChallanRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  kind: z.enum(["tds", "tcs"]),
+  financialYear: z.string(),
+  quarter: z.number().int(),
+  challanNumber: z.string(),
+  bsrCode: z.string(),
+  depositedOn: isoDatetime,
+  amount: money2,
+  interest: money2,
+  notes: z.string().nullable(),
+  createdByUserId: uuidNullable,
+  createdAt: isoDatetime,
+});
+
+export const periodLockRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  kind: z.enum(["books", "gst"]),
+  lockedThrough: z.string().nullable(),
+  returnPeriod: z.string().nullable(),
+  note: z.string().nullable(),
+  lockedByUserId: uuidNullable,
+  lockedByName: z.string().nullable(),
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
+export const financialYearCloseRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  financialYear: z.string(),
+  closedAt: isoDatetime,
+  closedByUserId: uuidNullable,
+  closedByName: z.string().nullable(),
+  note: z.string().nullable(),
+  snapshot: z.unknown(),
+});
+
+export const taxDeductionRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  kind: z.enum(["tds", "tcs"]),
+  direction: z.enum(["payable", "receivable"]),
+  partyId: uuid,
+  paymentId: uuidNullable,
+  invoiceId: uuidNullable,
+  sectionCode: z.string(),
+  financialYear: z.string(),
+  quarter: z.number().int(),
+  baseAmount: money2,
+  rate: money3,
+  amount: money2,
+  hasPan: z.boolean(),
+  deductedOn: isoDatetime,
+  challanId: uuidNullable,
+  createdAt: isoDatetime,
+});
+
 // ── Registry map ──────────────────────────────────────────────────────────────
 
 export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
@@ -813,6 +905,11 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   invoice_items: invoiceItemRowSchema,
   payments: paymentRowSchema,
   payment_allocations: paymentAllocationRowSchema,
+  tds_section_settings: tdsSectionSettingRowSchema,
+  tax_challans: taxChallanRowSchema,
+  tax_deductions: taxDeductionRowSchema,
+  period_locks: periodLockRowSchema,
+  financial_year_closes: financialYearCloseRowSchema,
   bank_transactions: bankTransactionRowSchema,
   expenses: expenseRowSchema,
   stock_adjustments: stockAdjustmentRowSchema,

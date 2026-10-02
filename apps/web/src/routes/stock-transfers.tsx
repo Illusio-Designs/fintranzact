@@ -4,7 +4,7 @@ import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
 import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
-import { formatDate, todayISODate, toISOString, cn } from "@/lib/utils";
+import { formatDate, todayISODate, toISOString } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";

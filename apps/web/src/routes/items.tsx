@@ -4,6 +4,9 @@ import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { invalidateStockViews } from "@/lib/stock-cache";
 import { formatCurrency, formatDate, cn, downloadCSV, todayISODate, toISOString } from "@/lib/utils";
+import { useSaveTick } from "@/hooks/useSaveTick";
+import { SavedTick } from "@/components/ui/SavedTick";
+import { useFlashRows } from "@/hooks/useFlashRows";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -29,6 +32,7 @@ import { Listbox } from "@/components/ui/Listbox";
 import { gstRateOptions, gstRateValue } from "@/lib/gst-rates";
 import { Combobox } from "@/components/ui/Combobox";
 import { Disclosure } from "@/components/ui/Disclosure";
+import { TcsSectionField } from "@/components/TcsSectionField";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { SortableTh, type SortOption, type SortState } from "@/components/ui/Table";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
@@ -163,7 +167,7 @@ function ItemsPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const { data, isFetching, isLoading } = trpc.item.list.useQuery({
+  const listInput = {
     search: debouncedSearch || undefined,
     lowStock: showLowStock || undefined,
     stockGroupId: groupFilter || undefined,
@@ -174,10 +178,13 @@ function ItemsPage() {
     sortDir: sort.dir,
     page,
     limit: pageSize,
-  }, {
+  };
+  const { data, isFetching, isLoading, isPlaceholderData } = trpc.item.list.useQuery(listInput, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
+  // Rows just added or saved glow green for a moment.
+  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
 
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -452,7 +459,7 @@ function ItemsPage() {
                     item.lowStockAlert &&
                     parseFloat(item.stockQuantity) <= parseFloat(item.lowStockAlert);
                   return (
-                    <tr key={item.id} className="cursor-pointer" onClick={() => setSelectedItemId(item.id)}>
+                    <tr key={item.id} className={cn("cursor-pointer", flash.has(item.id) && "animate-row-flash")} onClick={() => setSelectedItemId(item.id)}>
                       <td>
                         <div className="flex items-center gap-2">
                           {item.itemType === "service" && (
@@ -575,6 +582,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [barcode, setBarcode] = useState("");
   const [stockGroupId, setStockGroupId] = useState("");
   const [hsn, setHsn] = useState("");
+  const [tcsSection, setTcsSection] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [mrp, setMrp] = useState("");
@@ -670,6 +678,8 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
 
   const utils = trpc.useUtils();
 
+  // The save button shows a tick before the panel closes.
+  const tick = useSaveTick();
   const createMutation = trpc.item.create.useMutation({
     onSuccess: () => {
       utils.item.list.invalidate();
@@ -677,7 +687,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
       // The panel stays mounted: the next item starts blank instead of
       // inheriting this one's barcode, stock, batches and variants.
       resetForm();
-      onClose();
+      tick.finish(onClose);
     },
     onError: (err) => {
       toast.error(err.message);
@@ -734,6 +744,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
       barcode: barcode || undefined,
       stockGroupId: stockGroupId || undefined,
       hsn: hsn || undefined,
+      tcsSection: (tcsSection || undefined) as never,
       salePrice: salePrice || undefined,
       purchasePrice: purchasePrice || undefined,
       mrp: mrp || undefined,
@@ -778,11 +789,11 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
             Cancel
           </button>
           <button
-            className="btn-primary"
+            className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
             onClick={handleCreate}
-            disabled={createMutation.isPending || !name.trim()}
+            disabled={createMutation.isPending || tick.saved || !name.trim()}
           >
-            {createMutation.isPending ? "Creating…" : "Create Item"}
+            {tick.saved ? <SavedTick label="Created" /> : createMutation.isPending ? "Creating…" : "Create Item"}
           </button>
         </div>
       }
@@ -860,7 +871,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
         <div className="space-y-1">
           <Disclosure
             label="Identification"
-            count={countFilled(sku, hsn, stockGroupId)}
+            count={countFilled(sku, hsn, stockGroupId, tcsSection)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -876,6 +887,9 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
             </div>
             <div className="mt-3">
               <StockGroupPicker value={stockGroupId} onChange={setStockGroupId} />
+            </div>
+            <div className="mt-3">
+              <TcsSectionField value={tcsSection} onChange={setTcsSection} />
             </div>
           </Disclosure>
 
@@ -1164,6 +1178,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
   const [barcode, setBarcode] = useState("");
   const [stockGroupId, setStockGroupId] = useState("");
   const [hsn, setHsn] = useState("");
+  const [tcsSection, setTcsSection] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [mrp, setMrp] = useState("");
@@ -1195,6 +1210,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
     setBarcode(item.barcode ?? "");
     setStockGroupId(item.stockGroupId ?? "");
     setHsn(item.hsn ?? "");
+    setTcsSection(item.tcsSection ?? "");
     setSalePrice(item.salePrice ?? "");
     setPurchasePrice(item.purchasePrice ?? "");
     setMrp(item.mrp ?? "");
@@ -1231,12 +1247,14 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
 
   const renameUnitMut = trpc.item.renameUnit.useMutation();
 
+  // The save button shows a tick before the panel closes.
+  const tick = useSaveTick();
   const updateMutation = trpc.item.update.useMutation({
     onSuccess: () => {
       utils.item.list.invalidate();
       utils.item.getById.invalidate({ id: itemId });
       toast.success("Item updated");
-      onClose();
+      tick.finish(onClose);
     },
     onError: (err) => {
       toast.error(err.message);
@@ -1320,6 +1338,8 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         // Only when changed, so saving never touches a group set elsewhere.
         ...(stockGroupId !== (item?.stockGroupId ?? "") ? { stockGroupId: stockGroupId || null } : {}),
         hsn: hsn || undefined,
+        // null clears the section when it is emptied.
+        tcsSection: (tcsSection || null) as never,
         salePrice: salePrice || undefined,
         purchasePrice: purchasePrice || undefined,
         mrp: mrp || null,
@@ -1347,11 +1367,11 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
             Cancel
           </button>
           <button
-            className="btn-primary"
+            className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
             onClick={handleSave}
-            disabled={updateMutation.isPending || !name.trim()}
+            disabled={updateMutation.isPending || tick.saved || !name.trim()}
           >
-            {updateMutation.isPending ? "Saving…" : "Save Changes"}
+            {tick.saved ? <SavedTick /> : updateMutation.isPending ? "Saving…" : "Save Changes"}
           </button>
         </div>
       }
@@ -1451,7 +1471,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
         <div className="space-y-1">
           <Disclosure
             label="Identification"
-            count={countFilled(sku, hsn, stockGroupId)}
+            count={countFilled(sku, hsn, stockGroupId, tcsSection)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -1468,6 +1488,9 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
             </div>
             <div className="mt-3">
               <StockGroupPicker value={stockGroupId} onChange={setStockGroupId} />
+            </div>
+            <div className="mt-3">
+              <TcsSectionField value={tcsSection} onChange={setTcsSection} />
             </div>
           </Disclosure>
 

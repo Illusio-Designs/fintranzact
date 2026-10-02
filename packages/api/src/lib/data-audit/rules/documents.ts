@@ -84,14 +84,14 @@ export const documentTables: TableCoverage[] = [
             OR (ABS(i.tax_amount::numeric - l.tax) > ${MONEY_TOLERANCE}
                 AND NOT ${taxMatchesSql("(i.tax_amount::numeric - l.tax)", "i.additional_charges::numeric", "l.max_rate")})`),
       rule("invoices", "total-formula", "error",
-        "total_amount = subtotal + tax_amount − discount_amount + additional_charges + round_off.",
+        "total_amount = subtotal + tax_amount − discount_amount + additional_charges + round_off + tcs_amount (TCS collected with a sale).",
         INVOICE_WRITERS,
         `SELECT i.business_id, i.id::text,
                 i.invoice_number || ': total ' || i.total_amount || ' vs ' ||
-                (i.subtotal::numeric + i.tax_amount::numeric - i.discount_amount::numeric + i.additional_charges::numeric + i.round_off::numeric)
+                (i.subtotal::numeric + i.tax_amount::numeric - i.discount_amount::numeric + i.additional_charges::numeric + i.round_off::numeric + i.tcs_amount::numeric)
          FROM invoices i
          WHERE ABS(i.total_amount::numeric - (i.subtotal::numeric + i.tax_amount::numeric - i.discount_amount::numeric
-                   + i.additional_charges::numeric + i.round_off::numeric)) > ${MONEY_TOLERANCE}`),
+                   + i.additional_charges::numeric + i.round_off::numeric + i.tcs_amount::numeric)) > ${MONEY_TOLERANCE}`),
       rule("invoices", "charges-sum", "error",
         "When itemised charges are stored, additional_charges is their sum.",
         INVOICE_WRITERS.concat("shipment.create / shipment.update (charge sync)"),
@@ -200,6 +200,32 @@ export const documentTables: TableCoverage[] = [
         INVOICE_WRITERS,
         `SELECT i.business_id, i.id::text, i.invoice_number || ' has no creator'
          FROM invoices i WHERE ${userEntered("i")} AND (i.created_by_user_id IS NULL OR NULLIF(i.created_by_name, '') IS NULL)`),
+      rule("invoices", "tds-matches-payment", "error",
+        "A live purchase bill's TDS (tds_amount) is settled by exactly one system TDS payment of that amount; a cancelled or deleted bill has none; no other document carries TDS; the mode is auto, none or manual and the amount is not negative.",
+        ["invoice.create / update / updateStatus / delete (syncBillTds)"],
+        `SELECT i.business_id, i.id::text, i.invoice_number || ': tds ' || i.tds_amount || ' (' || i.tds_mode || '), ' || COUNT(p.id) || ' TDS payments totalling ' || COALESCE(SUM(p.amount::numeric), 0)
+         FROM invoices i
+         LEFT JOIN payments p ON p.invoice_id = i.id AND p.source = 'tds' AND p.deleted_at IS NULL
+         GROUP BY i.id
+         HAVING i.tds_mode NOT IN ('auto', 'none', 'manual') OR i.tds_amount::numeric < 0
+             OR COUNT(p.id) > 1
+             OR ABS(COALESCE(SUM(p.amount::numeric), 0) - (CASE
+                  WHEN i.type = 'purchase' AND i.document_type = 'invoice' AND i.deleted_at IS NULL AND i.status <> 'cancelled' THEN i.tds_amount::numeric
+                  ELSE 0 END)) > ${MONEY_TOLERANCE}
+             OR (NOT (i.type = 'purchase' AND i.document_type = 'invoice') AND i.tds_amount::numeric <> 0)`),
+      rule("invoices", "tcs-matches-deductions", "error",
+        "A live sale invoice's TCS (tcs_amount) is the sum of its TCS ledger rows, one per section, each kind 'tcs' and payable; a cancelled or deleted invoice, one with TCS switched off, and any other document carries none; the mode is auto or none and the amount is not negative.",
+        INVOICE_WRITERS,
+        `SELECT i.business_id, i.id::text, i.invoice_number || ': tcs ' || i.tcs_amount || ' (' || i.tcs_mode || ') vs ' || COUNT(d.id) || ' TCS rows totalling ' || COALESCE(SUM(d.amount::numeric), 0)
+         FROM invoices i
+         LEFT JOIN tax_deductions d ON d.invoice_id = i.id AND d.kind = 'tcs'
+         GROUP BY i.id
+         HAVING i.tcs_mode NOT IN ('auto', 'none') OR i.tcs_amount::numeric < 0
+             OR ABS(COALESCE(SUM(d.amount::numeric), 0) - (CASE
+                  WHEN i.type = 'sale' AND i.document_type = 'invoice' AND i.deleted_at IS NULL AND i.status <> 'cancelled' AND i.tcs_mode = 'auto' THEN i.tcs_amount::numeric
+                  ELSE 0 END)) > ${MONEY_TOLERANCE}
+             OR (NOT (i.type = 'sale' AND i.document_type = 'invoice') AND i.tcs_amount::numeric <> 0)
+             OR bool_or(d.direction <> 'payable') OR bool_or(d.payment_id IS NOT NULL)`),
       rule("invoices", "audit-trail", "error",
         "A document a person entered has a '<docType>.create' audit entry.",
         INVOICE_WRITERS,

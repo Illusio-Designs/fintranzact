@@ -63,6 +63,8 @@ export const DEVELOPER_GROUP_SLUGS = [
   // Accounting
   "accounts",
   "journals",
+  "tds",
+  "period",
   // Analytics
   "dashboard",
   "reports",

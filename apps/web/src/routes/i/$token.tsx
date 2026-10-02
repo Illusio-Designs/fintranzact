@@ -27,6 +27,8 @@ interface SharedDocument {
     taxAmount: string;
     discountAmount: string | null;
     additionalCharges: string | null;
+    /** TCS (s.206C) collected with the sale, included in totalAmount. */
+    tcsAmount?: string | null;
     roundOff: string | null;
     totalAmount: string;
     amountPaid: string;
@@ -133,6 +135,7 @@ function SharedDocumentView({ token, data }: { token: string; data: SharedDocume
     ["Discount", doc.discountAmount && parseFloat(doc.discountAmount) ? `-${doc.discountAmount}` : null],
     ["Tax", doc.taxAmount],
     ["Other charges", doc.additionalCharges && parseFloat(doc.additionalCharges) ? doc.additionalCharges : null],
+    ["TCS (s.206C)", doc.tcsAmount && parseFloat(doc.tcsAmount) ? doc.tcsAmount : null],
     ["Round off", doc.roundOff && parseFloat(doc.roundOff) ? doc.roundOff : null],
   ];
 

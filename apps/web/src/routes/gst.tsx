@@ -24,6 +24,11 @@ const months = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+// A return is read right after the bills it sums are saved, and the
+// dashboard may have cached the same month moments earlier; fetch it fresh
+// each time a return is opened.
+const FRESH = { refetchOnMount: "always" } as const;
+
 type ReportTab = "gstr1" | "gstr3b" | "gstr9" | "cmp08";
 const REPORT_TABS: ReportTab[] = ["gstr1", "gstr3b", "gstr9", "cmp08"];
 
@@ -148,8 +153,8 @@ export function GSTReportsPage() {
 // ── GSTR-1 View ────────────────────────────────────────────────
 
 function GSTR1View({ year, month }: { year: number; month: number }) {
-  const { data, isLoading, error } = trpc.gst.gstr1.useQuery({ year, month });
-  const { data: csvData } = trpc.gst.gstr1CSV.useQuery({ year, month });
+  const { data, isLoading, error } = trpc.gst.gstr1.useQuery({ year, month }, FRESH);
+  const { data: csvData } = trpc.gst.gstr1CSV.useQuery({ year, month }, FRESH);
   const utils = trpc.useUtils();
   const [downloadingJson, setDownloadingJson] = useState(false);
 
@@ -433,7 +438,7 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
 // ── GSTR-3B View ───────────────────────────────────────────────
 
 function GSTR3BView({ year, month }: { year: number; month: number }) {
-  const { data, isLoading, error } = trpc.gst.gstr3b.useQuery({ year, month });
+  const { data, isLoading, error } = trpc.gst.gstr3b.useQuery({ year, month }, FRESH);
 
   if (isLoading) return <ReportSkeleton columns={[{ label: "Nature of supplies" }, { label: "Taxable value", align: "right" }, { label: "IGST", align: "right" }, { label: "CGST", align: "right" }, { label: "SGST", align: "right" }]} />;
   if (error) return (
@@ -555,7 +560,7 @@ function CMP08View() {
   // Default to the quarter just ended: the one due for filing
   const [fy, setFy] = useState(thisQuarter === 1 ? thisFy - 1 : thisFy);
   const [quarter, setQuarter] = useState(thisQuarter === 1 ? 4 : thisQuarter - 1);
-  const { data, isLoading, error } = trpc.gst.cmp08.useQuery({ year: fy, quarter });
+  const { data, isLoading, error } = trpc.gst.cmp08.useQuery({ year: fy, quarter }, FRESH);
   const fyOptions = Array.from({ length: 5 }, (_, i) => thisFy - i);
 
   return (
@@ -607,7 +612,7 @@ function GSTR9View() {
   const [financialYear, setFinancialYear] = useState(currentFYStart - 1); // Default to last completed FY
   const [downloading, setDownloading] = useState(false);
 
-  const { data, isLoading, error } = trpc.gst.gstr9.useQuery({ financialYear });
+  const { data, isLoading, error } = trpc.gst.gstr9.useQuery({ financialYear }, FRESH);
   const utils = trpc.useUtils();
 
   // FY selector options — the year in progress (to review before it closes)

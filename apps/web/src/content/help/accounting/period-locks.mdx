@@ -1,0 +1,43 @@
+---
+title: Period Locks & Year Close
+description: Lock a period so it can't be edited, mark GST months as filed, close a financial year and carry its balances forward.
+sidebar:
+  order: 4
+---
+
+Once a month is filed or a year is audited, its numbers should stop moving. Fintranzact lets you **lock** a period so nothing dated in it can be added, edited or deleted, and **close** a financial year so its balances carry into the next one.
+
+Everything below is under **Settings → Period Locks**.
+
+## Lock the books up to a date
+
+1. Choose **Lock through** a date (any day up to yesterday) and add a note if you like.
+2. Select **Lock books**.
+
+From then on, invoices, bills, payments, expenses, journal entries, stock movements, bank entries, input tax credit and imported rows dated on or before that date can't be added, changed or deleted. This applies on the web, the mobile app, the API and imports. Moving an entry *into* or *out of* a locked period is blocked too.
+
+When something is blocked, the message says what is locked, who set it and when, and what to do:
+
+> This period is locked. Your books are locked through 31 Mar 2026 (set by Rishi Soni on 5 Apr 2026), so entries dated 10 Feb 2026 can't be added, changed or deleted. Ask the business owner to unlock the period if this needs to change.
+
+Opening balances (parties and bank accounts) are part of the closed books and can't be changed while any lock is in place.
+
+## Mark a GST month as filed
+
+Under **GST months marked as filed**, pick the return month and select **Mark as filed**. Entries dated in that month, and its input tax credit, are then locked, even if the books lock is set earlier. The CA or accountant can do this; it applies only to that month.
+
+## Close a financial year
+
+1. Under **Close a financial year**, choose the year. Only years that have ended are offered.
+2. Review the preview: the year's profit, stock value, what customers owe you and what you owe. Warnings (for example draft invoices dated in the year) appear here.
+3. Select **Close** and confirm.
+
+Closing freezes the year's closing balances for ledgers, stock and outstanding amounts, locks the books through the year's last day, and makes the next year's **Trial Balance** open with the carried-forward balances (profit to date goes to retained earnings).
+
+## Unlocking
+
+Only the **business owner** can unlock a period, unlock a GST month or reopen a closed year, and must give a reason of at least 10 characters. Each is recorded in the audit log with who did it, when and why. A closed year has to be **reopened** (not just unlocked), and later closed years must be reopened first.
+
+:::note
+Owners, admins and accountants can lock and close. Everyone else can see what is locked, which is why a change was blocked.
+:::

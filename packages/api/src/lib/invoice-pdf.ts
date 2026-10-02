@@ -80,6 +80,8 @@ export interface InvoicePDFData {
   discountAmount: string;
   /** Charges billed with the supply (freight, packing…) — taxed at the main rate. */
   additionalCharges?: string;
+  /** TCS (s.206C) collected with the sale, included in totalAmount. */
+  tcsAmount?: string;
   totalAmount: string;
   amountPaid: string;
 
@@ -763,6 +765,11 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
     totalRow("Tax", data.taxAmount);
   }
 
+  // Tax collected at source on specified goods, on top of the goods and GST
+  if (parseFloat(data.tcsAmount || "0") > 0) {
+    totalRow("TCS (s.206C)", data.tcsAmount || "0");
+  }
+
   // Round off
   const roundOff = Math.round(parseFloat(data.totalAmount)) - parseFloat(data.totalAmount);
   if (Math.abs(roundOff) > 0.005) {
@@ -1235,6 +1242,7 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
   if (parseFloat(data.discountAmount) > 0) totRow("Discount", `-${data.discountAmount}`);
   if (parseFloat(data.additionalCharges || "0") > 0) totRow("Charges", data.additionalCharges || "0");
   if (parseFloat(data.taxAmount) > 0) totRow("Tax", data.taxAmount);
+  if (parseFloat(data.tcsAmount || "0") > 0) totRow("TCS (s.206C)", data.tcsAmount || "0");
 
   hLine(doc, totLabelX, totY, totLabelW + totValW + 8, cBorder);
   totY += 4;

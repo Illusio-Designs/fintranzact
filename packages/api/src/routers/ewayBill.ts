@@ -46,7 +46,8 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
-import { EWBClient, computeValidUpto } from "../lib/ewb-client.js";
+import { computeValidUpto } from "../lib/ewb-client.js";
+import { createEWBClient, useSandboxProvider, type EWBClientLike } from "../lib/gov-provider.js";
 import { decryptEwbConfig } from "../lib/field-encryption.js";
 import { mapInvoiceToEWB } from "../lib/invoice-to-ewb.js";
 import type { TransportDetails, InvoiceForEWB, LineItemForEWB } from "../lib/invoice-to-ewb.js";
@@ -88,7 +89,7 @@ async function getEWBClient(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,
   businessId: string,
-): Promise<EWBClient | null> {
+): Promise<EWBClientLike | null> {
   const [row] = await db
     .select()
     .from(ewayBillConfigs)
@@ -102,15 +103,18 @@ async function getEWBClient(
   const username = config?.username || process.env.NIC_EWB_USERNAME;
   const password = config?.password || process.env.NIC_EWB_PASSWORD;
 
-  if (!clientId || !clientSecret || !username || !password) {
+  // Through Sandbox.co.in only the taxpayer's own portal login is needed; the
+  // GSP client id/secret belong to the direct NIC integration.
+  const needsGspPair = !useSandboxProvider();
+  if ((needsGspPair && (!clientId || !clientSecret)) || !username || !password) {
     return null;
   }
 
   const sandbox = config ? config.isSandbox : process.env.NIC_EWB_SANDBOX !== "false";
 
-  return new EWBClient({
-    clientId,
-    clientSecret,
+  return createEWBClient({
+    clientId: clientId ?? "",
+    clientSecret: clientSecret ?? "",
     username,
     password,
     gstin: "", // filled per-call with business GSTIN
@@ -125,7 +129,7 @@ async function requireEWBClient(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,
   businessId: string,
-): Promise<EWBClient> {
+): Promise<EWBClientLike> {
   const client = await getEWBClient(db, businessId);
   if (!client) {
     throw new TRPCError({
@@ -278,6 +282,7 @@ export const ewayBillRouter = router({
         discountAmount: invoice.discountAmount,
         additionalCharges: invoice.additionalCharges,
         taxAmount: invoice.taxAmount,
+        tcsAmount: invoice.tcsAmount,
         totalAmount: invoice.totalAmount,
         isReverseCharge: invoice.isReverseCharge,
         partyGstin: party.gstin,

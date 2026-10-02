@@ -174,6 +174,8 @@ export interface InvoiceModel {
   sgst: number;
   igst: number;
   tax: number;
+  /** TCS (s.206C) collected with the sale, included in grand (paise). */
+  tcs: number;
   roundOff: number;
   grand: number;
   paid: number;
@@ -311,7 +313,8 @@ export function buildModel(d: InvoicePDFData, copies: InvoiceCopy[] = [], defaul
   const sgst = byRate.reduce((s, r) => s + r.sgst, 0);
   const igst = intra ? 0 : tax;
   const grand = paise(d.totalAmount);
-  const roundOff = d.roundOff !== undefined ? paise(d.roundOff) : grand - taxable - tax;
+  const tcs = paise(d.tcsAmount ?? "0");
+  const roundOff = d.roundOff !== undefined ? paise(d.roundOff) : grand - taxable - tax - tcs;
   const paid = paise(d.amountPaid);
 
   const sellerAddr = splitAddress(d.businessAddress, [d.businessCity, d.businessState, d.businessPincode].filter(Boolean).join(", "));
@@ -375,6 +378,7 @@ export function buildModel(d: InvoicePDFData, copies: InvoiceCopy[] = [], defaul
     sgst,
     igst,
     tax,
+    tcs,
     roundOff,
     grand,
     paid,

@@ -202,6 +202,19 @@ export const INPUT_OVERRIDES: Record<string, (ids: Record<string, string>) => un
   "bankRecon.manualMatch": (ids) => ({ paymentId: ids.payment, expenseId: undefined, bankTransactionId: undefined }),
   // Generated periods are a single day; the end must come after the start.
   "target.create": () => ({ periodStart: new Date().toISOString(), periodEnd: new Date(Date.now() + 30 * 86_400_000).toISOString() }),
+  // A lock far in the past (and a long-closed year) so the sweep never locks the periods the rest of its data lives in.
+  "period.lockBooks": () => ({ through: "2001-03-31" }),
+  "period.closeYear": () => ({ financialYear: "2000-01", force: true }),
+  // Plausible challan details; the entry ids come from the generated input.
+  "tds.createChallan": () => ({
+    financialYear: "2026-27",
+    quarter: 3,
+    challanNumber: "00041",
+    bsrCode: "0510308",
+    depositedOn: new Date().toISOString(),
+    amount: "100.00",
+    interest: "0",
+  }),
   "auth.register": () => ({
     username: "sweeper",
     email: `sweep.${randomUUID().slice(0, 8)}@example.in`,

@@ -47,6 +47,7 @@ export const ROLE_ABILITIES: Record<string, Set<string>> = {
     "Account:read",
     "BankReconciliation:read",
     "ITC:read",
+    "Tds:read",
     "EInvoice:read",
     "EWayBill:read",
   ]),

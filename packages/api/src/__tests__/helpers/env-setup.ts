@@ -32,3 +32,11 @@ process.env.RAZORPAY_KEY = "";
 process.env.RAZORPAY_KEY_SECRET = "";
 process.env.RAZORPAY_SECRET = "";
 process.env.RAZORPAY_WEBHOOK_SECRET = "";
+// A developer's real Sandbox.co.in keys (loaded from .env) must never leak
+// into tests: they would route e-invoice / e-way bill calls to the live
+// gateway instead of the mocked NIC clients. Tests that exercise the Sandbox
+// provider set these themselves.
+delete process.env.SANDBOX_API_KEY;
+delete process.env.SANDBOX_API_SECRET;
+delete process.env.SANDBOX_BASE_URL;
+delete process.env.GOV_API_PROVIDER;

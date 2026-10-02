@@ -14,6 +14,7 @@ import {
   businesses,
   journalEntries,
   journalEntryLines,
+  financialYearCloses,
 } from "@fintranzact/db";
 import { deriveLedger, deriveFullLedger } from "../lib/derive-ledger.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
@@ -31,6 +32,7 @@ import {
   MSME_PAYMENT_DAYS,
   financialYearOf,
   istStartOfDay,
+  financialYearLabel,
 } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
@@ -1369,16 +1371,17 @@ export const reportsRouter = router({
             bankAccountId: payments.bankAccountId,
             bankAccountName: bankAccounts.accountName,
             count: sql<number>`COUNT(*)::int`,
-            totalAmount: sql<string>`SUM(${payments.amount}::numeric)::text`,
-            customerPayments: sql<string>`SUM(CASE WHEN ${parties.type} = 'customer' THEN ${payments.amount}::numeric ELSE 0 END)::text`,
-            supplierPayments: sql<string>`SUM(CASE WHEN ${parties.type} = 'supplier' THEN ${payments.amount}::numeric ELSE 0 END)::text`,
+            totalAmount: sql<string>`SUM((${payments.amount}::numeric - ${payments.tdsAmount}::numeric))::text`,
+            customerPayments: sql<string>`SUM(CASE WHEN ${parties.type} = 'customer' THEN (${payments.amount}::numeric - ${payments.tdsAmount}::numeric) ELSE 0 END)::text`,
+            supplierPayments: sql<string>`SUM(CASE WHEN ${parties.type} = 'supplier' THEN (${payments.amount}::numeric - ${payments.tdsAmount}::numeric) ELSE 0 END)::text`,
           })
           .from(payments)
           .innerJoin(parties, eq(parties.id, payments.partyId))
           .leftJoin(bankAccounts, eq(bankAccounts.id, payments.bankAccountId))
-          .where(and(...paymentConditions, ...receivedCondition))
+          // Money that moved: net of tax withheld, and without a bill's TDS adjustment.
+          .where(and(...paymentConditions, ...receivedCondition, sql`${payments.source} IS DISTINCT FROM 'tds'`))
           .groupBy(payments.mode, payments.bankAccountId, bankAccounts.accountName)
-          .orderBy(sql`SUM(${payments.amount}::numeric) DESC`),
+          .orderBy(sql`SUM((${payments.amount}::numeric - ${payments.tdsAmount}::numeric)) DESC`),
 
         input.type !== "received"
           ? ctx.db
@@ -1484,6 +1487,29 @@ export const reportsRouter = router({
         }
       }
 
+      // A year that follows a closed year opens with the balances the close
+      // carried forward (ledgers, with the profit to date in retained earnings).
+      // Only for the default view that starts at the financial year's start.
+      let carriedForwardFrom: string | null = null;
+      if (!input.fromDate) {
+        const previous = financialYearLabel(financialYearOf(asOf, fyStartMonth) - 1);
+        const [closed] = await ctx.db
+          .select({ snapshot: financialYearCloses.snapshot })
+          .from(financialYearCloses)
+          .where(and(eq(financialYearCloses.businessId, ctx.businessId), eq(financialYearCloses.financialYear, previous)))
+          .limit(1);
+        const opening = (closed?.snapshot as { openingBalances?: Array<{ code: string; name: string; debit: string; credit: string }> } | undefined)?.openingBalances;
+        if (opening) {
+          carriedForwardFrom = previous;
+          for (const o of opening) {
+            const existing = accountMap.get(o.code) ?? { debit: "0.00", credit: "0.00", code: o.code, name: o.name };
+            existing.debit = money.add(existing.debit, o.debit);
+            existing.credit = money.add(existing.credit, o.credit);
+            accountMap.set(o.code, existing);
+          }
+        }
+      }
+
       // Fetch account types from CoA
       const coaRows = await ctx.db
         .select({
@@ -1514,7 +1540,7 @@ export const reportsRouter = router({
       const totalDebit = money.sum(accounts.map((a) => a.debit));
       const totalCredit = money.sum(accounts.map((a) => a.credit));
 
-      return { accounts, totalDebit, totalCredit };
+      return { accounts, totalDebit, totalCredit, carriedForwardFrom };
     }),
 
   // ── 12. Balance Sheet ──────────────────────────────────────────

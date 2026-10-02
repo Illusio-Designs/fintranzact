@@ -7,6 +7,7 @@ import { invalidateStockViews } from "@/lib/stock-cache";
 import { useCan } from "@/lib/permissions";
 import { getBusinessId } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn } from "@/lib/utils";
+import { useFlashRows } from "@/hooks/useFlashRows";
 import { apiUrl } from "@/lib/api-url";
 import { openPdf } from "@/lib/open-pdf";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -562,6 +563,9 @@ function InvoiceDetailPanel({
   const totalAdjusted = allRelated.reduce((sum: number, d: any) => sum + parseFloat(d.totalAmount), 0);
   const invoiceTotal = invoice ? parseFloat(invoice.totalAmount) : 0;
   const fullyAdjusted = totalAdjusted >= invoiceTotal;
+  // TDS deducted from the supplier on a purchase bill. It is settled against the bill, so
+  // "Amount Paid" below is the cash actually paid, and the TDS gets its own line.
+  const tdsAmount = invoice?.type === "purchase" ? parseFloat(invoice.tdsAmount ?? "0") || 0 : 0;
 
   const canConvert =
     invoice &&
@@ -821,6 +825,12 @@ function InvoiceDetailPanel({
                   <span className="tabular-nums text-text-primary">{formatCurrency(invoice.roundOff)}</span>
                 </div>
               )}
+              {parseFloat(invoice.tcsAmount ?? "0") > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">TCS collected (s.206C)</span>
+                  <span className="tabular-nums text-text-primary">{formatCurrency(invoice.tcsAmount)}</span>
+                </div>
+              )}
               <div className="pt-2 border-t border-border-light flex justify-between">
                 <span className="text-sm font-semibold text-text-primary">Total</span>
                 <span className="text-base font-bold tabular-nums text-text-primary">{formatCurrency(invoice.totalAmount)}</span>
@@ -831,10 +841,18 @@ function InvoiceDetailPanel({
                   <span className="tabular-nums text-purple-600">-{formatCurrency(invoice.totalAdjusted)}</span>
                 </div>
               )}
-              {parseFloat(invoice.amountPaid) > 0 && (
+              {tdsAmount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">
+                    TDS deducted{invoice.tdsSection ? ` (${invoice.tdsSection.replace("_", " ")})` : ""}
+                  </span>
+                  <span className="tabular-nums text-purple-600">-{formatCurrency(tdsAmount)}</span>
+                </div>
+              )}
+              {parseFloat(invoice.amountPaid) - tdsAmount > 0.005 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-text-secondary">Amount Paid</span>
-                  <span className="tabular-nums text-emerald-600">{formatCurrency(invoice.amountPaid)}</span>
+                  <span className="tabular-nums text-emerald-600">{formatCurrency(parseFloat(invoice.amountPaid) - tdsAmount)}</span>
                 </div>
               )}
               {balance > 0.01 && !isDraftLike && (
@@ -1091,7 +1109,7 @@ function InvoicesPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const { data, isFetching, isLoading } = trpc.invoice.list.useQuery({
+  const listInput = {
     type,
     status: (status || undefined) as any,
     search: debouncedSearch || undefined,
@@ -1102,10 +1120,13 @@ function InvoicesPage() {
     ...filterParams(filters),
     page,
     limit: pageSize,
-  }, {
+  };
+  const { data, isFetching, isLoading, isPlaceholderData } = trpc.invoice.list.useQuery(listInput, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
+  // Rows just added or saved glow green for a moment.
+  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
 
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -1322,7 +1343,7 @@ function InvoicesPage() {
                     return (
                       <tr
                         key={inv.id}
-                        className="cursor-pointer"
+                        className={cn("cursor-pointer", flash.has(inv.id) && "animate-row-flash")}
                         onClick={() => setSelectedInvoiceId(inv.id)}
                       >
                         <td className="font-medium"><span className="block truncate max-w-[250px]">{inv.partyName}</span></td>

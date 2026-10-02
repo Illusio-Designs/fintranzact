@@ -27,6 +27,7 @@ import {
 import { paginationSchema } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { assertPeriodOpen } from "../lib/period-lock.js";
 import { audited } from "../lib/audit.js";
 import {
   ensureDefaultWarehouse,
@@ -619,6 +620,8 @@ export const stockRouter = router({
       const date = input.date ? new Date(input.date) : new Date();
 
       return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
+        // Nothing can be added to a locked period.
+        await assertPeriodOpen(tx, ctx.businessId, [input.date]);
         await assertWarehouses(tx, ctx.businessId, ids);
         await assertWarehousePermission(tx, ctx, ids, "canTransfer");
         const referenceId = crypto.randomUUID();
@@ -737,6 +740,8 @@ export const stockRouter = router({
       const date = input.date ? new Date(input.date) : new Date();
       const adjustmentIds: string[] = [];
       return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
+        // Nothing can be added to a locked period.
+        await assertPeriodOpen(tx, ctx.businessId, [input.date]);
         await assertWarehouses(tx, ctx.businessId, [input.warehouseId]);
         await assertWarehousePermission(tx, ctx, [input.warehouseId], "canAdjust");
         for (const line of input.lines) {
@@ -840,6 +845,7 @@ export const stockRouter = router({
       const reason = input.note?.trim() ? `${PHYSICAL_REASON}: ${input.note.trim()}` : PHYSICAL_REASON;
       const adjustmentIds: string[] = [];
       return audited(ctx, () => ctx.db.transaction(async (tx: Tx) => {
+        await assertPeriodOpen(tx, ctx.businessId, [input.date]);
         await assertWarehouses(tx, ctx.businessId, [input.warehouseId]);
         await assertWarehousePermission(tx, ctx, [input.warehouseId], "canAdjust");
         let adjusted = 0;

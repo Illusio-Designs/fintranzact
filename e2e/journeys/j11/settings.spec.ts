@@ -513,9 +513,9 @@ test.describe("J11 settings", () => {
     await expectNoHorizontalScroll(page, "plan selection");
     await page.getByRole("button", { name: /^Pro / }).click();
     await expect(page.getByText(/Pro is set up by the Fintranzact team/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start free for now" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start free and create your company" })).toBeVisible();
     await page.getByRole("button", { name: /^Recommended Forever Free/ }).click();
-    await page.getByRole("button", { name: "Continue to dashboard" }).click();
+    await page.getByRole("button", { name: "Create your company" }).click();
     await expect(page).toHaveURL(/\/$/);
     expect(await tenantPlan(owner.tenantId)).toBe("forever_free");
 

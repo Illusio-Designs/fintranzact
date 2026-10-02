@@ -72,6 +72,8 @@ The web and store frontends are deployed by Vercel's Git integration (see `apps/
 | `CORS_ORIGINS` | Yes | Comma-separated allowed origins | `https://fintranzact-web.vercel.app,https://store.fintranzact.com` |
 | `APP_URL` | Yes | Frontend URL (for email-change and invitation links) | `https://fintranzact-web.vercel.app` |
 | `ENCRYPTION_KEY` | Yes | AES-256-GCM key for field-level encryption (64-char hex). Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` | `a1b2c3...` |
+| `SANDBOX_API_KEY` | No | Sandbox.co.in API key for GST e-invoice, e-way bill, GSTIN lookup and TDS/TCS. `key_test_…` uses the test host, `key_live_…` the live host | `key_live_abc…` |
+| `SANDBOX_API_SECRET` | No | Sandbox.co.in API secret that pairs with the key (server-side only) | |
 | `ENCRYPTION_KEY_PREVIOUS` | No | Previous encryption key — set only during key rotation | |
 | `RESEND_API_KEY` | Yes | Email service API key (email-change links, invites) | `re_xxx` |
 | `EMAIL_FROM` | No | From address for emails | `Fintranzact <noreply@fintranzact.com>` |

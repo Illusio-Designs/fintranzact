@@ -2,7 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
-import { formatCurrency, formatDate, downloadCSV, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
+import { formatCurrency, formatDate, downloadCSV, todayISODate, toISOString, formatDateInput, cn } from "@/lib/utils";
+import { useSaveTick } from "@/hooks/useSaveTick";
+import { SavedTick } from "@/components/ui/SavedTick";
+import { useFlashRows } from "@/hooks/useFlashRows";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
 import { Badge } from "@/components/ui/Badge";
 import { toast } from "@/hooks/useToast";
@@ -117,7 +120,7 @@ function ExpensesPage() {
     },
   ]);
 
-  const { data, isFetching, isLoading } = trpc.expense.list.useQuery({
+  const listInput = {
     page,
     limit: pageSize,
     search: debouncedSearch || undefined,
@@ -126,10 +129,13 @@ function ExpensesPage() {
     toDate: dateRange.toDate,
     sortBy: sort.key,
     sortDir: sort.dir,
-  }, {
+  };
+  const { data, isFetching, isLoading, isPlaceholderData } = trpc.expense.list.useQuery(listInput, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
+  // Rows just added or saved glow green for a moment.
+  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
 
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -141,6 +147,8 @@ function ExpensesPage() {
 
   const utils = trpc.useUtils();
 
+  // The save button shows a tick before the panel closes.
+  const tick = useSaveTick();
   const createMutation = trpc.expense.create.useMutation({
     onSuccess: () => {
       utils.expense.list.invalidate();
@@ -152,7 +160,7 @@ function ExpensesPage() {
       utils.bankAccount.invalidate();
       utils.bankRecon.invalidate();
       toast.success("Expense added");
-      setShowAddModal(false);
+      tick.finish(() => setShowAddModal(false));
       setForm({ ...EMPTY_FORM, expenseDate: todayISODate() });
     },
     onError: (err) => toast.error(err.message),
@@ -169,7 +177,7 @@ function ExpensesPage() {
       utils.bankAccount.invalidate();
       utils.bankRecon.invalidate();
       toast.success("Expense updated");
-      setShowAddModal(false);
+      tick.finish(() => setShowAddModal(false));
       setEditExpenseId(null);
       setForm({ ...EMPTY_FORM, expenseDate: todayISODate() });
     },
@@ -349,7 +357,7 @@ function ExpensesPage() {
                 </thead>
                 <tbody>
                   {rows.map((exp) => (
-                    <tr key={exp.id}>
+                    <tr key={exp.id} className={cn(flash.has(exp.id) && "animate-row-flash")}>
                       <td className="text-text-secondary whitespace-nowrap">
                         {formatDate(exp.expenseDate)}
                       </td>
@@ -415,11 +423,11 @@ function ExpensesPage() {
               Cancel
             </button>
             <button
-              className="btn-primary"
+              className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || tick.saved}
             >
-              {isSubmitting
+              {tick.saved ? <SavedTick label={editExpenseId ? "Saved" : "Added"} /> : isSubmitting
                 ? editExpenseId
                   ? "Saving…"
                   : "Adding…"

@@ -99,6 +99,16 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
     },
+    // TDS panel on purchase bills: no section on the supplier, so nothing is deducted.
+    tds: {
+      preview: {
+        useQuery: () => ({ data: undefined, isLoading: false }),
+      },
+      // TCS panel on sale invoices: no TCS sections, so nothing is collected.
+      tcsPreview: {
+        useQuery: () => ({ data: undefined }),
+      },
+    },
     useUtils: () => ({
       invoice: { list: { invalidate: vi.fn() } },
       dashboard: { summary: { invalidate: vi.fn() } },

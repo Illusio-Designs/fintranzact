@@ -10,7 +10,7 @@ export type Resource =
   | "BankAccount" | "BankTransaction"
   | "Business" | "Team" | "Import" | "Report" | "GstReport"
   | "Store" | "SalesTarget" | "RecurringInvoice"
-  | "Account" | "ITC"
+  | "Account" | "ITC" | "Tds" | "PeriodLock"
   | "BankReconciliation" | "EInvoice" | "EWayBill"
   | "all";
 
@@ -114,6 +114,8 @@ export function defineAbilityFor(ctx: PermissionContext): AppAbility {
       can("manage", "BankTransaction");
       can("manage", "Account");
       can("manage", "ITC");
+      can("manage", "Tds");
+      can("manage", "PeriodLock");
       can("manage", "BankReconciliation");
       can("read", "EInvoice");
       can("read", "EWayBill");

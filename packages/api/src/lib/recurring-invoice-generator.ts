@@ -14,6 +14,9 @@ import { documentIsIntraState } from "./document-totals.js";
 import type { TenantDatabase } from "../trpc.js";
 import { documentStockDirection, resolveDocumentWarehouseId, syncDocumentStock } from "./inventory-service.js";
 import { resolveLineBatches } from "./batches.js";
+import { syncBillTds } from "./tds-service.js";
+import { syncPurchaseItc } from "./purchase-itc.js";
+import { syncInvoiceTcs } from "./tcs-service.js";
 
 interface TemplateRow {
   id: string;
@@ -224,6 +227,18 @@ export async function generateInvoiceFromTemplate(
       event: "CREATE",
       actorUserId: template.createdByUserId,
     });
+
+    // A recurring purchase bill is credited like any other: it earns input tax
+    // credit and carries TDS.
+    if (template.type === "purchase") {
+      await syncPurchaseItc(tx, template.businessId, invoice.id);
+      await syncBillTds(tx, { businessId: template.businessId, invoiceId: invoice.id, userId: template.createdByUserId });
+    }
+
+    // A recurring sale collects TCS on items that carry a TCS section.
+    if (template.type === "sale") {
+      await syncInvoiceTcs(tx, { businessId: template.businessId, invoiceId: invoice.id });
+    }
 
     // Record execution
     const [run] = await tx.insert(recurringInvoiceRuns).values({

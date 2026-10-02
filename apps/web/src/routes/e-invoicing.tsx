@@ -558,22 +558,6 @@ function SettingsTab() {
 
 // ── Skeleton ──────────────────────────────────────────────────
 
-function DashboardSkeleton() {
-  return (
-    <div className="divide-y divide-border-light">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-4 px-4 py-3">
-          <div className="h-3 skeleton rounded w-24" />
-          <div className="h-3 skeleton rounded w-16" />
-          <div className="h-3 skeleton rounded w-32" />
-          <div className="h-3 skeleton rounded w-20 ml-auto" />
-          <div className="h-4 skeleton rounded-full w-16" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── Main page ─────────────────────────────────────────────────
 
 const MAIN_TABS: Array<{ value: EInvoiceTab; label: string }> = [

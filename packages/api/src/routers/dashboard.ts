@@ -30,12 +30,12 @@ async function profitAndLossFor(
   expConditions.push(...buildBusinessDateFilter(expenses, { from: range.fromDate, to: range.toDate }));
 
   // GST collected or paid is not income or cost, so both sides use the
-  // taxable value (invoice total less its tax). Sales are net of the
+  // taxable value (invoice total less its tax, and less the TCS collected on a sale). Sales are net of the
   // credit notes and sales returns issued to customers (debit notes add);
   // purchases net of what went back to suppliers — purchase returns, our
   // debit notes and the supplier's credit notes — as in the ledger.
   const signedTaxable = sql<string>`COALESCE(SUM(CASE WHEN ${reducingDocument()} THEN -1 ELSE 1 END
-    * (${invoices.totalAmount}::numeric - ${invoices.taxAmount}::numeric)), 0)::text`;
+    * (${invoices.totalAmount}::numeric - ${invoices.taxAmount}::numeric - ${invoices.tcsAmount}::numeric)), 0)::text`;
   const [
     [sales],
     [purchases],
@@ -200,25 +200,28 @@ export const dashboardRouter = router({
         .orderBy(desc(invoices.createdAt))
         .limit(10),
 
-      // Cash in = payments received for sales (period-scoped)
+      // Cash in = payments received for sales (period-scoped), net of any tax the customer withheld
       ctx.db.select({
-        total: sql<string>`coalesce(sum(${payments.amount}::numeric), 0)::text`,
+        total: sql<string>`coalesce(sum((${payments.amount}::numeric - ${payments.tdsAmount}::numeric)), 0)::text`,
       }).from(payments)
         .innerJoin(invoices, eq(invoices.id, payments.invoiceId))
         .where(and(
           eq(payments.businessId, ctx.businessId),
           eq(invoices.type, "sale"),
+          sql`${payments.source} IS DISTINCT FROM 'tds'`,
           dateCondition(payments),
         )),
 
-      // Cash out = payments made for purchases (period-scoped)
+      // Cash out = payments made for purchases (period-scoped). A bill's TDS is settled
+      // against it but never leaves the bank, so it is not cash out.
       ctx.db.select({
-        total: sql<string>`coalesce(sum(${payments.amount}::numeric), 0)::text`,
+        total: sql<string>`coalesce(sum((${payments.amount}::numeric - ${payments.tdsAmount}::numeric)), 0)::text`,
       }).from(payments)
         .innerJoin(invoices, eq(invoices.id, payments.invoiceId))
         .where(and(
           eq(payments.businessId, ctx.businessId),
           eq(invoices.type, "purchase"),
+          sql`${payments.source} IS DISTINCT FROM 'tds'`,
           dateCondition(payments),
         )),
     ]);
@@ -742,13 +745,14 @@ export const dashboardRouter = router({
         eq(payments.businessId, ctx.businessId),
         sql`${payments.deletedAt} IS NULL`,
         sql`COALESCE(${invoices.type} = 'sale', ${parties.type} <> 'supplier')`,
+        sql`${payments.source} IS DISTINCT FROM 'tds'`,
       ];
       conditions.push(...buildBusinessDateFilter(payments, { from: input.fromDate, to: input.toDate }));
 
       const results = await ctx.db
         .select({
           mode: payments.mode,
-          total: sql<string>`SUM(${payments.amount}::numeric)::text`,
+          total: sql<string>`SUM((${payments.amount}::numeric - ${payments.tdsAmount}::numeric))::text`,
           count: sql<number>`COUNT(*)::int`,
         })
         .from(payments)
@@ -756,7 +760,7 @@ export const dashboardRouter = router({
         .leftJoin(invoices, eq(invoices.id, payments.invoiceId))
         .where(and(...conditions))
         .groupBy(payments.mode)
-        .orderBy(sql`SUM(${payments.amount}::numeric) DESC`);
+        .orderBy(sql`SUM((${payments.amount}::numeric - ${payments.tdsAmount}::numeric)) DESC`);
 
       return results;
     }),
