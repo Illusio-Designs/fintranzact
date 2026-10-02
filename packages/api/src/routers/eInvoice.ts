@@ -36,7 +36,8 @@ import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPError } from "../lib/irp-client.js";
-import { createIRPClient } from "../lib/gov-provider.js";
+import { createIRPClient, useSandboxProvider } from "../lib/gov-provider.js";
+import { recordGovUsage } from "../lib/gov-usage.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { mapInvoiceToIRP } from "../lib/invoice-to-irp.js";
 import { encryptEInvoiceConfig, decryptEInvoiceConfig } from "../lib/field-encryption.js";
@@ -54,6 +55,7 @@ async function generateIRNForInvoice(
   invoiceId: string,
   businessId: string,
   db: TenantDatabase,
+  tenantId?: string,
 ) {
   const [rawConfig] = await db
     .select()
@@ -207,6 +209,10 @@ async function generateIRNForInvoice(
       })
       .where(eq(invoices.id, invoiceId))
       .returning();
+
+    if (tenantId && useSandboxProvider()) {
+      await recordGovUsage({ tenantId, businessId, gstin: business.gstin, kind: "e_invoice", reference: result.irn });
+    }
 
     return updated!;
   } catch (err) {
@@ -391,7 +397,7 @@ export const eInvoiceRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot regenerate IRN for a cancelled e-invoice" });
       }
 
-      return generateIRNForInvoice(input.invoiceId, ctx.businessId, ctx.db);
+      return generateIRNForInvoice(input.invoiceId, ctx.businessId, ctx.db, ctx.tenantId);
     }, (_r, input) => ({ action: "eInvoice.generate", entityType: "invoice", entityId: input.invoiceId }))),
 
   /**
@@ -515,7 +521,7 @@ export const eInvoiceRouter = router({
       }
 
       // Run the generate logic inline (reuse same helper)
-      return generateIRNForInvoice(invoice.id, ctx.businessId, ctx.db);
+      return generateIRNForInvoice(invoice.id, ctx.businessId, ctx.db, ctx.tenantId);
     }, (_r, input) => ({ action: "eInvoice.retryFailed", entityType: "invoice", entityId: input.invoiceId }))),
 
   /**
@@ -693,7 +699,7 @@ export const eInvoiceRouter = router({
 
     for (const inv of failedInvoices) {
       try {
-        await generateIRNForInvoice(inv.id, ctx.businessId, ctx.db);
+        await generateIRNForInvoice(inv.id, ctx.businessId, ctx.db, ctx.tenantId);
         results.succeeded++;
       } catch {
         results.failed++;

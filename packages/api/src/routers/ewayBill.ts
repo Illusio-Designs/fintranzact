@@ -52,6 +52,7 @@ import { decryptEwbConfig } from "../lib/field-encryption.js";
 import { mapInvoiceToEWB } from "../lib/invoice-to-ewb.js";
 import type { TransportDetails, InvoiceForEWB, LineItemForEWB } from "../lib/invoice-to-ewb.js";
 import { withAudit } from "../lib/audit.js";
+import { recordGovUsage } from "../lib/gov-usage.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -368,6 +369,16 @@ export const ewayBillRouter = router({
           createdByUserId: ctx.user.id,
         })
         .returning();
+
+      if (ctx.tenantId && useSandboxProvider()) {
+        await recordGovUsage({
+          tenantId: ctx.tenantId,
+          businessId: ctx.businessId,
+          gstin: business.gstin,
+          kind: "e_way_bill",
+          reference: String(apiResponse.ewayBillNo),
+        });
+      }
 
       return newEwb!;
     }, (r, input) => ({ action: "ewayBill.generate", entityType: "ewayBill", entityId: r.id, metadata: { invoiceId: input.invoiceId, ewbNumber: r.ewbNumber } }))),

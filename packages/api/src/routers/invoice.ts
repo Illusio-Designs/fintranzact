@@ -29,7 +29,8 @@ import { documentListOrder, documentSortSchema } from "../lib/document-list-orde
 import { documentFilterConditions, documentFilterSchema } from "../lib/document-list-filters.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPError } from "../lib/irp-client.js";
-import { createIRPClient } from "../lib/gov-provider.js";
+import { createIRPClient, useSandboxProvider } from "../lib/gov-provider.js";
+import { recordGovUsage } from "../lib/gov-usage.js";
 import { assertBillTdsInput, syncBillTds } from "../lib/tds-service.js";
 import { syncPurchaseItc } from "../lib/purchase-itc.js";
 import { syncInvoiceTcs } from "../lib/tcs-service.js";
@@ -628,6 +629,7 @@ export const invoiceRouter = router({
       const invoiceId = invoice.id;
       const businessId = ctx.businessId;
       const db = ctx.db;
+      const tenantId = ctx.tenantId;
 
       // Non-blocking: check e-invoice config + party GSTIN
       setTimeout(async () => {
@@ -752,6 +754,10 @@ export const invoiceRouter = router({
               updatedAt: new Date(),
             })
             .where(eq(invoices.id, invoiceId));
+
+          if (tenantId && useSandboxProvider()) {
+            await recordGovUsage({ tenantId, businessId, gstin: biz.gstin, kind: "e_invoice", reference: result.irn });
+          }
         } catch (err) {
           // IRP errors must not bubble up — just log and mark as failed
           const isRetryable = err instanceof IRPError && err.isRetryable;

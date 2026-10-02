@@ -438,6 +438,42 @@ export const billingEvents = pgTable("billing_events", {
   index("billing_events_tenant_idx").on(t.tenantId, t.createdAt),
 ]);
 
+// ── Government API usage (Sandbox.co.in) ───────────────────────
+// One row per chargeable document sent to the government through the gateway
+// (successful calls only). Customers are billed per document after the month
+// ends; the unique index makes a retried call charge once.
+
+export const govApiUsage = pgTable("gov_api_usage", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  /** Business inside the tenant DB (no FK: lives in another database). */
+  businessId: uuid("business_id"),
+  gstin: text("gstin"),
+  /** e_invoice | e_way_bill | gstr1_filed | gstr3b_filed */
+  kind: text("kind").notNull(),
+  /** IRN, e-way bill number or return period — what was generated. */
+  reference: text("reference").notNull(),
+  /** Price charged for this document, before GST, in paise (frozen at the time). */
+  ratePaise: integer("rate_paise").notNull(),
+  /** Calendar month in IST, "YYYY-MM". */
+  period: text("period").notNull(),
+  /** Set once the month is closed onto a billing_payments row. */
+  statementPaymentId: uuid("statement_payment_id").references(() => billingPayments.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("gov_api_usage_doc_idx").on(t.tenantId, t.kind, t.reference),
+  index("gov_api_usage_period_idx").on(t.tenantId, t.period),
+]);
+
+/** Successful Sandbox calls per month across the whole deployment — drives quota alerts. */
+export const sandboxCallCounters = pgTable("sandbox_call_counters", {
+  period: text("period").primaryKey(),
+  calls: integer("calls").default(0).notNull(),
+  /** Highest alert threshold (percent of quota) already raised this month. */
+  alertedPercent: integer("alerted_percent").default(0).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ── Relations ──────────────────────────────────────────────────
 
 export const tenantsRelations = relations(tenants, ({ many }) => ({

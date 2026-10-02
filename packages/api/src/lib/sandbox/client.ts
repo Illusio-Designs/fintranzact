@@ -22,6 +22,7 @@
 
 import { createHash } from "node:crypto";
 import { logger } from "../logger.js";
+import { noteSandboxFundingFailure, trackSandboxCall } from "../gov-usage.js";
 
 export const SANDBOX_TEST_URL = "https://test-api.sandbox.co.in";
 export const SANDBOX_LIVE_URL = "https://api.sandbox.co.in";
@@ -128,6 +129,8 @@ export class SandboxClient {
     private readonly config: SandboxConfig,
     private readonly fetchImpl: typeof fetch = (...args) => fetch(...args),
     private readonly now: () => number = Date.now,
+    /** Count calls and raise quota/wallet alerts. Off in unit tests that mock fetch. */
+    private readonly meter: boolean = false,
   ) {}
 
   get isLive(): boolean {
@@ -312,6 +315,7 @@ export class SandboxClient {
       const obj = (json && typeof json === "object" ? json : {}) as Record<string, unknown>;
       const message = typeof obj.message === "string" ? obj.message : `Sandbox returned HTTP ${res.status}`;
       logger.warn({ path, status: res.status, tx: obj.transaction_id }, "Sandbox request failed");
+      if (this.meter) void noteSandboxFundingFailure(res.status, message);
       throw new SandboxError(
         message,
         String(obj.code ?? res.status),
@@ -320,6 +324,8 @@ export class SandboxClient {
         json,
       );
     }
+    // Only 2xx calls count against Sandbox's monthly plan.
+    if (this.meter && path !== "/authenticate") void trackSandboxCall();
     return json as SandboxEnvelope<T>;
   }
 }
@@ -351,7 +357,7 @@ let shared: SandboxClient | null | undefined;
 export function getSandboxClient(): SandboxClient | null {
   if (shared === undefined) {
     const cfg = sandboxConfigFromEnv();
-    shared = cfg ? new SandboxClient(cfg) : null;
+    shared = cfg ? new SandboxClient(cfg, undefined, undefined, process.env.NODE_ENV !== "test") : null;
   }
   return shared;
 }
