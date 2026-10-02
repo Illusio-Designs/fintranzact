@@ -46,9 +46,14 @@ export class PartiesPage extends BasePage {
     await expect(this.page.getByText("Suppliers").first()).toBeVisible();
   }
 
+  /** The balance filter is a dropdown: Outstanding / Has overdue invoices. */
   async expectStatusFilters() {
-    await expect(this.page.getByText("Outstanding").first()).toBeVisible();
-    await expect(this.page.getByText("Overdue").first()).toBeVisible();
+    const balance = this.page.getByRole("combobox", { name: "Filter by balance" });
+    await expect(balance).toBeVisible();
+    await balance.click();
+    await expect(this.page.getByRole("option", { name: "Outstanding", exact: true })).toBeVisible();
+    await expect(this.page.getByRole("option", { name: "Has overdue invoices" })).toBeVisible();
+    await this.page.keyboard.press("Escape");
   }
 
   // ── Interaction ──────────────────────────────────────────────

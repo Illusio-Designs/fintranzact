@@ -36,7 +36,7 @@ test.describe("Parties — Presence", () => {
     await parties.expectTypeFilter();
   });
 
-  test("renders status filter pills (Outstanding / Overdue)", async () => {
+  test("renders the balance filter (Outstanding / Has overdue invoices)", async () => {
     await parties.expectStatusFilters();
   });
 });
