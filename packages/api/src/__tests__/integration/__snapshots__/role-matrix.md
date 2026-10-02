@@ -169,6 +169,13 @@
 | gstr2b.summary | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
 | gstr2b.upload | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
 | gstr2b.uploads | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
+| gstReturns.fileGstr1 | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
+| gstReturns.fileGstr3b | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
+| gstReturns.pull2b | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
+| gstReturns.requestOtp | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
+| gstReturns.saveGstr1 | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
+| gstReturns.saveGstr3b | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
+| gstReturns.verifyOtp | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
 | hsn.search | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | hsn.validate | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | hsn.validateForTurnover | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
