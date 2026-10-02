@@ -73,6 +73,69 @@ export function isReadOnlyReason(reason: EntitlementReason | null | undefined): 
   return reason === "read_only_halted" || reason === "read_only_trial_expired" || reason === "read_only_subscription_ended";
 }
 
+/* ── Client helpers (web + mobile) ─────────────────────────────────────────── */
+
+export type EntitlementInfo = EntitlementErrorData;
+
+export interface EntitlementPrompt {
+  title: string;
+  description: string;
+  /** Button label, or null when the person cannot act on it (non-owner, suspended). */
+  actionLabel: string | null;
+  /** Suspended organisations get a message that stays until closed. */
+  blocking: boolean;
+}
+
+const ENTITLEMENT_REASONS: readonly EntitlementReason[] = [
+  "read_only_halted",
+  "read_only_trial_expired",
+  "read_only_subscription_ended",
+  "plan_limit",
+  "addon_required",
+  "tenant_suspended",
+];
+
+/** Reads `error.data.entitlement` from a tRPC client error; null for every other error. */
+export function entitlementFromError(error: unknown): EntitlementInfo | null {
+  const data = (error as { data?: { entitlement?: Partial<EntitlementInfo> } } | null)?.data;
+  const ent = data?.entitlement;
+  if (!ent || typeof ent.reason !== "string" || !ENTITLEMENT_REASONS.includes(ent.reason)) return null;
+  return {
+    reason: ent.reason,
+    upgradePath: typeof ent.upgradePath === "string" ? ent.upgradePath : BILLING_UPGRADE_PATH,
+    addon: ent.addon,
+  };
+}
+
+/**
+ * What to show for a refusal. `canManageBilling` null means "not known yet":
+ * treated as not allowed, so nobody is sent to a page they cannot open.
+ */
+export function describeEntitlement(
+  info: EntitlementInfo,
+  serverMessage: string,
+  canManageBilling: boolean | null,
+): EntitlementPrompt {
+  const message = serverMessage.trim();
+  if (info.reason === "tenant_suspended") {
+    return {
+      title: "Organisation suspended",
+      description: message || "This organisation has been suspended. Contact support to restore access.",
+      actionLabel: null,
+      blocking: true,
+    };
+  }
+  const readOnly = isReadOnlyReason(info.reason);
+  const owner = canManageBilling === true;
+  const ask = readOnly ? "Ask your organisation owner to choose a plan." : "Ask your organisation owner to upgrade.";
+  return {
+    title: readOnly ? "Your account is read-only" : info.reason === "addon_required" ? "Add-on required" : "Plan limit reached",
+    description: owner ? message : `${message} ${ask}`.trim(),
+    actionLabel: owner ? (readOnly ? "Choose a plan" : "Upgrade") : null,
+    blocking: false,
+  };
+}
+
 export function entitlementMessage(reason: EntitlementReason, addon?: AddonId): string {
   if (reason === "addon_required" && addon) {
     const name = addonById(addon)?.name ?? addon;

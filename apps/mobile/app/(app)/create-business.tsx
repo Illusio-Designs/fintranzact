@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useState, useRef, forwardRef } from "react";
+import { wasEntitlementHandled } from "../../src/lib/entitlement";
 import { trpc } from "../../src/lib/trpc";
 import { useBusinessStore } from "../../src/stores/business";
 import { makeStyles } from "../../src/lib/makeStyles";
@@ -101,6 +102,8 @@ export default function CreateBusinessScreen() {
       router.replace("/(app)/(home)");
     },
     onError: (err) => {
+      // A plan-limit / read-only refusal was already shown by the central handler.
+      if (wasEntitlementHandled(err.message)) return;
       Alert.alert("Error", err.message || "Failed to create business.");
     },
   });

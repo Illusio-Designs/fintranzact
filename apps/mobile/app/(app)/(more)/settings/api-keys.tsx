@@ -20,6 +20,7 @@ import { useColors } from "../../../../src/contexts/ThemeContext";
 import { fonts } from "../../../../src/lib/theme";
 import { Card, Skeleton, QueryError } from "../../../../src/components/ui";
 import { formatDateTime } from "../../../../src/lib/utils";
+import { openBilling, wasEntitlementHandled } from "../../../../src/lib/entitlement";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -81,9 +82,13 @@ export default function ApiKeysScreen() {
     isRefetching,
   } = trpc.apiKey.list.useQuery(undefined);
 
-  // Plan check
+  // The real per-plan limit (plan.list), not a hard-coded plan name. Unknown
+  // plan: do not block here; the server refuses with an upgrade prompt.
+  const { data: plans } = trpc.plan.list.useQuery(undefined);
+  const { data: billing } = trpc.billing.status.useQuery(undefined, { staleTime: 60_000 });
   const currentTenant = tenantList?.find((t) => t.tenantId === session?.tenantId);
-  const isFree = currentTenant?.tenantPlan === "free";
+  const maxApiKeys = plans?.find((p) => p.id === currentTenant?.tenantPlan)?.limits.maxApiKeys;
+  const isFree = maxApiKeys === 0;
 
   // Mutations
   const createMutation = trpc.apiKey.create.useMutation({
@@ -92,6 +97,8 @@ export default function ApiKeysScreen() {
       utils.apiKey.list.invalidate();
     },
     onError: (err) => {
+      // A plan / read-only refusal was already shown by the central handler.
+      if (wasEntitlementHandled(err.message)) return;
       Alert.alert("Error", err.message || "Failed to create API key.");
     },
   });
@@ -102,6 +109,7 @@ export default function ApiKeysScreen() {
       Alert.alert("Revoked", "API key has been revoked.");
     },
     onError: (err) => {
+      if (wasEntitlementHandled(err.message)) return;
       Alert.alert("Error", err.message || "Failed to revoke API key.");
     },
   });
@@ -199,6 +207,13 @@ export default function ApiKeysScreen() {
                 API keys are available on paid plans. Upgrade to create programmatic access tokens
                 for the CLI and MCP server.
               </Text>
+              {billing?.canManageBilling ? (
+                <TouchableOpacity onPress={openBilling} activeOpacity={0.7} accessibilityRole="link">
+                  <Text style={styles.paywallLink}>Upgrade on the web</Text>
+                </TouchableOpacity>
+              ) : billing ? (
+                <Text style={styles.paywallDescription}>Ask your organisation owner to upgrade.</Text>
+              ) : null}
             </View>
           </Card>
         ) : isLoading ? (
@@ -581,6 +596,14 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
     textAlign: "center",
     lineHeight: 19,
+  },
+
+  paywallLink: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.brand,
+    textDecorationLine: "underline",
+    marginTop: 4,
   },
 
   // Create large button
