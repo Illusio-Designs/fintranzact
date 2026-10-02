@@ -11,6 +11,7 @@ import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
 import { cn, formatCurrency } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
 import { DemoCheckout } from "@/components/billing/DemoCheckout";
+import { GovUsageSection } from "@/components/settings/GovUsageSection";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, CheckmarkCircle02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import type { BillingCycle, PlanId } from "@fintranzact/shared";
@@ -350,6 +351,8 @@ export function BillingTab() {
         initial={data.billingDetails}
         onSaved={refresh}
       />
+
+      <GovUsageSection />
 
       {/* ── Payment history ── */}
       <section className="card overflow-hidden p-0">

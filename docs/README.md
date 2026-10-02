@@ -24,6 +24,7 @@ This folder contains **internal architecture documents, audit reports, and desig
 
 ### Deployment
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — Production deployment guide (Docker, ONCE, Vercel)
+- [`SANDBOX-INTEGRATION.md`](SANDBOX-INTEGRATION.md) — Sandbox.co.in government API integration (provider adapter, metering, billing, quota alerts, go-live checklist)
 - [`ROLLBACK.md`](ROLLBACK.md) — Rollback procedures (app rollback, forward-fix migrations, backup restore, reverse SQL for every migration in the unified, control and tenant sets)
 
 ### Testing & Workflows

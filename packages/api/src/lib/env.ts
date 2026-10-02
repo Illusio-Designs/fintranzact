@@ -25,6 +25,11 @@ const checks: EnvCheck[] = [
     hint: "Sandbox.co.in API key — enables e-invoice, e-way bill, GSTIN lookup and TDS/TCS filing (also set SANDBOX_API_SECRET)",
   },
   {
+    key: "SANDBOX_MONTHLY_QUOTA",
+    required: false,
+    hint: "Sandbox.co.in plan quota (successful calls per month). Raises an alert at 80% and 100% of this number; unset disables the alerts",
+  },
+  {
     key: "RESEND_API_KEY",
     required: false,
     condition: () => process.env.NODE_ENV === "production",
