@@ -22,7 +22,7 @@
 import { config } from "dotenv";
 config({ path: "../../.env" });
 
-import { controlDb, tenants, getTenantDb } from "@fintranzact/db";
+import { controlDb, tenants, userTwoFactor, getTenantDb } from "@fintranzact/db";
 import { reEncryptField, getKeyVersion } from "@fintranzact/db";
 import { eq } from "drizzle-orm";
 
@@ -100,6 +100,51 @@ async function rotateControlDb(): Promise<RotationStats> {
     } catch (err) {
       stats.errors++;
       log(`  ERROR tenant ${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return stats;
+}
+
+// ── Rotate control DB: user_two_factor.secretEnc ────────────────────────────
+
+async function rotateTwoFactorSecrets(): Promise<RotationStats> {
+  const stats = newStats();
+  log("=== Control DB: user_two_factor.secretEnc ===");
+
+  const rows = await controlDb
+    .select({ userId: userTwoFactor.userId, secretEnc: userTwoFactor.secretEnc })
+    .from(userTwoFactor);
+
+  for (const row of rows) {
+    try {
+      const version = getKeyVersion(row.secretEnc);
+      if (version === CURRENT_KEY_VERSION) {
+        stats.alreadyCurrent++;
+        continue;
+      }
+
+      const reEncrypted = reEncryptField(row.secretEnc);
+      if (reEncrypted === row.secretEnc) {
+        stats.alreadyCurrent++;
+        continue;
+      }
+
+      const label = version === 0 ? "plaintext" : `v${version}`;
+      log(`  user ${row.userId}: secretEnc ${label} -> v${CURRENT_KEY_VERSION}`);
+
+      if (version === 0) stats.plaintext++;
+      else stats.rotated++;
+
+      if (EXECUTE) {
+        await controlDb
+          .update(userTwoFactor)
+          .set({ secretEnc: reEncrypted, updatedAt: new Date() })
+          .where(eq(userTwoFactor.userId, row.userId));
+      }
+    } catch (err) {
+      stats.errors++;
+      log(`  ERROR user ${row.userId}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -233,6 +278,11 @@ async function main() {
   const controlStats = await rotateControlDb();
   for (const k of Object.keys(totalStats) as (keyof RotationStats)[]) {
     totalStats[k] += controlStats[k];
+  }
+
+  const twoFactorStats = await rotateTwoFactorSecrets();
+  for (const k of Object.keys(totalStats) as (keyof RotationStats)[]) {
+    totalStats[k] += twoFactorStats[k];
   }
 
   // 2. Tenant DBs
