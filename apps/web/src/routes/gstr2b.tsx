@@ -661,7 +661,7 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
 
 // ── Main Page ─────────────────────────────────────────────────
 
-function GSTR2BPage() {
+export function GSTR2BPage() {
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
