@@ -16,6 +16,8 @@ This folder contains **internal architecture documents, audit reports, and desig
 - [`architecture/workflow-map.md`](architecture/workflow-map.md) — Complete workflow index (all WF-nn flows, triggers, roles, branch conditions)
 - [`architecture/analytics-design.md`](architecture/analytics-design.md) — Analytics and reporting design (dashboard widgets, reports router, data model); mostly built, with an "As built" note on what was not
 
+- [`ENTITLEMENTS.md`](ENTITLEMENTS.md) — Server-side plan/trial/billing enforcement: access states, tRPC gate and READ_ONLY_EXEMPT, REST endpoint policy table, error shapes, how to add a mutation/endpoint/add-on/limit
+
 ### Audits
 - [`compliance-audit.md`](compliance-audit.md) — Indian regulatory compliance assessment (GST, DPDPA, financial accuracy)
 - [`security-cross-tenant-audit.md`](security-cross-tenant-audit.md) — Multi-tenant isolation verification (every endpoint checked)

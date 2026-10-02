@@ -23,7 +23,7 @@ import { count as sqlCount } from "drizzle-orm";
 import { verifyImportToken } from "../lib/importToken.js";
 import { importTenantBackup } from "../lib/importEngine.js";
 import { logger } from "../lib/logger.js";
-import { getEntitlements } from "../lib/entitlements.js";
+import { refuseIfReadOnly } from "./entitlement-guard.js";
 
 /**
  * Register the import upload route on a Hono app instance.
@@ -53,10 +53,8 @@ export function registerImportRoute(app: Hono): void {
     const { userId } = tokenResult.payload;
 
     // ── Restoring is a write: re-check read-only/suspended since issuance ──
-    const ent = await getEntitlements(tenantId);
-    if (ent.readOnly && ent.reason) {
-      return c.json({ error: "This organisation is read-only. Restore a plan to import data." }, 403);
-    }
+    const refused = await refuseIfReadOnly(c, tenantId);
+    if (refused) return refused;
 
     // ── Re-check target tenant is empty ──────────────────────────────────
     // Checked again here because time may have elapsed since token issuance.
