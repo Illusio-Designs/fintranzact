@@ -115,6 +115,7 @@ export const HELP_NAV: HelpNavSection[] = [
       { label: "Two-factor authentication: set up, backup codes, trusted devices", slug: "settings/two-factor-authentication" },
       { label: "Team & Roles", slug: "team" },
       { label: "Invitations", slug: "team/invitations" },
+      { label: "Remove your CA's access", slug: "team/remove-ca-access" },
       { label: "Online Store", slug: "online-store" },
     ],
   },

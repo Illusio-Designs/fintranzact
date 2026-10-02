@@ -1,0 +1,45 @@
+---
+title: Remove your CA's access
+description: How to remove an accountant (CA) or any team member from your organization, and exactly what stops working when you do.
+sidebar:
+  order: 3
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+import { ForMobile } from "@/components/help/mdx";
+
+You can remove your CA's access at any time. Owners and admins can remove any member, including an accountant. The owner cannot be removed, and you cannot remove yourself.
+
+<ForDesktop>
+1. Go to **Settings → Team**.
+2. Find the member in the list and choose **Remove**.
+3. Confirm.
+</ForDesktop>
+
+<ForMobile>
+1. Open **More → Settings → Team**.
+2. Tap the member, then **Remove**.
+3. Confirm.
+</ForMobile>
+
+## What stops working
+
+Removal is one action and covers everything:
+
+- **Their login to your organization.** The organization disappears from their list. Anyone they were signed in as is signed out of it. This applies within about 15 seconds at the very latest, and usually straight away.
+- **Their access to your businesses.** Every business in the organization is removed from their account.
+- **Their API keys, CLI and MCP access** for your organization. The keys stop working and are deleted.
+- **Their old invitation link.** Clicking it again shows "This invitation has already been used". A pending invitation sent to the same email is cancelled too.
+
+Their own account, and any other organizations they belong to, are not affected. Nothing you or your team entered is deleted. The history of what they did in your books stays in the audit trail.
+
+## What we record and send
+
+- The removal is recorded in the security log with who removed them, when, their role, and how many API keys and businesses were revoked.
+- They get a short email: "Your access to {your organization} was removed". If the email cannot be sent, the removal still goes through.
+
+## Giving access back
+
+To give someone access again, send a **new invitation** (Settings → Team, or **Invite my CA**). Old links never work after a removal.
+
+If your CA is only changing what they can do, change their access level instead of removing them. Only the owner can change an accountant's access level.

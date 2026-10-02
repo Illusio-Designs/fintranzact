@@ -176,7 +176,7 @@ A user who has lost the phone **and** the backup codes cannot sign in. A platfor
 
 ## Audit trail
 
-`security_events` (control DB) holds user-level events; the tenant `audit_log` is business-scoped and does not fit them. Event types: `2fa.setup_started`, `2fa.enabled`, `2fa.disabled`, `2fa.verified` (metadata `method`: `totp` or `trusted_device`), `2fa.failed`, `2fa.locked`, `2fa.backup_used`, `2fa.backup_regenerated`, `2fa.device_trusted`, `2fa.device_revoked`, `2fa.reset_by_admin`, `2fa.policy_changed`. Labels are `SECURITY_EVENT_LABELS` in `@fintranzact/shared`.
+`security_events` (control DB) holds user-level events; the tenant `audit_log` is business-scoped and does not fit them. Event types: `2fa.setup_started`, `2fa.enabled`, `2fa.disabled`, `2fa.verified` (metadata `method`: `totp` or `trusted_device`), `2fa.failed`, `2fa.locked`, `2fa.backup_used`, `2fa.backup_regenerated`, `2fa.device_trusted`, `2fa.device_revoked`, `2fa.reset_by_admin`, `2fa.policy_changed`, `access.removed` (a member was removed from an organisation; metadata `role`, `email`, `apiKeysRevoked`, `businessesRevoked`, `removedBy`; see ACCOUNTANT-ACCESS.md). Labels are `SECURITY_EVENT_LABELS` in `@fintranzact/shared`.
 
 | Procedure | Who | Returns |
 |---|---|---|

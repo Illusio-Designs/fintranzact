@@ -36,7 +36,7 @@ describe("constants", () => {
   });
   it("labels every security event type", () => {
     for (const t of SECURITY_EVENT_TYPES) expect(SECURITY_EVENT_LABELS[t]).toBeTruthy();
-    expect(SECURITY_EVENT_TYPES).toHaveLength(12);
+    expect(SECURITY_EVENT_TYPES).toHaveLength(13);
   });
 });
 

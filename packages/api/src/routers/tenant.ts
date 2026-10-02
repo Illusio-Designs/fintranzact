@@ -17,6 +17,9 @@ import { isPaidPlan, isSelfServePlan } from "../lib/plan-catalog.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
 import { effectiveOwnerPlan, enforceTeamMemberLimit, countCaSlots, enforceOrgCreationLimit, assertOwnedOrgsWritable, getLimits } from "../lib/plan-limits.js";
 import { checkInviteRules, checkRoleChangeRules, countsTowardTeamLimit, normalizeInviteEmail } from "../lib/invite-rules.js";
+import { removeTenantMember } from "../lib/member-removal.js";
+import { removalStore } from "../lib/member-removal-store.js";
+import { invalidateTenantMembership } from "../lib/tenant-membership.js";
 import { backfillLegacyBusinessMembers, grantTenantBusinessesToMember } from "../lib/business-membership.js";
 
 /** A member who joins through an invitation can open the organisation's businesses. */
@@ -606,17 +609,14 @@ export const tenantRouter = router({
           const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
           return { tenantId: invitation.tenantId, tenantName };
         }
-        // Accepted but not a member (removed after accepting) — re-add them
-        await controlDb.insert(tenantMembers).values({
-          tenantId: invitation.tenantId,
-          userId: ctx.user.id,
-          role: invitation.role,
-          invitedBy: invitation.invitedBy ?? undefined,
-          acceptedAt: new Date(),
+        // Accepted but not a member: the person was removed (removal deletes
+        // the accepted invitation, so this is a leftover from before that, or a
+        // retry). An old link must never re-add someone the organisation
+        // removed: they need a NEW invitation.
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This invitation has already been used. Ask the organisation for a new invitation.",
         });
-        await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
-        const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
-        return { tenantId: invitation.tenantId, tenantName };
       }
 
       // Check if already a member (e.g. double-click)
@@ -711,7 +711,8 @@ export const tenantRouter = router({
       return { success: true };
     }),
 
-  // Remove a member
+  // Remove a member: revokes business grants, API keys, old invite links and
+  // sessions, logs `access.removed` and e-mails the person (lib/member-removal.ts).
   removeMember: tenantProcedure
     .input(z.object({ userId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
@@ -723,56 +724,15 @@ export const tenantRouter = router({
         ))
         .limit(1);
 
-      if (!callerMembership || !["owner", "superadmin", "admin"].includes(callerMembership.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only owners and admins can remove members" });
-      }
+      const result = await removeTenantMember({
+        tenantId: ctx.tenantId,
+        actor: { id: ctx.user.id, role: callerMembership?.role ?? null },
+        targetUserId: input.userId,
+        ip: ctx.ipAddress,
+        userAgent: ctx.req.headers.get("user-agent"),
+      }, removalStore);
 
-      if (input.userId === ctx.user.id) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot remove yourself" });
-      }
-
-      // Prevent removing a superadmin/owner
-      const [targetMembership] = await controlDb.select({ role: tenantMembers.role })
-        .from(tenantMembers)
-        .where(and(
-          eq(tenantMembers.tenantId, ctx.tenantId),
-          eq(tenantMembers.userId, input.userId),
-        ))
-        .limit(1);
-
-      if (targetMembership && ["owner", "superadmin"].includes(targetMembership.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Cannot remove a superadmin" });
-      }
-
-      await controlDb.delete(tenantMembers)
-        .where(and(
-          eq(tenantMembers.tenantId, ctx.tenantId),
-          eq(tenantMembers.userId, input.userId),
-        ));
-      invalidateTwoFactorGateMember(ctx.tenantId, input.userId);
-
-      // Revoke the removed user's access immediately: clear the tenantId from
-      // their sessions so the next request can't piggyback on the cached session.
-      const affectedSessions = await controlDb.select({ id: sessions.id })
-        .from(sessions)
-        .where(and(
-          eq(sessions.userId, input.userId),
-          eq(sessions.tenantId, ctx.tenantId),
-        ));
-
-      if (affectedSessions.length > 0) {
-        await controlDb.update(sessions)
-          .set({ tenantId: null })
-          .where(and(
-            eq(sessions.userId, input.userId),
-            eq(sessions.tenantId, ctx.tenantId),
-          ));
-        for (const s of affectedSessions) {
-          invalidateSessionCache(s.id);
-        }
-      }
-
-      return { success: true };
+      return { success: result.success };
     }),
 
   // Update member role
@@ -824,6 +784,7 @@ export const tenantRouter = router({
           eq(tenantMembers.userId, input.userId),
         ));
       invalidateTwoFactorGateMember(ctx.tenantId, input.userId);
+      invalidateTenantMembership(ctx.tenantId, input.userId);
 
       return { success: true };
     }),

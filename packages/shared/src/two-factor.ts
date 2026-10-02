@@ -50,6 +50,7 @@ export const SECURITY_EVENT_TYPES = [
   "2fa.device_revoked",
   "2fa.reset_by_admin",
   "2fa.policy_changed",
+  "access.removed",
 ] as const;
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 
@@ -66,6 +67,7 @@ export const SECURITY_EVENT_LABELS: Record<SecurityEventType, string> = {
   "2fa.device_revoked": "Trusted device removed",
   "2fa.reset_by_admin": "Two-factor reset by a platform administrator",
   "2fa.policy_changed": "Organisation two-factor policy changed",
+  "access.removed": "Member removed from the organisation",
 };
 
 // ── Platform-admin reset: identity verification ─────────────────────────────

@@ -10,6 +10,7 @@ import { isFirstPartyRequestedWith } from "./lib/client-headers.js";
 import { entitlementDataOf, entitlementError } from "./lib/entitlement-error.js";
 import { getEntitlements } from "./lib/entitlements.js";
 import { gateDecision } from "./lib/entitlement-exempt.js";
+import { requireTenantMembership } from "./lib/tenant-membership.js";
 import { checkTwoFactorGate } from "./lib/two-factor-gate.js";
 import { twoFactorDataOf, twoFactorRequiredError } from "./lib/two-factor-error.js";
 
@@ -147,6 +148,13 @@ const isAuthenticated = t.middleware(({ ctx, next }) => {
 const hasTenantAccess = t.middleware(async ({ ctx, next }) => {
   if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
   if (!ctx.tenantId) throw new TRPCError({ code: "BAD_REQUEST", message: "No organization selected" });
+
+  // The caller must still be a member of the organisation, on EVERY request:
+  // a session's tenantId can be stale (60s cache, other instances) and an API
+  // key carries its tenant forever. Positive answers are cached 15s per
+  // process (lib/tenant-membership.ts). Platform admins do not use the tenant
+  // bases, so they are not affected.
+  await requireTenantMembership(ctx.tenantId, ctx.user.id);
 
   const db = await getTenantDb(ctx.tenantId);
 
@@ -331,6 +339,9 @@ function withPermissions() {
       .from(tenantMembers)
       .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, user.id)))
       .limit(1);
+    // hasTenantAccess already refuses a user with no tenant_members row, so the
+    // "member" fallback (-> seller) is unreachable for real requests; it stays
+    // only as a defence for a row removed between the two reads.
     const tenantRole = mapDbRole(tenantMembership?.role ?? "member");
     const permissionRole = businessMembership.role === "admin"
       ? (tenantRole === "superadmin" ? "superadmin" : "admin")

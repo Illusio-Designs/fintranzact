@@ -80,6 +80,45 @@ The read-only organisation entitlement gate is unchanged and still refuses filin
 
 Unit: `invite-rules.test.ts` (admin refused, owner allowed, cap, role changes, `countsTowardTeamLimit`), `invitation-email.test.ts`, `ca-role-backstop.test.ts`, shared `accountant-access.test.ts`, web `TeamTab.ca.test.tsx` / `InviteSummary.test.tsx` / `team-roles.test.ts`, mobile `team-roles.test.ts`, CLI `tenant-roles.test.ts`, MCP `tenant-invite-tool.test.ts`. Integration (need Postgres): `integration/tenant-ca-invite.test.ts` (mixed-case invite visible and accepted, owner vs admin, cap, free-plan exclusion, accept creates `tenant_members` role plus `business_members` grants and the organisation in `tenant.list`, `ensureWalkInParty` refusal).
 
+## Removing access (Part 3)
+
+"The client can remove access at any time." `tenant.removeMember` is one flow (`removeTenantMember` in `packages/api/src/lib/member-removal.ts`, real store in `member-removal-store.ts`, unit-tested with a fake store):
+
+1. **Tenant DB first:** delete the user's `business_members` rows for this organisation's businesses (`tenantBusinessIds`, so in self-hosted shared-DB mode other organisations' businesses are untouched). It is idempotent: if it fails nothing else has changed and the owner just retries.
+2. **Control DB, one transaction:** delete the `tenant_members` row; delete the user's `api_keys` where `tenant_id` is this organisation; delete **accepted** `invitations` for that e-mail (case-insensitive) and **expire** pending ones (`expires_at = now`, row kept); set `sessions.tenant_id = NULL` for their sessions in this organisation.
+3. Clear the per-process caches: membership check, two-factor gate, session cache for each cleared session.
+4. Record a `access.removed` security event (subject = removed user, actor = remover, tenant; metadata `role`, `email`, `apiKeysRevoked`, `businessesRevoked`, `removedBy`).
+5. E-mail the removed person "Your access to {organisation} was removed" (`sendNotice`). Best effort: a failure is logged and never fails the removal.
+
+Guards are unchanged: caller must be owner/superadmin/admin (admins may remove CA members), you cannot remove yourself, owner/superadmin cannot be removed. Removing a non-member is a quiet no-op (it still sweeps leftovers for this organisation; no event, no e-mail). It stays in `READ_ONLY_EXEMPT`.
+
+### Membership is checked on every request
+
+`hasTenantAccess` (`trpc.ts`) calls `requireTenantMembership(tenantId, user.id)` (`lib/tenant-membership.ts`) before anything else on all three tenant bases. No `tenant_members` row means a plain `FORBIDDEN` "You no longer have access to this organisation". This closes two holes: an API key authenticates from `api_keys` with no membership check (and the old role fallback treated "no row" as `seller`), and a session's `tenantId` is cached up to 60s per process and only cleared on the instance that handled the removal.
+
+- Cost: one indexed lookup (unique `(tenant_id, user_id)`), **positive answers cached 15s per process** keyed `(tenantId, userId)`; refusals are never cached (a person added or re-added is let in at once). Only existence is cached, never the role (`withPermissions` reads the role per request).
+- Removal and `tenant.updateMemberRole` invalidate the entry on the instance that handled them.
+- **Residual window:** another instance can keep honouring a removed user for up to **15 seconds** (the cache TTL), down from 60s. Everything else is revoked at once (keys and grants are deleted, the session's `tenantId` is null for new cache fills).
+- Not affected: platform admins (no tenant bases, no `tenant_members`), public/protected procedures, API keys of current members.
+- The old "no membership means `seller`" fallback in `withPermissions` is now unreachable for real requests (the request is refused earlier); it is kept only as a defence for a row removed between the two reads.
+- Tests that build a context for a user must give the user a `tenant_members` row (`addMember`), because a user with no membership is exactly what is now refused. After editing `tenant_members` directly in a test, call `clearTenantMembershipCache()`.
+
+### Old invite links
+
+Removal deletes the accepted invitation, so the old link finds nothing. `tenant.acceptInvitation` also refuses an accepted invitation for a non-member (NOT_FOUND "This invitation has already been used. Ask the organisation for a new invitation."), replacing the old "re-add after removal" branch. Re-accepting while still a member stays idempotent; a fresh invitation works normally and re-grants the business access.
+
+### Role changes and business-level removal
+
+`tenant.updateMemberRole` already read the new role on the next request (the role is never cached except in the two-factor gate cache, which it invalidates, and now also the membership entry). `business.removeMember` only removes the per-business grant (`business_members`, read on every request, no cache) and leaves API keys alone (keys are tenant-scoped).
+
+### Follow-ups (Part 4/5)
+
+`tenant.leave` (a CA dropping a client, event `access.left`) is deliberately not added here: it needs the web/mobile UI to avoid a parity gap. The access-log viewer and the remaining access event types are Part 4. Clients should treat the FORBIDDEN message like losing the organisation (Part 4/5 polish).
+
+### Tests
+
+Unit: `member-removal.test.ts` (order, every step, e-mail failure ignored, tenant-DB failure stops early, guards, non-member no-op), `tenant-membership.test.ts` (15s positive cache, refusals not cached, invalidation, FORBIDDEN shape). Integration (need Postgres): `integration/tenant-access-removal.test.ts` (everything revoked, other organisation untouched, API key refused, stale session refused, old invite refused and new invite works, event recorded, admin may remove a CA, owner not removable) and the updated accept-invitation test in `tenant-invite-flow.test.ts`.
+
 ## Migration note
 
 The `member_role` enum gains `auditor` and `ca_filing`. Migrations: `packages/db/drizzle/0052_accountant_roles.sql` (unified, generated) and `packages/db/drizzle-control/0015_accountant_roles.sql` (idempotent `ADD VALUE IF NOT EXISTS`). drizzle's `migrate()` runs all pending migrations in one transaction, and Postgres forbids using a new enum value in the transaction that adds it, so these migrations only add the values: never use them (UPDATE, default, index, insert) in the same migration or run.
