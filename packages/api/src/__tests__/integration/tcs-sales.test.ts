@@ -58,7 +58,9 @@ const sale = (partyId: string, lines: ReturnType<typeof line>[], extra: Record<s
 const row = async (id: string) => (await db().select().from(invoices).where(eq(invoices.id, id)))[0]!;
 const tcsRows = (invoiceId: string) =>
   db().select().from(taxDeductions).where(and(eq(taxDeductions.invoiceId, invoiceId), eq(taxDeductions.kind, "tcs")));
-const trial = async () => c.reports.trialBalance({ asOfDate: new Date(Date.now() + 86_400_000).toISOString() });
+// The sales above are dated in 2025-26, and a trial balance starts at the financial year of its as-of date,
+// so read it as of the end of that year (not "tomorrow", which moves into 2026-27 and skips them).
+const trial = async () => c.reports.trialBalance({ asOfDate: "2026-03-31T12:00:00.000Z" });
 const acct = (tb: Awaited<ReturnType<typeof trial>>, code: string) => tb.accounts.find((a: { accountCode: string }) => a.accountCode === code);
 
 beforeAll(async () => {
