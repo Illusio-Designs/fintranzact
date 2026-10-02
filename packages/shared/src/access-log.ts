@@ -12,6 +12,7 @@ export const ACCESS_EVENT_TYPES = [
   "access.accepted",
   "access.role_changed",
   "access.removed",
+  "access.left",
   "access.org_opened",
   "access.export",
 ] as const;
@@ -21,7 +22,7 @@ export const ACCESS_LOG_FILTERS: ReadonlyArray<{ key: string; label: string; typ
   { key: "all", label: "All", types: null },
   { key: "invites", label: "Invites", types: ["access.invited", "access.invite_revoked", "access.accepted"] },
   { key: "roles", label: "Role changes", types: ["access.role_changed"] },
-  { key: "removals", label: "Removals", types: ["access.removed"] },
+  { key: "removals", label: "Removals", types: ["access.removed", "access.left"] },
   { key: "opened", label: "Opened", types: ["access.org_opened"] },
   { key: "downloads", label: "Downloads", types: ["access.export"] },
 ];
@@ -97,6 +98,8 @@ export function accessEventSentence(item: AccessLogItem, viewerId?: string | nul
       return `${subjectName(item, viewerId, false)}'s access changed from ${m.from ? memberRoleLabel(m.from) : "unknown"} to ${m.to ? memberRoleLabel(m.to) : "unknown"} by ${actor}`;
     case "access.removed":
       return `Access removed for ${subjectName(item, viewerId)} by ${actor}`;
+    case "access.left":
+      return `${subjectName(item, viewerId)} left the organisation`;
     case "access.org_opened":
       return `${actor}${isCaRole(m.role) ? " (CA)" : ""} opened this organisation`;
     case "access.export":

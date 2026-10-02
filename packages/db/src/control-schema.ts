@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, pgEnum, pgSequence, index, uniqueIndex, boolean, jsonb, integer, numeric, bigint, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum, pgSequence, index, primaryKey, uniqueIndex, boolean, jsonb, integer, numeric, bigint, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 // ── Enums ──────────────────────────────────────────────────────
@@ -151,6 +151,19 @@ export const tenantMembers = pgTable("tenant_members", {
 }, (t) => [
   uniqueIndex("tenant_members_unique_idx").on(t.tenantId, t.userId),
   index("tenant_members_user_idx").on(t.userId),
+]);
+
+// ── Per-user organisation preferences (client switcher) ───────
+
+/** What one person pinned and last opened in the organisation switcher. Control DB only. */
+export const userTenantPrefs = pgTable("user_tenant_prefs", {
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pinnedAt: timestamp("pinned_at", { withTimezone: true }),
+  lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }),
+}, (t) => [
+  primaryKey({ columns: [t.userId, t.tenantId] }),
+  index("user_tenant_prefs_tenant_idx").on(t.tenantId),
 ]);
 
 // ── Invitations ────────────────────────────────────────────────

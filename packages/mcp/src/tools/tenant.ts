@@ -20,7 +20,7 @@ const ACCESS_LOG_FILTERS: Record<string, string[] | null> = {
   all: null,
   invites: ["access.invited", "access.invite_revoked", "access.accepted"],
   roles: ["access.role_changed"],
-  removals: ["access.removed"],
+  removals: ["access.removed", "access.left"],
   opened: ["access.org_opened"],
   downloads: ["access.export"],
 };
@@ -161,6 +161,38 @@ export function registerTenantTools(server: McpServer, client: FintranzactClient
           text: invitations.length === 0
             ? "No pending invitations."
             : JSON.stringify(invitations, null, 2),
+        }],
+      };
+    })
+  );
+
+  server.tool(
+    "list_clients",
+    [
+      "The organisations you belong to: your own firm and the clients you have accountant access to,",
+      "pinned first, then most recently opened. Search by name; scope is all, mine (own firm) or clients.",
+      "Pass the returned next_cursor for the next page.",
+    ].join(" "),
+    {
+      search: z.string().max(100).optional().describe("Part of the organisation's name."),
+      scope: z.enum(["all", "mine", "clients"]).optional().describe("Default all."),
+      limit: z.number().int().min(1).max(100).optional().describe("How many (default 30)."),
+      cursor: z.string().optional().describe("next_cursor from the previous page."),
+    },
+    wrapTool(async (input) => {
+      const result = await client.tenant.listClients(input);
+      return {
+        content: [{
+          type: "text" as const,
+          text: result.items.length === 0
+            ? "No organisations found."
+            : JSON.stringify({
+                total: result.total,
+                organisations: result.items.map((o) => ({
+                  id: o.tenantId, name: o.name, role: o.roleLabel, own_firm: o.isOwnFirm, pinned: o.pinned, last_opened: o.lastOpenedAt,
+                })),
+                next_cursor: result.nextCursor,
+              }, null, 2),
         }],
       };
     })

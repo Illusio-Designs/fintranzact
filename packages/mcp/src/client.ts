@@ -656,6 +656,9 @@ export class FintranzactClient {
       pendingInvitations() {
         return c.query<unknown[]>("tenant.pendingInvitations");
       },
+      listClients(input?: { search?: string; scope?: "all" | "mine" | "clients"; cursor?: string; limit?: number }) {
+        return c.query<{ items: Array<Record<string, unknown>>; nextCursor: string | null; total: number }>("tenant.listClients", input);
+      },
       accessLog(input?: { cursor?: string; limit?: number; type?: string | string[] }) {
         return c.query<{ items: Array<Record<string, unknown>>; nextCursor: string | null }>("tenant.accessLog", input);
       },

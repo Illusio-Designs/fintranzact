@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { invalidateEntitlements } from "../lib/entitlements-cache.js";
 import { TRPCError } from "@trpc/server";
-import { controlDb, getTenantDb, tenants, tenantMembers, invitations, users, sessions, securityEvents, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
+import { controlDb, getTenantDb, tenants, tenantMembers, userTenantPrefs, invitations, users, sessions, securityEvents, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
 import { eq, and, gt, isNull, desc, sql, inArray, like } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { createHash } from "node:crypto";
@@ -20,8 +20,10 @@ import { checkInviteRules, checkRoleChangeRules, countsTowardTeamLimit, normaliz
 import { removeTenantMember } from "../lib/member-removal.js";
 import { removalStore } from "../lib/member-removal-store.js";
 import { invalidateTenantMembership } from "../lib/tenant-membership.js";
+import { logger } from "../lib/logger.js";
 import { recordAccessEvent, recordOrgOpened } from "../lib/access-events.js";
 import { canViewAccessLog, clampAccessLimit, decodeAccessCursor, pageAccessRows, accessUserIds, toAccessLogItem } from "../lib/access-log.js";
+import { CLIENT_SCOPES, orderAndPageClients, lastOpenedCutoff, decidePin, MAX_PINNED_TENANTS, type ClientRow } from "../lib/client-switcher.js";
 import { backfillLegacyBusinessMembers, grantTenantBusinessesToMember } from "../lib/business-membership.js";
 
 /** A member who joins through an invitation can open the organisation's businesses. */
@@ -257,6 +259,91 @@ export const tenantRouter = router({
     return memberships.map((m) => ({ ...m, planSelectedAt: m.planSelectedAt?.toISOString() ?? null }));
   }),
 
+  // The client switcher's list: the caller's organisations, pinned first, then
+  // most recently opened, then by name; searchable, scoped ("mine" = their own
+  // firm, "clients" = everything else) and paged. One join, ordered and paged in
+  // memory (lib/client-switcher.ts). Needs no selected organisation. Only active
+  // organisations are listed, as in tenant.list.
+  listClients: protectedProcedure
+    .input(z.object({
+      search: z.string().max(100).optional(),
+      scope: z.enum(CLIENT_SCOPES).optional(),
+      cursor: z.string().max(500).optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    }).optional())
+    .query(async ({ input, ctx }) => {
+      const rows: ClientRow[] = await controlDb.select({
+        tenantId: tenantMembers.tenantId,
+        name: tenants.name,
+        slug: tenants.slug,
+        role: tenantMembers.role,
+        plan: tenants.plan,
+        pinnedAt: userTenantPrefs.pinnedAt,
+        lastOpenedAt: userTenantPrefs.lastOpenedAt,
+      })
+        .from(tenantMembers)
+        .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+        .leftJoin(userTenantPrefs, and(
+          eq(userTenantPrefs.tenantId, tenantMembers.tenantId),
+          eq(userTenantPrefs.userId, tenantMembers.userId),
+        ))
+        .where(and(eq(tenantMembers.userId, ctx.user.id), eq(tenants.status, "active")));
+      return orderAndPageClients(rows, input ?? {});
+    }),
+
+  // Pin or unpin an organisation in the caller's own switcher (at most 20 pinned).
+  setPinned: protectedProcedure
+    .input(z.object({ tenantId: z.string().uuid(), pinned: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const [membership] = await controlDb.select({ id: tenantMembers.id })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, input.tenantId), eq(tenantMembers.userId, ctx.user.id)))
+        .limit(1);
+      if (!membership) throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this organization" });
+
+      const [current] = await controlDb.select({ pinnedAt: userTenantPrefs.pinnedAt })
+        .from(userTenantPrefs)
+        .where(and(eq(userTenantPrefs.userId, ctx.user.id), eq(userTenantPrefs.tenantId, input.tenantId)))
+        .limit(1);
+      // Only pins of organisations the person still belongs to count towards the limit.
+      const [{ count }] = await controlDb.select({ count: sql<number>`count(*)::int` })
+        .from(userTenantPrefs)
+        .innerJoin(tenantMembers, and(eq(tenantMembers.tenantId, userTenantPrefs.tenantId), eq(tenantMembers.userId, userTenantPrefs.userId)))
+        .where(and(eq(userTenantPrefs.userId, ctx.user.id), sql`${userTenantPrefs.pinnedAt} is not null`));
+      const decision = decidePin({ pinned: input.pinned, alreadyPinned: !!current?.pinnedAt, pinnedCount: count ?? 0 });
+      if (decision === "limit") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `You can pin up to ${MAX_PINNED_TENANTS} organisations. Unpin one first.` });
+      }
+      if (decision === "ok") {
+        const pinnedAt = input.pinned ? new Date() : null;
+        await controlDb.insert(userTenantPrefs)
+          .values({ userId: ctx.user.id, tenantId: input.tenantId, pinnedAt })
+          .onConflictDoUpdate({ target: [userTenantPrefs.userId, userTenantPrefs.tenantId], set: { pinnedAt } });
+      }
+      return { success: true, pinned: input.pinned };
+    }),
+
+  // Leave an organisation you do not own (a CA ending a client relationship).
+  // Same cleanup as being removed (business access, API keys, invitations,
+  // sessions); logs `access.left` and tells the owners. Owners cannot leave.
+  leave: protectedProcedure
+    .input(z.object({ tenantId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const [membership] = await controlDb.select({ role: tenantMembers.role })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, input.tenantId), eq(tenantMembers.userId, ctx.user.id)))
+        .limit(1);
+      const result = await removeTenantMember({
+        tenantId: input.tenantId,
+        actor: { id: ctx.user.id, role: membership?.role ?? null },
+        targetUserId: ctx.user.id,
+        self: true,
+        ip: ctx.ipAddress,
+        userAgent: ctx.req.headers.get("user-agent"),
+      }, removalStore);
+      return { success: result.success };
+    }),
+
   // Pending invitations for the authenticated user's email.
   // Used by the NoOrgScreen to show "You've been invited to [Org]".
   myInvitations: protectedProcedure.query(async ({ ctx }) => {
@@ -359,6 +446,22 @@ export const tenantRouter = router({
 
       // Invalidate cached session so the next request picks up the new tenant
       invalidateSessionCache(sessionId);
+
+      // Remember when this person last opened the organisation (for "Recent" in
+      // the switcher). At most one write per 5 minutes, the guard is in the
+      // upsert itself; never fails the selection.
+      try {
+        const now = new Date();
+        await controlDb.insert(userTenantPrefs)
+          .values({ userId: ctx.user.id, tenantId: input.tenantId, lastOpenedAt: now })
+          .onConflictDoUpdate({
+            target: [userTenantPrefs.userId, userTenantPrefs.tenantId],
+            set: { lastOpenedAt: now },
+            setWhere: sql`${userTenantPrefs.lastOpenedAt} is null or ${userTenantPrefs.lastOpenedAt} < ${lastOpenedCutoff(now)}`,
+          });
+      } catch (err) {
+        logger.warn({ err }, "tenant.select: could not record last opened");
+      }
 
       // A CA opening a client's books is logged for the owner (CA roles only,
       // at most once an hour per person and organisation).

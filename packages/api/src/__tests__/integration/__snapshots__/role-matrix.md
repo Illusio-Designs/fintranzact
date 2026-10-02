@@ -484,7 +484,9 @@
 | tenant.create | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.current | query | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.inviteMember | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| tenant.leave | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.list | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| tenant.listClients | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.members | query | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.myInvitations | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.peekInvitation | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -492,6 +494,7 @@
 | tenant.removeMember | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | tenant.revokeInvitation | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | tenant.select | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| tenant.setPinned | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.setSecurityPolicy | mutation | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | tenant.updateMemberRole | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | tenant.updatePlan | mutation | protected | — (+ plans are changed by the platform team only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |

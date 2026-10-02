@@ -217,6 +217,8 @@ export const INPUT_OVERRIDES: Record<string, (ids: Record<string, string>) => un
     amount: "100.00",
     interest: "0",
   }),
+  // Leaving the sweep's organisation would remove the sweep user from it for every later call: use one nobody belongs to (NOT_FOUND, not FORBIDDEN).
+  "tenant.leave": () => ({ tenantId: randomUUID() }),
   "auth.register": () => ({
     username: "sweeper",
     email: `sweep.${randomUUID().slice(0, 8)}@example.in`,

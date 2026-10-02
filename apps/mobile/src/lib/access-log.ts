@@ -16,6 +16,7 @@ const ICONS: Record<string, string> = {
   "access.accepted": "checkmark-circle-outline",
   "access.role_changed": "swap-horizontal-outline",
   "access.removed": "person-remove-outline",
+  "access.left": "exit-outline",
   "access.org_opened": "log-in-outline",
   "access.export": "download-outline",
 };

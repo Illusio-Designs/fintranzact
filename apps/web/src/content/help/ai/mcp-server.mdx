@@ -1620,6 +1620,12 @@ List pending (unaccepted, non-expired) invitations for the current tenant. Retur
 
 **Input:** `{}` (no parameters)
 
+#### `list_clients`
+
+The organisations you belong to, pinned and most recently opened first: your own firm and your clients.
+
+**Input:** `{ search?: string, scope?: "all" | "mine" | "clients", limit?: number, cursor?: string }`. Pass the returned `next_cursor` for the next page.
+
 #### `tenant_access_log`
 
 The access log, newest first: invitations, acceptances, role changes, removals, when an accountant opened the books and what they downloaded. Owners and admins only.

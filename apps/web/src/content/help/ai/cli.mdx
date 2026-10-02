@@ -976,6 +976,16 @@ fintranzact tenant invitations
 fintranzact tenant invitations --json
 ```
 
+#### `fintranzact tenant clients`
+
+Your organisations (own firm and the clients you have accountant access to), pinned and most recently opened first.
+
+```bash
+fintranzact tenant clients
+fintranzact tenant clients --search acme --scope clients
+fintranzact tenant clients --cursor <cursor>   # next page
+```
+
 #### `fintranzact tenant access-log`
 
 Who was invited, accepted, changed, removed, opened the books or downloaded a file (owners and admins only).

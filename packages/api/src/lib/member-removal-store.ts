@@ -1,6 +1,6 @@
 /** The real RemovalStore: control DB, tenant DB, caches, security events, e-mail. */
 import { and, eq, inArray, isNotNull, isNull, gt, sql } from "drizzle-orm";
-import { controlDb, getTenantDb, tenantMembers, apiKeys, invitations, sessions, users, tenants, businessMembers } from "@fintranzact/db";
+import { controlDb, getTenantDb, tenantMembers, apiKeys, invitations, sessions, users, tenants, businessMembers, userTenantPrefs } from "@fintranzact/db";
 import { invalidateSessionCache } from "../context.js";
 import { invalidateTwoFactorGateMember } from "./two-factor-gate-cache.js";
 import { invalidateTenantMembership } from "./tenant-membership.js";
@@ -32,6 +32,15 @@ export const removalStore: RemovalStore = {
     return row?.name ?? null;
   },
 
+  async getOwnerEmails(tenantId) {
+    const rows = await controlDb
+      .select({ email: users.email })
+      .from(tenantMembers)
+      .innerJoin(users, eq(users.id, tenantMembers.userId))
+      .where(and(eq(tenantMembers.tenantId, tenantId), inArray(tenantMembers.role, ["owner", "superadmin"])));
+    return rows.map((r) => r.email).filter((e): e is string => !!e);
+  },
+
   async revokeBusinessGrants(tenantId, userId) {
     const db = await getTenantDb(tenantId);
     // Scoped to this organisation's businesses (self-hosted mode shares one database across organisations).
@@ -50,6 +59,8 @@ export const removalStore: RemovalStore = {
         .delete(tenantMembers)
         .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)))
         .returning({ id: tenantMembers.id });
+
+      await tx.delete(userTenantPrefs).where(and(eq(userTenantPrefs.tenantId, tenantId), eq(userTenantPrefs.userId, userId)));
 
       const keys = await tx
         .delete(apiKeys)

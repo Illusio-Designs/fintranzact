@@ -68,6 +68,9 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   "tenant.acceptById",
   "tenant.removeMember",
   "tenant.revokeInvitation",
+  // The caller's own switcher state and leaving an organisation (reduces access).
+  "tenant.setPinned",
+  "tenant.leave",
   // Tightening security is never refused for plan reasons (owner only, see tenant.ts).
   "tenant.setSecurityPolicy",
 

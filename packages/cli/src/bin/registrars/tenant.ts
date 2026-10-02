@@ -66,6 +66,19 @@ export function registerTenantCommands(program: Command): void {
     });
 
   tenant
+    .command("clients")
+    .description("Your organisations (own firm and clients), pinned and recent first")
+    .option("--search <text>", "Only organisations whose name contains this")
+    .option("--scope <scope>", "all, mine (own firm) or clients")
+    .option("--limit <n>", "How many (max 100, default 30)")
+    .option("--cursor <cursor>", "Continue from a previous page")
+    .option("--json", "JSON output")
+    .action(async (opts) => {
+      const { clientsCommand } = await import("../../commands/tenant/clients.js");
+      await clientsCommand(opts);
+    });
+
+  tenant
     .command("access-log")
     .description("Who was invited, accepted, changed, removed, opened the books or downloaded a file (owners and admins)")
     .option("--filter <name>", "all, invites, roles, removals, opened or downloads")

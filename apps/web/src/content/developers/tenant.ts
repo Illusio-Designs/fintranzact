@@ -128,6 +128,130 @@ for org in orgs:
       ],
     },
     {
+      id: "tenant-list-clients",
+      method: "query",
+      path: "tenant.listClients",
+      title: "List Clients (Switcher)",
+      description: "The organization switcher's list: every active organization the caller belongs to (their own firm and the clients they have accountant access to), pinned first, then most recently opened, then by name. Searchable, scoped and paged. Needs no selected organization. Use tenant.list when you only need the plain memberships.",
+      auth: "protected",
+      input: [
+        { name: "search", type: "string", required: false, description: "Case-insensitive part of the organization name. Matched literally: % and _ are ordinary characters." },
+        { name: "scope", type: "enum", required: false, description: "all (default), mine (organizations you own) or clients (everything else)", enumValues: ["all", "mine", "clients"] },
+        { name: "cursor", type: "string", required: false, description: "nextCursor from the previous page" },
+        { name: "limit", type: "number", required: false, description: "Items per page (default 30, max 100)" },
+      ],
+      output: {
+        description: "A page of organizations, the cursor for the next page (null on the last page), the number of matches, and whole-list counts that ignore search and scope.",
+        example: {
+          items: [
+            {
+              tenantId: "01957a2b-3c4d-7e8f-9012-abcdef012345",
+              name: "Acme Traders",
+              slug: "acme-traders-abc123",
+              role: "auditor",
+              roleLabel: "Accountant (read-only)",
+              isOwnFirm: false,
+              isClient: true,
+              isCa: true,
+              plan: "business",
+              pinned: true,
+              lastOpenedAt: "2026-10-01T10:00:00.000Z",
+            },
+          ],
+          nextCursor: null,
+          total: 1,
+          counts: { all: 3, mine: 1, clients: 2, pinned: 1 },
+        },
+      },
+      codeExamples: {
+        curl: `curl -G "${API_BASE_URL}/api/trpc/tenant.listClients" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  --data-urlencode 'input={"json":{"search":"acme","scope":"clients"}}'`,
+        javascript: `const page = await trpc.tenant.listClients.query({ search: "acme", limit: 30 });
+for (const c of page.items) console.log(c.pinned ? "*" : " ", c.name, c.roleLabel);
+if (page.nextCursor) await trpc.tenant.listClients.query({ cursor: page.nextCursor });`,
+        python: `import httpx, json
+
+resp = httpx.get(
+    "${API_BASE_URL}/api/trpc/tenant.listClients",
+    params={"input": json.dumps({"json": {"scope": "clients"}})},
+    headers={"Authorization": f"Bearer {session_token}"},
+)
+page = resp.json()["result"]["data"]["json"]`,
+      },
+      gotchas: [
+        "Order is pinned first, then lastOpenedAt descending (never opened last), then name, then id. Paging is a keyset on that order: a cursor stays correct if something is pinned or opened between pages.",
+        "Ordering, search and paging are done in memory over one indexed query (an accountant has at most a few hundred organizations).",
+        "Only active organizations are listed, as in tenant.list.",
+        "pinned and lastOpenedAt belong to the caller only. lastOpenedAt is refreshed by tenant.select, at most every 5 minutes.",
+        "isOwnFirm is true for owner/superadmin; isClient is its opposite; isCa is true for the accountant roles (auditor, ca_filing).",
+      ],
+      relatedEndpoints: ["tenant-list", "tenant-select", "tenant-set-pinned", "tenant-leave"],
+    },
+    {
+      id: "tenant-set-pinned",
+      method: "mutation",
+      path: "tenant.setPinned",
+      title: "Pin an Organization",
+      description: "Pin or unpin an organization in the caller's own switcher. Pins are private to the caller.",
+      auth: "protected",
+      input: [
+        { name: "tenantId", type: "string (uuid)", required: true, description: "An organization the caller is a member of" },
+        { name: "pinned", type: "boolean", required: true, description: "true to pin, false to unpin" },
+      ],
+      output: { description: "The new state.", example: { success: true, pinned: true } },
+      codeExamples: {
+        curl: `curl -X POST "${API_BASE_URL}/api/trpc/tenant.setPinned" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"json":{"tenantId":"ORG_UUID","pinned":true}}'`,
+        javascript: `await trpc.tenant.setPinned.mutate({ tenantId, pinned: true });`,
+        python: `httpx.post(
+    "${API_BASE_URL}/api/trpc/tenant.setPinned",
+    json={"json": {"tenantId": tenant_id, "pinned": True}},
+    headers={"Authorization": f"Bearer {session_token}"},
+)`,
+      },
+      gotchas: [
+        "FORBIDDEN unless the caller is a member of the organization.",
+        "At most 20 pinned organizations: pinning a 21st is a BAD_REQUEST. Pinning something already pinned, or unpinning something not pinned, changes nothing.",
+        "Allowed in read-only and suspended states (it only changes the caller's own preferences).",
+      ],
+      relatedEndpoints: ["tenant-list-clients"],
+    },
+    {
+      id: "tenant-leave",
+      method: "mutation",
+      path: "tenant.leave",
+      title: "Leave an Organization",
+      description: "The caller ends their own membership of an organization they do not own (an accountant leaving a client). Same cleanup as being removed: the person's business access, their API keys for the organization, their invitation rows and the organization on their sessions. Records an access.left event and emails the organization's owners.",
+      auth: "protected",
+      input: [
+        { name: "tenantId", type: "string (uuid)", required: true, description: "The organization to leave" },
+      ],
+      output: { description: "Confirmation.", example: { success: true } },
+      codeExamples: {
+        curl: `curl -X POST "${API_BASE_URL}/api/trpc/tenant.leave" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"json":{"tenantId":"ORG_UUID"}}'`,
+        javascript: `await trpc.tenant.leave.mutate({ tenantId });`,
+        python: `httpx.post(
+    "${API_BASE_URL}/api/trpc/tenant.leave",
+    json={"json": {"tenantId": tenant_id}},
+    headers={"Authorization": f"Bearer {session_token}"},
+)`,
+      },
+      gotchas: [
+        "Owners and superadmins cannot leave (FORBIDDEN): transfer ownership or delete the organization instead. NOT_FOUND if the caller is not a member.",
+        "Takes effect immediately: the caller's sessions lose the organization (they must choose another), and their API keys for it are deleted.",
+        "Logged as access.left (not access.removed), with metadata.removedBy set to the caller. The owners get an email 'X left your organisation'; a failed email does not undo the leave.",
+        "To come back, an owner or admin must invite the person again.",
+        "tenant.removeMember still refuses removing yourself; leaving is this procedure.",
+      ],
+      relatedEndpoints: ["tenant-remove-member", "tenant-access-log", "tenant-list-clients"],
+    },
+    {
       id: "tenant-my-invitations",
       method: "query",
       path: "tenant.myInvitations",
@@ -251,6 +375,8 @@ httpx.post(
         "Returns FORBIDDEN if the user is not a member of the target organization.",
         "The session cache is invalidated immediately — no stale data on the next request.",
         "After switching, all `tenantProcedure` and `businessProcedure` calls operate under the new organization.",
+        "The selection belongs to the session, not to a browser tab: two tabs on one session share it. Send `x-business-id` per request to pick a business; there is no per-request organization.",
+        "Records when the caller last opened the organization (shown as Recent in the switcher), at most once every 5 minutes. A failure to record it never fails the selection.",
       ],
     },
     {
@@ -590,7 +716,7 @@ pending = resp.json()["result"]["data"]["json"]`,
       input: [
         { name: "cursor", type: "string", required: false, description: "nextCursor from the previous page (\"<createdAt ms>_<id>\"). Keyset paging: no events are skipped or repeated, even with equal timestamps." },
         { name: "limit", type: "number", required: false, description: "Events per page (default 25, max 100)" },
-        { name: "type", type: "enum | enum[]", required: false, description: "Only these event types", enumValues: ["access.invited", "access.invite_revoked", "access.accepted", "access.role_changed", "access.removed", "access.org_opened", "access.export"] },
+        { name: "type", type: "enum | enum[]", required: false, description: "Only these event types", enumValues: ["access.invited", "access.invite_revoked", "access.accepted", "access.role_changed", "access.removed", "access.left", "access.org_opened", "access.export"] },
       ],
       output: {
         description: "A page of events and the cursor for the next page (null on the last page). actor and subject are null when the user no longer exists. metadata holds only role, from, to, email and procedure.",

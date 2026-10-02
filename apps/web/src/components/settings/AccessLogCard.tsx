@@ -27,6 +27,7 @@ const ICONS: Record<string, { icon: IconSvgElement; tone: string }> = {
   "access.accepted": { icon: UserCheck01Icon, tone: "text-emerald-600" },
   "access.role_changed": { icon: UserEdit01Icon, tone: "text-amber-600" },
   "access.removed": { icon: UserRemove01Icon, tone: "text-red-600" },
+  "access.left": { icon: UserRemove01Icon, tone: "text-amber-600" },
   "access.org_opened": { icon: Login01Icon, tone: "text-violet-600" },
   "access.export": { icon: Download04Icon, tone: "text-violet-600" },
 };

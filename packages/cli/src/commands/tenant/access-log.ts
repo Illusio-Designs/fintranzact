@@ -8,7 +8,7 @@ export const FILTERS: Record<string, string[] | null> = {
   all: null,
   invites: ["access.invited", "access.invite_revoked", "access.accepted"],
   roles: ["access.role_changed"],
-  removals: ["access.removed"],
+  removals: ["access.removed", "access.left"],
   opened: ["access.org_opened"],
   downloads: ["access.export"],
 };

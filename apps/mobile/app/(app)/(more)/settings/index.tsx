@@ -214,6 +214,15 @@ export default function SettingsScreen() {
         canCreateOrg={canCreateOrg ?? false}
         onCreateNew={() => createOrgMutation.mutate()}
         isCreating={createOrgMutation.isPending}
+        onLeft={(leftTenantId, next) => {
+          // The open organisation was left: the server cleared it from the session.
+          // Open the next one (own firm first) so the app is never without an organisation.
+          if (leftTenantId === session?.tenantId) {
+            if (next) selectTenantMutation.mutate({ tenantId: next.tenantId });
+            else setShowOrgSwitcher(false);
+          }
+          utils.auth.me.invalidate();
+        }}
       />
     </SafeAreaView>
   );

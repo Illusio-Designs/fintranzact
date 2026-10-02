@@ -42,6 +42,8 @@ export interface RemovalStore {
   getTarget(tenantId: string, userId: string): Promise<RemovalTarget | null>;
   getUserEmail(userId: string): Promise<string | null>;
   getTenantName(tenantId: string): Promise<string | null>;
+  /** E-mail addresses of the organisation's owners/superadmins (to tell them a member left). */
+  getOwnerEmails(tenantId: string): Promise<string[]>;
   /** Tenant DB: delete the user's business_members rows in this organisation's businesses. Returns how many. */
   revokeBusinessGrants(tenantId: string, userId: string): Promise<number>;
   /** Control DB, ONE transaction (see the module comment). `email` is the target's e-mail for the invitation sweep. */
@@ -57,6 +59,12 @@ export interface RemovalInput {
   tenantId: string;
   actor: { id: string; role: string | null };
   targetUserId: string;
+  /**
+   * The person is leaving of their own accord (`tenant.leave`): the actor is
+   * the target, any role except owner/superadmin may do it, the event is
+   * `access.left`, the owners (not the leaver) get the notice.
+   */
+  self?: boolean;
   ip?: string | null;
   userAgent?: string | null;
 }
@@ -82,16 +90,41 @@ export function removalNoticeText(tenantName: string): { subject: string; text: 
   };
 }
 
+export function leftNoticeText(personName: string, tenantName: string): { subject: string; text: string } {
+  const clean = (s: string) => s.replace(/[\r\n]+/g, " ").trim();
+  const who = clean(personName) || "A member";
+  const org = clean(tenantName) || "your organisation";
+  return {
+    subject: `${who} left your organisation`,
+    text: [
+      `${who} left ${org} on Fintranzact.`,
+      "",
+      "Their access ended immediately: they can no longer open the books, and any API keys they made for it have stopped working.",
+      "You can see this in the access log (Settings, Team). If you want them back, invite them again.",
+    ].join("\n"),
+  };
+}
+
 export async function removeTenantMember(input: RemovalInput, store: RemovalStore): Promise<RemovalResult> {
-  if (!input.actor.role || !(REMOVER_ROLES as readonly string[]).includes(input.actor.role)) {
+  if (input.self) {
+    if (input.targetUserId !== input.actor.id) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "You can only leave on your own behalf" });
+    }
+  } else if (!input.actor.role || !(REMOVER_ROLES as readonly string[]).includes(input.actor.role)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Only owners and admins can remove members" });
   }
-  if (input.targetUserId === input.actor.id) {
+  if (!input.self && input.targetUserId === input.actor.id) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot remove yourself" });
   }
   const target = await store.getTarget(input.tenantId, input.targetUserId);
+  if (input.self && !target) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "You are not a member of this organization" });
+  }
   if (target && (PROTECTED_ROLES as readonly string[]).includes(target.role)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Cannot remove a superadmin" });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: input.self ? "The owner of an organisation cannot leave it. Transfer ownership or delete the organisation instead." : "Cannot remove a superadmin",
+    });
   }
 
   const email = target?.email ?? (await store.getUserEmail(input.targetUserId));
@@ -119,7 +152,7 @@ export async function removeTenantMember(input: RemovalInput, store: RemovalStor
 
   // 4. Audit trail (recordSecurityEvent never throws).
   await store.recordEvent({
-    type: "access.removed",
+    type: input.self ? "access.left" : "access.removed",
     userId: input.targetUserId,
     actorUserId: input.actor.id,
     tenantId: input.tenantId,
@@ -134,9 +167,24 @@ export async function removeTenantMember(input: RemovalInput, store: RemovalStor
     },
   });
 
-  // 5. Notice, best effort.
+  // 5. Notice, best effort. A person who left tells the owners; otherwise the removed person is told.
   let emailSent = false;
-  if (email) {
+  if (input.self) {
+    try {
+      const tenantName = (await store.getTenantName(input.tenantId)) ?? "";
+      const { subject, text } = leftNoticeText(target?.name || email || "", tenantName);
+      for (const to of await store.getOwnerEmails(input.tenantId)) {
+        try {
+          await store.sendNotice(to, subject, text);
+          emailSent = true;
+        } catch (err) {
+          store.log.error("Member left: owner notice failed", { tenantId: input.tenantId, userId: input.targetUserId, err: errMsg(err) });
+        }
+      }
+    } catch (err) {
+      store.log.error("Member left: owner lookup failed", { tenantId: input.tenantId, userId: input.targetUserId, err: errMsg(err) });
+    }
+  } else if (email) {
     try {
       const tenantName = (await store.getTenantName(input.tenantId)) ?? "";
       const { subject, text } = removalNoticeText(tenantName);

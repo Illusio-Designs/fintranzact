@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { removeTenantMember, removalNoticeText, type RemovalStore, type ControlRevocation, type RemovalTarget } from "../lib/member-removal.js";
+import { removeTenantMember, removalNoticeText, leftNoticeText, type RemovalStore, type ControlRevocation, type RemovalTarget } from "../lib/member-removal.js";
 import type { SecurityEventInput } from "../lib/security-events.js";
 
 interface FakeOpts {
   target?: RemovalTarget | null;
   control?: Partial<ControlRevocation>;
   grants?: number;
+  owners?: string[];
   failStep?: "grants" | "control" | "email" | "event";
 }
 
@@ -19,6 +20,7 @@ function makeStore(o: FakeOpts = {}) {
     async getTarget() { calls.push("getTarget"); return target; },
     async getUserEmail() { calls.push("getUserEmail"); return "ghost@x.in"; },
     async getTenantName() { calls.push("getTenantName"); return "Acme Traders"; },
+    async getOwnerEmails() { calls.push("getOwnerEmails"); return o.owners ?? ["owner@acme.in"]; },
     async revokeBusinessGrants() {
       calls.push("grants");
       if (o.failStep === "grants") throw new Error("tenant db down");
@@ -146,5 +148,77 @@ describe("removalNoticeText", () => {
     const { text } = removalNoticeText("Acme");
     expect(text).toContain("API keys");
     expect(text).toContain("owner");
+  });
+});
+
+describe("removeTenantMember: leaving (self)", () => {
+  const me = { id: "u1", role: "auditor" };
+  const leave = (over = {}) => ({ tenantId: "t1", actor: me, targetUserId: "u1", self: true, ...over });
+
+  it("a CA may remove their own membership: same cleanup, event access.left, removedBy is themself", async () => {
+    const f = makeStore({ target: { role: "auditor", email: "ca@firm.in", name: "Anita" } });
+    const r = await removeTenantMember(leave({ ip: "1.1.1.1" }), f.store);
+    expect(r).toMatchObject({ success: true, removed: true, apiKeysRevoked: 1, businessesRevoked: 2 });
+    expect(f.calls.slice(0, 4)).toEqual(["getTarget", "grants", "control:ca@firm.in", "caches:s1,s2"]);
+    expect(f.events).toEqual([{
+      type: "access.left",
+      userId: "u1",
+      actorUserId: "u1",
+      tenantId: "t1",
+      ip: "1.1.1.1",
+      userAgent: null,
+      metadata: { role: "auditor", email: "ca@firm.in", apiKeysRevoked: 1, businessesRevoked: 2, removedBy: "u1" },
+    }]);
+  });
+
+  it("tells the owners, not the person who left", async () => {
+    const f = makeStore({ target: { role: "ca_filing", email: "ca@firm.in", name: "Anita Shah" }, owners: ["a@acme.in", "b@acme.in"] });
+    await removeTenantMember(leave(), f.store);
+    expect(f.notices.map((n) => n.to)).toEqual(["a@acme.in", "b@acme.in"]);
+    expect(f.notices[0]!.subject).toBe("Anita Shah left your organisation");
+  });
+
+  it("an owner or superadmin cannot leave, and nothing is changed", async () => {
+    for (const role of ["owner", "superadmin"]) {
+      const f = makeStore({ target: { role, email: "o@acme.in", name: null } });
+      await expect(removeTenantMember(leave({ actor: { id: "u1", role } }), f.store)).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("cannot leave") });
+      expect(f.calls).toEqual(["getTarget"]);
+    }
+  });
+
+  it("any non-owner role may leave (admin, seller, accountant)", async () => {
+    for (const role of ["admin", "seller", "accountant", "ca_filing"]) {
+      const f = makeStore({ target: { role, email: "x@y.in", name: null } });
+      expect((await removeTenantMember(leave({ actor: { id: "u1", role } }), f.store)).removed).toBe(true);
+    }
+  });
+
+  it("not a member: NOT_FOUND and nothing is swept", async () => {
+    const f = makeStore({ target: null });
+    await expect(removeTenantMember(leave(), f.store)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(f.calls).toEqual(["getTarget"]);
+  });
+
+  it("self mode refuses a different target", async () => {
+    const f = makeStore();
+    await expect(removeTenantMember(leave({ targetUserId: "other" }), f.store)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("the normal path still refuses removing yourself", async () => {
+    const f = makeStore();
+    await expect(removeTenantMember({ tenantId: "t1", actor: owner, targetUserId: "owner" }, f.store)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("an owner e-mail failure is logged and does not fail leaving", async () => {
+    const f = makeStore({ target: { role: "auditor", email: "ca@firm.in", name: "A" }, failStep: "email" });
+    const r = await removeTenantMember(leave(), f.store);
+    expect(r.removed).toBe(true);
+    expect(f.logged.length).toBeGreaterThan(0);
+  });
+});
+
+describe("leftNoticeText", () => {
+  it("one-line subject", () => {
+    expect(leftNoticeText("Anita\nShah", "Acme").subject).toBe("Anita Shah left your organisation");
   });
 });

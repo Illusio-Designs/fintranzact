@@ -22,3 +22,4 @@ export * from "./two-factor.js";
 export * from "./two-factor-format.js";
 export * from "./accountant-access.js";
 export * from "./access-log.js";
+export * from "./client-switcher.js";

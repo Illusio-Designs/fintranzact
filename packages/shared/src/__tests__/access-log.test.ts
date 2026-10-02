@@ -28,9 +28,9 @@ describe("access event types", () => {
     expect([...ACCESS_EVENT_TYPES].sort()).toEqual([...access].sort());
     for (const t of ACCESS_EVENT_TYPES) expect(SECURITY_EVENT_LABELS[t]).toBeTruthy();
   });
-  it("keeps the original 13 and adds six", () => {
-    expect(SECURITY_EVENT_TYPES).toHaveLength(19);
-    for (const t of ["access.invited", "access.invite_revoked", "access.accepted", "access.role_changed", "access.org_opened", "access.export"]) {
+  it("keeps the original 13 and adds seven", () => {
+    expect(SECURITY_EVENT_TYPES).toHaveLength(20);
+    for (const t of ["access.invited", "access.invite_revoked", "access.accepted", "access.role_changed", "access.org_opened", "access.export", "access.left"]) {
       expect(SECURITY_EVENT_TYPES).toContain(t);
     }
   });
@@ -42,6 +42,10 @@ describe("access event types", () => {
 });
 
 describe("accessEventSentence", () => {
+  it("left: the person who left is the subject, the CA tag shows", () => {
+    expect(accessEventSentence(item("access.left", { subject: person("ca", "Anita"), actor: person("ca", "Anita"), metadata: { role: "auditor" } }), "owner")).toBe("Anita (CA) left the organisation");
+    expect(accessEventSentence(item("access.left", { subject: person("ca", "Anita"), metadata: { role: "auditor" } }), "ca")).toBe("You left the organisation");
+  });
   it("invited", () => {
     const s = accessEventSentence(item("access.invited", { subject: person("ca", "Anita Shah"), metadata: { role: "auditor", email: "a@x.in" } }), "owner");
     expect(s).toBe("Anita Shah (CA) was invited as Accountant (read-only) by You");

@@ -1,0 +1,73 @@
+---
+title: Work with many clients from one login
+description: For accountants (CAs): accept your clients' invitations, switch between client organizations, pin the ones you use most, and leave a client when you stop working for them.
+sidebar:
+  order: 5
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+import { ForMobile } from "@/components/help/mdx";
+
+If you are an accountant, you need only **one Fintranzact login** for all your clients. Each client invites you to their organization, and every client you accept appears in your list. Your own firm's books (if you keep them here) sit in the same list.
+
+## Accept a client's invitation
+
+1. Your client sends you an invitation by email (**Invite my CA**). Open the link in the email, or sign in and look for the invitation on the screen that asks you to choose an organization.
+2. Sign in with the email address the invitation was sent to, or create an account with it. Capital letters don't matter.
+3. Accept. The client's organization is added to your list, with the access they gave you: **Accountant (read-only)** or **Accountant (filing)**.
+
+You can accept as many clients as you like. Each one is separate: you only ever see the books of the organization you have opened.
+
+## Switch between clients
+
+<ForDesktop>
+Click your organization name in the left menu (it shows your access, for example "Accountant (read-only) · Acme Traders"). The switcher opens with:
+
+- a **search box**, already focused: type part of a client's name
+- **Pinned** clients at the top, then **Recent** (the five you opened last), then **My firm** and **Clients**
+- your access level on every row, and a small **CA** tag on organizations where you are the accountant
+
+Use the up and down arrow keys and **Enter** to open one without the mouse, or **Esc** to close. With a long list, click **Load more**.
+</ForDesktop>
+
+<ForMobile>
+Open **More → Settings** and tap your organization. In the sheet, type in the search box (it appears once you have more than five organizations), then tap a client to open it. Tap **Load more** at the bottom of a long list.
+</ForMobile>
+
+:::note
+Your selected organization belongs to your **login session**, not to a browser tab. If you open two tabs in the same browser and switch one to another client, the other tab switches too, and its next screen will show the new client's books. To look at two clients side by side, open the second in a **private window** or another browser.
+:::
+
+## Pin your busiest clients
+
+Click the **star** next to a client (tap the star on mobile) to pin it. Pinned clients always stay at the top, in the order you last opened them. You can pin up to 20. Click the star again to unpin. Your pins are yours alone: nobody else sees them, and your client cannot see them.
+
+## Leave a client
+
+When you stop working for a client, you can end your own access:
+
+<ForDesktop>
+Open the switcher, click the **...** menu on the client's row, choose **Leave this client**, and confirm.
+</ForDesktop>
+
+<ForMobile>
+Open the switcher and tap the exit icon on the client's row, then confirm.
+</ForMobile>
+
+What happens:
+
+- Your access ends **immediately**. You can no longer open the client's books.
+- Any API keys, CLI or MCP access you made for that client stop working.
+- The client's **owner is told** by email that you left, and it shows in their Access log.
+- Nothing the client or you entered is deleted. The history of what you did stays in their audit trail.
+- To come back, the client has to invite you again.
+
+You cannot leave an organization you own. If it is the organization you are working in, you are taken to another one in your list.
+
+## Questions
+
+**Do my clients see each other?** No. Each organization is separate, and none of them can see your other clients or your list.
+
+**Does a client pay for my seat?** Accountant access does not count towards a client's team-member limit.
+
+**Can my client see which of their books I opened?** Yes. They see when you last opened their books and what you downloaded. See [See what your CA did](/help/team/access-log).

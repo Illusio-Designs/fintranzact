@@ -113,6 +113,13 @@
       "when": 1791049700000,
       "tag": "0015_accountant_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791136100000,
+      "tag": "0016_user_tenant_prefs",
+      "breakpoints": true
     }
   ]
 }
