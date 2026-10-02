@@ -6,7 +6,7 @@
  * toaster and trigger toasts through the app's toast() helper.
  */
 
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, act, waitFor } from "@testing-library/react";
 import { ToastContainer } from "../Toast";
 import { toast } from "@/hooks/useToast";
@@ -53,5 +53,15 @@ describe("ToastContainer — goey-toast host", () => {
     await waitFor(() =>
       expect(document.body.querySelector('[data-sonner-toaster][data-sonner-theme="dark"]')).not.toBeNull(),
     );
+  });
+
+  it("still renders when matchMedia is stubbed and returns nothing", () => {
+    const original = window.matchMedia;
+    window.matchMedia = vi.fn() as unknown as typeof window.matchMedia;
+    try {
+      expect(() => render(<ToastContainer />)).not.toThrow();
+    } finally {
+      window.matchMedia = original;
+    }
   });
 });

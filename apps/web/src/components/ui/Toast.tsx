@@ -32,15 +32,19 @@ function useNoTopBar(): boolean {
 
 function usePrefersReducedMotion(): boolean {
   const query = "(prefers-reduced-motion: reduce)";
-  const supported = typeof window !== "undefined" && typeof window.matchMedia === "function";
-  const [reduce, setReduce] = useState(() => supported && window.matchMedia(query).matches);
+  // Some test setups stub matchMedia with a function that returns nothing.
+  const media = () =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? (window.matchMedia(query) as MediaQueryList | undefined)
+      : undefined;
+  const [reduce, setReduce] = useState(() => !!media()?.matches);
   useEffect(() => {
-    if (!supported) return;
-    const mq = window.matchMedia(query);
+    const mq = media();
+    if (!mq?.addEventListener) return;
     const on = () => setReduce(mq.matches);
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
-  }, [supported]);
+  }, []);
   return reduce;
 }
 
