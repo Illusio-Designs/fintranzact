@@ -1,6 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { z } from "zod";
+import { useHotkeys } from "@/hooks/useHotkeys";
+import { KbdShortcut } from "@/components/ui/KbdShortcut";
+import { AgingReportView, BalanceSheetView, PartyLedgerView, ProfitAndLossView, TallyExportView, TrialBalanceView } from "@/components/reports/AccountingReports";
 import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
-import { Fragment, useState, useRef, useEffect } from "react";
+import { Fragment, useState, useRef, useEffect, type ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn, formatDateInput, todayISODate } from "@/lib/utils";
 import { StatCard } from "@/components/ui/StatCard";
@@ -10,7 +14,7 @@ import { PartyCombobox } from "@/components/ui/PartyCombobox";
 import { Select } from "@/components/ui/Select";
 import { useDateRange } from "@/hooks/useDateRange";
 import { Icon } from "@/components/ui/Icon";
-import { Alert02Icon, Analytics01Icon, ArrowRight01Icon, Cash01Icon, Download04Icon, FileEmpty01Icon, InformationCircleIcon, Invoice01Icon, Menu01Icon, MoneySend01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, Analytics01Icon, ArrowRight01Icon, Cash01Icon, Clock01Icon, Download04Icon, FileEmpty01Icon, InformationCircleIcon, Invoice01Icon, MoneySend01Icon, Search01Icon, StarIcon, UserGroupIcon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
 import {
@@ -33,6 +37,7 @@ import { StockGroupFilter } from "@/components/inventory/StockGroups";
 import { PriceListReport } from "@/components/reports/PriceListReport";
 import { paymentModeLabel } from "@/lib/payment-modes";
 export const Route = createFileRoute("/reports")({
+  validateSearch: (search) => reportsSearchSchema.parse(search),
   component: ReportsPage,
 });
 
@@ -65,33 +70,67 @@ type ReportId =
   | "payment-summary"
   | "tax-summary"
   | "collection-metrics"
-  | "cash-flow";
+  | "cash-flow"
+  // Accounting statements that used to be tabs on the GST page
+  | "pnl"
+  | "balance-sheet"
+  | "trial-balance"
+  | "ageing"
+  | "party-ledger"
+  | "tally-export";
 
 interface ReportDef {
   id: ReportId;
   label: string;
   description: string;
   tabular: boolean; // true = table + CSV download, false = card/summary layout
+  /** Has its own period controls, so the shared date range is hidden. */
+  ownPeriod?: boolean;
 }
 
-const REPORT_GROUPS: Array<{ label: string; reports: ReportDef[] }> = [
+/** Report categories, grouped the way accountants look for them. */
+const REPORT_GROUPS: Array<{ id: string; label: string; reports: ReportDef[] }> = [
   {
-    label: "Financial",
+    id: "overview",
+    label: "Business overview",
     reports: [
-      { id: "daybook", label: "Daybook", description: "Chronological record of all transactions", tabular: true },
-      { id: "sales-register", label: "Sales Register", description: "All sales invoices in a period", tabular: true },
-      { id: "purchase-register", label: "Purchase Register", description: "All purchase invoices in a period", tabular: true },
+      { id: "pnl", label: "Profit & Loss", description: "Income, expenses and net profit for the period", tabular: false, ownPeriod: true },
+      { id: "balance-sheet", label: "Balance Sheet", description: "Assets, liabilities and equity on a date", tabular: false, ownPeriod: true },
+      { id: "cash-flow", label: "Cash Flow Statement", description: "Cash flows from operating, investing, and financing activities", tabular: false },
+      { id: "collection-metrics", label: "Collection Efficiency", description: "Payment collection performance", tabular: false },
     ],
   },
   {
-    label: "Receivables & Payables",
+    id: "sales",
+    label: "Sales",
+    reports: [
+      { id: "sales-register", label: "Sales Register", description: "All sales invoices in a period", tabular: true },
+      { id: "item-wise-sales", label: "Item-wise Sales", description: "Sales quantity and value per item", tabular: true },
+      { id: "pending-sales-orders", label: "Pending Sales Orders", description: "Ordered by customers and not yet delivered", tabular: true },
+      { id: "pending-delivery-challans", label: "Pending Delivery Challans", description: "Goods delivered and not yet billed", tabular: true },
+    ],
+  },
+  {
+    id: "receivables",
+    label: "Receivables",
     reports: [
       { id: "outstanding", label: "Outstanding Report", description: "Unpaid balances by party", tabular: true },
-      { id: "msme-payables", label: "MSME Payables", description: "Unpaid MSME supplier bills and their 45-day pay-by dates", tabular: true },
+      { id: "ageing", label: "Ageing Report", description: "Receivables and payables by how long they have been due", tabular: false, ownPeriod: true },
       { id: "party-statement", label: "Party Statement", description: "Full ledger for a selected party", tabular: true },
     ],
   },
   {
+    id: "payables",
+    label: "Purchases & payables",
+    reports: [
+      { id: "purchase-register", label: "Purchase Register", description: "All purchase invoices in a period", tabular: true },
+      { id: "msme-payables", label: "MSME Payables", description: "Unpaid MSME supplier bills and their 45-day pay-by dates", tabular: true },
+      { id: "pending-purchase-orders", label: "Pending Purchase Orders", description: "Ordered from suppliers and not yet received", tabular: true },
+      { id: "pending-grns", label: "Pending GRNs", description: "Goods received and not yet billed", tabular: true },
+    ],
+  },
+  {
+    id: "inventory",
     label: "Inventory",
     reports: [
       { id: "stock-summary", label: "Stock Summary", description: "Current stock levels by item", tabular: true },
@@ -106,25 +145,30 @@ const REPORT_GROUPS: Array<{ label: string; reports: ReportDef[] }> = [
       { id: "reorder-status", label: "Reorder Status", description: "Items at or below their reorder level, with a suggested order", tabular: true },
       { id: "dead-stock", label: "Dead Stock", description: "Stock that hasn't sold in a while", tabular: true },
       { id: "price-list", label: "Price List", description: "Each item's price on every price level, with MRP", tabular: true },
-      { id: "item-wise-sales", label: "Item-wise Sales", description: "Sales quantity and value per item", tabular: true },
     ],
   },
   {
-    label: "Orders",
+    id: "tax",
+    label: "Taxes",
     reports: [
-      { id: "pending-sales-orders", label: "Pending Sales Orders", description: "Ordered by customers and not yet delivered", tabular: true },
-      { id: "pending-purchase-orders", label: "Pending Purchase Orders", description: "Ordered from suppliers and not yet received", tabular: true },
-      { id: "pending-grns", label: "Pending GRNs", description: "Goods received and not yet billed", tabular: true },
-      { id: "pending-delivery-challans", label: "Pending Delivery Challans", description: "Goods delivered and not yet billed", tabular: true },
+      { id: "tax-summary", label: "Tax Summary", description: "Tax collected and paid summary", tabular: true },
     ],
   },
   {
-    label: "Payments & Tax",
+    id: "cash",
+    label: "Cash & payments",
     reports: [
       { id: "payment-summary", label: "Payment Summary", description: "All payments received and made", tabular: true },
-      { id: "tax-summary", label: "Tax Summary", description: "Tax collected and paid summary", tabular: true },
-      { id: "collection-metrics", label: "Collection Efficiency", description: "Payment collection performance", tabular: false },
-      { id: "cash-flow", label: "Cash Flow Statement", description: "Cash flows from operating, investing, and financing activities", tabular: false },
+      { id: "daybook", label: "Daybook", description: "Chronological record of all transactions", tabular: true },
+    ],
+  },
+  {
+    id: "accountant",
+    label: "Accountant",
+    reports: [
+      { id: "trial-balance", label: "Trial Balance", description: "Debit and credit totals for every account", tabular: false, ownPeriod: true },
+      { id: "party-ledger", label: "Party Ledger", description: "Every entry for one party with its running balance", tabular: false, ownPeriod: true },
+      { id: "tally-export", label: "Tally Export", description: "Masters and vouchers as Tally XML for your CA", tabular: false, ownPeriod: true },
     ],
   },
 ];
@@ -157,7 +201,19 @@ interface OutstandingPartyRow {
   days61_90: string;
   days90Plus: string;
   total: string;
-  invoices: unknown[];
+  invoices: OutstandingInvoice[];
+}
+
+// One unpaid document behind a party's balance
+interface OutstandingInvoice {
+  invoiceId: string;
+  invoiceNumber: string;
+  invoiceDate: string | Date;
+  dueDate: string | Date | null;
+  totalAmount: string;
+  amountPaid: string;
+  outstanding: string;
+  daysOverdue: string | number | null;
 }
 
 interface AgingBucket {
@@ -449,9 +505,12 @@ function DaybookTypeTabs({
 function AgingTable({
   label,
   bucket,
+  onOpenParty,
 }: {
   label: string;
   bucket: AgingBucket;
+  /** Drill down to the party's unpaid invoices. */
+  onOpenParty: (party: OutstandingPartyRow) => void;
 }) {
   if (bucket.parties.length === 0) return null;
   return (
@@ -474,7 +533,13 @@ function AgingTable({
             {bucket.parties.map((party) => (
               <tr key={party.partyId} className="border-b border-border/40 hover:bg-surface-2/40 transition-colors">
                 <td className="px-4 py-3">
-                  <p className="text-text-primary text-ui font-medium">{party.partyName}</p>
+                  <button
+                    type="button"
+                    onClick={() => onOpenParty(party)}
+                    className="text-left text-ui font-medium text-brand-600 hover:underline dark:text-brand-400"
+                  >
+                    {party.partyName}
+                  </button>
                   {party.partyPhone && (
                     <p className="text-text-tertiary text-2xs mt-0.5">{party.partyPhone}</p>
                   )}
@@ -542,6 +607,8 @@ function OutstandingReport({
   toDate?: string;
 }) {
   const [partyType, setPartyType] = useState<"all" | "customer" | "supplier">("all");
+  // Clicking a party drills down to the invoices behind its balance.
+  const [openParty, setOpenParty] = useState<{ party: OutstandingPartyRow; side: "Receivable" | "Payable" } | null>(null);
 
   // Map UI partyType → router `type` field
   const routerType =
@@ -601,6 +668,64 @@ function OutstandingReport({
     (data.receivables?.parties.length ?? 0) > 0 ||
     (data.payables?.parties.length ?? 0) > 0;
 
+  if (openParty) {
+    const { party, side } = openParty;
+    return (
+      <div className="flex flex-col gap-4">
+        <nav aria-label="Outstanding drill-down" className="flex items-center gap-1.5 text-ui text-text-tertiary">
+          <button type="button" onClick={() => setOpenParty(null)} className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+            All parties
+          </button>
+          <Icon icon={ArrowRight01Icon} size={12} />
+          <span className="font-medium text-text-primary">{party.partyName}</span>
+        </nav>
+        <div className="overflow-clip rounded-2xl border border-border-light bg-surface-0">
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-border-light px-4 py-3">
+            <b className="text-text-primary">
+              {side === "Receivable" ? `${party.partyName} owes ${formatCurrency(party.total)}` : `You owe ${party.partyName} ${formatCurrency(party.total)}`}
+            </b>
+            <span className="text-ui text-text-tertiary">
+              {party.invoices.length} unpaid {party.invoices.length === 1 ? "document" : "documents"}
+              {party.partyPhone ? ` · ${party.partyPhone}` : ""}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Number</th>
+                  <th>Date</th>
+                  <th>Due</th>
+                  <th className="text-right">Amount</th>
+                  <th className="text-right">Unpaid</th>
+                  <th className="text-right">Overdue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {party.invoices.map((inv) => (
+                  <tr key={inv.invoiceId}>
+                    <td>
+                      <Link to="/invoices" search={{ id: inv.invoiceId }} className="font-mono text-ui text-brand-600 hover:underline dark:text-brand-400">
+                        {inv.invoiceNumber}
+                      </Link>
+                    </td>
+                    <td className="whitespace-nowrap text-text-secondary">{formatDate(inv.invoiceDate)}</td>
+                    <td className="whitespace-nowrap text-text-secondary">{inv.dueDate ? formatDate(inv.dueDate) : "—"}</td>
+                    <td className="text-right tabular-nums">{formatCurrency(inv.totalAmount)}</td>
+                    <td className="text-right font-medium tabular-nums">{formatCurrency(inv.outstanding)}</td>
+                    <td className={cn("text-right tabular-nums", Number(inv.daysOverdue) > 0 ? "font-medium text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
+                      {Number(inv.daysOverdue) > 0 ? `${Number(inv.daysOverdue)} days` : "Not due"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Summary cards */}
@@ -633,10 +758,10 @@ function OutstandingReport({
       ) : (
         <>
           {data.receivables && data.receivables.parties.length > 0 && (
-            <AgingTable label="Receivables (Customers)" bucket={data.receivables} />
+            <AgingTable label="Receivables (Customers)" bucket={data.receivables} onOpenParty={(party) => setOpenParty({ party, side: "Receivable" })} />
           )}
           {data.payables && data.payables.parties.length > 0 && (
-            <AgingTable label="Payables (Suppliers)" bucket={data.payables} />
+            <AgingTable label="Payables (Suppliers)" bucket={data.payables} onOpenParty={(party) => setOpenParty({ party, side: "Payable" })} />
           )}
         </>
       )}
@@ -2918,25 +3043,57 @@ function StickyPeriodHint({ visible }: { visible: boolean }) {
 
 // ── Main Reports Page ────────────────────────────────────────────
 
-function ReportsPage() {
-  const [activeReport, setActiveReport] = useState<ReportId>(
-    () => (localStorage.getItem("fintranzact_reports_tab") as ReportId) || "daybook"
+const reportsSearchSchema = z.object({ report: z.string().optional() });
+
+const REPORT_FAVS_KEY = "fintranzact_report_favourites";
+const REPORT_RECENT_KEY = "fintranzact_reports_recent";
+const DEFAULT_FAVS: ReportId[] = ["outstanding", "pnl", "sales-register", "tax-summary"];
+
+function readIds(key: string, fallback: ReportId[]): ReportId[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? "null");
+    return Array.isArray(v) ? v.filter((id): id is ReportId => ALL_REPORTS.some((r) => r.id === id)) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writeIds(key: string, ids: ReportId[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(ids));
+  } catch {
+    /* private window: the list lasts for this visit */
+  }
+}
+
+function StarButton({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={on}
+      aria-label={`${on ? "Remove from" : "Add to"} favourites: ${label}`}
+      className={cn(
+        "grid h-7 w-7 shrink-0 place-items-center rounded-lg transition-colors hover:bg-surface-2",
+        on ? "text-amber-500" : "text-text-tertiary hover:text-text-primary",
+      )}
+    >
+      <Icon icon={StarIcon} size={16} className={on ? "[&_path]:fill-current" : undefined} />
+    </button>
   );
+}
+
+function ReportsPage() {
+  const { report } = Route.useSearch();
+  const navigate = useNavigate({ from: "/reports" });
+  const activeReport = ALL_REPORTS.some((r) => r.id === report) ? (report as ReportId) : null;
+
+  const [favs, setFavs] = useState<ReportId[]>(() => readIds(REPORT_FAVS_KEY, DEFAULT_FAVS));
+  const [recent, setRecent] = useState<ReportId[]>(() => readIds(REPORT_RECENT_KEY, []));
+  const [category, setCategory] = useState<string>("favourites");
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const [showStickyHint, setShowStickyHint] = useState(false);
   const hasInteracted = useRef(false);
-
-  const selectReport = (id: ReportId) => {
-    setActiveReport(id);
-    localStorage.setItem("fintranzact_reports_tab", id);
-
-    // Show sticky-period hint on first tab switch (once per session)
-    if (!hasInteracted.current && !sessionStorage.getItem(HINT_SESSION_KEY)) {
-      hasInteracted.current = true;
-      sessionStorage.setItem(HINT_SESSION_KEY, "1");
-      setShowStickyHint(true);
-    }
-  };
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Party statement filter — server-side search so all parties are accessible
   const [partyStatementPartyId, setPartyStatementPartyId] = useState("");
@@ -2944,8 +3101,53 @@ function ReportsPage() {
   const { preset, setPreset, customFrom, customTo, setCustomRange, fromDate, toDate } =
     useDateRange("reports", "this-month");
 
+  const toggleFav = (id: ReportId) => {
+    setFavs((f) => {
+      const next = f.includes(id) ? f.filter((x) => x !== id) : [...f, id];
+      writeIds(REPORT_FAVS_KEY, next);
+      return next;
+    });
+  };
 
-  const currentReport = ALL_REPORTS.find((r) => r.id === activeReport)!;
+  const openReport = (id: ReportId) => {
+    setRecent((r) => {
+      const next = [id, ...r.filter((x) => x !== id)].slice(0, 8);
+      writeIds(REPORT_RECENT_KEY, next);
+      return next;
+    });
+    // Show the sticky-period hint the first time someone moves between reports
+    if (activeReport && !hasInteracted.current && !sessionStorage.getItem(HINT_SESSION_KEY)) {
+      hasInteracted.current = true;
+      sessionStorage.setItem(HINT_SESSION_KEY, "1");
+      setShowStickyHint(true);
+    }
+    navigate({ search: { report: id } });
+  };
+  const backToReports = (cat?: string) => {
+    if (cat) setCategory(cat);
+    setQuery("");
+    navigate({ search: {} });
+  };
+
+  // "/" jumps to the report search from anywhere on the page, like Tally's Go To.
+  useHotkeys([
+    {
+      key: "/",
+      description: "Go to a report",
+      scope: "reports",
+      handler: () => {
+        if (activeReport) navigate({ search: {} });
+        requestAnimationFrame(() => searchRef.current?.focus());
+      },
+    },
+  ]);
+
+  const currentReport = activeReport ? ALL_REPORTS.find((r) => r.id === activeReport)! : null;
+  const currentGroup = activeReport ? REPORT_GROUPS.find((g) => g.reports.some((r) => r.id === activeReport))! : null;
+
+  useEffect(() => {
+    document.title = `${currentReport ? currentReport.label : "Reports"} — Fintranzact`;
+  }, [currentReport]);
 
   function renderReport() {
     switch (activeReport) {
@@ -3003,84 +3205,50 @@ function ReportsPage() {
         return <CollectionEfficiencyReport fromDate={fromDate} toDate={toDate} />;
       case "cash-flow":
         return <CashFlowReport fromDate={fromDate} toDate={toDate} />;
+      case "pnl":
+        return <ProfitAndLossView />;
+      case "balance-sheet":
+        return <BalanceSheetView />;
+      case "trial-balance":
+        return <TrialBalanceView />;
+      case "ageing":
+        return <AgingReportView />;
+      case "party-ledger":
+        return <PartyLedgerView />;
+      case "tally-export":
+        return <TallyExportView />;
       default:
-        return <PlaceholderReport report={currentReport} />;
+        return currentReport ? <PlaceholderReport report={currentReport} /> : null;
     }
   }
 
+  // ── A report ──
+  if (currentReport && currentGroup) {
+    return (
+      <div className="flex flex-col gap-4">
+        <nav aria-label="Where you are" className="flex flex-wrap items-center gap-1.5 text-ui text-text-tertiary">
+          <button type="button" onClick={() => backToReports()} className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+            Reports
+          </button>
+          <Icon icon={ArrowRight01Icon} size={12} />
+          <button type="button" onClick={() => backToReports(currentGroup.id)} className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+            {currentGroup.label}
+          </button>
+          <Icon icon={ArrowRight01Icon} size={12} />
+          <span className="font-medium text-text-primary">{currentReport.label}</span>
+        </nav>
 
-  return (
-    <div className="flex gap-0 -mx-6 -my-6 min-h-[calc(100vh-56px)]">
-      {/* Sidebar overlay (mobile) */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Report navigation sidebar */}
-      <aside
-        className={cn(
-          "w-56 shrink-0 border-r border-border bg-surface-0 flex flex-col overflow-y-auto",
-          "fixed inset-y-0 left-0 z-40 transition-transform duration-200 lg:relative lg:translate-x-0 lg:inset-auto lg:z-auto",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        <div className="px-4 py-4 border-b border-border shrink-0">
-          <h2 className="text-ui font-semibold text-text-primary">Reports</h2>
-          <p className="text-2xs text-text-tertiary mt-0.5">Select a report to view</p>
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <h1 className={PAGE_TITLE_CLASS}>{currentReport.label}</h1>
+              <StarButton on={favs.includes(currentReport.id)} label={currentReport.label} onToggle={() => toggleFav(currentReport.id)} />
+            </div>
+            <p className="mt-0.5 text-sm text-text-tertiary">{currentReport.description}</p>
+          </div>
         </div>
 
-        <nav className="flex-1 py-2">
-          {REPORT_GROUPS.map((group) => (
-            <div key={group.label} className="mb-1">
-              <p className="px-4 pt-3 pb-1 text-2xs font-semibold uppercase tracking-widest text-text-tertiary">
-                {group.label}
-              </p>
-              {group.reports.map((report) => (
-                <button
-                  key={report.id}
-                  onClick={() => {
-                    selectReport(report.id);
-                    setSidebarOpen(false);
-                  }}
-                  className={cn(
-                    "w-full text-left flex items-center gap-2 mx-2 px-3 py-[7px] rounded-lg text-ui transition-colors",
-                    activeReport === report.id
-                      ? "bg-brand-600/10 text-brand-700 dark:text-brand-400 font-medium"
-                      : "text-text-secondary hover:bg-surface-2 hover:text-text-primary"
-                  )}
-                  style={{ width: "calc(100% - 1rem)" }}
-                >
-                  {report.label}
-                </button>
-              ))}
-            </div>
-          ))}
-        </nav>
-      </aside>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        {/* Top bar: title + date filters */}
-        <div className="sticky top-0 z-20 bg-surface-1 border-b border-border px-6 py-4 shrink-0">
-          <div className="flex items-start gap-3 mb-3">
-            {/* Mobile: hamburger to open report sidebar */}
-            <button
-              className="lg:hidden flex items-center justify-center w-8 h-8 rounded-lg text-text-secondary hover:bg-surface-2 transition-colors border border-border shrink-0 mt-0.5"
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Select report"
-            >
-              <Icon icon={Menu01Icon} size={16} />
-            </button>
-
-            <div className="flex-1 min-w-0">
-              <h1 className={PAGE_TITLE_CLASS}>{currentReport.label}</h1>
-              <p className="text-sm text-text-tertiary mt-0.5">{currentReport.description}</p>
-            </div>
-          </div>
-
+        {!currentReport.ownPeriod && (
           <div className="flex flex-col gap-2">
             <DateRangeBar
               preset={preset}
@@ -3089,29 +3257,141 @@ function ReportsPage() {
               customTo={customTo}
               onCustomChange={setCustomRange}
             />
-
             <StickyPeriodHint visible={showStickyHint} />
-
-            {/* Party selector for Party Statement */}
-            {activeReport === "party-statement" && (
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-text-tertiary shrink-0">Party:</span>
-                <div className="w-64">
-                  <PartyCombobox
-                    value={partyStatementPartyId}
-                    onChange={setPartyStatementPartyId}
-                    label=""
-                  />
-                </div>
-              </div>
-            )}
           </div>
-        </div>
+        )}
 
-        {/* Report content */}
-        <div className="flex-1 px-6 py-6">
-          {renderReport()}
+        {activeReport === "party-statement" && (
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-xs text-text-tertiary">Party:</span>
+            <div className="w-64">
+              <PartyCombobox value={partyStatementPartyId} onChange={setPartyStatementPartyId} label="" />
+            </div>
+          </div>
+        )}
+
+        <div>{renderReport()}</div>
+      </div>
+    );
+  }
+
+  // ── Reports Centre ──
+  const term = query.trim().toLowerCase();
+  const byId = (id: ReportId) => ALL_REPORTS.find((r) => r.id === id);
+  const groupOf = (id: ReportId) => REPORT_GROUPS.find((g) => g.reports.some((r) => r.id === id))?.label ?? "";
+  let listTitle: string;
+  let listNote: string;
+  let list: ReportDef[];
+  if (term) {
+    list = ALL_REPORTS.filter((r) => `${r.label} ${r.description} ${groupOf(r.id)}`.toLowerCase().includes(term));
+    listTitle = `Results for “${query.trim()}”`;
+    listNote = `${list.length} found`;
+  } else if (category === "favourites") {
+    list = favs.map(byId).filter((r): r is ReportDef => !!r);
+    listTitle = "Favourites";
+    listNote = "Star any report to keep it here";
+  } else if (category === "recent") {
+    list = recent.map(byId).filter((r): r is ReportDef => !!r);
+    listTitle = "Recently viewed";
+    listNote = "The last reports you opened";
+  } else {
+    const g = REPORT_GROUPS.find((x) => x.id === category) ?? REPORT_GROUPS[0];
+    list = g.reports;
+    listTitle = g.label;
+    listNote = `${g.reports.length} reports`;
+  }
+  const showGroup = !!term || category === "favourites" || category === "recent";
+  const emptyText = term
+    ? `No report matches “${query.trim()}”. Try “stock”, “GST” or “ledger”.`
+    : category === "recent"
+      ? "Reports you open will show up here."
+      : "Star a report to add it here.";
+
+  const catButton = (id: string, label: string, count: number, icon?: ReactNode) => {
+    const on = !term && category === id;
+    return (
+      <button
+        key={id}
+        type="button"
+        onClick={() => {
+          setCategory(id);
+          setQuery("");
+        }}
+        aria-current={on ? "true" : undefined}
+        className={cn(
+          "flex shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-ui transition-colors lg:w-full",
+          on ? "bg-brand-600/10 font-semibold text-brand-700 dark:text-brand-400" : "text-text-secondary hover:bg-surface-2 hover:text-text-primary",
+        )}
+      >
+        {icon}
+        <span className="whitespace-nowrap">{label}</span>
+        <span className={cn("ml-auto pl-2 text-xs tabular-nums", on ? "" : "text-text-tertiary")}>{count}</span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className={PAGE_TITLE_CLASS}>Reports</h1>
+          <p className="mt-0.5 text-sm text-text-tertiary">{ALL_REPORTS.length} reports. Star the ones you use most.</p>
         </div>
+        <label className="flex h-10 w-full max-w-sm items-center gap-2 rounded-xl border border-border-light bg-surface-0 px-3 focus-within:border-brand-400">
+          <Icon icon={Search01Icon} size={16} className="shrink-0 text-text-tertiary" />
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Go to a report"
+            aria-label="Go to a report"
+            className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-tertiary"
+          />
+          <KbdShortcut keys={["/"]} className="opacity-70" />
+        </label>
+      </div>
+
+      <div className="grid overflow-clip rounded-2xl border border-border-light bg-surface-0 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <nav
+          aria-label="Report categories"
+          className="flex gap-1 overflow-x-auto border-b border-border-light p-2 lg:flex-col lg:overflow-visible lg:border-b-0 lg:border-r"
+        >
+          {catButton("favourites", "Favourites", favs.length, <Icon icon={StarIcon} size={15} className="text-amber-500 [&_path]:fill-current" />)}
+          {catButton("recent", "Recently viewed", recent.length, <Icon icon={Clock01Icon} size={15} className="text-text-tertiary" />)}
+          <div className="mx-2 my-1.5 hidden h-px bg-border-light lg:block" />
+          {REPORT_GROUPS.map((g) => catButton(g.id, g.label, g.reports.length))}
+        </nav>
+
+        <section aria-live="polite" className="min-w-0">
+          <header className="flex items-baseline gap-2.5 border-b border-border-light px-5 py-3.5">
+            <h2 className="text-base font-semibold text-text-primary">{listTitle}</h2>
+            <span className="text-ui text-text-tertiary">{listNote}</span>
+          </header>
+          {list.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-text-tertiary">{emptyText}</p>
+          ) : (
+            <ul>
+              {list.map((r) => (
+                <li key={r.id} className="flex items-center gap-1.5 border-b border-border-light px-3 last:border-0 hover:bg-surface-1">
+                  <StarButton on={favs.includes(r.id)} label={r.label} onToggle={() => toggleFav(r.id)} />
+                  <button
+                    type="button"
+                    onClick={() => openReport(r.id)}
+                    aria-label={r.label}
+                    className="group min-w-0 flex-1 py-2.5 text-left"
+                  >
+                    <span className="block font-semibold text-text-primary group-hover:text-brand-600 group-hover:underline group-hover:underline-offset-2 dark:group-hover:text-brand-400">
+                      {r.label}
+                    </span>
+                    <span className="block text-ui text-text-tertiary">{r.description}</span>
+                  </button>
+                  {showGroup && <span className="hidden shrink-0 text-xs text-text-tertiary sm:block">{groupOf(r.id)}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );

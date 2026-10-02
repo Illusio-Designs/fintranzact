@@ -36,10 +36,11 @@ export async function openPage(page: Page, label: string, heading: string | RegE
   await expectNoHorizontalScroll(page, label);
 }
 
-/** Business Reports → one report, from its menu (a drawer on a phone). */
+/** Business Reports → one report, found with "Go to a report". */
 export async function openReport(page: Page, label: string) {
   if (!page.url().endsWith("/reports")) await openPage(page, "Business Reports", /.+/);
-  if (isPhone(page)) await page.getByRole("button", { name: "Select report" }).click();
+  // The Reports Centre lists one category at a time; "Go to a report" finds any.
+  await page.getByRole("searchbox", { name: "Go to a report" }).fill(label);
   await page.getByRole("button", { name: label, exact: true }).click();
   await expect(page.getByRole("heading", { name: label, level: 1 })).toBeVisible();
 }

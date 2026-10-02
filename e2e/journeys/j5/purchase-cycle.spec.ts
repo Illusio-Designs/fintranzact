@@ -43,6 +43,7 @@ import {
   listRow,
   openBusiness,
   openPage,
+  openReport,
   pick,
   pickDateMonthsAhead,
 } from "../../helpers/journey-ui";
@@ -345,7 +346,7 @@ test.describe("J5 purchase cycle", () => {
     // their taxable value, input GST net of what went back, the returns and
     // debit note in Purchase Returns, and the supplier's account settled
     // past zero by the payment and the returns.
-    await page.getByTestId("gst-report-tabs").getByRole("button", { name: "Trial Balance" }).click();
+    await openReport(page, "Trial Balance");
     const account = async (code: string, debit: number, credit: number) => {
       const cells = page.getByRole("row").filter({ has: page.getByRole("cell", { name: code, exact: true }) }).getByRole("cell");
       await expect(cells.nth(3)).toHaveText(debit ? inr(debit) : "—");

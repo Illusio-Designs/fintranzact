@@ -245,10 +245,9 @@ test.describe("J10 dashboard & reports", () => {
     await expect(statCard(page, "Net Tax Liability")).toHaveText(inr(GST_MONTH.gstr3b.net.total));
     await expectNoHorizontalScroll(page, "tax summary");
 
-    // ── GST Returns page: P&L, trial balance, balance sheet, aging, ledger ─
-    await openPage(page, "GST Returns");
-    const tabs = page.getByTestId("gst-report-tabs");
-    await tabs.getByRole("button", { name: "Profit & Loss", exact: true }).click();
+    // ── Reports: P&L, trial balance, balance sheet, ageing, ledger ─
+    // (these used to be tabs on the GST Returns page)
+    await openReport(page, "Profit & Loss");
     await lastMonth(page);
     await expect(statCard(page, "Revenue")).toHaveText(inr(F.netSalesTaxable));
     await expect(statCard(page, "Cost of Goods Sold")).toHaveText(inr(cogs));
@@ -263,7 +262,7 @@ test.describe("J10 dashboard & reports", () => {
     const today = new Date(Date.now() + 330 * 60_000);
     const thisFy = today.getUTCMonth() >= 3 ? today.getUTCFullYear() : today.getUTCFullYear() - 1;
     if (p.fyStart === thisFy) {
-      await tabs.getByRole("button", { name: "Trial Balance", exact: true }).click();
+      await openReport(page, "Trial Balance");
       const account = (name: string) => page.getByRole("row").filter({ hasText: name }).getByRole("cell").last();
       await expect(account("Accounts Receivable")).toHaveText(inr(toCollect));
       await expect(account("Accounts Payable")).toHaveText(inr(-toPay));
@@ -274,7 +273,7 @@ test.describe("J10 dashboard & reports", () => {
       await expect(totals.nth(1)).toHaveText(await totals.nth(2).innerText()); // debits = credits
       await expectNoHorizontalScroll(page, "trial balance");
 
-      await tabs.getByRole("button", { name: "Balance Sheet", exact: true }).click();
+      await openReport(page, "Balance Sheet");
       const assets = toCollect + closingStock + (F.received - F.paid - F.expenses) + GST_MONTH.gstr3b.itc.total;
       const liabilities = toPay + GST_MONTH.gstr3b.outward.igst + GST_MONTH.gstr3b.outward.cgst + GST_MONTH.gstr3b.outward.sgst;
       await expect(page.getByText("Total Assets", { exact: true }).locator("..")).toContainText(inr(assets));
@@ -284,12 +283,12 @@ test.describe("J10 dashboard & reports", () => {
       await expectNoHorizontalScroll(page, "balance sheet");
     }
 
-    await tabs.getByRole("button", { name: "Aging Report", exact: true }).click();
+    await openReport(page, "Ageing Report");
     await expect(page.getByText("Total Outstanding", { exact: true }).locator("xpath=following-sibling::p[1]")).toHaveText(inr(toCollect));
     await expect(page.getByRole("row").filter({ hasText: m.anand.name }).getByRole("cell").last()).toHaveText(inr(106200));
     await expectNoHorizontalScroll(page, "aging");
 
-    await tabs.getByRole("button", { name: "Party Ledger", exact: true }).click();
+    await openReport(page, "Party Ledger");
     await lastMonth(page);
     await pick(page, page.getByRole("combobox", { name: "Select Party" }), m.pune.name);
     // Invoice 14,040 − credit note 2,360 − receipt 10,000
