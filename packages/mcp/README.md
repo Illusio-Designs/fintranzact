@@ -261,6 +261,14 @@ Ask Claude: *"What is my business's total outstanding receivables?"*
 | `api_key_create` | Create a new API key (shown exactly once) |
 | `api_key_revoke` | Permanently revoke an API key |
 
+### Billing
+
+| Tool | What it does |
+|---|---|
+| `billing_status` | Plan state, trial days left, read-only flag and add-ons (read-only; works while the organisation is read-only) |
+
+When an organisation is read-only, over a plan limit or missing an add-on, write tools return an error explaining that creating and editing are refused until the organisation owner chooses a plan, with the billing link. These are not permission errors. Set `FINTRANZACT_WEB_URL` to override the web app origin used for the link (default: the API URL with `api.` swapped for `app.`).
+
 ## Available Resources
 
 Resources are read-only context that AI agents can load into their context window:

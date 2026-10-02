@@ -12,6 +12,7 @@
  */
 
 import superjson from "superjson";
+import { parseEntitlement, buildBillingUrl, formatPlanRequired } from "./lib/plan.js";
 
 export interface ClientConfig {
   /** Base API URL, e.g. "http://localhost:3000" or the public API URL. */
@@ -29,6 +30,7 @@ export interface ClientConfig {
 export type FintranzactError =
   | { code: "unauthorized"; message: string }
   | { code: "forbidden"; message: string }
+  | { code: "plan_required"; reason: string; message: string; upgradeUrl: string }
   | { code: "not_found"; resource: string }
   | { code: "validation_failed"; fields: Record<string, string[]> }
   | { code: "api_error"; message: string };
@@ -46,6 +48,8 @@ export function formatFintranzactError(err: FintranzactError): string {
       return `Authentication required: ${err.message}. Check that FINTRANZACT_API_KEY is set and not expired.`;
     case "forbidden":
       return `Permission denied: ${err.message}`;
+    case "plan_required":
+      return formatPlanRequired(err);
     case "not_found":
       return `Not found: ${err.resource}`;
     case "validation_failed":
@@ -62,7 +66,7 @@ export function formatFintranzactError(err: FintranzactError): string {
 
 // ── tRPC error normalization ────────────────────────────────────────────────
 
-function normalizeTrpcError(raw: unknown): FintranzactError {
+export function normalizeTrpcError(raw: unknown, apiUrl?: string): FintranzactError {
   if (!raw || typeof raw !== "object") {
     return { code: "api_error", message: "Unknown error from API" };
   }
@@ -73,7 +77,19 @@ function normalizeTrpcError(raw: unknown): FintranzactError {
 
   // tRPC error codes map to HTTP semantics
   if (code === "UNAUTHORIZED") return { code: "unauthorized", message };
-  if (code === "FORBIDDEN") return { code: "forbidden", message };
+  if (code === "FORBIDDEN") {
+    // An entitlement refusal (read-only, plan limit, add-on, suspended) is not a permissions problem.
+    const ent = parseEntitlement(raw);
+    if (ent) {
+      return {
+        code: "plan_required",
+        reason: ent.reason,
+        message,
+        upgradeUrl: buildBillingUrl(ent, apiUrl),
+      };
+    }
+    return { code: "forbidden", message };
+  }
   if (code === "NOT_FOUND") return { code: "not_found", resource: message };
 
   // Zod validation errors from tRPC
@@ -118,7 +134,7 @@ export class FintranzactClient {
     const envelope = body as Record<string, unknown>;
 
     if (!res.ok || "error" in envelope) {
-      throw new FintranzactApiError(normalizeTrpcError(envelope["error"] ?? { code: "api_error", message: `HTTP ${res.status}` }));
+      throw new FintranzactApiError(normalizeTrpcError(envelope["error"] ?? { code: "api_error", message: `HTTP ${res.status}` }, this.apiUrl));
     }
 
     const result = (envelope["result"] as Record<string, unknown> | undefined);
@@ -1028,6 +1044,17 @@ export class FintranzactClient {
     };
   }
 
+  // ── Billing ─────────────────────────────────────────────────────
+
+  get billing() {
+    const c = this;
+    return {
+      status() {
+        return c.query<BillingStatus>("billing.status");
+      },
+    };
+  }
+
   // ── System ──────────────────────────────────────────────────────
 
   get system() {
@@ -1057,6 +1084,19 @@ export type InvoiceStatus =
 export type DocumentType =
   | "invoice" | "quotation" | "credit_note" | "debit_note"
   | "delivery_challan" | "proforma" | "sales_return" | "purchase_return";
+
+export interface BillingStatus {
+  state: string;
+  readOnly: boolean;
+  reason: string | null;
+  message: string | null;
+  trialEndsAt: string | null;
+  trialDaysLeft: number | null;
+  graceUntil: string | null;
+  addons: string[];
+  upgradePath: string;
+  canManageBilling: boolean;
+}
 
 export interface MaintenanceStatus {
   enabled: boolean;
