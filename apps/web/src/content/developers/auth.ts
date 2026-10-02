@@ -151,6 +151,7 @@ httpx.post(
           tenantName: "Rahul's Organization",
           role: "owner",
           needsProfile: false,
+          twoFactor: { enabled: false },
         },
       },
       codeExamples: {
@@ -175,7 +176,7 @@ if session["user"]:
       },
       gotchas: [
         "This is a `query` (GET) — not a mutation. Use `.query()` not `.mutate()`.",
-        "When unauthenticated, returns `{user: null, tenantId: null, tenantName: null, role: null, needsProfile: false}` — it does NOT throw.",
+        "When unauthenticated, returns `{user: null, tenantId: null, tenantName: null, role: null, needsProfile: false, twoFactor: {enabled: false}}` — it does NOT throw.",
       ],
     },
     {
@@ -476,6 +477,142 @@ access_token = data["accessToken"]`,
         "Access token hits do not extend the parent session; only refresh-token (session ID) requests slide its expiry. Revoking the session (`auth.revokeSession`, `auth.logout`) invalidates its access tokens too.",
       ],
       relatedEndpoints: ["auth-login", "auth-revoke-session"],
+    },
+    {
+      id: "auth-two-factor-status",
+      method: "query",
+      path: "auth.twoFactorStatus",
+      title: "Two-Factor Status",
+      description: "Whether two-factor authentication is on for the signed-in user, whether a setup is pending, how many backup codes remain and any lockout.",
+      auth: "protected",
+      input: [],
+      output: {
+        description: "Current two-factor state.",
+        example: { enabled: true, pendingSetup: false, backupCodesRemaining: 9, lockedUntil: null, trustedDeviceCount: 0, createdAt: "2026-10-02T09:30:00.000Z" },
+      },
+      codeExamples: {
+        curl: `curl ${API_BASE_URL}/api/trpc/auth.twoFactorStatus \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
+        javascript: `const result = await trpc.auth.twoFactorStatus.query();`,
+      },
+      gotchas: [
+        "Requires a real session (cookie, session Bearer or access token). API keys are refused with BAD_REQUEST.",
+        "`lockedUntil` is null unless verification is currently locked.",
+      ],
+      relatedEndpoints: ["auth-me"],
+    },
+    {
+      id: "auth-two-factor-begin-setup",
+      method: "mutation",
+      path: "auth.twoFactorBeginSetup",
+      title: "Begin Two-Factor Setup",
+      description: "Start enrolling an authenticator app. Generates a fresh secret (replacing any earlier pending one) and returns the otpauth URI, a PNG QR code and the key for manual entry. Nothing is enabled until `auth.twoFactorConfirmSetup` succeeds.",
+      auth: "protected",
+      input: [],
+      output: {
+        description: "Everything an authenticator app needs.",
+        example: { otpauthUri: "otpauth://totp/Fintranzact:rahul%40myshop.in?secret=JBSWY3DPEHPK3PXP...", qrDataUrl: "data:image/png;base64,...", manualKey: "JBSW Y3DP EHPK 3PXP", accountName: "rahul@myshop.in", issuer: "Fintranzact" },
+      },
+      codeExamples: {
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/auth.twoFactorBeginSetup \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -d '{"json":{}}'`,
+        javascript: `const result = await trpc.auth.twoFactorBeginSetup.mutate();`,
+      },
+      gotchas: [
+        "Requires a real session (cookie, session Bearer or access token). API keys are refused with BAD_REQUEST.",
+        "BAD_REQUEST when two-factor is already on. TOO_MANY_REQUESTS after 10 starts in an hour.",
+        "Allowed while the organisation is read-only or suspended.",
+      ],
+      relatedEndpoints: ["auth-me"],
+    },
+    {
+      id: "auth-two-factor-confirm-setup",
+      method: "mutation",
+      path: "auth.twoFactorConfirmSetup",
+      title: "Confirm Two-Factor Setup",
+      description: "Verify a 6-digit code from the authenticator app against the pending secret. On success two-factor is turned on, ten single-use backup codes are returned (shown once) and the user's other sessions are signed out.",
+      auth: "protected",
+      input: [
+        { name: "code", type: "string", required: true, description: "The 6-digit code from the authenticator app" },
+      ],
+      output: {
+        description: "The backup codes. Store them now: they are never shown again.",
+        example: { backupCodes: ["K7M2QX-9TWD4B", "..."] },
+      },
+      codeExamples: {
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/auth.twoFactorConfirmSetup \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -d '{"json":{"code":"123456"}}'`,
+        javascript: `const result = await trpc.auth.twoFactorConfirmSetup.mutate({ code: "123456" });`,
+      },
+      gotchas: [
+        "Requires a real session (cookie, session Bearer or access token). API keys are refused with BAD_REQUEST.",
+        "A wrong code is BAD_REQUEST, never UNAUTHORIZED. After 5 consecutive wrong codes verification is locked (TOO_MANY_REQUESTS with the unlock time): 15 minutes, then 1 hour, then 24 hours.",
+        "Other sessions are revoked; the calling session stays signed in.",
+      ],
+      relatedEndpoints: ["auth-me"],
+    },
+    {
+      id: "auth-two-factor-disable",
+      method: "mutation",
+      path: "auth.twoFactorDisable",
+      title: "Turn Off Two-Factor",
+      description: "Turn two-factor authentication off. Needs the account password and a current authenticator code or an unused backup code. Removes the secret and backup codes, revokes trusted devices and signs out the other sessions.",
+      auth: "protected",
+      input: [
+        { name: "password", type: "string", required: true, description: "Account password" },
+        { name: "code", type: "string", required: true, description: "6-digit authenticator code, or a backup code" },
+      ],
+      output: {
+        description: "Success confirmation.",
+        example: { success: true },
+      },
+      codeExamples: {
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/auth.twoFactorDisable \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -d '{"json":{"password":"your-password","code":"123456"}}'`,
+        javascript: `const result = await trpc.auth.twoFactorDisable.mutate({ password: "your-password", code: "123456" });`,
+      },
+      gotchas: [
+        "Requires a real session (cookie, session Bearer or access token). API keys are refused with BAD_REQUEST.",
+        "A wrong code is BAD_REQUEST, never UNAUTHORIZED. After 5 consecutive wrong codes verification is locked (TOO_MANY_REQUESTS with the unlock time): 15 minutes, then 1 hour, then 24 hours.",
+        "FORBIDDEN \"Your organisation requires two-factor authentication\" when any organisation the user belongs to enforces it for their role; an owner must relax the policy first.",
+        "The password and code share one generic BAD_REQUEST message, and wrong passwords count toward the same per-email limiter as sign-in.",
+      ],
+      relatedEndpoints: ["auth-me"],
+    },
+    {
+      id: "auth-regenerate-backup-codes",
+      method: "mutation",
+      path: "auth.regenerateBackupCodes",
+      title: "Regenerate Backup Codes",
+      description: "Replace all backup codes with ten new ones. Needs the account password and a current authenticator code (a backup code is not accepted). The old codes stop working immediately.",
+      auth: "protected",
+      input: [
+        { name: "password", type: "string", required: true, description: "Account password" },
+        { name: "code", type: "string", required: true, description: "6-digit authenticator code" },
+      ],
+      output: {
+        description: "The new backup codes, shown once.",
+        example: { backupCodes: ["M4T9RC-2XQ7HD", "..."] },
+      },
+      codeExamples: {
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/auth.regenerateBackupCodes \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -d '{"json":{"password":"your-password","code":"123456"}}'`,
+        javascript: `const result = await trpc.auth.regenerateBackupCodes.mutate({ password: "your-password", code: "123456" });`,
+      },
+      gotchas: [
+        "Requires a real session (cookie, session Bearer or access token). API keys are refused with BAD_REQUEST.",
+        "A wrong code is BAD_REQUEST, never UNAUTHORIZED. After 5 consecutive wrong codes verification is locked (TOO_MANY_REQUESTS with the unlock time): 15 minutes, then 1 hour, then 24 hours.",
+        "Trusted devices and other sessions are not affected.",
+      ],
+      relatedEndpoints: ["auth-me"],
     },
   ],
 };

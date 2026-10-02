@@ -39,6 +39,11 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   "auth.logoutAll",
   "auth.revokeSession",
   "auth.issueAccessToken",
+  // Account security (two-factor enrolment) never depends on the plan.
+  "auth.twoFactorBeginSetup",
+  "auth.twoFactorConfirmSetup",
+  "auth.twoFactorDisable",
+  "auth.regenerateBackupCodes",
 
   // Billing: the way out of read-only. A halted organisation must be able to
   // buy a plan, change plan, fix billing details and cancel.

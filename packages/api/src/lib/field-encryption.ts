@@ -147,7 +147,7 @@ function configuredKeyHex(): string | undefined {
 }
 
 /**
- * The key material 2FA secrets and backup-code hashes derive from. Unlike
+ * The key material 2FA (TOTP) secrets are encrypted with. Backup-code hashes do NOT use it. Unlike
  * encryptField (which silently stores PLAINTEXT when no key is configured),
  * this throws unless a real key is set; only NODE_ENV=test falls back to a
  * fixed test key so unit tests need no environment.

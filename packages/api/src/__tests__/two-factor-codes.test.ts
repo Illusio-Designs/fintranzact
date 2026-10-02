@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BACKUP_CODE_ALPHABET,
@@ -12,6 +13,8 @@ import {
 import { decryptTotpSecret, encryptTotpSecret } from "../lib/field-encryption.js";
 
 afterEach(() => vi.unstubAllEnvs());
+
+const U = "11111111-1111-1111-1111-111111111111";
 
 describe("backup codes", () => {
   it("generates 10 unique XXXXXX-XXXXXX codes from the unambiguous alphabet", () => {
@@ -36,29 +39,32 @@ describe("backup codes", () => {
     expect(normalizeBackupCode("abc.de_fg hjk")).toBe("ABCDEFGHJK");
   });
   it("hashes deterministically and input-format-insensitively", () => {
-    const h = hashBackupCode("ABCDEF-GHJKMN");
+    const h = hashBackupCode(U, "ABCDEF-GHJKMN");
     expect(h).toMatch(/^[0-9a-f]{64}$/);
-    expect(hashBackupCode("abcdef ghjkmn")).toBe(h);
-    expect(hashBackupCode("ABCDEF-GHJKMP")).not.toBe(h);
+    expect(hashBackupCode(U, "abcdef ghjkmn")).toBe(h);
+    expect(hashBackupCode(U, "ABCDEF-GHJKMP")).not.toBe(h);
   });
-  it("hash depends on the server key", () => {
-    const a = hashBackupCode("ABCDEF-GHJKMN");
+  it("is salted by user id", () => {
+    expect(hashBackupCode("user-b", "ABCDEF-GHJKMN")).not.toBe(hashBackupCode(U, "ABCDEF-GHJKMN"));
+  });
+  it("matches the documented construction (sha256 of the versioned string)", () => {
+    const expected = createHash("sha256").update(`fintranzact:2fa-backup:v1:${U}:ABCDEFGHJKMN`).digest("hex");
+    expect(hashBackupCode(U, "ABCDEF-GHJKMN")).toBe(expected);
+  });
+  it("does not depend on the encryption key (rotation cannot invalidate codes)", () => {
+    const a = hashBackupCode(U, "ABCDEF-GHJKMN");
     vi.stubEnv("ENCRYPTION_KEY", "ab".repeat(32));
-    const b = hashBackupCode("ABCDEF-GHJKMN");
-    expect(b).not.toBe(a);
-    expect(hashBackupCode("ABCDEF-GHJKMN")).toBe(b);
-  });
-  it("fails closed without a key outside tests", () => {
+    expect(hashBackupCode(U, "ABCDEF-GHJKMN")).toBe(a);
     vi.stubEnv("ENCRYPTION_KEY", "");
     vi.stubEnv("DB_ENCRYPTION_KEY", "");
     vi.stubEnv("NODE_ENV", "production");
-    expect(() => hashBackupCode("ABCDEF-GHJKMN")).toThrow(/ENCRYPTION_KEY/);
+    expect(hashBackupCode(U, "ABCDEF-GHJKMN")).toBe(a);
   });
   it("matches against a stored list in constant time", () => {
     const codes = generateBackupCodes(3);
-    const hashes = codes.map(hashBackupCode);
-    expect(matchesAnyBackupHash(codes[1].toLowerCase(), hashes)).toBe(true);
-    expect(matchesAnyBackupHash("ZZZZZZ-ZZZZZZ", hashes)).toBe(false);
+    const hashes = codes.map((c) => hashBackupCode(U, c));
+    expect(matchesAnyBackupHash(U, codes[1].toLowerCase(), hashes)).toBe(true);
+    expect(matchesAnyBackupHash(U, "ZZZZZZ-ZZZZZZ", hashes)).toBe(false);
     expect(constantTimeEqualHex("aa", "aaa")).toBe(false);
     expect(constantTimeEqualHex("aa", "aa")).toBe(true);
   });

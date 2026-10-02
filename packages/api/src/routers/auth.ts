@@ -15,6 +15,15 @@ import { invalidateSessionCache, getSessionIdFromRequest, revokeAllUserSessions 
 import { verifyTurnstile } from "../lib/turnstile.js";
 import { getClientKind } from "../lib/client-headers.js";
 import { enforceSessionLimit } from "../lib/plan-limits.js";
+import { createFixedWindowLimiter } from "../lib/fixed-window-limiter.js";
+import { createTwoFactorDeps } from "../lib/two-factor-store.js";
+import {
+  beginTwoFactorSetup,
+  confirmTwoFactorSetup,
+  disableTwoFactor,
+  getTwoFactorStatus,
+  regenerateBackupCodes,
+} from "../lib/two-factor.js";
 
 // TTL for short-lived access tokens (15 minutes)
 const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -34,6 +43,61 @@ setInterval(() => {
     if (now - entry.firstAttempt > LOGIN_WINDOW_MS) failedLoginAttempts.delete(key);
   }
 }, 5 * 60_000).unref();
+
+// The same per-email limiter backs the two-factor password re-check, so
+// disabling 2FA / regenerating codes cannot be used to brute-force the password.
+const twoFactorDeps = createTwoFactorDeps({
+  isBlocked(emailKey) {
+    const a = failedLoginAttempts.get(emailKey);
+    return !!a && a.count >= LOGIN_MAX_ATTEMPTS && Date.now() - a.firstAttempt < LOGIN_WINDOW_MS;
+  },
+  recordFailure(emailKey) {
+    const prev = failedLoginAttempts.get(emailKey);
+    if (prev && Date.now() - prev.firstAttempt < LOGIN_WINDOW_MS) prev.count++;
+    else failedLoginAttempts.set(emailKey, { count: 1, firstAttempt: Date.now() });
+  },
+});
+
+// Starting setup mints a secret and renders a QR: 10 per hour per user is plenty.
+const setupLimiter = createFixedWindowLimiter({ limit: 10, windowMs: 60 * 60_000 });
+
+/** Two-factor settings need a real session (cookie, session Bearer or access token), never an API key. */
+function requireSession(ctx: { authTokenKind?: "access" | "refresh" | "cookie" | null }): void {
+  if (!ctx.authTokenKind) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Two-factor settings can only be changed from a signed-in session, not with an API key.",
+    });
+  }
+}
+
+/** The caller's own session id, so it survives the rotation. Access tokens map to their parent session. */
+async function currentSessionId(ctx: { req: Request; authTokenKind?: string | null }): Promise<string | null> {
+  const direct = getSessionIdFromRequest(ctx.req);
+  if (direct) return direct;
+  if (ctx.authTokenKind === "access") {
+    const bearer = ctx.req.headers.get("authorization");
+    const token = bearer?.startsWith("Bearer ") ? bearer.slice(7) : null;
+    if (token?.startsWith("at_")) {
+      const [row] = await controlDb
+        .select({ sessionId: accessTokens.sessionId })
+        .from(accessTokens)
+        .where(eq(accessTokens.id, token))
+        .limit(1);
+      return row?.sessionId ?? null;
+    }
+  }
+  return null;
+}
+
+function eventContext(ctx: { req: Request; ipAddress?: string | null }) {
+  return { ip: ctx.ipAddress ?? null, userAgent: ctx.req.headers.get("user-agent") };
+}
+
+const twoFactorCodeInput = z.object({
+  password: z.string().min(1).max(128),
+  code: z.string().min(1).max(64),
+});
 
 function generateSlug(name: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -753,9 +817,53 @@ export const authRouter = router({
     return { accessToken: accessTokenId, expiresAt };
   }),
 
+  // ── Two-factor authentication (enrolment) ────────────────────
+  // Session-only (never API keys). See docs/TWO-FACTOR.md.
+  twoFactorStatus: protectedProcedure.query(async ({ ctx }) => {
+    requireSession(ctx);
+    return getTwoFactorStatus(twoFactorDeps, ctx.user.id);
+  }),
+
+  twoFactorBeginSetup: protectedProcedure.mutation(async ({ ctx }) => {
+    requireSession(ctx);
+    if (!setupLimiter.hit(ctx.user.id)) {
+      throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many setup attempts. Please try again in an hour." });
+    }
+    return beginTwoFactorSetup(twoFactorDeps, ctx.user, eventContext(ctx));
+  }),
+
+  twoFactorConfirmSetup: protectedProcedure
+    .input(z.object({ code: z.string().min(1).max(32) }))
+    .mutation(async ({ input, ctx }) => {
+      requireSession(ctx);
+      return confirmTwoFactorSetup(twoFactorDeps, ctx.user.id, input.code, {
+        currentSessionId: await currentSessionId(ctx),
+        event: eventContext(ctx),
+      });
+    }),
+
+  twoFactorDisable: protectedProcedure.input(twoFactorCodeInput).mutation(async ({ input, ctx }) => {
+    requireSession(ctx);
+    return disableTwoFactor(twoFactorDeps, ctx.user.id, input, {
+      currentSessionId: await currentSessionId(ctx),
+      event: eventContext(ctx),
+    });
+  }),
+
+  regenerateBackupCodes: protectedProcedure.input(twoFactorCodeInput).mutation(async ({ input, ctx }) => {
+    requireSession(ctx);
+    return regenerateBackupCodes(twoFactorDeps, ctx.user.id, input, { event: eventContext(ctx) });
+  }),
+
   // ── Me ───────────────────────────────────────────────────────
   me: publicProcedure.query(async ({ ctx }) => {
-    if (!ctx.user) return { user: null, tenantId: null, tenantName: null, role: null, needsProfile: false };
+    if (!ctx.user) return { user: null, tenantId: null, tenantName: null, role: null, needsProfile: false, twoFactor: { enabled: false } };
+
+    const [flag] = await controlDb
+      .select({ enabled: users.twoFactorEnabled })
+      .from(users)
+      .where(eq(users.id, ctx.user.id))
+      .limit(1);
 
     let tenantName: string | null = null;
     let role: string | null = null;
@@ -778,7 +886,7 @@ export const authRouter = router({
       role = membership?.role ?? null;
     }
 
-    return { user: ctx.user, tenantId: ctx.tenantId, tenantName, role, needsProfile: !ctx.user.name };
+    return { user: ctx.user, tenantId: ctx.tenantId, tenantName, role, needsProfile: !ctx.user.name, twoFactor: { enabled: flag?.enabled ?? false } };
   }),
 });
 

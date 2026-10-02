@@ -20,8 +20,13 @@
 | auth.logoutAll | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.me | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.register | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.regenerateBackupCodes | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.requestEmailChange | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.revokeSession | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.twoFactorBeginSetup | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.twoFactorConfirmSetup | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.twoFactorDisable | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.twoFactorStatus | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.updateName | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | bankAccount.addTransaction | mutation | authorized | create:BankTransaction | ✓ | ✓ | ✗ | ✗ | ✓ |
 | bankAccount.create | mutation | authorized | create:BankAccount | ✓ | ✓ | ✗ | ✗ | ✓ |

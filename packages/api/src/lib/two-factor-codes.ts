@@ -1,11 +1,10 @@
 /**
  * two-factor-codes.ts — backup codes and opaque tokens (login challenges,
- * trusted devices). Pure apart from reading the server key for the pepper.
+ * trusted devices). Pure functions; nothing here depends on ENCRYPTION_KEY.
  */
 
-import { createHash, createHmac, hkdfSync, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { BACKUP_CODE_COUNT } from "@fintranzact/shared";
-import { requireTwoFactorKeyHex } from "./field-encryption.js";
 
 /** 30 symbols (no 0/O/1/I/L/U), ~4.9 bits each. */
 export const BACKUP_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
@@ -32,21 +31,18 @@ export function normalizeBackupCode(input: string): string {
   return String(input ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-let pepperCache: { keyHex: string; pepper: Buffer } | null = null;
-
-function pepper(): Buffer {
-  const keyHex = requireTwoFactorKeyHex(); // throws in production without a key
-  if (pepperCache?.keyHex === keyHex) return pepperCache.pepper;
-  const derived = Buffer.from(
-    hkdfSync("sha256", Buffer.from(keyHex, "hex"), Buffer.alloc(0), "fintranzact/2fa/backup-code-pepper/v1", 32),
-  );
-  pepperCache = { keyHex, pepper: derived };
-  return derived;
-}
-
-/** Deterministic keyed hash (HMAC-SHA256, hex) of a backup code; normalises first. */
-export function hashBackupCode(code: string): string {
-  return createHmac("sha256", pepper()).update(normalizeBackupCode(code)).digest("hex");
+/**
+ * sha256 hex of a backup code, salted with the user id as a domain separator.
+ *
+ * Deliberately NOT keyed from ENCRYPTION_KEY: rotating that key must never
+ * invalidate anyone's backup codes. The codes carry ~59 bits of entropy and
+ * are single-use, so a salted fast hash is adequate; the user id stops one
+ * code table being reused across accounts. Normalises the code first.
+ */
+export function hashBackupCode(userId: string, code: string): string {
+  return createHash("sha256")
+    .update(`fintranzact:2fa-backup:v1:${userId}:${normalizeBackupCode(code)}`)
+    .digest("hex");
 }
 
 /** Constant-time equality for two hex hashes. */
@@ -57,8 +53,8 @@ export function constantTimeEqualHex(a: string, b: string): boolean {
 }
 
 /** True if `input` matches any stored hash; scans all of them (no early exit). */
-export function matchesAnyBackupHash(input: string, hashes: readonly string[]): boolean {
-  const h = hashBackupCode(input);
+export function matchesAnyBackupHash(userId: string, input: string, hashes: readonly string[]): boolean {
+  const h = hashBackupCode(userId, input);
   let found = false;
   for (const stored of hashes) if (constantTimeEqualHex(h, stored)) found = true;
   return found;

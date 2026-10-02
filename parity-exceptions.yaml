@@ -584,6 +584,14 @@ exceptions:
       # --- Auth ---
       # Browser-only flows requiring email verification links / callbacks.
       - auth.requestEmailChange
+      # Two-factor enrolment needs a real signed-in session (API keys are
+      # refused by the API) and an authenticator app: an interactive account
+      # flow, not something an API-key client does.
+      - auth.regenerateBackupCodes
+      - auth.twoFactorBeginSetup
+      - auth.twoFactorConfirmSetup
+      - auth.twoFactorDisable
+      - auth.twoFactorStatus
 
       # --- Tenant ---
       # Invite acceptance and org management are browser/mobile flows.
@@ -866,6 +874,14 @@ exceptions:
       - auth.me
       - auth.register
       - auth.requestEmailChange
+      # Two-factor enrolment needs a real signed-in session (API keys are
+      # refused by the API) and an authenticator app: an interactive account
+      # flow, not something an API-key client does.
+      - auth.regenerateBackupCodes
+      - auth.twoFactorBeginSetup
+      - auth.twoFactorConfirmSetup
+      - auth.twoFactorDisable
+      - auth.twoFactorStatus
       - auth.updateName
 
       # --- Tenant ---
