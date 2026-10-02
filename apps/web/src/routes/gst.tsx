@@ -14,6 +14,7 @@ import { Download04Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
 
 import { Spinner } from "@/components/ui/Spinner";
+import { CompositionSettingsCard } from "@/components/gst/CompositionSettingsCard";
 import { fmt, fmtN, fmtStr, fyLabel, ReportSkeleton } from "@/components/reports/report-format";
 export const Route = createFileRoute("/gst")({
   component: GSTReportsPage,
@@ -29,8 +30,8 @@ const months = [
 // each time a return is opened.
 const FRESH = { refetchOnMount: "always" } as const;
 
-type ReportTab = "gstr1" | "gstr3b" | "gstr9" | "cmp08";
-const REPORT_TABS: ReportTab[] = ["gstr1", "gstr3b", "gstr9", "cmp08"];
+type ReportTab = "gstr1" | "gstr3b" | "gstr9" | "cmp08" | "gstr4";
+const REPORT_TABS: ReportTab[] = ["gstr1", "gstr3b", "gstr9", "cmp08", "gstr4"];
 
 export function GSTReportsPage() {
   const embedded = useEmbeddedReport();
@@ -74,7 +75,9 @@ export function GSTReportsPage() {
     { value: "gstr3b", label: tab2Label },
     { value: "gstr9", label: "GSTR-9" },
     // Composition dealers pay tax quarterly on CMP-08
-    ...(isComposition ? [{ value: "cmp08" as const, label: "CMP-08" }] : []),
+    ...(isComposition
+      ? [{ value: "cmp08" as const, label: "CMP-08" }, { value: "gstr4" as const, label: "GSTR-4" }]
+      : []),
   ];
 
   return (
@@ -146,6 +149,7 @@ export function GSTReportsPage() {
       {activeTab === "gstr3b" && <GSTR3BView year={year} month={month} />}
       {activeTab === "gstr9" && <GSTR9View />}
       {activeTab === "cmp08" && isComposition && <CMP08View />}
+      {activeTab === "gstr4" && isComposition && <GSTR4View />}
     </div>
   );
 }
@@ -562,6 +566,8 @@ function CMP08View() {
   const [quarter, setQuarter] = useState(thisQuarter === 1 ? 4 : thisQuarter - 1);
   const { data, isLoading, error } = trpc.gst.cmp08.useQuery({ year: fy, quarter }, FRESH);
   const fyOptions = Array.from({ length: 5 }, (_, i) => thisFy - i);
+  const categoryLabel = (code: string) =>
+    ({ manufacturer_trader: "Manufacturer or trader", restaurant: "Restaurant", other_service: "Other service provider" } as Record<string, string>)[code] ?? code;
 
   return (
     <div className="space-y-5">
@@ -578,6 +584,8 @@ function CMP08View() {
         </Select>
       </div>
 
+      <CompositionSettingsCard financialYear={fyString(fy)} />
+
       {isLoading && <ReportSkeleton />}
       {error && (
         <div className="card px-5 py-4 border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800">
@@ -589,18 +597,337 @@ function CMP08View() {
           <div className="px-4 py-3 border-b border-border-light">
             <h3 className="text-sm font-semibold text-text-primary">CMP-08 — Statement for payment of self-assessed tax</h3>
             <p className="text-xs text-text-tertiary mt-0.5">
-              {formatDate(data.quarterStart)} — {formatDate(data.quarterEnd)} · outward supplies net of credit notes, at the 1% composition rate for traders
+              {formatDate(data.quarterStart)} — {formatDate(data.quarterEnd)} · outward supplies net of credit notes, at {data.rate}% ({categoryLabel(data.category)})
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
-            <StatCard label="Outward supplies (turnover)" value={fmtStr(data.taxableValue)} />
-            <StatCard label="Composition tax payable" value={fmtStr(data.taxPayable)} valueColor="text-amber-600" />
-          </div>
+          {!data.cmp08Applicable ? (
+            <p className="px-4 py-4 text-sm text-text-secondary">
+              There is no CMP-08 for Jan–Mar: the tax for this quarter is declared and paid with the annual return GSTR-4. See the GSTR-4 tab.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4">
+                <StatCard label="Outward supplies (turnover)" value={fmtStr(data.taxableValue)} />
+                <StatCard
+                  label="Composition tax payable"
+                  value={fmtStr(data.taxPayable)}
+                  valueColor="text-amber-600"
+                  subItems={[
+                    { label: "Rate", value: `${data.rate}%` },
+                    { label: "Central tax", value: fmtStr(data.centralTax) },
+                    { label: "State / UT tax", value: fmtStr(data.stateTax) },
+                  ]}
+                />
+                <StatCard
+                  label="Reverse charge tax"
+                  value={fmtStr(data.rcm.tax)}
+                  note={`On ${fmtStr(data.rcm.taxableValue)} of inward supplies`}
+                  subItems={[
+                    { label: "Central tax", value: fmtStr(data.rcm.centralTax) },
+                    { label: "State / UT tax", value: fmtStr(data.rcm.stateTax) },
+                    { label: "Integrated tax", value: fmtStr(data.rcm.integratedTax) },
+                  ]}
+                />
+              </div>
+              <div className="px-4 pb-4 space-y-1 text-xs text-text-secondary">
+                <p>Due date: <strong>{data.dueDate ? formatDate(data.dueDate) : "—"}</strong> (18th of the month after the quarter).</p>
+                <p>
+                  Interest: {fmtStr(data.interest)}
+                  {data.interestBasis === "payment_date_unknown" && " — payment date not recorded, so late interest is not worked out."}
+                  {data.interestBasis === "paid_late" && " — payment was after the due date."}
+                </p>
+                <p className="text-text-tertiary">Rates, due dates and interest change by notification. Verify with your CA before filing.</p>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
   );
 }
+
+// ── GSTR-4 View (annual return, composition scheme) ────────────
+
+/** "2026-27" for the financial year starting in `startYear`. */
+const fyString = (startYear: number) => `${startYear}-${String(startYear + 1).slice(2)}`;
+const AMOUNT_RE = /^\d+(\.\d{1,2})?$/;
+
+function GSTR4View() {
+  const now = new Date();
+  const thisFy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const [fy, setFy] = useState(thisFy - 1); // the last completed year is the one due for filing
+  const [paid, setPaid] = useState<{ 1: string; 2: string; 3: string }>({ 1: "", 2: "", 3: "" });
+  const [downloading, setDownloading] = useState(false);
+  const utils = trpc.useUtils();
+
+  // A quarter left blank is assumed paid in full; only valid amounts are sent.
+  const cmp08Paid = Object.fromEntries(
+    ([1, 2, 3] as const).filter((q) => AMOUNT_RE.test(paid[q].trim())).map((q) => [q, paid[q].trim()]),
+  ) as { 1?: string; 2?: string; 3?: string };
+  const input = { financialYear: fyString(fy), cmp08Paid: Object.keys(cmp08Paid).length ? cmp08Paid : undefined };
+  const { data, isLoading, error } = trpc.gst.gstr4.useQuery(input, FRESH);
+  const fyOptions = Array.from({ length: 6 }, (_, i) => thisFy - i);
+
+  function save(content: string, type: string, filename: string) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Best effort: the key names are not verified against the GST portal schema.
+  async function handleDownloadJson() {
+    setDownloading(true);
+    try {
+      const result = await utils.gst.gstr4Json.fetch(input);
+      save(JSON.stringify(result.json, null, 2), "application/json", result.filename);
+      toast.success("GSTR-4 JSON downloaded. Check it against the GST offline tool before uploading.");
+    } catch {
+      toast.error("Download failed");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  function handleExportCsv() {
+    if (!data) return;
+    const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const lines: string[][] = [
+      ["GSTR-4 summary", `FY ${data.financialYear}`],
+      [],
+      ["Table 4 inward supplies", "Taxable value", "Central tax", "State/UT tax", "Integrated tax", "Cess"],
+      ...data.inward.rows.map((r) => [r.label, r.taxableValue, r.centralTax, r.stateTax, r.integratedTax, r.cess]),
+      [],
+      ["Table 5 outward by quarter", "Turnover", "Rate %", "Tax"],
+      ...data.outward.quarters.map((r) => [quarterLabels[r.quarter - 1]!, r.taxableValue, r.rate, r.tax]),
+      [],
+      ["Table 6 rate-wise", "Rate %", "Turnover", "Central tax", "State/UT tax", "Integrated tax"],
+      ...data.rateWise.map((r) => ["", r.rate, r.taxableValue, r.centralTax, r.stateTax, r.integratedTax]),
+      [],
+      ["Tax payable and paid", "Payable", "Paid through CMP-08", "Assumed paid"],
+      ...data.taxPaid.quarters.map((r) => [quarterLabels[r.quarter - 1]!, r.payable, r.paid, r.paidAssumed ? "yes" : "no"]),
+      ["Total", data.taxPaid.totalPayable, data.taxPaid.paidThroughCmp08, data.taxPaid.paidAssumed ? "yes" : "no"],
+      ["Balance payable with GSTR-4", data.taxPaid.balancePayable],
+      ["Interest", data.taxPaid.interest],
+    ];
+    save(lines.map((l) => l.map(q).join(",")).join("\n"), "text/csv", `GSTR4_FY${data.financialYear.replace("-", "_")}_summary.csv`);
+    toast.success("GSTR-4 summary exported");
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <Select className="input w-36" aria-label="Financial year" value={fy} onChange={(e) => setFy(Number(e.target.value))}>
+          {fyOptions.map((y) => (
+            <option key={y} value={y}>{fyLabel(y)}{y === thisFy ? " (to date)" : ""}</option>
+          ))}
+        </Select>
+        <div className="sm:ml-auto flex flex-wrap gap-2 print:hidden">
+          <button type="button" onClick={handleExportCsv} disabled={!data} className="btn-secondary">Export CSV</button>
+          <button type="button" onClick={() => window.print()} disabled={!data} className="btn-secondary">Print</button>
+          <button type="button" onClick={handleDownloadJson} disabled={downloading || !data} className="btn-primary inline-flex items-center gap-2">
+            {downloading ? <Spinner size="sm" className="text-white" /> : <Icon icon={Download04Icon} size={16} />}
+            Download JSON
+          </button>
+        </div>
+      </div>
+
+      <CompositionSettingsCard financialYear={fyString(fy)} />
+
+      {isLoading && <ReportSkeleton />}
+      {error && (
+        <div className="card px-5 py-4 border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800">
+          <p className="text-sm text-red-700 dark:text-red-400">Failed to load GSTR-4: {error.message}</p>
+        </div>
+      )}
+
+      {data && (
+        <div className="space-y-5" data-testid="gstr4">
+          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 px-4 py-2">
+            <p className="text-xs text-blue-700 dark:text-blue-400">
+              Annual return for FY {data.financialYear}. Due date: <strong>{formatDate(data.dueDate)}</strong> (30 April after the year). Due dates are often extended: verify with your CA.
+              The JSON download is best effort and its field names are not verified against the GST portal schema.
+            </p>
+          </div>
+
+          {/* Table 4 */}
+          <div className="card overflow-hidden" data-testid="gstr4-table4">
+            <div className="px-4 py-3 border-b border-border-light bg-surface-1">
+              <h3 className="text-sm font-semibold text-text-primary">Table 4 — Inward supplies</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th className="text-right">Documents</th>
+                    <th className="text-right">Taxable value</th>
+                    <th className="text-right">Central tax</th>
+                    <th className="text-right">State / UT tax</th>
+                    <th className="text-right">Integrated tax</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.inward.rows.map((r) => (
+                    <tr key={r.kind}>
+                      <td className="text-text-primary">{r.label}</td>
+                      <td className="text-right tabular-nums text-text-secondary">{r.documentCount}</td>
+                      <td className="text-right tabular-nums">{fmtStr(r.taxableValue)}</td>
+                      <td className="text-right tabular-nums text-text-secondary">{fmtStr(r.centralTax)}</td>
+                      <td className="text-right tabular-nums text-text-secondary">{fmtStr(r.stateTax)}</td>
+                      <td className="text-right tabular-nums text-text-secondary">{fmtStr(r.integratedTax)}</td>
+                    </tr>
+                  ))}
+                  <tr className="font-semibold">
+                    <td>Total</td>
+                    <td />
+                    <td className="text-right tabular-nums">{fmtStr(data.inward.totalTaxableValue)}</td>
+                    <td colSpan={3} className="text-right tabular-nums">Reverse charge tax {fmtStr(data.inward.totalRcmTax)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Tables 5 and 6 */}
+          <div className="card overflow-hidden" data-testid="gstr4-table5">
+            <div className="px-4 py-3 border-b border-border-light bg-surface-1">
+              <h3 className="text-sm font-semibold text-text-primary">Table 5 — Outward turnover and Table 6 — tax by rate</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Quarter</th>
+                    <th className="text-right">Turnover</th>
+                    <th className="text-right">Rate</th>
+                    <th className="text-right">Composition tax</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.outward.quarters.map((q) => (
+                    <tr key={q.quarter}>
+                      <td className="text-text-primary">{quarterLabels[q.quarter - 1]}</td>
+                      <td className="text-right tabular-nums">{fmtStr(q.taxableValue)}</td>
+                      <td className="text-right tabular-nums text-text-secondary">{q.rate}%</td>
+                      <td className="text-right tabular-nums">{fmtStr(q.tax)}</td>
+                    </tr>
+                  ))}
+                  <tr className="font-semibold">
+                    <td>Year</td>
+                    <td className="text-right tabular-nums">{fmtStr(data.outward.taxableValue)}</td>
+                    <td />
+                    <td className="text-right tabular-nums">{fmtStr(data.outward.tax)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="overflow-x-auto border-t border-border-light">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Rate</th>
+                    <th className="text-right">Turnover</th>
+                    <th className="text-right">Central tax</th>
+                    <th className="text-right">State / UT tax</th>
+                    <th className="text-right">Integrated tax</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rateWise.map((r) => (
+                    <tr key={r.rate}>
+                      <td>{r.rate}%</td>
+                      <td className="text-right tabular-nums">{fmtStr(r.taxableValue)}</td>
+                      <td className="text-right tabular-nums text-text-secondary">{fmtStr(r.centralTax)}</td>
+                      <td className="text-right tabular-nums text-text-secondary">{fmtStr(r.stateTax)}</td>
+                      <td className="text-right tabular-nums text-text-secondary">{fmtStr(r.integratedTax)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="px-4 py-2 text-xs text-text-tertiary border-t border-border-light">
+              Exempt, nil-rated and non-GST outward supplies are not tracked: shown as zero.
+            </p>
+          </div>
+
+          {/* Tax payable vs paid */}
+          <div className="card overflow-hidden" data-testid="gstr4-tax-paid">
+            <div className="px-4 py-3 border-b border-border-light bg-surface-1">
+              <h3 className="text-sm font-semibold text-text-primary">Tax payable and paid through CMP-08</h3>
+            </div>
+            {data.taxPaid.paidAssumed && (
+              <div role="alert" className="mx-4 mt-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-4 py-2">
+                <p className="text-xs text-amber-800 dark:text-amber-400">
+                  <strong>Assumed paid.</strong> Fintranzact does not record CMP-08 payments. Quarters with no amount below are assumed paid in full. Enter what you actually paid.
+                </p>
+              </div>
+            )}
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Quarter</th>
+                    <th className="text-right">Payable</th>
+                    <th className="text-right">Paid through CMP-08</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.taxPaid.quarters.map((q) => (
+                    <tr key={q.quarter}>
+                      <td className="text-text-primary">{quarterLabels[q.quarter - 1]}</td>
+                      <td className="text-right tabular-nums">{fmtStr(q.payable)}</td>
+                      <td className="text-right">
+                        {q.quarter === 4 ? (
+                          <span className="text-xs text-text-tertiary">Paid with GSTR-4</span>
+                        ) : (
+                          <div className="inline-flex items-center gap-2">
+                            <input
+                              className="input w-32 text-right"
+                              inputMode="decimal"
+                              aria-label={`Paid in ${quarterLabels[q.quarter - 1]}`}
+                              placeholder={q.paidAssumed ? q.paid : ""}
+                              value={paid[q.quarter as 1 | 2 | 3]}
+                              onChange={(e) => setPaid((p) => ({ ...p, [q.quarter]: e.target.value }))}
+                              aria-invalid={paid[q.quarter as 1 | 2 | 3].trim() !== "" && !AMOUNT_RE.test(paid[q.quarter as 1 | 2 | 3].trim())}
+                            />
+                            {q.paidAssumed && <span className="text-xs text-amber-700 dark:text-amber-400">assumed paid</span>}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-4">
+              <StatCard label="Total payable" value={fmtStr(data.taxPaid.totalPayable)} note={`Composition ${fmtStr(data.taxPaid.compositionTaxPayable)} + reverse charge ${fmtStr(data.taxPaid.rcmTaxPayable)}`} />
+              <StatCard label="Paid through CMP-08" value={fmtStr(data.taxPaid.paidThroughCmp08)} />
+              <StatCard label="Balance to pay with GSTR-4" value={fmtStr(data.taxPaid.balancePayable)} valueColor="text-amber-600" />
+              <StatCard label="Interest" value={fmtStr(data.taxPaid.interest)} />
+            </div>
+            <div className="px-4 pb-4 space-y-1 text-xs text-text-tertiary">
+              {parseFloat(data.taxPaid.excessPaid) > 0 && <p>Paid {fmtStr(data.taxPaid.excessPaid)} more than payable: the excess stays in your cash ledger.</p>}
+              <p>{data.taxPaid.interestNote}</p>
+              <p>{data.taxPaid.lateFeeNote}</p>
+            </div>
+          </div>
+
+          {data.notes.length > 0 && (
+            <ul className="list-disc pl-5 text-xs text-text-tertiary space-y-1">
+              {data.notes.map((n) => <li key={n}>{n}</li>)}
+            </ul>
+          )}
+          <p className="text-xs text-text-tertiary">Verify the tables, rates and due dates with your CA before filing.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── GSTR-9 View ────────────────────────────────────────────────
 
 const currentFYStart = (() => {

@@ -103,6 +103,7 @@ export const HELP_NAV: HelpNavSection[] = [
       { label: "GSTR-2B Reconciliation", slug: "gst/gstr2b" },
       { label: "Input Tax Credit", slug: "gst/itc" },
       { label: "Set up e-invoicing and e-way bills", slug: "gst/setup-e-invoicing-and-eway-bills" },
+      { label: "GSTR-4 and CMP-08 for composition dealers", slug: "gst/gstr4-and-cmp08" },
     ],
   },
   {

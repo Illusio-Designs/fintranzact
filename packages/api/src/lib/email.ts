@@ -27,6 +27,8 @@ interface EmailService {
   sendInvitation(to: string, inviteUrl: string, businessName: string, inviterName: string | null): Promise<void>;
   sendPartnerApproved(to: string, details: PartnerApprovedEmail): Promise<void>;
   sendEnquiry(enquiry: EnquiryEmail): Promise<void>;
+  /** A plain notice (reminders): subject and text only, no links or tokens. */
+  sendNotice(to: string, subject: string, text: string): Promise<void>;
 }
 
 export interface PartnerApprovedEmail {
@@ -107,6 +109,11 @@ export function enquiryHtml(enquiry: EnquiryEmail): string {
 }
 
 class ConsoleEmailService implements EmailService {
+  async sendNotice(to: string, subject: string, text: string): Promise<void> {
+    // Reminders are best-effort: without a mail provider they are only logged.
+    console.log(`[notice] to=${to} subject=${JSON.stringify(subject)}\n${text}`);
+  }
+
   async sendPartnerApproved(to: string, details: PartnerApprovedEmail): Promise<void> {
     if (process.env.NODE_ENV === "production") {
       console.error("[email] FATAL: No email service configured for production. Set RESEND_API_KEY.");
@@ -157,6 +164,19 @@ class ConsoleEmailService implements EmailService {
 }
 
 class ResendEmailService implements EmailService {
+  async sendNotice(to: string, subject: string, text: string): Promise<void> {
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:24px;background-color:#f3f4f6;"><table role="presentation" width="100%" style="max-width:560px;margin:0 auto;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:12px;"><tr><td style="padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:22px;color:#374151;">${escapeHtml(text).replace(/\n/g, "<br />")}</td></tr></table></body></html>`;
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: this.fromAddress, to, subject, text, html }),
+    });
+    if (!res.ok) {
+      console.error("[email] Resend notice failed:", res.status, await res.text().catch(() => ""));
+      throw new Error("Failed to send email");
+    }
+  }
+
   async sendPartnerApproved(to: string, details: PartnerApprovedEmail): Promise<void> {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",

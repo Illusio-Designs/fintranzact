@@ -393,6 +393,12 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
     { enabled: tab === "top-items" || tab === "overview" }
   );
 
+  const [verifyPan, setVerifyPan] = useState(false);
+  const panCheck = trpc.tds.verifyDeductee.useQuery(
+    { partyId },
+    { enabled: verifyPan && !!party?.pan, staleTime: 5 * 60_000, retry: false },
+  );
+
   if (!party) return null;
 
   const balanceNum = parseFloat(party.balance);
@@ -463,7 +469,33 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                     <p className="font-mono text-ui text-text-secondary">{party.gstin}</p>
                   )}
                   {party.pan && (
-                    <p className="font-mono text-ui text-text-secondary">PAN: {party.pan}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-mono text-ui text-text-secondary">PAN: {party.pan}</p>
+                      <button
+                        type="button"
+                        className="text-2xs font-medium text-primary hover:underline disabled:opacity-50"
+                        disabled={panCheck.isFetching}
+                        onClick={() => (verifyPan ? panCheck.refetch() : setVerifyPan(true))}
+                      >
+                        {panCheck.isFetching ? "Checking…" : "Verify PAN"}
+                      </button>
+                      {panCheck.data && !panCheck.data.available && (
+                        <span className="text-2xs text-text-tertiary">Verification is not enabled on this server.</span>
+                      )}
+                      {panCheck.data?.available && !panCheck.data.checked && (
+                        <span className="text-2xs text-text-tertiary">{panCheck.data.reason}</span>
+                      )}
+                      {panCheck.data?.available && panCheck.data.checked && panCheck.data.valid && (
+                        <span className="text-2xs text-emerald-600">
+                          PAN is valid{panCheck.data.nameMatch === false ? ", but the name does not match" : panCheck.data.nameMatch ? ", name matches" : ""}.
+                        </span>
+                      )}
+                      {panCheck.data?.available && panCheck.data.checked && !panCheck.data.valid && (
+                        <span className="text-2xs text-amber-600">
+                          PAN could not be validated ({panCheck.data.status}). TDS is still deducted at the section rate; the no-PAN rate (s.206AA) applies only if the party is marked as having no PAN.
+                        </span>
+                      )}
+                    </div>
                   )}
                   {party.legalName && party.legalName !== party.name && (
                     <p className="text-ui text-text-secondary">Legal name: {party.legalName}</p>

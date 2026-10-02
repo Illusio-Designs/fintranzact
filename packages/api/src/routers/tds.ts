@@ -8,6 +8,8 @@
  *   preview                                    what TDS a payment would carry
  *   deductions / summary                       the ledgers, with due dates
  *   challans / createChallan / deleteChallan   marking tax as deposited
+ *   import26as / reconciliation26as / link26as / ignore26as
+ *                                              Form 26AS / AIS (CSV) vs TDS receivable
  *
  * Sections, rates and thresholds change most Budgets: they are defaults in
  * code that each business can override per financial year. Verify with a CA.
@@ -16,18 +18,16 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { businesses, invoices, items, parties, taxChallans, taxDeductions, tdsSectionSettings } from "@fintranzact/db";
+import { businesses, invoices, items, parties, taxChallans, taxDeductions, tds26asEntries, tdsSectionSettings } from "@fintranzact/db";
 import {
   defaultTdsSectionRules,
   money,
   defaultTcsSectionRules,
   panFromGstin,
-  tcsDepositDueDate,
-  tcsReturnDueDate,
   tcsSectionCodes,
-  tdsDepositDueDate,
   tdsFinancialYear,
-  tdsReturnDueDate,
+  tdsFinancialYearRange,
+  tdsQuarter,
   tdsSectionCodes,
   type TdsSectionRule,
 } from "@fintranzact/shared";
@@ -35,8 +35,16 @@ import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trp
 import { requireCan } from "../lib/permissions.js";
 import { withAudit } from "../lib/audit.js";
 import { previewPartyTds } from "../lib/tds-service.js";
+import { useSandboxProvider } from "../lib/gov-provider.js";
+import { getSandboxClient } from "../lib/sandbox/client.js";
+import { SandboxTdsClient, TdsApiError } from "../lib/sandbox/tds.js";
+import { logger } from "../lib/logger.js";
 import { buildTdsReturn } from "../lib/tds-return.js";
 import { loadTcsSectionRules, tcsForLines } from "../lib/tcs-service.js";
+import { depositDue, depositsDueFromMonths, loadTdsReminders, returnDue } from "../lib/tds-reminders.js";
+import { parse26asCsv } from "../lib/tds-26as-parser.js";
+import { reconcile26as } from "../lib/tds-26as.js";
+import { buildCertificateData, certificateToBuffer } from "../lib/tds-certificate.js";
 
 const fyInput = z.string().regex(/^\d{4}-\d{2}$/, "Use a financial year like 2026-27");
 const rupees = z.string().regex(/^\d{1,13}(\.\d{1,2})?$/);
@@ -45,10 +53,6 @@ const quarter = z.number().int().min(1).max(4);
 /** The ledger the call is about: tax we deduct (TDS) or tax we collect on sales (TCS). */
 const kindInput = z.enum(["tds", "tcs"]).default("tds");
 const allSectionCodes = [...tdsSectionCodes, ...tcsSectionCodes] as [string, ...string[]];
-
-/** Deposit and return due dates differ between TDS and TCS (no March exception; 27EQ dates). */
-const depositDue = (kind: "tds" | "tcs", d: Date | string) => (kind === "tcs" ? tcsDepositDueDate(d) : tdsDepositDueDate(d));
-const returnDue = (kind: "tds" | "tcs", fy: string, q: 1 | 2 | 3 | 4) => (kind === "tcs" ? tcsReturnDueDate(fy, q) : tdsReturnDueDate(fy, q));
 
 /** The section defaults for a ledger, in one shape (TCS has no individual rate or yearly limit). */
 function defaultRules(kind: "tds" | "tcs", fy: string): TdsSectionRule[] {
@@ -173,6 +177,8 @@ export const tdsRouter = router({
       paymentDate: z.string().datetime().optional(),
       sectionCode: z.enum(tdsSectionCodes).optional(),
       excludePaymentId: z.string().uuid().optional(),
+      /** The expense being edited, so it is not counted against the year twice. */
+      excludeExpenseId: z.string().uuid().optional(),
     }))
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Payment");
@@ -182,7 +188,36 @@ export const tdsRouter = router({
         paymentDate: input.paymentDate ? new Date(input.paymentDate) : undefined,
         sectionCode: input.sectionCode,
         excludePaymentId: input.excludePaymentId,
+        excludeExpenseId: input.excludeExpenseId,
       });
+    }),
+
+  /**
+   * Check a party's PAN with Sandbox.co.in. Advisory only: never blocks saving a party or
+   * deducting tax, and never changes the s.206AA no-PAN rate. A failed lookup comes back as
+   * `error`, not an exception. `available:false` when the Sandbox provider is off.
+   */
+  verifyDeductee: memberProcedure
+    .input(z.object({ partyId: z.string().uuid() }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Party");
+      const sandbox = useSandboxProvider() ? getSandboxClient() : null;
+      if (!sandbox) return { available: false as const };
+      const [party] = await ctx.db
+        .select({ name: parties.name, legalName: parties.legalName, pan: parties.pan })
+        .from(parties)
+        .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
+        .limit(1);
+      if (!party) throw new TRPCError({ code: "NOT_FOUND", message: "Party not found" });
+      if (!party.pan?.trim()) return { available: true as const, checked: false as const, reason: "This party has no PAN on file." };
+      try {
+        const r = await new SandboxTdsClient(sandbox).verifyPan(party.pan, party.legalName || party.name);
+        return { available: true as const, checked: true as const, valid: r.valid, nameMatch: r.nameMatch, status: r.status };
+      } catch (err) {
+        logger.warn({ err, partyId: input.partyId }, "PAN verification failed");
+        const retryable = err instanceof TdsApiError ? err.retryable : false;
+        return { available: true as const, checked: false as const, reason: "PAN verification is unavailable right now.", retryable };
+      }
     }),
 
   /**
@@ -309,7 +344,7 @@ export const tdsRouter = router({
       const deposited = sql<string>`COALESCE(SUM(${taxDeductions.amount}) FILTER (WHERE ${taxDeductions.challanId} IS NOT NULL), 0.00)::text`;
       const total = sql<string>`COALESCE(SUM(${taxDeductions.amount}), 0.00)::text`;
 
-      const [bySection, byQuarter, byMonth, receivable] = await Promise.all([
+      const [bySection, byQuarter, byMonth, receivable, sectionQuarter] = await Promise.all([
         ctx.db
           .select({ sectionCode: taxDeductions.sectionCode, total, deposited })
           .from(taxDeductions)
@@ -337,6 +372,13 @@ export const tdsRouter = router({
           .where(and(base, eq(taxDeductions.direction, "receivable")))
           .groupBy(taxDeductions.sectionCode)
           .orderBy(taxDeductions.sectionCode),
+        // Section x quarter, for the Reports hub.
+        ctx.db
+          .select({ sectionCode: taxDeductions.sectionCode, quarter: taxDeductions.quarter, total, deposited })
+          .from(taxDeductions)
+          .where(and(base, eq(taxDeductions.direction, "payable")))
+          .groupBy(taxDeductions.sectionCode, taxDeductions.quarter)
+          .orderBy(taxDeductions.sectionCode, taxDeductions.quarter),
       ]);
 
       const now = Date.now();
@@ -352,22 +394,139 @@ export const tdsRouter = router({
           deposited: money.sum(bySection.map((s) => s.deposited)),
           pending: money.sub(money.sum(bySection.map((s) => s.total)), money.sum(bySection.map((s) => s.deposited))),
           bySection: bySection.map(withPending),
+          bySectionQuarter: sectionQuarter.map(withPending),
           byQuarter: byQuarter.map((q) => ({
             ...withPending(q),
             returnDueDate: returnDue(kind, fy, q.quarter as 1 | 2 | 3 | 4),
           })),
           // Tax still to deposit, by the month it was deducted, with the day it is due.
-          depositsDue: byMonth
-            .filter((m) => money.isPositive(m.pending))
-            .map((m) => {
-              const dueDate = depositDue(kind, `${m.month}-15T12:00:00+05:30`);
-              return { month: m.month, pending: m.pending, dueDate, overdue: dueDate.getTime() < now };
-            }),
+          depositsDue: depositsDueFromMonths(kind, byMonth, now),
         },
         receivable: {
           total: money.sum(receivable.map((r) => r.total)),
           bySection: receivable,
         },
+      };
+    }),
+
+    /**
+   * Upcoming and overdue deposits and returns (TDS and TCS) for the business:
+   * the same items the due-date reminder emails are about. Due dates follow the
+   * current rules: verify with a CA.
+   */
+  reminders: viewerProcedure.query(async ({ ctx }) => {
+    requireCan(ctx.ability, "read", "Tds");
+    const items = await loadTdsReminders(ctx.db, ctx.businessId);
+    return { items, note: "Verify due dates with your CA." };
+  }),
+
+  // ── Certificates (statements from the books, not TRACES) ────────
+
+  /** Parties with tax deducted (TDS) or collected (TCS) in a quarter, with their totals. */
+  certificateParties: viewerProcedure
+    .input(z.object({ kind: kindInput, financialYear: fyInput, quarter }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Tds");
+      assertRealYear(input.financialYear);
+      const rows = await ctx.db
+        .select({
+          partyId: parties.id,
+          partyName: parties.name,
+          pan: parties.pan,
+          count: sql<number>`COUNT(*)::int`,
+          total: sql<string>`COALESCE(SUM(${taxDeductions.amount}), 0.00)::text`,
+          deposited: sql<string>`COALESCE(SUM(${taxDeductions.amount}) FILTER (WHERE ${taxDeductions.challanId} IS NOT NULL), 0.00)::text`,
+        })
+        .from(taxDeductions)
+        .innerJoin(parties, eq(parties.id, taxDeductions.partyId))
+        .where(and(
+          eq(taxDeductions.businessId, ctx.businessId),
+          eq(taxDeductions.kind, input.kind),
+          eq(taxDeductions.direction, "payable"),
+          eq(taxDeductions.financialYear, input.financialYear),
+          eq(taxDeductions.quarter, input.quarter),
+        ))
+        .groupBy(parties.id, parties.name, parties.pan)
+        .orderBy(parties.name);
+      return rows.map((r) => ({ ...r, pending: money.sub(r.total, r.deposited) }));
+    }),
+
+  /**
+   * One party's statement for a quarter as a base64 PDF: Form 16A style (TDS)
+   * or Form 27D style (TCS), generated from the books. Not the TRACES-issued
+   * certificate, which exists only after the return is filed.
+   */
+  certificate: viewerProcedure
+    .input(z.object({ kind: kindInput, partyId: z.string().uuid(), financialYear: fyInput, quarter }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Tds");
+      assertRealYear(input.financialYear);
+
+      const [[biz], [party], rows] = await Promise.all([
+        ctx.db
+          .select({
+            name: businesses.name, legalName: businesses.legalName, tan: businesses.tan, pan: businesses.pan,
+            address: businesses.address, addressLine1: businesses.addressLine1, addressLine2: businesses.addressLine2,
+            city: businesses.city, state: businesses.state, pincode: businesses.pincode,
+          })
+          .from(businesses)
+          .where(eq(businesses.id, ctx.businessId))
+          .limit(1),
+        ctx.db
+          .select({ name: parties.name, pan: parties.pan })
+          .from(parties)
+          .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
+          .limit(1),
+        ctx.db
+          .select({
+            sectionCode: taxDeductions.sectionCode,
+            deductedOn: taxDeductions.deductedOn,
+            baseAmount: taxDeductions.baseAmount,
+            amount: taxDeductions.amount,
+            challanBsr: taxChallans.bsrCode,
+            challanNumber: taxChallans.challanNumber,
+            challanDate: taxChallans.depositedOn,
+          })
+          .from(taxDeductions)
+          .leftJoin(taxChallans, eq(taxChallans.id, taxDeductions.challanId))
+          .where(and(
+            eq(taxDeductions.businessId, ctx.businessId),
+            eq(taxDeductions.partyId, input.partyId),
+            eq(taxDeductions.kind, input.kind),
+            eq(taxDeductions.direction, "payable"),
+            eq(taxDeductions.financialYear, input.financialYear),
+            eq(taxDeductions.quarter, input.quarter),
+          )),
+      ]);
+      if (!party || !biz) throw new TRPCError({ code: "NOT_FOUND", message: "Party not found" });
+      if (rows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No tax was recorded for this party in that quarter" });
+      }
+
+      const address = [biz.addressLine1 || biz.address, biz.addressLine2, biz.city, biz.state, biz.pincode].filter(Boolean).join(", ");
+      const data = buildCertificateData({
+        kind: input.kind,
+        deductor: { name: biz.legalName || biz.name, tan: biz.tan, pan: biz.pan, address },
+        deductee: { name: party.name, pan: party.pan },
+        financialYear: input.financialYear,
+        quarter: input.quarter as 1 | 2 | 3 | 4,
+        sectionLabels: Object.fromEntries(defaultRules(input.kind, input.financialYear).map((r) => [r.code, r.label])),
+        rows: rows.map((r) => ({
+          sectionCode: r.sectionCode,
+          deductedOn: r.deductedOn,
+          baseAmount: r.baseAmount,
+          amount: r.amount,
+          challan: r.challanBsr ? { bsrCode: r.challanBsr, challanNumber: r.challanNumber!, depositedOn: r.challanDate! } : null,
+        })),
+      });
+      const pdf = await certificateToBuffer(data);
+      const safe = party.name.replace(/[^0-9A-Za-z]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "party";
+      return {
+        filename: `${input.kind}-statement-${safe}-Q${input.quarter}-${input.financialYear}.pdf`,
+        contentType: "application/pdf" as const,
+        base64: pdf.toString("base64"),
+        totals: data.totals,
+        notes: data.notes,
       };
     }),
 
@@ -599,5 +758,179 @@ export const tdsRouter = router({
       entityType: "tax_challans",
       entityId: row.id,
       metadata: { challanNumber: row.challanNumber },
+    }))),
+
+  // ── Form 26AS / AIS reconciliation (TDS receivable) ─────────────
+
+  /**
+   * Import a Form 26AS / AIS TDS export (CSV only: see lib/tds-26as-parser.ts for
+   * the columns; the TRACES text file and AIS JSON are rejected). Replaces any
+   * rows imported earlier for the same financial year; customer links made on
+   * earlier rows are carried over by TAN. Rows dated outside the year are skipped.
+   */
+  import26as: adminProcedure
+    .input(z.object({
+      financialYear: fyInput,
+      content: z.string().min(1).max(20_000_000),
+      fileName: z.string().min(1).max(255),
+      format: z.enum(["csv"]).default("csv"),
+    }))
+    .mutation(withAudit(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "create", "Tds");
+      assertRealYear(input.financialYear);
+      let parsed;
+      try {
+        parsed = parse26asCsv(input.content);
+      } catch (err) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: err instanceof Error ? err.message : "Could not read the file" });
+      }
+      const range = tdsFinancialYearRange(input.financialYear);
+      const skipped = [...parsed.skipped];
+      const rows = parsed.rows.filter((r) => {
+        if (r.txnDate >= range.from && r.txnDate <= range.to) return true;
+        skipped.push({ line: 0, reason: `${r.deductorTan} ${r.section}: transaction date is outside ${input.financialYear}` });
+        return false;
+      });
+      if (rows.length === 0) {
+        const why = skipped.slice(0, 3).map((x) => x.reason).join("; ");
+        throw new TRPCError({ code: "BAD_REQUEST", message: `No usable rows for ${input.financialYear}${why ? `: ${why}` : ""}` });
+      }
+
+      const batchId = crypto.randomUUID();
+      const inserted = await ctx.db.transaction(async (tx) => {
+        // Customers linked by hand before, by TAN, from any year.
+        const linked = await tx
+          .select({ tan: tds26asEntries.deductorTan, partyId: tds26asEntries.partyId })
+          .from(tds26asEntries)
+          .where(and(eq(tds26asEntries.businessId, ctx.businessId), sql`${tds26asEntries.partyId} IS NOT NULL`));
+        const tanLinks = new Map<string, string>();
+        for (const l of linked) if (l.partyId && !tanLinks.has(l.tan)) tanLinks.set(l.tan, l.partyId);
+
+        await tx
+          .delete(tds26asEntries)
+          .where(and(eq(tds26asEntries.businessId, ctx.businessId), eq(tds26asEntries.financialYear, input.financialYear)));
+
+        const values = rows.map((r) => ({
+          businessId: ctx.businessId,
+          importBatchId: batchId,
+          financialYear: input.financialYear,
+          quarter: tdsQuarter(r.txnDate),
+          deductorTan: r.deductorTan,
+          deductorName: r.deductorName,
+          section: r.section,
+          txnDate: r.txnDate,
+          amountPaid: r.amountPaid,
+          taxDeducted: r.taxDeducted,
+          taxDeposited: r.taxDeposited,
+          partyId: tanLinks.get(r.deductorTan) ?? null,
+        }));
+        for (let i = 0; i < values.length; i += 500) await tx.insert(tds26asEntries).values(values.slice(i, i + 500));
+        return values.length;
+      });
+      return { batchId, financialYear: input.financialYear, fileName: input.fileName, imported: inserted, skipped: skipped.slice(0, 50), skippedCount: skipped.length };
+    }, (r) => ({
+      action: "tds.import26as",
+      entityType: "tds_26as_entries",
+      entityId: r.batchId,
+      metadata: { financialYear: r.financialYear, fileName: r.fileName, imported: r.imported, skipped: r.skippedCount },
+    }))),
+
+  /**
+   * 26AS rows vs the books' TDS receivable for a year, per customer + section +
+   * quarter: matched / amount_differs / missing_in_books / missing_in_26as, plus
+   * ignored rows. Computed live, so it follows later edits to the books.
+   */
+  reconciliation26as: viewerProcedure
+    .input(z.object({ financialYear: fyInput }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Tds");
+      assertRealYear(input.financialYear);
+      const [entries, partyRows, books] = await Promise.all([
+        ctx.db
+          .select()
+          .from(tds26asEntries)
+          .where(and(eq(tds26asEntries.businessId, ctx.businessId), eq(tds26asEntries.financialYear, input.financialYear))),
+        ctx.db
+          .select({ id: parties.id, name: parties.name, legalName: parties.legalName, tradeName: parties.tradeName })
+          .from(parties)
+          .where(eq(parties.businessId, ctx.businessId)),
+        ctx.db
+          .select({
+            partyId: taxDeductions.partyId,
+            sectionCode: taxDeductions.sectionCode,
+            quarter: taxDeductions.quarter,
+            amount: sql<string>`SUM(${taxDeductions.amount})::text`,
+          })
+          .from(taxDeductions)
+          .where(and(
+            eq(taxDeductions.businessId, ctx.businessId),
+            eq(taxDeductions.kind, "tds"),
+            eq(taxDeductions.direction, "receivable"),
+            eq(taxDeductions.financialYear, input.financialYear),
+          ))
+          .groupBy(taxDeductions.partyId, taxDeductions.sectionCode, taxDeductions.quarter),
+      ]);
+      const result = reconcile26as({
+        entries: entries.map((e) => ({
+          id: e.id,
+          deductorTan: e.deductorTan,
+          deductorName: e.deductorName,
+          section: e.section,
+          quarter: e.quarter,
+          taxDeducted: e.taxDeducted,
+          partyId: e.partyId,
+          status: e.status,
+        })),
+        parties: partyRows,
+        books,
+      });
+      const importedAt = entries.reduce<Date | null>((latest, e) => (!latest || e.createdAt > latest ? e.createdAt : latest), null);
+      return { financialYear: input.financialYear, entryCount: entries.length, importedAt, ...result };
+    }),
+
+  /** Point 26AS rows at a customer (or clear the link with partyId null). A link also covers other rows with the same TAN. */
+  link26as: adminProcedure
+    .input(z.object({ entryIds: z.array(z.string().uuid()).min(1).max(500), partyId: z.string().uuid().nullable() }))
+    .mutation(withAudit(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "update", "Tds");
+      if (input.partyId) {
+        const [party] = await ctx.db
+          .select({ id: parties.id })
+          .from(parties)
+          .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
+          .limit(1);
+        if (!party) throw new TRPCError({ code: "NOT_FOUND", message: "Customer not found" });
+      }
+      const rows = await ctx.db
+        .update(tds26asEntries)
+        .set({ partyId: input.partyId })
+        .where(and(eq(tds26asEntries.businessId, ctx.businessId), inArray(tds26asEntries.id, input.entryIds)))
+        .returning({ id: tds26asEntries.id });
+      if (rows.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "26AS rows not found" });
+      return { updated: rows.length, partyId: input.partyId, entryIds: rows.map((r) => r.id) };
+    }, (r) => ({
+      action: "tds.link26as",
+      entityType: "tds_26as_entries",
+      entityId: r.entryIds[0]!,
+      metadata: { updated: r.updated, partyId: r.partyId },
+    }))),
+
+  /** Leave 26AS rows out of the reconciliation (or put them back with ignored false). */
+  ignore26as: adminProcedure
+    .input(z.object({ entryIds: z.array(z.string().uuid()).min(1).max(500), ignored: z.boolean().default(true) }))
+    .mutation(withAudit(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "update", "Tds");
+      const rows = await ctx.db
+        .update(tds26asEntries)
+        .set({ status: input.ignored ? "ignored" : "pending" })
+        .where(and(eq(tds26asEntries.businessId, ctx.businessId), inArray(tds26asEntries.id, input.entryIds)))
+        .returning({ id: tds26asEntries.id });
+      if (rows.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "26AS rows not found" });
+      return { updated: rows.length, ignored: input.ignored, entryIds: rows.map((r) => r.id) };
+    }, (r) => ({
+      action: "tds.ignore26as",
+      entityType: "tds_26as_entries",
+      entityId: r.entryIds[0]!,
+      metadata: { updated: r.updated, ignored: r.ignored },
     }))),
 });

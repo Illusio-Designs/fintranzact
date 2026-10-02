@@ -482,6 +482,11 @@ export const expenseRowSchema = z.object({
   expenseDate: isoDatetime,
   referenceNumber: z.string().nullable(),
   bankAccountId: uuidNullable,
+  // TDS on an expense. Optional so backups made before it still import.
+  partyId: uuidNullable.optional(),
+  tdsMode: z.enum(["none", "auto", "manual"]).optional(),
+  tdsSection: z.string().nullable().optional(),
+  tdsAmount: money2.optional(),
   createdByUserId: uuidNullable,
   createdByName: z.string().nullable(),
   createdAt: isoDatetime,
@@ -826,6 +831,16 @@ export const tdsSectionSettingRowSchema = z.object({
   updatedAt: isoDatetime,
 });
 
+export const compositionSettingRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  financialYear: z.string(),
+  category: z.enum(["manufacturer_trader", "restaurant", "other_service"]),
+  rate: money3Nullable,
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
 export const taxChallanRowSchema = z.object({
   id: uuid,
   businessId: uuid,
@@ -874,6 +889,7 @@ export const taxDeductionRowSchema = z.object({
   partyId: uuid,
   paymentId: uuidNullable,
   invoiceId: uuidNullable,
+  expenseId: uuidNullable.optional(),
   sectionCode: z.string(),
   financialYear: z.string(),
   quarter: z.number().int(),
@@ -883,6 +899,24 @@ export const taxDeductionRowSchema = z.object({
   hasPan: z.boolean(),
   deductedOn: isoDatetime,
   challanId: uuidNullable,
+  createdAt: isoDatetime,
+});
+
+export const tds26asEntryRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  importBatchId: uuid,
+  financialYear: z.string(),
+  quarter: z.number().int(),
+  deductorTan: z.string(),
+  deductorName: z.string().nullable(),
+  section: z.string(),
+  txnDate: isoDatetime,
+  amountPaid: money2,
+  taxDeducted: money2,
+  taxDeposited: money2Nullable,
+  partyId: uuidNullable,
+  status: z.string(),
   createdAt: isoDatetime,
 });
 
@@ -906,8 +940,10 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   payments: paymentRowSchema,
   payment_allocations: paymentAllocationRowSchema,
   tds_section_settings: tdsSectionSettingRowSchema,
+  composition_settings: compositionSettingRowSchema,
   tax_challans: taxChallanRowSchema,
   tax_deductions: taxDeductionRowSchema,
+  tds_26as_entries: tds26asEntryRowSchema,
   period_locks: periodLockRowSchema,
   financial_year_closes: financialYearCloseRowSchema,
   bank_transactions: bankTransactionRowSchema,

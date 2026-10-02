@@ -382,7 +382,8 @@ export const bankReconRouter = router({
         ctx.db
           .select({
             id: expenses.id,
-            amount: expenses.amount,
+            // What left the bank: the amount less any TDS deducted.
+            amount: sql<string>`(${expenses.amount}::numeric - ${expenses.tdsAmount}::numeric)::text`,
             expenseDate: expenses.expenseDate,
             referenceNumber: expenses.referenceNumber,
             description: expenses.description,

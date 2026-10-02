@@ -29,6 +29,7 @@ import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, pa
 import { calcLineItem, calcInvoiceTotals, money, parseCopies, isIntraStateSupply, formatIstDate, INVOICE_TEMPLATES, splitIntraStateTax, type InvoiceTemplate, type ThermalWidth } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
+import { startTdsReminderScheduler, stopTdsReminderScheduler } from "./lib/tds-reminder-scheduler.js";
 import { seedPlatformAdmin } from "./lib/platform-admin.js";
 import { logger } from "./lib/logger.js";
 import { resolveDocumentWarehouseId, syncDocumentStock } from "./lib/inventory-service.js";
@@ -2426,6 +2427,7 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   logger.info({ port: info.port }, `Fintranzact API running on http://localhost:${info.port}`);
   logger.info({ port: info.port }, `  tRPC endpoint: http://localhost:${info.port}/api/trpc`);
   startRecurringScheduler();
+  startTdsReminderScheduler();
   // Create the platform admin from PLATFORM_ADMIN_EMAIL / _PASSWORD if set.
   seedPlatformAdmin().catch((err) => logger.error({ err }, "Could not create the platform admin account"));
 });
@@ -2434,6 +2436,7 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
 function shutdown(signal: string) {
   logger.info({ signal }, `Shutting down (${signal})...`);
   stopRecurringScheduler();
+  stopTdsReminderScheduler();
   server.close(() => {
     logger.info("HTTP server closed");
     process.exit(0);

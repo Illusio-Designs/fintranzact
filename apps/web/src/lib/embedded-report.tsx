@@ -7,7 +7,7 @@ import { createContext, useContext, type ReactNode } from "react";
  * page to one return.
  */
 interface Embedded {
-  gstTab?: "gstr1" | "gstr3b" | "gstr9" | "cmp08";
+  gstTab?: "gstr1" | "gstr3b" | "gstr9" | "cmp08" | "gstr4";
 }
 
 const EmbeddedReportContext = createContext<Embedded | null>(null);

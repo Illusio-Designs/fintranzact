@@ -1870,6 +1870,7 @@ function RootLayout() {
                   businessId={currentBusinessId ?? businesses?.[0]?.id ?? null}
                   canSeeInvoices={canAccess(session?.role, "Invoice", "read")}
                   canSeeItems={canAccess(session?.role, "Item", "read")}
+                  canSeeTds={canAccess(session?.role, "Tds", "read")}
                   isGstRegistered={isGstRegistered}
                 />
               )}

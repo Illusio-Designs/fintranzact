@@ -81,6 +81,8 @@ Open **TDS & TCS** in the sidebar and pick the financial year (April to March).
 | **Deductions** | Every entry, with supplier, PAN, section, rate and due date. Filter by quarter or "not yet deposited" |
 | **Challans** | The challans you have recorded |
 | **Return data** | The figures for a quarter's TDS return, with CSV downloads |
+| **Certificates** | Statements from your books, as PDF |
+| **26AS / AIS** | Compare TDS your customers deducted (Form 26AS or AIS) with your books (TDS only) |
 | **Sections & limits** | The rates and limits for the year, which you can edit |
 
 ## Recording a deposit
@@ -106,6 +108,63 @@ Open **TDS → Return data**, choose the quarter, and you get what a CA or retur
 - **Download deductees (CSV)** and **Download challans (CSV)** give you the two lists as spreadsheets. A deductee with no PAN shows `PANNOTAVBL`.
 - **Fix before filing** lists what is missing: your **TAN** (add it under **Settings → Business**), deductees without a PAN, and deductions that are not on a challan yet. A return needs every deduction to be on a challan.
 
+## Certificates from your books
+
+Open **TDS → Certificates**, choose the quarter, and you see each party you deducted TDS from (or, under TCS, collected TCS from) with the totals. **Download PDF** gives a statement in the style of Form 16A (TDS) or Form 27D (TCS): your name, TAN and PAN, the party's name and PAN, the section, each payment with the tax and the challan (BSR code, number and deposit date) it was deposited with, and the totals for the quarter and financial year.
+
+- Only tax linked to a challan you recorded shows as **Deposited**; the rest is listed as **Pending**.
+- A blank TAN or PAN means it is not saved in Fintranzact. Add your TAN under **Settings → Business** and the party's PAN on their record.
+
+:::caution[Not the TRACES certificate]
+This is a statement generated from your books. It is **not** the certificate issued through TRACES. The Income Tax Department issues the official Form 16A / 27D only after your quarterly return is filed and processed. Fintranzact does not file the return.
+:::
+
+## Check your TDS against Form 26AS / AIS
+
+TDS your customers deduct only becomes a credit for you if they deposit it and report it. Open **TDS → 26AS / AIS** to compare what Form 26AS or AIS shows with the **TDS receivable** in your books.
+
+**Which files work.** Only a **CSV** file is supported, with a header row and these columns (names are matched ignoring capitals; a few common spellings such as *TAN of Deductor* or *Date of Booking* also work):
+
+| Column | Needed |
+|---|---|
+| Deductor TAN | yes |
+| Section | yes |
+| Transaction Date (like `15-Jun-2025`, `15/06/2025` or `2025-06-15`) | yes |
+| Tax Deducted | yes |
+| Deductor Name | helps matching |
+| Amount Paid/Credited | optional |
+| TDS Deposited | optional |
+
+The raw **TRACES Form 26AS text file** (the `^`-separated one) and **AIS JSON** are **not** supported, and Fintranzact will say so rather than guess. Copy the TDS rows into a CSV with the columns above. Rows that cannot be read (a bad TAN or date, a total line) are skipped and listed after the import; rows dated outside the year are skipped too.
+
+**How it compares.** For each customer, section and quarter, the 26AS amounts are added up and compared with the TDS receivable recorded in the books, allowing ₹1 for rounding:
+
+| Status | Meaning |
+|---|---|
+| **Matched** | The two agree |
+| **Amount differs** | Both have an entry but the amounts are different |
+| **Missing in books** | 26AS shows tax deducted that your books have no entry for (or the deductor is not yet linked to a customer) |
+| **Missing in 26AS** | Your books record TDS the customer has not reported yet |
+| **Ignored** | A row you chose to leave out |
+
+Sections are compared by family: *194J* covers professional and technical fees, *194I* both kinds of rent.
+
+**Customers and TANs.** Your customer records do not hold a TAN, so Fintranzact first uses any link you made on a row with the same TAN, then a close, unambiguous name match (shown as *by name*). Anything else shows as **Not linked**: click **Link customer**, choose the customer once, and every row with that TAN follows, including in later imports. Use **Ignore** for rows that are not yours.
+
+Importing the same year again replaces that year's rows (your links are kept). The comparison is worked out each time you open it, so it follows later changes to your books. The result is a guide for following up with customers and your CA, not a tax filing.
+
+## TDS & TCS in Reports
+
+**Reports → Accountant** has **TDS Payable**, **TCS Payable** and **TDS Receivable**: for a financial year, each section and quarter with the amount deducted (or collected), deposited and pending, and a CSV download. For TDS receivable, "In Form 26AS" and "Not yet in 26AS" come from the file imported above.
+
+## Due-date reminders
+
+Fintranzact reminds you before TDS and TCS fall due, using the dates above: the 7th of the next month for deposits (30 April for March TDS) and the quarterly return dates.
+
+- The owners and admins of the business get an email (each item once when it is within 7 days of its due date, once on the day, and once when it is overdue), and the same items appear in the bell at the top of the page.
+- A return is listed for any quarter that has tax in it. Fintranzact does not know whether you have already filed it, so ignore the reminder once you have.
+- Reminders follow the usual due dates under current rules. Verify due dates with your CA.
+
 :::note
-This is the data for preparing the return. Fintranzact does not file the return or produce TDS certificates yet. Check the layout with your CA or return software.
+The return data is for preparing the return. Fintranzact does not file it. Check the layout with your CA or return software.
 :::

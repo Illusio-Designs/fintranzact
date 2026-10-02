@@ -155,12 +155,17 @@
 | govUsage.statements | query | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | govUsage.summary | query | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | gst.cmp08 | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
+| gst.cmp08Year | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
+| gst.compositionSettings | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr1 | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr1CSV | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr1Json | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr3b | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
+| gst.gstr4 | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
+| gst.gstr4Json | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr9 | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
 | gst.gstr9Json | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
+| gst.updateCompositionSettings | mutation | authorized | update:Business | ✓ | ✓ | ✗ | ✗ | ✗ |
 | gstr2b.ignoreRecord | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
 | gstr2b.linkInvoice | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ |
 | gstr2b.missingIn2B | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
@@ -439,17 +444,25 @@
 | target.list | query | authorized | read:SalesTarget | ✓ | ✓ | ✓ | ✓ | ✗ |
 | target.myTargets | query | authorized | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | target.update | mutation | authorized | manage:SalesTarget | ✓ | ✓ | ✓ | ✗ | ✗ |
+| tds.certificate | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.certificateParties | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.challans | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.createChallan | mutation | authorized | create:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.deductions | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.deleteChallan | mutation | authorized | delete:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.ignore26as | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.import26as | mutation | authorized | create:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.link26as | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.preview | query | authorized | read:Payment | ✓ | ✓ | ✓ | ✓ | ✓ |
+| tds.reconciliation26as | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.reminders | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.resetSection | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.returnData | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.sections | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.summary | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.tcsPreview | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tds.updateSection | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.verifyDeductee | query | authorized | read:Party | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.acceptById | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.acceptInvitation | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.canCreateOrg | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |

@@ -949,6 +949,23 @@ export const tdsSectionSettings = pgTable("tds_section_settings", {
   uniqueIndex("tds_section_settings_year_code_idx").on(t.businessId, t.financialYear, t.sectionCode),
 ]);
 
+// GST composition scheme: the category a composition dealer is taxed under for
+// a financial year (manufacturer_trader / restaurant / other_service) and, when
+// the Government changes it, the rate to use instead of the code default
+// (@fintranzact/shared composition.ts). Null rate = use the category default.
+export const compositionSettings = pgTable("composition_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  // "2026-27" — always April to March.
+  financialYear: text("financial_year").notNull(),
+  category: text("category").notNull(),
+  rate: numeric("rate", { precision: 6, scale: 3 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("composition_settings_year_idx").on(t.businessId, t.financialYear),
+]);
+
 // Tax deposited with the government. One challan can cover many deductions.
 export const taxChallans = pgTable("tax_challans", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -984,6 +1001,8 @@ export const taxDeductions = pgTable("tax_deductions", {
   partyId: uuid("party_id").notNull().references(() => parties.id, { onDelete: "restrict" }),
   paymentId: uuid("payment_id").references(() => payments.id, { onDelete: "cascade" }),
   invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+  // TDS withheld on an expense entry (rent, professional fees…) points here.
+  expenseId: uuid("expense_id").references(() => expenses.id, { onDelete: "cascade" }),
   sectionCode: text("section_code").notNull(),
   financialYear: text("financial_year").notNull(),
   quarter: integer("quarter").notNull(),
@@ -1000,7 +1019,51 @@ export const taxDeductions = pgTable("tax_deductions", {
   index("tax_deductions_period_idx").on(t.businessId, t.kind, t.direction, t.financialYear, t.quarter),
   index("tax_deductions_party_year_idx").on(t.businessId, t.partyId, t.financialYear, t.sectionCode),
   index("tax_deductions_payment_idx").on(t.paymentId),
+  index("tax_deductions_expense_idx").on(t.expenseId),
   index("tax_deductions_challan_idx").on(t.challanId),
+]);
+
+// Which TDS/TCS due-date reminder emails have gone out, so the scheduler sends
+// each one once. item_key names the item (e.g. "deposit:tds:2026-27:2026-09");
+// day_offset is 7 (within a week of the due date), 0 (due today) or -1 (overdue).
+export const tdsReminderLog = pgTable("tds_reminder_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  itemKey: text("item_key").notNull(),
+  dayOffset: integer("day_offset").notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("tds_reminder_log_item_idx").on(t.businessId, t.itemKey, t.dayOffset),
+]);
+
+// Rows imported from a Form 26AS / AIS TDS export: what customers report as
+// deducted from us. Whether a row agrees with our books is worked out live
+// (tds.reconciliation26as); only the manual outcome is stored.
+//   party_id — the customer this deductor is, set by a manual link (or carried
+//              over from an earlier import with the same TAN); null = match by name.
+//   status   — "pending" (reconcile live) or "ignored" (left out of the sums).
+// Importing a financial year again replaces that year's rows.
+export const tds26asEntries = pgTable("tds_26as_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  importBatchId: uuid("import_batch_id").notNull(),
+  financialYear: text("financial_year").notNull(),
+  quarter: integer("quarter").notNull(),
+  deductorTan: text("deductor_tan").notNull(),
+  deductorName: text("deductor_name"),
+  // As printed in the file ("194C", "194J(b)"…).
+  section: text("section").notNull(),
+  txnDate: timestamp("txn_date", { withTimezone: true }).notNull(),
+  amountPaid: numeric("amount_paid", { precision: 15, scale: 2 }).default("0").notNull(),
+  taxDeducted: numeric("tax_deducted", { precision: 15, scale: 2 }).notNull(),
+  // Null when the file has no deposited column.
+  taxDeposited: numeric("tax_deposited", { precision: 15, scale: 2 }),
+  partyId: uuid("party_id").references(() => parties.id, { onDelete: "set null" }),
+  status: text("status").default("pending").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("tds_26as_entries_year_idx").on(t.businessId, t.financialYear, t.quarter),
+  index("tds_26as_entries_tan_idx").on(t.businessId, t.deductorTan),
 ]);
 
 // ── Expenses ───────────────────────────────────────────────────
@@ -1015,6 +1078,13 @@ export const expenses = pgTable("expenses", {
   expenseDate: timestamp("expense_date", { withTimezone: true }).defaultNow().notNull(),
   referenceNumber: text("reference_number"),
   bankAccountId: uuid("bank_account_id").references(() => bankAccounts.id),
+  // Payee (landlord, consultant…) — set when TDS is withheld from the payment.
+  partyId: uuid("party_id").references(() => parties.id, { onDelete: "set null" }),
+  // "none" (no TDS) or "auto" / "manual" when TDS is deducted. The expense
+  // amount is gross; the bank moves amount - tds_amount.
+  tdsMode: text("tds_mode").default("none").notNull(),
+  tdsSection: text("tds_section"),
+  tdsAmount: numeric("tds_amount", { precision: 15, scale: 2 }).default("0").notNull(),
   createdByUserId: uuid("created_by_user_id"),
   createdByName: text("created_by_name"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

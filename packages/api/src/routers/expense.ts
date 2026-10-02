@@ -1,12 +1,13 @@
 import { eq, and, sql, ilike, or, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { expenses, bankAccounts, bankTransactions, bankStatementLines } from "@fintranzact/db";
+import { expenses, bankAccounts, bankTransactions, bankStatementLines, parties } from "@fintranzact/db";
 import { createExpenseSchema, paginationSchema, money } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { assertInBusiness } from "../lib/business-scope.js";
 import { assertPeriodOpen } from "../lib/period-lock.js";
 import { reopenLinesMatchedTo } from "./bankRecon.js";
+import { assertExpenseTdsInput, syncExpenseTds, type ExpenseTdsMode } from "../lib/tds-service.js";
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
@@ -69,15 +70,28 @@ export const expenseRouter = router({
 
     const expense = await ctx.db.transaction(async (tx) => {
       await assertInBusiness(tx, bankAccounts, input.bankAccountId, ctx.businessId, "Bank account");
+      await assertInBusiness(tx, parties, input.partyId, ctx.businessId, "Party");
       // Nothing can be added to a locked period.
       await assertPeriodOpen(tx, ctx.businessId, [input.expenseDate]);
-      const [newExpense] = await tx.insert(expenses).values({
+      const tdsInput = assertExpenseTdsInput(
+        input.tdsMode ?? "none", input.partyId, input.tdsSection, input.tdsAmount, input.amount,
+      );
+      const [inserted] = await tx.insert(expenses).values({
         ...input,
+        partyId: input.partyId ?? null,
+        tdsMode: tdsInput.mode,
+        tdsSection: tdsInput.section,
+        tdsAmount: tdsInput.amount,
         businessId: ctx.businessId,
         expenseDate: input.expenseDate ? new Date(input.expenseDate) : new Date(),
         createdByUserId: ctx.user!.id,
         createdByName: ctx.user!.name,
       }).returning();
+
+      // TDS payable; the bank then pays the payee net of it.
+      const tds = await syncExpenseTds(tx, { businessId: ctx.businessId, expenseId: inserted.id });
+      const newExpense = { ...inserted, tdsAmount: tds.tdsAmount, tdsSection: tds.tdsSection };
+      const netAmount = money.sub(input.amount, tds.tdsAmount);
 
       // ── Bank account debit ─────────────────────────────────────────
       // If bankAccountId is explicitly provided, use it directly;
@@ -121,13 +135,13 @@ export const expenseRouter = router({
           .limit(1);
 
         if (account) {
-          const newBalance = money.sub(account.currentBalance, input.amount);
+          const newBalance = money.sub(account.currentBalance, netAmount);
 
           await tx.insert(bankTransactions).values({
             businessId: ctx.businessId,
             bankAccountId: account.id,
             type: "withdrawal",
-            amount: input.amount,
+            amount: netAmount,
             description: `Expense: ${input.category}${input.description ? ` — ${input.description}` : ""}`,
             referenceType: "expense",
             referenceId: newExpense.id,
@@ -150,7 +164,7 @@ export const expenseRouter = router({
       action: "expense.create",
       entityType: "expense",
       entityId: expense.id,
-      metadata: { amount: expense.amount, category: expense.category },
+      metadata: { amount: expense.amount, category: expense.category, tdsAmount: expense.tdsAmount },
       ipAddress: ctx.ipAddress,
     });
 
@@ -173,6 +187,18 @@ export const expenseRouter = router({
         // Neither the old nor the new date may be in a locked period.
         await assertPeriodOpen(tx, ctx.businessId, [existing.expenseDate, input.data.expenseDate]);
         await assertInBusiness(tx, bankAccounts, input.data.bankAccountId, ctx.businessId, "Bank account");
+        await assertInBusiness(tx, parties, input.data.partyId, ctx.businessId, "Party");
+
+        // The TDS settings after this edit: what was sent, else what is stored.
+        const partyChanged = input.data.partyId !== undefined && input.data.partyId !== existing.partyId;
+        const tdsInput = assertExpenseTdsInput(
+          (input.data.tdsMode ?? existing.tdsMode) as ExpenseTdsMode,
+          input.data.partyId !== undefined ? input.data.partyId : existing.partyId,
+          // A section carried over from the old payee does not follow a change of payee.
+          input.data.tdsSection !== undefined ? input.data.tdsSection : partyChanged ? null : existing.tdsSection,
+          input.data.tdsAmount ?? existing.tdsAmount,
+          input.data.amount ?? existing.amount,
+        );
 
         // Reverse old bank transaction if one exists
         const [oldBankTx] = await tx.select({
@@ -214,14 +240,22 @@ export const expenseRouter = router({
         const pinnedAccountId = input.data.bankAccountId
           ?? (newMode === existing.mode ? existing.bankAccountId : null);
 
-        const [result] = await tx.update(expenses)
+        const [updatedRow] = await tx.update(expenses)
           .set({
             ...input.data,
             bankAccountId: pinnedAccountId,
+            tdsMode: tdsInput.mode,
+            tdsSection: tdsInput.section,
+            tdsAmount: tdsInput.amount,
             expenseDate: input.data.expenseDate ? new Date(input.data.expenseDate) : undefined,
           })
           .where(and(eq(expenses.id, input.id), eq(expenses.businessId, ctx.businessId)))
           .returning();
+
+        // Re-do the TDS deduction for the new amount / date / payee; the bank moves what is left.
+        const tds = await syncExpenseTds(tx, { businessId: ctx.businessId, expenseId: input.id });
+        const result = { ...updatedRow!, tdsAmount: tds.tdsAmount, tdsSection: tds.tdsSection };
+        const netAmount = money.sub(newAmount, tds.tdsAmount);
 
         // Create new bank transaction with updated values
         let account: { id: string; currentBalance: string } | undefined;
@@ -253,13 +287,13 @@ export const expenseRouter = router({
 
         let newBankTxId: string | null = null;
         if (account) {
-          const newBalance = money.sub(account.currentBalance, newAmount);
+          const newBalance = money.sub(account.currentBalance, netAmount);
 
           const [newBankTx] = await tx.insert(bankTransactions).values({
             businessId: ctx.businessId,
             bankAccountId: account.id,
             type: "withdrawal",
-            amount: newAmount,
+            amount: netAmount,
             description: `Expense: ${result.category}${result.description ? ` — ${result.description}` : ""}`,
             referenceType: "expense",
             referenceId: result.id,
@@ -291,7 +325,7 @@ export const expenseRouter = router({
         action: "expense.update",
         entityType: "expense",
         entityId: updated.id,
-        metadata: { expenseId: updated.id },
+        metadata: { expenseId: updated.id, tdsAmount: updated.tdsAmount },
         ipAddress: ctx.ipAddress,
       });
 
@@ -318,6 +352,9 @@ export const expenseRouter = router({
           .update(expenses)
           .set({ deletedAt: new Date() })
           .where(and(eq(expenses.id, input.id), eq(expenses.businessId, ctx.businessId)));
+
+        // Its TDS is no longer deducted (refused if already deposited on a challan).
+        await syncExpenseTds(tx, { businessId: ctx.businessId, expenseId: input.id });
 
         // Reverse the bank withdrawal that was created when this expense was recorded
         const [originalTx] = await tx

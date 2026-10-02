@@ -1,11 +1,12 @@
 /**
  * Accounting statements shown in Reports: Profit & Loss, Trial Balance,
- * Balance Sheet, Ageing, Party Ledger and Tally Export. They used to be tabs
+ * Balance Sheet, Ageing, Party Ledger, Tally Export and the TDS / TCS reports. They used to be tabs
  * on the GST page; each keeps its own period controls.
  */
 import { useState } from "react";
+import { tdsFinancialYear, tdsSections, defaultTcsSectionRules } from "@fintranzact/shared";
 import { trpc, getBusinessId } from "@/lib/trpc";
-import { formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
 import { apiUrl } from "@/lib/api-url";
 import { getCurrentFYBounds, getPreviousFYBounds } from "@/lib/fy-bounds";
@@ -18,6 +19,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Download04Icon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
+import { Select } from "@/components/ui/Select";
 import { fmtStr, fyLabel, ReportSkeleton } from "./report-format";
 
 
@@ -1237,6 +1239,159 @@ export function TallyExportView() {
           description="No invoices, payments or expenses found for the selected period."
         />
       )}
+    </div>
+  );
+}
+
+
+// ── TDS & TCS ──────────────────────────────────────────────────
+
+export type TdsReportKind = "tds-payable" | "tcs-payable" | "tds-receivable";
+
+interface TdsReportRow {
+  section: string;
+  quarter: number;
+  deducted: string;
+  deposited: string;
+  pending: string;
+}
+
+const TDS_REPORT_TEXT: Record<TdsReportKind, { title: string; word: string; columns: [string, string, string]; file: string }> = {
+  "tds-payable": { title: "TDS payable", word: "TDS", columns: ["Deducted", "Deposited", "Pending deposit"], file: "tds-payable" },
+  "tcs-payable": { title: "TCS payable", word: "TCS", columns: ["Collected", "Deposited", "Pending deposit"], file: "tcs-payable" },
+  "tds-receivable": { title: "TDS receivable", word: "TDS", columns: ["Deducted (books)", "In Form 26AS", "Not yet in 26AS"], file: "tds-receivable" },
+};
+
+const tdsSectionName = (code: string) =>
+  tdsSections.find((s) => s.code === code)?.label ?? defaultTcsSectionRules("").find((s) => s.code === code)?.label ?? code;
+
+function csvCell(v: string | number): string {
+  const t = String(v);
+  return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+}
+
+/**
+ * TDS payable, TCS payable and TDS receivable by section and quarter: what was
+ * deducted, what has been deposited and what is still pending. Receivable has no
+ * deposit of ours: "in 26AS" is what the imported Form 26AS / AIS shows
+ * for the same section and quarter (26AS / AIS tab on the TDS page).
+ */
+export function TdsTcsReportView({ report }: { report: TdsReportKind }) {
+  const years = Array.from({ length: 5 }, (_, i) => {
+    const start = parseInt(tdsFinancialYear(new Date()).slice(0, 4), 10) - i;
+    return `${start}-${String((start + 1) % 100).padStart(2, "0")}`;
+  });
+  const [fy, setFy] = useState(years[0]!);
+  const text = TDS_REPORT_TEXT[report];
+  const receivable = report === "tds-receivable";
+
+  const summary = trpc.tds.summary.useQuery({ financialYear: fy, kind: report === "tcs-payable" ? "tcs" : "tds" }, { enabled: !receivable });
+  const rec = trpc.tds.reconciliation26as.useQuery({ financialYear: fy }, { enabled: receivable });
+  const isLoading = receivable ? rec.isLoading : summary.isLoading;
+  const error = receivable ? rec.error : summary.error;
+
+  let rows: TdsReportRow[] = [];
+  if (receivable && rec.data) {
+    // Section family x quarter, summed over customers. "Pending" counts only shortfalls, per customer row.
+    const by = new Map<string, TdsReportRow>();
+    for (const r of rec.data.rows) {
+      if (r.status === "ignored") continue;
+      const key = `${r.section}|${r.quarter}`;
+      const cur = by.get(key) ?? { section: r.section, quarter: r.quarter, deducted: "0", deposited: "0", pending: "0" };
+      const short = Math.max(0, parseFloat(r.booksAmount) - parseFloat(r.amount26as));
+      cur.deducted = (parseFloat(cur.deducted) + parseFloat(r.booksAmount)).toFixed(2);
+      cur.deposited = (parseFloat(cur.deposited) + Math.min(parseFloat(r.booksAmount), parseFloat(r.amount26as))).toFixed(2);
+      cur.pending = (parseFloat(cur.pending) + short).toFixed(2);
+      by.set(key, cur);
+    }
+    rows = [...by.values()].sort((a, b) => a.section.localeCompare(b.section) || a.quarter - b.quarter);
+  } else if (summary.data) {
+    rows = summary.data.payable.bySectionQuarter.map((r) => ({
+      section: r.sectionCode, quarter: r.quarter, deducted: r.total, deposited: r.deposited, pending: r.pending,
+    }));
+  }
+  const sum = (k: "deducted" | "deposited" | "pending") => rows.reduce((t, r) => t + parseFloat(r[k]), 0).toFixed(2);
+  const sectionText = (code: string) => (receivable ? code : tdsSectionName(code));
+
+  function download() {
+    const lines = [
+      ["Section", "Quarter", ...text.columns].map(csvCell).join(","),
+      ...rows.map((r) => [sectionText(r.section), `Q${r.quarter}`, r.deducted, r.deposited, r.pending].map(csvCell).join(",")),
+      ["Total", "", sum("deducted"), sum("deposited"), sum("pending")].map(csvCell).join(","),
+    ];
+    const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${text.file}-${fy}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="card px-4 py-4 flex flex-wrap items-center gap-3">
+        <Select className="input w-32" value={fy} onChange={(e) => setFy(e.target.value)} aria-label="Financial year">
+          {years.map((y) => <option key={y} value={y}>FY {y}</option>)}
+        </Select>
+        <div className="flex-1" />
+        <button onClick={download} disabled={isLoading || rows.length === 0} className="btn-primary inline-flex items-center gap-2">
+          <Icon icon={Download04Icon} size={16} />
+          Download CSV
+        </button>
+      </div>
+
+      {receivable && rec.data && rec.data.entryCount === 0 && (
+        <div className="card px-4 py-3 text-sm text-text-secondary" role="note">
+          No Form 26AS / AIS file is imported for FY {fy}, so nothing shows as reflected there yet. Import one on the TDS page, 26AS / AIS tab.
+        </div>
+      )}
+
+      {isLoading && <ReportSkeleton columns={[{ label: "Section" }, { label: "Quarter" }, { label: text.columns[0], align: "right" }, { label: text.columns[1], align: "right" }, { label: text.columns[2], align: "right" }]} />}
+      {error && <div className="card px-4 py-3 text-sm text-red-700">Failed to load: {error.message}</div>}
+
+      {!isLoading && !error && rows.length === 0 && (
+        <EmptyState title={`No ${text.title} for FY ${fy}`} description={`No ${text.word} is recorded in this financial year.`} />
+      )}
+
+      {rows.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Section</th><th>Quarter</th>
+                  <th className="text-right">{text.columns[0]}</th>
+                  <th className="text-right">{text.columns[1]}</th>
+                  <th className="text-right">{text.columns[2]}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={`${r.section}|${r.quarter}`}>
+                    <td className="text-text-primary">{sectionText(r.section)}</td>
+                    <td className="text-text-secondary">Q{r.quarter}</td>
+                    <td className="text-right tabular-nums">{formatCurrency(r.deducted)}</td>
+                    <td className="text-right tabular-nums">{formatCurrency(r.deposited)}</td>
+                    <td className="text-right tabular-nums font-medium">{formatCurrency(r.pending)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="font-semibold">
+                  <td colSpan={2}>Total</td>
+                  <td className="text-right tabular-nums">{formatCurrency(sum("deducted"))}</td>
+                  <td className="text-right tabular-nums">{formatCurrency(sum("deposited"))}</td>
+                  <td className="text-right tabular-nums">{formatCurrency(sum("pending"))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+      <p className="text-xs text-text-tertiary">
+        Figures come from your books. Rates, limits and due dates change: check them with your CA.
+      </p>
     </div>
   );
 }

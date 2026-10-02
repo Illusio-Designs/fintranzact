@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
-import { AgingReportView, BalanceSheetView, PartyLedgerView, ProfitAndLossView, TallyExportView, TrialBalanceView } from "@/components/reports/AccountingReports";
+import { AgingReportView, BalanceSheetView, PartyLedgerView, ProfitAndLossView, TallyExportView, TdsTcsReportView, TrialBalanceView } from "@/components/reports/AccountingReports";
 import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
 import { Fragment, useState, useRef, useEffect, type ReactNode } from "react";
 import { trpc, getBusinessId } from "@/lib/trpc";
@@ -86,11 +86,15 @@ type ReportId =
   | "ageing"
   | "party-ledger"
   | "tally-export"
+  | "tds-payable"
+  | "tcs-payable"
+  | "tds-receivable"
   // Statutory: the GST and compliance pages, shown inside the Centre
   | "gstr1"
   | "gstr3b"
   | "gstr9"
   | "cmp08"
+  | "gstr4"
   | "gstr2b"
   | "itc"
   | "e-invoices"
@@ -187,6 +191,9 @@ const REPORT_GROUPS: Array<{ id: string; label: string; side?: ReportSide; repor
       { id: "trial-balance", label: "Trial Balance", description: "Debit and credit totals for every account", tabular: false, ownPeriod: true },
       { id: "party-ledger", label: "Party Ledger", description: "Every entry for one party with its running balance", tabular: false, ownPeriod: true },
       { id: "tally-export", label: "Tally Export", description: "Masters and vouchers as Tally XML for your CA", tabular: false, ownPeriod: true },
+      { id: "tds-payable", label: "TDS Payable", description: "TDS deducted, deposited and pending, by section and quarter", tabular: false, ownPeriod: true, resource: "Tds" },
+      { id: "tcs-payable", label: "TCS Payable", description: "TCS collected, deposited and pending, by section and quarter", tabular: false, ownPeriod: true, resource: "Tds" },
+      { id: "tds-receivable", label: "TDS Receivable", description: "TDS customers deducted from you, and how much of it shows in Form 26AS", tabular: false, ownPeriod: true, resource: "Tds" },
     ],
   },
   {
@@ -198,6 +205,7 @@ const REPORT_GROUPS: Array<{ id: string; label: string; side?: ReportSide; repor
       { id: "gstr3b", label: "GSTR-3B", description: "Monthly summary of output tax, input tax credit and tax payable", tabular: false, ownPeriod: true, gstOnly: true, resource: "GstReport" },
       { id: "gstr9", label: "GSTR-9", description: "Annual return for the financial year", tabular: false, ownPeriod: true, gstOnly: true, resource: "GstReport" },
       { id: "cmp08", label: "CMP-08", description: "Quarterly statement for composition dealers", tabular: false, ownPeriod: true, gstOnly: true, compositionOnly: true, resource: "GstReport" },
+      { id: "gstr4", label: "GSTR-4", description: "Annual return for composition dealers: inward supplies, turnover, tax paid, with JSON", tabular: false, ownPeriod: true, gstOnly: true, compositionOnly: true, resource: "GstReport" },
     ],
   },
   {
@@ -3107,7 +3115,9 @@ function FilingCalendar({ composition, onOpen, canOpen }: { composition: boolean
         { id: "gstr1", title: `GSTR-1 · ${monthName(last)}`, due: dueIn(11) },
         { id: "gstr3b", title: `GSTR-3B · ${monthName(last)}`, due: dueIn(20) },
       ];
-  items.push({ id: "gstr9", title: `GSTR-9 · FY ${fyStartYear - 1}-${String(fyStartYear).slice(2)}`, due: new Date(fyStartYear, 11, 31) });
+  // A composition dealer files GSTR-4 (30 April) instead of GSTR-9; verify dates with a CA.
+  if (composition) items.push({ id: "gstr4", title: `GSTR-4 · FY ${fyStartYear - 1}-${String(fyStartYear).slice(2)}`, due: new Date(fyStartYear, 3, 30) });
+  else items.push({ id: "gstr9", title: `GSTR-9 · FY ${fyStartYear - 1}-${String(fyStartYear).slice(2)}`, due: new Date(fyStartYear, 11, 31) });
   const days = (d: Date) => Math.round((d.getTime() - today.getTime()) / 86_400_000);
   return (
     <div aria-label="Filing calendar" role="group" className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
@@ -3286,11 +3296,16 @@ function ReportsPage() {
         return <PartyLedgerView />;
       case "tally-export":
         return <TallyExportView />;
+      case "tds-payable":
+      case "tcs-payable":
+      case "tds-receivable":
+        return <TdsTcsReportView report={activeReport} />;
       // The compliance pages, as they are, inside the Centre.
       case "gstr1":
       case "gstr3b":
       case "gstr9":
       case "cmp08":
+      case "gstr4":
         return <EmbeddedReport gstTab={activeReport}><GSTReportsPage /></EmbeddedReport>;
       case "gstr2b":
         return <EmbeddedReport><GSTR2BPage /></EmbeddedReport>;

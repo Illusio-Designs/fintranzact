@@ -495,7 +495,7 @@ const BEFORE_LAUNCH: RoadmapSeedItem[] = [
 - TDS payable and TCS payable ledgers per section
 - Challan entry (ITNS 281 / challan number, BSR code, date) to mark tax as paid; due-date reminders (by the 7th of the next month, verify with CA)
 - Form 26Q data (TDS on non-salary payments) and Form 27EQ data (TCS), quarterly
-- Form 16A / 27D certificates to download and share
+- Form 16A / 27D certificates to download and share (generated from the books, not TRACES-issued)
 - Filing, certificates and PAN/TAN checks through Sandbox.co.in — see "TDS & TCS return filing and certificates through Sandbox.co.in"`,
     [
       "TDS section master with rates and thresholds per financial year",
@@ -1997,8 +1997,8 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
       {
         // TDS on bills and payments, TDS receivable, TCS on sales, challans and
-        // 26Q/27EQ data. Still to come: TDS on expenses, due-date reminders,
-        // 26AS/AIS reconciliation and certificates.
+        // 26Q/27EQ data. Expenses, reminders, 26AS/AIS and certificates were
+        // ticked by the "2026-10-02-tds-2" batch below.
         title: "TDS & TCS on transactions",
         status: "in_progress",
         done: [
@@ -2040,6 +2040,73 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
         title: "Store Pro add-on billing",
         status: "in_progress",
         done: ["Razorpay subscription billing monthly/yearly"],
+      },
+    ],
+  },
+  {
+    key: "2026-10-02-tds-2",
+    updates: [
+      {
+        // Built after the first TDS batch. Certificates are generated from the
+        // books (not issued by TRACES). Left unticked on purpose: CA
+        // verification; Sandbox filing/certificates are a separate item.
+        title: "TDS & TCS on transactions",
+        status: "in_progress",
+        done: [
+          "TDS section on parties and expense ledgers",
+          "TDS on purchase bills and expense entries",
+          "TDS receivable reconciliation with 26AS / AIS",
+          "Challan entry (BSR code, challan no., date) and due-date reminders",
+          "Form 16A / 27D certificates",
+          "TDS/TCS reports: deducted, paid, pending",
+        ],
+      },
+    ],
+  },
+  {
+    key: "2026-10-02-gstr4",
+    updates: [
+      {
+        // Built: composition category and editable rate per year, CMP-08 data,
+        // GSTR-4 tables (outward, inward incl. RCM, tax paid against CMP-08), a
+        // GSTR-4 tab with CSV/print and a JSON download. Left unticked: CA
+        // verification of tables and due dates. The JSON is best effort, its
+        // table keys are not verified against the portal schema (docs/GSTR-4.md).
+        title: "GSTR-4 annual return for composition dealers",
+        status: "in_progress",
+        done: [
+          "Composition dealer setting and rate per business type",
+          "CMP-08 quarterly statement data",
+          "GSTR-4 outward supply table",
+          "GSTR-4 inward supplies (registered, unregistered, RCM)",
+          "Tax paid summary against CMP-08",
+          "GSTR-4 JSON export for the GST portal",
+        ],
+      },
+    ],
+  },
+  {
+    key: "2026-10-02-sandbox",
+    updates: [
+      {
+        // Built after the first Sandbox batch: e-way bill, setup guide, alerts
+        // (log + billing-events only), usage metering, the per-document charge
+        // on a monthly "payment due" statement (closed by a platform admin, no
+        // automatic collection) and the customer usage page. Left unticked on
+        // purpose: GSTR-1 / GSTR-3B / GSTR-2B (code exists, but the GST-returns
+        // endpoint paths are from memory and GSTR-1/3B are only partly mapped,
+        // so they are not verified against Sandbox), the quote, the test
+        // account and keys, and the test run / go-live.
+        title: "Connect e-invoice, e-way bill and GST returns through Sandbox.co.in",
+        status: "in_progress",
+        done: [
+          "E-way bill: generate (from IRN and standalone), update vehicle, cancel",
+          "Customer setup guide: create API user on the e-invoice portal",
+          "Quota and wallet balance alerts for our Sandbox account",
+          "Per-document usage metering (successful calls only)",
+          "Per-document charge on the customer's monthly bill (no advance)",
+          "Customer usage page: count, rate, amount this month",
+        ],
       },
     ],
   },

@@ -204,6 +204,34 @@
       "when": 1790945361962,
       "tag": "0028_tds_tcs_period_locks",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790951030536,
+      "tag": "0029_expense_tds",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790951646405,
+      "tag": "0030_tds_reminder_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790952335779,
+      "tag": "0031_tds_26as_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790953573299,
+      "tag": "0032_composition_settings",
+      "breakpoints": true
     }
   ]
 }

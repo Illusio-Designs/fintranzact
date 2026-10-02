@@ -1,17 +1,28 @@
 import { z } from "zod";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { invoices, businesses } from "@fintranzact/db";
-import { istPeriodRange } from "@fintranzact/shared";
-import { router, viewerProcedure } from "../trpc.js";
+import { TRPCError } from "@trpc/server";
+import { eq } from "drizzle-orm";
+import { businesses, compositionSettings } from "@fintranzact/db";
+import {
+  compositionCategories, compositionRateFor, defaultCompositionRules, financialYearLabel, financialYearOf,
+} from "@fintranzact/shared";
+import { router, viewerProcedure, adminProcedure } from "../trpc.js";
+import { withAudit } from "../lib/audit.js";
+import { loadCmp08Quarter, loadCompositionSetting } from "../lib/cmp08.js";
+import { Gstr4NotApplicableError, loadGstr4 } from "../lib/gstr4.js";
+import { gstr4ToPortalJson } from "../lib/gstr4-json.js";
 import { requireCan } from "../lib/permissions.js";
 import { generateGSTR1, generateGSTR3B, gstr1ToCSV, gstr1ToPortalJson } from "../lib/gst-reports.js";
 import { generateGSTR9, gstr9ToPortalJson } from "../lib/gstr9-generator.js";
-import { buildBusinessDateFilter } from "../lib/business-date.js";
 
-/** Sale documents that add to CMP-08 outward supplies. */
-const CMP08_ADDING_DOCUMENTS = ["invoice", "debit_note"] as const;
-/** Sale documents that reduce CMP-08 outward supplies. */
-const CMP08_REDUCING_DOCUMENTS = ["credit_note", "sales_return"] as const;
+const fyInput = z.string().regex(/^\d{4}-\d{2}$/, "Use a financial year like 2026-27");
+const percent = z.string().regex(/^\d{1,3}(\.\d{1,3})?$/).refine((v) => parseFloat(v) <= 100, "At most 100%");
+
+function assertRealYear(fy: string): void {
+  const start = parseInt(fy.slice(0, 4), 10);
+  if (String((start + 1) % 100).padStart(2, "0") !== fy.slice(5)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "A financial year runs April to March, e.g. 2026-27" });
+  }
+}
 
 export const gstRouter = router({
   // Reports are available for ALL businesses — GST-registered get GST terminology,
@@ -107,63 +118,153 @@ export const gstRouter = router({
       };
     }),
 
-  // CMP-08: Quarterly return for composition scheme dealers.
-  // Composition dealers pay a flat tax on total outward supplies instead of
-  // collecting GST from customers. The rate varies by category:
-  //   1% for traders (manufacturers), 5% for restaurants, 6% for service providers.
-  // This endpoint calculates total outward supplies for a quarter and the tax payable.
+  // CMP-08: Quarterly statement for composition scheme dealers.
+  // A composition dealer pays a flat percent of turnover instead of collecting
+  // GST. The rate comes from the category set for the financial year
+  // (gst.compositionSettings): 1% manufacturers and traders, 5% restaurants,
+  // 6% other service providers, unless the business overrides it.
   cmp08: viewerProcedure
     .input(z.object({
       /** Start year of the financial year: 2025 for FY 2025-26. */
       year: z.number().int().min(2020).max(2099),
       /** Financial-year quarter: Q1 = Apr–Jun, Q2 = Jul–Sep, Q3 = Oct–Dec, Q4 = Jan–Mar (next year). */
       quarter: z.number().int().min(1).max(4),
+      /** When the tax was paid, to work out interest on a late payment. */
+      paidOn: z.coerce.date().optional(),
     }))
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Report");
-
-      // CMP-08 quarters follow the financial year: Q1 starts in April
-      const startMonth = 4 + (input.quarter - 1) * 3; // Q1→4, Q2→7, Q3→10, Q4→13 (January next year)
-      // The quarter's three calendar months in India
-      const { from: quarterStart, to: quarterEnd } = istPeriodRange(input.year, startMonth, 3);
-
-      // Outward supplies are the sale invoices, net of the credit notes and
-      // sales returns (less) and debit notes (more) issued to customers.
-      // Quotations, proformas, orders and challans are not supplies, and
-      // deleted or cancelled documents are not reported.
-      const rows = await ctx.db.select({
-        documentType: invoices.documentType,
-        subtotal: invoices.subtotal,
-        discountAmount: invoices.discountAmount,
-        additionalCharges: invoices.additionalCharges,
-      }).from(invoices)
-        .where(and(
-          eq(invoices.businessId, ctx.businessId),
-          eq(invoices.type, "sale"),
-          inArray(invoices.documentType, [...CMP08_ADDING_DOCUMENTS, ...CMP08_REDUCING_DOCUMENTS]),
-          sql`${invoices.status} != 'cancelled'`,
-          isNull(invoices.deletedAt),
-          ...buildBusinessDateFilter(invoices, { from: quarterStart, to: quarterEnd }),
-        ));
-
-      let taxableValue = 0;
-      for (const row of rows) {
-        const sign = (CMP08_REDUCING_DOCUMENTS as readonly string[]).includes(row.documentType) ? -1 : 1;
-        // Value of supply: lines less the document discount, plus charges
-        taxableValue += sign * (parseFloat(row.subtotal) - parseFloat(row.discountAmount || "0") + parseFloat(row.additionalCharges || "0"));
-      }
-
-      // Default composition rate for traders: 1%.
-      // Businesses can override this; we default to the lowest rate.
-      // 1% for traders/manufacturers, 5% for restaurants, 6% for services.
-      const compositionRate = 0.01;
-      const taxPayable = taxableValue * compositionRate;
-
+      const q = await loadCmp08Quarter(
+        ctx.db, ctx.businessId, financialYearLabel(input.year), input.quarter as 1 | 2 | 3 | 4, input.paidOn,
+      );
       return {
-        taxableValue: taxableValue.toFixed(2),
-        taxPayable: taxPayable.toFixed(2),
-        quarterStart: quarterStart.toISOString(),
-        quarterEnd: quarterEnd.toISOString(),
+        ...q,
+        quarterStart: q.quarterStart.toISOString(),
+        quarterEnd: q.quarterEnd.toISOString(),
+        dueDate: q.dueDate?.toISOString() ?? null,
       };
     }),
+
+  /** All four quarters of a financial year (Q4 has no CMP-08: its tax goes in GSTR-4). */
+  cmp08Year: viewerProcedure
+    .input(z.object({ year: z.number().int().min(2020).max(2099) }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Report");
+      const fy = financialYearLabel(input.year);
+      const quarters = [];
+      for (const quarter of [1, 2, 3, 4] as const) {
+        const q = await loadCmp08Quarter(ctx.db, ctx.businessId, fy, quarter);
+        quarters.push({
+          ...q,
+          quarterStart: q.quarterStart.toISOString(),
+          quarterEnd: q.quarterEnd.toISOString(),
+          dueDate: q.dueDate?.toISOString() ?? null,
+        });
+      }
+      return { financialYear: fy, quarters };
+    }),
+
+  /**
+   * GSTR-4 annual return tables for a composition taxpayer. `cmp08Paid` is the
+   * total actually paid through CMP-08 per quarter (the app has no payment
+   * tracking); a missing quarter is assumed paid in full and `paidAssumed` says so.
+   */
+  gstr4: viewerProcedure
+    .input(z.object({
+      financialYear: fyInput,
+      cmp08Paid: z.object({
+        1: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+        2: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+        3: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+      }).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Report");
+      assertRealYear(input.financialYear);
+      try {
+        const r = await loadGstr4(ctx.db, ctx.businessId, input.financialYear, input.cmp08Paid);
+        return { ...r, dueDate: r.dueDate.toISOString() };
+      } catch (e) {
+        if (e instanceof Gstr4NotApplicableError) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: e.message });
+        }
+        throw e;
+      }
+    }),
+
+  /**
+   * GSTR-4 as a JSON file in the shape of the GST offline tool. BEST EFFORT: the
+   * table and field keys are not verified against the portal schema (see
+   * lib/gstr4-json.ts and docs/GSTR-4.md); check before uploading.
+   */
+  gstr4Json: viewerProcedure
+    .input(z.object({
+      financialYear: fyInput,
+      cmp08Paid: z.object({
+        1: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+        2: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+        3: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+      }).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Report");
+      assertRealYear(input.financialYear);
+      try {
+        const r = await loadGstr4(ctx.db, ctx.businessId, input.financialYear, input.cmp08Paid);
+        const [biz] = await ctx.db.select({ gstin: businesses.gstin }).from(businesses)
+          .where(eq(businesses.id, ctx.businessId)).limit(1);
+        return {
+          filename: `GSTR4_FY${input.financialYear.replace("-", "_")}_portal.json`,
+          json: gstr4ToPortalJson(r, { gstin: biz?.gstin ?? "", fy: input.financialYear }),
+        };
+      } catch (e) {
+        if (e instanceof Gstr4NotApplicableError) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: e.message });
+        }
+        throw e;
+      }
+    }),
+
+  /** The composition category and rate for a year, with the defaults to pick from. */
+  compositionSettings: viewerProcedure
+    .input(z.object({ financialYear: fyInput.optional() }).default({}))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Report");
+      const fy = input.financialYear ?? financialYearLabel(financialYearOf(new Date(), 4));
+      assertRealYear(fy);
+      const setting = await loadCompositionSetting(ctx.db, ctx.businessId, fy);
+      return {
+        financialYear: fy,
+        category: setting.category,
+        rateOverride: setting.rateOverride,
+        configured: setting.configured,
+        rate: compositionRateFor(setting.category, setting.rateOverride, fy),
+        categories: defaultCompositionRules(fy),
+      };
+    }),
+
+  /** Set the composition category (and, if the rate changed, the rate) for a financial year. */
+  updateCompositionSettings: adminProcedure
+    .input(z.object({
+      financialYear: fyInput,
+      category: z.enum(compositionCategories),
+      /** Percent; leave out to use the category default. */
+      rate: percent.nullish(),
+    }))
+    .mutation(withAudit(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "update", "Business");
+      assertRealYear(input.financialYear);
+      const values = { category: input.category, rate: input.rate ?? null, updatedAt: new Date() };
+      const [row] = await ctx.db
+        .insert(compositionSettings)
+        .values({ businessId: ctx.businessId, financialYear: input.financialYear, ...values })
+        .onConflictDoUpdate({ target: [compositionSettings.businessId, compositionSettings.financialYear], set: values })
+        .returning();
+      return row!;
+    }, (row, input) => ({
+      action: "gst.updateCompositionSettings",
+      entityType: "composition_settings",
+      entityId: row.id,
+      metadata: { financialYear: input.financialYear, category: input.category, rate: input.rate ?? null },
+    }))),
 });
