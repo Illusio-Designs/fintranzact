@@ -16,6 +16,7 @@
 import { test, expect, ApiHelper } from "../helpers/fixtures";
 import { openRegisterForm, fillRegisterForm } from "../helpers/auth";
 import { loadSeed } from "../helpers/seed";
+import { sidebarLabels } from "../helpers/journey";
 
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
 
@@ -141,27 +142,17 @@ test.describe("Role: Seller", () => {
     await rolePage.goto("/invoices");
     await rolePage.locator("h1").first().waitFor({ state: "visible", timeout: 10_000 });
 
-    const sidebar = rolePage.locator("nav, aside").first();
-
-    for (const item of ROLE_NAV_VISIBLE.seller) {
-      // In the DOM is enough: the sidebar is an accordion, so groups other than the current page's start closed.
-      await expect(
-        sidebar.getByText(item, { exact: true }).first(),
-      ).toBeAttached({ timeout: 5_000 });
-    }
+    // Every group's links, opening the accordion group by group.
+    const labels = await sidebarLabels(rolePage);
+    for (const item of ROLE_NAV_VISIBLE.seller) expect(labels).toContain(item);
   });
 
   test("seller does NOT see restricted nav items", async () => {
     await rolePage.goto("/invoices");
     await rolePage.locator("h1").first().waitFor({ state: "visible", timeout: 10_000 });
 
-    const sidebar = rolePage.locator("nav, aside").first();
-
-    for (const item of ROLE_NAV_HIDDEN.seller) {
-      await expect(
-        sidebar.getByText(item, { exact: true }),
-      ).toHaveCount(0);
-    }
+    const labels = await sidebarLabels(rolePage);
+    for (const item of ROLE_NAV_HIDDEN.seller) expect(labels).not.toContain(item);
   });
 
   test("seller is redirected from dashboard to invoices", async () => {
@@ -268,14 +259,8 @@ test.describe("Role: Accountant", () => {
     await rolePage.goto("/invoices");
     await rolePage.locator("h1").first().waitFor({ state: "visible", timeout: 10_000 });
 
-    const sidebar = rolePage.locator("nav, aside").first();
-
-    for (const item of ROLE_NAV_VISIBLE.accountant) {
-      // In the DOM is enough: the sidebar is an accordion, so groups other than the current page's start closed.
-      await expect(
-        sidebar.getByText(item, { exact: true }).first(),
-      ).toBeAttached({ timeout: 5_000 });
-    }
+    const labels = await sidebarLabels(rolePage);
+    for (const item of ROLE_NAV_VISIBLE.accountant) expect(labels).toContain(item);
   });
 
   test("accountant can access expenses page", async () => {

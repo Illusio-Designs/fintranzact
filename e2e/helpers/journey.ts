@@ -206,27 +206,60 @@ export async function navTo(page: Page, label: string | RegExp) {
     await expect(page.getByLabel(/^Notifications/).locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
     await page.getByRole("button", { name: "Open navigation menu" }).click();
   }
-  // The sidebar is an accordion: open the link's group first if it's closed.
-  const name = { name: label, exact: typeof label === "string" };
-  const link = sidebar.getByRole("link", { ...name, includeHidden: true });
-  // The sidebar is an accordion: open the link's group if it is closed. Its
-  // panel says so (aria-hidden), and the header that opens it controls it.
-  const panelId = await link.evaluate((el) => el.closest('[id^="nav-section-"]')?.id ?? "");
-  if (panelId && (await sidebar.locator(`[id="${panelId}"]`).getAttribute("aria-hidden")) === "true") {
-    await sidebar.locator(`button[aria-controls="${panelId}"]`).click();
-  }
-  await expect(link).toBeVisible();
+  // The sidebar is an accordion and a closed group renders no links, so open
+  // groups one at a time until the link shows. Groups can still be arriving
+  // (permissions, settings) right after a load, so look again until it does.
+  const link = sidebar.getByRole("link", { name: label, exact: typeof label === "string" });
+  await expect(async () => {
+    if (await link.isVisible()) return;
+    for (const header of await sidebar.locator('button[aria-controls^="nav-section-"]').all()) {
+      if ((await header.getAttribute("aria-expanded")) === "true") continue;
+      await header.click();
+      if (await link.waitFor({ state: "visible", timeout: 1_000 }).then(() => true, () => false)) return;
+    }
+    await expect(link).toBeVisible({ timeout: 500 });
+  }).toPass({ timeout: 20_000 });
   await link.click();
 }
 
 /** Labels of the links in the sidebar's main nav (what the role can see). */
 export async function sidebarLabels(page: Page): Promise<string[]> {
   const nav = page.getByTestId("app-sidebar-nav");
-  // Links in closed accordion groups count too: the role can still open them.
-  const links = nav.getByRole("link", { includeHidden: true });
-  await expect(links.first()).toBeAttached();
-  const texts = await links.allTextContents();
-  return texts.map((t) => t.trim()).filter(Boolean);
+  await expect(nav.getByRole("link").first()).toBeAttached();
+  // On a phone the groups live in the menu drawer: open it to reach them.
+  if (isPhone(page)) {
+    await page.mouse.move(1, (page.viewportSize()?.height ?? 800) - 1);
+    await expect(page.getByLabel(/^Notifications/).locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
+    await page.getByRole("button", { name: "Open navigation menu" }).click();
+    await expect(nav).toBeInViewport();
+  }
+  // The sidebar is an accordion: open each group in turn and collect its links.
+  const collect = async () => {
+    const texts = await nav.getByRole("link").allTextContents();
+    for (const header of await nav.locator('button[aria-controls^="nav-section-"]').all()) {
+      if ((await header.getAttribute("aria-expanded")) === "true") continue;
+      await header.click();
+      await expect(header).toHaveAttribute("aria-expanded", "true");
+      await expect(nav.locator(`[id="${await header.getAttribute("aria-controls")}"]`).getByRole("link").first()).toBeAttached();
+      texts.push(...(await nav.getByRole("link").allTextContents()));
+    }
+    return [...new Set(texts.map((t) => t.trim()).filter(Boolean))].sort();
+  };
+  // Groups can still be arriving right after a load: read until two passes agree.
+  let labels: string[] = [];
+  await expect(async () => {
+    const a = await collect();
+    const b = await collect();
+    expect(a).toEqual(b);
+    labels = a;
+  }).toPass({ timeout: 20_000 });
+  if (isPhone(page)) {
+    // Close the drawer the way a finger would: a tap on the page beside it.
+    const size = page.viewportSize() ?? { width: 390, height: 800 };
+    await page.mouse.click(size.width - 5, size.height / 2);
+    await expect(nav).not.toBeInViewport();
+  }
+  return labels;
 }
 
 /** Sign out from the sidebar (or top bar while onboarding). */

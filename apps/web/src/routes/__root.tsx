@@ -7,7 +7,7 @@ import {
   useNavigate,
   useLocation,
 } from "@tanstack/react-router";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { trpc, setBusinessId, queryClient } from "@/lib/trpc";
 import { canAccess } from "@/lib/permissions";
 import { needsPlanSelection } from "@/lib/plan-selection";
@@ -723,6 +723,18 @@ function RootLayout() {
   const toggleSection = useCallback((label: string) => {
     setOpenSection((prev) => (prev === label ? null : label));
   }, []);
+  // A group that just closed keeps its links for the length of its slide;
+  // after that a closed group renders none, so nothing hidden is left behind.
+  const [closingSection, setClosingSection] = useState<string | null>(null);
+  const prevOpenSection = useRef(openSection);
+  useEffect(() => {
+    const prev = prevOpenSection.current;
+    prevOpenSection.current = openSection;
+    if (!prev || prev === openSection) return;
+    setClosingSection(prev);
+    const t = setTimeout(() => setClosingSection(null), 220);
+    return () => clearTimeout(t);
+  }, [openSection]);
 
   const selectTenantMutation = trpc.tenant.select.useMutation({
     onSuccess: () => {
@@ -1614,7 +1626,7 @@ function RootLayout() {
                       )}
                     >
                     <div className="min-h-0 overflow-hidden">
-                    {visibleItems.map((item) => (
+                    {(!closed || closingSection === section.label) && visibleItems.map((item) => (
                       <Tooltip
                         key={item.to}
                         label={item.label}
