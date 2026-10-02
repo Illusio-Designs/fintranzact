@@ -29,7 +29,7 @@ function callerFor(sessionId: string) {
   const base = createTestContext({ user: { id: userId, email, name: "T" }, tenantId, authTokenKind: "cookie" });
   const req = new Request("http://localhost:3000/api/trpc/auth.x", {
     method: "POST",
-    headers: { cookie: `session_id=${sessionId}`, "user-agent": "vitest" },
+    headers: { cookie: `session_id=${sessionId}`, "user-agent": "vitest", "x-requested-with": "fintranzact" },
   });
   return factory({ ...base, req });
 }

@@ -39,7 +39,7 @@ function as(u: U, kind: "cookie" | null = "cookie") {
   const base = createTestContext({ user: { id: u.id, email: u.email, name: "T" }, tenantId, authTokenKind: kind });
   const req = new Request("http://localhost:3000/api/trpc/x", {
     method: "POST",
-    headers: { cookie: `session_id=${u.sessionId}`, "user-agent": "vitest" },
+    headers: { cookie: `session_id=${u.sessionId}`, "user-agent": "vitest", "x-requested-with": "fintranzact" },
   });
   return factory({ ...base, req });
 }

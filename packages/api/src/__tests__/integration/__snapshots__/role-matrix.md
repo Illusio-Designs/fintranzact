@@ -20,8 +20,8 @@
 | auth.logout | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.logoutAll | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.me | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
-| auth.register | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.regenerateBackupCodes | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.register | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.requestEmailChange | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.revokeAllTrustedDevices | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.revokeSession | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
