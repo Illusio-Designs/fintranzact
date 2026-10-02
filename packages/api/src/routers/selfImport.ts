@@ -10,6 +10,7 @@ import { controlDb, getTenantDb, businesses, tenantMembers } from "@fintranzact/
 import { eq, and, count as sqlCount } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc.js";
 import { signImportToken } from "../lib/importToken.js";
+import { assertWritable } from "../lib/entitlements.js";
 
 export const selfImportRouter = router({
   /**
@@ -43,6 +44,9 @@ export const selfImportRouter = router({
           message: "Only tenant owners can initiate an import",
         });
       }
+
+      // ── Restoring is a write: refused while read-only or suspended ────────
+      await assertWritable(tenantId);
 
       // ── Empty-target pre-check ─────────────────────────────────────────────
       const tenantDb = await getTenantDb(tenantId);

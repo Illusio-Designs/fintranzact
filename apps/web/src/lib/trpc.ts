@@ -1,11 +1,12 @@
 import { createTRPCReact } from "@trpc/react-query";
 import { httpBatchLink, splitLink, httpLink, TRPCClientError, type TRPCLink } from "@trpc/client";
 import { observable } from "@trpc/server/observable";
-import { QueryClient, QueryCache } from "@tanstack/react-query";
+import { QueryClient, QueryCache, MutationCache } from "@tanstack/react-query";
 import superjson from "superjson";
 import type { AppRouter } from "@fintranzact/api";
 import { isDesktop } from "./isDesktop";
 import { ensureAccessToken } from "./desktop-session";
+import { handleEntitlementError } from "@/lib/entitlement-handler";
 import { isAuthPublicPath, isMarketingPath, isSharePath } from "@/lib/public-paths";
 
 // The explicit `as any` cast avoids TS2742 "inferred type cannot be named" error caused
@@ -158,6 +159,17 @@ function handleAuthError(error: unknown) {
   }
 }
 
+/**
+ * Runs for every failed query and mutation (before a form's own onError):
+ * an entitlement refusal gets one toast with a "Choose a plan" / "Upgrade"
+ * action, and billing.status is refetched so the banner is current.
+ */
+function handleEntitlement(error: unknown) {
+  if (handleEntitlementError(error)) {
+    void queryClient.invalidateQueries({ queryKey: [["billing", "status"]] });
+  }
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -178,6 +190,12 @@ export const queryClient = new QueryClient({
     },
   },
   queryCache: new QueryCache({
-    onError: handleAuthError,
+    onError: (error) => {
+      handleAuthError(error);
+      handleEntitlement(error);
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: handleEntitlement,
   }),
 });

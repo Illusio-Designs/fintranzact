@@ -27,6 +27,8 @@ import { TABLE_REGISTRY } from "../lib/tableRegistry.js";
 import type { Manifest } from "@fintranzact/shared/selfExport";
 import { verifyExportToken } from "../lib/exportToken.js";
 import { logger } from "../lib/logger.js";
+import { getEntitlements } from "../lib/entitlements.js";
+import { DATA_EXPORT_DENIED_MESSAGE } from "../lib/plan-limits.js";
 import { APP_VERSION, SCHEMA_CHECKSUM } from "../lib/exportManifest.js";
 
 // ── Snake → camel column map ──────────────────────────────────────────────────
@@ -169,6 +171,12 @@ export function registerExportRoute(app: Hono): void {
 
     if (!tenant || tenant.status !== "active") {
       return c.json({ error: "Organization not found" }, 404);
+    }
+
+    // The plan's dataExport flag applies here too (the token may predate a
+    // downgrade). Read-only organisations still export when the flag is on.
+    if (!(await getEntitlements(tenantId)).limits.dataExport) {
+      return c.json({ error: DATA_EXPORT_DENIED_MESSAGE }, 403);
     }
 
     const tenantSlug = tenant.slug;

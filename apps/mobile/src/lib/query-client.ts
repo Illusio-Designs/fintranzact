@@ -1,6 +1,14 @@
-import { QueryClient, QueryCache } from "@tanstack/react-query";
+import { QueryClient, QueryCache, MutationCache } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
 import { useAuthStore } from "../stores/auth";
+import { handleEntitlementError } from "./entitlement";
+
+/** Entitlement refusals get one prompt, and billing.status is refreshed so the banner is current. */
+function handleEntitlement(error: unknown) {
+  if (handleEntitlementError(error)) {
+    void queryClient.invalidateQueries({ queryKey: [["billing", "status"]] });
+  }
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,7 +36,12 @@ export const queryClient = new QueryClient({
       if (trpcError?.data?.code === "UNAUTHORIZED") {
         SecureStore.setItemAsync("sessionExpired", "1");
         useAuthStore.getState().logout();
+        return;
       }
+      handleEntitlement(error);
     },
+  }),
+  mutationCache: new MutationCache({
+    onError: handleEntitlement,
   }),
 });

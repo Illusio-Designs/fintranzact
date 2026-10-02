@@ -10,6 +10,7 @@ import { targetEndpoints } from "./target";
 import { reportsEndpoints } from "./reports";
 import { shipmentEndpoints } from "./shipment";
 import { tenantEndpoints } from "./tenant";
+import { billingEndpoints } from "./billing";
 import { gstEndpoints } from "./gst";
 import { hsnEndpoints } from "./hsn";
 import { itcEndpoints } from "./itc";
@@ -51,7 +52,7 @@ export const allSections: EndpointSection[] = [
   {
     id: "foundation",
     title: "Foundation",
-    groups: [authEndpoints, tenantEndpoints, businessEndpoints, apiKeyEndpoints, systemEndpoints],
+    groups: [authEndpoints, tenantEndpoints, billingEndpoints, businessEndpoints, apiKeyEndpoints, systemEndpoints],
   },
   {
     id: "commerce",
@@ -150,6 +151,7 @@ export {
   reportsEndpoints,
   shipmentEndpoints,
   tenantEndpoints,
+  billingEndpoints,
   gstEndpoints,
   hsnEndpoints,
   itcEndpoints,

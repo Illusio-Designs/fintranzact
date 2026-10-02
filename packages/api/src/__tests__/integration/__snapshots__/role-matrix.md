@@ -72,6 +72,7 @@
 | billing.config | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | billing.demoCheckout | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | billing.overview | query | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| billing.status | query | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | billing.subscribeAddon | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | billing.subscribePlan | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | billing.updateBillingDetails | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
@@ -314,6 +315,7 @@
 | platform.sandboxQuota | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.setTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.subscriptions | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenant | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenants | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |

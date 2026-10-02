@@ -32,6 +32,7 @@ import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring
 import { startTdsReminderScheduler, stopTdsReminderScheduler } from "./lib/tds-reminder-scheduler.js";
 import { seedPlatformAdmin } from "./lib/platform-admin.js";
 import { logger } from "./lib/logger.js";
+import { pdfBrandingHidden, storeServesTenant } from "./lib/plan-limits.js";
 import { resolveDocumentWarehouseId, syncDocumentStock } from "./lib/inventory-service.js";
 import { resolveLineBatches } from "./lib/batches.js";
 import { lineBatchDetails } from "./lib/batch-display.js";
@@ -584,7 +585,7 @@ async function buildInvoicePdfData(
     businessStateCode: biz.stateCode || undefined,
     partyStateCode: party.stateCode || undefined,
     lineItemHsn: lineItems.map(li => li.itemId ? (hsnMap.get(li.itemId) || "") : ""),
-    isPaidPlan: plan !== "free",
+    isPaidPlan: await pdfBrandingHidden(plan),
     status: invoice.status,
     // Logo bytes are carried into the PDF worker. Buffers survive
     // structuredClone across worker threads as Uint8Array, and PDFKit
@@ -887,7 +888,7 @@ app.get("/api/invoice-templates/preview", async (c) => {
     signatureBuffer: biz.signatureData ?? undefined,
     ...(bank ? { bankName: bank.bankName || undefined, bankAccountNumber: bank.accountNumber || undefined, bankIfsc: bank.ifsc || undefined, bankAccountName: bank.accountName || undefined } : {}),
     upiId: upi?.accountNumber || undefined,
-    isPaidPlan: plan !== "free",
+    isPaidPlan: await pdfBrandingHidden(plan),
     print: { template, thermalWidth: c.req.query("width") === "58" ? 58 : c.req.query("width") === "80" ? 80 : biz.thermalWidth === 58 ? 58 : 80 },
   });
   if (sample.upiId) {
@@ -971,7 +972,7 @@ app.get("/api/eway-bills/:id/pdf", async (c) => {
     partB: vehicles.length
       ? vehicles.map((v) => ({ mode: ewb.transportMode ?? undefined, vehicle: v.vehicleNumber, from: v.fromPlace ?? undefined, enteredDate: v.updatedAt.toISOString(), enteredBy }))
       : [{ mode: ewb.transportMode ?? undefined, vehicle: ewb.vehicleNumber ?? "", from: place(biz!.city, biz!.state) || undefined, enteredDate: ewb.ewbDate?.toISOString(), enteredBy }],
-    isPaidPlan: plan !== "free",
+    isPaidPlan: await pdfBrandingHidden(plan),
   };
   const genDate = ewb.ewbDate ? formatIstDate(ewb.ewbDate, "/") : "";
   data.qrDataUrl = await QRCode.toDataURL(`${ewb.ewbNumber}/${biz!.gstin ?? ""}/${genDate}`, { width: 220, margin: 1 });
@@ -1285,7 +1286,22 @@ setInterval(() => {
   }
 }, 5 * 60_000).unref();
 
+/**
+ * Resolve a public store slug to its tenant and business, or null when the
+ * store cannot serve buyers: unknown slug, store switched off, or (hosted
+ * only) the organisation's plan lacks the online store, or it is read-only or
+ * suspended. Every public /store/* endpoint treats null as the same neutral
+ * 404 "Store not found", so buyers never learn why and never see billing
+ * wording. A self-hosted install has no plan check (single tenant).
+ */
 async function resolveStoreSlug(slug: string): Promise<{ tenantId: string; businessId: string } | null> {
+  const resolved = await lookupStoreSlug(slug);
+  if (!resolved) return null;
+  if (process.env.MULTI_TENANT !== "true") return resolved;
+  return (await storeServesTenant(resolved.tenantId)) ? resolved : null;
+}
+
+async function lookupStoreSlug(slug: string): Promise<{ tenantId: string; businessId: string } | null> {
   // Validate slug format
   if (!slug || !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(slug)) return null;
 
@@ -2100,6 +2116,8 @@ const labelRequestSchema = z.object({
 // POST rather than GET because the body carries a per-item quantity map, and
 // a label run can cover far more items than a query string should hold.
 // Auth chain is identical to the other PDF endpoints.
+// Entitlements (rest-entitlement-policy.ts: exempt-download): a label sheet is a
+// PDF download, so it stays open in read-only mode; suspended is refused below.
 app.post("/api/items/labels", async (c) => {
   if (!checkPdfRateLimit(getClientIp(c))) {
     return c.json({ error: "Too many PDF requests. Try again later." }, 429);
@@ -2207,6 +2225,9 @@ app.post("/api/items/labels", async (c) => {
   });
 });
 
+// Every route below and above has an explicit read-only/suspended decision in
+// http/rest-entitlement-policy.ts; rest-entitlement-policy.test.ts fails when a
+// route is registered without one. Add the row when you add the route.
 registerExportRoute(app);
 
 // ── Self-import upload endpoint ────────────────────────────────
@@ -2288,6 +2309,11 @@ function brandedHtml(title: string, heading: string, message: string, status: nu
 // Carriers POST status updates here. The URL includes the business ID for routing.
 // Each carrier has a different payload format — the handler normalises them into shipment events.
 // For now: accept, log, and store the raw payload. Actual carrier-specific parsing comes later.
+//
+// Entitlements (http/rest-entitlement-policy.ts: exempt-webhook): events are still
+// accepted for a READ-ONLY organisation (dropping carrier updates would lose data),
+// but a SUSPENDED organisation is refused: the multi-tenant lookup below only scans
+// tenants with status "active", so a suspended tenant's business answers 404.
 app.post("/webhooks/shipping/:businessId", async (c) => {
   const secret = process.env.SHIPPING_WEBHOOK_SECRET;
   if (!secret) {

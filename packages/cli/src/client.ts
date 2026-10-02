@@ -4,6 +4,8 @@
  */
 
 import superjson from "superjson";
+import { parseEntitlement, buildBillingUrl, formatPlanRequired } from "./plan.js";
+import { handlePlanRequired } from "./output.js";
 
 export interface ClientConfig {
   apiUrl: string;
@@ -17,6 +19,7 @@ export interface ClientConfig {
 export type FintranzactError =
   | { code: "unauthorized"; message: string }
   | { code: "forbidden"; message: string }
+  | { code: "plan_required"; reason: string; message: string; upgradeUrl: string }
   | { code: "not_found"; resource: string }
   | { code: "validation_failed"; fields: Record<string, string[]> }
   | { code: "network_error"; message: string }
@@ -36,6 +39,8 @@ export function formatFintranzactError(err: FintranzactError): string {
       return `Authentication required: ${err.message}`;
     case "forbidden":
       return `Permission denied: ${err.message}`;
+    case "plan_required":
+      return formatPlanRequired(err);
     case "not_found":
       return `Not found: ${err.resource}`;
     case "validation_failed":
@@ -54,7 +59,7 @@ export function formatFintranzactError(err: FintranzactError): string {
   }
 }
 
-function normalizeTrpcError(raw: unknown): FintranzactError {
+export function normalizeTrpcError(raw: unknown, apiUrl?: string): FintranzactError {
   if (!raw || typeof raw !== "object") {
     return { code: "api_error", message: "Unknown error from API" };
   }
@@ -63,7 +68,19 @@ function normalizeTrpcError(raw: unknown): FintranzactError {
   const message = (err["message"] as string | undefined) ?? "Unknown error";
 
   if (code === "UNAUTHORIZED") return { code: "unauthorized", message };
-  if (code === "FORBIDDEN") return { code: "forbidden", message };
+  if (code === "FORBIDDEN") {
+    // An entitlement refusal (read-only, plan limit, add-on, suspended) is not a permissions problem.
+    const ent = parseEntitlement(raw);
+    if (ent) {
+      return {
+        code: "plan_required",
+        reason: ent.reason,
+        message,
+        upgradeUrl: buildBillingUrl(ent, apiUrl),
+      };
+    }
+    return { code: "forbidden", message };
+  }
   if (code === "NOT_FOUND") return { code: "not_found", resource: message };
 
   if (code === "BAD_REQUEST") {
@@ -128,7 +145,11 @@ export class FintranzactClient {
     const envelope = body as Record<string, unknown>;
 
     if (!res.ok || "error" in envelope) {
-      throw new FintranzactApiError(normalizeTrpcError(envelope["error"] ?? { code: "api_error", message: `HTTP ${res.status}` }));
+      const normalized = normalizeTrpcError(envelope["error"] ?? { code: "api_error", message: `HTTP ${res.status}` }, this.apiUrl);
+      // Plan-required refusals are handled centrally: every command's catch-all
+      // would otherwise print them as a generic failure with exit code 1.
+      if (normalized.code === "plan_required") handlePlanRequired(normalized);
+      throw new FintranzactApiError(normalized);
     }
 
     const result = (envelope["result"] as Record<string, unknown> | undefined);
@@ -1210,6 +1231,17 @@ export class FintranzactClient {
     };
   }
 
+  // ── Billing ─────────────────────────────────────────────────────
+
+  get billing() {
+    const c = this;
+    return {
+      status() {
+        return c.query<BillingStatus>("billing.status");
+      },
+    };
+  }
+
   // ── System ──────────────────────────────────────────────────────
 
   get system() {
@@ -1258,6 +1290,19 @@ export interface AuthUser {
   email: string;
   name: string;
   role: string;
+}
+
+export interface BillingStatus {
+  state: string;
+  readOnly: boolean;
+  reason: string | null;
+  message: string | null;
+  trialEndsAt: string | null;
+  trialDaysLeft: number | null;
+  graceUntil: string | null;
+  addons: string[];
+  upgradePath: string;
+  canManageBilling: boolean;
 }
 
 export interface MaintenanceStatus {

@@ -34,10 +34,14 @@ export function BillingTab() {
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.billing.overview.useQuery();
   const { data: config } = trpc.billing.config.useQuery();
+  const { data: access } = trpc.billing.status.useQuery();
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [checkoutPlan, setCheckoutPlan] = useState<{ id: PlanId; name: string; monthlyPriceInr: number; features?: string[] } | null>(null);
 
-  const refresh = () => utils.billing.overview.invalidate();
+  const refresh = () => {
+    void utils.billing.status.invalidate();
+    return utils.billing.overview.invalidate();
+  };
 
   const changePlan = trpc.billing.changePlan.useMutation({
     onSuccess: async (res) => {
@@ -130,7 +134,9 @@ export function BillingTab() {
   }
 
   const planSub = data.planSubscription;
-  const onPaidPlan = !!planSub;
+  // A halted subscription is dead: the owner buys a plan again (subscribePlan),
+  // they do not "switch" it. The same goes for any lapsed state without a live plan.
+  const onPaidPlan = !!planSub && planSub.status !== "halted";
   const addonOf = (id: string) => data.addonSubscriptions.find((s) => s.addon === id);
 
   return (
@@ -141,7 +147,17 @@ export function BillingTab() {
           <Icon icon={Alert02Icon} size={18} />
           <p>
             <span className="font-semibold">Subscription on hold.</span> The last renewal could not be collected and the
-            grace period is over. Pay to continue — your data is safe and nothing is deleted.
+            grace period is over. You can still view, search, download and export, but not create or edit. Choose a plan
+            below to continue — your data is safe and nothing is deleted.
+          </p>
+        </div>
+      ) : access?.state === "trialing" && access.trialDaysLeft !== null ? (
+        <div role="status" className="flex items-start gap-3 rounded-xl border border-brand-200 bg-brand-600/[0.04] p-4 text-sm text-text-primary">
+          <Icon icon={Alert02Icon} size={18} />
+          <p>
+            <span className="font-semibold">Free trial.</span>{" "}
+            {access.trialDaysLeft <= 0 ? "Your trial ends today." : `${access.trialDaysLeft} day${access.trialDaysLeft === 1 ? "" : "s"} left.`}{" "}
+            Choose a plan below to keep creating and editing after it ends.
           </p>
         </div>
       ) : planSub?.status === "past_due" ? (
@@ -221,7 +237,7 @@ export function BillingTab() {
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.plans.map((p) => {
-            const isCurrent = planSub ? planSub.plan === p.id && planSub.cycle === cycle : data.plan.id === p.id;
+            const isCurrent = planSub ? onPaidPlan && planSub.plan === p.id && planSub.cycle === cycle : data.plan.id === p.id;
             const amount = cycle === "yearly" ? p.yearly : p.monthly;
             return (
               <div key={p.id} className={cn("flex flex-col rounded-xl border p-4", isCurrent ? "border-brand-400 bg-brand-600/[0.04]" : "border-border-light")}>

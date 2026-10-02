@@ -42,6 +42,12 @@ export const tenants = pgTable("tenants", {
    * seeds and admin-created orgs count as chosen; only self sign-up inserts NULL.
    */
   planSelectedAt: timestamp("plan_selected_at", { withTimezone: true }).defaultNow(),
+  /**
+   * End of the free trial, or NULL when the organisation has none. Past this
+   * instant with no live plan subscription the organisation is read-only
+   * (see deriveAccess in @fintranzact/shared). Nothing starts trials yet.
+   */
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   // Billing details printed on the GST invoices Finvera issues to this
   // organisation. Separate from the businesses' own profiles: an organisation
   // can hold many businesses but is one paying customer.

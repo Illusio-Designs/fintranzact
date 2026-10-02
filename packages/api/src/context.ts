@@ -5,6 +5,8 @@ import { getClientKind } from "./lib/client-headers.js";
 import { controlDb } from "@fintranzact/db";
 import { sessions, users, apiKeys, accessTokens } from "@fintranzact/db";
 import { eq, gt, and } from "drizzle-orm";
+import { getEntitlements } from "./lib/entitlements.js";
+import { apiKeyUsable } from "./lib/plan-limits.js";
 
 // Bearer session sliding-window constants — must mirror auth.ts values
 const BEARER_SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7-day sliding window
@@ -120,7 +122,7 @@ export async function createContext(opts: FetchCreateContextFnOptions) {
         .limit(1);
 
       const key = result[0];
-      if (key && (!key.expiresAt || key.expiresAt > new Date())) {
+      if (key && (!key.expiresAt || key.expiresAt > new Date()) && apiKeyUsable(await getEntitlements(key.tenantId))) {
         user = { id: key.userId, email: key.email, name: key.name };
         tenantId = key.tenantId;
         // authTokenKind stays null for API keys

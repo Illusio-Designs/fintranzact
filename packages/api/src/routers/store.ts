@@ -6,6 +6,7 @@ import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trp
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { enforceOnlineStore } from "../lib/plan-limits.js";
 import { syncDocumentStock } from "../lib/inventory-service.js";
 
 // ── Validators ─────────────────────────────────────────────────
@@ -75,6 +76,9 @@ export const storeRouter = router({
     .input(updateStoreSettingsSchema)
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "manage", "Store");
+      // Turning the store off is always allowed; anything else needs a plan with the store.
+      const onlyDisabling = input.storeEnabled === false && Object.keys(input).every((k) => k === "storeEnabled");
+      if (!onlyDisabling) await enforceOnlineStore(ctx.tenantId);
 
       // Validate slug uniqueness within this tenant's businesses
       if (input.storeSlug) {
@@ -181,6 +185,7 @@ export const storeRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Store");
+      if (input.storeEnabled) await enforceOnlineStore(ctx.tenantId);
       // Active mutation — skip soft-deleted items in the bulk toggle.
       // A toggle on a deleted row is nonsense (it's not visible anywhere).
       await ctx.db.update(items)
@@ -203,6 +208,7 @@ export const storeRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Store");
+      await enforceOnlineStore(ctx.tenantId);
 
       const { itemId, ...fields } = input;
 
@@ -242,6 +248,7 @@ export const storeRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Store");
+      if (input.storeEnabled !== false) await enforceOnlineStore(ctx.tenantId);
 
       // Active mutation — both the parent item and the variant must be
       // non-deleted before the store settings can be changed.

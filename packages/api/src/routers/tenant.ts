@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { invalidateEntitlements } from "../lib/entitlements-cache.js";
 import { TRPCError } from "@trpc/server";
 import { controlDb, getTenantDb, tenants, tenantMembers, invitations, users, sessions, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
 import { eq, and, gt, isNull, desc } from "drizzle-orm";
@@ -9,7 +10,7 @@ import { invalidateSessionCache, getSessionIdFromRequest } from "../context.js";
 import { emailService } from "../lib/email.js";
 import { isPaidPlan, isSelfServePlan } from "../lib/plan-catalog.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
-import { effectiveOwnerPlan, enforceTeamMemberLimit, enforceOrgCreationLimit, getLimits } from "../lib/plan-limits.js";
+import { effectiveOwnerPlan, enforceTeamMemberLimit, enforceOrgCreationLimit, assertOwnedOrgsWritable, getLimits } from "../lib/plan-limits.js";
 import { backfillLegacyBusinessMembers, grantTenantBusinessesToMember } from "../lib/business-membership.js";
 
 /** A member who joins through an invitation can open the organisation's businesses. */
@@ -78,6 +79,7 @@ export const tenantRouter = router({
       await controlDb.update(tenants)
         .set({ plan: input.plan, planSelectedAt: new Date(), updatedAt: new Date() })
         .where(eq(tenants.id, tenantId));
+      invalidateEntitlements(tenantId);
 
       return { plan: input.plan };
     }),
@@ -85,6 +87,7 @@ export const tenantRouter = router({
   // Create a new organization for the authenticated user.
   // User becomes the owner. In self-hosted mode, joins the default tenant instead.
   create: protectedProcedure.mutation(async ({ ctx }) => {
+    await assertOwnedOrgsWritable(ctx.user.id);
     await enforceOrgCreationLimit(ctx.user.id);
     const displayName = ctx.user.name ?? ctx.user.email.split("@")[0];
 

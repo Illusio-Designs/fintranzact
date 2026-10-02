@@ -26,6 +26,8 @@ import { ensureRoadmapSeeded } from "../lib/roadmap.js";
 import { isPlatformAdmin } from "../lib/platform-admin.js";
 import { sandboxQuotaStatus, tenantsWithUnbilledUsage, periodIsClosed } from "../lib/gov-usage.js";
 import { closeGovUsagePeriod } from "../lib/billing/service.js";
+import { invalidateEntitlements } from "../lib/entitlements-cache.js";
+import { setTrial } from "../lib/trial.js";
 
 /**
  * Platform admin: every organisation on this server, and the plan each is on.
@@ -221,6 +223,20 @@ export const platformRouter = router({
         .set({ plan: input.plan, updatedAt: new Date() })
         .where(eq(tenants.id, input.tenantId))
         .returning({ id: tenants.id, plan: tenants.plan });
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation not found" });
+      invalidateEntitlements(input.tenantId);
+      return row;
+    }),
+
+  /**
+   * Set (or clear, with null) an organisation's trial end. Past it, with no
+   * live plan subscription, the organisation is read-only until it picks a plan.
+   * Recorded in the billing event log with the acting admin.
+   */
+  setTrial: platformAdminProcedure
+    .input(z.object({ tenantId: z.string().uuid(), endsAt: z.coerce.date().nullable() }))
+    .mutation(async ({ input, ctx }) => {
+      const row = await setTrial(input.tenantId, input.endsAt, { actorUserId: ctx.user.id });
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation not found" });
       return row;
     }),

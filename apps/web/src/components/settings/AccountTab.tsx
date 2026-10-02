@@ -11,6 +11,8 @@ import { cn, todayISODate } from "@/lib/utils";
 import dayjs from "dayjs";
 import { parseUserAgent } from "@/lib/parse-user-agent";
 import { useInfiniteList } from "@/hooks/useInfiniteList";
+import { usePlans } from "@/lib/plans";
+import { Link } from "@tanstack/react-router";
 
 // ── Action label map ──────────────────────────────────────────────────────────
 
@@ -485,7 +487,11 @@ function ApiKeysContent() {
   const [copied, setCopied] = useState(false);
 
   const currentTenant = tenantList?.find((t) => t.tenantId === session?.tenantId);
-  const isFree = currentTenant?.tenantPlan === "free";
+  // The real per-plan limit (from plan.list), not a hard-coded plan name.
+  // Unknown plan: do not block here; the server refuses with an upgrade prompt.
+  const { plans } = usePlans();
+  const maxApiKeys = plans.find((p) => p.id === currentTenant?.tenantPlan)?.limits.maxApiKeys;
+  const isFree = maxApiKeys === 0;
 
   const createMutation = trpc.apiKey.create.useMutation({
     onSuccess: (data) => {
@@ -545,7 +551,10 @@ function ApiKeysContent() {
         <div className="max-h-[400px] overflow-y-auto">
           {isFree ? (
             <p className="text-sm text-text-tertiary py-8 text-center px-6">
-              API keys are available on paid plans. Upgrade to create programmatic access tokens.
+              API keys are not included in your plan. Upgrade to create programmatic access tokens.{" "}
+              <Link to="/settings" search={{ tab: "billing" }} className="font-semibold text-brand-600 underline underline-offset-2">
+                View plans
+              </Link>
             </p>
           ) : isLoading ? (
             <div className="p-6 space-y-3">

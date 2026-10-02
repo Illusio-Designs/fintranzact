@@ -15,6 +15,7 @@ import { controlDb, tenantMembers, tenants } from "@fintranzact/db";
 import { router, protectedProcedure } from "../trpc.js";
 import { signExportToken } from "../lib/exportToken.js";
 import { logger } from "../lib/logger.js";
+import { enforceDataExport } from "../lib/plan-limits.js";
 
 // ── Rate limiting: 2 exports per tenant per 24 hours ──────────────────────────
 // Rolling window based on last 24h of token issuances.
@@ -108,6 +109,9 @@ export const selfExportRouter = router({
           message: "Organization is not active",
         });
       }
+
+      // ── Plan: the dataExport flag. Read-only organisations still export. ─────
+      await enforceDataExport(input.tenantId);
 
       // ── Rate limit check ──────────────────────────────────────────────────────
       checkAndRecordExportRateLimit(input.tenantId);

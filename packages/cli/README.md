@@ -237,6 +237,14 @@ $ fintranzact gst r3b --quarter Q4 --json | jq '.taxPayable'
 }
 ```
 
+### Plan and billing
+
+| Command | Description |
+|---|---|
+| `billing status` | Plan state, trial countdown and whether the organisation is read-only (works while read-only) |
+
+When an organisation is read-only (trial ended, payment failed, plan ended), a plan limit is hit, or an add-on is needed, creating and editing commands fail with the server message and `Choose a plan (organisation owner): <url>` and exit code **10**. With `--json` the output is `{"error":{"code":"plan_required","reason":"...","message":"...","upgradeUrl":"..."}}` on stdout. Reads, search and exports keep working. The billing link uses `FINTRANZACT_WEB_URL` if set, otherwise your API URL with `api.` swapped for `app.`, otherwise `https://app.fintranzact.com`.
+
 ---
 
 ## Output Formats and Scripting

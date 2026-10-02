@@ -5,6 +5,7 @@ import { router, protectedProcedure } from "../trpc.js";
 import { controlDb, apiKeys } from "@fintranzact/db";
 import { createApiKeySchema, revokeApiKeySchema } from "@fintranzact/shared";
 import { enforceApiKeyLimit } from "../lib/plan-limits.js";
+import { assertWritable } from "../lib/entitlements.js";
 
 export const apiKeyRouter = router({
   /**
@@ -40,6 +41,9 @@ export const apiKeyRouter = router({
     if (!ctx.tenantId) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "No organization selected" });
     }
+
+    // Issuing a credential is a write: refused while read-only or suspended.
+    await assertWritable(ctx.tenantId);
 
     // Plan check — enforces both plan access and key count limit
     await enforceApiKeyLimit(ctx.tenantId);

@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { formatPlanRequired, planRequiredJson, type PlanRequiredError } from "./plan.js";
 
 // ── Environment detection ──────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ export const EXIT = {
   NETWORK: 7,
   CONFLICT: 8,
   RATE_LIMITED: 9,
+  PLAN_REQUIRED: 10,
 } as const;
 
 // ── Output helpers ────────────────────────────────────────────────────────
@@ -225,4 +227,39 @@ export function paginationFooter(page: number, limit: number, total: number): vo
   const to = Math.min(page * limit, total);
   const msg = `  Showing ${from}-${to} of ${total}`;
   process.stdout.write("\n" + (hasColor() ? chalk.dim(msg) : msg) + "\n");
+}
+
+// ── Plan-required errors ──────────────────────────────────────────────────
+
+export function wantsJson(argv: string[] = process.argv): boolean {
+  return argv.includes("--json");
+}
+
+/**
+ * Report a plan / entitlement refusal (read-only organisation, plan limit,
+ * add-on, suspended) and exit with EXIT.PLAN_REQUIRED. JSON mode (--json)
+ * prints {error:{code:"plan_required",reason,message,upgradeUrl}} on stdout so
+ * scripts can parse it; human mode prints the message and the billing link on
+ * stderr. The `exit` and `write` hooks exist for tests.
+ */
+export function handlePlanRequired(
+  err: PlanRequiredError,
+  opts: {
+    json?: boolean;
+    exit?: (code: number) => never;
+    out?: (s: string) => void;
+    errOut?: (s: string) => void;
+  } = {},
+): never {
+  const json = opts.json ?? wantsJson();
+  const out = opts.out ?? ((s: string) => void process.stdout.write(s));
+  const errOut = opts.errOut ?? ((s: string) => void process.stderr.write(s));
+  const exit = opts.exit ?? ((c: number) => process.exit(c));
+  if (json) {
+    out(JSON.stringify(planRequiredJson(err), null, 2) + "\n");
+  } else {
+    const prefix = hasColor() ? chalk.red("Error: ") : "Error: ";
+    errOut(prefix + formatPlanRequired(err) + "\n");
+  }
+  return exit(EXIT.PLAN_REQUIRED);
 }

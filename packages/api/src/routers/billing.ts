@@ -2,18 +2,22 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, count, desc, eq, gte, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { controlDb, getTenantDb, billingPayments, billingSubscriptions, invoices, tenants } from "@fintranzact/db";
+import { controlDb, getTenantDb, billingPayments, billingSubscriptions, invoices, tenants, tenantMembers } from "@fintranzact/db";
 import {
   ADDONS,
   ADDON_IDS,
+  BILLING_UPGRADE_PATH,
   BILLING_CYCLES,
   PLAN_IDS,
   SUBSCRIPTION_STATUS_LABELS,
   cycleAmount,
+  entitlementMessage,
   planCheckoutAmount,
   type SubscriptionStatus,
 } from "@fintranzact/shared";
-import { router, publicProcedure, protectedProcedure } from "../trpc.js";
+import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
+import { getEntitlements } from "../lib/entitlements.js";
+import { PLAN_MANAGER_ROLES } from "../lib/plan-manager.js";
 import { getPlanCatalog } from "../lib/plan-catalog.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
 import { razorpayConfigured, razorpayKeyId, verifyRazorpayCheckoutSignature } from "../lib/billing/gateway.js";
@@ -169,6 +173,34 @@ export const billingRouter = router({
       await activateSubscription({ subscriptionId: row.id, providerPaymentId: input.razorpayPaymentId });
       return { status: "active" as const };
     }),
+
+  /**
+   * Lightweight status for the banners every member sees (trial countdown,
+   * read-only, past-due grace, suspended). Open to every member of the
+   * organisation, unlike overview, and allowed while read-only or suspended.
+   * `canManageBilling` tells the client whether to offer "Choose a plan" or
+   * "Ask your organization owner".
+   */
+  status: tenantProcedure.query(async ({ ctx }) => {
+    const ent = await getEntitlements(ctx.tenantId);
+    const [membership] = await controlDb
+      .select({ role: tenantMembers.role })
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, ctx.tenantId), eq(tenantMembers.userId, ctx.user.id)))
+      .limit(1);
+    return {
+      state: ent.state,
+      readOnly: ent.readOnly,
+      reason: ent.reason,
+      message: ent.reason ? entitlementMessage(ent.reason) : null,
+      trialEndsAt: ent.trialEndsAt,
+      trialDaysLeft: ent.trialDaysLeft,
+      graceUntil: ent.graceUntil,
+      addons: ent.addons,
+      upgradePath: BILLING_UPGRADE_PATH,
+      canManageBilling: !!membership && PLAN_MANAGER_ROLES.includes(membership.role),
+    };
+  }),
 
   /** Everything the Billing tab shows, in one query. */
   overview: protectedProcedure.query(async ({ ctx }) => {

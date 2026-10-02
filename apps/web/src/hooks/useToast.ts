@@ -1,4 +1,5 @@
 import { gooeyToast } from "goey-toast";
+import { wasEntitlementHandled } from "@/lib/entitlement";
 
 type ToastVariant = "success" | "error" | "info" | "warning";
 
@@ -15,6 +16,8 @@ interface ToastOptions {
   action?: ToastAction;
   /** Override how long it stays (ms). Infinity keeps it until closed. */
   duration?: number;
+  /** Used by the central entitlement handler itself, which must not suppress its own toast. */
+  bypassEntitlementDedupe?: boolean;
 }
 
 /** Errors and warnings stay longer so there is time to read what to do next. */
@@ -27,6 +30,11 @@ const DURATION: Record<ToastVariant, number> = { success: 4000, info: 4000, warn
  */
 export function toast(options: ToastOptions): string | number {
   const variant = options.variant ?? "info";
+  // A refusal the central entitlement handler already showed with its
+  // "Choose a plan" action: a form repeating the same message adds nothing.
+  if (variant === "error" && !options.bypassEntitlementDedupe && wasEntitlementHandled(options.title, options.description)) {
+    return "";
+  }
   return gooeyToast[variant](options.title, {
     description: options.description,
     action: options.action,

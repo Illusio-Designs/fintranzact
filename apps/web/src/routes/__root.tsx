@@ -78,6 +78,7 @@ import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
+import { BillingBanner } from "@/components/BillingBanner";
 import { LandingPage } from "@/components/LandingPage";
 import { AUTH_PUBLIC_PATHS, isMarketingPath, isSharePath } from "@/lib/public-paths";
 import { isDesktop } from "@/lib/isDesktop";
@@ -1440,6 +1441,7 @@ function RootLayout() {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-0">
       <MaintenanceBanner />
+      <BillingBanner />
       <div className="flex flex-1 overflow-hidden">
         {/* Mobile sidebar backdrop */}
         {!isOnboarding && sidebarOpen && (

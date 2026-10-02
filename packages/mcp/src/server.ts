@@ -33,6 +33,7 @@ import { registerEInvoiceTools } from "./tools/eInvoice.js";
 import { registerEwayBillTools } from "./tools/ewayBill.js";
 import { registerGstr2bTools } from "./tools/gstr2b.js";
 import { registerSystemTools } from "./tools/system.js";
+import { registerBillingTools } from "./tools/billing.js";
 import { registerResources } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
 
@@ -96,6 +97,7 @@ export function registerTools(server: McpServer, client: FintranzactClient): voi
 
   // System status
   registerSystemTools(server, client);
+  registerBillingTools(server, client);
 
   // Read-only context resources
   registerResources(server, client);

@@ -7,6 +7,9 @@ import { eq, and } from "drizzle-orm";
 import { defineAbilityFor, mapDbRole, type AppAbility } from "./lib/permissions.js";
 import { getMaintenanceStatus } from "./lib/maintenance-cache.js";
 import { isFirstPartyRequestedWith } from "./lib/client-headers.js";
+import { entitlementDataOf, entitlementError } from "./lib/entitlement-error.js";
+import { getEntitlements } from "./lib/entitlements.js";
+import { gateDecision } from "./lib/entitlement-exempt.js";
 
 // ── Middleware context shape interfaces ────────────────────────
 // These represent the enriched context after each middleware runs.
@@ -49,12 +52,15 @@ const t = initTRPC.context<Context>().create({
     // Never expose internal error details (DB errors, stack traces) to clients
     const isInternal = error.code === "INTERNAL_SERVER_ERROR";
     const zodMessage = error.code === "BAD_REQUEST" ? friendlyZodMessage(error.cause) : null;
+    const entitlement = entitlementDataOf(error);
     return {
       ...shape,
       message: isInternal ? "Something went wrong. Please try again." : (zodMessage ?? shape.message),
       data: {
         ...shape.data,
         zodError: error.cause instanceof Error ? undefined : null,
+        // Why a plan / trial / add-on / read-only check refused (see lib/entitlement-error.ts).
+        ...(entitlement ? { entitlement } : {}),
       },
     };
   },
@@ -242,9 +248,24 @@ const hasBusinessAccess = t.middleware(async ({ ctx, next }) => {
   });
 });
 
+// Middleware: plan / trial / read-only / suspended enforcement. Appended LAST
+// to each tenant-scoped base (never inserted earlier: the sweep helpers match a
+// procedure to its base by middleware prefix). Reads pass; writes are refused
+// by default while the organisation is read-only unless allowlisted. All the
+// logic is the pure gateDecision in lib/entitlement-exempt.ts. Organisations
+// that never had a subscription (forever_free, legacy, fixtures) are never
+// read-only, so this never refuses them.
+const entitlementGate = t.middleware(async ({ ctx, type, path, next }) => {
+  if (!ctx.tenantId) return next();
+  const entitlements = await getEntitlements(ctx.tenantId);
+  const decision = gateDecision({ type, path, entitlements });
+  if (!decision.allow) throw entitlementError(decision.reason);
+  return next();
+});
+
 export const protectedProcedure = baseProcedure.use(isAuthenticated);
-export const tenantProcedure = baseProcedure.use(isAuthenticated).use(hasTenantAccess);
-export const businessProcedure = baseProcedure.use(isAuthenticated).use(hasTenantAccess).use(hasBusinessAccess);
+export const tenantProcedure = baseProcedure.use(isAuthenticated).use(hasTenantAccess).use(entitlementGate);
+export const businessProcedure = baseProcedure.use(isAuthenticated).use(hasTenantAccess).use(hasBusinessAccess).use(entitlementGate);
 
 // ── CASL-based permission middleware ──────────────────────────────────────────
 // Resolves permissions from the user's role inside the selected business.
@@ -317,7 +338,8 @@ export const authorizedProcedure = baseProcedure
   .use(isAuthenticated)
   .use(hasTenantAccess)
   .use(hasBusinessAccess)
-  .use(withPermissions());
+  .use(withPermissions())
+  .use(entitlementGate);
 
 // Keep old names as aliases for backward compatibility (avoids changing every router import)
 export const viewerProcedure = authorizedProcedure;

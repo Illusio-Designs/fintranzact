@@ -1,4 +1,5 @@
 import { controlDb, planSettings } from "@fintranzact/db";
+import { clearEntitlementsCache } from "./entitlements-cache.js";
 import {
   PLAN_DEFAULTS,
   PLAN_IDS,
@@ -27,6 +28,8 @@ let cache: { at: number; plans: Map<PlanId, CatalogPlan> } | null = null;
 
 export function invalidatePlanCatalog(): void {
   cache = null;
+  // Entitlements carry the plan's limits; drop them with the catalogue.
+  clearEntitlementsCache();
 }
 
 async function load(): Promise<Map<PlanId, CatalogPlan>> {

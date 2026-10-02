@@ -10,6 +10,7 @@ import { useColors } from "../../src/contexts/ThemeContext";
 import { queryClient } from "../../src/lib/query-client";
 import { BusinessSwitcherProvider } from "../../src/contexts/BusinessSwitcherContext";
 import { MaintenanceBanner } from "../../src/components/MaintenanceBanner";
+import { BillingBanner } from "../../src/components/BillingBanner";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fontFamilies } from "../../src/lib/theme";
 
@@ -157,6 +158,7 @@ export default function AppLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <MaintenanceBanner />
+      <BillingBanner />
       <BusinessSwitcherProvider
         businesses={businesses ?? []}
         activeBusinessId={businessId ?? ""}

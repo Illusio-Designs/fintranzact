@@ -23,6 +23,7 @@ export const DEVELOPER_GROUP_SLUGS = [
   // Foundation
   "auth",
   "tenant",
+  "billing",
   "businesses",
   "api-keys",
   "plans-system",

@@ -7,13 +7,14 @@
  * Self-hosted defaults to "free" plan — same limits apply including PDF branding.
  */
 
-import { TRPCError } from "@trpc/server";
-import { eq, and, gt, isNull, count } from "drizzle-orm";
+import { eq, and, gt, gte, isNull, count, sql } from "drizzle-orm";
 import { controlDb, tenants, tenantMembers, invitations } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
-import { businesses } from "@fintranzact/db";
+import { businesses, recurringInvoiceRuns } from "@fintranzact/db";
 import { PLAN_LIMITS, type PlanLimits } from "@fintranzact/shared";
 import { getPlanLimits } from "./plan-catalog.js";
+import { getEntitlements, assertWritable } from "./entitlements.js";
+import { limitError } from "./entitlement-error.js";
 
 // ── Plan limit definitions ────────────────────────────────────────────────────
 // Defined once in @fintranzact/shared so the pricing page shows exactly the
@@ -33,13 +34,9 @@ export const RECURRING_RUNS_PER_MONTH_FREE = PLAN_LIMITS.free.recurringRunsPerMo
 
 // ── Enforcement helpers ───────────────────────────────────────────────────────
 
-async function getTenantPlan(tenantId: string): Promise<string> {
-  const [row] = await controlDb
-    .select({ plan: tenants.plan })
-    .from(tenants)
-    .where(eq(tenants.id, tenantId))
-    .limit(1);
-  return row?.plan ?? "free";
+/** The limits in force for an organisation: one source, shared with the read-only/add-on checks. */
+async function getTenantLimits(tenantId: string): Promise<PlanLimits> {
+  return (await getEntitlements(tenantId)).limits;
 }
 
 /**
@@ -49,7 +46,7 @@ async function getTenantPlan(tenantId: string): Promise<string> {
  */
 export async function recurringRunLimit(tenantId: string | null): Promise<number> {
   if (!tenantId || process.env.MULTI_TENANT !== "true") return RECURRING_RUNS_PER_MONTH_FREE;
-  return (await getLimits(await getTenantPlan(tenantId))).recurringRunsPerMonth;
+  return (await getTenantLimits(tenantId)).recurringRunsPerMonth;
 }
 
 /**
@@ -93,10 +90,26 @@ export async function enforceOrgCreationLimit(userId: string): Promise<void> {
   if (limits.maxOwnedOrgs === Infinity) return;
 
   if (ownedOrgs.length >= limits.maxOwnedOrgs) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `Your plan allows up to ${limits.maxOwnedOrgs} organization${limits.maxOwnedOrgs === 1 ? "" : "s"}. Upgrade to create more.`,
-    });
+    throw limitError(
+      `Your plan allows up to ${limits.maxOwnedOrgs} organization${limits.maxOwnedOrgs === 1 ? "" : "s"}. Upgrade to create more.`,
+    );
+  }
+}
+
+/**
+ * Creating another organisation is a write, and refused while any organisation
+ * the user owns is read-only (trial over, payment failed, plan ended) or
+ * suspended: otherwise a lapsed owner could start a fresh trial in a new
+ * organisation instead of paying. The refusal carries that organisation's
+ * entitlement reason. Users who own none, or only organisations in good
+ * standing (including forever_free and legacy free), are unaffected.
+ */
+export async function assertOwnedOrgsWritable(userId: string): Promise<void> {
+  const owned = await controlDb.select({ tenantId: tenantMembers.tenantId })
+    .from(tenantMembers)
+    .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.role, "owner")));
+  for (const { tenantId } of owned) {
+    await assertWritable(tenantId);
   }
 }
 
@@ -105,8 +118,7 @@ export async function enforceOrgCreationLimit(userId: string): Promise<void> {
  * Counts existing businesses in the tenant DB and compares against the plan limit.
  */
 export async function enforceBusinessLimit(tenantId: string, tenantDb: TenantDatabase): Promise<void> {
-  const plan = await getTenantPlan(tenantId);
-  const limits = await getLimits(plan);
+  const limits = await getTenantLimits(tenantId);
   if (limits.maxBusinesses === Infinity) return;
 
   const [{ count: bizCount }] = await tenantDb
@@ -114,10 +126,9 @@ export async function enforceBusinessLimit(tenantId: string, tenantDb: TenantDat
     .from(businesses);
 
   if (bizCount >= limits.maxBusinesses) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `Your plan allows up to ${limits.maxBusinesses} business${limits.maxBusinesses === 1 ? "" : "es"}. Upgrade to add more.`,
-    });
+    throw limitError(
+      `Your plan allows up to ${limits.maxBusinesses} business${limits.maxBusinesses === 1 ? "" : "es"}. Upgrade to add more.`,
+    );
   }
 }
 
@@ -126,8 +137,7 @@ export async function enforceBusinessLimit(tenantId: string, tenantDb: TenantDat
  * Counts current members + pending invitations against the plan limit.
  */
 export async function enforceTeamMemberLimit(tenantId: string): Promise<void> {
-  const plan = await getTenantPlan(tenantId);
-  const limits = await getLimits(plan);
+  const limits = await getTenantLimits(tenantId);
   if (limits.maxTeamMembers === Infinity) return;
 
   const [[members], [pending]] = await Promise.all([
@@ -143,10 +153,9 @@ export async function enforceTeamMemberLimit(tenantId: string): Promise<void> {
 
   const total = (members?.count ?? 0) + (pending?.count ?? 0);
   if (total >= limits.maxTeamMembers) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `Your plan allows up to ${limits.maxTeamMembers} team members (including pending invites). Upgrade to invite more.`,
-    });
+    throw limitError(
+      `Your plan allows up to ${limits.maxTeamMembers} team members (including pending invites). Upgrade to invite more.`,
+    );
   }
 }
 
@@ -155,13 +164,11 @@ export async function enforceTeamMemberLimit(tenantId: string): Promise<void> {
  * Called from apiKey.create — counts existing keys for the user+tenant.
  */
 export async function enforceApiKeyLimit(tenantId: string): Promise<void> {
-  const plan = await getTenantPlan(tenantId);
-  const limits = await getLimits(plan);
+  const limits = await getTenantLimits(tenantId);
   if (limits.maxApiKeys === 0) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "API keys are available on paid plans. Upgrade to Pro to use the CLI and MCP server.",
-    });
+    throw limitError(
+      "API keys are available on paid plans. Upgrade to Pro to use the CLI and MCP server.",
+    );
   }
   if (limits.maxApiKeys === Infinity) return;
 
@@ -172,10 +179,9 @@ export async function enforceApiKeyLimit(tenantId: string): Promise<void> {
     .where(eq(apiKeys.tenantId, tenantId));
 
   if (keyCount >= limits.maxApiKeys) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `Your plan allows up to ${limits.maxApiKeys} API key${limits.maxApiKeys === 1 ? "" : "s"}. Upgrade to create more.`,
-    });
+    throw limitError(
+      `Your plan allows up to ${limits.maxApiKeys} API key${limits.maxApiKeys === 1 ? "" : "s"}. Upgrade to create more.`,
+    );
   }
 }
 
@@ -204,8 +210,7 @@ export async function enforceSessionLimit(userId: string, parentTx?: ControlTxLi
     .where(eq(tenantMembers.userId, userId))
     .limit(1);
 
-  const plan = membership ? await getTenantPlan(membership.tenantId) : "free";
-  const limits = await getLimits(plan);
+  const limits = membership ? await getTenantLimits(membership.tenantId) : await getLimits("free");
   if (limits.maxConcurrentSessions === Infinity) return;
 
   const activeSessions = await db
@@ -226,16 +231,126 @@ export async function enforceSessionLimit(userId: string, parentTx?: ControlTxLi
   }
 }
 
+/** The message for a plan without data export. */
+export const DATA_EXPORT_DENIED_MESSAGE = "Data export is available on paid plans. Upgrade to export your data.";
+
 /**
- * Enforce data export access.
+ * Enforce data export access. This checks the plan's `dataExport` flag only:
+ * a read-only organisation (trial over, payment failed) can still export when
+ * its plan allows it, and a suspended one is refused earlier by the callers'
+ * own tenant-status checks. Used by business.exportData, selfExport.request
+ * and GET /api/export/:tenantId.
  */
 export async function enforceDataExport(tenantId: string): Promise<void> {
-  const plan = await getTenantPlan(tenantId);
-  const limits = await getLimits(plan);
+  const limits = await getTenantLimits(tenantId);
   if (!limits.dataExport) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Data export is available on paid plans. Upgrade to export your data.",
-    });
+    throw limitError(DATA_EXPORT_DENIED_MESSAGE);
+  }
+}
+
+/**
+ * Whether the online store may serve buyers: the plan includes it and the
+ * organisation is not read-only or suspended. Pure so it can be unit-tested.
+ */
+export function storeAvailable(ent: { readOnly: boolean; reason: unknown; limits: { onlineStore: boolean } }): boolean {
+  return ent.limits.onlineStore && !ent.readOnly && !ent.reason;
+}
+
+/** Whether a hosted organisation's public store may serve buyers right now. */
+export async function storeServesTenant(tenantId: string): Promise<boolean> {
+  return storeAvailable(await getEntitlements(tenantId));
+}
+
+/**
+ * Whether a recurring run may happen now. `runsThisMonth` counts successful
+ * runs this month for the business; the limit is the plan's
+ * recurringRunsPerMonth (Infinity = unlimited). Shared by the scheduler and
+ * recurringInvoice.runNow so both count the same way.
+ */
+export function recurringRunAllowed(runsThisMonth: number, limit: number): boolean {
+  return !Number.isFinite(limit) || runsThisMonth < limit;
+}
+
+/** Successful recurring runs this calendar month for a business: the one counter the limit uses. */
+export async function countRecurringRunsThisMonth(
+  db: TenantDatabase,
+  businessId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const monthStart = new Date(now);
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const [{ count: n }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(recurringInvoiceRuns)
+    .where(and(
+      eq(recurringInvoiceRuns.businessId, businessId),
+      eq(recurringInvoiceRuns.status, "success"),
+      gte(recurringInvoiceRuns.executedAt, monthStart),
+    ));
+  return n;
+}
+
+/** Refuse a manual recurring run once the plan's monthly allowance is used. */
+export async function enforceRecurringRunLimit(
+  tenantId: string | null,
+  db: TenantDatabase,
+  businessId: string,
+): Promise<void> {
+  // The organisation's own plan (a real tenant row exists in hosted AND
+  // self-hosted mode here), not the scheduler's self-hosted free allowance.
+  const limit = tenantId ? await getTenantLimits(tenantId).then((l) => l.recurringRunsPerMonth) : RECURRING_RUNS_PER_MONTH_FREE;
+  if (!Number.isFinite(limit)) return;
+  const used = await countRecurringRunsThisMonth(db, businessId);
+  if (!recurringRunAllowed(used, limit)) {
+    throw limitError(
+      `Your plan allows ${limit} recurring invoice run${limit === 1 ? "" : "s"} a month per business, and this month's are used. Upgrade for more.`,
+    );
+  }
+}
+
+/**
+ * Whether a PDF is printed WITHOUT the "Powered by Fintranzact" footer. The
+ * plan's `pdfBranding` limit decides (so a platform admin's edit in
+ * plan_settings takes effect). Defaults match the old `plan !== "free"` rule:
+ * only the legacy free plan is branded. The PDF data field is still called
+ * isPaidPlan for historical reasons.
+ */
+export async function pdfBrandingHidden(plan: string): Promise<boolean> {
+  return !(await getLimits(plan)).pdfBranding;
+}
+
+/**
+ * Whether an API key may authenticate. Existing keys keep working after a
+ * downgrade, with two exceptions: a suspended organisation is shut (the same
+ * as for a signed-in user), and a plan with no API keys at all
+ * (maxApiKeys === 0, e.g. legacy free) stops honouring keys it once issued.
+ * Writes by a key in a read-only organisation are refused by the entitlement
+ * gate like any other caller's (a key sets ctx.tenantId, so it passes through
+ * the same tenant-scoped bases). Keys beyond a reduced maxApiKeys above zero
+ * are NOT individually disabled; the cap applies to creating new ones.
+ */
+export function apiKeyUsable(ent: { reason: unknown; limits: { maxApiKeys: number } }): boolean {
+  return ent.reason !== "tenant_suspended" && ent.limits.maxApiKeys !== 0;
+}
+
+/**
+ * auditRetentionDays means a VISIBLE WINDOW, not deletion: business.auditTrail
+ * hides entries older than this many days. Nothing is purged, so upgrading the
+ * plan (or raising the limit) shows the older history again. null = unlimited.
+ * Returns the oldest createdAt that may be shown, or null for no cut-off.
+ */
+export function auditWindowStart(retentionDays: number | null, now: Date = new Date()): Date | null {
+  if (retentionDays === null || !Number.isFinite(retentionDays)) return null;
+  return new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+}
+
+/** Message for a plan without the online store. Staff-facing only: buyers never see it. */
+export const ONLINE_STORE_DENIED_MESSAGE = "The online store is available on paid plans. Upgrade to turn it on.";
+
+/** Refuse enabling or configuring the online store on a plan without it. */
+export async function enforceOnlineStore(tenantId: string): Promise<void> {
+  if (!(await getTenantLimits(tenantId)).onlineStore) {
+    throw limitError(ONLINE_STORE_DENIED_MESSAGE);
   }
 }
