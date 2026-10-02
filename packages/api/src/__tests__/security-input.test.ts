@@ -24,7 +24,6 @@ import path from "node:path";
 import {
   loginSchema,
   registerSchema,
-  magicLinkRequestSchema,
   createBusinessSchema,
   createPartySchema,
   createItemSchema,
@@ -243,18 +242,6 @@ describe("SECURITY — Zod validators reject malformed inputs before they reach 
         password: "ValidPass1",
         confirmPassword: "ValidPass1",
       });
-      expect(result.success).toBe(false);
-    });
-  });
-
-  describe("magicLinkRequestSchema", () => {
-    it("accepts valid email for magic link", () => {
-      const result = magicLinkRequestSchema.safeParse({ email: "kiran@fintranzact.com" });
-      expect(result.success).toBe(true);
-    });
-
-    it("rejects invalid email format for magic link", () => {
-      const result = magicLinkRequestSchema.safeParse({ email: "not-valid" });
       expect(result.success).toBe(false);
     });
   });
@@ -487,7 +474,7 @@ describe("SECURITY — Zod validators reject malformed inputs before they reach 
 describe("SECURITY — escapeHtml prevents HTML injection in email templates", () => {
   /**
    * INVARIANT: The escapeHtml() function in email.ts is used to sanitise
-   * user-controlled data (businessName, inviterName, magicLinkUrl) before
+   * user-controlled data (businessName, inviterName, linkUrl) before
    * embedding it in HTML email bodies. If escaping were missed or broken,
    * a malicious business name like '<script>alert(1)</script>' could execute
    * arbitrary JavaScript in the recipient's email client.
@@ -522,8 +509,8 @@ describe("SECURITY — escapeHtml prevents HTML injection in email templates", (
   });
 
   it("escapes double-quote in URLs to prevent attribute injection (href=\"...\")", () => {
-    // If a magic link URL contained a " it could break out of the href attribute
-    // Example: magicLinkUrl = 'https://fintranzact.com/verify?token=abc"onload=alert(1)'
+    // If an email-change link URL contained a " it could break out of the href attribute
+    // Example: linkUrl = 'https://fintranzact.com/verify?token=abc"onload=alert(1)'
     const maliciousUrl = 'https://fintranzact.com/verify?token=abc"onload=alert(1)';
     const escaped = escapeHtml(maliciousUrl);
     expect(escaped).not.toContain('"onload');

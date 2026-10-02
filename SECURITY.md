@@ -24,11 +24,11 @@ We will acknowledge receipt within 48 hours and aim to provide a fix or mitigati
 ## Security Architecture
 
 ### Authentication
-- **Magic link (passwordless)** as primary auth method — tokens are SHA-256 hashed before storage, single-use, 15-minute expiry
-- **Argon2id** password hashing for password-based auth (memory-hard, GPU-resistant)
+- **Email + password** sign-in; **Argon2id** password hashing (memory-hard, GPU-resistant)
+- Email-change verification links: tokens are SHA-256 hashed before storage and single-use
 - **Session-based auth** with HttpOnly, Secure, SameSite=Lax cookies
 - 30-day session expiry with server-controlled invalidation
-- Rate limiting on magic link requests (5 per email per 15 minutes)
+- Rate limiting on failed login attempts
 
 ### Authorization
 - **CASL-based RBAC** with 5 roles and granular per-resource permissions

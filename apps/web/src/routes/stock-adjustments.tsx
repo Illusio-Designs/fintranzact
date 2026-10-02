@@ -9,9 +9,7 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { TableSkeleton } from "@/components/ui/Skeleton";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
+import { ListCard } from "@/components/ui/ListCard";
 import { usePageSize } from "@/hooks/usePageSize";
 import { PillTabs } from "@/components/ui/Tabs";
 import {
@@ -91,28 +89,26 @@ function StockAdjustmentsPage() {
         }
       />
 
-      <div className="card overflow-clip">
-        <div className="border-b border-border-light px-4 py-2">
-          {/* The tabs scroll sideways on narrow phones instead of wrapping. */}
-          <div className="min-w-0 max-w-full overflow-x-auto">
-            <PillTabs
-              tabs={[
-                { value: "all", label: "All adjustments" },
-                { value: "physical", label: "From physical counts" },
-              ]}
-              value={kind}
-              onChange={(v) => setKind(v as "all" | "physical")}
-            />
-          </div>
-        </div>
-        {!data ? (
-          <TableSkeleton columns={[{ label: "Date" }, { label: "Item" }, { label: "Warehouse" }, { label: "Change", align: "right" }, { label: "Stock after", align: "right" }, { label: "Reason" }, { label: "By" }]} rows={6} />
-        ) : data.data.length === 0 ? (
-          <EmptyState title="No adjustments" description="Damaged, expired, found or counted stock changes show up here." />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination placement="top" page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={pageSize} />
-            <TableScroll ref={tableRef}>
+      <ListCard
+        tabs={{
+          tabs: [
+            { value: "all", label: "All adjustments" },
+            { value: "physical", label: "From physical counts" },
+          ],
+          value: kind,
+          onChange: (v) => setKind(v as "all" | "physical"),
+          label: "Adjustment source",
+        }}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        loading={!data}
+        fetching={isFetching}
+        tableRef={tableRef}
+        empty={
+          data && data.data.length === 0 ? (
+            <EmptyState title="No adjustments" description="Damaged, expired, found or counted stock changes show up here." />
+          ) : undefined
+        }
+      >
               <table className="data-table w-full">
                 <thead>
                   <tr>
@@ -126,7 +122,7 @@ function StockAdjustmentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.data.map((a) => {
+                  {(data?.data ?? []).map((a) => {
                     const change = parseFloat(a.quantity);
                     return (
                       <tr key={a.id}>
@@ -157,18 +153,7 @@ function StockAdjustmentsPage() {
                   })}
                 </tbody>
               </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+      </ListCard>
 
       <SlideOver
         open={open}

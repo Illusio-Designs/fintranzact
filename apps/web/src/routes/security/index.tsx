@@ -43,7 +43,7 @@ const PILLARS: Array<{ icon: IconSvgElement; title: string; points: string[] }> 
       "Every connection to Fintranzact, from the browser, the desktop app or the mobile app, uses HTTPS.",
       "Your e-invoice (IRP) and e-way bill portal credentials and shipping carrier API keys are encrypted with AES-256-GCM before they are stored.",
       "Database passwords and the tokens behind invoice share links are encrypted the same way. Encryption keys can be rotated without losing data.",
-      "Passwords are hashed with Argon2id, and sign-in links are stored only as a hash, so neither can be read back from our database.",
+      "Passwords are hashed with Argon2id, and email-change verification links are stored only as a hash, so neither can be read back from our database.",
     ],
   },
   {
@@ -60,7 +60,7 @@ const PILLARS: Array<{ icon: IconSvgElement; title: string; points: string[] }> 
     icon: Key01Icon,
     title: "Sign-in & sessions",
     points: [
-      "Sign-in links sent by email work once and expire after 15 minutes.",
+      "Sign in with your email and password. The verification link we email when you change your address works once and expires quickly.",
       "Repeated failed sign-ins are rate-limited, and sign-up is protected against bots.",
       "Browser sessions live in secure, HTTP-only cookies and end after 14 days without use.",
       "See every device signed in to your account under Settings and sign any of them out, or all of them at once.",

@@ -37,7 +37,7 @@ import {
   tenantMembers,
   invitations,
   apiKeys,
-  magicLinkTokens,
+  emailChangeTokens,
   // Tenant schema tables (used only for typing TenantTestDb)
   businesses,
   parties,
@@ -83,7 +83,7 @@ const controlSchema = {
   tenantMembers,
   invitations,
   apiKeys,
-  magicLinkTokens,
+  emailChangeTokens,
 };
 
 const tenantSchema = {
@@ -237,6 +237,9 @@ export async function truncateAllTables(): Promise<void> {
       parties,
       businesses,
       -- Control schema
+      billing_events,
+      billing_payments,
+      billing_subscriptions,
       roadmap_items,
       share_links,
       access_tokens,

@@ -1,11 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { usePageSearch } from "@/lib/page-search";
-import { useSaveTick } from "@/hooks/useSaveTick";
-import { SavedTick } from "@/components/ui/SavedTick";
 import { trpc } from "@/lib/trpc";
-import { useFlashRows } from "@/hooks/useFlashRows";
-import { cn, formatCurrency, formatDate, downloadCSV, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
+import { formatCurrency, formatDate, downloadCSV, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
 import { Badge } from "@/components/ui/Badge";
 import { toast } from "@/hooks/useToast";
@@ -16,14 +13,13 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
-import { PillTabs } from "@/components/ui/Tabs";
+import { ListCard, FilterField } from "@/components/ui/ListCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { usePageSize } from "@/hooks/usePageSize";
-import { Pagination } from "@/components/ui/Pagination";
-import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { SortableTh, type SortOption, type SortState } from "@/components/ui/Table";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 
 export const Route = createFileRoute("/expenses")({
@@ -121,7 +117,7 @@ function ExpensesPage() {
     },
   ]);
 
-  const listInput = {
+  const { data, isFetching, isLoading } = trpc.expense.list.useQuery({
     page,
     limit: pageSize,
     search: debouncedSearch || undefined,
@@ -130,15 +126,12 @@ function ExpensesPage() {
     toDate: dateRange.toDate,
     sortBy: sort.key,
     sortDir: sort.dir,
-  };
-  const { data, isFetching, isLoading, isPlaceholderData } = trpc.expense.list.useQuery(listInput, {
+  }, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
   const rows = data?.data ?? [];
-  // Rows just added or saved glow green for a moment.
-  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   // Deleting the last row of the last page: step back a page.
@@ -148,8 +141,6 @@ function ExpensesPage() {
 
   const utils = trpc.useUtils();
 
-  // The save button shows a tick before the panel closes.
-  const tick = useSaveTick();
   const createMutation = trpc.expense.create.useMutation({
     onSuccess: () => {
       utils.expense.list.invalidate();
@@ -161,7 +152,7 @@ function ExpensesPage() {
       utils.bankAccount.invalidate();
       utils.bankRecon.invalidate();
       toast.success("Expense added");
-      tick.finish(() => setShowAddModal(false));
+      setShowAddModal(false);
       setForm({ ...EMPTY_FORM, expenseDate: todayISODate() });
     },
     onError: (err) => toast.error(err.message),
@@ -178,7 +169,7 @@ function ExpensesPage() {
       utils.bankAccount.invalidate();
       utils.bankRecon.invalidate();
       toast.success("Expense updated");
-      tick.finish(() => setShowAddModal(false));
+      setShowAddModal(false);
       setEditExpenseId(null);
       setForm({ ...EMPTY_FORM, expenseDate: todayISODate() });
     },
@@ -290,12 +281,6 @@ function ExpensesPage() {
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
-  // Build category pill tabs from fetched categories
-  const categoryTabs = [
-    { value: "", label: "All" },
-    ...(categories?.map((c) => ({ value: c, label: c })) ?? []),
-  ];
-
   return (
     <div>
       <PageHeader
@@ -308,60 +293,49 @@ function ExpensesPage() {
         }
       />
 
-      {/* Filters */}
-      <div className="card mb-5 overflow-clip">
-        <div className="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-border-light">
-          <DateRangeBar
-            preset={dateRange.preset}
-            onPresetChange={dateRange.setPreset}
-            customFrom={dateRange.customFrom}
-            customTo={dateRange.customTo}
-            onCustomChange={dateRange.setCustomRange}
-            onExport={exportExpensesCSV}
-            exporting={exporting}
-            className="flex-1"
-          />
-        </div>
-
-        {categoryTabs.length > 1 && (
-          <div className="px-4 py-2 border-b border-border-light">
-            {/* Many categories scroll sideways on phones instead of wrapping. */}
-            <div className="min-w-0 max-w-full overflow-x-auto">
-              <PillTabs
-                tabs={categoryTabs}
-                value={categoryFilter}
-                onChange={setCategoryFilter}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Table */}
-        {isLoading ? (
-          <ExpenseTableSkeleton />
-        ) : !rows.length && !isFetching ? (
-          <EmptyState
-            title="No expenses"
-            description={
-              search || categoryFilter
-                ? "No expenses match your filters"
-                : "Add your first expense to get started"
-            }
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination
-              placement="top"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-            >
-              <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
-            </Pagination>
-            <TableScroll ref={tableRef}>
-              <table className="data-table w-full">
+      <ListCard
+        className="mb-5"
+        filters={
+          <>
+            <DateRangeBar
+              preset={dateRange.preset}
+              onPresetChange={dateRange.setPreset}
+              customFrom={dateRange.customFrom}
+              customTo={dateRange.customTo}
+              onCustomChange={dateRange.setCustomRange}
+              onExport={exportExpensesCSV}
+              exporting={exporting}
+            />
+            {!!categories?.length && (
+              <FilterField label="Category" value={categoryFilter} onChange={setCategoryFilter}>
+                <option value="">All categories</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </FilterField>
+            )}
+          </>
+        }
+        sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort }}
+        onClearFilters={categoryFilter ? () => setCategoryFilter("") : undefined}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        empty={
+          !rows.length && !isFetching ? (
+            <EmptyState
+              title="No expenses"
+              description={
+                search || categoryFilter
+                  ? "No expenses match your filters"
+                  : "Add your first expense to get started"
+              }
+            />
+          ) : undefined
+        }
+      >
+        <table className="data-table w-full">
                 <thead>
                   <tr>
                     <SortableTh sortKey="date" sort={sort} onSort={setSort} firstDir="desc">Date</SortableTh>
@@ -375,7 +349,7 @@ function ExpensesPage() {
                 </thead>
                 <tbody>
                   {rows.map((exp) => (
-                    <tr key={exp.id} className={cn(flash.has(exp.id) && "animate-row-flash")}>
+                    <tr key={exp.id}>
                       <td className="text-text-secondary whitespace-nowrap">
                         {formatDate(exp.expenseDate)}
                       </td>
@@ -417,18 +391,7 @@ function ExpensesPage() {
                   ))}
                 </tbody>
               </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+      </ListCard>
 
       {/* Add / Edit SlideOver */}
       <SlideOver
@@ -452,11 +415,11 @@ function ExpensesPage() {
               Cancel
             </button>
             <button
-              className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
+              className="btn-primary"
               onClick={handleSubmit}
-              disabled={isSubmitting || tick.saved}
+              disabled={isSubmitting}
             >
-              {tick.saved ? <SavedTick label={editExpenseId ? "Saved" : "Added"} /> : isSubmitting
+              {isSubmitting
                 ? editExpenseId
                   ? "Saving…"
                   : "Adding…"
@@ -540,20 +503,3 @@ function ExpensesPage() {
   );
 }
 
-// ── Skeleton ────────────────────────────────────────────────────
-
-function ExpenseTableSkeleton() {
-  return (
-    <div className="divide-y divide-border-light">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="px-4 py-3 flex items-center gap-4">
-          <div className="h-3.5 w-20 skeleton rounded" />
-          <div className="h-5 w-24 skeleton rounded" />
-          <div className="h-3.5 w-32 skeleton rounded flex-1" />
-          <div className="h-5 w-12 skeleton rounded" />
-          <div className="h-3.5 w-20 skeleton rounded ml-auto" />
-        </div>
-      ))}
-    </div>
-  );
-}

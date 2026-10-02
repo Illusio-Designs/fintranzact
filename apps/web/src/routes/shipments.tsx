@@ -11,14 +11,12 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DetailField } from "@/components/ui/DetailField";
 import { LinkButton } from "@/components/ui/LinkButton";
-import { DetailSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
-import { PillTabs } from "@/components/ui/Tabs";
+import { ListCard } from "@/components/ui/ListCard";
+import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Icon } from "@/components/ui/Icon";
 import { DeliveryTruck01Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
 import { DateInput } from "@/components/ui/DateInput";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
 
 export const Route = createFileRoute("/shipments")({
   component: ShipmentsPage,
@@ -262,7 +260,7 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
         }
       >
         {isLoading ? (
-          <DetailSkeleton />
+          <SkeletonRows count={6} height="h-8" className="space-y-3 animate-pulse" />
         ) : !s ? (
           <p className="text-text-tertiary text-sm">Shipment not found.</p>
         ) : (
@@ -520,54 +518,34 @@ function ShipmentsPage() {
       <PageHeader
         title="Shipments"
         description="Track and manage your outgoing shipments"
+      />
+
+      <ListCard
+        tabs={{ tabs: STATUS_TABS, value: status, onChange: (v) => setStatus(v as ShipmentStatus | ""), label: "Shipment status" }}
         actions={
           <button
             onClick={exportCSV}
             disabled={exporting}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium text-text-secondary hover:bg-surface-2 border border-border-light transition-colors disabled:opacity-50"
+            className="btn-secondary inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"
           >
             {exporting ? "Exporting…" : "Export CSV"}
           </button>
         }
-      />
-
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
-        {/* Status filter */}
-        <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
-          {/* Six statuses scroll sideways on phones instead of wrapping. */}
-          <div className="min-w-0 max-w-full overflow-x-auto">
-            <PillTabs
-              tabs={STATUS_TABS}
-              value={status}
-              onChange={(v) => setStatus(v as ShipmentStatus | "")}
+        onClearFilters={status ? () => setStatus("") : undefined}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        empty={
+          !rows.length && !isFetching ? (
+            <EmptyState
+              icon={<Icon icon={DeliveryTruck01Icon} size={24} className="text-text-tertiary" />}
+              title="No shipments found"
+              description={status ? `No shipments with status "${status}".` : "No shipments have been created yet."}
             />
-          </div>
-        </div>
-
-        {/* Content */}
-        {isLoading ? (
-          <div className="p-4">
-            <TableSkeleton columns={[{ label: "Date" }, { label: "Invoice #", kind: "mono" }, { label: "Party" }, { label: "Mode", kind: "badge" }, { label: "Carrier" }, { label: "Tracking #", kind: "mono" }, { label: "Cost", align: "right" }, { label: "Status", kind: "badge" }]} rows={6} />
-          </div>
-        ) : !rows.length && !isFetching ? (
-          <EmptyState
-            icon={
-              <Icon icon={DeliveryTruck01Icon} size={24} className="text-text-tertiary" />
-            }
-            title="No shipments found"
-            description={status ? `No shipments with status "${status}".` : "No shipments have been created yet."}
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination
-              placement="top"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-            />
-            <TableScroll ref={tableRef}>
+          ) : undefined
+        }
+      >
               <table className="data-table w-full">
                 <thead>
                   <tr>
@@ -627,18 +605,7 @@ function ShipmentsPage() {
                   ))}
                 </tbody>
               </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+      </ListCard>
 
       {/* Detail panel */}
       <ShipmentDetailPanel

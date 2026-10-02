@@ -16,7 +16,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { sessions, tenantMembers, invitations, magicLinkTokens, businessMembers } from "@fintranzact/db";
+import { sessions, tenantMembers, invitations, businessMembers } from "@fintranzact/db";
 import { createHash, randomUUID } from "crypto";
 import {
   createUser,
@@ -794,7 +794,7 @@ describe("Multi-tenant isolation — invitation flow", () => {
 // Auth flow: skip auto-tenant when pending invitation exists
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("verifyMagicLink — skip auto-tenant for invited users", () => {
+describe("register — skip auto-tenant for invited users", () => {
   const db = getControlDb();
 
   /** Unauthenticated caller for auth endpoints. */
@@ -813,21 +813,14 @@ describe("verifyMagicLink — skip auto-tenant for invited users", () => {
       rawToken: randomUUID(),
     });
 
-    // Create a magic link token
-    const rawToken = "magic-invited-" + Date.now();
-    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-    await db.insert(magicLinkTokens).values({
-      email,
-      tokenHash,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-    });
-
-    // Verify magic link — should create user but NOT auto-tenant
+    // Register — should create user but NOT auto-tenant
     const caller = unauthCaller();
-    const result = await caller.auth.verifyMagicLink({ token: rawToken });
-
-    expect(result.isNewUser).toBe(true);
-    expect(result.needsProfile).toBe(true);
+    const result = await caller.auth.register({
+      username: "invitednotenant",
+      email,
+      password: "a-long-test-password",
+      confirmPassword: "a-long-test-password",
+    });
 
     // Verify the user has NO memberships (no auto-created tenant)
     const memberships = await db.select()
@@ -837,8 +830,8 @@ describe("verifyMagicLink — skip auto-tenant for invited users", () => {
   });
 
   it("REGRESSION: invited user can complete profile → accept invite → tenant.list returns membership", async () => {
-    // This test covers the exact flow that was broken: an invited user verifies
-    // via magic link, has 0 memberships (tenantId=null on session), but must
+    // This test covers the exact flow that was broken: an invited user registers
+    // with the invited address, has 0 memberships (tenantId=null on session), but must
     // still be able to complete profile and accept the invitation. The frontend
     // root layout was blocking with "No organization found" before this fix.
     const email = `invited.fullflow.${randomUUID().slice(0, 8)}@example.in`;
@@ -853,20 +846,14 @@ describe("verifyMagicLink — skip auto-tenant for invited users", () => {
       rawToken: inviteRawToken,
     });
 
-    // Step 2: User clicks magic link and verifies
-    const magicRawToken = "magic-fullflow-" + Date.now();
-    const magicHash = createHash("sha256").update(magicRawToken).digest("hex");
-    await db.insert(magicLinkTokens).values({
-      email,
-      tokenHash: magicHash,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-    });
-
+    // Step 2: User registers with the invited address
     const unauthenticated = _callerFactory(createTestContext({}));
-    const verifyResult = await unauthenticated.auth.verifyMagicLink({ token: magicRawToken });
-
-    expect(verifyResult.isNewUser).toBe(true);
-    expect(verifyResult.needsProfile).toBe(true);
+    const verifyResult = await unauthenticated.auth.register({
+      username: "invitedfullflow",
+      email,
+      password: "a-long-test-password",
+      confirmPassword: "a-long-test-password",
+    });
 
     // User has 0 memberships — this is the state that broke the frontend
     const membershipsBeforeAccept = await db.select()
@@ -996,18 +983,13 @@ describe("verifyMagicLink — skip auto-tenant for invited users", () => {
     const email = `noinvite.autotenant.${randomUUID().slice(0, 8)}@example.in`;
 
     // NO pending invitation for this email
-    const rawToken = "magic-noinvite-" + Date.now();
-    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-    await db.insert(magicLinkTokens).values({
-      email,
-      tokenHash,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-    });
-
     const caller = unauthCaller();
-    const result = await caller.auth.verifyMagicLink({ token: rawToken });
-
-    expect(result.isNewUser).toBe(true);
+    const result = await caller.auth.register({
+      username: "noinvite",
+      email,
+      password: "a-long-test-password",
+      confirmPassword: "a-long-test-password",
+    });
 
     // Verify the user HAS a membership (auto-created tenant)
     const memberships = await db.select()

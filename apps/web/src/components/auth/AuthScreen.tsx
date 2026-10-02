@@ -206,7 +206,6 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
     toast.error(message, hint);
     if (field) requestAnimationFrame(() => document.getElementById(FIELD_ID[field])?.focus());
   }
-  const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
     document.title = `${mode === "login" ? "Log in" : "Create your account"} — Fintranzact`;
@@ -253,12 +252,23 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
     setShowTurnstile(true);
   }
 
+  // Set once the account is in, until the next page takes over. A fast second
+  // click on "Log in" would otherwise land on whatever the next page shows
+  // under the pointer.
+  const [signedIn, setSignedIn] = useState(false);
+  async function leaveAfterSignIn(to: "/" | "/auth/plan-selection") {
+    setSignedIn(true);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    navigate({ to });
+  }
+
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async (data) => {
+      setSignedIn(true);
       // Desktop uses Bearer auth; keep the token in the OS keychain (no-op on web).
       if (isDesktop() && data?.sessionToken) await saveDesktopToken(data.sessionToken);
       utils.auth.me.invalidate();
-      navigate({ to: "/" });
+      await leaveAfterSignIn("/");
     },
     onError: (e) => setError(e.message),
   });
@@ -266,49 +276,23 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
   const registerMutation = trpc.auth.register.useMutation({
     onSuccess: async (data) => {
       if (isDesktop() && data?.sessionToken) await saveDesktopToken(data.sessionToken);
+      setSignedIn(true);
       await utils.auth.me.invalidate();
-      navigate({ to: "/auth/plan-selection" });
+      await leaveAfterSignIn("/auth/plan-selection");
     },
     onError: (e) => setError(e.message),
   });
 
-  const magicLinkMutation = trpc.auth.sendMagicLink.useMutation({
-    onSuccess: (_data, variables) => {
-      setCooldown(60);
-      setInvalid(new Set());
-      toast.success("Sign-in link sent", `Check ${variables.email} and open the link on this device.`);
-    },
-    onError: (e) => setError(e.message),
-  });
-
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const id = setTimeout(() => setCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(id);
-  }, [cooldown]);
-
-  const isPending = loginMutation.isPending || registerMutation.isPending || magicLinkMutation.isPending;
+  const isPending = loginMutation.isPending || registerMutation.isPending || signedIn;
 
   function handleLogin(e: FormEvent) {
     e.preventDefault();
+    if (isPending) return;
     if (!email.trim()) return setError("Enter your email address", "email");
     if (!EMAIL_RE.test(email.trim())) return setError("Enter a valid email address", "email", "Example: name@business.in");
     if (!password) return setError("Enter your password", "password");
     setInvalid(new Set());
     loginMutation.mutate({ email: email.trim(), password });
-  }
-
-  function sendSignInLink() {
-    if (!email.trim()) return setError("Enter your email address first", "email", "Then we'll send you a sign-in link.");
-    if (!EMAIL_RE.test(email.trim())) return setError("Enter a valid email address", "email", "Example: name@business.in");
-    withTurnstile((token) =>
-      magicLinkMutation.mutate({
-        email: email.trim(),
-        turnstileToken: token,
-        source: isDesktop() ? "desktop" : "web",
-        referralCode: referralCode.trim() || undefined,
-      }),
-    );
   }
 
   function handleRegister(e: FormEvent) {
@@ -407,16 +391,6 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                 <Field
                   label="Password"
                   htmlFor="auth-password"
-                  aside={
-                    <button
-                      type="button"
-                      onClick={sendSignInLink}
-                      disabled={isPending || cooldown > 0}
-                      className="text-[13px] font-semibold text-brand-700 hover:underline disabled:cursor-not-allowed disabled:opacity-60 dark:text-brand-300"
-                    >
-                      {cooldown > 0 ? `Resend link in ${cooldown}s` : "Email me a sign-in link"}
-                    </button>
-                  }
                 >
                   <PasswordInput
                     id="auth-password"
@@ -431,7 +405,7 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                   />
                 </Field>
                 <button type="submit" disabled={isPending} className={cn(PRIMARY, "mt-1.5")}>
-                  {loginMutation.isPending ? "Logging in…" : "Log in"}
+                  {loginMutation.isPending || signedIn ? "Logging in…" : "Log in"}
                 </button>
                 <p className="mt-2 text-center text-sm text-text-tertiary">
                   New to Fintranzact?{" "}
@@ -514,7 +488,7 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                   />
                 </Field>
                 <button type="submit" disabled={isPending} className={cn(PRIMARY, "mt-1.5")}>
-                  {registerMutation.isPending ? "Creating your account…" : "Create free account"}
+                  {registerMutation.isPending || signedIn ? "Creating your account…" : "Create free account"}
                 </button>
                 <p className="text-center text-xs leading-relaxed text-text-tertiary">
                   By creating an account you agree to our{" "}

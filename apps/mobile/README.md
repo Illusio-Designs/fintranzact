@@ -121,7 +121,7 @@ This generates the `android/` and `ios/` directories from the Expo config. These
 ```
 apps/mobile/
 ├── app/
-│   ├── (auth)/          # Login, register, magic link screens
+│   ├── (auth)/          # Login, register, complete-profile screens
 │   └── (app)/           # Main app tabs (guarded by auth)
 ├── src/
 │   ├── components/      # Shared UI components

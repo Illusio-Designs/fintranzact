@@ -92,7 +92,7 @@ function OnboardingPage() {
           </p>
 
           <h1 className="mt-2 text-2xl font-semibold text-text-primary">
-            Set up your business
+            Create your company
           </h1>
 
           <p className="mt-1 text-sm text-text-tertiary">

@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./api-base";
 export const authEndpoints: EndpointGroup = {
   id: "auth",
   title: "Authentication",
-  description: "Authenticate users via email/password or magic link. Sessions last 30 days and are stored as HttpOnly cookies. Mobile clients can use the returned sessionToken as a Bearer token.",
+  description: "Authenticate users with email and password. Sessions last 30 days and are stored as HttpOnly cookies. Mobile clients can use the returned sessionToken as a Bearer token.",
   endpoints: [
     {
       id: "auth-register",
@@ -106,98 +106,11 @@ session_token = data["sessionToken"]`,
       ],
     },
     {
-      id: "auth-send-magic-link",
-      method: "mutation",
-      path: "auth.sendMagicLink",
-      title: "Send Magic Link",
-      description: "Send a passwordless sign-in link to an email address. If the email is not registered, a new account is created automatically when the link is clicked. Always returns `{success: true}` regardless of whether the email exists, preventing email enumeration.",
-      auth: "public",
-      input: [
-        { name: "email", type: "string", required: true, description: "Email address to send the magic link to (max 255 chars)" },
-        { name: "turnstileToken", type: "string", required: false, description: "Cloudflare Turnstile token; verified when present (FORBIDDEN if invalid)" },
-        { name: "source", type: "enum", required: false, description: "Client requesting the link; `desktop`/`mobile` add `&source=…` to the link so it can hand off to the app", default: "web", enumValues: ["web", "desktop", "mobile"] },
-      ],
-      output: {
-        description: "Always returns success to prevent email enumeration.",
-        example: { success: true },
-      },
-      codeExamples: {
-        curl: `curl -X POST ${API_BASE_URL}/api/trpc/auth.sendMagicLink \\
-  -H "Content-Type: application/json" \\
-  -d '{"json":{"email":"rahul@myshop.in"}}'`,
-        javascript: `await trpc.auth.sendMagicLink.mutate({
-  email: "rahul@myshop.in",
-});
-// Ask user to check their inbox for the sign-in link`,
-        python: `import httpx
-
-httpx.post(
-    "${API_BASE_URL}/api/trpc/auth.sendMagicLink",
-    json={"json": {"email": "rahul@myshop.in"}},
-)`,
-      },
-      gotchas: [
-        "Rate limited: 5 requests per email per 15 minutes. Excess requests silently succeed (no rate-limit error exposed).",
-        "The link expires in 15 minutes and can only be used once (atomically marked used on verify).",
-        "If `RESEND_API_KEY` is not configured, the magic link is printed to the server console (development mode).",
-        "New users who verify the link will have `needsProfile: true` — redirect them to complete their profile.",
-      ],
-    },
-    {
-      id: "auth-verify-magic-link",
-      method: "mutation",
-      path: "auth.verifyMagicLink",
-      title: "Verify Magic Link",
-      description: "Exchange a magic link token for an authenticated session. The token is atomically marked as used in a single UPDATE statement to prevent race-condition double-use. If the email is new, an account and organization are created automatically.",
-      auth: "public",
-      input: [
-        { name: "token", type: "string", required: true, description: "The token from the magic link URL (1–128 chars)" },
-      ],
-      output: {
-        description: "Authenticated user with session token and profile completion flag.",
-        example: {
-          user: { id: "01957a2b-3c4d-7e8f-9012-abcdef012345", email: "rahul@myshop.in", name: null },
-          sessionToken: "sess_VbK2mQ9xP4nR7wA1...",
-          isNewUser: true,
-          needsProfile: true,
-        },
-      },
-      codeExamples: {
-        curl: `# Token comes from the ?token= param of the magic link URL
-curl -X POST ${API_BASE_URL}/api/trpc/auth.verifyMagicLink \\
-  -H "Content-Type: application/json" \\
-  -d '{"json":{"token":"<token-from-email-link>"}}'`,
-        javascript: `// Extract token from URL: /auth/verify?token=abc123...
-const url = new URL(window.location.href);
-const token = url.searchParams.get("token");
-
-const result = await trpc.auth.verifyMagicLink.mutate({ token });
-
-if (result.needsProfile) {
-  // Redirect to profile completion page
-  navigate("/auth/complete-profile");
-}`,
-        python: `import httpx
-
-resp = httpx.post(
-    "${API_BASE_URL}/api/trpc/auth.verifyMagicLink",
-    json={"json": {"token": token_from_email}},
-)
-data = resp.json()["result"]["data"]["json"]`,
-      },
-      gotchas: [
-        "Returns BAD_REQUEST if the token is invalid, expired (>15 min), or already used.",
-        "Token verification is atomic — concurrent requests with the same token will see one succeed and one fail.",
-        "Check `needsProfile` in the response. If true, the user has no display name yet — prompt them to set one via `auth.completeProfile`.",
-      ],
-      relatedEndpoints: ["auth-send-magic-link", "auth-complete-profile"],
-    },
-    {
       id: "auth-complete-profile",
       method: "mutation",
       path: "auth.completeProfile",
       title: "Complete Profile",
-      description: "Set the display name for a user who signed in via magic link for the first time. After calling this, `auth.me` will return `needsProfile: false`.",
+      description: "Set the display name for a signed-in user whose profile has no name yet (`auth.me` reports `needsProfile: true`). After calling this, `auth.me` will return `needsProfile: false`.",
       auth: "protected",
       input: [
         { name: "name", type: "string", required: true, description: "Display name (2–100 chars)" },
@@ -526,7 +439,7 @@ httpx.post(
       method: "mutation",
       path: "auth.issueAccessToken",
       title: "Issue Access Token",
-      description: "Mint a short-lived access token (`at_…`, valid for 15 minutes) from a long-lived Bearer session. Mobile and desktop clients keep the session ID from `auth.login` / `auth.verifyMagicLink` as a refresh token and send the access token as `Authorization: Bearer at_…` on normal API calls, calling this again shortly before it expires. The access token resolves to the same user and selected organization as its parent session. Web clients use the HttpOnly cookie and cannot call this.",
+      description: "Mint a short-lived access token (`at_…`, valid for 15 minutes) from a long-lived Bearer session. Mobile and desktop clients keep the session ID from `auth.login` as a refresh token and send the access token as `Authorization: Bearer at_…` on normal API calls, calling this again shortly before it expires. The access token resolves to the same user and selected organization as its parent session. Web clients use the HttpOnly cookie and cannot call this.",
       auth: "protected",
       input: [],
       output: {
@@ -562,7 +475,7 @@ access_token = data["accessToken"]`,
         "UNAUTHORIZED \"No session found\" / \"Session not found\" when the request carries no session ID (e.g. authenticated with an API key).",
         "Access token hits do not extend the parent session; only refresh-token (session ID) requests slide its expiry. Revoking the session (`auth.revokeSession`, `auth.logout`) invalidates its access tokens too.",
       ],
-      relatedEndpoints: ["auth-login", "auth-verify-magic-link", "auth-revoke-session"],
+      relatedEndpoints: ["auth-login", "auth-revoke-session"],
     },
   ],
 };

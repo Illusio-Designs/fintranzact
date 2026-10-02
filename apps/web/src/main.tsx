@@ -5,6 +5,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { trpc, createTRPCClient, queryClient } from "@/lib/trpc";
 import { ToastContainer } from "@/components/ui/Toast";
 import { PageSearchProvider } from "@/lib/page-search";
+import { NotFoundPage } from "@/components/NotFoundPage";
 import { routeTree } from "./routeTree.gen";
 import { hydrateDesktopSession } from "@/lib/desktop-session";
 import { isDesktop } from "@/lib/isDesktop";
@@ -22,6 +23,7 @@ import "@/styles/globals.css";
 const router = createRouter({
   routeTree,
   defaultPreload: "intent",
+  defaultNotFoundComponent: NotFoundPage,
   context: { trpc: undefined! },
 });
 
@@ -58,6 +60,12 @@ function App() {
 async function boot() {
   if (isDesktop()) {
     window.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+  // Web only: keep a copy of the app shell so a refresh while offline still opens the app.
+  if (!isDesktop() && import.meta.env.PROD && "serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
   }
   await hydrateDesktopSession();
   createRoot(document.getElementById("root")!).render(

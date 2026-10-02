@@ -319,8 +319,8 @@ input, select, textarea {
   }
   .data-table th {
     @apply px-4 py-2.5 text-xs font-medium text-left;
-    color: var(--text-tertiary);
-    background: var(--surface-1);
+    color: var(--text-secondary);
+    background: var(--surface-2);
     border-bottom: 1px solid var(--border-light);
   }
   .data-table th.text-right {

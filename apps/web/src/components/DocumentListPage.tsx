@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { useFlashRows } from "@/hooks/useFlashRows";
 import { trpc } from "@/lib/trpc";
 import { useCan } from "@/lib/permissions";
 import { invalidateStockViews } from "@/lib/stock-cache";
@@ -8,7 +7,6 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { usePageSearch } from "@/lib/page-search";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PillTabs } from "@/components/ui/Tabs";
 import { SegmentedControl } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -19,9 +17,9 @@ import { ReturnRejectedDialog } from "@/components/ReturnRejectedDialog";
 import { formatQty } from "@/components/inventory/shared";
 import { toast } from "@/hooks/useToast";
 import { usePageSize } from "@/hooks/usePageSize";
-import { Pagination } from "@/components/ui/Pagination";
+import { ListCard } from "@/components/ui/ListCard";
 import { RowActions, tidyMenu, type MenuEntry } from "@/components/ui/Menu";
-import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { SortableTh, type SortOption, type SortState } from "@/components/ui/Table";
 import { FilterButton, FilterChips, activeFilterCount, filterParams, type DocFilters } from "@/components/ui/ListFilters";
 
 import { Icon, type IconSvgElement } from "@/components/ui/Icon";
@@ -250,7 +248,8 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
   useEffect(() => { setFilters((f) => (f.parties ? { ...f, parties: undefined } : f)); }, [type]);
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const listInput = {
+  const { data, isLoading, isFetching } = router.list.useQuery(
+    {
       type,
       status: (status && !byFulfilment ? status : undefined) as never,
       fulfilment: byFulfilment ? status : undefined,
@@ -260,14 +259,10 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
       ...filterParams(filters),
       page,
       limit: pageSize,
-  };
-  const { data, isLoading, isFetching, isPlaceholderData } = router.list.useQuery(
-    listInput,
+    },
     // Keep the current page on screen while the next one loads.
     { placeholderData: (prev: unknown) => prev },
   );
-  // Rows just added or saved glow green for a moment.
-  const flash = useFlashRows(isPlaceholderData ? undefined : (data as { data?: { id: string; updatedAt?: string }[] } | undefined)?.data, JSON.stringify(listInput));
   const total: number = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
@@ -349,73 +344,59 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
         }
       />
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-border-light px-4 py-3">
-          {hasTypeFilter && (
-            <SegmentedControl
-              tabs={typeOptions}
-              value={type}
-              onChange={(v) => setType(v as "sale" | "purchase")}
-            />
-          )}
-          <div className={cn("min-w-0 max-w-full overflow-x-auto", hasTypeFilter && "ml-auto")}>
-            <PillTabs tabs={statusTabs} value={status} onChange={setStatus} />
-          </div>
-          <div className={cn("flex flex-wrap items-center gap-2", !hasTypeFilter && "ml-auto")}>
-            <FilterChips value={filters} onChange={setFilters} />
+      <ListCard
+        tabs={{ tabs: statusTabs, value: status, onChange: setStatus, label: "Status" }}
+        filters={
+          <>
+            {hasTypeFilter && (
+              <SegmentedControl
+                tabs={typeOptions}
+                value={type}
+                onChange={(v) => setType(v as "sale" | "purchase")}
+              />
+            )}
             <FilterButton
               value={filters}
               onChange={setFilters}
               partyType={type === "sale" ? "customer" : "supplier"}
               kinds={col4Variant === "dueDate" ? ["party", "amount", "due"] : ["party", "amount"]}
             />
-          </div>
-        </div>
-
-        {/* Content */}
-        {isLoading ? (
-          <div className="space-y-2 p-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="skeleton h-14 rounded-lg" />
-            ))}
-          </div>
-        ) : !data?.data.length ? (
-          <EmptyState
-            icon={<Icon icon={emptyIcon} size={26} />}
-            title={emptyTitle}
-            description={
-              activeFilterCount(filters)
-                ? "Nothing matches these filters."
-                : search
-                  ? `Nothing matches "${search}".`
-                  : emptyDescription(type, status)
-            }
-            action={
-              activeFilterCount(filters) ? (
-                <button className="btn-secondary" onClick={() => setFilters({})}>
-                  Clear filters
-                </button>
-              ) : search ? undefined : (
-                <button className="btn-primary" onClick={() => setShowCreate(true)}>
-                  {buttonLabel}
-                </button>
-              )
-            }
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination
-              placement="top"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-            >
-              <SortMenu options={docSortOptions(col4Variant === "dueDate")} sort={sort} onSort={setSort} />
-            </Pagination>
-            <TableScroll ref={tableRef}>
+            <FilterChips value={filters} onChange={setFilters} />
+          </>
+        }
+        sort={{ options: docSortOptions(col4Variant === "dueDate"), value: sort, onChange: setSort }}
+        onClearFilters={activeFilterCount(filters) ? () => setFilters({}) : undefined}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        empty={
+          !data?.data.length ? (
+            <EmptyState
+              icon={<Icon icon={emptyIcon} size={26} />}
+              title={emptyTitle}
+              description={
+                activeFilterCount(filters)
+                  ? "Nothing matches these filters."
+                  : search
+                    ? `Nothing matches "${search}".`
+                    : emptyDescription(type, status)
+              }
+              action={
+                activeFilterCount(filters) ? (
+                  <button className="btn-secondary" onClick={() => setFilters({})}>
+                    Clear filters
+                  </button>
+                ) : search ? undefined : (
+                  <button className="btn-primary" onClick={() => setShowCreate(true)}>
+                    {buttonLabel}
+                  </button>
+                )
+              }
+            />
+          ) : undefined
+        }
+      >
             <table className="data-table">
               <thead>
                 <tr>
@@ -435,8 +416,8 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
               </thead>
               <tbody>
                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                {data.data.map((doc: any) => (
-                  <tr key={doc.id} className={cn("cursor-pointer", flash.has(doc.id) && "animate-row-flash")} onClick={() => setSelectedId(doc.id)}>
+                {(data?.data ?? []).map((doc: any) => (
+                  <tr key={doc.id} className="cursor-pointer" onClick={() => setSelectedId(doc.id)}>
                     <td className="font-medium">{doc.partyName}</td>
                     <td className="font-mono text-ui text-text-secondary">
                       {doc.invoiceNumber}
@@ -511,18 +492,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                 ))}
               </tbody>
             </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+      </ListCard>
 
       {/* Document detail slide-over */}
       <SlideOver

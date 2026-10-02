@@ -5,10 +5,10 @@ import { nanoid } from "nanoid";
 import { createHash, randomBytes } from "node:crypto";
 import * as argon2 from "argon2";
 import { isPlatformAdmin } from "../lib/platform-admin.js";
-import { controlDb, users, sessions, tenants, tenantMembers, magicLinkTokens, invitations, accessTokens, provisionTenantDatabase, cleanupTenantDatabase, type TenantDbConfig } from "@fintranzact/db";
+import { controlDb, users, sessions, tenants, tenantMembers, emailChangeTokens, invitations, accessTokens, provisionTenantDatabase, cleanupTenantDatabase, type TenantDbConfig } from "@fintranzact/db";
 import { normalizeReferralCode } from "@fintranzact/shared";
 import { partnerForReferralCode } from "../lib/partner-program.js";
-import { loginSchema, registerSchema, magicLinkRequestSchema, magicLinkVerifySchema, completeProfileSchema } from "@fintranzact/shared";
+import { loginSchema, registerSchema, completeProfileSchema } from "@fintranzact/shared";
 import { router, publicProcedure, protectedProcedure } from "../trpc.js";
 import { emailService } from "../lib/email.js";
 import { invalidateSessionCache, getSessionIdFromRequest, revokeAllUserSessions } from "../context.js";
@@ -72,7 +72,7 @@ function getClientIpFromRequest(req: Request): string | null {
  * Trade-off: the header is client-supplied and therefore spoofable. A
  * scripted attacker who sends this header bypasses Turnstile. We accept
  * that because (a) the desktop build is distributed as a signed binary,
- * (b) magic-link already has per-email rate limiting, and (c) register
+ * (b) login already has per-email rate limiting, and (c) register
  * abuse is still bounded by email validation + session creation costs.
  * If abuse materialises, add per-IP rate limiting on these endpoints.
  */
@@ -494,265 +494,7 @@ export const authRouter = router({
     return { user: { id: user.id, email: user.email, name: user.name }, sessionToken };
   }),
 
-  // ── Magic link: request ──────────────────────────────────────
-  sendMagicLink: publicProcedure.input(magicLinkRequestSchema).mutation(async ({ input, ctx }) => {
-    // Verify Turnstile token when provided (skipped in dev / self-hosted without secret key)
-    if (input.turnstileToken) {
-      const ip = getClientIpFromRequest(ctx.req);
-      const valid = await verifyTurnstile(input.turnstileToken, ip);
-      if (!valid) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Verification failed. Please refresh and try again." });
-      }
-    }
-
-    const email = input.email.toLowerCase();
-
-    // Rate limit: max 5 requests per email per 15 minutes
-    const recentTokens = await controlDb
-      .select({ id: magicLinkTokens.id })
-      .from(magicLinkTokens)
-      .where(and(
-        eq(magicLinkTokens.email, email),
-        gt(magicLinkTokens.createdAt, new Date(Date.now() - 15 * 60 * 1000)),
-      ));
-
-    if (recentTokens.length >= 5) {
-      // Don't reveal rate limit — always return success to prevent enumeration
-      return { success: true };
-    }
-
-    const rawToken = crypto.randomUUID() + "-" + nanoid(32);
-    const tokenH = hashToken(rawToken);
-
-    await controlDb.insert(magicLinkTokens).values({
-      email,
-      tokenHash: tokenH,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-      ipAddress: getClientIpFromRequest(ctx.req),
-      referralCode: normalizeReferralCode(input.referralCode),
-    });
-
-    const baseUrl = process.env.APP_URL || "http://localhost:5173";
-    const tokenParam = `token=${encodeURIComponent(rawToken)}`;
-
-    // Primary email CTA is ALWAYS the HTTPS link — email clients (Gmail,
-    // Outlook, Apple Mail, corporate gateways) strip or refuse to render
-    // anchors with custom URL schemes like `fintranzact://`, treating them as
-    // phishing / protocol-hijack vectors. Shipping the deep link as the
-    // primary `<a href="...">` produces a plain-text, non-clickable line
-    // in most inboxes.
-    //
-    // When the sign-in was initiated from the desktop or mobile app we
-    // thread the `source` through the HTTPS URL as a query param so the
-    // /auth/verify page can hand off to the native app via the `fintranzact://`
-    // scheme from a real browser (where custom schemes ARE honored by the
-    // OS), instead of consuming the token inside the browser session.
-    const sourceSuffix =
-      input.source === "desktop" || input.source === "mobile"
-        ? `&source=${input.source}`
-        : "";
-    const webUrl = `${baseUrl}/auth/verify?${tokenParam}${sourceSuffix}`;
-    const deepLinkUrl = `fintranzact://verify?${tokenParam}`;
-
-    // Secondary is the raw deep link — some email clients do render it
-    // (and it serves as a copy-paste fallback) but we no longer depend
-    // on its clickability.
-    const primaryUrl = webUrl;
-    const secondaryUrl = deepLinkUrl;
-
-    // Check if user already exists to send welcome vs sign-in variant
-    // (API response is always { success: true } regardless — no enumeration risk)
-    const [existingUser] = await controlDb.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
-    await emailService.sendMagicLink(email, primaryUrl, secondaryUrl, !existingUser);
-
-    return { success: true }; // Always success — no email enumeration
-  }),
-
-  // ── Magic link: verify ───────────────────────────────────────
-  verifyMagicLink: publicProcedure.input(magicLinkVerifySchema).mutation(async ({ input, ctx }) => {
-    // Determine authMethod once, before the transaction, using the same
-    // client-kind header signal as login/register.
-    const magicLinkAuthMethod: "cookie" | "bearer" = isBearerClient(ctx.req) ? "bearer" : "cookie";
-    const tokenH = hashToken(input.token);
-
-    // ── Phase 1 (pre-tx peek) ────────────────────────────────────────
-    // Decide whether this verify is likely to trigger tenant provisioning,
-    // so we can create the physical DB OUTSIDE any transaction. The peeks
-    // are dirty reads — authoritative checks happen inside the tx below.
-    //
-    // We do NOT consume the token here. The atomic UPDATE ... WHERE
-    // usedAt IS NULL ... RETURNING inside the tx is the only claim site,
-    // so a concurrent verify that claims the token between peek and tx
-    // will cause OUR tx to throw BAD_REQUEST — and our provisioned DB (if
-    // any) will be cleaned up by withProvisionedTenantCleanup.
-    const [tokenPeek] = await controlDb.select({ email: magicLinkTokens.email })
-      .from(magicLinkTokens)
-      .where(and(
-        eq(magicLinkTokens.tokenHash, tokenH),
-        gt(magicLinkTokens.expiresAt, new Date()),
-        isNull(magicLinkTokens.usedAt),
-      ))
-      .limit(1);
-
-    if (!tokenPeek) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Invalid, expired, or already used link. Please request a new one.",
-      });
-    }
-
-    const peekEmail = tokenPeek.email;
-    const peekEmailLower = peekEmail.toLowerCase();
-
-    const [existingUserPeek] = await controlDb.select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, peekEmail))
-      .limit(1);
-
-    const [pendingInvitePeek] = existingUserPeek ? [] : await controlDb.select({ id: invitations.id })
-      .from(invitations)
-      .where(and(
-        eq(invitations.email, peekEmailLower),
-        isNull(invitations.acceptedAt),
-        gt(invitations.expiresAt, new Date()),
-      ))
-      .limit(1);
-
-    const needsAutoTenant =
-      !existingUserPeek && !pendingInvitePeek && process.env.MULTI_TENANT === "true";
-
-    // ── Phase 2 (provision outside tx) ────────────────────────────────
-    const provisioned: ProvisionedTenant | null = needsAutoTenant
-      ? await provisionNewTenantForUser(peekEmail.split("@")[0])
-      : null;
-
-    // ── Phase 3 (tx) + Phase 4 (compensate on failure or unused) ─────
-    const { user, sessionToken, isNewUser, email } = await withProvisionedTenantCleanup(
-      provisioned,
-      async (markUsed) =>
-        controlDb.transaction(async (tx) => {
-          // Atomically claim the token. Must be the first write in the tx so
-          // that concurrent verifiers for the same token serialize on the row
-          // lock. Rolls back on any downstream throw, so failed provisioning
-          // or session insert does not burn the token.
-          const [tokenRow] = await tx.update(magicLinkTokens)
-            .set({ usedAt: new Date() })
-            .where(and(
-              eq(magicLinkTokens.tokenHash, tokenH),
-              gt(magicLinkTokens.expiresAt, new Date()),
-              isNull(magicLinkTokens.usedAt),
-            ))
-            .returning();
-
-          if (!tokenRow) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Invalid, expired, or already used link. Please request a new one.",
-            });
-          }
-
-          const emailLocal = tokenRow.email;
-          let isNew = false;
-
-          // Find or create user
-          let [user] = await tx
-            .select({ id: users.id, email: users.email, name: users.name })
-            .from(users)
-            .where(eq(users.email, emailLocal))
-            .limit(1);
-
-          if (!user) {
-            isNew = true;
-            const [newUser] = await tx.insert(users).values({
-              email: emailLocal,
-              referralCode: tokenRow.referralCode,
-              emailVerified: true,
-            }).returning({ id: users.id, email: users.email, name: users.name });
-            user = newUser;
-
-            // Re-check invitation using tx state (not the peek)
-            const [pendingInvite] = await tx.select({ id: invitations.id })
-              .from(invitations)
-              .where(and(
-                eq(invitations.email, emailLocal.toLowerCase()),
-                isNull(invitations.acceptedAt),
-                gt(invitations.expiresAt, new Date()),
-              ))
-              .limit(1);
-
-            if (pendingInvite) {
-              // Invitation pending — skip auto-tenant. If we pre-provisioned
-              // based on a stale peek, cleanup will run because markUsed() is
-              // never called.
-            } else if (process.env.MULTI_TENANT === "true") {
-              if (!provisioned) {
-                // Peek said invitation pending or user existed, but tx state
-                // now contradicts. Rather than provision inside the tx, ask
-                // the caller to retry with a fresh link.
-                throw new TRPCError({
-                  code: "CONFLICT",
-                  message: "Sign-in state changed — please try again.",
-                });
-              }
-              await writeNewTenantRows(tx, user.id, provisioned, tokenRow.referralCode);
-              markUsed();
-            } else {
-              const assignedName = user.name ?? emailLocal.split("@")[0] ?? "My Organization";
-              await createTenantForUser(user.id, assignedName, tx, tokenRow.referralCode);
-            }
-          } else {
-            // Existing user path — mark email verified
-            await tx.update(users)
-              .set({ emailVerified: true, updatedAt: new Date() })
-              .where(eq(users.id, user.id));
-          }
-
-          const sessionId = nanoid(64);
-          const memberships = await tx
-            .select({ tenantId: tenantMembers.tenantId })
-            .from(tenantMembers)
-            .where(eq(tenantMembers.userId, user.id));
-          const resolvedTenantId = memberships.length === 1 ? memberships[0].tenantId : null;
-
-          await enforceSessionLimit(user.id, tx);
-
-          const mlNow = Date.now();
-          const mlExpiresAt = new Date(mlNow + (magicLinkAuthMethod === "bearer" ? BEARER_SESSION_DURATION_MS : SESSION_DURATION_MS));
-          const mlMaxExpiresAt = magicLinkAuthMethod === "bearer" ? new Date(mlNow + BEARER_MAX_SESSION_DURATION_MS) : null;
-
-          await tx.insert(sessions).values({
-            id: sessionId,
-            userId: user.id,
-            tenantId: resolvedTenantId,
-            expiresAt: mlExpiresAt,
-            maxExpiresAt: mlMaxExpiresAt,
-            authMethod: magicLinkAuthMethod,
-            ipAddress: getClientIpFromRequest(ctx.req),
-            userAgent: ctx.req.headers.get("user-agent") || null,
-          });
-
-          return { user, sessionToken: sessionId, isNewUser: isNew, email: emailLocal };
-        }),
-    );
-
-    // ── Phase 5 (cookie, outside tx) ─────────────────────────────────
-    // Write Set-Cookie only after COMMIT has succeeded so the client never
-    // ends up with a cookie for a rolled-back session.
-    if (magicLinkAuthMethod === "cookie") {
-      setSessionCookie(ctx.resHeaders, sessionToken);
-    }
-    // `email` is captured to keep parity with the old log surface if needed later.
-    void email;
-
-    return {
-      user: { id: user.id, email: user.email, name: user.name },
-      sessionToken,
-      isNewUser,
-      needsProfile: !user.name,
-    };
-  }),
-
-  // ── Complete profile (first magic link sign-in) ──────────────
+  // ── Complete profile ─────────────────────────────────────────
   completeProfile: protectedProcedure.input(completeProfileSchema).mutation(async ({ input, ctx }) => {
     await controlDb.update(users)
       .set({ name: input.name, updatedAt: new Date() })
@@ -798,7 +540,7 @@ export const authRouter = router({
       const rawToken = crypto.randomUUID() + "-" + nanoid(32);
       const tokenHash = hashToken(rawToken);
 
-      await controlDb.insert(magicLinkTokens).values({
+      await controlDb.insert(emailChangeTokens).values({
         email: email, // Store the NEW email
         tokenHash,
         // Store the requesting user's ID so confirmEmailChange doesn't trust client-supplied userId
@@ -811,7 +553,7 @@ export const authRouter = router({
       const baseUrl = process.env.APP_URL || "http://localhost:5173";
       const verifyUrl = `${baseUrl}/auth/verify-email-change?token=${encodeURIComponent(rawToken)}`;
 
-      await emailService.sendMagicLink(email, verifyUrl);
+      await emailService.sendEmailChangeLink(email, verifyUrl);
 
       return { success: true };
     }),
@@ -825,12 +567,12 @@ export const authRouter = router({
       const tokenH = hashToken(input.token);
 
       // Atomic: find + mark-used
-      const [tokenRow] = await controlDb.update(magicLinkTokens)
+      const [tokenRow] = await controlDb.update(emailChangeTokens)
         .set({ usedAt: new Date() })
         .where(and(
-          eq(magicLinkTokens.tokenHash, tokenH),
-          gt(magicLinkTokens.expiresAt, new Date()),
-          isNull(magicLinkTokens.usedAt),
+          eq(emailChangeTokens.tokenHash, tokenH),
+          gt(emailChangeTokens.expiresAt, new Date()),
+          isNull(emailChangeTokens.usedAt),
         ))
         .returning();
 

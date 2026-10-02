@@ -18,11 +18,10 @@
  * header so the session-ID extraction path in auth.ts is exercised.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
-import { createHash } from "node:crypto";
-import { users, sessions, tenants, tenantMembers, magicLinkTokens, invitations } from "@fintranzact/db";
+import { users, sessions, tenants, tenantMembers, invitations } from "@fintranzact/db";
 import { isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -35,7 +34,6 @@ import { getControlDb, truncateAllTables, closeTestDb } from "../helpers/test-db
 import { createTestContext } from "../helpers/test-context.js";
 import { createCallerFactory } from "../../trpc.js";
 import { appRouter } from "../../router.js";
-import { emailService } from "../../lib/email.js";
 
 // ── Caller factory ────────────────────────────────────────────────────────────
 
@@ -395,8 +393,8 @@ describe("auth.login", () => {
     expect(wrongPasswordError!.message).toBe(noUserError!.message);
   });
 
-  it("login for a user with no passwordHash (magic-link-only account) returns UNAUTHORIZED", async () => {
-    // Insert a user without a password hash to simulate a magic-link-only account
+  it("login for a user with no passwordHash (passwordless account) returns UNAUTHORIZED", async () => {
+    // Insert a user without a password hash to simulate a passwordless account
     const _db = getControlDb();
     const tenant = await createTenant({ name: "MagicOnly Org" });
     const magicUser = await createUser({
@@ -519,92 +517,7 @@ describe("auth.logout", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// auth.sendMagicLink — email URL shape
-//
-// CRITICAL INVARIANT: the primary email CTA is ALWAYS an HTTPS URL, never
-// a `fintranzact://` custom-scheme anchor. Email clients (Gmail, Outlook, Apple
-// Mail, corporate gateways) strip or refuse to render custom URL schemes as
-// clickable links, so a `fintranzact://` primary reaches the user as plain,
-// unclickable text. If this test fails because someone reverted the primary
-// URL to the custom scheme, DO NOT fix the test — fix the server to keep
-// shipping HTTPS as the primary and hand off to the native app from the
-// /auth/verify page. See apps/web/src/routes/auth/verify.tsx for the
-// browser-to-app hand-off logic this relies on.
-//
-// Historical regression the old suite guarded against (preserved below):
-// the deep link path must be `/verify`, never `/auth/verify`, because Expo
-// Router uses (auth) as a layout group, so the actual scheme path is
-// /verify. Desktop Tauri's deep-link handler translates /verify into the
-// webview path /auth/verify.
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe("auth.sendMagicLink — email URL shape", () => {
-  const sendSpy = vi.spyOn(emailService, "sendMagicLink").mockResolvedValue(undefined);
-
-  afterAll(() => {
-    sendSpy.mockRestore();
-  });
-
-  it("web source: primary is an https link with no source suffix, secondary is the fintranzact://verify deep link", async () => {
-    sendSpy.mockClear();
-    const caller = unauthCaller();
-    await caller.auth.sendMagicLink({ email: "deeplink-web@vyapar.in", source: "web" });
-
-    expect(sendSpy).toHaveBeenCalledOnce();
-    const [, primaryUrl, secondaryUrl] = sendSpy.mock.calls[0]!;
-    expect(primaryUrl).toMatch(/^https?:\/\/.+\/auth\/verify\?token=/);
-    // Web source does not thread `source` through the URL — the verify
-    // page only hands off to the native app when source is desktop/mobile.
-    expect(primaryUrl).not.toContain("source=");
-    expect(secondaryUrl).toMatch(/^fintranzact:\/\/verify\?token=/);
-    expect(secondaryUrl).not.toContain("fintranzact://auth/");
-  });
-
-  it("mobile source: primary is an https link with source=mobile, secondary is the fintranzact://verify deep link — primary MUST NOT be a custom-scheme URL because email clients strip non-http anchors and the user ends up with plain, unclickable text", async () => {
-    sendSpy.mockClear();
-    const caller = unauthCaller();
-    await caller.auth.sendMagicLink({ email: "deeplink-mobile@vyapar.in", source: "mobile" });
-
-    expect(sendSpy).toHaveBeenCalledOnce();
-    const [, primaryUrl, secondaryUrl] = sendSpy.mock.calls[0]!;
-    expect(primaryUrl).toMatch(/^https?:\/\/.+\/auth\/verify\?token=/);
-    expect(primaryUrl).toContain("&source=mobile");
-    // Regression guard: primary MUST be https so Gmail/Outlook render it as
-    // a clickable button.
-    expect(primaryUrl).not.toMatch(/^fintranzact:\/\//);
-    expect(secondaryUrl).toMatch(/^fintranzact:\/\/verify\?token=/);
-    expect(secondaryUrl).not.toContain("fintranzact://auth/");
-  });
-
-  it("desktop source: primary is an https link with source=desktop, secondary is the fintranzact://verify deep link — same email-client rationale as mobile", async () => {
-    sendSpy.mockClear();
-    const caller = unauthCaller();
-    await caller.auth.sendMagicLink({ email: "deeplink-desktop@vyapar.in", source: "desktop" });
-
-    expect(sendSpy).toHaveBeenCalledOnce();
-    const [, primaryUrl, secondaryUrl] = sendSpy.mock.calls[0]!;
-    expect(primaryUrl).toMatch(/^https?:\/\/.+\/auth\/verify\?token=/);
-    expect(primaryUrl).toContain("&source=desktop");
-    expect(primaryUrl).not.toMatch(/^fintranzact:\/\//);
-    expect(secondaryUrl).toMatch(/^fintranzact:\/\/verify\?token=/);
-    expect(secondaryUrl).not.toContain("fintranzact://auth/");
-  });
-
-  it("primary URL is NEVER a fintranzact:// custom-scheme link for ANY source — this is the load-bearing invariant that kept desktop/mobile users stuck with unclickable email buttons; if this ever regresses, users report 'the link in the email does nothing, I have to copy-paste it into Firefox' (verbatim user report)", async () => {
-    for (const source of ["web", "desktop", "mobile"] as const) {
-      sendSpy.mockClear();
-      const caller = unauthCaller();
-      await caller.auth.sendMagicLink({ email: `deeplink-${source}-guard@vyapar.in`, source });
-
-      const [, primaryUrl] = sendSpy.mock.calls[0]!;
-      expect(primaryUrl).not.toMatch(/^fintranzact:\/\//);
-      expect(primaryUrl).toMatch(/^https?:\/\//);
-    }
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// auth.verifyMagicLink — transaction isolation regression test
+// auth.register — transaction isolation regression test
 //
 // Regression: assignTenantToNewUser() used controlDb directly instead of the
 // parent transaction's tx. The user row (inserted by tx) was invisible to
@@ -612,26 +525,21 @@ describe("auth.sendMagicLink — email URL shape", () => {
 // Fix: pass tx through to getOrCreateDefaultTenant / assignTenantToNewUser.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("auth.verifyMagicLink", () => {
+describe("auth.register — new user setup", () => {
   const db = getControlDb();
 
   it("creates a new user AND tenant membership atomically — no FK violation", async () => {
     const caller = unauthCaller();
-    const email = "magic-link-new@vyapar.in";
-    const rawToken = "test-magic-token-" + Date.now();
-    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+    const email = "register-new@vyapar.in";
 
-    await db.insert(magicLinkTokens).values({
+    const result = await caller.auth.register({
+      username: "registernew",
       email,
-      tokenHash,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      password: "SecurePass1!",
+      confirmPassword: "SecurePass1!",
     });
 
-    const result = await caller.auth.verifyMagicLink({ token: rawToken });
-
     expect(result.user.email).toBe(email);
-    expect(result.isNewUser).toBe(true);
-    expect(result.needsProfile).toBe(true);
     expect(typeof result.sessionToken).toBe("string");
 
     const [dbUser] = await db.select().from(users)
@@ -643,79 +551,11 @@ describe("auth.verifyMagicLink", () => {
     expect(memberships.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("returns existing user for repeated magic link verify — no duplicate", async () => {
-    const caller = unauthCaller();
-    const email = "magic-link-existing@vyapar.in";
-
-    await caller.auth.register({
-      email,
-      name: "Existing User",
-      password: "SecurePass1!",
-      confirmPassword: "SecurePass1!",
-    });
-
-    const rawToken = "test-magic-existing-" + Date.now();
-    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-    await db.insert(magicLinkTokens).values({
-      email,
-      tokenHash,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-    });
-
-    const result = await caller.auth.verifyMagicLink({ token: rawToken });
-    expect(result.user.email).toBe(email);
-    expect(result.isNewUser).toBe(false);
-  });
-
-  it("rejects expired magic link token", async () => {
-    const caller = unauthCaller();
-    const rawToken = "test-magic-expired-" + Date.now();
-    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-
-    await db.insert(magicLinkTokens).values({
-      email: "expired@vyapar.in",
-      tokenHash,
-      expiresAt: new Date(Date.now() - 1000),
-    });
-
-    await expect(caller.auth.verifyMagicLink({ token: rawToken })).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-    });
-  });
-
-  // ── Protective: token is single-use on success (P0-2) ───────────────────
-  //
-  // Regression guard: after a successful verify, the same raw token must NOT
-  // be reusable. Protects against the claim UPDATE moving back outside the
-  // tx in a way that doesn't preserve single-use semantics.
-  it("burns the token on a successful verify — same raw token fails on replay", async () => {
-    const caller = unauthCaller();
-    const email = "magic-single-use@vyapar.in";
-    const rawToken = "test-magic-single-use-" + Date.now();
-    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-
-    await db.insert(magicLinkTokens).values({
-      email,
-      tokenHash,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-    });
-
-    // First use succeeds
-    const first = await caller.auth.verifyMagicLink({ token: rawToken });
-    expect(first.user.email).toBe(email);
-
-    // Replay returns BAD_REQUEST — not INTERNAL_SERVER_ERROR, not success.
-    // The atomic UPDATE ... WHERE usedAt IS NULL ... RETURNING is the sole
-    // gate; on replay it returns 0 rows and the handler throws BAD_REQUEST.
-    await expect(caller.auth.verifyMagicLink({ token: rawToken }))
-      .rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
   // ── Protective: pending invitation skips tenant auto-creation (P1-9) ────
   //
-  // When an email has a pending invitation, verify must NOT auto-create an
+  // When an email has a pending invitation, register must NOT auto-create an
   // organization. The user will join the invited org after completing their
-  // profile. Protects the invitation branch at auth.ts inside verifyMagicLink
+  // profile. Protects the invitation branch at auth.ts inside register
   // — if someone removes the invitation peek or the in-tx re-check, new
   // invited users would get an unwanted free org auto-created and the
   // onboarding flow would bifurcate silently.
@@ -743,20 +583,15 @@ describe("auth.verifyMagicLink", () => {
       invitedBy: inviter.id,
     });
 
-    // Now verify a magic link for the SAME email — should NOT create a new tenant
-    const rawToken = "magic-invited-" + Date.now();
-    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-    await db.insert(magicLinkTokens).values({
+    // Now register with the SAME email — should NOT create a new tenant
+    const result = await caller.auth.register({
+      username: "invitednewuser",
       email,
-      tokenHash,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      password: "SecurePass1!",
+      confirmPassword: "SecurePass1!",
     });
 
-    const result = await caller.auth.verifyMagicLink({ token: rawToken });
-
     expect(result.user.email).toBe(email);
-    expect(result.isNewUser).toBe(true);
-    expect(result.needsProfile).toBe(true);
 
     // The user has ZERO memberships because no tenant was auto-created and
     // the invitation hasn't been accepted yet. The invitation is accepted via
@@ -774,8 +609,8 @@ describe("auth.verifyMagicLink", () => {
     expect(sess).toBeDefined();
     expect(sess!.tenantId).toBeNull();
 
-    // And the invitation is still pending (not auto-accepted by the magic
-    // link flow — that's the responsibility of tenant.acceptById).
+    // And the invitation is still pending (not auto-accepted by the
+    // register flow — that's the responsibility of tenant.acceptById).
     const pending = await db.select().from(invitations)
       .where(isNull(invitations.acceptedAt));
     expect(pending.length).toBeGreaterThanOrEqual(1);

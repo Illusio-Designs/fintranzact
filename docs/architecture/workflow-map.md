@@ -29,7 +29,7 @@ This document maps every workflow in the Fintranzact application — verified ag
 | ID | Workflow | Platform | Roles | Status |
 |---|---|---|---|---|
 | WF-01 | First-time Setup | Web, Mobile | All | Approved |
-| WF-02 | Password / Magic Link Login | Web, Mobile | All | Approved |
+| WF-02 | Password Login | Web, Mobile | All | Approved |
 | WF-03 | Mobile Biometric / PIN Unlock | Mobile | All | Approved |
 | WF-04 | Create Sale Invoice | Web, Mobile | superadmin, admin, seller_manager, seller | Approved |
 | WF-05 | Create Purchase Invoice | Web, Mobile | superadmin, admin, seller_manager | Approved |
@@ -85,9 +85,9 @@ This document maps every workflow in the Fintranzact application — verified ag
 ### Happy path
 
 1. User lands on `/login` (web) or the login screen (mobile).
-2. Registers with email + password (or receives a magic link — see WF-02).
-3. On first magic link verification, `verifyMagicLink` returns `needsProfile: true` when `user.name` is null.
-4. Web redirects to `/auth/complete-profile` (detected in root layout: `!session.user.name`). Mobile redirects to `/(auth)/verify` which reads `needsProfile`.
+2. Registers with username, email and password (`auth.register`, optional referral code). Sign-in afterwards is by email + password only (see WF-02).
+3. `auth.me` returns `needsProfile: true` only when `user.name` is null (for example an account that has no display name yet).
+4. Web redirects to `/auth/complete-profile` (detected in root layout: `!session.user.name`).
 5. User enters display name. `auth.completeProfile` is called → name saved → session cache invalidated.
 6. Root layout detects `businesses.length === 0` → redirects to `/settings`.
 7. Settings page renders `<BusinessForm>` (no business exists yet).
@@ -99,7 +99,7 @@ This document maps every workflow in the Fintranzact application — verified ag
 
 ### Branch conditions
 
-- **Password registration vs magic link**: Password registration completes name in the form. Magic link registration creates a nameless user requiring the complete-profile step.
+- **Nameless account**: Registration collects the username in the form, so the complete-profile step only appears when `user.name` is null.
 - **GST registered?**: If `gstRegistrationType !== "unregistered"` and GSTIN provided, invoice PDFs render as full GST invoices; reports show GST terminology. If unregistered, UI shows "Sales Report" / "Tax Summary" labels instead.
 - **Multi-tenant mode**: If `MULTI_TENANT=true`, a new tenant is created for the user's org. If `MULTI_TENANT=false` (default self-hosted), the user joins the shared "Default Organization" tenant. The first joiner gets `owner` role; subsequent users get `member`.
 - **Has existing data?**: Import wizard shown post-setup. Skippable.
@@ -119,21 +119,11 @@ This document maps every workflow in the Fintranzact application — verified ag
 
 ---
 
-## WF-02: Password / Magic Link Login
+## WF-02: Password Login
 
 **Trigger**: User navigates to `/login` (web) or opens login screen (mobile)
 **Roles**: All
 **Platform**: Web, Mobile
-
-### Happy path — magic link
-
-1. User enters email. Client calls `auth.sendMagicLink`.
-2. API generates a raw token (`crypto.randomUUID() + nanoid(32)`), stores SHA-256 hash in `magic_link_tokens`, emails the raw token link to the user. Always returns `{ success: true }` regardless of whether the email exists (anti-enumeration).
-3. Token expires in 15 minutes.
-4. User clicks link → browser opens `/auth/verify?token=<rawToken>`.
-5. `auth.verifyMagicLink` atomically marks token `usedAt` (TOCTOU-safe single UPDATE), looks up or creates user, creates session cookie (30-day expiry).
-6. If new user (`isNewUser: true` or `needsProfile: true`) → redirect to `/auth/complete-profile`.
-7. If existing user → redirect to `/` (dashboard).
 
 ### Happy path — password login
 
@@ -145,7 +135,7 @@ This document maps every workflow in the Fintranzact application — verified ag
 
 ### Happy path — password registration (web + mobile)
 
-1. User fills name, email, password, confirmPassword.
+1. User fills username, email, password, confirmPassword (and optionally a referral code).
 2. Client calls `auth.register`. Duplicate check → hash password → insert user → assign tenant → create session.
 3. Mobile navigates to `/(app)/(home)` via `router.replace`. Web root layout detects session and redirects.
 
@@ -159,15 +149,13 @@ This document maps every workflow in the Fintranzact application — verified ag
 
 - **Wrong password**: `auth.login` returns `UNAUTHORIZED` with message "Invalid email or password" (deliberately vague — does not reveal whether email exists).
 - **No org membership**: `auth.login` returns `FORBIDDEN` if the user has no tenant membership. This can happen if a user was removed from all tenants.
-- **Magic link expired/used**: `verifyMagicLink` returns `BAD_REQUEST`. User sees "Invalid, expired, or already used link. Please request a new one."
-- **Rate limit on magic link**: Silently capped at 5 requests per email per 15 minutes. Extra requests return `{ success: true }` but no email is sent. User is not notified of rate limit (anti-enumeration).
 - **Network failure**: tRPC query fails. Web shows inline error message. Mobile shows error banner.
 
 ### Observable states
 
-- Customer sees: email sent confirmation screen → link click → redirect → app loads
+- Customer sees: login form → redirect → app loads
 - Operator sees: nothing (no admin visibility into login events currently)
-- Database: `magic_link_tokens.used_at` set on use; `sessions` row created with IP, user agent, expiry
+- Database: `sessions` row created with IP, user agent, expiry
 
 ---
 

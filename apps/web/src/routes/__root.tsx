@@ -6,6 +6,7 @@ import {
   Outlet,
   useNavigate,
   useLocation,
+  useRouterState,
 } from "@tanstack/react-router";
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { trpc, setBusinessId, queryClient } from "@/lib/trpc";
@@ -1008,7 +1009,11 @@ function RootLayout() {
   const showsMarketingPage = isMarketingPath(pathname) && !isDesktop();
   // A shared document is public and opens on its own page for anyone.
   const showsSharedDocument = isSharePath(pathname);
-  const showsStandalonePage = showsMarketingPage || showsSharedDocument;
+  // A URL that matches no page gets the not-found page, not a login redirect.
+  const matchesNoPage = useRouterState({
+    select: (state) => state.matches.some((match) => match.globalNotFound === true),
+  });
+  const showsStandalonePage = showsMarketingPage || showsSharedDocument || matchesNoPage;
 
   useEffect(() => {
     if (showsStandalonePage) return;

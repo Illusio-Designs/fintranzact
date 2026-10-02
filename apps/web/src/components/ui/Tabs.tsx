@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 import { useSlidingIndicator } from "@/hooks/useSlidingIndicator";
 
@@ -111,6 +112,67 @@ export function SegmentedControl({ tabs, value, onChange }: SegmentedControlProp
           {tab.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * UnderlineTabs: the main way to switch between views of one list (All,
+ * Customers, Suppliers). The current tab has a brand-coloured underline and
+ * bold label; each can show a count. Arrow keys move between tabs.
+ */
+export function UnderlineTabs({ tabs, value, onChange, label = "View", className }: {
+  tabs: Tab[];
+  value: string;
+  onChange: (v: string) => void;
+  label?: string;
+  className?: string;
+}) {
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    const index = tabs.findIndex((tab) => tab.value === value);
+    const next = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    if (next) {
+      onChange(next.value);
+      (event.currentTarget.querySelector(`[data-tab="${next.value}"]`) as HTMLElement | null)?.focus();
+    }
+  }
+  return (
+    <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className={cn("flex items-end gap-1 overflow-y-hidden overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}>
+      {tabs.map((tab) => {
+        const selected = tab.value === value;
+        return (
+          <button
+            key={tab.value}
+            type="button"
+            role="tab"
+            data-tab={tab.value}
+            aria-selected={selected}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => !selected && onChange(tab.value)}
+            className={cn(
+              "relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm transition-colors",
+              selected
+                ? "border-brand-600 font-semibold text-brand-700 dark:border-brand-400 dark:text-brand-300"
+                : "border-transparent font-medium text-text-secondary hover:border-border-color hover:text-text-primary",
+            )}
+          >
+            {tab.label}
+            {tab.count !== undefined && (
+              <span
+                className={cn(
+                  "min-w-[22px] rounded-full px-1.5 py-0.5 text-center text-2xs font-semibold tabular-nums",
+                  selected
+                    ? "bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-200"
+                    : "bg-surface-2 text-text-tertiary",
+                )}
+              >
+                {tab.count.toLocaleString("en-IN")}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

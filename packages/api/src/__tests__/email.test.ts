@@ -3,7 +3,7 @@
  *
  * WHY THIS FILE EXISTS:
  * email.ts embeds user-supplied strings directly into HTML email bodies
- * (magic-link URLs, business names, inviter names). The escapeHtml function
+ * (email-change URLs, business names, inviter names). The escapeHtml function
  * is the only line of defence against stored XSS in email clients that render
  * HTML. If escapeHtml misses a single character, a malicious business name
  * like `<script>...</script>` could execute in the recipient's email client.
@@ -47,8 +47,7 @@ describe("escapeHtml — escapes all five HTML special characters to prevent ema
   /**
    * escapeHtml is applied to every piece of user-controlled data before it
    * is interpolated into an email HTML template:
-   *   - magic link URL   → href attribute + copy-link paragraph
-   *   - deep link URL    → href attribute
+   *   - email-change URL → href attribute + copy-link paragraph
    *   - inviter name     → paragraph text
    *   - business name    → paragraph text + strong element
    *   - invite URL       → href attribute + copy-link paragraph
@@ -90,7 +89,7 @@ describe("escapeHtml — escapes all five HTML special characters to prevent ema
   it("escapes '\"' to '&quot;' — prevents attribute value breakout in double-quoted contexts", () => {
     /**
      * The email templates use double-quoted HTML attributes:
-     *   href="${escapeHtml(magicLinkUrl)}"
+     *   href="${escapeHtml(linkUrl)}"
      * An unescaped '"' in the URL would terminate the attribute value and
      * allow injecting arbitrary attributes (e.g. onclick=...).
      */
@@ -130,7 +129,7 @@ describe("escapeHtml — escapes all five HTML special characters to prevent ema
 
   it("escapes an attribute injection attempt: \" onclick=\"alert(1)\"", () => {
     /**
-     * A malicious magic link URL containing a double-quote would break out
+     * A malicious link URL containing a double-quote would break out
      * of the href attribute and inject arbitrary attributes like onclick.
      * Example unescaped: href="https://evil.com" onclick="alert(1)"
      */
@@ -216,7 +215,7 @@ describe("escapeHtml — escapes all five HTML special characters to prevent ema
 
   it("handles a URL with a query string containing special characters", () => {
     /**
-     * Magic link URLs often contain query parameters with encoded special
+     * Email-change link URLs often contain query parameters with encoded special
      * characters. The '&' joining query params is particularly relevant.
      * Example: ?token=abc&redirect=/dashboard
      */

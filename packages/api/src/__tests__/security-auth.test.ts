@@ -408,18 +408,18 @@ describe("SECURITY — Argon2id password hashing invariants", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECURITY — Magic link token security
+// SECURITY — Email-change token security
 // ─────────────────────────────────────────────────────────────────────────────
-describe("SECURITY — magic link token security properties", () => {
+describe("SECURITY — email-change token security properties", () => {
   /**
-   * INVARIANT: The raw magic link token must never be stored in the database.
+   * INVARIANT: The raw email-change token must never be stored in the database.
    * Only its SHA-256 hash is stored (tokenHash column). The raw token travels
    * to the user's email only and is never logged or persisted.
    *
    * Additional invariants:
    * - Token must expire (expiresAt is set to now + 15 minutes)
    * - Used tokens are marked with usedAt; subsequent use fails because
-   *   the WHERE clause includes `isNull(magicLinkTokens.usedAt)`
+   *   the WHERE clause includes `isNull(emailChangeTokens.usedAt)`
    * - Token format: crypto.randomUUID() + "-" + nanoid(32) — high entropy
    */
 
@@ -446,7 +446,7 @@ describe("SECURITY — magic link token security properties", () => {
     expect(hashToken(raw1)).not.toBe(hashToken(raw2));
   });
 
-  it("magic link token must have an expiry set to +15 minutes from creation", () => {
+  it("email-change token must have an expiry set to +15 minutes from creation", () => {
     /**
      * INVARIANT: auth.ts sets expiresAt = new Date(Date.now() + 15 * 60 * 1000).
      * A token without an expiry would be permanently valid after a DB dump.
@@ -460,7 +460,7 @@ describe("SECURITY — magic link token security properties", () => {
 
   it("used token must not be reusable (atomic mark-used pattern makes usedAt non-null)", () => {
     /**
-     * INVARIANT: verifyMagicLink uses an atomic UPDATE ... WHERE usedAt IS NULL
+     * INVARIANT: confirmEmailChange uses an atomic UPDATE ... WHERE usedAt IS NULL
      * combined with RETURNING to find-and-mark in one statement. If the token
      * was already used, usedAt is non-null, the WHERE clause fails, and
      * no row is returned — causing an error to be thrown.
@@ -520,7 +520,7 @@ describe("SECURITY — magic link token security properties", () => {
     expect(simulateConfirm({ userId: "user-ramesh-001", email: "new@example.com" }))
       .toBe("user-ramesh-001");
 
-    // Regular magic link token (no userId) cannot be used for email change
+    // Token without a userId cannot be used for email change
     expect(() => simulateConfirm({ userId: null, email: "attacker@evil.com" }))
       .toThrow("Invalid or expired link");
   });

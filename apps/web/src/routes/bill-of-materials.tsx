@@ -9,9 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { TableSkeleton } from "@/components/ui/Skeleton";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
+import { ListCard } from "@/components/ui/ListCard";
 import { usePageSize } from "@/hooks/usePageSize";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -168,72 +166,58 @@ function BillOfMaterialsPage() {
         actions={<button className="btn-primary" onClick={openNew}>+ New BOM</button>}
       />
 
-      <div className="mb-4 max-w-sm">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search BOMs or items" />
-      </div>
-
-      <div className="card overflow-clip">
-        {!data ? (
-          <TableSkeleton columns={[{ label: "Item made" }, { label: "BOM" }, { label: "Makes", align: "right" }, { label: "Components", align: "right" }, { label: "Status", kind: "badge" }]} rows={6} />
-        ) : data.data.length === 0 ? (
-          <EmptyState
-            title={debounced ? "No BOMs match" : "No bills of material yet"}
-            description="Set up a BOM for each item you manufacture: the components and how much of each it takes."
-            action={!debounced ? <button className="btn-primary" onClick={openNew}>Create a BOM</button> : undefined}
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination
-              placement="top"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-            />
-            <TableScroll ref={tableRef}>
-              <table className="data-table w-full">
-                <thead>
-                  <tr>
-                    <th>Item made</th>
-                    <th>BOM</th>
-                    <th className="text-right">Makes</th>
-                    <th className="text-right">Components</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.data.map((b) => (
-                    <tr key={b.id} className="cursor-pointer" onClick={() => edit(b.id)}>
-                      <td className="font-medium text-text-primary">{b.itemName}</td>
-                      <td className="text-text-secondary">{b.name}</td>
-                      <td className="text-right tabular-nums">{formatQty(b.outputQuantity, b.unit)}</td>
-                      <td className="text-right tabular-nums">
-                        {b.componentCount}
-                        {b.byProductCount > 0 && <span className="text-text-tertiary"> + {b.byProductCount} by-product{b.byProductCount === 1 ? "" : "s"}</span>}
-                      </td>
-                      <td>
-                        <div className="flex gap-1.5">
-                          {b.isDefault && <Tag tone="brand">Default</Tag>}
-                          {!b.isActive && <Tag tone="muted">Inactive</Tag>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
+      <ListCard
+        filters={
+          <div className="w-full max-w-xs">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search BOMs or items" />
           </div>
-        )}
-      </div>
+        }
+        onClearFilters={search ? () => setSearch("") : undefined}
+        loading={!data}
+        fetching={isFetching}
+        tableRef={tableRef}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        empty={
+          data && data.data.length === 0 ? (
+            <EmptyState
+              title={debounced ? "No BOMs match" : "No bills of material yet"}
+              description="Set up a BOM for each item you manufacture: the components and how much of each it takes."
+              action={!debounced ? <button className="btn-primary" onClick={openNew}>Create a BOM</button> : undefined}
+            />
+          ) : undefined
+        }
+      >
+        <table className="data-table w-full">
+          <thead>
+            <tr>
+              <th>Item made</th>
+              <th>BOM</th>
+              <th className="text-right">Makes</th>
+              <th className="text-right">Components</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data?.data ?? []).map((b) => (
+              <tr key={b.id} className="cursor-pointer" onClick={() => edit(b.id)}>
+                <td className="font-medium text-text-primary">{b.itemName}</td>
+                <td className="text-text-secondary">{b.name}</td>
+                <td className="text-right tabular-nums">{formatQty(b.outputQuantity, b.unit)}</td>
+                <td className="text-right tabular-nums">
+                  {b.componentCount}
+                  {b.byProductCount > 0 && <span className="text-text-tertiary"> + {b.byProductCount} by-product{b.byProductCount === 1 ? "" : "s"}</span>}
+                </td>
+                <td>
+                  <div className="flex gap-1.5">
+                    {b.isDefault && <Tag tone="brand">Default</Tag>}
+                    {!b.isActive && <Tag tone="muted">Inactive</Tag>}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </ListCard>
 
       <SlideOver
         open={open}

@@ -1,10 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { usePageSearch } from "@/lib/page-search";
-import { useSaveTick } from "@/hooks/useSaveTick";
-import { SavedTick } from "@/components/ui/SavedTick";
 import { trpc } from "@/lib/trpc";
-import { useFlashRows } from "@/hooks/useFlashRows";
 import { invalidateStockViews } from "@/lib/stock-cache";
 import { formatCurrency, formatDate, cn, downloadCSV, todayISODate, toISOString } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -24,16 +21,16 @@ import { Modal } from "@/components/ui/Modal";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
+import { ListCard } from "@/components/ui/ListCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
-import { TableSkeleton } from "@/components/ui/Skeleton";
+import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Listbox } from "@/components/ui/Listbox";
 import { gstRateOptions, gstRateValue } from "@/lib/gst-rates";
 import { Combobox } from "@/components/ui/Combobox";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
-import { Pagination } from "@/components/ui/Pagination";
-import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { SortableTh, type SortOption, type SortState } from "@/components/ui/Table";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 import { UnitVariantEditor } from "@/components/UnitVariantEditor";
 import {
@@ -166,7 +163,7 @@ function ItemsPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const listInput = {
+  const { data, isFetching, isLoading } = trpc.item.list.useQuery({
     search: debouncedSearch || undefined,
     lowStock: showLowStock || undefined,
     stockGroupId: groupFilter || undefined,
@@ -177,17 +174,15 @@ function ItemsPage() {
     sortDir: sort.dir,
     page,
     limit: pageSize,
-  };
-  const { data, isFetching, isLoading, isPlaceholderData } = trpc.item.list.useQuery(listInput, {
+  }, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
   const rows = data?.data ?? [];
-  // Rows just added or saved glow green for a moment.
-  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasFilters = typeFilter !== "all" || showLowStock || !!groupFilter || !!debouncedSearch;
   // Deleting the last row of the last page: step back a page.
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
@@ -356,63 +351,10 @@ function ItemsPage() {
         }
       />
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <SegmentedControl
-          tabs={TYPE_TABS}
-          value={typeFilter}
-          onChange={setTypeFilter}
-        />
-        <StockGroupFilter value={groupFilter} onChange={setGroupFilter} allowNone className="w-48" />
-        {(lowStockCount ?? 0) > 0 && (
-          <button
-            onClick={() => setShowLowStock(!showLowStock)}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border",
-              showLowStock
-                ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800"
-                : "bg-surface-0 text-text-secondary border-border-color hover:bg-surface-1"
-            )}
-          >
-            Low stock ({lowStockCount})
-          </button>
-        )}
-        <div className="ml-auto relative">
-          {data && data.total > 0 && (
-            <div className="relative group">
-              <button
-                disabled={exporting}
-                className="btn-secondary text-xs px-3 py-1.5 inline-flex items-center gap-1.5 shrink-0"
-                onClick={() => exportItemsCSV("all")}
-              >
-                {exporting ? (
-                  <>
-                    <Spinner size="xs" />
-                    Preparing…
-                  </>
-                ) : (
-                  <>
-                    <Icon icon={Download04Icon} size={14} />
-                    Export CSV
-                    <Icon icon={ArrowDown01Icon} size={12} />
-                  </>
-                )}
-              </button>
-              <div className="absolute right-0 top-full mt-1 bg-surface-0 border border-border-color rounded-lg shadow-elevated py-1 hidden group-hover:block z-10 min-w-[160px]">
-                <button onClick={() => exportItemsCSV("all")} disabled={exporting} className="w-full text-left px-3 py-1.5 text-xs hover:bg-surface-1 transition-colors">All Items</button>
-                <button onClick={() => exportItemsCSV("simple")} disabled={exporting} className="w-full text-left px-3 py-1.5 text-xs hover:bg-surface-1 transition-colors">Simple Items</button>
-                <button onClick={() => exportItemsCSV("alt_units")} disabled={exporting} className="w-full text-left px-3 py-1.5 text-xs hover:bg-surface-1 transition-colors">Alt Unit Items</button>
-                <button onClick={() => exportItemsCSV("variants")} disabled={exporting} className="w-full text-left px-3 py-1.5 text-xs hover:bg-surface-1 transition-colors">Variant Items</button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Table */}
+{/* Items */}
       {isLoading ? (
-        <TableSkeleton columns={[{ label: "Item", kind: "pair" }, { label: "Barcode" }, { label: "Sale Price", align: "right" }, { label: "Stock", align: "right" }, { label: "Unit" }, { align: "right", kind: "button" }]} rows={5} />
-      ) : !rows.length && !isFetching ? (
+        <SkeletonRows count={5} height="h-12" />
+      ) : !rows.length && !isFetching && !hasFilters ? (
         <EmptyState
           title="No items found"
           description="Add products or services to start creating invoices."
@@ -424,21 +366,75 @@ function ItemsPage() {
           }
         />
       ) : (
-        // overflow-clip, not -hidden: rounds the corners without making the
-        // card a scroll box, so the header row can stay stuck inside TableScroll.
-        <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
-          <Pagination
-            placement="top"
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            total={total}
-            pageSize={pageSize}
-          >
-            <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
-          </Pagination>
-          <TableScroll ref={tableRef}>
-            <table className="data-table w-full">
+        <ListCard
+          tabs={{ tabs: TYPE_TABS, value: typeFilter, onChange: setTypeFilter, label: "Item type" }}
+          filters={
+            <>
+              <StockGroupFilter value={groupFilter} onChange={setGroupFilter} allowNone className="h-8 w-48 py-0 text-xs" />
+              {(lowStockCount ?? 0) > 0 && (
+                <button
+                  onClick={() => setShowLowStock(!showLowStock)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border",
+                    showLowStock
+                      ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800"
+                      : "bg-surface-0 text-text-secondary border-border-color hover:bg-surface-1"
+                  )}
+                >
+                  Low stock ({lowStockCount})
+                </button>
+              )}
+            </>
+          }
+          sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort }}
+          onClearFilters={
+            hasFilters
+              ? () => { setTypeFilter("all"); setGroupFilter(""); setShowLowStock(false); }
+              : undefined
+          }
+          actions={
+            data && data.total > 0 ? (
+              <div className="relative group">
+                      <button
+                        disabled={exporting}
+                        className="btn-secondary text-xs px-3 py-1.5 inline-flex items-center gap-1.5 shrink-0"
+                        onClick={() => exportItemsCSV("all")}
+                      >
+                        {exporting ? (
+                          <>
+                            <Spinner size="xs" />
+                            Preparing…
+                          </>
+                        ) : (
+                          <>
+                            <Icon icon={Download04Icon} size={14} />
+                            Export CSV
+                            <Icon icon={ArrowDown01Icon} size={12} />
+                          </>
+                        )}
+                      </button>
+                      <div className="absolute right-0 top-full mt-1 bg-surface-0 border border-border-color rounded-lg shadow-elevated py-1 hidden group-hover:block z-10 min-w-[160px]">
+                        <button onClick={() => exportItemsCSV("all")} disabled={exporting} className="w-full text-left px-3 py-1.5 text-xs hover:bg-surface-1 transition-colors">All Items</button>
+                        <button onClick={() => exportItemsCSV("simple")} disabled={exporting} className="w-full text-left px-3 py-1.5 text-xs hover:bg-surface-1 transition-colors">Simple Items</button>
+                        <button onClick={() => exportItemsCSV("alt_units")} disabled={exporting} className="w-full text-left px-3 py-1.5 text-xs hover:bg-surface-1 transition-colors">Alt Unit Items</button>
+                        <button onClick={() => exportItemsCSV("variants")} disabled={exporting} className="w-full text-left px-3 py-1.5 text-xs hover:bg-surface-1 transition-colors">Variant Items</button>
+                      </div>
+                    </div>
+            ) : undefined
+          }
+          pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+          fetching={isFetching}
+          tableRef={tableRef}
+          empty={
+            !rows.length ? (
+              <div className="px-4 py-14 text-center">
+                <p className="text-sm font-semibold text-text-primary">No items match these filters</p>
+                <p className="mt-1 text-xs text-text-tertiary">Try another tab or search, or clear the filters.</p>
+              </div>
+            ) : undefined
+          }
+        >
+          <table className="data-table w-full">
               <thead>
                 <tr>
                   <SortableTh sortKey="name" sort={sort} onSort={setSort}>Item</SortableTh>
@@ -456,7 +452,7 @@ function ItemsPage() {
                     item.lowStockAlert &&
                     parseFloat(item.stockQuantity) <= parseFloat(item.lowStockAlert);
                   return (
-                    <tr key={item.id} className={cn("cursor-pointer", flash.has(item.id) && "animate-row-flash")} onClick={() => setSelectedItemId(item.id)}>
+                    <tr key={item.id} className="cursor-pointer" onClick={() => setSelectedItemId(item.id)}>
                       <td>
                         <div className="flex items-center gap-2">
                           {item.itemType === "service" && (
@@ -516,16 +512,7 @@ function ItemsPage() {
                 })}
               </tbody>
             </table>
-          </TableScroll>
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            total={total}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
-          />
-        </div>
+        </ListCard>
       )}
 
       {/* Add Item Modal */}
@@ -683,8 +670,6 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
 
   const utils = trpc.useUtils();
 
-  // The save button shows a tick before the panel closes.
-  const tick = useSaveTick();
   const createMutation = trpc.item.create.useMutation({
     onSuccess: () => {
       utils.item.list.invalidate();
@@ -692,7 +677,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
       // The panel stays mounted: the next item starts blank instead of
       // inheriting this one's barcode, stock, batches and variants.
       resetForm();
-      tick.finish(onClose);
+      onClose();
     },
     onError: (err) => {
       toast.error(err.message);
@@ -793,11 +778,11 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
             Cancel
           </button>
           <button
-            className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
+            className="btn-primary"
             onClick={handleCreate}
-            disabled={createMutation.isPending || tick.saved || !name.trim()}
+            disabled={createMutation.isPending || !name.trim()}
           >
-            {tick.saved ? <SavedTick label="Created" /> : createMutation.isPending ? "Creating…" : "Create Item"}
+            {createMutation.isPending ? "Creating…" : "Create Item"}
           </button>
         </div>
       }
@@ -1246,14 +1231,12 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
 
   const renameUnitMut = trpc.item.renameUnit.useMutation();
 
-  // The save button shows a tick before the panel closes.
-  const tick = useSaveTick();
   const updateMutation = trpc.item.update.useMutation({
     onSuccess: () => {
       utils.item.list.invalidate();
       utils.item.getById.invalidate({ id: itemId });
       toast.success("Item updated");
-      tick.finish(onClose);
+      onClose();
     },
     onError: (err) => {
       toast.error(err.message);
@@ -1364,11 +1347,11 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
             Cancel
           </button>
           <button
-            className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
+            className="btn-primary"
             onClick={handleSave}
-            disabled={updateMutation.isPending || tick.saved || !name.trim()}
+            disabled={updateMutation.isPending || !name.trim()}
           >
-            {tick.saved ? <SavedTick /> : updateMutation.isPending ? "Saving…" : "Save Changes"}
+            {updateMutation.isPending ? "Saving…" : "Save Changes"}
           </button>
         </div>
       }

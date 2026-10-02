@@ -23,3 +23,12 @@ process.env.MULTI_TENANT = "false";
 process.env.NODE_ENV = "test";
 // Prevent real email delivery during tests
 process.env.RESEND_API_KEY = "";
+// Billing must use the demo gateway in tests, never the live Razorpay API.
+// The developer's real keys would leak in through the root .env, which
+// @fintranzact/db's dotenv call loads AFTER this setup file runs — but dotenv
+// never overrides a key that already exists, so blank them (not delete) here.
+process.env.RAZORPAY_KEY_ID = "";
+process.env.RAZORPAY_KEY = "";
+process.env.RAZORPAY_KEY_SECRET = "";
+process.env.RAZORPAY_SECRET = "";
+process.env.RAZORPAY_WEBHOOK_SECRET = "";

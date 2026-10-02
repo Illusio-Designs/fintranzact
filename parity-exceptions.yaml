@@ -242,6 +242,8 @@ exceptions:
       - platform.plans
       - platform.savePlan
       - platform.resetPlan
+      - platform.subscriptions
+      - platform.billingSummary
       - platform.partners
       - platform.updatePartner
       - partner.submitApplication
@@ -260,9 +262,17 @@ exceptions:
       - platform.roadmapReorder
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
-      # Demo plan checkout: web sign-up checkout only; real Razorpay later.
+      # Subscription billing: checkout runs in the web sign-up flow and the
+      # Settings -> Billing page (owner only); mobile manages billing on the web.
       - billing.config
       - billing.demoCheckout
+      - billing.subscribePlan
+      - billing.subscribeAddon
+      - billing.verifyCheckout
+      - billing.overview
+      - billing.updateBillingDetails
+      - billing.changePlan
+      - billing.cancelSubscription
       # Public contact/partner forms and the emailed email-change confirmation
       # link are pages of the public website (/contact, /partners,
       # /auth/verify-email-change); the link opens in a browser, not the app.
@@ -484,8 +494,6 @@ exceptions:
       # --- Auth ---
       # Browser-only flows requiring email verification links / callbacks.
       - auth.requestEmailChange
-      - auth.sendMagicLink
-      - auth.verifyMagicLink
 
       # --- Tenant ---
       # Invite acceptance and org management are browser/mobile flows.
@@ -508,6 +516,8 @@ exceptions:
       - platform.plans
       - platform.savePlan
       - platform.resetPlan
+      - platform.subscriptions
+      - platform.billingSummary
       - platform.partners
       - platform.updatePartner
       - partner.submitApplication
@@ -526,9 +536,17 @@ exceptions:
       - platform.roadmapReorder
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
-      # Demo plan checkout: web sign-up checkout only; real Razorpay later.
+      # Subscription billing: checkout runs in the web sign-up flow and the
+      # Settings -> Billing page (owner only); mobile manages billing on the web.
       - billing.config
       - billing.demoCheckout
+      - billing.subscribePlan
+      - billing.subscribeAddon
+      - billing.verifyCheckout
+      - billing.overview
+      - billing.updateBillingDetails
+      - billing.changePlan
+      - billing.cancelSubscription
       # Public contact/partner forms and the emailed email-change confirmation
       # link are pages of the public website (/contact, /partners,
       # /auth/verify-email-change); the link opens in a browser, not the app.
@@ -713,9 +731,7 @@ exceptions:
       - auth.me
       - auth.register
       - auth.requestEmailChange
-      - auth.sendMagicLink
       - auth.updateName
-      - auth.verifyMagicLink
 
       # --- Tenant ---
       # Invite acceptance and org management are browser/mobile flows.
@@ -738,6 +754,8 @@ exceptions:
       - platform.plans
       - platform.savePlan
       - platform.resetPlan
+      - platform.subscriptions
+      - platform.billingSummary
       - platform.partners
       - platform.updatePartner
       - partner.submitApplication
@@ -756,9 +774,17 @@ exceptions:
       - platform.roadmapReorder
       # Public plan catalogue feeds the web pricing and sign-up pages only.
       - plan.list
-      # Demo plan checkout: web sign-up checkout only; real Razorpay later.
+      # Subscription billing: checkout runs in the web sign-up flow and the
+      # Settings -> Billing page (owner only); mobile manages billing on the web.
       - billing.config
       - billing.demoCheckout
+      - billing.subscribePlan
+      - billing.subscribeAddon
+      - billing.verifyCheckout
+      - billing.overview
+      - billing.updateBillingDetails
+      - billing.changePlan
+      - billing.cancelSubscription
       # Public contact/partner forms and the emailed email-change confirmation
       # link are pages of the public website (/contact, /partners,
       # /auth/verify-email-change); the link opens in a browser, not the app.

@@ -3,7 +3,7 @@
  *
  * WHY THIS FILE EXISTS:
  * verifyTurnstile is the only server-side gatekeeper against bot sign-ups on
- * the public registration and magic-link endpoints. Two failure modes have
+ * the public registration endpoint. Two failure modes have
  * serious consequences:
  *
  * 1. FALSE PASS in production — if the function returns true when it should

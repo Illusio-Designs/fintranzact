@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
-import { useFlashRows } from "@/hooks/useFlashRows";
 import { invalidateStockViews } from "@/lib/stock-cache";
 import { useCan } from "@/lib/permissions";
 import { getBusinessId } from "@/lib/trpc";
@@ -13,10 +12,10 @@ import { openPdf } from "@/lib/open-pdf";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PillTabs } from "@/components/ui/Tabs";
 import { SegmentedControl } from "@/components/ui/Tabs";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
-import { DetailSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
+import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { ListCard } from "@/components/ui/ListCard";
 import { DetailField } from "@/components/ui/DetailField";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -37,9 +36,8 @@ import { Icon } from "@/components/ui/Icon";
 import { Download04Icon, File01Icon, FlashIcon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
-import { Pagination } from "@/components/ui/Pagination";
 import { RowActions, tidyMenu, type MenuEntry } from "@/components/ui/Menu";
-import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { SortableTh, type SortOption, type SortState } from "@/components/ui/Table";
 import { FilterButton, FilterChips, activeFilterCount, filterParams, type DocFilters } from "@/components/ui/ListFilters";
 const invoicesSearchSchema = z.object({
   id: z.string().uuid().optional(),
@@ -688,7 +686,7 @@ function InvoiceDetailPanel({
       }
     >
       {isLoading ? (
-        <DetailSkeleton />
+        <SkeletonRows count={5} height="h-8" className="space-y-3 animate-pulse" />
       ) : !invoice ? (
         <p className="text-text-tertiary text-sm">Invoice not found.</p>
       ) : (
@@ -1093,7 +1091,7 @@ function InvoicesPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const listInput = {
+  const { data, isFetching, isLoading } = trpc.invoice.list.useQuery({
     type,
     status: (status || undefined) as any,
     search: debouncedSearch || undefined,
@@ -1104,15 +1102,12 @@ function InvoicesPage() {
     ...filterParams(filters),
     page,
     limit: pageSize,
-  };
-  const { data, isFetching, isLoading, isPlaceholderData } = trpc.invoice.list.useQuery(listInput, {
+  }, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
   const rows = data?.data ?? [];
-  // Rows just added or saved glow green for a moment.
-  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   // Deleting the last row of the last page: step back a page.
@@ -1223,86 +1218,87 @@ function InvoicesPage() {
         }
       />
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
-        {/* Filters */}
-        <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
-          <SegmentedControl
-            tabs={typeOptions}
-            value={type}
-            onChange={(v) => setType(v as "sale" | "purchase")}
-          />
-          <div className="ml-auto min-w-0 max-w-full overflow-x-auto">
-            <PillTabs
-              tabs={statusTabs}
-              value={status}
-              onChange={setStatus}
+      <ListCard
+        tabs={{ tabs: statusTabs, value: status, onChange: setStatus, label: "Status" }}
+        filters={
+          <>
+            <SegmentedControl
+              tabs={typeOptions}
+              value={type}
+              onChange={(v) => setType(v as "sale" | "purchase")}
             />
-          </div>
-        </div>
-        <div className="border-b border-border-light px-4 py-2">
-          <DateRangeBar
-            preset={dateRange.preset}
-            onPresetChange={dateRange.setPreset}
-            customFrom={dateRange.customFrom}
-            customTo={dateRange.customTo}
-            onCustomChange={dateRange.setCustomRange}
-            onExport={exportInvoicesCSV}
-            exporting={exporting}
-          >
+            <DateRangeBar
+              className="contents"
+              preset={dateRange.preset}
+              onPresetChange={dateRange.setPreset}
+              customFrom={dateRange.customFrom}
+              customTo={dateRange.customTo}
+              onCustomChange={dateRange.setCustomRange}
+            />
             <FilterButton
               value={filters}
               onChange={setFilters}
               partyType={type === "sale" ? "customer" : "supplier"}
             />
             <FilterChips value={filters} onChange={setFilters} />
-          </DateRangeBar>
-        </div>
-
-        {/* Content */}
-        {isLoading ? (
-          <div className="p-4">
-            <TableSkeleton columns={[{ label: "Party" }, { label: "Invoice #", kind: "mono" }, { label: "Date" }, { label: "Due" }, { label: "Source", kind: "badge" }, { label: "Seller" }, { label: "Amount", align: "right" }, { label: "Status", kind: "badge" }, { align: "right", kind: "button" }]} rows={6} />
-          </div>
-        ) : !rows.length && !isFetching ? (
-          <EmptyState
-            icon={
-              <Icon icon={File01Icon} size={24} className="text-text-tertiary" />
-            }
-            title="No invoices found"
-            description={
-              activeFilterCount(filters)
-                ? "No invoices match these filters."
-                : `No ${type === "sale" ? "sales" : "purchase"} invoices${status ? ` with status "${status}"` : ""}.`
-            }
-            encouragement={!search && !status && !activeFilterCount(filters) ? "Create your first invoice — it only takes a minute." : undefined}
-            action={
-              activeFilterCount(filters) ? (
-                <button className="btn-secondary" onClick={() => setFilters({})}>
-                  Clear filters
-                </button>
-              ) : canCreate ? (
-                <button
-                  className="btn-primary"
-                  onClick={() => setShowCreate(true)}
-                >
-                  + New Invoice
-                </button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination
-              placement="top"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-            >
-              <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
-            </Pagination>
-            <TableScroll ref={tableRef}>
+          </>
+        }
+        sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort }}
+        onClearFilters={activeFilterCount(filters) ? () => setFilters({}) : undefined}
+        actions={
+          <button
+            onClick={exportInvoicesCSV}
+            disabled={exporting}
+            className="btn-secondary inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"
+          >
+            {exporting ? (
+              <>
+                <Spinner size="xs" />
+                Preparing…
+              </>
+            ) : (
+              <>
+                <Icon icon={Download04Icon} size={14} />
+                Export CSV
+              </>
+            )}
+          </button>
+        }
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        empty={
+          !rows.length && !isFetching ? (
+            <EmptyState
+              icon={
+                <Icon icon={File01Icon} size={24} className="text-text-tertiary" />
+              }
+              title="No invoices found"
+              description={
+                activeFilterCount(filters)
+                  ? "No invoices match these filters."
+                  : `No ${type === "sale" ? "sales" : "purchase"} invoices${status ? ` with status "${status}"` : ""}.`
+              }
+              encouragement={!search && !status && !activeFilterCount(filters) ? "Create your first invoice — it only takes a minute." : undefined}
+              action={
+                activeFilterCount(filters) ? (
+                  <button className="btn-secondary" onClick={() => setFilters({})}>
+                    Clear filters
+                  </button>
+                ) : canCreate ? (
+                  <button
+                    className="btn-primary"
+                    onClick={() => setShowCreate(true)}
+                  >
+                    + New Invoice
+                  </button>
+                ) : undefined
+              }
+            />
+          ) : undefined
+        }
+      >
               <table className="data-table w-full">
                 <thead>
                   <tr>
@@ -1326,7 +1322,7 @@ function InvoicesPage() {
                     return (
                       <tr
                         key={inv.id}
-                        className={cn("cursor-pointer", flash.has(inv.id) && "animate-row-flash")}
+                        className="cursor-pointer"
                         onClick={() => setSelectedInvoiceId(inv.id)}
                       >
                         <td className="font-medium"><span className="block truncate max-w-[250px]">{inv.partyName}</span></td>
@@ -1367,18 +1363,7 @@ function InvoicesPage() {
                   })}
                 </tbody>
               </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+      </ListCard>
 
       {/* Delete confirm dialog */}
       <DeleteConfirmDialog

@@ -22,6 +22,8 @@
     "db:push:all": "pnpm db:push:control && pnpm db:push:tenant",
     "db:generate:control": "drizzle-kit generate --config drizzle-control.config.ts",
     "db:generate:tenant": "drizzle-kit generate --config drizzle-tenant.config.ts",
+    "db:seed:demo": "node seed/load-demo-company.mjs",
+    "db:seed:plans": "node seed/run-seed.mjs plans.sql",
     "db:reset": "pnpm exec tsx src/reset.ts && pnpm db:push",
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit"

@@ -18,7 +18,7 @@ import { Combobox } from "@/components/ui/Combobox";
 import { useDebounce } from "@/hooks/useDebounce";
 import { openPdf } from "@/lib/open-pdf";
 import { usePageSize } from "@/hooks/usePageSize";
-import { Pagination } from "@/components/ui/Pagination";
+import { ListCard } from "@/components/ui/ListCard";
 import { TableScroll } from "@/components/ui/Table";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 
@@ -713,36 +713,21 @@ function DashboardTab({
   const statusTabs = STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
 
   return (
-    <div className="card overflow-clip">
-      <div className="px-4 py-3 border-b border-border-light">
-        {/* Five status tabs scroll sideways on phones instead of wrapping. */}
-        <div className="min-w-0 max-w-full overflow-x-auto">
-          <PillTabs
-            tabs={statusTabs}
-            value={statusFilter}
-            onChange={onStatusFilterChange}
+    <ListCard
+      tabs={{ tabs: statusTabs, value: statusFilter, onChange: onStatusFilterChange, label: "E-way bill status" }}
+      loading={isLoading}
+      fetching={isFetching}
+      tableRef={tableRef}
+      pagination={{ page, totalPages, onPageChange, total, pageSize, onPageSizeChange }}
+      empty={
+        !rows.length ? (
+          <EmptyState
+            title="No E-Way Bills"
+            description={statusFilter ? `No ${statusFilter} E-Way Bills found` : "Generate your first E-Way Bill to get started"}
           />
-        </div>
-      </div>
-
-      {isLoading ? (
-        <EWBTableSkeleton />
-      ) : !rows.length ? (
-        <EmptyState
-          title="No E-Way Bills"
-          description={statusFilter ? `No ${statusFilter} E-Way Bills found` : "Generate your first E-Way Bill to get started"}
-        />
-      ) : (
-        <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-          <Pagination
-            placement="top"
-            page={page}
-            totalPages={totalPages}
-            onPageChange={onPageChange}
-            total={total}
-            pageSize={pageSize}
-          />
-          <TableScroll ref={tableRef}>
+        ) : undefined
+      }
+    >
             <table className="data-table">
               <thead>
                 <tr>
@@ -821,18 +806,7 @@ function DashboardTab({
                 })}
               </tbody>
             </table>
-          </TableScroll>
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={onPageChange}
-            total={total}
-            pageSize={pageSize}
-            onPageSizeChange={onPageSizeChange}
-          />
-        </div>
-      )}
-    </div>
+    </ListCard>
   );
 }
 

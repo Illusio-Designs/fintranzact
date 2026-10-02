@@ -2,8 +2,8 @@
  * J14 — A partner, from the public page to their first referral.
  *
  *   /partners → "Apply as a reseller" → /partners/apply: the form, sent
- *   through the Turnstile check → "Partner login" → a sign-in link to the
- *   address they applied with → the partner portal says the application is
+ *   through the Turnstile check → "Partner login" → they create an account
+ *   with the address they applied with → the partner portal says the application is
  *   being reviewed → a platform admin approves it in /platform (another
  *   browser) → the portal shows the referral code and the sign-up link
  *   (/register?ref=FTZ-…) → a new business owner opens that link in a fresh
@@ -12,9 +12,8 @@
  *   The portal is also checked in the dark theme.
  *
  * External services: none. Turnstile is replaced by a stub that passes and
- * the API runs without TURNSTILE_SECRET_KEY (its test mode). The sign-in
- * link is "emailed" by the dev console mailer; the journey opens it through
- * the database (db.claimLatestMagicLink), as J1 does. Approving the partner
+ * the API runs without TURNSTILE_SECRET_KEY (its test mode). The partner
+ * signs up with the register form, as J1 does. Approving the partner
  * needs the platform admin's credentials (helpers/admin.ts); the journey is
  * skipped without them.
  */
@@ -30,7 +29,7 @@ import {
 } from "../../helpers/journey";
 import { dialog, listRow } from "../../helpers/journey-ui";
 import { adminSection, hasPlatformAdmin, NO_ADMIN_REASON, signInAsPlatformAdmin } from "../../helpers/admin";
-import { claimLatestMagicLink, membershipsOf, userByEmail } from "../../helpers/db";
+import { membershipsOf, userByEmail } from "../../helpers/db";
 import { partnerByEmail, tenantsReferredBy } from "../../helpers/settings-db";
 
 test.describe("J14 partner", () => {
@@ -83,23 +82,24 @@ test.describe("J14 partner", () => {
     expect(applied!.phone).toContain("9824012345");
     expect(applied!.client_count).not.toBeNull();
 
-    // ── Partner login: a sign-in link to the address they applied with ──
+    // ── Partner login → create an account with the address they applied with ──
     await page.goto("/partners");
     await page.getByRole("link", { name: "Partner login →" }).click();
     await expect(page).toHaveURL(/\/login/);
+    await page.goto("/register");
+    await page.getByLabel("Username").fill("Nikhil Shah");
     await page.getByLabel("Email address").fill(email);
-    await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Sign-in link sent" })).toContainText(email);
-    await page.goto(`/auth/verify?token=${encodeURIComponent(await claimLatestMagicLink(email))}`);
-    await expect(page.getByRole("heading", { name: "Welcome to Fintranzact" })).toBeVisible({ timeout: 15_000 });
-    await page.getByLabel("Your name").fill("Nikhil Shah");
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByLabel("Password", { exact: true }).fill("Partner@12345");
+    await page.getByLabel("Retype password").fill("Partner@12345");
+    await page.locator("form").getByRole("button", { name: "Create free account" }).click();
+    await expect(page).toHaveURL(/\/auth\/plan-selection/, { timeout: 20_000 });
+    await page.goto("/partner-portal");
     // A partner with no business of their own is taken to their portal.
     await expect(page).toHaveURL(/\/partner-portal/, { timeout: 20_000 });
     await expect(page.getByText("Your application is being reviewed")).toBeVisible();
     await expect(page.getByText(company)).toBeVisible();
     await expectNoHorizontalScroll(page, "partner portal (pending)");
-    expect((await userByEmail(email))!.email_verified).toBe(true);
+    expect(await userByEmail(email)).toMatchObject({ name: "Nikhil Shah", has_password: true });
 
     // ── A platform admin approves it ────────────────────────────
     const adminContext = await newJourneyContext(browser, guard, { viewport: page.viewportSize()!, hasTouch: isPhone(page) });

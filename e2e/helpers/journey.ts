@@ -12,8 +12,8 @@
  *
  * External services are never reached: Cloudflare Turnstile and Google Fonts
  * are stubbed at the network layer (stubExternalServices) and the API runs without
- * RESEND_API_KEY, so "emails" go to the dev console mailer — journeys read
- * magic links through the database instead (see db.ts).
+ * RESEND_API_KEY, so "emails" go to the dev console mailer — journeys never
+ * depend on a delivered email.
  */
 import { test as base, expect, type Browser, type BrowserContext, type BrowserContextOptions, type Page } from "@playwright/test";
 import { closeDb } from "./db";

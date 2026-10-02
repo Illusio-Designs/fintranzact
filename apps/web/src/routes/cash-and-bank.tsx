@@ -16,8 +16,7 @@ import { Listbox } from "@/components/ui/Listbox";
 import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Download04Icon, PencilEdit02Icon, StarIcon } from "@hugeicons/core-free-icons";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
+import { ListCard } from "@/components/ui/ListCard";
 import { usePageSize } from "@/hooks/usePageSize";
 import { useDebounce } from "@/hooks/useDebounce";
 import { toast } from "@/hooks/useToast";
@@ -360,193 +359,162 @@ function CashAndBankPage() {
         {/* Right: Transactions */}
         <div className="min-w-0 md:col-span-8">
           {selectedAccountId ? (
-            <div className="card overflow-clip">
-              <div
-                className="px-4 py-3 flex items-center justify-between border-b border-border-light"
+            <ListCard
+              filters={
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+            {[
+              { value: "this-month", label: "This Month" },
+              { value: "last-month", label: "Last Month" },
+              { value: "last-30", label: "Last 30 Days" },
+              { value: "this-fy", label: "This FY" },
+              { value: "last-fy", label: "Last FY" },
+              { value: "custom", label: "Custom" },
+              { value: "all", label: "All" },
+            ].map((p) => (
+              <button
+                key={p.value}
+                onClick={() => {
+                  setDatePreset(p.value);
+                  if (p.value !== "custom") {
+                    setDateRange(getDatePreset(p.value));
+                  }
+                }}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                  datePreset === p.value
+                    ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400"
+                    : "text-text-tertiary hover:text-text-secondary hover:bg-surface-2"
+                )}
               >
-                <h3 className="text-sm font-semibold text-text-primary">Transactions</h3>
-                <div className="flex gap-2">
-                  <button
-                    className="btn-ghost text-xs"
-                    onClick={() => setShowTransfer(true)}
-                  >
+                {p.label}
+              </button>
+            ))}
+
+            {datePreset === "custom" && (
+              <div className="flex items-center gap-2 ml-2">
+                <DateInput
+                  value={formatDateInput(dateRange.fromDate)}
+                  onChange={(e) =>
+                    setDateRange((prev) => ({
+                      ...prev,
+                      fromDate: toISOString(e.target.value) ?? "",
+                    }))
+                  }
+                  className="input py-1 text-xs w-32"
+                />
+                <span className="text-text-tertiary text-xs">to</span>
+                <DateInput
+                  value={formatDateInput(dateRange.toDate)}
+                  onChange={(e) =>
+                    setDateRange((prev) => ({
+                      ...prev,
+                      toDate: toISOStringEndOfDay(e.target.value) ?? "",
+                    }))
+                  }
+                  className="input py-1 text-xs w-32"
+                />
+              </div>
+            )}
+          </div>
+              }
+              actions={
+                <>
+                  <button className="btn-ghost text-xs" onClick={() => setShowTransfer(true)}>
                     Transfer
                   </button>
+                  {txns.length > 0 && (
+                    <button
+                      onClick={exportTransactionsCSV}
+                      disabled={exporting}
+                      className="btn-secondary flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"
+                    >
+                      {exporting ? <Spinner size="xs" /> : <Icon icon={Download04Icon} size={14} />}
+                      {exporting ? "Preparing…" : "Export CSV"}
+                    </button>
+                  )}
                   <button
-                    className="btn-primary text-xs py-1.5 px-3"
+                    className="btn-primary px-3 py-1.5 text-xs"
                     onClick={() => setShowAddTransaction(true)}
                   >
                     + Add Transaction
                   </button>
-                </div>
-              </div>
-
-              {/* Date range filter bar */}
-              <div
-                className="px-4 py-2 flex items-center gap-1 flex-wrap border-b border-border-light"
-              >
-                <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
-                {[
-                  { value: "this-month", label: "This Month" },
-                  { value: "last-month", label: "Last Month" },
-                  { value: "last-30", label: "Last 30 Days" },
-                  { value: "this-fy", label: "This FY" },
-                  { value: "last-fy", label: "Last FY" },
-                  { value: "custom", label: "Custom" },
-                  { value: "all", label: "All" },
-                ].map((p) => (
-                  <button
-                    key={p.value}
-                    onClick={() => {
-                      setDatePreset(p.value);
-                      if (p.value !== "custom") {
-                        setDateRange(getDatePreset(p.value));
-                      }
-                    }}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                      datePreset === p.value
-                        ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400"
-                        : "text-text-tertiary hover:text-text-secondary hover:bg-surface-2"
-                    )}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-
-                {datePreset === "custom" && (
-                  <div className="flex items-center gap-2 ml-2">
-                    <DateInput
-                      value={formatDateInput(dateRange.fromDate)}
-                      onChange={(e) =>
-                        setDateRange((prev) => ({
-                          ...prev,
-                          fromDate: toISOString(e.target.value) ?? "",
-                        }))
-                      }
-                      className="input py-1 text-xs w-32"
-                    />
-                    <span className="text-text-tertiary text-xs">to</span>
-                    <DateInput
-                      value={formatDateInput(dateRange.toDate)}
-                      onChange={(e) =>
-                        setDateRange((prev) => ({
-                          ...prev,
-                          toDate: toISOStringEndOfDay(e.target.value) ?? "",
-                        }))
-                      }
-                      className="input py-1 text-xs w-32"
-                    />
+                </>
+              }
+              loading={datePreset !== null && txns.length === 0 && txnFetching}
+              fetching={txnFetching}
+              tableRef={txnTableRef}
+              pagination={{ page: txnPage, totalPages: txnTotalPages, onPageChange: setTxnPage, total: txnTotal, pageSize: txnPageSize, onPageSizeChange: setTxnPageSize }}
+              empty={
+                datePreset === null ? (
+                  <div className="py-10 text-center">
+                    <p className="text-sm text-text-tertiary">Select a time period above to load transactions</p>
                   </div>
-                )}
-                </div>
-                {txns.length > 0 && (
-                  <button
-                    onClick={exportTransactionsCSV}
-                    disabled={exporting}
-                    className="btn-secondary text-xs px-3 py-1.5 ml-auto shrink-0 flex items-center gap-1.5"
-                  >
-                    {exporting ? (
-                      <Spinner size="xs" />
-                    ) : (
-                      <Icon icon={Download04Icon} size={14} />
-                    )}
-                    {exporting ? "Preparing…" : "Export CSV"}
-                  </button>
-                )}
-              </div>
-
-              {datePreset === null ? (
-                <div className="py-10 text-center">
-                  <p className="text-sm text-text-tertiary">Select a time period above to load transactions</p>
-                </div>
-              ) : txns.length === 0 && !txnFetching ? (
-                <EmptyState
-                  title="No transactions"
-                  description="No transactions in this period"
-                />
-              ) : txns.length === 0 && txnFetching ? (
-                <TransactionTableSkeleton />
-              ) : (
-                <div className={cn("transition-opacity", txnFetching && "opacity-60")}>
-                  <Pagination
-                    placement="top"
-                    page={txnPage}
-                    totalPages={txnTotalPages}
-                    onPageChange={setTxnPage}
-                    total={txnTotal}
-                    pageSize={txnPageSize}
+                ) : txns.length === 0 && !txnFetching ? (
+                  <EmptyState
+                    title="No transactions"
+                    description="No transactions in this period"
                   />
-                  <TableScroll ref={txnTableRef}>
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Description</th>
-                          <th>Type</th>
-                          <th className="text-right">Amount</th>
-                          <th className="text-right">Balance</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {txns.map((txn: any) => (
-                          <tr
-                            key={txn.id}
-                            className={txn.referenceType === "payment" ? "cursor-pointer hover:bg-surface-1" : ""}
-                            onClick={() => {
-                              if (txn.referenceType === "payment" && txn.referenceId) {
-                                navigate({ to: "/payments", search: { q: txn.description?.match(/Payment (\S+)/)?.[1] || "" } as any });
-                              }
-                            }}
-                          >
-                            <td className="text-text-secondary">
-                              {formatDate(txn.transactionDate)}
-                            </td>
-                            <td className={txn.referenceType === "payment" ? "text-brand-600 dark:text-brand-400 hover:underline" : "text-text-primary"}>
-                              {txn.description || "—"}
-                            </td>
-                            <td>
-                              <span
-                                className={cn(
-                                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium",
-                                  txn.type === "deposit"
-                                    ? "bg-emerald-600/[0.08] text-emerald-600 dark:text-emerald-400"
-                                    : txn.type === "withdrawal"
-                                      ? "bg-red-600/[0.08] text-red-600 dark:text-red-400"
-                                      : "bg-blue-600/[0.08] text-blue-600 dark:text-blue-400"
-                                )}
-                              >
-                                {txn.type}
-                              </span>
-                            </td>
-                            <td
-                              className={`text-right tabular-nums font-medium ${txn.type === "deposit"
-                                ? "text-emerald-600"
-                                : "text-red-600"
-                                }`}
-                            >
-                              {txn.type === "deposit" ? "+" : "-"}
-                              {formatCurrency(txn.amount)}
-                            </td>
-                            <td className="text-right tabular-nums text-text-secondary">
-                              {formatCurrency(txn.balanceAfter)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </TableScroll>
-                  <Pagination
-                    page={txnPage}
-                    totalPages={txnTotalPages}
-                    onPageChange={setTxnPage}
-                    total={txnTotal}
-                    pageSize={txnPageSize}
-                    onPageSizeChange={setTxnPageSize}
-                  />
-                </div>
-              )}
-            </div>
+                ) : undefined
+              }
+            >
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Type</th>
+                    <th className="text-right">Amount</th>
+                    <th className="text-right">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {txns.map((txn: any) => (
+                    <tr
+                      key={txn.id}
+                      className={txn.referenceType === "payment" ? "cursor-pointer hover:bg-surface-1" : ""}
+                      onClick={() => {
+                        if (txn.referenceType === "payment" && txn.referenceId) {
+                          navigate({ to: "/payments", search: { q: txn.description?.match(/Payment (\S+)/)?.[1] || "" } as any });
+                        }
+                      }}
+                    >
+                      <td className="text-text-secondary">
+                        {formatDate(txn.transactionDate)}
+                      </td>
+                      <td className={txn.referenceType === "payment" ? "text-brand-600 dark:text-brand-400 hover:underline" : "text-text-primary"}>
+                        {txn.description || "—"}
+                      </td>
+                      <td>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium",
+                            txn.type === "deposit"
+                              ? "bg-emerald-600/[0.08] text-emerald-600 dark:text-emerald-400"
+                              : txn.type === "withdrawal"
+                                ? "bg-red-600/[0.08] text-red-600 dark:text-red-400"
+                                : "bg-blue-600/[0.08] text-blue-600 dark:text-blue-400"
+                          )}
+                        >
+                          {txn.type}
+                        </span>
+                      </td>
+                      <td
+                        className={`text-right tabular-nums font-medium ${txn.type === "deposit"
+                          ? "text-emerald-600"
+                          : "text-red-600"
+                          }`}
+                      >
+                        {txn.type === "deposit" ? "+" : "-"}
+                        {formatCurrency(txn.amount)}
+                      </td>
+                      <td className="text-right tabular-nums text-text-secondary">
+                        {formatCurrency(txn.balanceAfter)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </ListCard>
           ) : (
             <div className="card">
               <EmptyState
@@ -576,24 +544,6 @@ function CashAndBankPage() {
             </div>
           </div>
 
-          {/* Filters row */}
-          <div className="flex items-center gap-3 mb-3 flex-wrap">
-            {/* The mode tabs scroll sideways on phones instead of wrapping. */}
-            <div className="min-w-0 max-w-full overflow-x-auto">
-              <PillTabs
-                tabs={[
-                  { value: "cash", label: "Cash" },
-                  { value: "upi", label: "UPI" },
-                  { value: "bank", label: "Bank" },
-                  { value: "cheque", label: "Cheque" },
-                  { value: "other", label: "Other" },
-                  { value: "", label: "All" },
-                ]}
-                value={untrackedMode}
-                onChange={setUntrackedMode}
-              />
-            </div>
-          </div>
 
           {/* Bulk assign toolbar — appears when items are selected */}
           {(selectedUntracked.size > 0 || selectAllMatching) && accounts && accounts.length > 0 && (
@@ -676,115 +626,111 @@ function CashAndBankPage() {
             </div>
           )}
 
-          {/* Table */}
-          {untrackedFetching && !untrackedData && (
-            <SkeletonRows count={3} height="h-10" />
-          )}
-          {untrackedData && untrackedData.data.length === 0 && (
-            <div className="card px-4 py-8 text-center">
-              <p className="text-sm text-text-tertiary">
-                {untrackedMode || debouncedUntrackedSearch
-                  ? "No untracked payments match this filter"
-                  : "All payments are assigned to accounts"}
-              </p>
-            </div>
-          )}
-          {untrackedData && untrackedData.data.length > 0 && (
-            <div className={cn("card overflow-clip transition-opacity", untrackedFetching && "opacity-60")}>
-              <Pagination
-                placement="top"
-                page={untrackedPage}
-                totalPages={untrackedTotalPages}
-                onPageChange={setUntrackedPage}
-                total={untrackedData.total}
-                pageSize={untrackedPageSize}
-              />
-              <TableScroll ref={untrackedTableRef}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th className="w-10">
+            <ListCard
+              tabs={{
+                tabs: [
+                  { value: "cash", label: "Cash" },
+                  { value: "upi", label: "UPI" },
+                  { value: "bank", label: "Bank" },
+                  { value: "cheque", label: "Cheque" },
+                  { value: "other", label: "Other" },
+                  { value: "", label: "All" },
+                ],
+                value: untrackedMode,
+                onChange: setUntrackedMode,
+                label: "Payment mode",
+              }}
+              loading={untrackedFetching && !untrackedData}
+              fetching={untrackedFetching}
+              tableRef={untrackedTableRef}
+              pagination={untrackedData ? { page: untrackedPage, totalPages: untrackedTotalPages, onPageChange: setUntrackedPage, total: untrackedData.total, pageSize: untrackedPageSize, onPageSizeChange: setUntrackedPageSize } : undefined}
+              empty={
+                untrackedData && untrackedData.data.length === 0 ? (
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-sm text-text-tertiary">
+                      {untrackedMode || debouncedUntrackedSearch
+                        ? "No untracked payments match this filter"
+                        : "All payments are assigned to accounts"}
+                    </p>
+                  </div>
+                ) : undefined
+              }
+            >
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th className="w-10">
+                      <input
+                        type="checkbox"
+                        checked={
+                          (untrackedData?.data ?? []).length > 0 &&
+                          (untrackedData?.data ?? []).every((p) => selectedUntracked.has(p.id))
+                        }
+                        onChange={(e) => {
+                          const next = new Set(selectedUntracked);
+                          if (e.target.checked) {
+                            (untrackedData?.data ?? []).forEach((p) => next.add(p.id));
+                          } else {
+                            (untrackedData?.data ?? []).forEach((p) => next.delete(p.id));
+                          }
+                          setSelectedUntracked(next);
+                        }}
+                        className="w-4 h-4 rounded"
+                      />
+                    </th>
+                    <th>Payment #</th>
+                    <th>Party</th>
+                    <th>Date</th>
+                    <th>Mode</th>
+                    <th className="text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(untrackedData?.data ?? []).map((pmt) => (
+                    <tr
+                      key={pmt.id}
+                      className="group cursor-pointer"
+                      onClick={() => navigate({ to: "/payments", search: { q: pmt.paymentNumber || pmt.partyName } as any })}
+                    >
+                      <td onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
-                          checked={
-                            untrackedData.data.length > 0 &&
-                            untrackedData.data.every((p) => selectedUntracked.has(p.id))
-                          }
+                          checked={selectedUntracked.has(pmt.id)}
                           onChange={(e) => {
                             const next = new Set(selectedUntracked);
-                            if (e.target.checked) {
-                              untrackedData.data.forEach((p) => next.add(p.id));
-                            } else {
-                              untrackedData.data.forEach((p) => next.delete(p.id));
-                            }
+                            if (e.target.checked) next.add(pmt.id);
+                            else next.delete(pmt.id);
                             setSelectedUntracked(next);
                           }}
                           className="w-4 h-4 rounded"
                         />
-                      </th>
-                      <th>Payment #</th>
-                      <th>Party</th>
-                      <th>Date</th>
-                      <th>Mode</th>
-                      <th className="text-right">Amount</th>
+                      </td>
+                      <td className="font-mono text-ui text-brand-600 dark:text-brand-400 hover:underline">
+                        {pmt.paymentNumber || "—"}
+                      </td>
+                      <td className="font-medium">{pmt.partyName}</td>
+                      <td className="text-text-secondary">{formatDate(pmt.paymentDate)}</td>
+                      <td>
+                        <Badge
+                          size="sm"
+                          color={
+                            pmt.mode === "upi" ? "bg-brand-600/[0.08] text-brand-700 dark:text-brand-400" :
+                            pmt.mode === "cash" ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400" :
+                            pmt.mode === "bank" ? "bg-blue-600/[0.08] text-blue-700 dark:text-blue-400" :
+                            "bg-surface-2 text-text-secondary"
+                          }
+                        >
+                          {pmt.mode.toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td className="text-right tabular-nums font-semibold text-emerald-600">
+                        {formatCurrency(pmt.amount)}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {untrackedData.data.map((pmt) => (
-                      <tr
-                        key={pmt.id}
-                        className="group cursor-pointer"
-                        onClick={() => navigate({ to: "/payments", search: { q: pmt.paymentNumber || pmt.partyName } as any })}
-                      >
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={selectedUntracked.has(pmt.id)}
-                            onChange={(e) => {
-                              const next = new Set(selectedUntracked);
-                              if (e.target.checked) next.add(pmt.id);
-                              else next.delete(pmt.id);
-                              setSelectedUntracked(next);
-                            }}
-                            className="w-4 h-4 rounded"
-                          />
-                        </td>
-                        <td className="font-mono text-ui text-brand-600 dark:text-brand-400 hover:underline">
-                          {pmt.paymentNumber || "—"}
-                        </td>
-                        <td className="font-medium">{pmt.partyName}</td>
-                        <td className="text-text-secondary">{formatDate(pmt.paymentDate)}</td>
-                        <td>
-                          <Badge
-                            size="sm"
-                            color={
-                              pmt.mode === "upi" ? "bg-brand-600/[0.08] text-brand-700 dark:text-brand-400" :
-                              pmt.mode === "cash" ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400" :
-                              pmt.mode === "bank" ? "bg-blue-600/[0.08] text-blue-700 dark:text-blue-400" :
-                              "bg-surface-2 text-text-secondary"
-                            }
-                          >
-                            {pmt.mode.toUpperCase()}
-                          </Badge>
-                        </td>
-                        <td className="text-right tabular-nums font-semibold text-emerald-600">
-                          {formatCurrency(pmt.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </TableScroll>
-              <Pagination
-                page={untrackedPage}
-                totalPages={untrackedTotalPages}
-                onPageChange={setUntrackedPage}
-                total={untrackedData.total}
-                pageSize={untrackedPageSize}
-                onPageSizeChange={setUntrackedPageSize}
-              />
-            </div>
-          )}
+                  ))}
+                </tbody>
+              </table>
+            </ListCard>
         </div>
       )}
 

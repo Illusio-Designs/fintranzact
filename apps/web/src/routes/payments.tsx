@@ -2,9 +2,8 @@ import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { usePageSearch } from "@/lib/page-search";
-import { useFlashRows } from "@/hooks/useFlashRows";
 import { trpc, getBusinessId } from "@/lib/trpc";
-import { cn, formatCurrency, formatDate, downloadCSV } from "@/lib/utils";
+import { formatCurrency, formatDate, downloadCSV } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -16,15 +15,15 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
-import { DetailSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
+import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { DetailField } from "@/components/ui/DetailField";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { RecordPaymentPanel } from "@/components/RecordPaymentPanel";
 import { Icon } from "@/components/ui/Icon";
-import { Pagination } from "@/components/ui/Pagination";
+import { ListCard } from "@/components/ui/ListCard";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
-import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { SortableTh, type SortOption, type SortState } from "@/components/ui/Table";
 import { Cancel01Icon, StarIcon } from "@hugeicons/core-free-icons";
 import { paymentModeLabel } from "@/lib/payment-modes";
 
@@ -266,7 +265,7 @@ function PaymentsPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const listInput = {
+  const { data, isFetching, isLoading } = trpc.payment.list.useQuery({
     page,
     limit: pageSize,
     search: debouncedSearch || undefined,
@@ -274,15 +273,12 @@ function PaymentsPage() {
     toDate: dateRange.toDate,
     sortBy: sort.key,
     sortDir: sort.dir,
-  };
-  const { data, isFetching, isLoading, isPlaceholderData } = trpc.payment.list.useQuery(listInput, {
+  }, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
   const rows = data?.data ?? [];
-  // Rows just added or saved glow green for a moment.
-  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   // Deleting the last row of the last page: step back a page.
@@ -369,9 +365,8 @@ function PaymentsPage() {
       {/* Smart auto-assign banner — one-time per business, shown only when assignments fire */}
       <SmartAssignBanner onAssigned={() => utils.payment.list.invalidate()} />
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
-        {/* Filters */}
-        <div className="border-b border-border-light px-4 py-2">
+      <ListCard
+        filters={
           <DateRangeBar
             preset={dateRange.preset}
             onPresetChange={dateRange.setPreset}
@@ -381,38 +376,28 @@ function PaymentsPage() {
             onExport={exportPaymentsCSV}
             exporting={exporting}
           />
-        </div>
-
-        {/* Table */}
-        {isLoading ? (
-          <div className="p-4">
-            <TableSkeleton columns={[{ label: "Payment #", kind: "mono" }, { label: "Party" }, { label: "Date" }, { label: "Mode" }, { label: "Reference" }, { label: "Amount", align: "right" }, { align: "right", kind: "button" }]} rows={5} />
-          </div>
-        ) : !rows.length && !isFetching ? (
-          <EmptyState
-            title="No payments recorded yet"
-            description="Record your first payment to start tracking cash flow."
-            encouragement="Once you start invoicing, payments will show here."
-            action={
-              <button className="btn-primary" onClick={() => setShowPanel(true)}>
-                + Record Payment
-              </button>
-            }
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination
-              placement="top"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-            >
-              <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
-            </Pagination>
-            <TableScroll ref={tableRef}>
-              <table className="data-table w-full">
+        }
+        sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort }}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        empty={
+          !rows.length && !isFetching ? (
+            <EmptyState
+              title="No payments recorded yet"
+              description="Record your first payment to start tracking cash flow."
+              encouragement="Once you start invoicing, payments will show here."
+              action={
+                <button className="btn-primary" onClick={() => setShowPanel(true)}>
+                  + Record Payment
+                </button>
+              }
+            />
+          ) : undefined
+        }
+      >
+        <table className="data-table w-full">
                 <thead>
                   <tr>
                     <th>Payment #</th>
@@ -426,7 +411,7 @@ function PaymentsPage() {
                 </thead>
                 <tbody>
                   {rows.map((p) => (
-                    <tr key={p.id} className={cn("cursor-pointer", flash.has(p.id) && "animate-row-flash")} onClick={() => setSelectedPaymentId(p.id)}>
+                    <tr key={p.id} className="cursor-pointer" onClick={() => setSelectedPaymentId(p.id)}>
                       <td className="font-mono text-ui text-text-secondary">
                         {p.paymentNumber || "—"}
                       </td>
@@ -460,18 +445,7 @@ function PaymentsPage() {
                   ))}
                 </tbody>
               </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+      </ListCard>
 
       {/* Record Payment SlideOver (create) */}
       <RecordPaymentPanel
@@ -548,7 +522,7 @@ function PaymentDetailPanel({
       }
     >
       {isLoading ? (
-        <DetailSkeleton />
+        <SkeletonRows count={4} height="h-8" className="space-y-3 animate-pulse" />
       ) : !payment ? (
         <p className="text-text-tertiary text-sm">Payment not found.</p>
       ) : (

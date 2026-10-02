@@ -232,7 +232,7 @@ Rule 46 requires the following on a Tax Invoice:
 
 **Evidence**: `packages/api/src/routers/auth.ts`, lines 448-458; `packages/api/src/context.ts`.
 
-**Findings**: Session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` (in production). Session IDs are 64-character nanoid tokens (cryptographically random). Sessions expire after 30 days. Server-side invalidation on logout is implemented (sessions deleted from DB, cache evicted). Logout-all-sessions functionality exists. Magic link tokens are SHA-256 hashed before storage and are single-use (atomic update-and-check in `verifyMagicLink`, line 236-243). Token hash comparison prevents timing attacks.
+**Findings**: Session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` (in production). Session IDs are 64-character nanoid tokens (cryptographically random). Sessions expire after 30 days. Server-side invalidation on logout is implemented (sessions deleted from DB, cache evicted). Logout-all-sessions functionality exists. Email-change tokens are SHA-256 hashed before storage and are single-use (atomic update-and-check in `confirmEmailChange`). Sign-in is by email and password only; the earlier email sign-in link flow was removed. Token hash comparison prevents timing attacks.
 
 **Gap 3.3.1 (HIGH — see SECURITY_PENDING.md)**: No per-email login rate limiting. Global rate limiter (120 req/min/IP) allows approximately 120 password attempts per minute per IP address, more from distributed IPs. An attacker conducting a credential stuffing or brute-force attack against a known email address is not blocked beyond the global limit.
 - Evidence: `packages/api/src/routers/auth.ts` login procedure; `SECURITY_PENDING.md` line 23.
@@ -491,7 +491,7 @@ The `logAudit()` function wraps the insert in a try/catch (line 27-29) so audit 
 | `packages/api/src/lib/invoice-pdf.ts` | PDF generation (A4, A5, thermal) |
 | `packages/api/src/lib/audit.ts` | Audit log helper |
 | `packages/api/src/context.ts` | Session validation, auth context |
-| `packages/api/src/routers/auth.ts` | Registration, login, magic link, session management |
+| `packages/api/src/routers/auth.ts` | Registration, login, email change, session management |
 | `packages/api/src/server.ts` | Hono server, rate limiting, CORS, PDF endpoint |
 | `packages/shared/src/money.ts` | Fixed-point monetary arithmetic |
 | `packages/shared/src/calc.ts` | Invoice line item and total calculation |

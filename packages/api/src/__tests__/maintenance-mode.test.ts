@@ -201,7 +201,7 @@ describe("hasTenantAccess middleware — maintenance-mode guard on every tenant-
     expect((caught as TRPCError).message.length).toBeGreaterThan(0);
   });
 
-  it("does NOT block public procedures during maintenance — the outage must remain diagnosable (status query, health checks, auth.sendMagicLink style public endpoints)", async () => {
+  it("does NOT block public procedures during maintenance — the outage must remain diagnosable (status query, health checks, auth.login style public endpoints)", async () => {
     mockGetMaintenanceStatus.mockResolvedValue({
       enabled: true,
       message: "down",

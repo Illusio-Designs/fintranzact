@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, asc, count, desc, eq, gte, ilike, inArray, max, or, sql } from "drizzle-orm";
-import { controlDb, getTenantDb, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts, roadmapItems } from "@fintranzact/db";
+import { controlDb, getTenantDb, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts, roadmapItems, billingSubscriptions, billingPayments } from "@fintranzact/db";
 import { ensureReferralCode, getPartnerStats } from "../lib/partner-program.js";
 import { emailService } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
-import { PLAN_DEFAULTS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema } from "@fintranzact/shared";
+import { PLAN_DEFAULTS, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema } from "@fintranzact/shared";
 import {
   roadmapStatuses,
   roadmapListSchema,
@@ -268,6 +268,130 @@ export const platformRouter = router({
       invalidatePlanCatalog();
       return { plan: input.plan, name: PLAN_DEFAULTS[input.plan].name };
     }),
+
+  // ── Subscriptions (billing) ──────────────────────────────────
+
+  /** Every subscription with its organisation, status and next renewal. */
+  subscriptions: platformAdminProcedure
+    .input(z.object({
+      status: z.enum(SUBSCRIPTION_STATUSES).optional(),
+      search: z.string().trim().max(100).optional(),
+      page: z.number().int().min(1).default(1),
+      limit: z.number().int().min(1).max(100).default(25),
+    }).default({}))
+    .query(async ({ input }) => {
+      const term = input.search ? `%${escapeLike(input.search)}%` : null;
+      const where = and(
+        input.status ? eq(billingSubscriptions.status, input.status) : undefined,
+        term ? or(ilike(tenants.name, term), ilike(tenants.slug, term)) : undefined,
+      );
+
+      const [rows, [total], failedRows] = await Promise.all([
+        controlDb
+          .select({
+            id: billingSubscriptions.id,
+            tenantId: billingSubscriptions.tenantId,
+            tenantName: tenants.name,
+            kind: billingSubscriptions.kind,
+            plan: billingSubscriptions.plan,
+            addon: billingSubscriptions.addon,
+            cycle: billingSubscriptions.cycle,
+            status: billingSubscriptions.status,
+            provider: billingSubscriptions.provider,
+            basePaise: billingSubscriptions.basePaise,
+            currentPeriodEnd: billingSubscriptions.currentPeriodEnd,
+            cancelAtPeriodEnd: billingSubscriptions.cancelAtPeriodEnd,
+            scheduledPlan: billingSubscriptions.scheduledPlan,
+            graceUntil: billingSubscriptions.graceUntil,
+            createdAt: billingSubscriptions.createdAt,
+          })
+          .from(billingSubscriptions)
+          .innerJoin(tenants, eq(tenants.id, billingSubscriptions.tenantId))
+          .where(where)
+          .orderBy(desc(billingSubscriptions.createdAt))
+          .limit(input.limit)
+          .offset((input.page - 1) * input.limit),
+        controlDb
+          .select({ n: count() })
+          .from(billingSubscriptions)
+          .innerJoin(tenants, eq(tenants.id, billingSubscriptions.tenantId))
+          .where(where),
+        // Failed charges in the last 30 days, per subscription.
+        controlDb
+          .select({ subscriptionId: billingPayments.subscriptionId, n: count() })
+          .from(billingPayments)
+          .where(and(
+            eq(billingPayments.status, "failed"),
+            gte(billingPayments.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+          ))
+          .groupBy(billingPayments.subscriptionId),
+      ]);
+      const failedOf = new Map(failedRows.map((r) => [r.subscriptionId, r.n]));
+      return {
+        subscriptions: rows.map((r) => ({
+          ...r,
+          createdAt: r.createdAt.toISOString(),
+          currentPeriodEnd: r.currentPeriodEnd?.toISOString() ?? null,
+          graceUntil: r.graceUntil?.toISOString() ?? null,
+          failedPayments30d: failedOf.get(r.id) ?? 0,
+        })),
+        total: total?.n ?? 0,
+        page: input.page,
+        limit: input.limit,
+      };
+    }),
+
+  /** MRR and the plan / add-on mix across live subscriptions. */
+  billingSummary: platformAdminProcedure.query(async () => {
+    const live = await controlDb
+      .select({
+        kind: billingSubscriptions.kind,
+        plan: billingSubscriptions.plan,
+        addon: billingSubscriptions.addon,
+        cycle: billingSubscriptions.cycle,
+        status: billingSubscriptions.status,
+        basePaise: billingSubscriptions.basePaise,
+      })
+      .from(billingSubscriptions)
+      .where(inArray(billingSubscriptions.status, ["active", "past_due"]));
+
+    // MRR = each live subscription's base price per month (yearly spreads
+    // over the 10 paid months of its cycle → the real money per month).
+    const monthlyOf = (s: (typeof live)[number]) =>
+      s.cycle === "yearly" ? Math.round(s.basePaise / YEARLY_CYCLE_MONTHS) : s.basePaise;
+    const mrrPaise = live.reduce((sum, s) => sum + monthlyOf(s), 0);
+
+    const mix = new Map<string, { label: string; kind: string; count: number; mrrPaise: number }>();
+    for (const s of live) {
+      const key = s.kind === "plan" ? `plan:${s.plan}` : `addon:${s.addon}`;
+      const entry = mix.get(key) ?? { label: s.kind === "plan" ? (s.plan ?? "?") : (s.addon ?? "?"), kind: s.kind, count: 0, mrrPaise: 0 };
+      entry.count += 1;
+      entry.mrrPaise += monthlyOf(s);
+      mix.set(key, entry);
+    }
+
+    const [statusCounts, [failed30]] = await Promise.all([
+      controlDb
+        .select({ status: billingSubscriptions.status, n: count() })
+        .from(billingSubscriptions)
+        .groupBy(billingSubscriptions.status),
+      controlDb
+        .select({ n: count() })
+        .from(billingPayments)
+        .where(and(
+          eq(billingPayments.status, "failed"),
+          gte(billingPayments.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+        )),
+    ]);
+
+    return {
+      mrrPaise,
+      liveCount: live.length,
+      mix: [...mix.values()].sort((a, b) => b.mrrPaise - a.mrrPaise),
+      byStatus: statusCounts.map((r) => ({ status: r.status, count: r.n })),
+      failedPayments30d: failed30?.n ?? 0,
+    };
+  }),
 
   // ── Partners ─────────────────────────────────────────────────
 

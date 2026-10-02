@@ -1949,6 +1949,33 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-02",
+    updates: [
+      {
+        // Subscription billing built end-to-end: billing_subscriptions /
+        // billing_payments / billing_events in the control DB, a Razorpay
+        // gateway adapter (demo mode until keys are set), the /webhooks/razorpay
+        // endpoint, proration on upgrades, lazy grace→read-only state, GST
+        // invoice PDFs from Finvera, the owners' Settings → Billing page and
+        // the admin Subscriptions view with MRR. Still in progress: verify the
+        // flow against live Razorpay keys, and P4 enforcement of read-only.
+        title: "P3. Checkout & subscription billing",
+        status: "in_progress",
+        done: [
+          "Razorpay plans for each plan and add-on (monthly/yearly)",
+          "Checkout from the plan picker and Billing page",
+          "Subscription webhooks (activated, charged, failed, cancelled)",
+          "Upgrade/downgrade with proration",
+          "Failed-payment retries and grace period",
+          "Cancel at period end",
+          "GST invoices from Finvera Solutions LLP",
+          "Billing page: plan, add-ons, usage, invoices, cancel",
+          "Admin: subscriptions list and MRR",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

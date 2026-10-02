@@ -1,5 +1,6 @@
 import { createTRPCReact } from "@trpc/react-query";
-import { httpBatchLink, splitLink, httpLink } from "@trpc/client";
+import { httpBatchLink, splitLink, httpLink, TRPCClientError, type TRPCLink } from "@trpc/client";
+import { observable } from "@trpc/server/observable";
 import { QueryClient, QueryCache } from "@tanstack/react-query";
 import superjson from "superjson";
 import type { AppRouter } from "@fintranzact/api";
@@ -20,6 +21,8 @@ export function setBusinessId(id: string | null) {
 export function getBusinessId() {
   return currentBusinessId;
 }
+
+export const OFFLINE_MESSAGE = "You appear to be offline. Check your internet connection and try again.";
 
 function commonOptions() {
   // Desktop uses Bearer-token auth (see apps/web/src/lib/desktop-session.ts
@@ -63,7 +66,14 @@ function commonOptions() {
       // demand CORS `Access-Control-Allow-Credentials: true` on every
       // response to `tauri.localhost` without any auth benefit.
       const credentials: RequestCredentials = desktop ? "omit" : "include";
-      return fetch(url, { ...options, credentials });
+      // A request that cannot reach the server surfaces as a plain TypeError
+      // ("Failed to fetch"); give people a message they can act on instead.
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        return Promise.reject(new Error(OFFLINE_MESSAGE));
+      }
+      return fetch(url, { ...options, credentials }).catch((error: unknown) => {
+        throw error instanceof TypeError ? new Error(OFFLINE_MESSAGE) : error;
+      });
     },
   };
 }
@@ -72,9 +82,53 @@ const TRPC_URL = import.meta.env.API_URL
   ? `${import.meta.env.API_URL}/api/trpc`
   : "/api/trpc";
 
+const GENERIC_MESSAGE = "Something went wrong. Please try again.";
+
+/**
+ * Turns whatever an error carries into a sentence a person can read: never
+ * JSON, HTML, a stack trace or a library message. Used as a safety net so
+ * every `error.message` the UI prints is friendly.
+ */
+export function friendlyErrorMessage(message: string | undefined | null): string {
+  const text = (message ?? "").trim();
+  if (!text) return GENERIC_MESSAGE;
+  if (/failed to fetch|networkerror|network request failed|load failed/i.test(text)) return OFFLINE_MESSAGE;
+  if (text.startsWith("[") || text.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(text);
+      const first = Array.isArray(parsed) ? parsed[0] : parsed;
+      const inner = typeof first?.message === "string" ? first.message : "";
+      // An issue we wrote ourselves is fine to show; Zod's stock wording is not.
+      if (inner && !/^(invalid|required|expected)/i.test(inner)) return inner;
+    } catch {
+      // not JSON after all; fall through
+    }
+    return "Please check the details you entered and try again.";
+  }
+  if (/^<(!doctype|html)/i.test(text) || /unable to transform response|unexpected token|is not valid json|unexpected end of json/i.test(text)) {
+    return GENERIC_MESSAGE;
+  }
+  if (/\n\s+at /.test(text)) return GENERIC_MESSAGE;
+  return text;
+}
+
+/** Rewrites every failed call's message with friendlyErrorMessage before the UI sees it. */
+const friendlyErrorLink: TRPCLink<AppRouter> = () => ({ next, op }) =>
+  observable((observer) =>
+    next(op).subscribe({
+      next: (value) => observer.next(value),
+      error: (err) => {
+        if (err instanceof TRPCClientError) err.message = friendlyErrorMessage(err.message);
+        observer.error(err);
+      },
+      complete: () => observer.complete(),
+    }),
+  );
+
 export function createTRPCClient() {
   return trpc.createClient({
     links: [
+      friendlyErrorLink,
       // Mutations go through a non-batching link to avoid SuperJSON parse failures
       // when large mutation responses get combined with background query responses
       splitLink({
@@ -117,6 +171,9 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
     mutations: {
+      // Fail straight away when offline (so a form can show an error)
+      // instead of waiting silently until the network returns.
+      networkMode: "always",
       onError: handleAuthError,
     },
   },

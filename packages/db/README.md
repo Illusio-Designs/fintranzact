@@ -13,7 +13,7 @@ Fintranzact uses two logical databases:
 
 | Database | Purpose | Schema file |
 |---|---|---|
-| **Control DB** | Users, sessions, tenants, team memberships, magic link tokens | `src/control-schema.ts` |
+| **Control DB** | Users, sessions, tenants, team memberships, email-change tokens | `src/control-schema.ts` |
 | **Tenant DB** | All business data — businesses, parties, items, invoices, payments, expenses, inventory, bank accounts | `src/tenant-schema.ts` |
 
 In self-hosted mode (`MULTI_TENANT=false`), both databases are the same PostgreSQL database — the same `DATABASE_URL`. In cloud/SaaS mode, the control database is separate and each tenant has its own database.
@@ -30,7 +30,7 @@ In self-hosted mode (`MULTI_TENANT=false`), both databases are the same PostgreS
 | `users` | User accounts with email, optional name, Argon2id password hash, email verification status |
 | `sessions` | Active sessions with token hash, user ID, expiry timestamp |
 | `tenant_members` | Join table: which users belong to which tenants, with their role |
-| `magic_link_tokens` | Hashed magic link tokens with expiry |
+| `magic_link_tokens` | Hashed email-change tokens with expiry (legacy table name; only used for email change) |
 
 **Roles** (`member_role` enum): `superadmin`, `admin`, `seller_manager`, `seller`, `accountant`
 

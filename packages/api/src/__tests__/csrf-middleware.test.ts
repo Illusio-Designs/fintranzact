@@ -6,7 +6,7 @@
  * A prior pass hand-wired the CSRF check inline in `server.ts` and
  * rejected every React Native POST because Android's native HTTP
  * cookie jar replays the stale `session_id` cookie from a previous
- * magic-link verification. That caused the Android app to emit
+ * email-change verification. That caused the Android app to emit
  * "Unable to transform response from server" on every login attempt.
  * These tests pin the fix so the same regression cannot recur.
  *
@@ -46,7 +46,7 @@ function buildTestApp(
     }),
   );
   app.all("/api/store/order", (c) => c.json({ ok: true }));
-  app.all("/api/trpc/auth.sendMagicLink", (c) => c.json({ ok: true }));
+  app.all("/api/trpc/auth.login", (c) => c.json({ ok: true }));
   app.all("/", (c) => c.json({ ok: true }));
   return app;
 }
@@ -130,10 +130,10 @@ describe("CSRF middleware — Hono layer for non-tRPC routes", () => {
     expect(res.status).toBe(403);
   });
 
-  it("CSRF middleware allows POST when the request has no session_id cookie at all — unauthenticated public endpoints like sendMagicLink must not be gated by CSRF", async () => {
+  it("CSRF middleware allows POST when the request has no session_id cookie at all — unauthenticated public endpoints like login must not be gated by CSRF", async () => {
     const app = buildTestApp();
 
-    // Unauthenticated public POST (e.g. initial magic-link request).
+    // Unauthenticated public POST (e.g. initial login request).
     // No cookie → nothing to protect → must pass without the sentinel.
     const res = await app.request("/api/store/order", {
       method: "POST",
@@ -198,11 +198,11 @@ describe("CSRF middleware — Hono layer for non-tRPC routes", () => {
     // Default behaviour — skipPathPrefixes defaults to ["/api/trpc/"].
     const app = new Hono();
     app.use("*", createCsrfMiddleware()); // default skip list
-    app.all("/api/trpc/auth.sendMagicLink", (c) => c.json({ ok: true }));
+    app.all("/api/trpc/auth.login", (c) => c.json({ ok: true }));
 
     // A POST that WOULD be blocked by the Hono layer (cookie, no XRW)
     // must pass through because tRPC handles CSRF itself.
-    const res = await app.request("/api/trpc/auth.sendMagicLink", {
+    const res = await app.request("/api/trpc/auth.login", {
       method: "POST",
       headers: {
         "cookie": "session_id=real-browser-session",

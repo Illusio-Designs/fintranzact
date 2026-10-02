@@ -26,6 +26,8 @@ interface PaginationProps {
   placement?: "top" | "bottom";
   /** Extra controls on the top bar's left, e.g. the Sort menu. */
   children?: ReactNode;
+  /** Keep the bottom bar (count and rows per page) even when the list fits on one page. */
+  alwaysShow?: boolean;
   className?: string;
 }
 
@@ -55,9 +57,10 @@ export function Pagination({
   pageSizeOptions = PAGE_SIZE_OPTIONS,
   placement = "bottom",
   children,
+  alwaysShow = false,
   className,
 }: PaginationProps) {
-  const canResize = !!onPageSizeChange && total > Math.min(...pageSizeOptions);
+  const canResize = !!onPageSizeChange && (alwaysShow || total > Math.min(...pageSizeOptions));
   if (total === 0 || (totalPages <= 1 && !canResize && !children)) return null;
 
   const start = (page - 1) * pageSize + 1;

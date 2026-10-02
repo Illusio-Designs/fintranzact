@@ -18,8 +18,7 @@ import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
+import { ListCard } from "@/components/ui/ListCard";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 import { usePageSize } from "@/hooks/usePageSize";
 import {
@@ -552,135 +551,109 @@ function AutomatedInvoicesPage() {
       )}
 
       {/* Filters + Table */}
-      <div className="card mb-5 overflow-clip">
-        <div className="px-4 py-3 border-b border-border-light">
-          {/* The status tabs scroll sideways on phones instead of wrapping. */}
-          <div className="min-w-0 max-w-full overflow-x-auto">
-            <PillTabs
-              tabs={STATUS_TABS}
-              value={statusFilter}
-              onChange={setStatusFilter}
+      <ListCard
+        className="mb-5"
+        tabs={{ tabs: STATUS_TABS, value: statusFilter, onChange: setStatusFilter, label: "Template status" }}
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        empty={
+          !filteredTemplates.length && !isFetching ? (
+            <EmptyState
+              title="No automated invoices"
+              description={
+                search || statusFilter
+                  ? "No templates match your filters"
+                  : "Create your first recurring invoice template to automate billing"
+              }
+              action={
+                !search && !statusFilter ? (
+                  <button className="btn-primary text-sm" onClick={openAdd}>
+                    + Create Template
+                  </button>
+                ) : undefined
+              }
             />
-          </div>
-        </div>
-
-        {/* Table */}
-        {isLoading ? (
-          <TemplateTableSkeleton />
-        ) : !filteredTemplates.length && !isFetching ? (
-          <EmptyState
-            title="No automated invoices"
-            description={
-              search || statusFilter
-                ? "No templates match your filters"
-                : "Create your first recurring invoice template to automate billing"
-            }
-            action={
-              !search && !statusFilter ? (
-                <button className="btn-primary text-sm" onClick={openAdd}>
-                  + Create Template
-                </button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination
-              placement="top"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-            />
-            <TableScroll ref={tableRef}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Party</th>
-                    <th>Frequency</th>
-                    <th>Status</th>
-                    <th>Next Run</th>
-                    <th className="text-right">Runs</th>
-                    <th className="text-right"><span className="sr-only">Actions</span></th>
+          ) : undefined
+        }
+      >
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Party</th>
+                  <th>Frequency</th>
+                  <th>Status</th>
+                  <th>Next Run</th>
+                  <th className="text-right">Runs</th>
+                  <th className="text-right"><span className="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTemplates.map((template: any) => (
+                  <tr
+                    key={template.id}
+                    className="cursor-pointer"
+                    onClick={() => setDetailTemplateId(template.id)}
+                  >
+                    <td className="text-text-primary font-medium max-w-[200px] truncate">
+                      {template.name || "Untitled"}
+                    </td>
+                    <td className="text-text-secondary truncate max-w-[150px]">
+                      {template.partyName || "—"}
+                    </td>
+                    <td className="text-text-secondary whitespace-nowrap text-xs">
+                      {frequencyLabel(template.frequency, template.customIntervalDays)}
+                    </td>
+                    <td>
+                      <Badge size="sm" color={statusColor(template.status)} className="uppercase">
+                        {template.status}
+                      </Badge>
+                    </td>
+                    <td className="text-text-secondary whitespace-nowrap text-xs">
+                      {template.nextRunDate ? formatDate(template.nextRunDate) : "—"}
+                    </td>
+                    <td className="text-right tabular-nums text-text-secondary text-xs">
+                      {template.totalRuns ?? 0}
+                      {template.maxRuns ? ` / ${template.maxRuns}` : ""}
+                    </td>
+                    <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                      {/* One menu instead of icons that only showed on hover. */}
+                      <RowActions
+                        label={template.name || "Untitled"}
+                        items={tidyMenu([
+                          { label: "Open", hint: "Enter", onSelect: () => setDetailTemplateId(template.id) },
+                          template.status === "active" && {
+                            label: "Pause",
+                            disabled: pauseMutation.isPending,
+                            onSelect: () => pauseMutation.mutate({ id: template.id }),
+                          },
+                          template.status === "paused" && {
+                            label: "Resume",
+                            disabled: resumeMutation.isPending,
+                            onSelect: () => resumeMutation.mutate({ id: template.id }),
+                          },
+                          (template.status === "active" || template.status === "paused") && {
+                            label: "Run now",
+                            disabled: runNowMutation.isPending,
+                            onSelect: () => runNowMutation.mutate({ id: template.id }),
+                          },
+                          { label: "Edit", onSelect: () => openEdit(template) },
+                          { kind: "separator" },
+                          {
+                            label: "Delete template",
+                            danger: true,
+                            onSelect: () => deleteConfirm.requestDelete(template.id, template.name || "Untitled"),
+                          },
+                        ])}
+                      />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filteredTemplates.map((template: any) => (
-                    <tr
-                      key={template.id}
-                      className="cursor-pointer"
-                      onClick={() => setDetailTemplateId(template.id)}
-                    >
-                      <td className="text-text-primary font-medium max-w-[200px] truncate">
-                        {template.name || "Untitled"}
-                      </td>
-                      <td className="text-text-secondary truncate max-w-[150px]">
-                        {template.partyName || "—"}
-                      </td>
-                      <td className="text-text-secondary whitespace-nowrap text-xs">
-                        {frequencyLabel(template.frequency, template.customIntervalDays)}
-                      </td>
-                      <td>
-                        <Badge size="sm" color={statusColor(template.status)} className="uppercase">
-                          {template.status}
-                        </Badge>
-                      </td>
-                      <td className="text-text-secondary whitespace-nowrap text-xs">
-                        {template.nextRunDate ? formatDate(template.nextRunDate) : "—"}
-                      </td>
-                      <td className="text-right tabular-nums text-text-secondary text-xs">
-                        {template.totalRuns ?? 0}
-                        {template.maxRuns ? ` / ${template.maxRuns}` : ""}
-                      </td>
-                      <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                        {/* One menu instead of icons that only showed on hover. */}
-                        <RowActions
-                          label={template.name || "Untitled"}
-                          items={tidyMenu([
-                            { label: "Open", hint: "Enter", onSelect: () => setDetailTemplateId(template.id) },
-                            template.status === "active" && {
-                              label: "Pause",
-                              disabled: pauseMutation.isPending,
-                              onSelect: () => pauseMutation.mutate({ id: template.id }),
-                            },
-                            template.status === "paused" && {
-                              label: "Resume",
-                              disabled: resumeMutation.isPending,
-                              onSelect: () => resumeMutation.mutate({ id: template.id }),
-                            },
-                            (template.status === "active" || template.status === "paused") && {
-                              label: "Run now",
-                              disabled: runNowMutation.isPending,
-                              onSelect: () => runNowMutation.mutate({ id: template.id }),
-                            },
-                            { label: "Edit", onSelect: () => openEdit(template) },
-                            { kind: "separator" },
-                            {
-                              label: "Delete template",
-                              danger: true,
-                              onSelect: () => deleteConfirm.requestDelete(template.id, template.name || "Untitled"),
-                            },
-                          ])}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+                ))}
+              </tbody>
+            </table>
+      </ListCard>
 
       {/* Create / Edit SlideOver */}
       <SlideOver
@@ -1291,19 +1264,3 @@ function DetailField({ label, value }: { label: string; value: string }) {
 
 // ── Skeleton ─────────────────────────────────────────────────────
 
-function TemplateTableSkeleton() {
-  return (
-    <div className="divide-y divide-border-light">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="px-4 py-3 flex items-center gap-4">
-          <div className="h-3.5 w-32 skeleton rounded" />
-          <div className="h-3.5 w-24 skeleton rounded" />
-          <div className="h-5 w-16 skeleton rounded" />
-          <div className="h-5 w-14 skeleton rounded" />
-          <div className="h-3.5 w-20 skeleton rounded" />
-          <div className="h-3.5 w-12 skeleton rounded ml-auto" />
-        </div>
-      ))}
-    </div>
-  );
-}

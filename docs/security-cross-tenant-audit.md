@@ -48,7 +48,7 @@ The key isolation boundary is `ctx.db`: it is already scoped to the authenticate
 
 ### `auth.ts` — No Issues
 
-All procedures use `publicProcedure` or `protectedProcedure`. Email-change confirmation reads the `userId` from the server-side token record, never from client input. Magic link tokens use SHA-256 hashing and atomic mark-used updates to prevent replay.
+All procedures use `publicProcedure` or `protectedProcedure`. Email-change confirmation reads the `userId` from the server-side token record, never from client input. Email-change tokens use SHA-256 hashing and atomic mark-used updates to prevent replay.
 
 ### `tenant.ts` — No Issues
 

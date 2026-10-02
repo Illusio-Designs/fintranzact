@@ -10,6 +10,7 @@ import { TeamTab } from "@/components/settings/TeamTab";
 import { SalesTargetsTab } from "@/components/settings/SalesTargetsTab";
 import { DataTab } from "@/components/settings/DataTab";
 import { AccountTab } from "@/components/settings/AccountTab";
+import { BillingTab } from "@/components/settings/BillingTab";
 import { StoreTab } from "@/components/settings/StoreTab";
 import { POSTab } from "@/components/settings/POSTab";
 import { BarcodesTab } from "@/components/settings/BarcodesTab";
@@ -261,6 +262,7 @@ function SettingsPage() {
           {tab === "targets" && <SalesTargetsTab />}
           {tab === "data" && <DataTab />}
           {tab === "account" && <AccountTab />}
+          {tab === "billing" && isOwner && <BillingTab />}
           {tab === "store" && <StoreTab />}
           {tab === "pos" && biz && <POSTab biz={biz} />}
           {tab === "barcodes" && <BarcodesTab />}

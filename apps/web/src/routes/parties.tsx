@@ -2,10 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { usePageSearch } from "@/lib/page-search";
-import { useSaveTick } from "@/hooks/useSaveTick";
-import { SavedTick } from "@/components/ui/SavedTick";
 import { trpc } from "@/lib/trpc";
-import { useFlashRows } from "@/hooks/useFlashRows";
 import { formatCurrency, formatDate, getInitials, cn, downloadCSV, toISOString } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -42,11 +39,11 @@ import { SegmentedControl, PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { LinkButton } from "@/components/ui/LinkButton";
-import { TableSkeleton } from "@/components/ui/Skeleton";
+import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
-import { Pagination } from "@/components/ui/Pagination";
-import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { ListCard, FilterField } from "@/components/ui/ListCard";
+import { SortableTh, type SortOption, type SortState } from "@/components/ui/Table";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -67,16 +64,7 @@ export const Route = createFileRoute("/parties")({
   component: PartiesPage,
 });
 
-const PARTY_TYPE_TABS = [
-  { value: "all", label: "All" },
-  { value: "customer", label: "Customers" },
-  { value: "supplier", label: "Suppliers" },
-];
-
-const PARTY_STATUS_FILTERS = [
-  { value: "outstanding", label: "Outstanding" },
-  { value: "overdue", label: "Overdue" },
-];
+type PartyStatus = "all" | "outstanding" | "overdue";
 
 type PartySortKey = "name" | "balance";
 
@@ -93,7 +81,8 @@ function countFilled(...values: string[]): number {
 
 function PartiesPage() {
   const [search] = usePageSearch("Search by name…");
-  const [partyFilter, setPartyFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "customer" | "supplier">("all");
+  const [statusFilter, setStatusFilter] = useState<PartyStatus>("all");
   const [sort, setSort] = useState<SortState<PartySortKey>>({ key: "name", dir: "asc" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = usePageSize("parties", 25);
@@ -106,26 +95,35 @@ function PartiesPage() {
   const debouncedSearch = useDebounce(search, 300);
 
   // Back to page 1 whenever search, filter, sort or rows per page change
-  useEffect(() => { setPage(1); }, [debouncedSearch, partyFilter, sort.key, sort.dir, pageSize]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter, statusFilter, sort.key, sort.dir, pageSize]);
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const listInput = {
+  const { data, isFetching, isLoading } = trpc.party.list.useQuery({
     search: debouncedSearch || undefined,
-    filter: partyFilter as any,
+    type: typeFilter === "all" ? undefined : typeFilter,
+    filter: statusFilter === "all" ? undefined : statusFilter,
     sortBy: sort.key,
     sortDir: sort.dir,
     page,
     limit: pageSize,
-  };
-  const { data, isFetching, isLoading, isPlaceholderData } = trpc.party.list.useQuery(listInput, {
+  }, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
+  // Tab counts ignore search and the balance filter, so they show what each tab holds.
+  const { data: allCount } = trpc.party.list.useQuery({ page: 1, limit: 1 });
+  const { data: customerCount } = trpc.party.list.useQuery({ type: "customer", page: 1, limit: 1 });
+  const { data: supplierCount } = trpc.party.list.useQuery({ type: "supplier", page: 1, limit: 1 });
+  const typeTabs = [
+    { value: "all", label: "All", count: allCount?.total },
+    { value: "customer", label: "Customers", count: customerCount?.total },
+    { value: "supplier", label: "Suppliers", count: supplierCount?.total },
+  ];
+  const hasFilters = typeFilter !== "all" || statusFilter !== "all" || debouncedSearch !== "";
+
   const rows = data?.data ?? [];
-  // Rows just added or saved glow green for a moment.
-  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   // Deleting the last row of the last page: step back a page.
@@ -142,7 +140,8 @@ function PartiesPage() {
       while (hasMore) {
         const result = await utils.party.list.fetch({
           search: debouncedSearch || undefined,
-          filter: partyFilter as any,
+          type: typeFilter === "all" ? undefined : typeFilter,
+          filter: statusFilter === "all" ? undefined : statusFilter,
           page: pg,
           limit: 100,
         });
@@ -161,7 +160,7 @@ function PartiesPage() {
         p.balance || "0",
       ]);
 
-      downloadCSV(`parties_${partyFilter}`, headers, rows);
+      downloadCSV(`parties_${typeFilter}${statusFilter === "all" ? "" : `_${statusFilter}`}`, headers, rows);
     } finally {
       setExporting(false);
     }
@@ -209,49 +208,9 @@ function PartiesPage() {
         }
       />
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="min-w-0 max-w-full overflow-x-auto">
-          <PillTabs
-            tabs={PARTY_TYPE_TABS}
-            value={["all", "customer", "supplier"].includes(partyFilter) ? partyFilter : "all"}
-            onChange={setPartyFilter}
-          />
-        </div>
-        <div className="ml-auto flex min-w-0 max-w-full items-center gap-1.5">
-          <div className="min-w-0 max-w-full overflow-x-auto">
-            <PillTabs
-              tabs={PARTY_STATUS_FILTERS}
-              value={partyFilter}
-              onChange={(v) => setPartyFilter(partyFilter === v ? "all" : v)}
-            />
-          </div>
-          {data && data.total > 0 && (
-            <button
-              onClick={exportPartiesCSV}
-              disabled={exporting}
-              className="btn-secondary text-xs px-3 py-1.5 inline-flex items-center gap-1.5 shrink-0"
-            >
-              {exporting ? (
-                <>
-                  <Spinner size="xs" />
-                  Preparing…
-                </>
-              ) : (
-                <>
-                  <Icon icon={Download04Icon} size={14} />
-                  Export CSV
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Table */}
       {isLoading ? (
-        <TableSkeleton columns={[{ label: "Name", kind: "pair" }, { label: "Type", kind: "badge" }, { label: "Phone" }, { label: "GSTIN", kind: "mono" }, { label: "Balance", align: "right" }, { align: "right", kind: "button" }]} rows={5} />
-      ) : !rows.length && !isFetching ? (
+        <SkeletonRows count={5} height="h-12" />
+      ) : !data?.total && !isFetching && !hasFilters ? (
         <EmptyState
           title="No parties found"
           description="Add your first customer or supplier to get started."
@@ -263,80 +222,103 @@ function PartiesPage() {
           }
         />
       ) : (
-        <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
-          <Pagination
-            placement="top"
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            total={total}
-            pageSize={pageSize}
-          >
-            <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
-          </Pagination>
-          <TableScroll ref={tableRef}>
-            <table className="data-table w-full">
-              <thead>
-                <tr>
-                  <SortableTh sortKey="name" sort={sort} onSort={setSort}>Name</SortableTh>
-                  <th>Type</th>
-                  <th>Phone</th>
-                  <th>GSTIN</th>
-                  <SortableTh sortKey="balance" sort={sort} onSort={setSort} firstDir="desc" align="right">Balance</SortableTh>
-                  <th className="text-right"><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((party) => (
-                  <tr
-                    key={party.id}
-                    className={cn("cursor-pointer", flash.has(party.id) && "animate-row-flash")}
-                    onClick={() => setSelectedPartyId(party.id)}
-                  >
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white ${party.type === "customer" ? "bg-emerald-500" : "bg-blue-500"}`}
-                        >
-                          {getInitials(party.name)}
-                        </div>
-                        <span className="font-medium">{party.name}</span>
+        <ListCard
+          tabs={{ tabs: typeTabs, value: typeFilter, onChange: (v) => setTypeFilter(v as typeof typeFilter), label: "Party type" }}
+          filters={
+            <FilterField label="Balance" value={statusFilter} onChange={(v) => setStatusFilter(v as PartyStatus)}>
+              <option value="all">All balances</option>
+              <option value="outstanding">Outstanding</option>
+              <option value="overdue">Has overdue invoices</option>
+            </FilterField>
+          }
+          sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort }}
+          onClearFilters={hasFilters ? () => { setTypeFilter("all"); setStatusFilter("all"); } : undefined}
+          actions={
+            data && data.total > 0 ? (
+              <button
+                onClick={exportPartiesCSV}
+                disabled={exporting}
+                className="btn-secondary inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"
+              >
+                {exporting ? (
+                  <>
+                    <Spinner size="xs" />
+                    Preparing…
+                  </>
+                ) : (
+                  <>
+                    <Icon icon={Download04Icon} size={14} />
+                    Export CSV
+                  </>
+                )}
+              </button>
+            ) : undefined
+          }
+          pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+          fetching={isFetching}
+          tableRef={tableRef}
+          empty={
+            !rows.length ? (
+              <div className="px-4 py-14 text-center">
+                <p className="text-sm font-semibold text-text-primary">No parties match these filters</p>
+                <p className="mt-1 text-xs text-text-tertiary">Try another tab or search, or clear the filters.</p>
+              </div>
+            ) : undefined
+          }
+        >
+          <table className="data-table w-full">
+            <thead>
+              <tr>
+                <SortableTh sortKey="name" sort={sort} onSort={setSort}>Name</SortableTh>
+                <th>Type</th>
+                <th>Phone</th>
+                <th>GSTIN</th>
+                <SortableTh sortKey="balance" sort={sort} onSort={setSort} firstDir="desc" align="right">Balance</SortableTh>
+                <th className="text-right"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((party) => (
+                <tr
+                  key={party.id}
+                  className="cursor-pointer"
+                  onClick={() => setSelectedPartyId(party.id)}
+                >
+                  <td>
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white ${party.type === "customer" ? "bg-emerald-500" : "bg-blue-500"}`}
+                      >
+                        {getInitials(party.name)}
                       </div>
-                    </td>
-                    <td className="capitalize text-text-secondary">{party.type}</td>
-                    <td className="text-text-secondary">{party.phone || "—"}</td>
-                    <td className="font-mono text-ui text-text-secondary">
-                      {party.gstin || "—"}
-                    </td>
-                    <td className="text-right tabular-nums font-medium">
-                      {party.balance && party.balance !== "0"
-                        ? formatCurrency(party.balance)
-                        : "—"}
-                    </td>
-                    <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <RowActions
-                        label={party.name}
-                        items={tidyMenu([
-                          { label: "Open", hint: "Enter", onSelect: () => setSelectedPartyId(party.id) },
-                          { kind: "separator" },
-                          { label: "Delete party", danger: true, onSelect: () => confirmDelete(party.id, party.name) },
-                        ])}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableScroll>
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            total={total}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
-          />
-        </div>
+                      <span className="font-medium">{party.name}</span>
+                    </div>
+                  </td>
+                  <td className="capitalize text-text-secondary">{party.type}</td>
+                  <td className="text-text-secondary">{party.phone || "—"}</td>
+                  <td className="font-mono text-ui text-text-secondary">
+                    {party.gstin || "—"}
+                  </td>
+                  <td className="text-right tabular-nums font-medium">
+                    {party.balance && party.balance !== "0"
+                      ? formatCurrency(party.balance)
+                      : "—"}
+                  </td>
+                  <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <RowActions
+                      label={party.name}
+                      items={tidyMenu([
+                        { label: "Open", hint: "Enter", onSelect: () => setSelectedPartyId(party.id) },
+                        { kind: "separator" },
+                        { label: "Delete party", danger: true, onSelect: () => confirmDelete(party.id, party.name) },
+                      ])}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </ListCard>
       )}
 
       {/* Add Party Modal */}
@@ -1374,18 +1356,14 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
     onError: (err) => toast.error(err.message),
   });
 
-  // The save button shows a tick before the panel closes.
-  const tick = useSaveTick();
   const createMutation = trpc.party.create.useMutation({
     onSuccess: () => {
       utils.party.list.invalidate();
       toast.success("Party created");
       // The panel stays mounted: start the next party from a blank form, not
       // with this one's phone, addresses and credit terms.
-      tick.finish(() => {
-        resetForm();
-        onClose();
-      });
+      resetForm();
+      onClose();
     },
     onError: (err) => {
       toast.error(err.message);
@@ -1397,7 +1375,7 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
       utils.party.list.invalidate();
       if (existing) utils.party.getById.invalidate({ id: existing.id });
       toast.success("Party updated");
-      tick.finish(onClose);
+      onClose();
     },
     onError: (err) => {
       toast.error(err.message);
@@ -1558,11 +1536,11 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
             Cancel
           </button>
           <button
-            className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
+            className="btn-primary"
             onClick={handleCreate}
-            disabled={saving || tick.saved || !name.trim()}
+            disabled={saving || !name.trim()}
           >
-            {tick.saved ? <SavedTick label={existing ? "Saved" : "Created"} /> : existing
+            {existing
               ? updateMutation.isPending ? "Saving…" : "Save Changes"
               : createMutation.isPending ? "Creating…" : "Create Party"}
           </button>

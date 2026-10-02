@@ -4,9 +4,9 @@
  *
  * WHY THIS FILE EXISTS:
  * The Android app hit an "Unable to transform response from server"
- * error on `auth.sendMagicLink` because:
+ * error on `auth.login` because:
  *
- *   1. After a successful magic-link verification the API sets a
+ *   1. After a successful login the API sets a
  *      `session_id` cookie via Set-Cookie.
  *   2. React Native's native HTTP stack (URLSession / OkHttp) stores
  *      that cookie in a per-app cookie jar and replays it on every
@@ -73,7 +73,7 @@ describe("mobile tRPC client header posture — CSRF sentinel", () => {
     expect(headers["X-Requested-With"]).toBe("fintranzact");
   });
 
-  it("mobile tRPC client sends X-Requested-With even when no auth token is cached — the first anonymous call (auth.sendMagicLink) must pass the CSRF gate, which is exactly the call that was failing on Android", () => {
+  it("mobile tRPC client sends X-Requested-With even when no auth token is cached — the first anonymous call (auth.login) must pass the CSRF gate, which is exactly the call that was failing on Android", () => {
     // No token set in auth module cache → simulates a fresh install.
     const { commonOptions } = require("../lib/trpc");
     const headers = commonOptions().headers();

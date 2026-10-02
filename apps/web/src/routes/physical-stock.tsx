@@ -7,9 +7,8 @@ import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { InputField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ListCard } from "@/components/ui/ListCard";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
 import { usePageSize } from "@/hooks/usePageSize";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { WarehouseSelect, formatQty, unitKey, useWarehouses } from "@/components/inventory/shared";
@@ -194,18 +193,18 @@ function HomeScreen({ onStart, onOpen }: { onStart: (warehouseId: string) => voi
         </button>
       </div>
 
-      <div className="card overflow-clip">
-        <div className="border-b border-border-light px-4 py-3">
-          <h2 className="text-sm font-semibold text-text-primary">Past counts</h2>
-        </div>
-        {!data ? (
-          <SkeletonRows />
-        ) : data.data.length === 0 ? (
-          <EmptyState title="No counts yet" description="Finished scans and their reports are listed here." />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination placement="top" page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={pageSize} />
-            <TableScroll ref={tableRef}>
+      <ListCard
+        title="Past counts" titleCount={total}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        loading={!data}
+        fetching={isFetching}
+        tableRef={tableRef}
+        empty={
+          data && data.data.length === 0 ? (
+            <EmptyState title="No counts yet" description="Finished scans and their reports are listed here." />
+          ) : undefined
+        }
+      >
               <table className="data-table w-full">
                 <thead>
                   <tr>
@@ -219,7 +218,7 @@ function HomeScreen({ onStart, onOpen }: { onStart: (warehouseId: string) => voi
                   </tr>
                 </thead>
                 <tbody>
-                  {data.data.map((c) => (
+                  {(data?.data ?? []).map((c) => (
                     <tr key={c.id} className="cursor-pointer" onClick={() => onOpen(c.id)}>
                       <td>{formatDate(c.endedAt)}</td>
                       <td className="font-medium text-text-primary">{c.warehouseName}</td>
@@ -243,18 +242,7 @@ function HomeScreen({ onStart, onOpen }: { onStart: (warehouseId: string) => voi
                   ))}
                 </tbody>
               </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+      </ListCard>
     </div>
   );
 }

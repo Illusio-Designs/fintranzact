@@ -150,7 +150,7 @@ describe("SECURITY — confirmEmailChange reads userId from token, not from clie
 
   it("documents that the email-change token stores userId server-side (not in client URL)", () => {
     // This is a specification test: it asserts the design intent documented in auth.ts.
-    // The actual DB call is: insert(magicLinkTokens).values({ userId: ctx.user!.id, ... })
+    // The actual DB call is: insert(emailChangeTokens).values({ userId: ctx.user!.id, ... })
     // And confirmEmailChange: if (!tokenRow.userId) throw FORBIDDEN
     //
     // We model this as a pure function test to avoid needing a real DB.
@@ -168,13 +168,13 @@ describe("SECURITY — confirmEmailChange reads userId from token, not from clie
     expect(result.newEmail).toBe("new@example.com");
   });
 
-  it("rejects tokens that do not have a bound userId (e.g. regular magic link used for email-change)", () => {
+  it("rejects tokens that do not have a bound userId (e.g. token without a bound user used for email-change)", () => {
     function simulateConfirmEmailChange(tokenRow: { userId: string | null; email: string }) {
       if (!tokenRow.userId) throw new Error("Invalid or expired link");
       return { updatedUserId: tokenRow.userId, newEmail: tokenRow.email };
     }
 
-    // A magic link token (no userId bound) cannot be reused for email change
+    // A token with no userId bound cannot be reused for email change
     expect(() =>
       simulateConfirmEmailChange({ userId: null, email: "attacker@evil.com" })
     ).toThrow("Invalid or expired link");
@@ -262,11 +262,11 @@ describe("SECURITY — complete role-to-permission matrix for audit trail", () =
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECURITY — magic link token hashing
+// SECURITY — email-change token hashing
 // ─────────────────────────────────────────────────────────────────────────────
-describe("SECURITY — magic link token architecture (raw token never stored in DB)", () => {
+describe("SECURITY — email-change token architecture (raw token never stored in DB)", () => {
   /**
-   * AUDIT FINDING: If the raw magic link token were stored in the database, a
+   * AUDIT FINDING: If the raw email-change token were stored in the database, a
    * SQL injection or a DB dump would allow anyone to log in as any user. The
    * auth router hashes the token with SHA-256 before storing it.
    *

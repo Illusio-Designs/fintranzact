@@ -85,12 +85,12 @@ export const partyRouter = router({
       const conditions = [eq(parties.businessId, ctx.businessId)];
 
       // Support both legacy `type` param and new `filter` param
-      const effectiveFilter = input.filter ?? (input.type ? input.type : "all");
-      if (effectiveFilter === "customer") {
-        conditions.push(eq(parties.type, "customer"));
-      } else if (effectiveFilter === "supplier") {
-        conditions.push(eq(parties.type, "supplier"));
-      } else if (effectiveFilter === "outstanding") {
+      // The type (customer / supplier) and the balance status (outstanding /
+      // overdue) are separate choices, so both can apply at once.
+      const effectiveFilter = input.filter ?? "all";
+      const typeFilter = input.type ?? (effectiveFilter === "customer" || effectiveFilter === "supplier" ? effectiveFilter : null);
+      if (typeFilter) conditions.push(eq(parties.type, typeFilter));
+      if (effectiveFilter === "outstanding") {
         // Parties where opening_balance + unpaid invoice balance > 0
         conditions.push(sql`(
           ${parties.openingBalance}::numeric + COALESCE((

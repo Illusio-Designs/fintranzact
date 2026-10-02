@@ -6,6 +6,7 @@
     <title>Fintranzact — Professional Billing for Indian Businesses</title>
     <meta name="description" content="Fast, precise, GST-compliant invoicing and business management. Built for Indian businesses that mean business." />
     <meta name="theme-color" content="#3b5eaa" />
+    <link rel="canonical" href="https://fintranzact-web.vercel.app/" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
@@ -42,7 +43,14 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Shown until the app loads, so the page is never blank -->
+      <div role="status" aria-live="polite" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'DM Sans',system-ui,sans-serif;color:#64748b">
+        <div style="width:34px;height:34px;border:3px solid #dbe4f5;border-top-color:#3b5eaa;border-radius:50%;animation:ftz-spin .8s linear infinite"></div>
+        <span style="font-size:14px">Loading Fintranzact…</span>
+      </div>
+      <style>@keyframes ftz-spin{to{transform:rotate(360deg)}}</style>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

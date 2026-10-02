@@ -22,9 +22,7 @@
 | auth.register | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.requestEmailChange | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.revokeSession | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
-| auth.sendMagicLink | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.updateName | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
-| auth.verifyMagicLink | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | bankAccount.addTransaction | mutation | authorized | create:BankTransaction | ✓ | ✓ | ✗ | ✗ | ✓ |
 | bankAccount.create | mutation | authorized | create:BankAccount | ✓ | ✓ | ✗ | ✗ | ✓ |
 | bankAccount.delete | mutation | authorized | delete:BankAccount | ✓ | ✓ | ✗ | ✗ | ✓ |
@@ -69,8 +67,15 @@
 | batch.delete | mutation | authorized | delete:Item | ✓ | ✓ | ✗ | ✗ | ✗ |
 | batch.list | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ |
 | batch.update | mutation | authorized | update:Item | ✓ | ✓ | ✓ | ✗ | ✗ |
+| billing.cancelSubscription | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| billing.changePlan | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | billing.config | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | billing.demoCheckout | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| billing.overview | query | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| billing.subscribeAddon | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| billing.subscribePlan | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| billing.updateBillingDetails | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| billing.verifyCheckout | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | business.addMember | mutation | tenant | — (+ requireTenantAdmin) | ✓ | ✓ | ✗ | ✗ | ✗ |
 | business.auditTrail | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | business.canCreate | query | tenant | — | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -267,6 +272,7 @@
 | payment.untrackedPayments | query | authorized | read:Payment | ✓ | ✓ | ✓ | ✓ | ✓ |
 | payment.update | mutation | authorized | update:Payment | ✓ | ✓ | ✓ | ✓ | ✓ |
 | plan.list | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| platform.billingSummary | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.deletePayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.me | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | platform.overview | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -282,6 +288,7 @@
 | platform.roadmapUpdate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.subscriptions | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenant | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenants | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.updatePartner | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |

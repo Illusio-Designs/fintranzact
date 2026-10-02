@@ -27,7 +27,7 @@ function detectAuthMethod(req: Request): "cookie" | "bearer" {
   return client === "mobile" || client === "desktop" ? "bearer" : "cookie";
 }
 
-/** Mirrors session insert values computed in auth.ts for login/register/verifyMagicLink */
+/** Mirrors session insert values computed in auth.ts for login/register */
 function computeSessionInsertValues(authMethod: "cookie" | "bearer", now: number) {
   const expiresAt = new Date(now + (authMethod === "bearer" ? BEARER_SESSION_DURATION_MS : COOKIE_SESSION_DURATION_MS));
   const maxExpiresAt = authMethod === "bearer" ? new Date(now + BEARER_MAX_SESSION_DURATION_MS) : null;

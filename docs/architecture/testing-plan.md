@@ -499,19 +499,19 @@ Scenario: Login with wrong password throws UNAUTHORIZED
   When: auth.login with wrong password
   Then: Throws UNAUTHORIZED (not exposing which field is wrong)
 
-Scenario: Magic link token is hashed in storage
-  When: auth.requestMagicLink called
-  Then: magicLinkTokens row has tokenHash (64-char hex), not the raw token
+Scenario: Email-change token is hashed in storage
+  When: auth.requestEmailChange called
+  Then: emailChangeTokens row has tokenHash (64-char hex), not the raw token
 
-Scenario: Magic link is single-use
-  Given: A valid magic link token
-  When: auth.verifyMagicLink called twice with same token
-  Then: First call succeeds, second call throws UNAUTHORIZED
+Scenario: Email-change token is single-use
+  Given: A valid email-change token
+  When: auth.confirmEmailChange called twice with same token
+  Then: First call succeeds, second call throws BAD_REQUEST
 
-Scenario: Expired magic link is rejected
+Scenario: Expired email-change token is rejected
   Given: A token with expiresAt in the past
-  When: auth.verifyMagicLink called
-  Then: Throws UNAUTHORIZED
+  When: auth.confirmEmailChange called
+  Then: Throws BAD_REQUEST
 
 Scenario: Session cache is invalidated after logout
   Given: A user with a cached session
@@ -746,12 +746,9 @@ E2E tests require a running API with a seeded database. Use a dedicated test use
 **`auth.spec.ts`:**
 
 ```
-Magic link login flow:
+Password login flow:
   - Navigate to /login
-  - Enter email, submit form
-  - Observe "check your email" confirmation state
-  - (In CI: use a test endpoint that directly returns the token)
-  - Navigate to /verify?token=...
+  - Enter email and password, submit form
   - Assert redirect to dashboard
   - Assert user name appears in nav
 
@@ -1179,7 +1176,7 @@ test-e2e:
 |---|---|---|
 | `packages/shared` | Nothing | Pure functions, no I/O |
 | `packages/api` unit | Nothing | In-memory `defineAbilityFor` |
-| `packages/api` integration | Email service (nodemailer/SMTP), magic link delivery | Real PostgreSQL via transaction rollback |
+| `packages/api` integration | Email service (nodemailer/SMTP), email-change link delivery | Real PostgreSQL via transaction rollback |
 | `apps/web` component | tRPC client (via MSW or vi.mock), router | DOM interactions, ARIA, axe |
 | `apps/web` E2E | Nothing | Full stack (real API + real DB) |
 | `apps/mobile` stores | `expo-secure-store`, `expo-local-authentication` | Store state machines |

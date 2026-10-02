@@ -75,7 +75,6 @@ export { HELP_PAGE_PATHS, isHelpPath } from "./help-paths";
 export const AUTH_PUBLIC_PATHS = [
   "/login",
   "/register",
-  "/auth/verify",
   "/auth/complete-profile",
   "/auth/verify-email-change",
   "/invite",

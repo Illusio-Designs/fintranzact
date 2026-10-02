@@ -1,5 +1,5 @@
 // ── Email service abstraction ──────────────────────────────────
-// Dev: prints magic link to console (no setup needed)
+// Dev: prints the email-change link to console (no setup needed)
 // Prod: sends via Resend API (no npm dep — raw fetch)
 
 function escapeHtml(str: string): string {
@@ -23,7 +23,7 @@ export interface EnquiryEmail {
 }
 
 interface EmailService {
-  sendMagicLink(to: string, magicLinkUrl: string, deepLinkUrl?: string, isNewUser?: boolean): Promise<void>;
+  sendEmailChangeLink(to: string, url: string): Promise<void>;
   sendInvitation(to: string, inviteUrl: string, businessName: string, inviterName: string | null): Promise<void>;
   sendPartnerApproved(to: string, details: PartnerApprovedEmail): Promise<void>;
   sendEnquiry(enquiry: EnquiryEmail): Promise<void>;
@@ -115,17 +115,16 @@ class ConsoleEmailService implements EmailService {
     console.log(`\n[email] Partner approved: ${to}\n${partnerApprovedText(details)}\n`);
   }
 
-  async sendMagicLink(to: string, magicLinkUrl: string, deepLinkUrl?: string, isNewUser?: boolean): Promise<void> {
+  async sendEmailChangeLink(to: string, url: string): Promise<void> {
     if (process.env.NODE_ENV === "production") {
       console.error("[email] FATAL: No email service configured for production. Set RESEND_API_KEY.");
       throw new Error("Email service not configured");
     }
     console.log("");
     console.log("╔══════════════════════════════════════════════════════════╗");
-    console.log(`║  ${isNewUser ? "WELCOME" : "Magic link"} for ${to.padEnd(isNewUser ? 36 : 40)}║`);
+    console.log(`║  Confirm new email for ${to.padEnd(34)}║`);
     console.log("╠══════════════════════════════════════════════════════════╣");
-    console.log(`║  Primary:   ${magicLinkUrl}`);
-    if (deepLinkUrl) console.log(`║  Secondary: ${deepLinkUrl}`);
+    console.log(`║  Link:      ${url}`);
     console.log("╚══════════════════════════════════════════════════════════╝");
     console.log("");
   }
@@ -181,55 +180,18 @@ class ResendEmailService implements EmailService {
     private fromAddress: string,
   ) {}
 
-  async sendMagicLink(to: string, magicLinkUrl: string, deepLinkUrl?: string, isNewUser?: boolean): Promise<void> {
-    // Secondary link: when primary is the web URL, secondary is the deep link
-    // (for desktop/mobile users). When primary is the deep link, secondary is the web URL.
-    const isSecondaryWeb = deepLinkUrl?.startsWith("http");
-    const secondaryLabel = isSecondaryWeb ? "Open in browser instead" : "Using the desktop app? Open in Fintranzact";
-    const deepLinkHtml = deepLinkUrl
-      ? `<tr><td style="padding: 0 40px;"><table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td style="padding: 4px 0 0 0; text-align: center;"><p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; line-height: 20px; color: #6b7280;"><a href="${escapeHtml(deepLinkUrl)}" style="color: #4f46e5; text-decoration: underline; font-weight: 500;">${secondaryLabel}</a></p></td></tr></table></td></tr>`
-      : "";
+  async sendEmailChangeLink(to: string, url: string): Promise<void> {
+    const subject = "Confirm your new email address";
+    const preheader = "Confirm this address for your Fintranzact account. This link expires in 15 minutes.";
 
-    const subject = isNewUser ? "Welcome to Fintranzact" : "Sign in to Fintranzact";
-    const preheader = isNewUser
-      ? "Your business deserves pakka hisaab. Set up your account and start invoicing in under 2 minutes."
-      : "Sign in to your Fintranzact account. This link expires in 15 minutes.";
-
-    // Welcome email: feature highlights + onboarding CTA
-    // Returning user: simple sign-in CTA
-    const mainContentHtml = isNewUser
-      ? `<!-- Main content — welcome variant -->
+    const mainContentHtml = `<!-- Main content -->
 <tr><td style="padding: 28px 40px 0 40px;">
-<h1 style="margin: 0 0 12px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 22px; font-weight: 700; color: #111827; text-align: center; line-height: 28px;">Your business deserves pakka hisaab.</h1>
-<p style="margin: 0 0 20px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 15px; line-height: 24px; color: #4b5563; text-align: center;">Welcome to Fintranzact. You're one click away from professional invoicing that just works. Tap the button below to set up your business profile and send your first invoice today.</p>
-</td></tr>
-
-<!-- Feature highlights -->
-<tr><td style="padding: 0 40px 20px 40px;">
-<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f9fafb; border-radius: 10px;">
-<tr><td style="padding: 16px 20px;">
-<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
-<tr><td style="padding: 4px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 22px; color: #374151;">&#10003;&ensp;GST-compliant invoices in seconds</td></tr>
-<tr><td style="padding: 4px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 22px; color: #374151;">&#10003;&ensp;Party ledgers with &#8377; balance tracking</td></tr>
-<tr><td style="padding: 4px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 22px; color: #374151;">&#10003;&ensp;Record payments, track what's due</td></tr>
-<tr><td style="padding: 4px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 22px; color: #374151;">&#10003;&ensp;Business reports at a glance</td></tr>
-</table>
-</td></tr>
-</table>
-</td></tr>`
-      : `<!-- Main content — sign-in variant -->
-<tr><td style="padding: 28px 40px 0 40px;">
-<h1 style="margin: 0 0 12px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 22px; font-weight: 700; color: #111827; text-align: center; line-height: 28px;">Sign in to your account</h1>
-<p style="margin: 0 0 24px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 15px; line-height: 24px; color: #4b5563; text-align: center;">Tap the button below to securely sign in. This link is single-use and expires in <strong style="color: #374151;">15 minutes</strong>.</p>
+<h1 style="margin: 0 0 12px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 22px; font-weight: 700; color: #111827; text-align: center; line-height: 28px;">Confirm your new email</h1>
+<p style="margin: 0 0 24px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 15px; line-height: 24px; color: #4b5563; text-align: center;">Tap the button below to use this address for your Fintranzact account. This link is single-use and expires in <strong style="color: #374151;">15 minutes</strong>.</p>
 </td></tr>`;
 
-    const ctaLabel = isNewUser ? "Start My Setup" : "Sign in to Fintranzact";
-    const ctaLabelOutlook = isNewUser ? "Start My Setup" : "Sign in to Fintranzact";
-
-    // Reassurance line for new users only
-    const reassuranceHtml = isNewUser
-      ? `<tr><td style="padding: 12px 40px 0 40px; text-align: center;"><p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #6b7280;">Setup takes under 2 minutes. No payment required &mdash; Fintranzact is free.</p></td></tr>`
-      : "";
+    const ctaLabel = "Confirm email address";
+    const ctaLabelOutlook = "Confirm email address";
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -285,18 +247,13 @@ ${mainContentHtml}
 <tr><td style="padding: 0 40px;">
 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
 <tr><td style="text-align: center; padding: 4px 0 20px 0;">
-<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeHtml(magicLinkUrl)}" style="height:52px;v-text-anchor:middle;width:320px;" arcsize="15%" fill="t"><v:fill type="gradient" color="#4f46e5" color2="#4338ca" angle="180" /><w:anchorlock/><center style="color:#ffffff;font-family:sans-serif;font-size:16px;font-weight:bold;">${ctaLabelOutlook}</center></v:roundrect><![endif]-->
+<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeHtml(url)}" style="height:52px;v-text-anchor:middle;width:320px;" arcsize="15%" fill="t"><v:fill type="gradient" color="#4f46e5" color2="#4338ca" angle="180" /><w:anchorlock/><center style="color:#ffffff;font-family:sans-serif;font-size:16px;font-weight:bold;">${ctaLabelOutlook}</center></v:roundrect><![endif]-->
 <!--[if !mso]><!-->
-<a href="${escapeHtml(magicLinkUrl)}" target="_blank" style="display: inline-block; width: 100%; max-width: 320px; padding: 14px 32px; background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%); color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 16px; font-weight: 600; text-decoration: none; text-align: center; border-radius: 10px; box-sizing: border-box; -webkit-text-size-adjust: none; mso-hide: all;">${ctaLabel}</a>
+<a href="${escapeHtml(url)}" target="_blank" style="display: inline-block; width: 100%; max-width: 320px; padding: 14px 32px; background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%); color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 16px; font-weight: 600; text-decoration: none; text-align: center; border-radius: 10px; box-sizing: border-box; -webkit-text-size-adjust: none; mso-hide: all;">${ctaLabel}</a>
 <!--<![endif]-->
 </td></tr>
 </table>
 </td></tr>
-
-${reassuranceHtml}
-
-<!-- Deep link (optional) -->
-${deepLinkHtml}
 
 <!-- Divider -->
 <tr><td style="padding: 24px 40px 0 40px;">
@@ -308,7 +265,7 @@ ${deepLinkHtml}
 <!-- Fallback URL -->
 <tr><td style="padding: 20px 40px 0 40px;">
 <p style="margin: 0 0 6px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 12px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">Button not working? Copy this link:</p>
-<p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 12px; line-height: 18px; color: #6b7280; word-break: break-all;">${escapeHtml(magicLinkUrl)}</p>
+<p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 12px; line-height: 18px; color: #6b7280; word-break: break-all;">${escapeHtml(url)}</p>
 </td></tr>
 
 <!-- Safety notice -->
@@ -537,7 +494,7 @@ function createEmailService(): EmailService {
     return new ResendEmailService(resendKey, fromAddress);
   }
 
-  console.log("[email] No RESEND_API_KEY — magic links will print to console");
+  console.log("[email] No RESEND_API_KEY — email links will print to console");
   return new ConsoleEmailService();
 }
 

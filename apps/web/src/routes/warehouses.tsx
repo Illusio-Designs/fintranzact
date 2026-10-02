@@ -9,10 +9,8 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ListCard } from "@/components/ui/ListCard";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
-import { TableSkeleton } from "@/components/ui/Skeleton";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
 import { usePageSize } from "@/hooks/usePageSize";
 import { Icon } from "@/components/ui/Icon";
 import { cn } from "@/lib/utils";
@@ -249,21 +247,21 @@ function WarehousesPage() {
       <InventorySettings />
 
       {/* Stock by warehouse */}
-      <div className="card overflow-clip">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-light px-4 py-3">
-          <h2 className="text-sm font-semibold text-text-primary">Stock by warehouse</h2>
-        </div>
-        {!balances ? (
-          <TableSkeleton columns={[{ label: "Item", kind: "pair" }, { align: "right" }, { align: "right" }, { label: "Total", align: "right" }]} rows={6} />
-        ) : balances.data.length === 0 ? (
-          <EmptyState
-            title="No stock items"
-            description={search ? "No items match your search" : "Products you add under Items appear here"}
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination placement="top" page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={pageSize} />
-            <TableScroll ref={tableRef}>
+      <ListCard
+        title="Stock by warehouse" titleCount={total}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        loading={!balances}
+        fetching={isFetching}
+        tableRef={tableRef}
+        empty={
+          balances && balances.data.length === 0 ? (
+            <EmptyState
+              title="No stock items"
+              description={search ? "No items match your search" : "Products you add under Items appear here"}
+            />
+          ) : undefined
+        }
+      >
               <table className="data-table w-full">
                 <thead>
                   <tr>
@@ -275,7 +273,7 @@ function WarehousesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {balances.data.map((row) => {
+                  {(balances?.data ?? []).map((row) => {
                     const low = row.lowStock !== null && parseFloat(row.total) <= parseFloat(row.lowStock);
                     return (
                       <tr key={`${row.itemId}:${row.variantId ?? ""}`}>
@@ -300,19 +298,7 @@ function WarehousesPage() {
                   })}
                 </tbody>
               </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
-
+      </ListCard>
       {managing && <WarehouseManager key={managing.id} warehouse={managing} onClose={() => setManagingId(null)} />}
 
       <SlideOver

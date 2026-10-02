@@ -114,17 +114,6 @@ describe("referral codes", () => {
     expect(await tenantOf("meena@shahtraders.in")).toMatchObject({ partnerId, referralCode });
   });
 
-  it("link an organisation created from an emailed sign-in link", async () => {
-    const spy = vi.spyOn(emailService, "sendMagicLink").mockResolvedValue(undefined);
-    await publicCaller().auth.sendMagicLink({ email: "ravi@patelstores.in", source: "web", referralCode });
-    const url = String(spy.mock.calls[0]![1]);
-    spy.mockRestore();
-    const token = decodeURIComponent(new URL(url).searchParams.get("token")!);
-
-    await publicCaller().auth.verifyMagicLink({ token });
-    expect(await tenantOf("ravi@patelstores.in")).toMatchObject({ partnerId, referralCode });
-  });
-
   it("keep an unknown code as typed without linking a partner", async () => {
     await publicCaller().auth.register({
       name: "Anil Rao",

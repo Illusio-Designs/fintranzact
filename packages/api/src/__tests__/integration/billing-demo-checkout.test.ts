@@ -107,11 +107,11 @@ describe("plan choice after sign-up", () => {
   it("billing.config reports demo payments on outside production", async () => {
     process.env.NODE_ENV = "test";
     delete process.env.DEMO_PAYMENTS;
-    await expect(createUnauthenticatedCaller().billing.config()).resolves.toEqual({ demoPayments: true });
+    await expect(createUnauthenticatedCaller().billing.config()).resolves.toMatchObject({ demoPayments: true, provider: "demo" });
     process.env.NODE_ENV = "production";
-    await expect(createUnauthenticatedCaller().billing.config()).resolves.toEqual({ demoPayments: false });
+    await expect(createUnauthenticatedCaller().billing.config()).resolves.toMatchObject({ demoPayments: false });
     process.env.DEMO_PAYMENTS = "true";
-    await expect(createUnauthenticatedCaller().billing.config()).resolves.toEqual({ demoPayments: true });
+    await expect(createUnauthenticatedCaller().billing.config()).resolves.toMatchObject({ demoPayments: true });
   });
 });
 
@@ -142,10 +142,10 @@ describe("billing.demoCheckout", () => {
     expect(row.planSelectedAt).toBeInstanceOf(Date);
   });
 
-  it("charges twelve months plus GST for a yearly cycle", async () => {
+  it("charges ten months plus GST for a yearly cycle (2 months free)", async () => {
     const result = await caller(owner, tenant.id).billing.demoCheckout({ plan: "pro", cycle: "yearly", method: "card" });
     expect(result.amountPaise).toBe(planCheckoutAmount(PRO_PRICE_INR, "yearly").totalPaise);
-    expect(result.amountPaise).toBe(1_414_584);
+    expect(result.amountPaise).toBe(1_178_820);
   });
 
   it("is FORBIDDEN in production without DEMO_PAYMENTS", async () => {

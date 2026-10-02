@@ -1,4 +1,3 @@
-import { TableSkeleton } from "@/components/ui/Skeleton";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
@@ -16,6 +15,7 @@ import { Listbox } from "@/components/ui/Listbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { Spinner } from "@/components/ui/Spinner";
+import { ListCard } from "@/components/ui/ListCard";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableScroll } from "@/components/ui/Table";
 import { usePageSize } from "@/hooks/usePageSize";
@@ -268,7 +268,7 @@ function HubTab({
           )}
         </PanelHeader>
         {isLoading ? (
-          <TableSkeleton rows={6} columns={[{ label: "File" }, { label: "Status", kind: "badge" }, { label: "Lines", align: "right" }, { label: "Matched", align: "right" }, { label: "Unmatched", align: "right" }, { label: "Date" }, { align: "right", kind: "button" }]} />
+          <div className="flex justify-center py-10"><Spinner /></div>
         ) : imports && imports.data.length > 0 ? (
           <div className={cn("mt-4 border-t border-border-light transition-opacity", isFetching && "opacity-60")}>
             <Pagination
@@ -1008,151 +1008,134 @@ function ReviewTab({ importId }: { importId: string | null }) {
         </div>
       )}
 
-      {/* Filter — the tabs scroll sideways on phones instead of wrapping. */}
-      <div className="min-w-0 max-w-full overflow-x-auto">
-        <PillTabs
-          tabs={MATCH_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-          value={statusFilter}
-          onChange={setStatusFilter}
-        />
-      </div>
-
       {/* Lines table */}
-      {isLoading ? (
-        <TableSkeleton rows={6} columns={[{ label: "#", kind: "mono" }, { label: "Date" }, { label: "Narration" }, { label: "Debit", align: "right" }, { label: "Credit", align: "right" }, { label: "Status", kind: "badge" }, { label: "Confidence", align: "right" }, { label: "Actions", align: "right" }]} />
-      ) : lines && lines.data.length > 0 ? (
-        <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
-          <Pagination
-            placement="top"
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            total={lines.total}
-            pageSize={pageSize}
-          />
-          <TableScroll ref={tableRef}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Date</th>
-                  <th>Narration</th>
-                  <th className="text-right">Debit</th>
-                  <th className="text-right">Credit</th>
-                  <th>Status</th>
-                  <th className="text-right">Confidence</th>
-                  <th className="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.data.map((line) => (
-                  <tr key={line.id}>
-                    <td className="text-text-tertiary text-xs">{line.lineNumber}</td>
-                    <td className="text-text-secondary whitespace-nowrap">
-                      {formatDate(line.transactionDate)}
-                    </td>
-                    <td className="text-text-primary max-w-xs">
-                      <p className="truncate">{line.narration || "—"}</p>
-                      {line.referenceNumber && (
-                        <p className="text-xs text-text-tertiary truncate">{line.referenceNumber}</p>
-                      )}
-                    </td>
-                    <td className="text-right">
-                      {parseFloat(line.debit) > 0 ? (
-                        <span className="text-red-500 font-medium">{fmt(line.debit)}</span>
-                      ) : "—"}
-                    </td>
-                    <td className="text-right">
-                      {parseFloat(line.credit) > 0 ? (
-                        <span className="text-emerald-600 font-medium">{fmt(line.credit)}</span>
-                      ) : "—"}
-                    </td>
-                    <td>
-                      <Badge size="md" color={matchStatusColor(line.matchStatus)}>
-                        {matchStatusLabel(line.matchStatus)}
-                      </Badge>
-                    </td>
-                    <td className="text-right text-text-secondary text-xs">
-                      {line.matchConfidence
-                        ? `${Math.round(parseFloat(line.matchConfidence) * 100)}%`
-                        : "—"}
-                    </td>
-                    <td>
-                      {/* Confirming or matching a line is the task on this screen,
-                          so these stay visible buttons instead of a row menu. */}
-                      <div className="flex gap-2 justify-end">
-                        {line.matchStatus === "auto_matched" && (
-                          <>
-                            <button
-                              className="text-emerald-600 hover:text-emerald-700 text-xs font-medium"
-                              onClick={() => confirmMutation.mutate({ lineId: line.id })}
-                              disabled={confirmMutation.isPending}
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              className="text-red-500 hover:text-red-600 text-xs font-medium"
-                              onClick={() => setConfirmUnmatchId(line.id)}
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-                        {line.matchStatus === "manual_matched" && (
+      <ListCard
+        tabs={{
+          tabs: MATCH_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+          value: statusFilter,
+          onChange: setStatusFilter,
+          label: "Match status",
+        }}
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        pagination={{ page, totalPages, onPageChange: setPage, total: lines?.total ?? 0, pageSize, onPageSizeChange: setPageSize }}
+        empty={
+          !lines || lines.data.length === 0 ? (
+            <EmptyState
+              title="No lines"
+              description={statusFilter ? "No lines with this status" : "No statement lines found"}
+            />
+          ) : undefined
+        }
+      >
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date</th>
+              <th>Narration</th>
+              <th className="text-right">Debit</th>
+              <th className="text-right">Credit</th>
+              <th>Status</th>
+              <th className="text-right">Confidence</th>
+              <th className="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(lines?.data ?? []).map((line) => (
+              <tr key={line.id}>
+                <td className="text-text-tertiary text-xs">{line.lineNumber}</td>
+                <td className="text-text-secondary whitespace-nowrap">
+                  {formatDate(line.transactionDate)}
+                </td>
+                <td className="text-text-primary max-w-xs">
+                  <p className="truncate">{line.narration || "—"}</p>
+                  {line.referenceNumber && (
+                    <p className="text-xs text-text-tertiary truncate">{line.referenceNumber}</p>
+                  )}
+                </td>
+                <td className="text-right">
+                  {parseFloat(line.debit) > 0 ? (
+                    <span className="text-red-500 font-medium">{fmt(line.debit)}</span>
+                  ) : "—"}
+                </td>
+                <td className="text-right">
+                  {parseFloat(line.credit) > 0 ? (
+                    <span className="text-emerald-600 font-medium">{fmt(line.credit)}</span>
+                  ) : "—"}
+                </td>
+                <td>
+                  <Badge size="md" color={matchStatusColor(line.matchStatus)}>
+                    {matchStatusLabel(line.matchStatus)}
+                  </Badge>
+                </td>
+                <td className="text-right text-text-secondary text-xs">
+                  {line.matchConfidence
+                    ? `${Math.round(parseFloat(line.matchConfidence) * 100)}%`
+                    : "—"}
+                </td>
+                <td>
+                  {/* Confirming or matching a line is the task on this screen,
+                      so these stay visible buttons instead of a row menu. */}
+                  <div className="flex gap-2 justify-end">
+                    {line.matchStatus === "auto_matched" && (
+                      <>
+                        <button
+                          className="text-emerald-600 hover:text-emerald-700 text-xs font-medium"
+                          onClick={() => confirmMutation.mutate({ lineId: line.id })}
+                          disabled={confirmMutation.isPending}
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          className="text-red-500 hover:text-red-600 text-xs font-medium"
+                          onClick={() => setConfirmUnmatchId(line.id)}
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {line.matchStatus === "manual_matched" && (
+                      <button
+                        className="text-red-500 hover:text-red-600 text-xs font-medium"
+                        onClick={() => setConfirmUnmatchId(line.id)}
+                      >
+                        Unmatch
+                      </button>
+                    )}
+                    {line.matchStatus === "unmatched" && (
+                      <>
+                        <button
+                          className="text-brand-600 hover:text-brand-700 text-xs font-medium"
+                          onClick={() => setManualMatchLine(line)}
+                        >
+                          Match
+                        </button>
+                        {parseFloat(line.debit) > 0 && (
                           <button
-                            className="text-red-500 hover:text-red-600 text-xs font-medium"
-                            onClick={() => setConfirmUnmatchId(line.id)}
+                            className="text-amber-600 hover:text-amber-700 text-xs font-medium"
+                            onClick={() => setCreateExpenseLine(line)}
                           >
-                            Unmatch
+                            + Expense
                           </button>
                         )}
-                        {line.matchStatus === "unmatched" && (
-                          <>
-                            <button
-                              className="text-brand-600 hover:text-brand-700 text-xs font-medium"
-                              onClick={() => setManualMatchLine(line)}
-                            >
-                              Match
-                            </button>
-                            {parseFloat(line.debit) > 0 && (
-                              <button
-                                className="text-amber-600 hover:text-amber-700 text-xs font-medium"
-                                onClick={() => setCreateExpenseLine(line)}
-                              >
-                                + Expense
-                              </button>
-                            )}
-                            <button
-                              className="text-text-secondary hover:text-text-primary text-xs font-medium"
-                              onClick={() => ignoreMutation.mutate({ lineId: line.id })}
-                              disabled={ignoreMutation.isPending}
-                            >
-                              Ignore
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableScroll>
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            total={lines.total}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
-          />
-        </div>
-      ) : (
-        <EmptyState
-          title="No lines"
-          description={statusFilter ? "No lines with this status" : "No statement lines found"}
-        />
-      )}
+                        <button
+                          className="text-text-secondary hover:text-text-primary text-xs font-medium"
+                          onClick={() => ignoreMutation.mutate({ lineId: line.id })}
+                          disabled={ignoreMutation.isPending}
+                        >
+                          Ignore
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </ListCard>
 
       {/* Manual match slide-over */}
       {manualMatchLine && (
@@ -1416,7 +1399,7 @@ function SummaryTab({ accountId }: { accountId: string | null }) {
         />
       </div>
 
-      {isLoading && <TableSkeleton rows={6} columns={[{ label: "Match" }, { label: "Pattern" }, { label: "Action" }, { label: "Category" }, { label: "Priority", align: "right" }, { label: "Hits", align: "right" }, { label: "Status", kind: "badge" }]} />}
+      {isLoading && <div className="flex justify-center py-8"><Spinner /></div>}
 
       {summary && (
         <div className="card p-5 space-y-4">
@@ -1593,7 +1576,7 @@ function RulesTab() {
       </div>
 
       {isLoading ? (
-        <TableSkeleton rows={6} columns={[{ label: "Match" }, { label: "Pattern" }, { label: "Action" }, { label: "Category" }, { label: "Priority", align: "right" }, { label: "Hits", align: "right" }, { label: "Status", kind: "badge" }]} />
+        <div className="flex justify-center py-8"><Spinner /></div>
       ) : rules && rules.length > 0 ? (
         <div className="card overflow-hidden">
           <table className="table-auto w-full text-sm">
@@ -1824,7 +1807,7 @@ function TemplatesTab() {
       </p>
 
       {isLoading ? (
-        <TableSkeleton rows={6} columns={[{ label: "Bank" }, { label: "Version" }, { label: "Type", kind: "badge" }, { label: "Format" }, { label: "Label" }, { label: "Status", kind: "badge" }]} />
+        <div className="flex justify-center py-10"><Spinner /></div>
       ) : templates && templates.length > 0 ? (
         <div className="card overflow-hidden">
           <table className="table-auto w-full text-sm">

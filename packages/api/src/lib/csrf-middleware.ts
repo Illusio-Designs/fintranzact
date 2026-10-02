@@ -28,7 +28,7 @@
  * WHY THE COOKIE-PRESENCE CHECK STILL MATTERS FOR BEARER CLIENTS:
  * React Native's native HTTP stack (URLSession on iOS, OkHttp on
  * Android) maintains a per-app cookie jar by default. When the API
- * sets `Set-Cookie: session_id=…` on `auth.verifyMagicLink`, that
+ * sets `Set-Cookie: session_id=…` on `auth.login`, that
  * cookie is persisted at the native layer and replayed on every
  * subsequent request from the app — even though the JS tRPC client
  * never sets it. If we only checked for the cookie's presence we

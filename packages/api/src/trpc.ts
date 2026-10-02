@@ -19,14 +19,39 @@ interface TenantCtx extends Context {
   db: TenantDatabase;
 }
 
+/** "customerName" / "items.0.qty" -> "Customer name" / "Qty" */
+function fieldLabel(path: ReadonlyArray<string | number>): string {
+  const last = [...path].reverse().find((part) => typeof part === "string") as string | undefined;
+  if (!last) return "";
+  const words = last.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").trim().toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Zod's stock wording ("Required", "Expected string, received number") means nothing to a user. */
+const GENERIC_ZOD_MESSAGE = /^(invalid|required|expected|string must|number must|array must|too (small|big)|unrecognized)/i;
+
+/**
+ * A readable one-line message for a failed input check, never the raw list of
+ * Zod issues. Messages we wrote ourselves ("Enter a valid email") pass through.
+ */
+function friendlyZodMessage(cause: unknown): string | null {
+  const issues = (cause as { issues?: Array<{ path: Array<string | number>; message: string }> } | undefined)?.issues;
+  if (!Array.isArray(issues) || issues.length === 0) return null;
+  const issue = issues[0];
+  const label = fieldLabel(issue.path);
+  if (!GENERIC_ZOD_MESSAGE.test(issue.message)) return issue.message;
+  return label ? `Please check "${label}" and try again.` : "Please check the details you entered and try again.";
+}
+
 const t = initTRPC.context<Context>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
     // Never expose internal error details (DB errors, stack traces) to clients
     const isInternal = error.code === "INTERNAL_SERVER_ERROR";
+    const zodMessage = error.code === "BAD_REQUEST" ? friendlyZodMessage(error.cause) : null;
     return {
       ...shape,
-      message: isInternal ? "Something went wrong. Please try again." : shape.message,
+      message: isInternal ? "Something went wrong. Please try again." : (zodMessage ?? shape.message),
       data: {
         ...shape.data,
         zodError: error.cause instanceof Error ? undefined : null,
@@ -94,7 +119,7 @@ const csrfCheck = t.middleware(({ ctx, next }) => {
 
 // Base procedure with CSRF enforcement — every procedure below inherits
 // from this so the check runs on every tRPC call, including public
-// endpoints like `auth.sendMagicLink` that are otherwise unauthenticated.
+// endpoints like `auth.login` that are otherwise unauthenticated.
 const baseProcedure = t.procedure.use(csrfCheck);
 
 export const publicProcedure = baseProcedure;

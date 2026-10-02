@@ -74,7 +74,7 @@ FIXTURE: Test Infrastructure
 ### A1. auth.test.ts
 
 **File**: `packages/api/src/routers/auth.ts`
-**Middleware chain**: publicProcedure (register, login, sendMagicLink, verifyMagicLink, confirmEmailChange), protectedProcedure (logout, logoutAll, completeProfile, updateName, requestEmailChange)
+**Middleware chain**: publicProcedure (register, login, confirmEmailChange), protectedProcedure (logout, logoutAll, completeProfile, updateName, requestEmailChange)
 
 #### Workflow: Password Registration
 
@@ -161,78 +161,11 @@ STEP 3: Login with non-existent email
     - Throws UNAUTHORIZED "Invalid email or password"
     - Error message is identical to wrong-password case (no enumeration)
 
-STEP 4: Login for magic-link-only user (no passwordHash)
-  PRE-CONDITIONS: User exists via magic link (passwordHash is null)
-  INPUT: { email: "magiconly@example.com", password: "anything" }
-  ASSERT:
-    - Throws UNAUTHORIZED "Invalid email or password"
-
-STEP 5: Login for user with no tenant membership
+STEP 4: Login for user with no tenant membership
   PRE-CONDITIONS: User exists, tenant_members empty for this user
   INPUT: { email: "orphan@example.com", password: "securepass1" }
   ASSERT:
     - Throws FORBIDDEN "Account has no organization membership"
-```
-
-#### Workflow: Magic Link
-
-```
-describe("auth.sendMagicLink + auth.verifyMagicLink")
-
-PRE-CONDITIONS: None (handles both new and existing users)
-
-STEP 1: Request magic link for existing user
-  INPUT: { email: "existing@example.com" }
-  ASSERT:
-    - Returns { success: true }
-    - Database: magic_link_tokens has new row with email, tokenHash, expiresAt (~15 min)
-    - Email service was called with magic link URL
-
-STEP 2: Request magic link for non-existent email
-  INPUT: { email: "newuser@example.com" }
-  ASSERT:
-    - Returns { success: true } (no enumeration)
-    - Database: magic_link_tokens still created
-    - Email still sent
-
-STEP 3: Verify valid magic link
-  INPUT: { token: "<raw-token-from-step-1>" }
-  ASSERT:
-    - Returns { user, sessionToken, isNewUser: false, needsProfile: false }
-    - Database: magic_link_tokens.usedAt is now set
-    - Database: users.emailVerified = true
-    - Set-Cookie header present
-
-STEP 4: Verify valid magic link for new user (auto-creates account)
-  INPUT: { token: "<raw-token-for-new-email>" }
-  ASSERT:
-    - Returns { user, sessionToken, isNewUser: true, needsProfile: true }
-    - Database: new user created with email, emailVerified=true, name=null
-    - Database: tenant auto-created and membership established
-
-STEP 5: Verify expired token
-  PRE-CONDITIONS: Token created with expiresAt in the past
-  INPUT: { token: "<expired-raw-token>" }
-  ASSERT:
-    - Throws BAD_REQUEST "Invalid, expired, or already used link"
-
-STEP 6: Verify already-used token
-  PRE-CONDITIONS: Token already has usedAt set
-  INPUT: { token: "<used-raw-token>" }
-  ASSERT:
-    - Throws BAD_REQUEST (atomic update-returning found no matching row)
-
-STEP 7: Verify tampered token
-  INPUT: { token: "random-garbage" }
-  ASSERT:
-    - Throws BAD_REQUEST
-
-STEP 8: Rate limiting - 6th request within 15 minutes
-  PRE-CONDITIONS: 5 tokens already created for this email in last 15 min
-  INPUT: { email: "ratelimited@example.com" }
-  ASSERT:
-    - Returns { success: true } (no error, but no token created)
-    - Database: still only 5 tokens for this email
 ```
 
 #### Workflow: Complete Profile
@@ -240,7 +173,7 @@ STEP 8: Rate limiting - 6th request within 15 minutes
 ```
 describe("auth.completeProfile")
 
-PRE-CONDITIONS: User authenticated via magic link, user.name is null
+PRE-CONDITIONS: User authenticated, user.name is null
 
 STEP 1: Set profile name
   INPUT: { name: "My Name" }
@@ -266,7 +199,7 @@ STEP 1: Request email change
   INPUT: { newEmail: "new@example.com" }
   ASSERT:
     - Returns { success: true }
-    - Database: magic_link_tokens has row with email="new@example.com", userId=current user
+    - Database: magic_link_tokens (email-change tokens only) has row with email="new@example.com", userId=current user
     - Email sent to new@example.com
 
 STEP 2: Request change to already-taken email
@@ -282,7 +215,7 @@ STEP 3: Confirm email change
     - userId is read from token row, NOT from client input (security)
 
 STEP 4: Confirm with token that has no userId (not an email-change token)
-  INPUT: { token: "<magic-link-token-without-userId>" }
+  INPUT: { token: "<token-row-without-userId>" }
   ASSERT:
     - Throws BAD_REQUEST "Invalid or expired link"
 ```
@@ -2736,7 +2669,7 @@ STEP 16: Any status -> cancelled
 | A5 | getTenantDb returns isolated DB connection per tenant in cloud mode | Assumed from control-schema.ts tenant DB config fields | Cross-tenant data leakage |
 | A6 | Session cache (60s TTL, max 1000) does not cause stale auth | context.ts uses Map cache | Stale permissions for ~60s after role change |
 | A7 | Payment update reverses old SINGLE invoiceId but not old allocations | Verified: payment.update line 426 uses existing.invoiceId | Multi-allocation payments may not fully reverse on update |
-| A8 | Email service calls are mockable in tests | Assumed | Cannot test magic link flows |
+| A8 | Email service calls are mockable in tests | Assumed | Cannot test email-change flows |
 | A9 | Turnstile verification is skippable when no TURNSTILE_SECRET_KEY | Verified: verifyTurnstile skips when key absent | Cannot test Turnstile in CI |
 
 ---
@@ -2753,7 +2686,7 @@ STEP 16: Any status -> cancelled
 
 5. **Dashboard N+1**: The dashboard.summary endpoint runs 8 parallel queries. Are there N+1 concerns with recentInvoices or cashIn/cashOut?
 
-6. **Magic link token cleanup**: Expired/used magic_link_tokens are never cleaned up. Should there be a background job?
+6. **Email-change token cleanup**: Expired/used magic_link_tokens are never cleaned up. Should there be a background job?
 
 ---
 

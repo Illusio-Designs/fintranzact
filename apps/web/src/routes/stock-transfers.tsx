@@ -9,9 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { TableSkeleton } from "@/components/ui/Skeleton";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
+import { ListCard } from "@/components/ui/ListCard";
 import { usePageSize } from "@/hooks/usePageSize";
 import { Icon } from "@/components/ui/Icon";
 import {
@@ -83,23 +81,25 @@ function StockTransfersPage() {
         }
       />
 
-      <div className="card overflow-clip">
-        {!data ? (
-          <TableSkeleton columns={[{ label: "Date" }, { label: "From → To" }, { label: "Items" }, { label: "Quantity", align: "right" }]} rows={6} />
-        ) : data.data.length === 0 ? (
-          <EmptyState
-            title="No transfers yet"
-            description="Transfers between warehouses show up here, newest first."
-            action={
-              <button className="btn-primary" onClick={() => setOpen(true)}>
-                Make a transfer
-              </button>
-            }
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination placement="top" page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={pageSize} />
-            <TableScroll ref={tableRef}>
+      <ListCard
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        loading={!data}
+        fetching={isFetching}
+        tableRef={tableRef}
+        empty={
+          data && data.data.length === 0 ? (
+            <EmptyState
+              title="No transfers yet"
+              description="Transfers between warehouses show up here, newest first."
+              action={
+                <button className="btn-primary" onClick={() => setOpen(true)}>
+                  Make a transfer
+                </button>
+              }
+            />
+          ) : undefined
+        }
+      >
               <table className="data-table w-full">
                 <thead>
                   <tr>
@@ -110,7 +110,7 @@ function StockTransfersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.data.map((t) => (
+                  {(data?.data ?? []).map((t) => (
                     <tr key={t.referenceId}>
                       <td className="whitespace-nowrap text-text-secondary">{formatDate(t.date)}</td>
                       <td>
@@ -131,18 +131,7 @@ function StockTransfersPage() {
                   ))}
                 </tbody>
               </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+      </ListCard>
 
       <SlideOver
         open={open}

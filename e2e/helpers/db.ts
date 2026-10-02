@@ -5,12 +5,11 @@
  * opens one small connection pool to the database the API under test uses
  * (E2E_DATABASE_URL, falling back to DATABASE_URL, then the CI default) and
  * exposes a few typed read helpers. Writes are limited to test plumbing that
- * has no UI (e.g. making a magic link expire), and are named as such.
+ * has no UI (e.g. backdating a record), and are named as such.
  *
  * Single-tenant mode only (MULTI_TENANT unset, as in CI): control tables and
  * business tables share this one database.
  */
-import { createHash } from "node:crypto";
 import postgres from "postgres";
 
 const DATABASE_URL =
@@ -32,11 +31,6 @@ export async function closeDb() {
     client = null;
     await c.end({ timeout: 5 });
   }
-}
-
-/** Same hashing the API uses for magic-link tokens (sha256 hex). */
-export function hashToken(raw: string): string {
-  return createHash("sha256").update(raw).digest("hex");
 }
 
 // ── Reads ────────────────────────────────────────────────────────
@@ -107,18 +101,6 @@ export async function businessMembers(businessId: string) {
   return (await db()`
     select bm.user_id, bm.role, u.email from business_members bm join users u on u.id = bm.user_id
     where bm.business_id = ${businessId} order by bm.created_at`) as unknown as Array<{ user_id: string; role: string; email: string }>;
-}
-
-export async function magicLinkTokens(email: string) {
-  return (await db()`
-    select id, token_hash, expires_at, used_at, created_at from magic_link_tokens
-    where email = lower(${email}) order by created_at`) as unknown as Array<{
-    id: string;
-    token_hash: string;
-    expires_at: Date;
-    used_at: Date | null;
-    created_at: Date;
-  }>;
 }
 
 export async function activeSessionCount(userId: string) {
@@ -833,25 +815,4 @@ export async function recurringRunsOf(templateId: string) {
 /** Make an invoice look `hours` old (role rules depend on its age). */
 export async function backdateInvoice(id: string, hours: number) {
   await db()`update invoices set created_at = now() - make_interval(hours => ${hours}) where id = ${id}`;
-}
-
-/**
- * The API only stores a hash of each magic-link token and "sends" the raw
- * link to the dev console mailer. To open the link the user was emailed, the
- * test swaps the newest token's hash for the hash of a raw token it chose —
- * the stored row (expiry, used flag, email) is otherwise untouched.
- */
-export async function claimLatestMagicLink(email: string): Promise<string> {
-  const raw = `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const rows = await db()`
-    update magic_link_tokens set token_hash = ${hashToken(raw)}
-    where id = (select id from magic_link_tokens where email = lower(${email}) order by created_at desc limit 1)
-    returning id`;
-  if (rows.length !== 1) throw new Error(`No magic link was issued for ${email}`);
-  return raw;
-}
-
-/** Backdate a magic link so it has expired (the 15-minute window has passed). */
-export async function expireMagicLinkToken(raw: string) {
-  await db()`update magic_link_tokens set expires_at = now() - interval '1 minute' where token_hash = ${hashToken(raw)}`;
 }

@@ -55,7 +55,7 @@ The Hono app handles:
 Three levels of middleware protection, each extending the previous:
 
 ```
-publicProcedure          — No auth required (login, register, magic link)
+publicProcedure          — No auth required (login, register)
   └── protectedProcedure — Requires valid session (user settings, business list)
         └── tenantProcedure    — Requires tenant selection (injects ctx.db)
               └── businessProcedure  — Requires business selection (scopes queries)
@@ -76,7 +76,7 @@ In cloud/SaaS mode (`MULTI_TENANT=true`), each tenant has its own database. The 
 
 | Router | File | Key procedures |
 |---|---|---|
-| `auth` | `routers/auth.ts` | `register`, `login`, `logout`, `sendMagicLink`, `verifyMagicLink`, `me` |
+| `auth` | `routers/auth.ts` | `register`, `login`, `logout`, `me`, `completeProfile` |
 | `business` | `routers/business.ts` | `list`, `create`, `update`, `switchBusiness` |
 | `party` | `routers/party.ts` | `list`, `create`, `update`, `delete`, `ledger`, `merge`, `exportTally` |
 | `item` | `routers/item.ts` | `list`, `create`, `update`, `delete`, `adjustStock`, `stockHistory` |
@@ -97,7 +97,7 @@ In cloud/SaaS mode (`MULTI_TENANT=true`), each tenant has its own database. The 
 
 ### Web app (cookie-based sessions)
 
-1. User logs in via password or magic link.
+1. User logs in with email and password (`auth.login`).
 2. API creates a session record in the control database with a 30-day expiry.
 3. API sets a `session_id` HttpOnly, Secure, SameSite=Lax cookie.
 4. Every request reads the `session_id` cookie, validates the session in the database (with in-memory LRU cache), and resolves the user.
@@ -106,15 +106,13 @@ In cloud/SaaS mode (`MULTI_TENANT=true`), each tenant has its own database. The 
 
 The mobile app cannot reliably use cookies. It sends `Authorization: Bearer <session_id>` as a header instead. The session model is identical — the same session table, same 30-day expiry, same server-side invalidation.
 
-### Magic links
+### Email-change links
 
-1. Client calls `auth.sendMagicLink` with an email address.
-2. API generates a token, hashes it with SHA-256, and stores the hash in the database with a 15-minute expiry.
-3. API sends an email (via Resend) containing the raw token as a URL parameter.
-4. Client calls `auth.verifyMagicLink` with the raw token.
-5. API hashes the token, looks it up, validates expiry, and creates a session.
+1. Client calls `auth.requestEmailChange` with the new address.
+2. API generates a token, stores its SHA-256 hash (table `magic_link_tokens`, kept for its legacy name) with a 15-minute expiry, and emails a verification link to the NEW address.
+3. The link opens `/auth/verify-email-change?token=...`, which calls `auth.confirmEmailChange`.
 
-If `RESEND_API_KEY` is not set, the magic link URL is printed to the console (development convenience).
+If `RESEND_API_KEY` is not set, the link is printed to the console (development convenience).
 
 ---
 
@@ -190,7 +188,7 @@ Exit code 0 = clean, 1 = violations (errors; warnings too with `--strict`), 2 = 
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `PORT` | No | Server port (default: 3000) |
 | `CORS_ORIGINS` | Yes | Comma-separated allowed origins |
-| `APP_URL` | Yes | Frontend URL (for magic link emails) |
+| `APP_URL` | Yes | Frontend URL (for email links) |
 | `NODE_ENV` | No | `development` or `production` |
 | `RESEND_API_KEY` | No | Resend API key for transactional email |
 | `EMAIL_FROM` | No | Sender address for emails |

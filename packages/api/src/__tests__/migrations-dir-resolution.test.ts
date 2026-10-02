@@ -6,7 +6,7 @@
  *   packages/api/tsup.config.ts inlines @fintranzact/db into packages/api/dist/.
  *   Before the fix, migrate.ts used `resolve(__dirname, "..", "drizzle-tenant")`
  *   which pointed at /app/packages/api/drizzle-tenant/ (nonexistent) inside
- *   the bundled runtime, causing the first user's magic-link verify to crash
+ *   the bundled runtime, causing the first user's registration to crash
  *   with `Can't find meta/_journal.json file`.
  *
  * INVARIANTS PROTECTED:

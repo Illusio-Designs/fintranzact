@@ -127,7 +127,7 @@ STEP 1: Rate limit check
 STEP 2: User lookup
   ACTION: SELECT user by email (id, email, name, passwordHash)
   BRANCH: not found -> increment failedLoginAttempts, FAILURE(UNAUTHORIZED, "Invalid email or password")
-  BRANCH: found but no passwordHash (magic-link-only account) -> increment attempts, FAILURE(UNAUTHORIZED)
+  BRANCH: found but no passwordHash -> increment attempts, FAILURE(UNAUTHORIZED)
   BRANCH: found with passwordHash -> STEP 3
 
 STEP 3: Password verification
@@ -162,69 +162,9 @@ OUTPUT: { user: { id, email, name }, sessionToken }
 
 ---
 
-### WORKFLOW 1C: Magic Link (Request)
+### WORKFLOWS 1C and 1D (removed)
 
-**Trigger**: `auth.sendMagicLink` (publicProcedure)
-**Input**: `{ email, turnstileToken?, source: "web"|"desktop"|"mobile" }`
-
-```
-STEP 1: Optional Turnstile verification (same as register)
-
-STEP 2: Rate limit check
-  ACTION: COUNT magicLinkTokens WHERE email AND createdAt > 15min ago
-  BRANCH: >= 5 tokens -> return { success: true } (silent, no enumeration)
-  BRANCH: < 5 -> STEP 3
-
-STEP 3: Generate token
-  ACTION: rawToken = crypto.randomUUID() + "-" + nanoid(32)
-  ACTION: tokenHash = sha256(rawToken)
-  ACTION: INSERT magicLinkTokens (email, tokenHash, expiresAt=15min, ipAddress)
-
-STEP 4: Build URLs
-  primaryUrl = deep link (desktop/mobile) or HTTPS link (web)
-  secondaryUrl = the other
-
-STEP 5: Send email
-  ACTION: Check if user exists (for email template variant, not for access control)
-  ACTION: emailService.sendMagicLink(email, primaryUrl, secondaryUrl, isNewUser)
-
-OUTPUT: { success: true } -- ALWAYS, regardless of email existence (anti-enumeration)
-```
-
----
-
-### WORKFLOW 1D: Magic Link (Verify)
-
-**Trigger**: `auth.verifyMagicLink` (publicProcedure)
-**Input**: `{ token }`
-
-```
-STEP 1: Atomic token consumption
-  ACTION: UPDATE magicLinkTokens SET usedAt=now()
-    WHERE tokenHash=sha256(token) AND expiresAt > now() AND usedAt IS NULL
-    RETURNING row
-  BRANCH: no row returned -> FAILURE(BAD_REQUEST, "Invalid, expired, or already used link")
-  BRANCH: row returned -> STEP 2
-
-STEP 2: User upsert (inside transaction)
-  BEGIN TRANSACTION
-    STEP 2a: SELECT user by email
-      BRANCH: user exists
-        -> SET emailVerified=true
-        -> isNewUser=false
-      BRANCH: user does not exist
-        -> INSERT user (email, emailVerified=true, name=null)
-        -> isNewUser=true
-        -> Check for pending invitation (same logic as register)
-          BRANCH: pending invite -> skip tenant creation
-          BRANCH: no invite -> assignTenantToNewUser
-    STEP 2b: Create session (same as login STEP 5)
-  COMMIT
-
-OUTPUT: { user, sessionToken, isNewUser, needsProfile: !user.name }
-```
-
-**Key decision**: `needsProfile=true` signals the UI to show the profile completion form.
+The email sign-in link flow (`auth.sendMagicLink` / `auth.verifyMagicLink`) was removed. Sign-in is by email + password only (1B); IDs 1C and 1D are retired and not reused.
 
 ---
 
@@ -252,8 +192,8 @@ REQUEST PHASE:
   STEP 3: Send verification email to NEW address
 
 CONFIRM PHASE:
-  STEP 1: Atomic token consumption (same as magic link verify)
-  STEP 2: Verify tokenRow.userId exists (must be an email-change token, not a magic link)
+  STEP 1: Atomic token consumption (single UPDATE ... SET usedAt=now() WHERE tokenHash AND expiresAt > now() AND usedAt IS NULL RETURNING row)
+  STEP 2: Verify tokenRow.userId exists (email-change tokens always carry a userId)
   STEP 3: UPDATE users SET email=tokenRow.email WHERE id=tokenRow.userId
     NOTE: userId comes from server-side token, NEVER from client input
 ```
@@ -1554,14 +1494,8 @@ Every branch in the workflow trees above maps to a BDD test case. Below is the c
 | AUTH-08 | 1B | Wrong password | Login with wrong password -> UNAUTHORIZED, attempt counted |
 | AUTH-09 | 1B | Rate limited | Login 5+ times with wrong password -> TOO_MANY_REQUESTS |
 | AUTH-10 | 1B | No memberships | Login for user with 0 memberships -> FORBIDDEN |
-| AUTH-11 | 1B | Password-less account | Login with password for magic-link-only user -> UNAUTHORIZED |
-| AUTH-12 | 1C | Happy path | Request magic link -> always returns success |
-| AUTH-13 | 1C | Rate limited | Request 6th link in 15min -> returns success (silent) |
-| AUTH-14 | 1D | Happy path, new user | Verify magic link -> new user created, needsProfile=true |
-| AUTH-15 | 1D | Happy path, existing user | Verify magic link -> existing user, emailVerified=true |
-| AUTH-16 | 1D | Expired token | Verify expired token -> BAD_REQUEST |
-| AUTH-17 | 1D | Used token | Verify already-used token -> BAD_REQUEST |
-| AUTH-18 | 1D | New user with invite | Magic link creates user, skips auto-tenant |
+| AUTH-11 | 1B | Password-less account | Login with password for a user with no passwordHash -> UNAUTHORIZED |
+| AUTH-12 to AUTH-18 | - | Retired | Magic link request/verify cases removed with the feature |
 | AUTH-19 | 1E | Happy path | Complete profile -> name updated |
 | AUTH-20 | 1F | Happy path | Request + confirm email change |
 | AUTH-21 | 1F | Email taken | Request email change to taken email -> CONFLICT |

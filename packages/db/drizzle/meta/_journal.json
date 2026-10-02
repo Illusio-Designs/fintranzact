@@ -288,6 +288,13 @@
       "when": 1790883697137,
       "tag": "0040_invoice_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790939620968,
+      "tag": "0041_subscription_billing",
+      "breakpoints": true
     }
   ]
 }

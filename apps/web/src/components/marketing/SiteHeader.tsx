@@ -228,11 +228,29 @@ const NAV: NavItem[] = [
 
 const LINK_ROW =
   "flex items-center gap-3 rounded-lg px-2 py-2 text-[15px] text-text-secondary transition hover:bg-brand-50 hover:text-brand-700 dark:hover:bg-white/5 dark:hover:text-white";
+const LINK_ROW_ACTIVE = "bg-brand-50 font-semibold text-brand-700 dark:bg-white/10 dark:text-white";
+
+const trimSlash = (path: string) => path.replace(/\/+$/, "") || "/";
+
+/** Whether a menu link points at the page being viewed. Help and API docs also cover their sub-pages. */
+function isLinkActive(to: string | undefined, pathname: string) {
+  if (!to) return false;
+  const here = trimSlash(pathname);
+  const target = trimSlash(to);
+  if (here === target) return true;
+  return (target === DOCS_URL || target === API_DOCS_URL) && here.startsWith(`${target}/`);
+}
+
+function menuHasActive(menu: MegaMenu, pathname: string) {
+  return menu.columns.some((column) => column.links.some((link) => isLinkActive(link.to, pathname)));
+}
 
 function MenuItemLink({ link, onNavigate }: { link: MenuLink; onNavigate: () => void }) {
+  const { pathname } = useLocation();
+  const active = isLinkActive(link.to, pathname);
   const content = (
     <>
-      <Icon icon={link.icon} size={19} className="shrink-0 text-text-tertiary" />
+      <Icon icon={link.icon} size={19} className={cn("shrink-0", active ? "text-brand-600 dark:text-white" : "text-text-tertiary")} />
       <span>{link.label}</span>
     </>
   );
@@ -250,7 +268,7 @@ function MenuItemLink({ link, onNavigate }: { link: MenuLink; onNavigate: () => 
     );
   }
   return (
-    <Link to={link.to!} className={LINK_ROW} onClick={onNavigate}>
+    <Link to={link.to!} className={cn(LINK_ROW, active && LINK_ROW_ACTIVE)} aria-current={active ? "page" : undefined} onClick={onNavigate}>
       {content}
     </Link>
   );
@@ -462,12 +480,15 @@ function RegionPill() {
 function NavTrigger({
   label,
   open,
+  current,
   onToggle,
   onHover,
   controls,
 }: {
   label: string;
   open: boolean;
+  /** The page being viewed is inside this menu. */
+  current: boolean;
   onToggle: () => void;
   onHover: () => void;
   controls: string;
@@ -481,7 +502,8 @@ function NavTrigger({
       onMouseEnter={onHover}
       className={cn(
         "flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-2.5 text-[14px] font-medium transition hover:text-text-primary xl:px-3 xl:text-[15px]",
-        open ? "text-brand-700 dark:text-white" : "text-text-secondary",
+        open || current ? "text-brand-700 dark:text-white" : "text-text-secondary",
+        current && "font-semibold",
       )}
     >
       {label}
@@ -556,6 +578,7 @@ export function SiteHeader() {
                 key={item.menu.id}
                 label={item.menu.label}
                 open={openMenu === item.menu.id}
+                current={menuHasActive(item.menu, pathname)}
                 controls={`mega-${item.menu.id}`}
                 onHover={() => hoverOpen(item.menu.id)}
                 onToggle={() => setOpenMenu((cur) => (cur === item.menu.id ? null : item.menu.id))}
@@ -564,10 +587,11 @@ export function SiteHeader() {
               <Link
                 key={item.to}
                 to={item.to}
+                aria-current={trimSlash(pathname) === item.to ? "page" : undefined}
                 onMouseEnter={() => hoverOpen(null)}
                 className={cn(
                   "whitespace-nowrap rounded-md px-2 py-2.5 text-[14px] font-medium transition hover:text-text-primary xl:px-3 xl:text-[15px]",
-                  pathname === item.to ? "text-text-primary" : "text-text-secondary",
+                  trimSlash(pathname) === item.to ? "font-semibold text-brand-700 dark:text-white" : "text-text-secondary",
                 )}
               >
                 {item.label}
@@ -622,6 +646,7 @@ export function SiteHeader() {
                 key={item.menu.id}
                 menu={item.menu}
                 open={mobileSection === item.menu.id}
+                current={menuHasActive(item.menu, pathname)}
                 onToggle={() => setMobileSection((cur) => (cur === item.menu.id ? null : item.menu.id))}
                 onNavigate={close}
               />
@@ -629,7 +654,11 @@ export function SiteHeader() {
               <Link
                 key={item.to}
                 to={item.to}
-                className="block rounded-md px-2 py-3 text-[15px] font-medium text-text-secondary hover:bg-surface-1"
+                aria-current={trimSlash(pathname) === item.to ? "page" : undefined}
+                className={cn(
+                  "block rounded-md px-2 py-3 text-[15px] font-medium hover:bg-surface-1",
+                  trimSlash(pathname) === item.to ? "font-semibold text-brand-700 dark:text-white" : "text-text-secondary",
+                )}
               >
                 {item.label}
               </Link>
@@ -650,11 +679,13 @@ export function SiteHeader() {
 function MobileSection({
   menu,
   open,
+  current,
   onToggle,
   onNavigate,
 }: {
   menu: MegaMenu;
   open: boolean;
+  current: boolean;
   onToggle: () => void;
   onNavigate: () => void;
 }): ReactNode {
@@ -664,7 +695,10 @@ function MobileSection({
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="flex w-full items-center justify-between rounded-md px-2 py-3 text-[15px] font-medium text-text-secondary hover:bg-surface-1"
+        className={cn(
+          "flex w-full items-center justify-between rounded-md px-2 py-3 text-[15px] font-medium hover:bg-surface-1",
+          current ? "font-semibold text-brand-700 dark:text-white" : "text-text-secondary",
+        )}
       >
         {menu.label}
         <Icon icon={ArrowDown01Icon} size={16} className={cn("transition", open && "rotate-180")} />

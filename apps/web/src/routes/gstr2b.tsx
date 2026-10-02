@@ -1,4 +1,3 @@
-import { TableSkeleton } from "@/components/ui/Skeleton";
 import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
@@ -14,8 +13,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Upload04Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
 import { usePageSize } from "@/hooks/usePageSize";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
+import { ListCard, FilterField } from "@/components/ui/ListCard";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 
 export const Route = createFileRoute("/gstr2b")({
@@ -227,28 +225,21 @@ function UploadHistorySection({ onSelectUpload }: { onSelectUpload: (returnPerio
   );
   const totalPages = useTotalPages(data?.total ?? 0, pageSize, page, setPage);
 
-  if (isLoading) return <TableSkeleton rows={6} columns={[{ label: "Period" }, { label: "File" }, { label: "Total", align: "right" }, { label: "Matched", align: "right" }, { label: "Mismatch", align: "right" }, { label: "Not in Books", align: "right" }, { label: "Uploaded" }, { align: "right", kind: "button" }]} />;
-
-  if (!data?.uploads.length) {
-    return (
-      <EmptyState
-        title="No uploads yet"
-        description="Upload a GSTR-2B file to get started with reconciliation."
-      />
-    );
-  }
-
   return (
-    <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
-      <Pagination
-        placement="top"
-        page={page}
-        totalPages={totalPages}
-        onPageChange={setPage}
-        total={data.total}
-        pageSize={pageSize}
-      />
-      <TableScroll ref={tableRef}>
+    <ListCard
+      loading={isLoading}
+      fetching={isFetching}
+      tableRef={tableRef}
+      pagination={{ page, totalPages, onPageChange: setPage, total: data?.total ?? 0, pageSize, onPageSizeChange: setPageSize, pageSizeOptions: UPLOAD_PAGE_SIZES }}
+      empty={
+        !data?.uploads.length ? (
+          <EmptyState
+            title="No uploads yet"
+            description="Upload a GSTR-2B file to get started with reconciliation."
+          />
+        ) : undefined
+      }
+    >
         <table className="data-table">
           <thead>
             <tr>
@@ -263,7 +254,7 @@ function UploadHistorySection({ onSelectUpload }: { onSelectUpload: (returnPerio
             </tr>
           </thead>
           <tbody>
-            {data.uploads.map((u) => (
+            {data?.uploads.map((u) => (
               <tr key={u.id} className="cursor-pointer" onClick={() => onSelectUpload(u.returnPeriod)}>
                 <td className="font-medium text-text-primary">{u.returnPeriod}</td>
                 <td className="text-text-secondary max-w-[180px] truncate">{u.fileName}</td>
@@ -284,17 +275,7 @@ function UploadHistorySection({ onSelectUpload }: { onSelectUpload: (returnPerio
             ))}
           </tbody>
         </table>
-      </TableScroll>
-      <Pagination
-        page={page}
-        totalPages={totalPages}
-        onPageChange={setPage}
-        total={data.total}
-        pageSize={pageSize}
-        onPageSizeChange={setPageSize}
-        pageSizeOptions={UPLOAD_PAGE_SIZES}
-      />
-    </div>
+    </ListCard>
   );
 }
 
@@ -398,37 +379,25 @@ function ReconciliationSection({
         />
       </div>
 
-      {/* Filter */}
-      <div className="flex items-center gap-3 mb-4">
-        <Select
-          className="input w-44 text-sm"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          aria-label="Filter by match status"
-        >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </Select>
-      </div>
-
-      {isLoading && <TableSkeleton rows={6} columns={[{ label: "Supplier GSTIN" }, { label: "Supplier" }, { label: "Invoice #", kind: "mono" }, { label: "Date" }, { label: "Taxable", align: "right" }, { label: "CGST", align: "right" }, { label: "SGST", align: "right" }, { label: "IGST", align: "right" }, { label: "ITC", align: "center" }, { label: "Status", align: "center", kind: "badge" }, { align: "right", kind: "button" }]} />}
-
-      {!isLoading && !records?.records.length && (
-        <EmptyState title="No records" description="No records match the current filter." />
-      )}
-
-      {!isLoading && !!records?.records.length && (
-        <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
-          <Pagination
-            placement="top"
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            total={records.total}
-            pageSize={pageSize}
-          />
-          <TableScroll ref={tableRef}>
+      <ListCard
+        filters={
+          <FilterField label="Status" value={statusFilter} onChange={setStatusFilter} className="w-[160px]">
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </FilterField>
+        }
+        onClearFilters={statusFilter ? () => setStatusFilter("") : undefined}
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        pagination={{ page, totalPages, onPageChange: setPage, total: records?.total ?? 0, pageSize, onPageSizeChange: setPageSize }}
+        empty={
+          !records?.records.length ? (
+            <EmptyState title="No records" description="No records match the current filter." />
+          ) : undefined
+        }
+      >
             <table className="data-table">
               <thead>
                 <tr>
@@ -446,7 +415,7 @@ function ReconciliationSection({
                 </tr>
               </thead>
               <tbody>
-                {records.records.map((r) => {
+                {records?.records.map((r) => {
                   const badge = matchBadge(r.matchStatus);
                   const expanded = expandedId === r.id;
                   return (
@@ -518,17 +487,7 @@ function ReconciliationSection({
                 })}
               </tbody>
             </table>
-          </TableScroll>
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            total={records.total}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
-          />
-        </div>
-      )}
+      </ListCard>
     </div>
   );
 }
@@ -561,34 +520,29 @@ function MissingInBooksSection({ year, month }: { year: number; month: number })
     );
   }
 
-  if (isLoading) return <TableSkeleton rows={6} columns={[{ label: "Supplier GSTIN" }, { label: "Supplier" }, { label: "Invoice #", kind: "mono" }, { label: "Date" }, { label: "Taxable", align: "right" }, { label: "CGST", align: "right" }, { label: "SGST", align: "right" }, { label: "IGST", align: "right" }, { label: "ITC", align: "center" }]} />;
-
-  if (!data?.records.length) {
-    return (
-      <EmptyState
-        title="All suppliers accounted for"
-        description="No invoices found in GSTR-2B that are missing from your purchase records."
-      />
-    );
-  }
-
   return (
     <div>
-      <p className="text-sm text-text-secondary mb-4">
-        These invoices are reported in the GSTR-2B by your suppliers but are absent from your purchase records.
-        Create a purchase invoice to claim the ITC.
-      </p>
+      {data?.records.length ? (
+        <p className="text-sm text-text-secondary mb-4">
+          These invoices are reported in the GSTR-2B by your suppliers but are absent from your purchase records.
+          Create a purchase invoice to claim the ITC.
+        </p>
+      ) : null}
 
-      <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
-        <Pagination
-          placement="top"
-          page={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-          total={data.total}
-          pageSize={pageSize}
-        />
-        <TableScroll ref={tableRef}>
+      <ListCard
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        pagination={{ page, totalPages, onPageChange: setPage, total: data?.total ?? 0, pageSize, onPageSizeChange: setPageSize }}
+        empty={
+          !data?.records.length ? (
+            <EmptyState
+              title="All suppliers accounted for"
+              description="No invoices found in GSTR-2B that are missing from your purchase records."
+            />
+          ) : undefined
+        }
+      >
           <table className="data-table">
             <thead>
               <tr>
@@ -604,7 +558,7 @@ function MissingInBooksSection({ year, month }: { year: number; month: number })
               </tr>
             </thead>
             <tbody>
-              {data.records.map((r) => (
+              {data?.records.map((r) => (
                 <tr key={r.id}>
                   <td className="font-mono text-xs text-text-secondary">{r.supplierGstin}</td>
                   <td className="text-text-primary">{r.supplierName ?? "—"}</td>
@@ -630,16 +584,7 @@ function MissingInBooksSection({ year, month }: { year: number; month: number })
               ))}
             </tbody>
           </table>
-        </TableScroll>
-        <Pagination
-          page={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-          total={data.total}
-          pageSize={pageSize}
-          onPageSizeChange={setPageSize}
-        />
-      </div>
+      </ListCard>
     </div>
   );
 }
@@ -657,34 +602,29 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
   );
   const totalPages = useTotalPages(data?.total ?? 0, pageSize, page, setPage);
 
-  if (isLoading) return <TableSkeleton rows={6} columns={[{ label: "Supplier GSTIN" }, { label: "Supplier" }, { label: "Invoice #", kind: "mono" }, { label: "Date" }, { label: "Amount", align: "right" }]} />;
-
-  if (!data?.records.length) {
-    return (
-      <EmptyState
-        title="All purchase invoices accounted for"
-        description="All your purchase invoices with a supplier GSTIN appear in the GSTR-2B."
-      />
-    );
-  }
-
   return (
     <div>
-      <p className="text-sm text-text-secondary mb-4">
-        These purchase invoices are in your books but not in the GSTR-2B. Follow up with the
-        supplier to ensure they file their return correctly.
-      </p>
+      {data?.records.length ? (
+        <p className="text-sm text-text-secondary mb-4">
+          These purchase invoices are in your books but not in the GSTR-2B. Follow up with the
+          supplier to ensure they file their return correctly.
+        </p>
+      ) : null}
 
-      <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
-        <Pagination
-          placement="top"
-          page={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-          total={data.total}
-          pageSize={pageSize}
-        />
-        <TableScroll ref={tableRef}>
+      <ListCard
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        pagination={{ page, totalPages, onPageChange: setPage, total: data?.total ?? 0, pageSize, onPageSizeChange: setPageSize }}
+        empty={
+          !data?.records.length ? (
+            <EmptyState
+              title="All purchase invoices accounted for"
+              description="All your purchase invoices with a supplier GSTIN appear in the GSTR-2B."
+            />
+          ) : undefined
+        }
+      >
           <table className="data-table">
             <thead>
               <tr>
@@ -696,7 +636,7 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
               </tr>
             </thead>
             <tbody>
-              {data.records.map((r) => (
+              {data?.records.map((r) => (
                 <tr key={r.id}>
                   <td className="font-mono text-xs text-text-secondary">{r.partyGstin ?? "—"}</td>
                   <td className="text-text-primary">{r.partyName ?? "—"}</td>
@@ -714,23 +654,14 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
               ))}
             </tbody>
           </table>
-        </TableScroll>
-        <Pagination
-          page={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-          total={data.total}
-          pageSize={pageSize}
-          onPageSizeChange={setPageSize}
-        />
-      </div>
+      </ListCard>
     </div>
   );
 }
 
 // ── Main Page ─────────────────────────────────────────────────
 
-export function GSTR2BPage() {
+function GSTR2BPage() {
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);

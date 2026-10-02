@@ -96,7 +96,7 @@ apps/web/
 │   │   ├── cash-and-bank.tsx
 │   │   ├── gst.tsx
 │   │   ├── settings.tsx
-│   │   └── auth/         # Login, magic link, complete profile
+│   │   └── auth/         # Login, register, complete profile
 │   ├── components/       # Shared UI components, feature-specific panels
 │   ├── lib/
 │   │   ├── trpc.ts       # tRPC React client + QueryClient setup

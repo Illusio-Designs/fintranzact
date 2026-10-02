@@ -11,9 +11,8 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { TableSkeleton } from "@/components/ui/Skeleton";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
+import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { ListCard } from "@/components/ui/ListCard";
 import { usePageSize } from "@/hooks/usePageSize";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
@@ -70,83 +69,67 @@ function ManufacturingPage() {
         actions={<button className="btn-primary" onClick={openForm}>+ Manufacture</button>}
       />
 
-      <div className="card overflow-clip">
-        {!data ? (
-          <TableSkeleton columns={[{ label: "No." }, { label: "Date" }, { label: "Item made" }, { label: "Quantity", align: "right" }, { label: "Components from → To" }, { label: "Cost", align: "right" }, { label: "Status", kind: "badge" }]} rows={6} />
-        ) : data.data.length === 0 ? (
-          <EmptyState
-            title="Nothing manufactured yet"
-            description="Each production run is kept here as a manufacturing journal, newest first."
-            action={<button className="btn-primary" onClick={openForm}>Manufacture</button>}
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination
-              placement="top"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
+      <ListCard
+        loading={!data}
+        fetching={isFetching}
+        tableRef={tableRef}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        empty={
+          data && data.data.length === 0 ? (
+            <EmptyState
+              title="Nothing manufactured yet"
+              description="Each production run is kept here as a manufacturing journal, newest first."
+              action={<button className="btn-primary" onClick={openForm}>Manufacture</button>}
             />
-            <TableScroll ref={tableRef}>
-              <table className="data-table w-full">
-                <thead>
-                  <tr>
-                    <th>No.</th>
-                    <th>Date</th>
-                    <th>Item made</th>
-                    <th className="text-right">Quantity</th>
-                    <th>Components from → To</th>
-                    <th className="text-right">Cost</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.data.map((j) => (
-                    <tr key={j.id} className="cursor-pointer" onClick={() => setViewing(j.id)}>
-                      <td className="whitespace-nowrap font-medium text-text-primary">{j.journalNumber}</td>
-                      <td className="whitespace-nowrap text-text-secondary">{formatDate(j.date)}</td>
-                      <td>
-                        <p className="font-medium text-text-primary">{j.itemName}</p>
-                        {j.bomName && <p className="text-xs text-text-tertiary">{j.bomName}</p>}
-                      </td>
-                      <td className="text-right tabular-nums">{formatQty(j.quantity, j.unit)}</td>
-                      <td>
-                        <span className="inline-flex items-center gap-1.5 text-text-secondary">
-                          {j.sourceName}
-                          <Icon icon={ArrowRight01Icon} size={14} className="text-text-tertiary" />
-                          {j.destinationName}
-                        </span>
-                      </td>
-                      <td className="text-right tabular-nums">
-                        <p className="font-semibold text-text-primary">{formatCurrency(j.totalCost)}</p>
-                        <p className="text-xs text-text-tertiary">{formatCurrency(j.unitCost)} / {j.unit}</p>
-                      </td>
-                      <td>
-                        <span className={cn(
-                          "rounded px-1.5 py-0.5 text-2xs font-medium",
-                          j.status === "cancelled" ? "bg-red-600/10 text-red-600" : "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400",
-                        )}>
-                          {j.status === "cancelled" ? "Cancelled" : "Posted"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+          ) : undefined
+        }
+      >
+        <table className="data-table w-full">
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Date</th>
+              <th>Item made</th>
+              <th className="text-right">Quantity</th>
+              <th>Components from → To</th>
+              <th className="text-right">Cost</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data?.data ?? []).map((j) => (
+              <tr key={j.id} className="cursor-pointer" onClick={() => setViewing(j.id)}>
+                <td className="whitespace-nowrap font-medium text-text-primary">{j.journalNumber}</td>
+                <td className="whitespace-nowrap text-text-secondary">{formatDate(j.date)}</td>
+                <td>
+                  <p className="font-medium text-text-primary">{j.itemName}</p>
+                  {j.bomName && <p className="text-xs text-text-tertiary">{j.bomName}</p>}
+                </td>
+                <td className="text-right tabular-nums">{formatQty(j.quantity, j.unit)}</td>
+                <td>
+                  <span className="inline-flex items-center gap-1.5 text-text-secondary">
+                    {j.sourceName}
+                    <Icon icon={ArrowRight01Icon} size={14} className="text-text-tertiary" />
+                    {j.destinationName}
+                  </span>
+                </td>
+                <td className="text-right tabular-nums">
+                  <p className="font-semibold text-text-primary">{formatCurrency(j.totalCost)}</p>
+                  <p className="text-xs text-text-tertiary">{formatCurrency(j.unitCost)} / {j.unit}</p>
+                </td>
+                <td>
+                  <span className={cn(
+                    "rounded px-1.5 py-0.5 text-2xs font-medium",
+                    j.status === "cancelled" ? "bg-red-600/10 text-red-600" : "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400",
+                  )}>
+                    {j.status === "cancelled" ? "Cancelled" : "Posted"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </ListCard>
 
       <ManufactureForm
         key={formVersion}
@@ -566,7 +549,7 @@ function JournalDetail({ id, onClose }: { id: string | null; onClose: () => void
         }
       >
         {!j ? (
-          <TableSkeleton columns={[{ label: "Item" }, { label: "BOM", align: "right" }, { label: "Actual", align: "right" }, { label: "Value", align: "right" }]} rows={6} />
+          <SkeletonRows />
         ) : (
           <div className="space-y-5 text-sm">
             <div>

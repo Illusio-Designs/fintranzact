@@ -129,7 +129,7 @@ describe("DemoCheckout", () => {
     expect(mutateAsync).toHaveBeenCalledWith({ plan: "pro", cycle: "monthly", method: "upi" });
     expect(screen.getByTestId("payment-id")).toHaveTextContent("pay_demo_AbCdEfGhIjKlMn");
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue to set up your business" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create your company" }));
     await waitFor(() => expect(onContinue).toHaveBeenCalledTimes(1));
   });
 

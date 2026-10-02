@@ -1,10 +1,15 @@
-import { pgTable, text, timestamp, uuid, pgEnum, index, uniqueIndex, boolean, jsonb, integer, numeric, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum, pgSequence, index, uniqueIndex, boolean, jsonb, integer, numeric, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 // ── Enums ──────────────────────────────────────────────────────
 
 export const tenantStatusEnum = pgEnum("tenant_status", ["active", "suspended", "deleted"]);
 export const tenantPlanEnum = pgEnum("tenant_plan", ["forever_free", "free", "pro", "business", "enterprise"]);
+export const billingSubscriptionKindEnum = pgEnum("billing_subscription_kind", ["plan", "addon"]);
+export const billingSubscriptionStatusEnum = pgEnum("billing_subscription_status", [
+  "created", "active", "past_due", "halted", "cancelled",
+]);
+export const billingCycleEnum = pgEnum("billing_cycle", ["monthly", "yearly"]);
 export const memberRoleEnum = pgEnum("member_role", [
   // Legacy values (kept for backward compat with existing DB rows)
   "owner", "admin", "member", "viewer",
@@ -37,6 +42,13 @@ export const tenants = pgTable("tenants", {
    * seeds and admin-created orgs count as chosen; only self sign-up inserts NULL.
    */
   planSelectedAt: timestamp("plan_selected_at", { withTimezone: true }).defaultNow(),
+  // Billing details printed on the GST invoices Finvera issues to this
+  // organisation. Separate from the businesses' own profiles: an organisation
+  // can hold many businesses but is one paying customer.
+  billingName: text("billing_name"),
+  billingGstin: text("billing_gstin"),
+  billingAddress: text("billing_address"),
+  billingEmail: text("billing_email"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
@@ -142,17 +154,21 @@ export const invitations = pgTable("invitations", {
 
 // ── Magic Link Tokens ─────────────────────────────────────────
 
-export const magicLinkTokens = pgTable("magic_link_tokens", {
+/**
+ * Email-change tokens: the link sent to a NEW address to confirm it. The
+ * table kept its first name, "magic_link_tokens", from when it also held
+ * sign-in links (removed), so no migration was needed. `referral_code` is an
+ * unused leftover of that.
+ */
+export const emailChangeTokens = pgTable("magic_link_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull(),
   tokenHash: text("token_hash").notNull(),
-  // Populated for email-change tokens so confirmEmailChange doesn't trust client-supplied userId
+  // Bound server-side so confirmEmailChange never trusts a client-supplied userId
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),
   ipAddress: text("ip_address"),
-  /** Referral code typed or linked at sign-up, applied to the new organisation. */
-  referralCode: text("referral_code"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index("magic_link_tokens_email_idx").on(t.email),
@@ -315,6 +331,111 @@ export const roadmapItems = pgTable("roadmap_items", {
   createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
 }, (t) => [
   index("roadmap_items_status_idx").on(t.status, t.sortOrder),
+]);
+
+// ── Subscription billing ───────────────────────────────────────
+// What each organisation is paying for: one subscription row per plan or
+// add-on bought, mirroring a Razorpay subscription (or a demo one before the
+// gateway is configured). Control-schema because webhooks resolve by tenant
+// and the platform admin sees every organisation's billing in one query.
+
+export const billingSubscriptions = pgTable("billing_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  kind: billingSubscriptionKindEnum("kind").notNull(),
+  /** Plan id when kind = plan (tenant_plan value). */
+  plan: text("plan"),
+  /** Add-on id when kind = addon (ai_assistant | ai_plus | payroll | store_pro). */
+  addon: text("addon"),
+  cycle: billingCycleEnum("cycle").notNull(),
+  status: billingSubscriptionStatusEnum("status").default("created").notNull(),
+  /** demo | razorpay */
+  provider: text("provider").default("demo").notNull(),
+  providerSubscriptionId: text("provider_subscription_id"),
+  /** Price per cycle, before GST, in paise — frozen when bought. */
+  basePaise: integer("base_paise").notNull(),
+  currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  /** The owner cancelled: the subscription runs out at the period end. */
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
+  /** Downgrade scheduled for the period end (plan subscriptions only). */
+  scheduledPlan: text("scheduled_plan"),
+  scheduledCycle: billingCycleEnum("scheduled_cycle"),
+  /** Set when a renewal fails; past it the organisation goes read-only. */
+  graceUntil: timestamp("grace_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+}, (t) => [
+  index("billing_subscriptions_tenant_idx").on(t.tenantId),
+  index("billing_subscriptions_status_idx").on(t.status, t.currentPeriodEnd),
+  uniqueIndex("billing_subscriptions_provider_idx").on(t.providerSubscriptionId).where(sql`${t.providerSubscriptionId} IS NOT NULL`),
+  // One live plan subscription per organisation; one live row per add-on.
+  uniqueIndex("billing_subscriptions_live_plan_idx").on(t.tenantId).where(sql`${t.kind} = 'plan' AND ${t.status} <> 'cancelled'`),
+  uniqueIndex("billing_subscriptions_live_addon_idx").on(t.tenantId, t.addon).where(sql`${t.kind} = 'addon' AND ${t.status} <> 'cancelled'`),
+]);
+
+// Every charge (and failed charge) on a subscription. A captured row IS the
+// GST invoice from Finvera Solutions LLP: invoice_seq numbers them, and the
+// billing_* columns freeze the customer details the invoice was issued with.
+
+/** Numbers Finvera's GST invoices (FIN-00001). Separate from the column
+ * default so failed charges never consume a number. */
+export const billingInvoiceSeq = pgSequence("billing_invoice_seq");
+
+export const billingPayments = pgTable("billing_payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /**
+   * Sequential GST invoice number (FIN-00001). Only captured and credit rows
+   * take one (from the billing_invoice_seq sequence), so failed charges never
+   * punch holes in the invoice series.
+   */
+  invoiceSeq: integer("invoice_seq"),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  subscriptionId: uuid("subscription_id").references(() => billingSubscriptions.id, { onDelete: "set null" }),
+  /** captured | failed | refunded | credit */
+  status: text("status").default("captured").notNull(),
+  /** "Pro plan — monthly", "AI Assistant add-on — yearly", "Credit: unused Pro time". */
+  description: text("description").notNull(),
+  /** Negative for credit notes (unused time on an upgrade). */
+  basePaise: integer("base_paise").notNull(),
+  gstPaise: integer("gst_paise").notNull(),
+  totalPaise: integer("total_paise").notNull(),
+  method: text("method"),
+  provider: text("provider").notNull(),
+  providerPaymentId: text("provider_payment_id"),
+  providerInvoiceId: text("provider_invoice_id"),
+  periodStart: timestamp("period_start", { withTimezone: true }),
+  periodEnd: timestamp("period_end", { withTimezone: true }),
+  billingName: text("billing_name"),
+  billingGstin: text("billing_gstin"),
+  billingAddress: text("billing_address"),
+  failureReason: text("failure_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("billing_payments_tenant_idx").on(t.tenantId, t.createdAt),
+  index("billing_payments_subscription_idx").on(t.subscriptionId),
+]);
+
+// Webhook deliveries and the lifecycle steps the API takes itself, kept for
+// idempotency (a Razorpay event is applied once) and as the billing audit
+// trail — the tenant-DB audit log is business-scoped and cannot hold these.
+
+export const billingEvents = pgTable("billing_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** demo | razorpay | local (steps the API took itself) */
+  provider: text("provider").notNull(),
+  /** The gateway's event id; unique so a redelivered webhook is a no-op. */
+  eventId: text("event_id"),
+  type: text("type").notNull(),
+  tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+  subscriptionId: uuid("subscription_id").references(() => billingSubscriptions.id, { onDelete: "set null" }),
+  payload: jsonb("payload"),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("billing_events_event_idx").on(t.provider, t.eventId).where(sql`${t.eventId} IS NOT NULL`),
+  index("billing_events_tenant_idx").on(t.tenantId, t.createdAt),
 ]);
 
 // ── Relations ──────────────────────────────────────────────────

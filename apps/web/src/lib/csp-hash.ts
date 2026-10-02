@@ -36,7 +36,8 @@ export function cspDirectives(opts: { isDev: boolean; apiOrigin: string | null; 
       : "connect-src 'self'";
   return [
     "default-src 'self'",
-    `script-src 'self' ${inlineScriptSources} https://challenges.cloudflare.com`,
+    // checkout.razorpay.com — the Razorpay checkout script (subscription payments).
+    `script-src 'self' ${inlineScriptSources} https://challenges.cloudflare.com https://checkout.razorpay.com`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     // The business logo and signature are images served by the API
@@ -45,7 +46,8 @@ export function cspDirectives(opts: { isDev: boolean; apiOrigin: string | null; 
     connectSrc,
     // blob: — the POS prints its thermal receipt from a PDF the app fetched,
     // loaded into a hidden iframe as a blob: URL.
-    "frame-src 'self' blob: https://challenges.cloudflare.com",
+    // api.razorpay.com — the Razorpay checkout opens its payment UI in an iframe.
+    "frame-src 'self' blob: https://challenges.cloudflare.com https://api.razorpay.com https://checkout.razorpay.com",
     "object-src 'none'",
     "base-uri 'self'",
   ];

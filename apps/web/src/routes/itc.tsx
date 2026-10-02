@@ -18,7 +18,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
 import { usePageSize } from "@/hooks/usePageSize";
-import { Pagination } from "@/components/ui/Pagination";
+import { ListCard } from "@/components/ui/ListCard";
 import { TableScroll } from "@/components/ui/Table";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 
@@ -414,44 +414,33 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="w-48">
-          <Listbox
-            value={statusFilter}
-            onChange={(v) => setStatusFilter(v as LedgerStatus | "")}
-            options={STATUS_OPTIONS}
-            placeholder="All Statuses"
-          />
-        </div>
-        {data && (
-          <span className="text-xs text-text-tertiary">
-            {data.pagination.total} record{data.pagination.total !== 1 ? "s" : ""}
-          </span>
-        )}
-      </div>
-
-      {/* Table */}
-      {isLoading ? (
-        <ReportSkeleton />
-      ) : error ? (
-        <ErrorCard message={error.message} />
-      ) : !data || data.entries.length === 0 ? (
-        <EmptyState
-          title="No ITC entries"
-          description={statusFilter ? "No entries match the selected filter." : "No ITC entries for this period."}
-        />
-      ) : (
-        <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
-          <Pagination
-            placement="top"
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            total={total}
-            pageSize={pageSize}
-          />
-          <TableScroll ref={tableRef}>
+      <ListCard
+        filters={
+          <div className="w-48">
+            <Listbox
+              value={statusFilter}
+              onChange={(v) => setStatusFilter(v as LedgerStatus | "")}
+              options={STATUS_OPTIONS}
+              placeholder="All Statuses"
+            />
+          </div>
+        }
+        onClearFilters={statusFilter ? () => setStatusFilter("") : undefined}
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        empty={
+          error ? (
+            <ErrorCard message={error.message} />
+          ) : !data || data.entries.length === 0 ? (
+            <EmptyState
+              title="No ITC entries"
+              description={statusFilter ? "No entries match the selected filter." : "No ITC entries for this period."}
+            />
+          ) : undefined
+        }
+      >
             <table className="data-table">
               <thead>
                 <tr>
@@ -469,7 +458,7 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
                 </tr>
               </thead>
               <tbody>
-                {data.entries.map((entry) => {
+                {data?.entries.map((entry) => {
                   const rowTotal =
                     (parseFloat(entry.cgst) || 0) +
                     (parseFloat(entry.sgst) || 0) +
@@ -533,17 +522,7 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
                 })}
               </tbody>
             </table>
-          </TableScroll>
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            total={total}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
-          />
-        </div>
-      )}
+      </ListCard>
 
       {/* Block ITC Dialog */}
       <Modal

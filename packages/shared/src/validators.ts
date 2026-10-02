@@ -32,14 +32,14 @@ export const searchSchema = z.object({
 // ── Auth ───────────────────────────────────────────────────────
 
 export const loginSchema = z.object({
-  email: z.string().email().max(255),
+  email: z.string().trim().email().max(255),
   password: z.string().min(8).max(128),
 });
 
 export const registerSchema = z.object({
   username: z.string().trim().min(3).max(50).optional(),
   name: z.string().trim().min(2).max(100).optional(),
-  email: z.string().email().max(255),
+  email: z.string().trim().email().max(255),
   password: z.string().min(8).max(128),
   confirmPassword: z.string(),
   referralCode: z.string().trim().max(50).optional().or(z.literal("")),
@@ -61,18 +61,6 @@ export const registerSchema = z.object({
       message: "Passwords don't match",
     });
   }
-});
-
-export const magicLinkRequestSchema = z.object({
-  email: z.string().email().max(255),
-  turnstileToken: z.string().optional(),
-  source: z.enum(["web", "desktop", "mobile"]).default("web"),
-  /** Partner referral code; applied if this link creates a new organisation. */
-  referralCode: z.string().trim().max(50).optional(),
-});
-
-export const magicLinkVerifySchema = z.object({
-  token: z.string().min(1).max(128),
 });
 
 export const completeProfileSchema = z.object({

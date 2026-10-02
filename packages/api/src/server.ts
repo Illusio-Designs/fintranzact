@@ -25,7 +25,7 @@ import { generateLabelSheetPDF, LABEL_PRESETS, TYPE_PRESET } from "./lib/label-p
 import { asBarcodeType } from "./lib/barcode-setup.js";
 import { verifyBusinessAccess } from "./lib/business-membership.js";
 import { recordShareView, resolveShareToken } from "./lib/share-links.js";
-import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, magicLinkTokens, bankAccounts, storeOrders, payments, ewayBills, ewayBillVehicleUpdates, assertMigrationsPresent } from "@fintranzact/db";
+import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, parties, businesses, sessions, tenants, emailChangeTokens, bankAccounts, storeOrders, payments, ewayBills, ewayBillVehicleUpdates, assertMigrationsPresent } from "@fintranzact/db";
 import { calcLineItem, calcInvoiceTotals, money, parseCopies, isIntraStateSupply, formatIstDate, INVOICE_TEMPLATES, splitIntraStateTax, type InvoiceTemplate, type ThermalWidth } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
@@ -39,6 +39,8 @@ import { createCsrfMiddleware } from "./lib/csrf-middleware.js";
 import { assertAllowedStoreOrigin } from "./lib/store-origin.js";
 import { registerExportRoute } from "./http/exportStream.js";
 import { registerImportRoute } from "./http/importStream.js";
+import { registerRazorpayWebhook } from "./http/razorpayWebhook.js";
+import { registerBillingInvoiceRoute } from "./http/billingInvoice.js";
 import { listPublicPlansJson } from "./lib/public-plans.js";
 import { apiSecureHeaders } from "./lib/security-headers.js";
 
@@ -233,7 +235,7 @@ setInterval(() => {
 //      jar that replays stale `session_id` cookies on every request
 //      even when the JS tRPC client never set them. Without this
 //      bypass the mobile app would be locked out after its first
-//      successful magic-link verification.
+//      successful sign-in.
 //
 // GET/HEAD/OPTIONS are exempt by HTTP convention (side-effect-free).
 //
@@ -2207,6 +2209,11 @@ registerExportRoute(app);
 // ── Self-import upload endpoint ────────────────────────────────
 registerImportRoute(app);
 
+// ── Subscription billing ───────────────────────────────────────
+// Razorpay subscription webhooks, and the GST invoice PDFs Finvera issues.
+registerRazorpayWebhook(app);
+registerBillingInvoiceRoute(app);
+
 // ── tRPC handler ───────────────────────────────────────────────
 app.use("/api/trpc/*", async (c) => {
   const response = await fetchRequestHandler({
@@ -2228,7 +2235,7 @@ app.use("/api/trpc/*", async (c) => {
 const cleanupTimer = setInterval(async () => {
   try {
     await controlDb.delete(sessions).where(lt(sessions.expiresAt, new Date()));
-    await controlDb.delete(magicLinkTokens).where(lt(magicLinkTokens.expiresAt, new Date()));
+    await controlDb.delete(emailChangeTokens).where(lt(emailChangeTokens.expiresAt, new Date()));
   } catch (e) {
     logger.error({ err: e }, "[session-cleanup] Failed");
   }

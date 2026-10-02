@@ -7,6 +7,7 @@ import {
   Building03Icon,
   CreditCardIcon,
   DashboardSquare01Icon,
+  Invoice01Icon,
   Logout01Icon,
   Menu01Icon,
   Rocket01Icon,
@@ -40,9 +41,10 @@ import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
 import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
 import { RoadmapView } from "@/components/platform/RoadmapView";
+import { SubscriptionsView } from "@/components/platform/SubscriptionsView";
 
-type View = "overview" | "organisations" | "plans" | "partners" | "roadmap";
-const VIEWS: View[] = ["overview", "organisations", "plans", "partners", "roadmap"];
+type View = "overview" | "organisations" | "plans" | "subscriptions" | "partners" | "roadmap";
+const VIEWS: View[] = ["overview", "organisations", "plans", "subscriptions", "partners", "roadmap"];
 
 export const Route = createFileRoute("/platform")({
   validateSearch: (search: Record<string, unknown>): { view?: View } => ({
@@ -55,6 +57,7 @@ const NAV: { view: View; label: string; icon: typeof Building03Icon }[] = [
   { view: "overview", label: "Overview", icon: DashboardSquare01Icon },
   { view: "organisations", label: "Organisations", icon: Building03Icon },
   { view: "plans", label: "Plans", icon: CreditCardIcon },
+  { view: "subscriptions", label: "Subscriptions", icon: Invoice01Icon },
   { view: "partners", label: "Partners", icon: UserGroupIcon },
   { view: "roadmap", label: "Upcoming features", icon: Rocket01Icon },
 ];
@@ -128,6 +131,7 @@ function PlatformAdminPage() {
       {view === "overview" ? <OverviewView onOpen={setSelectedId} /> : null}
       {view === "organisations" ? <OrganisationsView onOpen={setSelectedId} /> : null}
       {view === "plans" ? <PlansView /> : null}
+      {view === "subscriptions" ? <SubscriptionsView /> : null}
       {view === "partners" ? <PartnersView /> : null}
       {view === "roadmap" ? <RoadmapView /> : null}
       <OrganisationPanel id={selectedId} onClose={() => setSelectedId(null)} />

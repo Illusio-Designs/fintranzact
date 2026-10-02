@@ -251,13 +251,17 @@ export interface PlanCheckoutAmount {
   totalPaise: number;
 }
 
+/** Yearly billing gives 2 months free: a year costs 10 months. */
+export const YEARLY_CYCLE_MONTHS = 10;
+
 /**
  * What a plan costs for one billing cycle, in paise, with 18% GST on top.
- * Plans carry a monthly price only, so a year is twelve months. Integer math:
- * prices are whole rupees, so 18% of them is always a whole number of paise.
+ * Plans carry a monthly price only; a year is ten months (2 months free).
+ * Integer math: prices are whole rupees, so 18% of them is always a whole
+ * number of paise.
  */
 export function planCheckoutAmount(monthlyPriceInr: number, cycle: BillingCycle): PlanCheckoutAmount {
-  const months = cycle === "yearly" ? 12 : 1;
+  const months = cycle === "yearly" ? YEARLY_CYCLE_MONTHS : 1;
   const basePaise = monthlyPriceInr * 100 * months;
   const gstPaise = Math.round((basePaise * PLAN_GST_RATE_PERCENT) / 100);
   return { basePaise, gstPaise, totalPaise: basePaise + gstPaise };

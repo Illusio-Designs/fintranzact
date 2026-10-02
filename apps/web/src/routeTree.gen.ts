@@ -75,7 +75,6 @@ import { Route as HelpSplatRouteImport } from './routes/help/$'
 import { Route as FeaturesSlugRouteImport } from './routes/features/$slug'
 import { Route as BusinessCreateRouteImport } from './routes/business/create'
 import { Route as AuthVerifyEmailChangeRouteImport } from './routes/auth/verify-email-change'
-import { Route as AuthVerifyRouteImport } from './routes/auth/verify'
 import { Route as AuthPlanSelectionRouteImport } from './routes/auth/plan-selection'
 import { Route as AuthCompleteProfileRouteImport } from './routes/auth/complete-profile'
 
@@ -444,11 +443,6 @@ const AuthVerifyEmailChangeRoute = AuthVerifyEmailChangeRouteImport.update({
   path: '/auth/verify-email-change',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthVerifyRoute = AuthVerifyRouteImport.update({
-  id: '/auth/verify',
-  path: '/auth/verify',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthPlanSelectionRoute = AuthPlanSelectionRouteImport.update({
   id: '/auth/plan-selection',
   path: '/auth/plan-selection',
@@ -529,7 +523,6 @@ export interface FileRoutesByFullPath {
   '/widgets': typeof WidgetsRoute
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
-  '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
   '/features/$slug': typeof FeaturesSlugRoute
@@ -604,7 +597,6 @@ export interface FileRoutesByTo {
   '/widgets': typeof WidgetsRoute
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
-  '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
   '/features/$slug': typeof FeaturesSlugRoute
@@ -680,7 +672,6 @@ export interface FileRoutesById {
   '/widgets': typeof WidgetsRoute
   '/auth/complete-profile': typeof AuthCompleteProfileRoute
   '/auth/plan-selection': typeof AuthPlanSelectionRoute
-  '/auth/verify': typeof AuthVerifyRoute
   '/auth/verify-email-change': typeof AuthVerifyEmailChangeRoute
   '/business/create': typeof BusinessCreateRoute
   '/features/$slug': typeof FeaturesSlugRoute
@@ -757,7 +748,6 @@ export interface FileRouteTypes {
     | '/widgets'
     | '/auth/complete-profile'
     | '/auth/plan-selection'
-    | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
     | '/features/$slug'
@@ -832,7 +822,6 @@ export interface FileRouteTypes {
     | '/widgets'
     | '/auth/complete-profile'
     | '/auth/plan-selection'
-    | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
     | '/features/$slug'
@@ -907,7 +896,6 @@ export interface FileRouteTypes {
     | '/widgets'
     | '/auth/complete-profile'
     | '/auth/plan-selection'
-    | '/auth/verify'
     | '/auth/verify-email-change'
     | '/business/create'
     | '/features/$slug'
@@ -983,7 +971,6 @@ export interface RootRouteChildren {
   WidgetsRoute: typeof WidgetsRoute
   AuthCompleteProfileRoute: typeof AuthCompleteProfileRoute
   AuthPlanSelectionRoute: typeof AuthPlanSelectionRoute
-  AuthVerifyRoute: typeof AuthVerifyRoute
   AuthVerifyEmailChangeRoute: typeof AuthVerifyEmailChangeRoute
   BusinessCreateRoute: typeof BusinessCreateRoute
   FeaturesSlugRoute: typeof FeaturesSlugRoute
@@ -1484,13 +1471,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthVerifyEmailChangeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/verify': {
-      id: '/auth/verify'
-      path: '/auth/verify'
-      fullPath: '/auth/verify'
-      preLoaderRoute: typeof AuthVerifyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/auth/plan-selection': {
       id: '/auth/plan-selection'
       path: '/auth/plan-selection'
@@ -1575,7 +1555,6 @@ const rootRouteChildren: RootRouteChildren = {
   WidgetsRoute: WidgetsRoute,
   AuthCompleteProfileRoute: AuthCompleteProfileRoute,
   AuthPlanSelectionRoute: AuthPlanSelectionRoute,
-  AuthVerifyRoute: AuthVerifyRoute,
   AuthVerifyEmailChangeRoute: AuthVerifyEmailChangeRoute,
   BusinessCreateRoute: BusinessCreateRoute,
   FeaturesSlugRoute: FeaturesSlugRoute,

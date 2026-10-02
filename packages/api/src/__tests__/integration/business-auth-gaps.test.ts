@@ -173,7 +173,7 @@ describe("auth", () => {
 
   it("requestEmailChange emails a link that confirmEmailChange uses once", async () => {
     const u = await createUser({ email: "move.me@example.in" });
-    const send = vi.spyOn(emailService, "sendMagicLink").mockResolvedValue(undefined as never);
+    const send = vi.spyOn(emailService, "sendEmailChangeLink").mockResolvedValue(undefined as never);
     try {
       await expect(userCaller(u).auth.requestEmailChange({ newEmail: "Moved.Here@Example.in" })).resolves.toEqual({ success: true });
       const [to, url] = send.mock.calls[0] as [string, string];
@@ -197,7 +197,7 @@ describe("auth", () => {
 
   it("confirmEmailChange reports a clash if the address was taken after the request", async () => {
     const u = await createUser({ email: "slow.mover@example.in" });
-    const send = vi.spyOn(emailService, "sendMagicLink").mockResolvedValue(undefined as never);
+    const send = vi.spyOn(emailService, "sendEmailChangeLink").mockResolvedValue(undefined as never);
     try {
       await userCaller(u).auth.requestEmailChange({ newEmail: "contested@example.in" });
       const token = new URL((send.mock.calls[0] as [string, string])[1]).searchParams.get("token")!;

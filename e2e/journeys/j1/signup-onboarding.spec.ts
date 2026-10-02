@@ -6,16 +6,11 @@
  *      "Set up your business" wizard with a GSTIN (pincode fills city/state,
  *      GSTIN fills PAN and the state code) → dashboard. Then sign out, a wrong
  *      password is refused, and the right one lands the owner on the dashboard.
- *   B. Magic-link sign-up (dark theme): "Email me a sign-in link" for a new
- *      address → open the emailed link → complete profile → plan selection
- *      (Forever Free) → onboarding (owner without a business lands there) →
- *      an unregistered business.
- *      The spent link and an expired link are both refused; a fresh link signs
- *      the now-established owner straight into the dashboard.
+ *   B. Password sign-up on the free plan (dark theme): /register → plan
+ *      selection (Forever Free) → onboarding (owner without a business lands
+ *      there) → an unregistered business. Then sign out and log in again with
+ *      the password, straight into the dashboard.
  *
- * Emails: the API runs without RESEND_API_KEY, so links go to the dev console
- * mailer and the API stores only a hash. The journey reads "the email" by
- * re-keying the newest token row for the address (db.claimLatestMagicLink).
  * Turnstile is stubbed at the network layer; nothing external is called.
  * The checkout is the demo one (no gateway, no money): Business is given a
  * listed price for the journey, since by default it is priced on request.
@@ -32,9 +27,6 @@ import {
 } from "../../helpers/journey";
 import {
   businessesCreatedBy,
-  claimLatestMagicLink,
-  expireMagicLinkToken,
-  magicLinkTokens,
   membershipsOf,
   offerBusinessPlanAt,
   userByEmail,
@@ -277,43 +269,27 @@ test.describe("J1 sign-up & onboarding", () => {
   });
 });
 
-test.describe("J1 sign-up by magic link (dark theme)", () => {
+test.describe("J1 sign-up on the free plan (dark theme)", () => {
   test.use({ theme: "dark" });
 
-  test("magic-link sign-up → profile → onboarding (unregistered); spent and expired links refused", async ({
+  test("password sign-up → plan (Forever Free) → onboarding (unregistered business) → dashboard; sign out and log in", async ({
     page,
-    guard,
   }) => {
     const id = uid();
-    const email = `j1-magic-${id}@test.fintranzact.com`;
-    const name = `Meera ${id}`;
+    const email = `j1-free-${id}@test.fintranzact.com`;
+    const username = `Meera ${id}`;
     const bizName = `J1 Kirana ${id}`;
 
-    // ── Ask for a sign-in link with a brand-new address ─────────
-    await page.goto("/login");
-    await expectNoHorizontalScroll(page, "login");
-    await page.getByLabel("Email address").fill(email);
-    await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Sign-in link sent" })).toContainText(email);
-    await expect(page.getByRole("button", { name: /Resend link in \d+s/ })).toBeDisabled();
-
-    const [issued] = await magicLinkTokens(email);
-    expect(issued, "magic link row").toBeTruthy();
-    expect(issued.used_at).toBeNull();
-    // Valid for 15 minutes from issue.
-    expect(Math.abs(issued.expires_at.getTime() - issued.created_at.getTime() - 15 * 60_000)).toBeLessThan(5_000);
-    expect(await userByEmail(email), "no account until the link is opened").toBeUndefined();
-
-    // ── Open the emailed link ───────────────────────────────────
-    const link = await claimLatestMagicLink(email);
-    await page.goto(`/auth/verify?token=${encodeURIComponent(link)}`);
-
-    // First sign-in: tell us your name
-    await expect(page.getByRole("heading", { name: "Welcome to Fintranzact" })).toBeVisible({ timeout: 15_000 });
+    // ── Register with a brand-new address ───────────────────────
+    await page.goto("/register");
+    await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
     await expectTheme(page, "dark");
-    await expectNoHorizontalScroll(page, "complete profile");
-    await page.getByLabel("Your name").fill(name);
-    await page.getByRole("button", { name: "Continue" }).click();
+    await expectNoHorizontalScroll(page, "register");
+    await page.getByLabel("Username").fill(username);
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByLabel("Retype password").fill(PASSWORD);
+    await page.locator("form").getByRole("button", { name: "Create free account" }).click();
 
     // A new organisation's owner chooses a plan first, however they signed up.
     await choosePlan(page, /Forever Free/);
@@ -321,9 +297,7 @@ test.describe("J1 sign-up by magic link (dark theme)", () => {
     await expectTheme(page, "dark");
 
     const user = await userByEmail(email);
-    expect(user).toMatchObject({ name, email_verified: true, has_password: false });
-    const [spent] = await magicLinkTokens(email);
-    expect(spent.used_at, "link is single-use").not.toBeNull();
+    expect(user).toMatchObject({ name: username, has_password: true });
 
     // ── Business without GST: state code follows the chosen state ─
     await completeBusinessWizard(page, {
@@ -350,31 +324,11 @@ test.describe("J1 sign-up by magic link (dark theme)", () => {
     const orgs = await membershipsOf(user!.id);
     expect(orgs).toEqual([expect.objectContaining({ role: "owner", plan: "forever_free", plan_selected_at: expect.any(Date) })]);
 
-    // ── Spent link: refused ─────────────────────────────────────
+    // ── Sign out, then log in with the password ─────────────────
     await signOut(page);
-    guard.allow(/status of 400 .*auth\.verifyMagicLink/); // spent / expired links are refused with a 400
-    await page.goto(`/auth/verify?token=${encodeURIComponent(link)}`);
-    await expect(page.getByRole("heading", { name: "Link expired or invalid" })).toBeVisible({ timeout: 15_000 });
-    await expectNoHorizontalScroll(page, "verify: spent link");
-    await page.getByRole("button", { name: "Back to sign in" }).click();
-    await expect(page).toHaveURL(/\/login/);
-
-    // ── Expired link: refused ───────────────────────────────────
     await page.getByLabel("Email address").fill(email);
-    await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Sign-in link sent" })).toBeVisible();
-    const expired = await claimLatestMagicLink(email);
-    await expireMagicLinkToken(expired);
-    await page.goto(`/auth/verify?token=${encodeURIComponent(expired)}`);
-    await expect(page.getByRole("heading", { name: "Link expired or invalid" })).toBeVisible({ timeout: 15_000 });
-
-    // ── A fresh link signs the owner straight into the dashboard ─
-    await page.goto("/login");
-    await page.getByLabel("Email address").fill(email);
-    await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Sign-in link sent" })).toBeVisible();
-    const fresh = await claimLatestMagicLink(email);
-    await page.goto(`/auth/verify?token=${encodeURIComponent(fresh)}`);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.locator("form").getByRole("button", { name: "Log in" }).click();
     await openCompany(page, bizName);
   });
 });

@@ -8,12 +8,10 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { DetailSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
-import { PillTabs } from "@/components/ui/Tabs";
+import { ListCard } from "@/components/ui/ListCard";
+import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Icon } from "@/components/ui/Icon";
 import { ShoppingBag01Icon } from "@hugeicons/core-free-icons";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 import { usePageSize } from "@/hooks/usePageSize";
 
@@ -361,7 +359,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
         }
       >
         {isLoading ? (
-          <DetailSkeleton />
+          <SkeletonRows count={7} height="h-8" className="space-y-3 animate-pulse" />
         ) : !o ? (
           <p className="text-text-tertiary text-sm">Order not found.</p>
         ) : (
@@ -628,50 +626,29 @@ function StoreOrdersPage() {
         description="Manage and track customer orders from your store"
       />
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
-        {/* Filters */}
-        <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
-          {/* Seven statuses scroll sideways on phones instead of wrapping. */}
-          <div className="min-w-0 max-w-full overflow-x-auto">
-            <PillTabs
-              tabs={STATUS_TABS}
-              value={status}
-              onChange={(v) => setStatus(v as OrderStatus | "")}
+      <ListCard
+        tabs={{ tabs: STATUS_TABS, value: status, onChange: (v) => setStatus(v as OrderStatus | ""), label: "Order status" }}
+        onClearFilters={status ? () => setStatus("") : undefined}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        empty={
+          !orders.length && !isFetching ? (
+            <EmptyState
+              icon={<Icon icon={ShoppingBag01Icon} size={24} className="text-text-tertiary" />}
+              title="No orders found"
+              description={
+                status
+                  ? `No ${STATUS_CONFIG[status as OrderStatus]?.label.toLowerCase() ?? status} orders${search ? ` matching "${search}"` : ""}.`
+                  : search
+                    ? `No orders matching "${search}".`
+                    : "No store orders have been placed yet."
+              }
             />
-          </div>
-        </div>
-
-        {/* Content */}
-        {isLoading ? (
-          <div className="p-4">
-            <TableSkeleton columns={[{ label: "Order #", kind: "mono" }, { label: "Customer" }, { label: "Phone" }, { label: "Items", align: "center" }, { label: "Total", align: "right" }, { label: "Status", kind: "badge" }, { label: "Date" }, { align: "right", kind: "button" }]} rows={7} />
-          </div>
-        ) : !orders.length && !isFetching ? (
-          <EmptyState
-            icon={
-              <Icon icon={ShoppingBag01Icon} size={24} className="text-text-tertiary" />
-            }
-            title="No orders found"
-            description={
-              status
-                ? `No ${STATUS_CONFIG[status as OrderStatus]?.label.toLowerCase() ?? status} orders${search ? ` matching "${search}"` : ""}.`
-                : search
-                  ? `No orders matching "${search}".`
-                  : "No store orders have been placed yet."
-            }
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination
-              placement="top"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-            />
-            {/* Scrolls sideways on a phone so Total, Status and Actions stay reachable. */}
-            <TableScroll ref={tableRef}>
+          ) : undefined
+        }
+      >
               <table className="data-table w-full">
                 <thead>
                   <tr>
@@ -757,19 +734,7 @@ function StoreOrdersPage() {
                   ))}
                 </tbody>
               </table>
-
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+      </ListCard>
 
       {/* Detail panel */}
       <OrderDetailPanel

@@ -4,6 +4,8 @@ import { trpc } from "@/lib/trpc";
 import { usePlans, type PlanId } from "@/lib/plans";
 import { planSelectionMode } from "@/lib/plan-selection";
 import { DemoCheckout } from "@/components/billing/DemoCheckout";
+import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
+import { toast } from "@/hooks/useToast";
 
 import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/Icon";
@@ -25,24 +27,56 @@ function PlanSelectionPage() {
   );
 
   // DB is the source of truth: refresh tenant data so __root.tsx sees the
-  // saved plan, then let its guards take the owner on (onboarding next).
+  // saved plan. A new owner has no company yet, so the next page is where they
+  // create it; an organisation that already has one goes to its dashboard.
   async function goOn() {
     await utils.auth.me.refetch();
     await utils.tenant.list.refetch();
-    navigate({ to: "/" });
+    const businesses = await utils.business.list.fetch();
+    navigate({ to: businesses.length === 0 ? "/onboarding" : "/" });
   }
 
   const updatePlanMutation = trpc.tenant.updatePlan.useMutation({ onSuccess: goOn });
 
   // Owners choose a free plan themselves. A paid plan with a listed price is
-  // paid for in the (demo) checkout when it is switched on; otherwise paid
-  // plans are set up by the Fintranzact team and the owner starts free.
+  // paid for online — through Razorpay once its keys are configured, or the
+  // demo checkout before that; otherwise paid plans are set up by the
+  // Fintranzact team and the owner starts free.
   const selectedOption = plans.find((plan) => plan.id === selectedPlan);
   const selectedIsFree = selectedPlan === "forever_free" || selectedPlan === "free";
   const { data: billingConfig } = trpc.billing.config.useQuery(undefined, { staleTime: 5 * 60_000 });
   const selectedPrice = selectedOption?.monthlyPriceInr ?? null;
-  const canPayOnline = !selectedIsFree && !!billingConfig?.demoPayments && selectedPrice !== null && selectedPrice > 0;
+  const paymentsOn = !!billingConfig?.demoPayments || billingConfig?.provider === "razorpay";
+  const canPayOnline = !selectedIsFree && paymentsOn && selectedPrice !== null && selectedPrice > 0;
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+
+  // Razorpay flow: create the subscription, open the Razorpay popup, then
+  // verify the signature server-side; only then is the plan active.
+  const verifyCheckout = trpc.billing.verifyCheckout.useMutation({
+    onSuccess: goOn,
+    onError: (e) => toast.error("Payment could not be verified", e.message),
+  });
+  const subscribePlan = trpc.billing.subscribePlan.useMutation({
+    onSuccess: async (res) => {
+      if (res.status === "active") {
+        await goOn();
+        return;
+      }
+      await openRazorpayCheckout({
+        keyId: res.razorpayKeyId,
+        providerSubscriptionId: res.providerSubscriptionId,
+        name: selectedOption?.name,
+        email: session?.user?.email ?? undefined,
+        onSuccess: (resp) =>
+          verifyCheckout.mutate({
+            subscriptionId: res.subscriptionId,
+            razorpayPaymentId: resp.razorpay_payment_id,
+            razorpaySignature: resp.razorpay_signature,
+          }),
+      });
+    },
+    onError: (e) => toast.error("Could not start the payment", e.message),
+  });
 
   // Only the owner changes the plan, and an organisation already on a paid
   // plan keeps it — picking here must never reset it to Forever Free.
@@ -61,11 +95,18 @@ function PlanSelectionPage() {
       return;
     }
     if (canPayOnline) {
-      setCheckoutOpen(true);
+      if (billingConfig?.provider === "razorpay") {
+        // Plans carry a monthly price only, so there is no yearly choice yet.
+        subscribePlan.mutate({ plan: selectedPlan, cycle: "monthly" });
+      } else {
+        setCheckoutOpen(true);
+      }
       return;
     }
     updatePlanMutation.mutate({ plan: selectedIsFree ? selectedPlan : "forever_free" });
   }
+
+  const paying = subscribePlan.isPending || verifyCheckout.isPending;
 
   return (
     <div className="min-h-screen bg-surface-1 px-4 py-10 sm:px-6 lg:px-8">
@@ -146,7 +187,7 @@ function PlanSelectionPage() {
               </p>
             ) : canPayOnline ? (
               <p className="mt-4 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm text-brand-700 dark:border-brand-900 dark:bg-brand-950 dark:text-brand-300">
-                {selectedOption!.price} a month + GST, paid now. Then you'll set up your business.
+                {selectedOption!.price} a month + GST, paid now. Then you'll create your company.
               </p>
             ) : !selectedIsFree && (
               <p className="mt-4 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm text-brand-700 dark:border-brand-900 dark:bg-brand-950 dark:text-brand-300">
@@ -158,16 +199,20 @@ function PlanSelectionPage() {
             <button
               type="button"
               onClick={handleContinue}
-              disabled={updatePlanMutation.isPending || sessionLoading || tenantListLoading}
+              disabled={updatePlanMutation.isPending || paying || sessionLoading || tenantListLoading}
               className="btn-primary mt-6 w-full py-3"
             >
               {updatePlanMutation.isPending
                 ? "Saving plan…"
-                : keepsCurrentPlan || selectedIsFree
-                  ? "Continue to dashboard"
-                  : canPayOnline
-                    ? "Continue to payment"
-                    : "Start free for now"}
+                : paying
+                  ? "Opening payment…"
+                  : keepsCurrentPlan
+                    ? "Continue"
+                    : selectedIsFree
+                      ? "Create your company"
+                      : canPayOnline
+                        ? "Continue to payment"
+                        : "Start free and create your company"}
             </button>
           </div>
         </div>
@@ -176,7 +221,7 @@ function PlanSelectionPage() {
       {canPayOnline && selectedOption && (
         <DemoCheckout
           open={checkoutOpen}
-          plan={{ id: selectedOption.id, name: selectedOption.name, monthlyPriceInr: selectedPrice! }}
+          plan={{ id: selectedOption.id, name: selectedOption.name, monthlyPriceInr: selectedPrice!, features: selectedOption.features }}
           // Plans carry a monthly price only, so there is no yearly choice yet.
           cycle="monthly"
           onClose={() => setCheckoutOpen(false)}

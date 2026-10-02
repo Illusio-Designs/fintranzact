@@ -25,7 +25,7 @@ export const trpc = createTRPCReact<AppRouter>();
  *
  * React Native's native HTTP stack (URLSession / OkHttp) maintains a
  * per-app cookie jar that replays any `Set-Cookie` the API ever sent
- * — including the `session_id` cookie from `auth.verifyMagicLink` —
+ * — including the `session_id` cookie set by `auth.login` —
  * on every subsequent request, even though this JS layer never
  * touches cookies. Without the header the second mobile POST would
  * be rejected and the tRPC client would report "Unable to transform

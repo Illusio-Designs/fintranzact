@@ -14,8 +14,7 @@ import { InputField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { Spinner } from "@/components/ui/Spinner";
 import { Select } from "@/components/ui/Select";
-import { Pagination } from "@/components/ui/Pagination";
-import { TableScroll } from "@/components/ui/Table";
+import { ListCard } from "@/components/ui/ListCard";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 import { usePageSize } from "@/hooks/usePageSize";
 
@@ -123,11 +122,11 @@ function DashboardTab() {
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const statusTabs = [
-    { value: "", label: `All (${Object.values(counts).reduce((a, b) => a + b, 0)})` },
-    { value: "generated", label: `Generated (${counts.generated})` },
-    { value: "pending", label: `Pending (${counts.pending})` },
-    { value: "failed", label: `Failed (${counts.failed})` },
-    { value: "cancelled", label: `Cancelled (${counts.cancelled})` },
+    { value: "", label: "All", count: Object.values(counts).reduce((a, b) => a + b, 0) },
+    { value: "generated", label: "Generated", count: counts.generated },
+    { value: "pending", label: "Pending", count: counts.pending },
+    { value: "failed", label: "Failed", count: counts.failed },
+    { value: "cancelled", label: "Cancelled", count: counts.cancelled },
   ];
 
   const hasFailed = (counts.failed + counts.pending) > 0;
@@ -149,52 +148,38 @@ function DashboardTab() {
         ))}
       </div>
 
-      {/* Filters + bulk retry */}
-      <div className="card overflow-clip">
-        <div className="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-border-light">
-          {hasFailed && (
+      {/* Status tabs + bulk retry + table */}
+      <ListCard
+        tabs={{ tabs: statusTabs, value: tab, onChange: setTab, label: "E-invoice status" }}
+        actions={
+          hasFailed ? (
             <button
               onClick={() => bulkRetryMutation.mutate()}
               disabled={bulkRetryMutation.isPending}
-              className="btn-secondary text-sm ml-auto flex items-center gap-1.5"
+              className="btn-secondary text-sm flex items-center gap-1.5"
             >
               {bulkRetryMutation.isPending && <Spinner size="sm" />}
               Retry All Failed
             </button>
-          )}
-        </div>
-
-        {/* Status tabs */}
-        <div className="px-4 py-2 border-b border-border-light">
-          {/* Five tabs with counts scroll sideways on phones instead of wrapping. */}
-          <div className="min-w-0 max-w-full overflow-x-auto">
-            <PillTabs tabs={statusTabs} value={tab} onChange={setTab} />
-          </div>
-        </div>
-
-        {/* Table */}
-        {isLoading ? (
-          <DashboardSkeleton />
-        ) : !data?.data.length ? (
-          <EmptyState
-            title="No e-invoices"
-            description={
-              tab || search
-                ? "No invoices match your filters"
-                : "E-invoice status will appear here once invoices are submitted to IRP"
-            }
-          />
-        ) : (
-          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
-            <Pagination
-              placement="top"
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
+          ) : undefined
+        }
+        loading={isLoading}
+        fetching={isFetching}
+        tableRef={tableRef}
+        pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
+        empty={
+          !data?.data.length ? (
+            <EmptyState
+              title="No e-invoices"
+              description={
+                tab || search
+                  ? "No invoices match your filters"
+                  : "E-invoice status will appear here once invoices are submitted to IRP"
+              }
             />
-            <TableScroll ref={tableRef}>
+          ) : undefined
+        }
+      >
               <table className="data-table">
                 <thead>
                   <tr>
@@ -209,7 +194,7 @@ function DashboardTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.data.map((inv) => (
+                  {data?.data.map((inv) => (
                     <tr key={inv.id}>
                       <td className="font-mono text-xs text-text-primary">{inv.invoiceNumber}</td>
                       <td className="text-text-secondary whitespace-nowrap">{formatDate(inv.invoiceDate)}</td>
@@ -265,18 +250,7 @@ function DashboardTab() {
                   ))}
                 </tbody>
               </table>
-            </TableScroll>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              total={total}
-              pageSize={pageSize}
-              onPageSizeChange={setPageSize}
-            />
-          </div>
-        )}
-      </div>
+      </ListCard>
 
       {/* Cancel IRN modal */}
       <Modal open={cancelId !== null} onClose={() => setCancelId(null)} className="max-w-md">
