@@ -15,6 +15,7 @@
 | auth.confirmEmailChange | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.issueAccessToken | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.listSessions | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.listTrustedDevices | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.login | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.logout | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.logoutAll | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -22,12 +23,15 @@
 | auth.register | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.regenerateBackupCodes | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.requestEmailChange | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.revokeAllTrustedDevices | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.revokeSession | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.revokeTrustedDevice | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.twoFactorBeginSetup | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.twoFactorConfirmSetup | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.twoFactorDisable | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.twoFactorStatus | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.updateName | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.verifyTwoFactor | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | bankAccount.addTransaction | mutation | authorized | create:BankTransaction | ✓ | ✓ | ✗ | ✗ | ✓ |
 | bankAccount.create | mutation | authorized | create:BankAccount | ✓ | ✓ | ✗ | ✗ | ✓ |
 | bankAccount.delete | mutation | authorized | delete:BankAccount | ✓ | ✓ | ✗ | ✗ | ✓ |

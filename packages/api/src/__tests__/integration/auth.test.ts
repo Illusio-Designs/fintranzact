@@ -316,6 +316,8 @@ describe("auth.login", () => {
       password: "Test@1234!",
     });
 
+    expect(result.twoFactorRequired).toBe(false);
+    if (result.twoFactorRequired) throw new Error("expected a session, got a two-factor challenge");
     expect(result.user.email).toBe("login.test@vyapar.in");
     expect(result.user.id).toBe(loginUserId);
     expect(typeof result.sessionToken).toBe("string");
@@ -343,6 +345,7 @@ describe("auth.login", () => {
     expect(reg.user.email).toBe("case.mixed@vyapar.in");
 
     const login = await unauthCaller().auth.login({ email: "CASE.MIXED@vyapar.in", password: "Test@1234!" });
+    if (login.twoFactorRequired) throw new Error("expected a session, got a two-factor challenge");
     expect(login.user.id).toBe(reg.user.id);
 
     await expect(

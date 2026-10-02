@@ -22,6 +22,9 @@ describe("two-factor procedures reject API-key auth", () => {
       () => c.auth.twoFactorConfirmSetup({ code: "123456" }),
       () => c.auth.twoFactorDisable({ password: "x", code: "123456" }),
       () => c.auth.regenerateBackupCodes({ password: "x", code: "123456" }),
+      () => c.auth.listTrustedDevices(),
+      () => c.auth.revokeTrustedDevice({ id: "33333333-3333-3333-3333-333333333333" }),
+      () => c.auth.revokeAllTrustedDevices(),
     ];
     for (const call of calls) {
       const err = (await call().catch((e) => e)) as { code: string; message: string };

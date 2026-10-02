@@ -4,13 +4,14 @@
  * rely on is one atomic UPDATE.
  */
 
-import { and, count, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import {
   controlDb,
   tenantMembers,
   tenants,
   trustedDevices,
   twoFactorBackupCodes,
+  twoFactorChallenges,
   userTwoFactor,
   users,
 } from "@fintranzact/db";
@@ -19,6 +20,8 @@ import * as argon2 from "argon2";
 import { recordSecurityEvent } from "./security-events.js";
 import { rotateSessionsOnPrivilegeEvent } from "./session-rotation.js";
 import { renderQrDataUrl, type TwoFactorDeps, type TwoFactorStore } from "./two-factor.js";
+import { newOpaqueToken } from "./two-factor-codes.js";
+import type { TwoFactorLoginDeps, TwoFactorLoginStore } from "./two-factor-login.js";
 
 export const drizzleTwoFactorStore: TwoFactorStore = {
   async getRecord(userId) {
@@ -130,6 +133,11 @@ export const drizzleTwoFactorStore: TwoFactorStore = {
         .returning({ userId: userTwoFactor.userId });
       if (confirmed.length === 0) return false;
       await tx.update(users).set({ twoFactorEnabled: true, updatedAt: now }).where(eq(users.id, userId));
+      // A new secret never inherits trust from an earlier one.
+      await tx
+        .update(trustedDevices)
+        .set({ revokedAt: now })
+        .where(and(eq(trustedDevices.userId, userId), isNull(trustedDevices.revokedAt)));
       await tx.delete(twoFactorBackupCodes).where(eq(twoFactorBackupCodes.userId, userId));
       await tx.insert(twoFactorBackupCodes).values(codeHashes.map((codeHash) => ({ userId, codeHash })));
       return true;
@@ -180,15 +188,129 @@ export const drizzleTwoFactorStore: TwoFactorStore = {
   },
 };
 
-/** Production wiring. `loginLimiter` is the per-email limiter owned by routers/auth.ts. */
-export function createTwoFactorDeps(loginLimiter: TwoFactorDeps["loginLimiter"]): TwoFactorDeps {
+/** Production wiring. `passwordLimiter` is owned by routers/auth.ts (separate from the sign-in limiter). */
+export function createTwoFactorDeps(passwordLimiter: TwoFactorDeps["passwordLimiter"]): TwoFactorDeps {
   return {
     store: drizzleTwoFactorStore,
     record: recordSecurityEvent,
     rotateSessions: rotateSessionsOnPrivilegeEvent,
-    loginLimiter,
+    passwordLimiter,
     verifyPassword: (hash, password) => argon2.verify(hash, password),
     renderQr: renderQrDataUrl,
     now: () => Date.now(),
   };
+}
+
+// ── Sign-in challenge and trusted devices ───────────────────────────────────
+
+export const drizzleTwoFactorLoginStore: TwoFactorLoginStore = {
+  async createChallenge(input) {
+    await controlDb.insert(twoFactorChallenges).values(input);
+  },
+
+  async deleteExpiredChallenges(now) {
+    await controlDb.delete(twoFactorChallenges).where(lt(twoFactorChallenges.expiresAt, now));
+  },
+
+  async getChallengeByHash(tokenHash) {
+    const [row] = await controlDb
+      .select({
+        id: twoFactorChallenges.id,
+        userId: twoFactorChallenges.userId,
+        expiresAt: twoFactorChallenges.expiresAt,
+        attempts: twoFactorChallenges.attempts,
+        consumedAt: twoFactorChallenges.consumedAt,
+        clientKind: twoFactorChallenges.clientKind,
+      })
+      .from(twoFactorChallenges)
+      .where(eq(twoFactorChallenges.tokenHash, tokenHash))
+      .limit(1);
+    return row ?? null;
+  },
+
+  async consumeChallenge(id, now) {
+    const rows = await controlDb
+      .update(twoFactorChallenges)
+      .set({ consumedAt: now })
+      .where(
+        and(
+          eq(twoFactorChallenges.id, id),
+          isNull(twoFactorChallenges.consumedAt),
+          gt(twoFactorChallenges.expiresAt, now),
+        ),
+      )
+      .returning({ id: twoFactorChallenges.id });
+    return rows.length > 0;
+  },
+
+  async recordChallengeFailure(id, max, now) {
+    const [row] = await controlDb
+      .update(twoFactorChallenges)
+      .set({
+        attempts: sql`${twoFactorChallenges.attempts} + 1`,
+        consumedAt: sql`CASE WHEN ${twoFactorChallenges.attempts} + 1 >= ${max} THEN COALESCE(${twoFactorChallenges.consumedAt}, ${now.toISOString()}::timestamptz) ELSE ${twoFactorChallenges.consumedAt} END`,
+      })
+      .where(eq(twoFactorChallenges.id, id))
+      .returning({ attempts: twoFactorChallenges.attempts });
+    const attempts = row?.attempts ?? max;
+    return { attempts, killed: attempts >= max };
+  },
+
+  async findTrustedDevice(userId, tokenHash, now) {
+    const [row] = await controlDb
+      .select()
+      .from(trustedDevices)
+      .where(
+        and(
+          eq(trustedDevices.tokenHash, tokenHash),
+          eq(trustedDevices.userId, userId),
+          isNull(trustedDevices.revokedAt),
+          gt(trustedDevices.expiresAt, now),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  },
+
+  async touchTrustedDevice(id, now) {
+    await controlDb.update(trustedDevices).set({ lastUsedAt: now }).where(eq(trustedDevices.id, id));
+  },
+
+  async createTrustedDevice(input) {
+    const [row] = await controlDb.insert(trustedDevices).values(input).returning({ id: trustedDevices.id });
+    return { id: row.id };
+  },
+
+  async listTrustedDevices(userId, now) {
+    return controlDb
+      .select()
+      .from(trustedDevices)
+      .where(and(eq(trustedDevices.userId, userId), isNull(trustedDevices.revokedAt), gt(trustedDevices.expiresAt, now)))
+      .orderBy(desc(trustedDevices.createdAt));
+  },
+
+  async revokeTrustedDevice(userId, id, now) {
+    const rows = await controlDb
+      .update(trustedDevices)
+      .set({ revokedAt: now })
+      .where(and(eq(trustedDevices.id, id), eq(trustedDevices.userId, userId), isNull(trustedDevices.revokedAt)))
+      .returning({ id: trustedDevices.id });
+    return rows.length > 0;
+  },
+
+  async revokeAllTrustedDevices(userId, now) {
+    const rows = await controlDb
+      .update(trustedDevices)
+      .set({ revokedAt: now })
+      .where(and(eq(trustedDevices.userId, userId), isNull(trustedDevices.revokedAt)))
+      .returning({ id: trustedDevices.id });
+    return rows.length;
+  },
+};
+
+export function createTwoFactorLoginDeps(
+  base: TwoFactorDeps,
+  limiters: { ipLimiter: TwoFactorLoginDeps["ipLimiter"]; challengeLimiter: TwoFactorLoginDeps["challengeLimiter"] },
+): TwoFactorLoginDeps {
+  return { base, store: drizzleTwoFactorLoginStore, ...limiters, newToken: newOpaqueToken };
 }

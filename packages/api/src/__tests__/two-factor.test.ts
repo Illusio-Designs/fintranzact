@@ -131,9 +131,9 @@ function makeFake(): Fake {
     async rotateSessions(userId, keep) {
       rotations.push([userId, keep]);
     },
-    loginLimiter: {
-      isBlocked: (k) => limiterFails.filter((x) => x === k).length >= 5,
-      recordFailure: (k) => void limiterFails.push(k),
+    passwordLimiter: {
+      isBlocked: (k: string) => limiterFails.filter((x) => x === k).length >= 5,
+      recordFailure: (k: string) => void limiterFails.push(k),
     },
     async verifyPassword(hash, pw) {
       return hash === `hash:${pw}` && passwords.has(pw);
@@ -378,16 +378,16 @@ describe("disableTwoFactor", () => {
     expect(f.user.twoFactorEnabled).toBe(false);
   });
 
-  it("wrong password: generic BAD_REQUEST, feeds the login limiter, no 2FA failure counted", async () => {
+  it("wrong password: generic BAD_REQUEST, feeds the per-user password limiter, no 2FA failure counted", async () => {
     await enrol(f);
     const err = await disableTwoFactor(f.deps, USER, { password: "nope", code: codeNow(f, 1) }).catch((e) => e);
     expect(err.code).toBe("BAD_REQUEST");
-    expect(f.limiterFails).toEqual(["rahul@example.in"]);
+    expect(f.limiterFails).toEqual([`2fa-password:${USER}`]);
     expect(f.rec()!.failedCount).toBe(0);
     expect(f.user.twoFactorEnabled).toBe(true);
   });
 
-  it("the shared limiter blocks brute force after 5 wrong passwords", async () => {
+  it("the password limiter blocks brute force after 5 wrong passwords", async () => {
     await enrol(f);
     for (let i = 0; i < 5; i++) await code(disableTwoFactor(f.deps, USER, { password: "nope", code: "123456" }));
     expect(await code(disableTwoFactor(f.deps, USER, good()))).toBe("TOO_MANY_REQUESTS");

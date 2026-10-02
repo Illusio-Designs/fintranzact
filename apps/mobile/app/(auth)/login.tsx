@@ -83,6 +83,12 @@ export default function LoginScreen() {
   /* ── Mutations ─────────────────────────────────────────────────── */
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async (data) => {
+      // Two-factor accounts get a challenge instead of a session; the code
+      // screen arrives in a later part.
+      if (data.twoFactorRequired) {
+        setError("Two-factor sign-in is not available in this version yet");
+        return;
+      }
       setError("");
       await useAuthStore.getState().login(data.sessionToken);
       router.replace("/(app)/(home)");

@@ -78,7 +78,7 @@ export interface TwoFactorStore {
   completeEnrolment(userId: string, input: { step: number; codeHashes: string[]; now: Date }): Promise<boolean>;
   /** One transaction: delete every code, insert the new hashes. */
   replaceBackupCodes(userId: string, codeHashes: string[]): Promise<void>;
-  /** One transaction: delete secret + codes, revoke trusted devices, clear the flag. */
+  /** One transaction: delete secret + codes, revoke trusted devices, clear the flag. (Enrolment also revokes devices: a new secret never inherits trust.) */
   disable(userId: string, now: Date): Promise<void>;
   membershipPolicies(userId: string): Promise<MembershipPolicy[]>;
   countTrustedDevices(userId: string, now: Date): Promise<number>;
@@ -94,10 +94,15 @@ export interface TwoFactorDeps {
   record(event: SecurityEventInput): Promise<void>;
   /** Revoke the user's other sessions (keepSessionId survives). */
   rotateSessions(userId: string, keepSessionId?: string): Promise<unknown>;
-  /** The per-email failed-login limiter shared with sign-in. */
-  loginLimiter: {
-    isBlocked(email: string): boolean;
-    recordFailure(email: string): void;
+  /**
+   * Counts wrong passwords typed into disable / regenerate. Keyed
+   * `2fa-password:<userId>` and SEPARATE from the sign-in limiter: a session
+   * holder who lacks the password must not be able to lock the real user out
+   * of signing in.
+   */
+  passwordLimiter: {
+    isBlocked(key: string): boolean;
+    recordFailure(key: string): void;
   };
   verifyPassword(hash: string, password: string): Promise<boolean>;
   renderQr(uri: string): Promise<string>;
@@ -198,7 +203,7 @@ export async function verifySecondFactor(
   return fail("invalid");
 }
 
-function lockedError(until: Date | null, nowMs: number): TRPCError {
+export function lockedError(until: Date | null, nowMs: number): TRPCError {
   const minutes = until ? Math.max(1, Math.ceil((until.getTime() - nowMs) / 60_000)) : null;
   return new TRPCError({
     code: "TOO_MANY_REQUESTS",
@@ -213,7 +218,7 @@ const WRONG_SETUP_CODE =
 const WRONG_PASSWORD_OR_CODE = "The password or code you entered is not right.";
 
 /** Turn a failed verification into the TRPCError the API promises. */
-function throwForFailure(deps: TwoFactorDeps, r: VerifyResult, wrongMessage: string): never {
+export function throwForFailure(deps: TwoFactorDeps, r: VerifyResult, wrongMessage: string): never {
   switch (r.reason) {
     case "locked":
       throw lockedError(r.lockedUntil, deps.now());
@@ -345,16 +350,21 @@ export async function organisationsRequiringTwoFactor(deps: TwoFactorDeps, userI
     .map((m) => m.tenantId);
 }
 
-/** Re-check the account password through the shared failed-login limiter. Accounts with no password skip it. */
-async function requirePassword(deps: TwoFactorDeps, auth: UserAuthRecord, password: string): Promise<void> {
+/** Limiter key for password re-checks on the security screens (never the sign-in key). */
+export function passwordLimiterKey(userId: string): string {
+  return `2fa-password:${userId}`;
+}
+
+/** Re-check the account password through its own per-user limiter (5 per 15 minutes). Accounts with no password skip it. */
+async function requirePassword(deps: TwoFactorDeps, userId: string, auth: UserAuthRecord, password: string): Promise<void> {
   if (!auth.passwordHash) return;
-  const key = auth.email.trim().toLowerCase();
-  if (deps.loginLimiter.isBlocked(key)) {
-    throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many failed login attempts. Please try again later." });
+  const key = passwordLimiterKey(userId);
+  if (deps.passwordLimiter.isBlocked(key)) {
+    throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many wrong passwords. Please try again later." });
   }
   const ok = await deps.verifyPassword(auth.passwordHash, password);
   if (!ok) {
-    deps.loginLimiter.recordFailure(key);
+    deps.passwordLimiter.recordFailure(key);
     throw new TRPCError({ code: "BAD_REQUEST", message: WRONG_PASSWORD_OR_CODE });
   }
 }
@@ -382,7 +392,7 @@ export async function disableTwoFactor(
     });
   }
 
-  await requirePassword(deps, auth, input.password);
+  await requirePassword(deps, userId, auth, input.password);
   const r = await verifySecondFactor(deps, userId, input.code, { allowBackup: true, purpose: "disable", event: opts.event });
   if (!r.ok) throwForFailure(deps, r, WRONG_PASSWORD_OR_CODE);
 
@@ -399,7 +409,7 @@ export async function regenerateBackupCodes(
   opts: { event?: EventContext } = {},
 ): Promise<{ backupCodes: string[] }> {
   const auth = await requireEnabled(deps, userId);
-  await requirePassword(deps, auth, input.password);
+  await requirePassword(deps, userId, auth, input.password);
   // A backup code is refused here so a stolen one cannot mint a fresh set.
   const r = await verifySecondFactor(deps, userId, input.code, { allowBackup: false, purpose: "regenerate_backup_codes", event: opts.event });
   if (!r.ok) throwForFailure(deps, r, WRONG_PASSWORD_OR_CODE);

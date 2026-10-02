@@ -267,6 +267,12 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
 
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async (data) => {
+      // Two-factor accounts get a challenge instead of a session. The code
+      // screen is built in a later part; until then, stop here.
+      if (data.twoFactorRequired) {
+        setError("Two-factor sign-in is not available in this version yet");
+        return;
+      }
       setSignedIn(true);
       // Desktop uses Bearer auth; keep the token in the OS keychain (no-op on web).
       if (isDesktop() && data?.sessionToken) await saveDesktopToken(data.sessionToken);

@@ -592,6 +592,11 @@ exceptions:
       - auth.twoFactorConfirmSetup
       - auth.twoFactorDisable
       - auth.twoFactorStatus
+      # Trusted-device management is an account-security screen. (The CLI does
+      # call auth.verifyTwoFactor at sign-in, so that one is not excepted.)
+      - auth.listTrustedDevices
+      - auth.revokeAllTrustedDevices
+      - auth.revokeTrustedDevice
 
       # --- Tenant ---
       # Invite acceptance and org management are browser/mobile flows.
@@ -877,12 +882,17 @@ exceptions:
       # Two-factor enrolment needs a real signed-in session (API keys are
       # refused by the API) and an authenticator app: an interactive account
       # flow, not something an API-key client does.
+      - auth.listTrustedDevices
       - auth.regenerateBackupCodes
+      - auth.revokeAllTrustedDevices
+      - auth.revokeTrustedDevice
       - auth.twoFactorBeginSetup
       - auth.twoFactorConfirmSetup
       - auth.twoFactorDisable
       - auth.twoFactorStatus
       - auth.updateName
+      # MCP signs in with API keys only, so it never meets the sign-in challenge.
+      - auth.verifyTwoFactor
 
       # --- Tenant ---
       # Invite acceptance and org management are browser/mobile flows.

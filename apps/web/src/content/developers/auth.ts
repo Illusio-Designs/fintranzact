@@ -72,10 +72,13 @@ session_token = data["sessionToken"]`,
       input: [
         { name: "email", type: "string", required: true, description: "Registered email address (max 255 chars)" },
         { name: "password", type: "string", required: true, description: "Account password (8–128 chars)" },
+        { name: "trustedDeviceToken", type: "string", required: false, description: "Mobile, desktop and scripts only: the token returned by `auth.verifyTwoFactor` when the device was remembered. Web clients send the `ftz_td` cookie automatically." },
+        { name: "client", type: "\"web\" | \"mobile\" | \"desktop\" | \"cli\"", required: false, description: "Only decides where a remembered-device token is delivered (cookie or response body). The `X-Fintranzact-Client` header takes precedence. It never changes how the session works." },
       ],
       output: {
-        description: "Authenticated user object with session token.",
+        description: "A discriminated union on `twoFactorRequired`. Accounts without two-factor (or with a valid trusted device) get the user and session token. Accounts with two-factor on get a challenge: NO session and NO Set-Cookie until `auth.verifyTwoFactor` succeeds.",
         example: {
+          twoFactorRequired: false,
           user: { id: "01957a2b-3c4d-7e8f-9012-abcdef012345", email: "rahul@myshop.in", name: "Rahul Sharma" },
           sessionToken: "sess_VbK2mQ9xP4nR7wA1...",
         },
@@ -103,7 +106,51 @@ session_token = data["sessionToken"]`,
         "Returns a generic 'Invalid email or password' for both wrong email and wrong password — this prevents email enumeration attacks.",
         "Returns FORBIDDEN (403) if the account exists but has no organization membership.",
         "The `sessionToken` in the response body is for mobile clients. Web clients should use the HttpOnly cookie set automatically.",
+        "Two-factor is only mentioned after the password has been verified. When it is on, the result is `{ twoFactorRequired: true, challengeToken, expiresAt, methods: [\"totp\", \"backup_code\"] }` (valid 5 minutes); finish with `auth.verifyTwoFactor`. Always check `twoFactorRequired` before reading `sessionToken`.",
+        "A valid trusted device (cookie `ftz_td` on the web, `trustedDeviceToken` elsewhere) skips the challenge for that user only; the password is still required.",
       ],
+      relatedEndpoints: ["auth-verify-two-factor"],
+    },
+    {
+      id: "auth-verify-two-factor",
+      method: "mutation",
+      path: "auth.verifyTwoFactor",
+      title: "Verify Two-Factor Code (Sign-In)",
+      description: "Second step of sign-in. Exchange the `challengeToken` from `auth.login` and a 6-digit authenticator code (or an unused backup code) for a session, exactly as `auth.login` would have returned it. A challenge is single use.",
+      auth: "public",
+      input: [
+        { name: "challengeToken", type: "string", required: true, description: "From `auth.login`" },
+        { name: "code", type: "string", required: true, description: "6-digit authenticator code, or a backup code (case, spaces and dashes ignored)" },
+        { name: "rememberDevice", type: "boolean", required: false, description: "Skip this step on this device for 30 days (fixed, not sliding). Ignored for `client: \"cli\"`." },
+        { name: "client", type: "\"web\" | \"mobile\" | \"desktop\" | \"cli\"", required: false, description: "Decides where the remembered-device token goes. The `X-Fintranzact-Client` header takes precedence." },
+      ],
+      output: {
+        description: "User and session token, plus `trustedDeviceToken` for desktop/mobile when `rememberDevice` was set. Web clients get the session in the `session_id` cookie and the remembered device in the `ftz_td` cookie (HttpOnly, SameSite=Lax, 30 days) instead.",
+        example: {
+          user: { id: "01957a2b-3c4d-7e8f-9012-abcdef012345", email: "rahul@myshop.in", name: "Rahul Sharma" },
+          sessionToken: "sess_VbK2mQ9xP4nR7wA1...",
+        },
+      },
+      codeExamples: {
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/auth.verifyTwoFactor \\
+  -H "Content-Type: application/json" \\
+  -d '{"json":{"challengeToken":"CHALLENGE_TOKEN","code":"123456","rememberDevice":true}}'`,
+        javascript: `const login = await trpc.auth.login.mutate({ email, password });
+if (login.twoFactorRequired) {
+  const result = await trpc.auth.verifyTwoFactor.mutate({
+    challengeToken: login.challengeToken,
+    code: "123456",
+    rememberDevice: true,
+  });
+}`,
+      },
+      gotchas: [
+        "Errors are BAD_REQUEST, TOO_MANY_REQUESTS or FORBIDDEN, never UNAUTHORIZED. An unknown, expired or used challenge is BAD_REQUEST \"This sign-in has expired. Enter your password again.\"",
+        "The fifth wrong code on one challenge ends it: the user must enter the password again. After 5 consecutive wrong codes on the account, verification is locked (TOO_MANY_REQUESTS with the unlock time): 15 minutes, then 1 hour, then 24 hours.",
+        "Attempts are also limited per IP and per challenge (TOO_MANY_REQUESTS).",
+        "A backup code works once.",
+      ],
+      relatedEndpoints: ["auth-login", "auth-list-trusted-devices"],
     },
     {
       id: "auth-complete-profile",
@@ -212,7 +259,7 @@ if session["user"]:
       method: "mutation",
       path: "auth.logoutAll",
       title: "Logout All Sessions",
-      description: "Invalidate all sessions for the current user across all devices. Useful for security incident response.",
+      description: "Invalidate all sessions for the current user across all devices, and revoke every trusted two-factor device. Useful for security incident response.",
       auth: "protected",
       input: [],
       output: {
@@ -581,7 +628,7 @@ access_token = data["accessToken"]`,
         "Requires a real session (cookie, session Bearer or access token). API keys are refused with BAD_REQUEST.",
         "A wrong code is BAD_REQUEST, never UNAUTHORIZED. After 5 consecutive wrong codes verification is locked (TOO_MANY_REQUESTS with the unlock time): 15 minutes, then 1 hour, then 24 hours.",
         "FORBIDDEN \"Your organisation requires two-factor authentication\" when any organisation the user belongs to enforces it for their role; an owner must relax the policy first.",
-        "The password and code share one generic BAD_REQUEST message, and wrong passwords count toward the same per-email limiter as sign-in.",
+        "The password and code share one generic BAD_REQUEST message. Wrong passwords count toward their own per-user limiter (5 per 15 minutes) and never block sign-in. A trusted device is not accepted here: a password and a fresh code are always required.",
       ],
       relatedEndpoints: ["auth-me"],
     },
@@ -610,9 +657,84 @@ access_token = data["accessToken"]`,
       gotchas: [
         "Requires a real session (cookie, session Bearer or access token). API keys are refused with BAD_REQUEST.",
         "A wrong code is BAD_REQUEST, never UNAUTHORIZED. After 5 consecutive wrong codes verification is locked (TOO_MANY_REQUESTS with the unlock time): 15 minutes, then 1 hour, then 24 hours.",
-        "Trusted devices and other sessions are not affected.",
+        "Trusted devices and other sessions are not affected. A trusted device is not accepted here: a password and a fresh authenticator code are always required.",
       ],
       relatedEndpoints: ["auth-me"],
+    },
+    {
+      id: "auth-list-trusted-devices",
+      method: "query",
+      path: "auth.listTrustedDevices",
+      title: "List Trusted Devices",
+      description: "Devices that currently skip the two-factor step at sign-in (not revoked, not expired), newest first.",
+      auth: "protected",
+      input: [
+        { name: "trustedDeviceToken", type: "string", required: false, description: "Mobile/desktop: this device's token, so it can be marked `current`. Web clients send the `ftz_td` cookie." },
+      ],
+      output: {
+        description: "The devices. `current` is true for the device making the request.",
+        example: [{ id: "01957a2b-3c4d-7e8f-9012-abcdef012345", label: "Chrome 126 on macOS", ip: "203.0.113.9", createdAt: "2026-10-02T12:00:00.000Z", lastUsedAt: null, expiresAt: "2026-11-01T12:00:00.000Z", current: true }],
+      },
+      codeExamples: {
+        curl: `curl ${API_BASE_URL}/api/trpc/auth.listTrustedDevices \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
+        javascript: `const devices = await trpc.auth.listTrustedDevices.query();`,
+      },
+      gotchas: [
+        "Requires a real session (cookie, session Bearer or access token). API keys are refused with BAD_REQUEST.",
+      ],
+      relatedEndpoints: ["auth-revoke-trusted-device", "auth-revoke-all-trusted-devices"],
+    },
+    {
+      id: "auth-revoke-trusted-device",
+      method: "mutation",
+      path: "auth.revokeTrustedDevice",
+      title: "Revoke a Trusted Device",
+      description: "Make one of your own trusted devices ask for a code again at its next sign-in.",
+      auth: "protected",
+      input: [
+        { name: "id", type: "string (uuid)", required: true, description: "Device id from `auth.listTrustedDevices`" },
+      ],
+      output: {
+        description: "Success confirmation.",
+        example: { success: true },
+      },
+      codeExamples: {
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/auth.revokeTrustedDevice \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -d '{"json":{"id":"DEVICE_ID"}}'`,
+        javascript: `await trpc.auth.revokeTrustedDevice.mutate({ id });`,
+      },
+      gotchas: [
+        "NOT_FOUND for a device that is not yours or is already revoked.",
+        "Requires a real session. API keys are refused with BAD_REQUEST.",
+      ],
+      relatedEndpoints: ["auth-list-trusted-devices"],
+    },
+    {
+      id: "auth-revoke-all-trusted-devices",
+      method: "mutation",
+      path: "auth.revokeAllTrustedDevices",
+      title: "Revoke All Trusted Devices",
+      description: "Make every trusted device ask for a code again. Also clears the `ftz_td` cookie on the calling browser. `auth.logoutAll`, turning two-factor off and a change of authenticator secret do this automatically.",
+      auth: "protected",
+      input: [],
+      output: {
+        description: "How many devices were revoked.",
+        example: { revoked: 2 },
+      },
+      codeExamples: {
+        curl: `curl -X POST ${API_BASE_URL}/api/trpc/auth.revokeAllTrustedDevices \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -d '{"json":{}}'`,
+        javascript: `const { revoked } = await trpc.auth.revokeAllTrustedDevices.mutate();`,
+      },
+      gotchas: [
+        "Requires a real session. API keys are refused with BAD_REQUEST.",
+      ],
+      relatedEndpoints: ["auth-list-trusted-devices", "auth-logout-all"],
     },
   ],
 };

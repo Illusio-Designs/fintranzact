@@ -95,6 +95,13 @@ export function normalizeTrpcError(raw: unknown, apiUrl?: string): FintranzactEr
   return { code: "api_error", message };
 }
 
+// ── Sign-in results ────────────────────────────────────────────────────────
+
+/** auth.login: a session, or a two-factor challenge (no session yet). */
+export type LoginResult =
+  | { twoFactorRequired: false; user: { id: string; email: string; name: string | null }; sessionToken: string }
+  | { twoFactorRequired: true; challengeToken: string; expiresAt: Date | string; methods: string[] };
+
 // ── HTTP client ────────────────────────────────────────────────────────────
 
 export class FintranzactClient {
@@ -129,10 +136,19 @@ export class FintranzactClient {
           retryMs = Math.min(parsed * 1000, 120_000); // cap at 2 minutes
         }
       }
+      // A rate-limit message from the API (e.g. a two-factor lockout with the
+      // unlock time) is more useful than the generic one.
+      let serverMessage: string | null = null;
+      try {
+        const parsed = (await res.clone().json()) as { error?: { message?: unknown } };
+        if (typeof parsed?.error?.message === "string") serverMessage = parsed.error.message;
+      } catch {
+        // not JSON: use the generic message
+      }
       throw new FintranzactApiError({
         code: "rate_limited",
         retryAfterMs: retryMs,
-        message: `Rate limited. Try again in ${Math.ceil(retryMs / 1000)}s.`,
+        message: serverMessage ?? `Rate limited. Try again in ${Math.ceil(retryMs / 1000)}s.`,
       });
     }
 
@@ -205,7 +221,15 @@ export class FintranzactClient {
     const c = this;
     return {
       login(input: { email: string; password: string }) {
-        return c.mutate<{ sessionId: string; user: AuthUser }>("auth.login", input);
+        // The CLI never remembers devices; `client: "cli"` tells the API so.
+        return c.mutate<LoginResult>("auth.login", { ...input, client: "cli" });
+      },
+      verifyTwoFactor(input: { challengeToken: string; code: string }) {
+        return c.mutate<{ user: AuthUser; sessionToken: string }>("auth.verifyTwoFactor", {
+          ...input,
+          rememberDevice: false,
+          client: "cli",
+        });
       },
       logout() {
         return c.mutate<{ success: boolean }>("auth.logout", {});

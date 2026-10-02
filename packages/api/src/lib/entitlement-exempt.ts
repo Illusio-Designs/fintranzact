@@ -44,6 +44,10 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   "auth.twoFactorConfirmSetup",
   "auth.twoFactorDisable",
   "auth.regenerateBackupCodes",
+  // Second step of sign-in and trusted-device management: same reasoning.
+  "auth.verifyTwoFactor",
+  "auth.revokeTrustedDevice",
+  "auth.revokeAllTrustedDevices",
 
   // Billing: the way out of read-only. A halted organisation must be able to
   // buy a plan, change plan, fix billing details and cancel.
