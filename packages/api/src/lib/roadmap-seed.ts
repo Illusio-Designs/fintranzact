@@ -2064,6 +2064,28 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
     ],
   },
   {
+    key: "2026-10-02-gstr4",
+    updates: [
+      {
+        // Built: composition category and editable rate per year, CMP-08 data,
+        // GSTR-4 tables (outward, inward incl. RCM, tax paid against CMP-08), a
+        // GSTR-4 tab with CSV/print and a JSON download. Left unticked: CA
+        // verification of tables and due dates. The JSON is best effort, its
+        // table keys are not verified against the portal schema (docs/GSTR-4.md).
+        title: "GSTR-4 annual return for composition dealers",
+        status: "in_progress",
+        done: [
+          "Composition dealer setting and rate per business type",
+          "CMP-08 quarterly statement data",
+          "GSTR-4 outward supply table",
+          "GSTR-4 inward supplies (registered, unregistered, RCM)",
+          "Tax paid summary against CMP-08",
+          "GSTR-4 JSON export for the GST portal",
+        ],
+      },
+    ],
+  },
+  {
     key: "2026-10-02-sandbox",
     updates: [
       {

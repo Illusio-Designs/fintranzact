@@ -94,6 +94,7 @@ type ReportId =
   | "gstr3b"
   | "gstr9"
   | "cmp08"
+  | "gstr4"
   | "gstr2b"
   | "itc"
   | "e-invoices"
@@ -204,6 +205,7 @@ const REPORT_GROUPS: Array<{ id: string; label: string; side?: ReportSide; repor
       { id: "gstr3b", label: "GSTR-3B", description: "Monthly summary of output tax, input tax credit and tax payable", tabular: false, ownPeriod: true, gstOnly: true, resource: "GstReport" },
       { id: "gstr9", label: "GSTR-9", description: "Annual return for the financial year", tabular: false, ownPeriod: true, gstOnly: true, resource: "GstReport" },
       { id: "cmp08", label: "CMP-08", description: "Quarterly statement for composition dealers", tabular: false, ownPeriod: true, gstOnly: true, compositionOnly: true, resource: "GstReport" },
+      { id: "gstr4", label: "GSTR-4", description: "Annual return for composition dealers: inward supplies, turnover, tax paid, with JSON", tabular: false, ownPeriod: true, gstOnly: true, compositionOnly: true, resource: "GstReport" },
     ],
   },
   {
@@ -3113,7 +3115,9 @@ function FilingCalendar({ composition, onOpen, canOpen }: { composition: boolean
         { id: "gstr1", title: `GSTR-1 · ${monthName(last)}`, due: dueIn(11) },
         { id: "gstr3b", title: `GSTR-3B · ${monthName(last)}`, due: dueIn(20) },
       ];
-  items.push({ id: "gstr9", title: `GSTR-9 · FY ${fyStartYear - 1}-${String(fyStartYear).slice(2)}`, due: new Date(fyStartYear, 11, 31) });
+  // A composition dealer files GSTR-4 (30 April) instead of GSTR-9; verify dates with a CA.
+  if (composition) items.push({ id: "gstr4", title: `GSTR-4 · FY ${fyStartYear - 1}-${String(fyStartYear).slice(2)}`, due: new Date(fyStartYear, 3, 30) });
+  else items.push({ id: "gstr9", title: `GSTR-9 · FY ${fyStartYear - 1}-${String(fyStartYear).slice(2)}`, due: new Date(fyStartYear, 11, 31) });
   const days = (d: Date) => Math.round((d.getTime() - today.getTime()) / 86_400_000);
   return (
     <div aria-label="Filing calendar" role="group" className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
@@ -3301,6 +3305,7 @@ function ReportsPage() {
       case "gstr3b":
       case "gstr9":
       case "cmp08":
+      case "gstr4":
         return <EmbeddedReport gstTab={activeReport}><GSTReportsPage /></EmbeddedReport>;
       case "gstr2b":
         return <EmbeddedReport><GSTR2BPage /></EmbeddedReport>;

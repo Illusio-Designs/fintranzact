@@ -9,6 +9,7 @@ import { router, viewerProcedure, adminProcedure } from "../trpc.js";
 import { withAudit } from "../lib/audit.js";
 import { loadCmp08Quarter, loadCompositionSetting } from "../lib/cmp08.js";
 import { Gstr4NotApplicableError, loadGstr4 } from "../lib/gstr4.js";
+import { gstr4ToPortalJson } from "../lib/gstr4-json.js";
 import { requireCan } from "../lib/permissions.js";
 import { generateGSTR1, generateGSTR3B, gstr1ToCSV, gstr1ToPortalJson } from "../lib/gst-reports.js";
 import { generateGSTR9, gstr9ToPortalJson } from "../lib/gstr9-generator.js";
@@ -183,6 +184,39 @@ export const gstRouter = router({
       try {
         const r = await loadGstr4(ctx.db, ctx.businessId, input.financialYear, input.cmp08Paid);
         return { ...r, dueDate: r.dueDate.toISOString() };
+      } catch (e) {
+        if (e instanceof Gstr4NotApplicableError) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: e.message });
+        }
+        throw e;
+      }
+    }),
+
+  /**
+   * GSTR-4 as a JSON file in the shape of the GST offline tool. BEST EFFORT: the
+   * table and field keys are not verified against the portal schema (see
+   * lib/gstr4-json.ts and docs/GSTR-4.md); check before uploading.
+   */
+  gstr4Json: viewerProcedure
+    .input(z.object({
+      financialYear: fyInput,
+      cmp08Paid: z.object({
+        1: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+        2: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+        3: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+      }).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Report");
+      assertRealYear(input.financialYear);
+      try {
+        const r = await loadGstr4(ctx.db, ctx.businessId, input.financialYear, input.cmp08Paid);
+        const [biz] = await ctx.db.select({ gstin: businesses.gstin }).from(businesses)
+          .where(eq(businesses.id, ctx.businessId)).limit(1);
+        return {
+          filename: `GSTR4_FY${input.financialYear.replace("-", "_")}_portal.json`,
+          json: gstr4ToPortalJson(r, { gstin: biz?.gstin ?? "", fy: input.financialYear }),
+        };
       } catch (e) {
         if (e instanceof Gstr4NotApplicableError) {
           throw new TRPCError({ code: "PRECONDITION_FAILED", message: e.message });

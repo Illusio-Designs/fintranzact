@@ -162,6 +162,7 @@
 | gst.gstr1Json | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr3b | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr4 | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
+| gst.gstr4Json | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr9 | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
 | gst.gstr9Json | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ |
 | gst.updateCompositionSettings | mutation | authorized | update:Business | ✓ | ✓ | ✗ | ✗ | ✗ |

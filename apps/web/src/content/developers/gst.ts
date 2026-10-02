@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./api-base";
 export const gstEndpoints: EndpointGroup = {
   id: "gst",
   title: "GST Returns",
-  description: "Generate filing-ready GST returns. GSTR-1 (outward supplies), GSTR-3B (summary return), GSTR-9 (annual return), and CMP-08 (composition scheme). All endpoints return structured data ready for export to the GST portal.",
+  description: "Generate filing-ready GST returns. GSTR-1 (outward supplies), GSTR-3B (summary return), GSTR-9 (annual return), CMP-08 (composition scheme quarterly statement) and GSTR-4 (composition scheme annual return). All endpoints return structured data ready for export to the GST portal.",
   endpoints: [
     {
       id: "gst-gstr1",
@@ -381,18 +381,22 @@ with open(data["filename"], "w") as f:
       method: "query",
       path: "gst.cmp08",
       title: "Generate CMP-08 (Composition Scheme)",
-      description: "Generate CMP-08 quarterly return for composition scheme dealers. Composition dealers pay a flat tax rate on total outward supplies instead of collecting GST from customers. Calculates total taxable value from sale invoices in the quarter (plus sale debit notes, less sale credit notes and sales returns; quotations, proformas, orders, challans and deleted or cancelled documents are excluded) and applies the composition tax rate (default 1% for traders/manufacturers).",
+      description: "CMP-08 quarterly statement data for composition scheme dealers. Totals the taxable value of sale invoices in the financial-year quarter (plus sale debit notes, less sale credit notes and sales returns; quotations, proformas, orders, challans and deleted or cancelled documents are excluded) and applies the composition rate of the business's category for that financial year (set with gst.updateCompositionSettings; default 1% manufacturers and traders, 5% restaurants, 6% other service providers). Also returns the tax by head, reverse-charge tax on inward supplies, interest and the due date.",
       auth: "business",
       requiredRole: "viewer",
       input: [
         { name: "year", type: "number", required: true, description: "Start year of the financial year (2020–2099): 2025 for FY 2025-26" },
         { name: "quarter", type: "number", required: true, description: "Financial-year quarter (1–4). Q1 = Apr-Jun, Q2 = Jul-Sep, Q3 = Oct-Dec, Q4 = Jan-Mar of the next calendar year." },
+        { name: "paidOn", type: "string", required: false, description: "ISO date. When the tax was paid, to work out interest on a late payment. Without it interest is 0.00 and interestBasis says payment_date_unknown." },
       ],
       output: {
-        description: "Total taxable value, tax payable at composition rate, and quarter date range.",
+        description: "Turnover, composition tax (rate, category, central and state share), reverse-charge tax, interest and due date for the quarter.",
         example: {
-          taxableValue: "450000.00",
-          taxPayable: "4500.00",
+          financialYear: "2026-27", quarter: 1, category: "manufacturer_trader", rate: "1",
+          taxableValue: "450000.00", centralTax: "2250.00", stateTax: "2250.00", integratedTax: "0.00", taxPayable: "4500.00",
+          rcm: { taxableValue: "10000.00", centralTax: "900.00", stateTax: "900.00", integratedTax: "0.00", tax: "1800.00" },
+          interest: "0.00", interestBasis: "payment_date_unknown", cmp08Applicable: true,
+          dueDate: "2026-07-17T18:30:00.000Z",
           quarterStart: "2026-03-31T18:30:00.000Z",
           quarterEnd: "2026-06-30T18:29:59.999Z",
         },
@@ -422,12 +426,151 @@ print(f"Tax payable: Rs. {cmp['taxPayable']}")`,
       },
       gotchas: [
         "Requires `Report:read` permission.",
-        "The default composition rate is 1% (for traders/manufacturers). Restaurants pay 5%, service providers pay 6% — the endpoint currently defaults to 1%.",
-        "CMP-08 is filed quarterly by the 18th of the month following the quarter (e.g. Q1 Jan-Mar due by April 18).",
-        "Quarters are calendar quarters (Q1 = Jan-Mar), not financial year quarters. This differs from some GST contexts where Q1 starts in April.",
-        "Only sale invoices with status != 'cancelled' are included in the taxable value calculation.",
+        "Quarters are financial-year quarters: Q1 = Apr-Jun ... Q4 = Jan-Mar. There is no CMP-08 for Q4 (cmp08Applicable is false and dueDate is null): that tax goes in GSTR-4.",
+        "CMP-08 is due by the 18th of the month after the quarter (Q1 18 Jul, Q2 18 Oct, Q3 18 Jan). Dates and rates are defaults: verify them with a CA each year.",
+        "Interest is 18% a year, simple, only when paidOn is given and is after the due date.",
+        "gst.cmp08Year returns all four quarters of a financial year in one call: `{ year }` in, `{ financialYear, quarters }` out.",
       ],
-      relatedEndpoints: ["gst-gstr1", "gst-gstr3b"],
+      relatedEndpoints: ["gst-gstr4", "gst-composition-settings"],
+    },
+    {
+      id: "gst-gstr4",
+      method: "query",
+      path: "gst.gstr4",
+      title: "Generate GSTR-4 (Composition Annual Return)",
+      description: "GSTR-4 tables for a composition taxpayer's financial year: Table 4 inward supplies (registered, registered under reverse charge, unregistered, import of services), Table 5 outward turnover by quarter, Table 6 tax by rate, and tax payable against tax paid through CMP-08. Outward turnover and tax come from the four CMP-08 quarters, so the two always agree. Fails with PRECONDITION_FAILED for a business that is not registered under the composition scheme.",
+      auth: "business",
+      requiredRole: "viewer",
+      input: [
+        { name: "financialYear", type: "string", required: true, description: "Financial year such as \"2026-27\" (April to March)" },
+        { name: "cmp08Paid", type: "object", required: false, description: "Amount actually paid through CMP-08 per quarter, as `{ 1?, 2?, 3? }` strings like \"1500.00\". Fintranzact does not record payments. A quarter left out is assumed paid in full and paidAssumed is true." },
+      ],
+      output: {
+        description: "inward (rows + totals), outward (quarters, totals), rateWise, taxPaid (payable, paid, balance, interest, paidAssumed), dueDate and notes.",
+        example: {
+          financialYear: "2026-27", isComposition: true, dueDate: "2027-04-29T18:30:00.000Z",
+          inward: { rows: [{ kind: "registered_non_rcm", taxableValue: "10000.00", tax: "0.00", documentCount: 1 }], totalTaxableValue: "10000.00", totalRcmTax: "0.00" },
+          outward: { taxableValue: "400000.00", tax: "4000.00" },
+          rateWise: [{ rate: "1", taxableValue: "400000.00", centralTax: "2000.00", stateTax: "2000.00", integratedTax: "0.00", tax: "4000.00" }],
+          taxPaid: { totalPayable: "4000.00", paidThroughCmp08: "3000.00", paidAssumed: true, balancePayable: "1000.00", interest: "0.00", lateFee: "0.00" },
+        },
+      },
+      codeExamples: {
+        curl: `curl "${API_BASE_URL}/api/trpc/gst.gstr4?input=%7B%22json%22%3A%7B%22financialYear%22%3A%222026-27%22%7D%7D" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "x-business-id: YOUR_BUSINESS_ID"`,
+        javascript: `const gstr4 = await trpc.gst.gstr4.query({
+  financialYear: "2026-27",
+  cmp08Paid: { 1: "1000.00", 2: "1000.00", 3: "1000.00" },
+});
+if (gstr4.taxPaid.paidAssumed) console.warn("Some quarters were assumed paid");
+console.log("Balance with GSTR-4:", gstr4.taxPaid.balancePayable);`,
+        python: `import httpx
+
+resp = httpx.get(
+    "${API_BASE_URL}/api/trpc/gst.gstr4",
+    params={"input": '{"json":{"financialYear":"2026-27"}}'},
+    headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
+)
+print(resp.json()["result"]["data"]["json"]["taxPaid"])`,
+      },
+      gotchas: [
+        "Requires `Report:read` permission. Returns PRECONDITION_FAILED unless the business GST registration type is composition.",
+        "The due date is 30 April after the year; it is often extended. Verify with a CA.",
+        "Payments are not tracked: Q1-Q3 without an amount in cmp08Paid are assumed paid in full (paidAssumed: true). Q4 is the balance paid with GSTR-4.",
+        "Exempt, nil-rated and non-GST outward supplies and cess are not tracked: always 0.00. Late fee and interest on the GSTR-4 balance are not computed.",
+        "Unregistered purchases are only treated as reverse charge when the document is flagged reverse charge; the app does not apply s.9(4) automatically.",
+      ],
+      relatedEndpoints: ["gst-gstr4-json", "gst-cmp08"],
+    },
+    {
+      id: "gst-gstr4-json",
+      method: "query",
+      path: "gst.gstr4Json",
+      title: "GSTR-4 Portal JSON (best effort)",
+      description: "The GSTR-4 tables as a JSON file shaped like the GST portal offline utility's upload. BEST EFFORT: the amount keys (txval, camt, samt, iamt, csamt, rt) and the gstin/fy header follow portal convention, but the table keys (table4 to table7), the quarter and tax-paid keys are NOT verified against the portal schema. Check the file against the GST offline tool before uploading.",
+      auth: "business",
+      requiredRole: "viewer",
+      input: [
+        { name: "financialYear", type: "string", required: true, description: "Financial year such as \"2026-27\"" },
+        { name: "cmp08Paid", type: "object", required: false, description: "Same as gst.gstr4" },
+      ],
+      output: {
+        description: "A filename and the JSON document.",
+        example: {
+          filename: "GSTR4_FY2026_27_portal.json",
+          json: { gstin: "27AABCS1429B1Z5", fy: "2026-27", table4: { "4A": { txval: 10000, iamt: 0, camt: 0, samt: 0, csamt: 0 } }, table5: { txval: 400000 }, table6: [{ rt: 1, txval: 400000 }], table7: { tot_tax: 4000 } },
+        },
+      },
+      codeExamples: {
+        curl: `curl "${API_BASE_URL}/api/trpc/gst.gstr4Json?input=%7B%22json%22%3A%7B%22financialYear%22%3A%222026-27%22%7D%7D" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "x-business-id: YOUR_BUSINESS_ID"`,
+        javascript: `const { filename, json } = await trpc.gst.gstr4Json.query({ financialYear: "2026-27" });
+// Save it, then compare it with the GST offline tool schema before uploading.`,
+        python: `import httpx, json
+
+resp = httpx.get(
+    "${API_BASE_URL}/api/trpc/gst.gstr4Json",
+    params={"input": '{"json":{"financialYear":"2026-27"}}'},
+    headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
+)
+data = resp.json()["result"]["data"]["json"]
+open(data["filename"], "w").write(json.dumps(data["json"], indent=2))`,
+      },
+      gotchas: [
+        "Requires `Report:read` permission. Same PRECONDITION_FAILED rule as gst.gstr4.",
+        "Best effort and unverified: all guessed key names are in one block (GSTR4_PORTAL_KEYS in packages/api/src/lib/gstr4-json.ts). See docs/GSTR-4.md.",
+        "Amounts are JSON numbers with two decimals; unregistered purchases (with or without reverse charge) are merged under 4C.",
+      ],
+      relatedEndpoints: ["gst-gstr4"],
+    },
+    {
+      id: "gst-composition-settings",
+      method: "query",
+      path: "gst.compositionSettings",
+      title: "Composition Category and Rate",
+      description: "Reads the composition category and rate for a financial year, with the default categories to choose from. gst.updateCompositionSettings (mutation, admin role, needs update:Business) saves a category and an optional rate for a year; leave the rate out to follow the category default.",
+      auth: "business",
+      requiredRole: "viewer",
+      input: [
+        { name: "financialYear", type: "string", required: false, description: "Financial year such as \"2026-27\". Defaults to the current one." },
+      ],
+      output: {
+        description: "The category, rate and the default category rules.",
+        example: {
+          financialYear: "2026-27", category: "manufacturer_trader", rateOverride: null, configured: false, rate: "1",
+          categories: [
+            { code: "manufacturer_trader", label: "Manufacturer or trader (goods)", rate: "1", note: "Central 0.5% + State 0.5% of turnover" },
+            { code: "restaurant", label: "Restaurant (not serving alcohol)", rate: "5", note: "Central 2.5% + State 2.5% of turnover" },
+            { code: "other_service", label: "Other service provider", rate: "6", note: "Central 3% + State 3% of turnover" },
+          ],
+        },
+      },
+      codeExamples: {
+        curl: `curl "${API_BASE_URL}/api/trpc/gst.compositionSettings?input=%7B%22json%22%3A%7B%22financialYear%22%3A%222026-27%22%7D%7D" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "x-business-id: YOUR_BUSINESS_ID"`,
+        javascript: `await trpc.gst.updateCompositionSettings.mutate({
+  financialYear: "2026-27",
+  category: "restaurant",
+  rate: "5", // optional: omit to use the category default
+});`,
+        python: `import httpx
+
+resp = httpx.get(
+    "${API_BASE_URL}/api/trpc/gst.compositionSettings",
+    params={"input": '{"json":{"financialYear":"2026-27"}}'},
+    headers={"Authorization": f"Bearer {session_token}", "x-business-id": business_id},
+)
+print(resp.json()["result"]["data"]["json"]["rate"])`,
+      },
+      gotchas: [
+        "The rates are defaults that the Government can change: confirm each year with a CA, and override the rate if it has changed.",
+        "Until a category is saved, manufacturer_trader (1%) is used and `configured` is false.",
+        "Saving is audited and needs `Business:update` (admin).",
+      ],
+      relatedEndpoints: ["gst-cmp08", "gst-gstr4"],
     },
   ],
 };
