@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { DATE_PRESETS, type DatePreset } from "@/hooks/useDateRange";
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowDown01Icon, Calendar03Icon, Download04Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "./Icon";
 import { DateInput } from "./DateInput";
@@ -15,6 +15,8 @@ interface DateRangeBarProps {
   onExport?: () => void;
   exporting?: boolean;
   className?: string;
+  /** More controls after the date menu, e.g. the "+ Filter" button and its chips. */
+  children?: ReactNode;
   /** Kept for existing callers; both variants now render the same date menu. */
   variant?: "pills" | "segmented";
 }
@@ -28,6 +30,7 @@ export function DateRangeBar({
   onExport,
   exporting,
   className,
+  children,
 }: DateRangeBarProps) {
   // One "This Month ▾" button opens the ranges (was 7 buttons in a row).
   const [open, setOpen] = useState(false);
@@ -129,6 +132,8 @@ export function DateRangeBar({
           />
         </div>
       )}
+
+      {children}
 
       {onExport && (
         <button

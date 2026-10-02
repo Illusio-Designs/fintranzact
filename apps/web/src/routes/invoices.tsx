@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
@@ -27,15 +27,19 @@ import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDateRange } from "@/hooks/useDateRange";
-import { useInfiniteList } from "@/hooks/useInfiniteList";
+import { usePageSize } from "@/hooks/usePageSize";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { RecordPaymentPanel } from "@/components/RecordPaymentPanel";
 import { ShareLinkSection } from "@/components/ShareLinkSection";
 import { Icon } from "@/components/ui/Icon";
-import { Cash01Icon, Delete02Icon, Download04Icon, File01Icon, FlashIcon, SentIcon } from "@hugeicons/core-free-icons";
+import { Download04Icon, File01Icon, FlashIcon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
+import { Pagination } from "@/components/ui/Pagination";
+import { RowActions, tidyMenu, type MenuEntry } from "@/components/ui/Menu";
+import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { FilterButton, FilterChips, activeFilterCount, filterParams, type DocFilters } from "@/components/ui/ListFilters";
 const invoicesSearchSchema = z.object({
   id: z.string().uuid().optional(),
   create: z.string().optional(),
@@ -90,29 +94,31 @@ function SourceChip({ source }: { source: string | null | undefined }) {
 
 // ── PDF download button ──────────────────────────────────────────
 
-function DownloadPDFButton({
+type PdfFormat = "a4" | "a5" | "thermal";
+
+/**
+ * The PDF formats this business can print and a function that downloads one.
+ * Used by the PDF button in the invoice panel and the row's Actions menu.
+ */
+function useInvoicePdf({
   invoiceId,
   invoiceNumber,
   invoiceStatus,
   onShared,
-  menuAbove = false,
 }: {
   invoiceId: string;
   invoiceNumber: string;
   invoiceStatus: string;
   onShared?: () => void;
-  /** Open the format menu upwards (the button sits at the bottom of a panel). */
-  menuAbove?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
 
   const { data: businesses } = trpc.business.list.useQuery();
   const activeId = getBusinessId();
   const activeBusiness = businesses?.find((b) => b.id === activeId);
   const hasGstin = !!(activeBusiness?.gstin && activeBusiness.gstRegistrationType !== "unregistered");
 
-  type Format = "a4" | "a5" | "thermal";
+  type Format = PdfFormat;
   // A4 prints in the business's chosen design (Settings → Documents); the
   // copies option prints Original, Duplicate and Triplicate in one PDF.
   const design = activeBusiness?.invoiceTemplate ?? "classic";
@@ -130,7 +136,6 @@ function DownloadPDFButton({
       ];
 
   async function download(format: Format, copies = false) {
-    setOpen(false);
     setLoading(true);
     try {
       const res = await fetch(
@@ -156,6 +161,31 @@ function DownloadPDFButton({
     }
     setLoading(false);
   }
+
+  return { options, download, loading };
+}
+
+function DownloadPDFButton({
+  invoiceId,
+  invoiceNumber,
+  invoiceStatus,
+  onShared,
+  menuAbove = false,
+}: {
+  invoiceId: string;
+  invoiceNumber: string;
+  invoiceStatus: string;
+  onShared?: () => void;
+  /** Open the format menu upwards (the button sits at the bottom of a panel). */
+  menuAbove?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const pdf = useInvoicePdf({ invoiceId, invoiceNumber, invoiceStatus, onShared });
+  const { options, loading } = pdf;
+  const download = (format: PdfFormat, copies?: boolean) => {
+    setOpen(false);
+    void pdf.download(format, copies);
+  };
 
   return (
     <div className="relative inline-flex" onClick={(e) => e.stopPropagation()}>
@@ -935,15 +965,84 @@ interface PaymentPanelState {
   balance: string;
 }
 
-const PAGE_SIZE = 25;
+type InvoiceSortKey = "date" | "amount" | "number" | "party" | "due";
+
+const SORT_OPTIONS: SortOption<InvoiceSortKey>[] = [
+  { key: "date", dir: "desc", label: "Newest first" },
+  { key: "date", dir: "asc", label: "Oldest first" },
+  { key: "amount", dir: "desc", label: "Amount: high to low" },
+  { key: "amount", dir: "asc", label: "Amount: low to high" },
+  { key: "due", dir: "asc", label: "Due date: soonest" },
+  { key: "party", dir: "asc", label: "Party: A to Z" },
+  { key: "number", dir: "desc", label: "Invoice number" },
+];
+
+interface InvoiceRow {
+  id: string;
+  invoiceNumber: string;
+  status: string;
+  partyId: string;
+  totalAmount: string;
+  amountPaid: string;
+  totalAdjusted?: string | null;
+}
+
+/** What is still owed on an invoice after payments and credit notes. */
+function balanceDue(inv: InvoiceRow) {
+  return parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0");
+}
+
+/** The row's "Actions ▾" menu: the same actions the row icons used to offer, with names. */
+function InvoiceRowActions({
+  inv,
+  onOpen,
+  onMarkSent,
+  onRecordPayment,
+  onDelete,
+}: {
+  inv: InvoiceRow;
+  onOpen: () => void;
+  onMarkSent: () => void;
+  onRecordPayment: (balance: string) => void;
+  onDelete: () => void;
+}) {
+  const pdf = useInvoicePdf({
+    invoiceId: inv.id,
+    invoiceNumber: inv.invoiceNumber,
+    invoiceStatus: inv.status,
+    onShared: onMarkSent,
+  });
+  const editable = inv.status === "draft" || inv.status === "unfulfilled";
+  // Roles that can't delete (sellers, accountants) aren't offered it.
+  const canDelete = useCan("Invoice", "delete");
+  const balance = balanceDue(inv);
+  const canPay = !["draft", "cancelled", "paid", "adjusted"].includes(inv.status) && balance > 0.01;
+  const items: (MenuEntry | false)[] = [
+    { label: "Open", hint: "Enter", onSelect: onOpen },
+    canPay && { label: "Record payment", onSelect: () => onRecordPayment(balance.toFixed(2)) },
+    editable && { label: inv.status === "unfulfilled" ? "Mark fulfilled" : "Mark as sent", onSelect: onMarkSent },
+    { kind: "separator" },
+    { kind: "label", label: "Download PDF" },
+    ...pdf.options.map((o) => ({
+      label: o.label,
+      onSelect: () => { void pdf.download(o.format, o.copies); },
+    })),
+    { kind: "separator" },
+    editable && canDelete && { label: "Delete invoice", danger: true, onSelect: onDelete },
+  ];
+  return <RowActions label={inv.invoiceNumber} items={tidyMenu(items)} />;
+}
 
 function InvoicesPage() {
   const [type, setType] = useState<"sale" | "purchase">("sale");
   const [status, setStatus] = useState("");
   const [search] = usePageSearch("Search invoices…");
-  const [sortBy, setSortBy] = useState<"date" | "amount" | "number">("date");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sort, setSort] = useState<SortState<InvoiceSortKey>>({ key: "date", dir: "desc" });
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("invoices");
+  const [filters, setFilters] = useState<DocFilters>({});
+  const filterKey = JSON.stringify(filterParams(filters));
+  const tableRef = useRef<HTMLDivElement>(null);
   const [showCreate, setShowCreate] = useState(false);
   // Show the "Switch to POS" entry button when the active business has POS
   // mode enabled. Sourced via the existing business.list query that powers
@@ -986,10 +1085,12 @@ function InvoicesPage() {
     { key: "n", handler: () => canCreate && setShowCreate(true), description: "New invoice", scope: "invoices" },
   ]);
 
-  // Reset to page 1 whenever filters or sort change
-  useEffect(() => { setPage(1); }, [type, status, debouncedSearch, dateRange.fromDate, dateRange.toDate, sortBy, sortDir]);
-
-  const loadMore = useCallback(() => setPage((p) => p + 1), []);
+  // Back to page 1 whenever filters, sort or rows per page change
+  useEffect(() => { setPage(1); }, [type, status, debouncedSearch, dateRange.fromDate, dateRange.toDate, sort.key, sort.dir, pageSize, filterKey]);
+  // Parties differ between sales and purchases.
+  useEffect(() => { setFilters((f) => (f.parties ? { ...f, parties: undefined } : f)); }, [type]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   const { data, isFetching, isLoading } = trpc.invoice.list.useQuery({
     type,
@@ -997,25 +1098,21 @@ function InvoicesPage() {
     search: debouncedSearch || undefined,
     fromDate: dateRange.fromDate,
     toDate: dateRange.toDate,
-    sortBy,
-    sortDir,
+    sortBy: sort.key,
+    sortDir: sort.dir,
+    ...filterParams(filters),
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
   }, {
-    // Keep previous page data visible while next page loads —
-    // prevents flash-to-empty that causes scroll position to reset.
+    // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
-  const list = useInfiniteList({
-    key: "invoices",
-    data: data?.data,
-    total: data?.total ?? 0,
-    page,
-    isFetching,
-    onLoadMore: loadMore,
-    resetDeps: [type, status, debouncedSearch, dateRange.fromDate, dateRange.toDate, sortBy, sortDir],
-  });
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // Deleting the last row of the last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const utils = trpc.useUtils();
 
@@ -1030,8 +1127,6 @@ function InvoicesPage() {
 
   const deleteMutation = trpc.invoice.delete.useMutation({
     onSuccess: () => {
-      // Optimistically remove from infinite list immediately
-      if (deleteConfirm.deleteTarget) list.removeItem(deleteConfirm.deleteTarget.id);
       utils.invoice.list.invalidate();
       utils.dashboard.summary.invalidate();
       toast.success("Invoice deleted");
@@ -1065,6 +1160,10 @@ function InvoicesPage() {
           search: debouncedSearch || undefined,
           fromDate: dateRange.fromDate,
           toDate: dateRange.toDate,
+          // The file matches what's on screen: same filters, same order.
+          sortBy: sort.key,
+          sortDir: sort.dir,
+          ...filterParams(filters),
           page: pg,
           limit: 100,
         });
@@ -1120,7 +1219,7 @@ function InvoicesPage() {
         }
       />
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
         {/* Filters */}
         <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
           <SegmentedControl
@@ -1128,7 +1227,7 @@ function InvoicesPage() {
             value={type}
             onChange={(v) => setType(v as "sale" | "purchase")}
           />
-          <div className="ml-auto">
+          <div className="ml-auto min-w-0 max-w-full overflow-x-auto">
             <PillTabs
               tabs={statusTabs}
               value={status}
@@ -1145,7 +1244,14 @@ function InvoicesPage() {
             onCustomChange={dateRange.setCustomRange}
             onExport={exportInvoicesCSV}
             exporting={exporting}
-          />
+          >
+            <FilterButton
+              value={filters}
+              onChange={setFilters}
+              partyType={type === "sale" ? "customer" : "supplier"}
+            />
+            <FilterChips value={filters} onChange={setFilters} />
+          </DateRangeBar>
         </div>
 
         {/* Content */}
@@ -1153,16 +1259,24 @@ function InvoicesPage() {
           <div className="p-4">
             <SkeletonRows count={6} height="h-14" />
           </div>
-        ) : !list.items.length && !isFetching ? (
+        ) : !rows.length && !isFetching ? (
           <EmptyState
             icon={
               <Icon icon={File01Icon} size={24} className="text-text-tertiary" />
             }
             title="No invoices found"
-            description={`No ${type === "sale" ? "sales" : "purchase"} invoices${status ? ` with status "${status}"` : ""}.`}
-            encouragement={!search && !status ? "Create your first invoice — it only takes a minute." : undefined}
+            description={
+              activeFilterCount(filters)
+                ? "No invoices match these filters."
+                : `No ${type === "sale" ? "sales" : "purchase"} invoices${status ? ` with status "${status}"` : ""}.`
+            }
+            encouragement={!search && !status && !activeFilterCount(filters) ? "Create your first invoice — it only takes a minute." : undefined}
             action={
-              canCreate ? (
+              activeFilterCount(filters) ? (
+                <button className="btn-secondary" onClick={() => setFilters({})}>
+                  Clear filters
+                </button>
+              ) : canCreate ? (
                 <button
                   className="btn-primary"
                   onClick={() => setShowCreate(true)}
@@ -1173,48 +1287,42 @@ function InvoicesPage() {
             }
           />
         ) : (
-          <div>
-            <div
-              ref={list.scrollRef}
-              onScroll={list.onScroll}
-              className="max-h-[600px] overflow-y-auto"
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
             >
+              <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
+            </Pagination>
+            <TableScroll ref={tableRef}>
               <table className="data-table w-full">
-                <thead className="sticky top-0 z-10">
+                <thead>
                   <tr>
-                    <th>Party</th>
-                    <th
-                      className="whitespace-nowrap cursor-pointer select-none hover:text-text-primary transition-colors"
-                      onClick={() => {
-                        if (sortBy === "number" && sortDir === "desc") setSortDir("asc");
-                        else if (sortBy === "number" && sortDir === "asc") { setSortBy("date"); setSortDir("desc"); }
-                        else { setSortBy("number"); setSortDir("desc"); }
-                      }}
-                    >
-                      Invoice # {sortBy === "number" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
-                    </th>
-                    <th className="whitespace-nowrap">Date</th>
+                    <SortableTh sortKey="party" sort={sort} onSort={setSort}>Party</SortableTh>
+                    <SortableTh sortKey="number" sort={sort} onSort={setSort} firstDir="desc">Invoice #</SortableTh>
+                    <SortableTh sortKey="date" sort={sort} onSort={setSort} firstDir="desc">Date</SortableTh>
+                    <SortableTh sortKey="due" sort={sort} onSort={setSort}>Due</SortableTh>
                     <th className="whitespace-nowrap">Source</th>
                     <th className="whitespace-nowrap">Seller</th>
-                    <th
-                      className="text-right whitespace-nowrap cursor-pointer select-none hover:text-text-primary transition-colors"
-                      onClick={() => {
-                        if (sortBy === "amount" && sortDir === "desc") setSortDir("asc");
-                        else if (sortBy === "amount" && sortDir === "asc") { setSortBy("date"); setSortDir("desc"); }
-                        else { setSortBy("amount"); setSortDir("desc"); }
-                      }}
-                    >
-                      Amount {sortBy === "amount" && <span className="text-brand-600">{sortDir === "asc" ? "↑" : "↓"}</span>}
-                    </th>
+                    <SortableTh sortKey="amount" sort={sort} onSort={setSort} firstDir="desc" align="right">Amount</SortableTh>
                     <th>Status</th>
-                    <th className="w-28"></th>
+                    <th className="text-right"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {list.items.map((inv) => (
+                  {rows.map((inv) => {
+                    const overdue =
+                      !!inv.dueDate &&
+                      new Date(inv.dueDate) < new Date() &&
+                      !["paid", "cancelled", "draft", "adjusted"].includes(inv.status);
+                    return (
                       <tr
                         key={inv.id}
-                        className="group cursor-pointer"
+                        className="cursor-pointer"
                         onClick={() => setSelectedInvoiceId(inv.id)}
                       >
                         <td className="font-medium"><span className="block truncate max-w-[250px]">{inv.partyName}</span></td>
@@ -1223,6 +1331,9 @@ function InvoicesPage() {
                         </td>
                         <td className="text-text-secondary whitespace-nowrap">
                           {formatDate(inv.invoiceDate)}
+                        </td>
+                        <td className={cn("whitespace-nowrap", overdue ? "text-red-600 dark:text-red-400" : "text-text-secondary")}>
+                          {inv.dueDate ? formatDate(inv.dueDate) : "—"}
                         </td>
                         <td className="whitespace-nowrap">
                           <SourceChip source={(inv as { source?: string | null }).source ?? null} />
@@ -1238,92 +1349,29 @@ function InvoicesPage() {
                         <td className="whitespace-nowrap">
                           <StatusBadge status={inv.status} size="sm" />
                         </td>
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-0.5">
-                            {/* PDF buttons — always visible, LEFT aligned */}
-                            <DownloadPDFButton
-                              invoiceId={inv.id}
-                              invoiceNumber={inv.invoiceNumber}
-                              invoiceStatus={inv.status}
-                              onShared={() =>
-                                updateStatus.mutate({ id: inv.id, status: "sent" })
-                              }
-                            />
-                            {/* Context actions — always visible at reduced opacity, full on hover */}
-                            <div className="flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
-                              {(inv.status === "draft" || inv.status === "unfulfilled") && (
-                                <button
-                                  onClick={() =>
-                                    updateStatus.mutate({ id: inv.id, status: "sent" })
-                                  }
-                                  title={inv.status === "unfulfilled" ? "Mark fulfilled" : "Mark as sent"}
-                                  className="p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
-                                >
-                                  <Icon icon={SentIcon} size={16} />
-                                </button>
-                              )}
-                              {inv.status !== "draft" &&
-                                inv.status !== "cancelled" &&
-                                inv.status !== "paid" &&
-                                inv.status !== "adjusted" &&
-                                (parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0")) > 0.01 && (
-                                  <button
-                                    onClick={() =>
-                                      openPaymentPanel(
-                                        inv.partyId,
-                                        inv.id,
-                                        (parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid) - parseFloat(inv.totalAdjusted || "0")).toFixed(2)
-                                      )
-                                    }
-                                    title="Record payment"
-                                    className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-600/[0.08] transition-colors"
-                                  >
-                                    <Icon icon={Cash01Icon} size={16} />
-                                  </button>
-                                )}
-                              {(inv.status === "draft" || inv.status === "unfulfilled") && (
-                                <button
-                                  onClick={() =>
-                                    confirmDelete(inv.id, inv.invoiceNumber)
-                                  }
-                                  title="Delete invoice"
-                                  className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
-                                >
-                                  <Icon icon={Delete02Icon} size={16} />
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                        <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <InvoiceRowActions
+                            inv={inv}
+                            onOpen={() => setSelectedInvoiceId(inv.id)}
+                            onMarkSent={() => updateStatus.mutate({ id: inv.id, status: "sent" })}
+                            onRecordPayment={(balance) => openPaymentPanel(inv.partyId, inv.id, balance)}
+                            onDelete={() => confirmDelete(inv.id, inv.invoiceNumber)}
+                          />
                         </td>
                       </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
-              {list.loadingMore && (
-                <div className="border-t border-border-light">
-                  <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                    <div className="h-3 bg-surface-2 rounded w-32" />
-                    <div className="h-3 bg-surface-2 rounded w-20" />
-                    <div className="h-3 bg-surface-2 rounded w-24" />
-                    <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
-                  </div>
-                </div>
-              )}
-              {list.hasMore && !list.loadingMore && (
-                <button
-                  type="button"
-                  onClick={list.loadMore}
-                  className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
-                >
-                  Load more
-                </button>
-              )}
-              {!list.hasMore && list.items.length > PAGE_SIZE && (
-                <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
-                  All {list.total.toLocaleString()} records loaded
-                </div>
-              )}
-            </div>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         )}
       </div>

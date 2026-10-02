@@ -6,6 +6,8 @@ interface Options {
   /** Estimated popover height, used to decide whether to flip above the trigger. */
   estimatedHeight?: number;
   gap?: number;
+  /** Line the popover up with the trigger's left edge (start) or right edge (end). */
+  align?: "start" | "end";
 }
 
 /**
@@ -17,7 +19,7 @@ interface Options {
 export function useAnchoredPopover(
   anchorRef: RefObject<HTMLElement | null>,
   open: boolean,
-  { width = "anchor", estimatedHeight = 280, gap = 6 }: Options = {},
+  { width = "anchor", estimatedHeight = 280, gap = 6, align = "start" }: Options = {},
 ): CSSProperties {
   const [style, setStyle] = useState<CSSProperties>({ position: "fixed", top: -9999, left: -9999 });
 
@@ -28,7 +30,8 @@ export function useAnchoredPopover(
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const w = width === "anchor" ? rect.width : width;
-    const left = Math.max(8, Math.min(rect.left, vw - w - 8));
+    const wanted = align === "end" ? rect.right - w : rect.left;
+    const left = Math.max(8, Math.min(wanted, vw - w - 8));
     const spaceBelow = vh - rect.bottom;
     const flip = spaceBelow < estimatedHeight + gap && rect.top > spaceBelow;
     setStyle({
@@ -37,7 +40,7 @@ export function useAnchoredPopover(
       width: w,
       ...(flip ? { bottom: vh - rect.top + gap } : { top: rect.bottom + gap }),
     });
-  }, [anchorRef, width, estimatedHeight, gap]);
+  }, [anchorRef, width, estimatedHeight, gap, align]);
 
   useLayoutEffect(() => {
     if (!open) return;

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import { useCan } from "@/lib/permissions";
 import { invalidateStockViews } from "@/lib/stock-cache";
 import { formatCurrency, formatDate, cn, getDocumentTypeLabel } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -16,6 +17,11 @@ import { ConvertDocumentDialog, type ConvertTarget } from "@/components/ConvertD
 import { ReturnRejectedDialog } from "@/components/ReturnRejectedDialog";
 import { formatQty } from "@/components/inventory/shared";
 import { toast } from "@/hooks/useToast";
+import { usePageSize } from "@/hooks/usePageSize";
+import { Pagination } from "@/components/ui/Pagination";
+import { RowActions, tidyMenu, type MenuEntry } from "@/components/ui/Menu";
+import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { FilterButton, FilterChips, activeFilterCount, filterParams, type DocFilters } from "@/components/ui/ListFilters";
 
 import { Icon, type IconSvgElement } from "@/components/ui/Icon";
 // ── Types ─────────────────────────────────────────────────────────
@@ -145,6 +151,21 @@ interface DocumentListPageProps {
   initialSelectedId?: string;
 }
 
+type DocSortKey = "created" | "date" | "amount" | "number" | "party" | "due";
+
+function docSortOptions(withDue: boolean): SortOption<DocSortKey>[] {
+  return [
+    { key: "created", dir: "desc", label: "Recently added" },
+    { key: "date", dir: "desc", label: "Newest first" },
+    { key: "date", dir: "asc", label: "Oldest first" },
+    { key: "amount", dir: "desc", label: "Amount: high to low" },
+    { key: "amount", dir: "asc", label: "Amount: low to high" },
+    ...(withDue ? [{ key: "due" as const, dir: "asc" as const, label: "Valid until: soonest" }] : []),
+    { key: "party", dir: "asc", label: "Party: A to Z" },
+    { key: "number", dir: "desc", label: "Number" },
+  ];
+}
+
 export function DocumentListPage({ config, initialSelectedId }: DocumentListPageProps) {
   const {
     trpcRouter,
@@ -173,6 +194,14 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
   );
   const [status, setStatus] = useState("");
   const [search] = usePageSearch(`Search ${title.toLowerCase()} by party or number…`);
+  const [sort, setSort] = useState<SortState<DocSortKey>>({ key: "created", dir: "desc" });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize(`documents_${documentType}`);
+  const [filters, setFilters] = useState<DocFilters>({});
+  // Roles that can't delete aren't offered it in the row menu.
+  const canDelete = useCan("Invoice", "delete");
+  const filterKey = JSON.stringify(filterParams(filters));
+  const tableRef = useRef<HTMLDivElement>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteNumber, setDeleteNumber] = useState("");
@@ -213,14 +242,31 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
   );
 
   const byFulfilment = !!fulfilment && FULFILMENT_FILTERS.includes(status);
-  const { data, isLoading } = router.list.useQuery({
-    type,
-    status: (status && !byFulfilment ? status : undefined) as never,
-    fulfilment: byFulfilment ? status : undefined,
-    search: search.trim() || undefined,
-    page: 1,
-    limit: 50,
-  });
+  const searchTerm = search.trim();
+  // Back to page 1 whenever filters, sort or rows per page change.
+  useEffect(() => { setPage(1); }, [type, status, searchTerm, sort.key, sort.dir, pageSize, filterKey]);
+  // Parties differ between sales and purchases.
+  useEffect(() => { setFilters((f) => (f.parties ? { ...f, parties: undefined } : f)); }, [type]);
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
+
+  const { data, isLoading, isFetching } = router.list.useQuery(
+    {
+      type,
+      status: (status && !byFulfilment ? status : undefined) as never,
+      fulfilment: byFulfilment ? status : undefined,
+      search: searchTerm || undefined,
+      sortBy: sort.key,
+      sortDir: sort.dir,
+      ...filterParams(filters),
+      page,
+      limit: pageSize,
+    },
+    // Keep the current page on screen while the next one loads.
+    { placeholderData: (prev: unknown) => prev },
+  );
+  const total: number = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const updateStatus = router.updateStatus.useMutation({
     onSuccess: (_: unknown, vars: { id: string; status: string }) => {
@@ -299,7 +345,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
         }
       />
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 border-b border-border-light px-4 py-3">
           {hasTypeFilter && (
@@ -309,8 +355,17 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
               onChange={(v) => setType(v as "sale" | "purchase")}
             />
           )}
-          <div className={hasTypeFilter ? "ml-auto" : undefined}>
+          <div className={cn("min-w-0 max-w-full overflow-x-auto", hasTypeFilter && "ml-auto")}>
             <PillTabs tabs={statusTabs} value={status} onChange={setStatus} />
+          </div>
+          <div className={cn("flex flex-wrap items-center gap-2", !hasTypeFilter && "ml-auto")}>
+            <FilterChips value={filters} onChange={setFilters} />
+            <FilterButton
+              value={filters}
+              onChange={setFilters}
+              partyType={type === "sale" ? "customer" : "supplier"}
+              kinds={col4Variant === "dueDate" ? ["party", "amount", "due"] : ["party", "amount"]}
+            />
           </div>
         </div>
 
@@ -325,9 +380,19 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
           <EmptyState
             icon={<Icon icon={emptyIcon} size={26} />}
             title={emptyTitle}
-            description={search ? `Nothing matches "${search}".` : emptyDescription(type, status)}
+            description={
+              activeFilterCount(filters)
+                ? "Nothing matches these filters."
+                : search
+                  ? `Nothing matches "${search}".`
+                  : emptyDescription(type, status)
+            }
             action={
-              search ? undefined : (
+              activeFilterCount(filters) ? (
+                <button className="btn-secondary" onClick={() => setFilters({})}>
+                  Clear filters
+                </button>
+              ) : search ? undefined : (
                 <button className="btn-primary" onClick={() => setShowCreate(true)}>
                   {buttonLabel}
                 </button>
@@ -335,24 +400,39 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
             }
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+            >
+              <SortMenu options={docSortOptions(col4Variant === "dueDate")} sort={sort} onSort={setSort} />
+            </Pagination>
+            <TableScroll ref={tableRef}>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Party</th>
-                  <th>{col2Header}</th>
-                  <th>Date</th>
-                  <th>{col4Header}</th>
+                  <SortableTh sortKey="party" sort={sort} onSort={setSort}>Party</SortableTh>
+                  <SortableTh sortKey="number" sort={sort} onSort={setSort} firstDir="desc">{col2Header}</SortableTh>
+                  <SortableTh sortKey="date" sort={sort} onSort={setSort} firstDir="desc">Date</SortableTh>
+                  {col4Variant === "dueDate" ? (
+                    <SortableTh sortKey="due" sort={sort} onSort={setSort}>{col4Header}</SortableTh>
+                  ) : (
+                    <th>{col4Header}</th>
+                  )}
                   <th>Status</th>
                   {fulfilment && <th>Pending</th>}
-                  <th className="text-right">Total</th>
-                  <th></th>
+                  <SortableTh sortKey="amount" sort={sort} onSort={setSort} firstDir="desc" align="right">Total</SortableTh>
+                  <th className="text-right"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 {data.data.map((doc: any) => (
-                  <tr key={doc.id} className="group cursor-pointer" onClick={() => setSelectedId(doc.id)}>
+                  <tr key={doc.id} className="cursor-pointer" onClick={() => setSelectedId(doc.id)}>
                     <td className="font-medium">{doc.partyName}</td>
                     <td className="font-mono text-ui text-text-secondary">
                       {doc.invoiceNumber}
@@ -391,63 +471,51 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
                       {formatCurrency(doc.totalAmount)}
                     </td>
                     <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {markSent && doc.status === "draft" && (
-                          <button
-                            onClick={() =>
-                              updateStatus.mutate({ id: doc.id, status: "sent" })
-                            }
-                            className="text-xs px-2 py-1 rounded font-medium text-text-secondary hover:bg-surface-2 transition-colors"
-                          >
-                            Mark Sent
-                          </button>
-                        )}
-                        {markPaid && doc.status === "sent" && (
-                          <button
-                            onClick={() =>
-                              updateStatus.mutate({ id: doc.id, status: "paid" })
-                            }
-                            className="text-xs px-2 py-1 rounded font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors"
-                          >
-                            Mark Paid
-                          </button>
-                        )}
-                        {convert && doc.status !== "cancelled" && convertTargets.map((t) => (
-                          <button
-                            key={t.type}
-                            onClick={() => convert.onConvert(doc.id, t.type)}
-                            disabled={convert.convertingId === doc.id}
-                            className="text-xs px-2 py-1 rounded font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950 transition-colors disabled:opacity-50"
-                          >
-                            {convert.convertingId === doc.id
-                              ? "Converting…"
-                              : `Convert to ${t.label}`}
-                          </button>
-                        ))}
-                        {fulfilment && (doc.fulfilmentStatus === "open" || doc.fulfilmentStatus === "partial") && (
-                          <button
-                            onClick={() => setConvertId(doc.id)}
-                            className="text-xs px-2 py-1 rounded font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950 transition-colors"
-                          >
-                            Convert
-                          </button>
-                        )}
-                        {doc.status === "draft" && (
-                          <button
-                            onClick={() =>
-                              confirmDelete(doc.id, doc.invoiceNumber)
-                            }
-                            className="text-xs px-2 py-1 rounded font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
+                      <RowActions
+                        label={doc.invoiceNumber}
+                        items={tidyMenu([
+                          { label: "Open", hint: "Enter", onSelect: () => setSelectedId(doc.id) },
+                          markSent && doc.status === "draft" && {
+                            label: "Mark as sent",
+                            onSelect: () => updateStatus.mutate({ id: doc.id, status: "sent" }),
+                          },
+                          markPaid && doc.status === "sent" && {
+                            label: "Mark as paid",
+                            onSelect: () => updateStatus.mutate({ id: doc.id, status: "paid" }),
+                          },
+                          ...(convert && doc.status !== "cancelled"
+                            ? convertTargets.map((t): MenuEntry => ({
+                                label: `Convert to ${t.label}`,
+                                disabled: convert.convertingId === doc.id,
+                                onSelect: () => convert.onConvert(doc.id, t.type),
+                              }))
+                            : []),
+                          !!fulfilment && (doc.fulfilmentStatus === "open" || doc.fulfilmentStatus === "partial") && {
+                            label: "Convert…",
+                            onSelect: () => setConvertId(doc.id),
+                          },
+                          { kind: "separator" },
+                          doc.status === "draft" && canDelete && {
+                            label: `Delete ${singular.toLowerCase()}`,
+                            danger: true,
+                            onSelect: () => confirmDelete(doc.id, doc.invoiceNumber),
+                          },
+                        ])}
+                      />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         )}
       </div>

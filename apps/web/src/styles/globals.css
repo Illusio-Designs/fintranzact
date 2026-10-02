@@ -326,6 +326,12 @@ input, select, textarea {
   .data-table th.text-right {
     text-align: right;
   }
+  /* The header row stays in view while the rows scroll (inside TableScroll). */
+  .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
   .data-table td {
     @apply px-4 py-3;
     color: var(--text-primary);

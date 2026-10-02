@@ -12,6 +12,8 @@ export const ROLE_ABILITIES: Record<string, Set<string>> = {
   seller_manager: new Set([
     "Invoice:read",
     "Invoice:create",
+    // Fresh unpaid invoices only; the API checks the 2-hour window.
+    "Invoice:delete",
     "Party:read",
     "Item:read",
     "Payment:read",
