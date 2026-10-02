@@ -106,7 +106,7 @@ function Segmented<T extends string>({
           aria-pressed={value === o.value}
           onClick={() => onSelect(o.value)}
           className={cn(
-            "flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[13px] font-semibold",
+            "flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-ui font-semibold",
             value === o.value
               ? "bg-surface-0 text-brand-700 shadow-sm dark:bg-surface-3 dark:text-white"
               : "text-text-tertiary hover:text-text-primary",
@@ -267,7 +267,7 @@ function SidebarLink({ link, current }: { link: HelpNavLink; current: string }) 
       to={helpPath(link.slug)}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "block rounded-md px-2.5 py-1.5 text-[14px] leading-snug",
+        "block rounded-md px-2.5 py-1.5 text-sm leading-snug",
         active
           ? "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
           : "text-text-secondary hover:bg-surface-1 hover:text-text-primary",
@@ -289,7 +289,7 @@ function HelpSidebar({ current }: { current: string }) {
             {section.items.map((item) =>
               isGroup(item) ? (
                 <li key={item.label} className="pt-1.5">
-                  <p className="px-2.5 pb-1 text-[13px] font-bold text-text-primary">{item.label}</p>
+                  <p className="px-2.5 pb-1 text-ui font-bold text-text-primary">{item.label}</p>
                   <ul className="ml-2.5 space-y-0.5 border-l border-border-light pl-1.5">
                     {item.items.map((link) => (
                       <li key={link.slug}>
@@ -464,7 +464,7 @@ export function HelpLayout({
 
             <div className="min-w-0 flex-1 py-8 md:py-10">
               {/* Breadcrumbs */}
-              <nav aria-label="Breadcrumb" className="text-[13px] text-text-tertiary">
+              <nav aria-label="Breadcrumb" className="text-ui text-text-tertiary">
                 <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                   <li>
                     <Link to="/help" className="font-semibold text-brand-600 hover:underline dark:text-brand-300">

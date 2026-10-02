@@ -9,6 +9,17 @@ import { Icon } from "@/components/ui/Icon";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { TurnstileModal } from "@/components/ui/TurnstileModal";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/useToast";
+
+type AuthFieldName = "email" | "password" | "username" | "confirm";
+const FIELD_ID: Record<AuthFieldName, string> = {
+  email: "auth-email",
+  password: "auth-password",
+  username: "auth-username",
+  confirm: "auth-password-2",
+};
+/** Same rule the API uses: something@something.tld, no spaces. */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type AuthMode = "login" | "register";
 
@@ -175,23 +186,54 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
       return search.ref ?? "";
     }
   });
-  const [error, setError] = useState("");
-  const [linkSentTo, setLinkSentTo] = useState("");
+  // Fields that failed the last check: red outline + aria-invalid. Messages
+  // themselves are goey toasts (no browser bubbles, no banners).
+  const [invalid, setInvalid] = useState<ReadonlySet<AuthFieldName>>(new Set());
+  const markOk = (field: AuthFieldName) =>
+    setInvalid((prev) => {
+      if (!prev.has(field)) return prev;
+      const next = new Set(prev);
+      next.delete(field);
+      return next;
+    });
+  /** Show a problem as a toast; with a field, outline it and put the cursor there. */
+  function setError(message: string, field?: AuthFieldName, hint?: string) {
+    if (!message) {
+      setInvalid(new Set());
+      return;
+    }
+    setInvalid(field ? new Set([field]) : new Set());
+    toast.error(message, hint);
+    if (field) requestAnimationFrame(() => document.getElementById(FIELD_ID[field])?.focus());
+  }
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
     document.title = `${mode === "login" ? "Log in" : "Create your account"} — Fintranzact`;
   }, [mode]);
 
-  // Clear errors when switching between /login and /register.
-  useEffect(() => setError(""), [mode]);
+  // No top bar here, so toasts can sit near the top edge.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-no-topbar", "");
+    return () => document.documentElement.removeAttribute("data-no-topbar");
+  }, []);
 
-  // Set when the app sends someone here after their session ended.
-  const [sessionExpired] = useState(() => {
-    const expired = sessionStorage.getItem("sessionExpired") === "1";
-    if (expired) sessionStorage.removeItem("sessionExpired");
-    return expired;
-  });
+  // Clear outlines when switching between /login and /register.
+  useEffect(() => setInvalid(new Set()), [mode]);
+
+  // Messages that arrive with the page (session ended, wrong invite address)
+  // show once as toasts.
+  useEffect(() => {
+    if (sessionStorage.getItem("sessionExpired") === "1") {
+      sessionStorage.removeItem("sessionExpired");
+      toast.warning("Your session ended", "It expired or you logged out on another device. Please log in again.");
+    }
+  }, []);
+  useEffect(() => {
+    if (search.error === "email_mismatch") {
+      toast.error("This invitation is for a different email address", "Log in with that address to accept it.");
+    }
+  }, [search.error]);
 
   // ── Turnstile (bot protection): open the modal, run the action with the token.
   const [showTurnstile, setShowTurnstile] = useState(false);
@@ -232,9 +274,9 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
 
   const magicLinkMutation = trpc.auth.sendMagicLink.useMutation({
     onSuccess: (_data, variables) => {
-      setLinkSentTo(variables.email);
       setCooldown(60);
-      setError("");
+      setInvalid(new Set());
+      toast.success("Sign-in link sent", `Check ${variables.email} and open the link on this device.`);
     },
     onError: (e) => setError(e.message),
   });
@@ -249,16 +291,16 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
 
   function handleLogin(e: FormEvent) {
     e.preventDefault();
-    setError("");
-    loginMutation.mutate({ email, password });
+    if (!email.trim()) return setError("Enter your email address", "email");
+    if (!EMAIL_RE.test(email.trim())) return setError("Enter a valid email address", "email", "Example: name@business.in");
+    if (!password) return setError("Enter your password", "password");
+    setInvalid(new Set());
+    loginMutation.mutate({ email: email.trim(), password });
   }
 
   function sendSignInLink() {
-    setError("");
-    if (!email.trim()) {
-      setError("Enter your email address first, then we'll send you a sign-in link.");
-      return;
-    }
+    if (!email.trim()) return setError("Enter your email address first", "email", "Then we'll send you a sign-in link.");
+    if (!EMAIL_RE.test(email.trim())) return setError("Enter a valid email address", "email", "Example: name@business.in");
     withTurnstile((token) =>
       magicLinkMutation.mutate({
         email: email.trim(),
@@ -271,19 +313,16 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
 
   function handleRegister(e: FormEvent) {
     e.preventDefault();
-    setError("");
-    if (!username.trim()) {
-      setError("Username is required");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords don't match");
-      return;
-    }
+    if (!username.trim()) return setError("Enter a username", "username");
+    if (!email.trim()) return setError("Enter your email address", "email");
+    if (!EMAIL_RE.test(email.trim())) return setError("Enter a valid email address", "email", "Example: name@business.in");
+    if (password.length < 8) return setError("Use at least 8 characters for your password", "password");
+    if (password !== confirmPassword) return setError("Passwords don't match", "confirm", "Type the same password in both boxes.");
+    setInvalid(new Set());
     withTurnstile((token) =>
       registerMutation.mutate({
         username: username.trim(),
-        email,
+        email: email.trim(),
         password,
         confirmPassword,
         referralCode: referralCode.trim() || undefined,
@@ -335,11 +374,6 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
             </p>
 
             <div className="mt-6">
-              {sessionExpired && (
-                <Banner tone="warn">
-                  Your session ended, either from another device or because it expired. Please log in again.
-                </Banner>
-              )}
               {search.invite && !search.error && (
                 <Banner tone="info">
                   {mode === "login"
@@ -347,32 +381,22 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                     : "Create your account with the email address the invite was sent to, then accept the invitation."}
                 </Banner>
               )}
-              {search.error === "email_mismatch" && (
-                <Banner tone="error">
-                  This invitation was sent to a different email address. Log in with that address to accept it.
-                </Banner>
-              )}
               {search.ref && mode === "register" && (
                 <Banner tone="info">
                   Referral code <strong>{search.ref.toUpperCase()}</strong> will be applied to your new account.
                 </Banner>
               )}
-              {error && <Banner tone="error">{error}</Banner>}
-              {linkSentTo && mode === "login" && (
-                <Banner tone="info">
-                  We sent a sign-in link to <strong>{linkSentTo}</strong>. Open it on this device to log in.
-                </Banner>
-              )}
             </div>
 
             {mode === "login" ? (
-              <form onSubmit={handleLogin} className="flex flex-col gap-[18px]">
+              <form onSubmit={handleLogin} noValidate className="flex flex-col gap-[18px]">
                 <Field label="Email address" htmlFor="auth-email">
                   <input
                     id="auth-email"
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); markOk("email"); }}
+                    aria-invalid={invalid.has("email") || undefined}
                     required
                     autoFocus
                     autoComplete="email"
@@ -397,7 +421,8 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                   <PasswordInput
                     id="auth-password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => { setPassword(e.target.value); markOk("password"); }}
+                    aria-invalid={invalid.has("password") || undefined}
                     required
                     minLength={8}
                     autoComplete="current-password"
@@ -416,13 +441,14 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                 </p>
               </form>
             ) : (
-              <form onSubmit={handleRegister} className="flex flex-col gap-3.5">
+              <form onSubmit={handleRegister} noValidate className="flex flex-col gap-3.5">
                 <div className="grid gap-3.5 sm:grid-cols-2">
                   <Field label="Username" htmlFor="auth-username">
                     <input
                       id="auth-username"
                       value={username}
-                      onChange={(e) => setUsername(e.target.value)}
+                      onChange={(e) => { setUsername(e.target.value); markOk("username"); }}
+                      aria-invalid={invalid.has("username") || undefined}
                       required
                       autoFocus
                       autoComplete="username"
@@ -452,7 +478,8 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                     id="auth-email"
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); markOk("email"); }}
+                    aria-invalid={invalid.has("email") || undefined}
                     required
                     autoComplete="email"
                     className="input h-[46px]"
@@ -463,7 +490,8 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                   <PasswordInput
                     id="auth-password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => { setPassword(e.target.value); markOk("password"); }}
+                    aria-invalid={invalid.has("password") || undefined}
                     required
                     minLength={8}
                     autoComplete="new-password"
@@ -476,7 +504,8 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                   <PasswordInput
                     id="auth-password-2"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => { setConfirmPassword(e.target.value); markOk("confirm"); }}
+                    aria-invalid={invalid.has("confirm") || undefined}
                     required
                     minLength={8}
                     autoComplete="new-password"

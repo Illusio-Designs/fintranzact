@@ -123,7 +123,7 @@ export function DocHeader({
   return (
     <header>
       {eyebrow && (
-        <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-300">{eyebrow}</p>
+        <p className="text-ui font-bold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-300">{eyebrow}</p>
       )}
       <h1 className={cn(HEADING, "mt-2 text-3xl leading-tight md:text-[42px]")}>{title}</h1>
       {children && <div className="mt-4 max-w-2xl text-[17px] leading-relaxed text-text-secondary">{children}</div>}

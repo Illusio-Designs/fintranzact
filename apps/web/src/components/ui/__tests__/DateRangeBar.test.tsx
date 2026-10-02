@@ -12,10 +12,10 @@
  *   user knows which period they are viewing.
  *
  * These tests verify:
- *   1. All seven preset buttons are rendered with the correct labels.
- *   2. The active preset button carries a distinct visual class so it is
- *      obvious which period is currently selected.
- *   3. Clicking a preset button calls onPresetChange with the correct value.
+ *   1. One button shows the current period and opens a menu of all seven
+ *      presets (keyboard: arrows, Escape).
+ *   2. The active preset is marked checked in the menu.
+ *   3. Choosing a preset calls onPresetChange with the correct value.
  *   4. Custom date inputs appear only when preset === "custom" and
  *      onCustomChange is provided.
  *   5. Custom date inputs are hidden for all other preset values.
@@ -49,141 +49,87 @@ function renderBar(props: Partial<React.ComponentProps<typeof DateRangeBar>> = {
   return render(<DateRangeBar {...defaults} {...props} />);
 }
 
+/** Opens the date menu (one "This Month ▾" button holds the presets). */
+async function openMenu() {
+  await userEvent.click(screen.getByRole("button", { name: /^Date range:/ }));
+  return screen.getByRole("menu", { name: "Date range" });
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("DateRangeBar — date filter toolbar for reports and lists", () => {
 
-  // ─── Preset buttons ────────────────────────────────────────────────────────
+  // ─── Date menu ─────────────────────────────────────────────────────────────
 
-  describe("preset buttons — all seven periods must be available", () => {
-    it("renders all preset buttons with the correct labels so the user can select any date range", () => {
+  describe("date menu — one button shows the period and opens all seven presets", () => {
+    it("shows the current period on the button so the user always knows the range", () => {
+      renderBar({ preset: "this-fy" });
+      expect(screen.getByRole("button", { name: "Date range: This FY" })).toHaveTextContent("This FY");
+    });
+
+    it("keeps the menu closed until the button is clicked", () => {
       renderBar();
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^Date range:/ })).toHaveAttribute("aria-expanded", "false");
+    });
 
+    it("lists all seven presets with the correct labels when opened", async () => {
+      renderBar();
+      await openMenu();
       for (const preset of DATE_PRESETS) {
-        expect(
-          screen.getByRole("button", { name: preset.label })
-        ).toBeInTheDocument();
+        expect(screen.getByRole("menuitemradio", { name: preset.label })).toBeInTheDocument();
       }
+      expect(screen.getAllByRole("menuitemradio")).toHaveLength(DATE_PRESETS.length);
     });
 
-    it("renders exactly seven preset buttons (one per DATE_PRESETS entry)", () => {
-      renderBar();
-
-      // Date inputs and Export button must not be counted; filter to only
-      // the preset buttons by checking all button labels against DATE_PRESETS.
-      const presetLabels = DATE_PRESETS.map((p) => p.label);
-      const allButtons = screen.getAllByRole("button");
-      const presetButtons = allButtons.filter((btn) =>
-        presetLabels.includes(btn.textContent?.trim() ?? "")
-      );
-      expect(presetButtons).toHaveLength(DATE_PRESETS.length);
-    });
-
-    it("renders 'This Month' button for the current-month period commonly used for monthly GST review", () => {
-      renderBar();
-      expect(screen.getByRole("button", { name: "This Month" })).toBeInTheDocument();
-    });
-
-    it("renders 'Last Month' button for reviewing the prior month before filing returns", () => {
-      renderBar();
-      expect(screen.getByRole("button", { name: "Last Month" })).toBeInTheDocument();
-    });
-
-    it("renders 'Last 30 Days' button for rolling 30-day analysis", () => {
-      renderBar();
-      expect(screen.getByRole("button", { name: "Last 30 Days" })).toBeInTheDocument();
-    });
-
-    it("renders 'This FY' button for current financial year — critical for annual GST reconciliation", () => {
-      renderBar();
-      expect(screen.getByRole("button", { name: "This FY" })).toBeInTheDocument();
-    });
-
-    it("renders 'Last FY' button for prior financial year — required for audits and annual filings", () => {
-      renderBar();
-      expect(screen.getByRole("button", { name: "Last FY" })).toBeInTheDocument();
-    });
-
-    it("renders 'Custom' button so users can specify an arbitrary date range", () => {
-      renderBar();
-      expect(screen.getByRole("button", { name: "Custom" })).toBeInTheDocument();
-    });
-
-    it("renders 'All' button so users can view the full unfiltered transaction history", () => {
-      renderBar();
-      expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
-    });
-  });
-
-  // ─── Active preset styling ─────────────────────────────────────────────────
-
-  describe("active preset styling — user must know which period is currently selected", () => {
-    it("the active preset button carries the brand highlight class to distinguish it from inactive presets", () => {
-      renderBar({ preset: "this-month" });
-
-      const activeButton = screen.getByRole("button", { name: "This Month" });
-      // The active class uses brand-600 opacity tint — verify the distinguishing class.
-      expect(activeButton.className).toMatch(/bg-brand-600/);
-    });
-
-    it("inactive preset buttons do not carry the active brand highlight class", () => {
-      renderBar({ preset: "this-month" });
-
-      const inactiveButton = screen.getByRole("button", { name: "Last Month" });
-      expect(inactiveButton.className).not.toMatch(/bg-brand-600/);
-    });
-
-    it("switching the active preset moves the highlight to the newly selected button", () => {
-      // Render with "last-fy" active to simulate the user having navigated to
-      // the prior financial year for their annual audit.
+    it("marks only the active preset as checked", async () => {
       renderBar({ preset: "last-fy" });
+      await openMenu();
+      expect(screen.getByRole("menuitemradio", { name: "Last FY" })).toHaveAttribute("aria-checked", "true");
+      expect(screen.getByRole("menuitemradio", { name: "This Month" })).toHaveAttribute("aria-checked", "false");
+    });
 
-      const lastFyButton = screen.getByRole("button", { name: "Last FY" });
-      const thisMonthButton = screen.getByRole("button", { name: "This Month" });
+    it("closes on Escape and returns focus to the button", async () => {
+      renderBar();
+      await openMenu();
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^Date range:/ })).toHaveFocus();
+    });
 
-      expect(lastFyButton.className).toMatch(/bg-brand-600/);
-      expect(thisMonthButton.className).not.toMatch(/bg-brand-600/);
+    it("moves between presets with the arrow keys", async () => {
+      renderBar({ preset: "this-month" });
+      await openMenu();
+      expect(screen.getByRole("menuitemradio", { name: "This Month" })).toHaveFocus();
+      await userEvent.keyboard("{ArrowDown}");
+      expect(screen.getByRole("menuitemradio", { name: "Last Month" })).toHaveFocus();
     });
   });
 
   // ─── Preset click interaction ──────────────────────────────────────────────
 
-  describe("preset click interaction — clicking a preset must notify the parent", () => {
-    it("clicking 'Last Month' calls onPresetChange with value 'last-month'", async () => {
+  describe("preset click interaction — choosing a preset must notify the parent", () => {
+    it.each([
+      ["Last Month", "last-month"],
+      ["This FY", "this-fy"],
+      ["Custom", "custom"],
+      ["All", "all"],
+    ])("choosing '%s' calls onPresetChange with '%s' and closes the menu", async (label, value) => {
       const onPresetChange = vi.fn();
       renderBar({ onPresetChange });
-
-      await userEvent.click(screen.getByRole("button", { name: "Last Month" }));
-
+      await openMenu();
+      await userEvent.click(screen.getByRole("menuitemradio", { name: label }));
       expect(onPresetChange).toHaveBeenCalledOnce();
-      expect(onPresetChange).toHaveBeenCalledWith("last-month");
+      expect(onPresetChange).toHaveBeenCalledWith(value);
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     });
 
-    it("clicking 'This FY' calls onPresetChange with value 'this-fy'", async () => {
+    it("choosing the preset that is already active does not call onPresetChange", async () => {
       const onPresetChange = vi.fn();
-      renderBar({ onPresetChange });
-
-      await userEvent.click(screen.getByRole("button", { name: "This FY" }));
-
-      expect(onPresetChange).toHaveBeenCalledWith("this-fy");
-    });
-
-    it("clicking 'Custom' calls onPresetChange with value 'custom'", async () => {
-      const onPresetChange = vi.fn();
-      renderBar({ onPresetChange });
-
-      await userEvent.click(screen.getByRole("button", { name: "Custom" }));
-
-      expect(onPresetChange).toHaveBeenCalledWith("custom");
-    });
-
-    it("clicking 'All' calls onPresetChange with value 'all'", async () => {
-      const onPresetChange = vi.fn();
-      renderBar({ onPresetChange });
-
-      await userEvent.click(screen.getByRole("button", { name: "All" }));
-
-      expect(onPresetChange).toHaveBeenCalledWith("all");
+      renderBar({ preset: "this-month", onPresetChange });
+      await openMenu();
+      await userEvent.click(screen.getByRole("menuitemradio", { name: "This Month" }));
+      expect(onPresetChange).not.toHaveBeenCalled();
     });
   });
 
@@ -304,14 +250,14 @@ describe("DateRangeBar — date filter toolbar for reports and lists", () => {
     it("shows 'Preparing...' label while exporting is true so the user knows the download is in progress", () => {
       renderBar({ onExport: vi.fn(), exporting: true });
 
-      expect(screen.getByText("Preparing...")).toBeInTheDocument();
+      expect(screen.getByText("Preparing…")).toBeInTheDocument();
       expect(screen.queryByText("Export CSV")).not.toBeInTheDocument();
     });
 
     it("disables the Export button while exporting is true to prevent duplicate requests", () => {
       renderBar({ onExport: vi.fn(), exporting: true });
 
-      // The button wrapping "Preparing..." text must be disabled.
+      // The button wrapping "Preparing…" text must be disabled.
       const exportButton = screen.getByRole("button", { name: /preparing/i });
       expect(exportButton).toBeDisabled();
     });

@@ -67,7 +67,7 @@ export function InvoiceDesignSection({ biz }: Props) {
               onClick={() => save.mutate({ id: biz.id, data: { invoiceTemplate: template, thermalWidth: width } })}
               disabled={save.isPending}
             >
-              {save.isPending ? "Saving..." : "Save invoice design"}
+              {save.isPending ? "Saving…" : "Save invoice design"}
             </button>
           )}
         </div>
@@ -106,9 +106,9 @@ export function InvoiceDesignSection({ biz }: Props) {
                 <span className="p-2.5 sm:p-3 flex flex-col gap-1 min-w-0">
                   <span className="flex items-start justify-between gap-2">
                     <span id={nameId} className="text-sm font-medium text-text-primary leading-tight">{t.name}</span>
-                    {checked && <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-600 shrink-0">Selected</span>}
+                    {checked && <span className="text-2xs font-semibold uppercase tracking-wide text-brand-600 shrink-0">Selected</span>}
                   </span>
-                  <span className="text-[11px] text-text-tertiary">{t.size}{t.id === savedTemplate ? " · in use" : ""}</span>
+                  <span className="text-2xs text-text-tertiary">{t.size}{t.id === savedTemplate ? " · in use" : ""}</span>
                   <span id={descId} className="text-xs text-text-secondary line-clamp-3 sm:line-clamp-none">{t.description}</span>
                 </span>
               </label>

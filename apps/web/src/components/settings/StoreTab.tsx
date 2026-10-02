@@ -216,19 +216,19 @@ function StoreSettingsCard() {
           </div>
         </div>
         {isSlugLocked ? (
-          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+          <p className="text-2xs text-amber-600 dark:text-amber-400 mt-1">
             Store URL cannot be changed once set
           </p>
         ) : slugStatus === "taken" ? (
-          <p className="text-[11px] text-red-500 mt-1">
+          <p className="text-2xs text-red-500 mt-1">
             This URL is already taken. Please choose a different one.
           </p>
         ) : slugStatus === "available" ? (
-          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+          <p className="text-2xs text-emerald-600 dark:text-emerald-400 mt-1">
             This URL is available!
           </p>
         ) : (
-          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+          <p className="text-2xs text-amber-600 dark:text-amber-400 mt-1">
             Choose carefully — this cannot be changed later
           </p>
         )}
@@ -408,7 +408,7 @@ function StoreItemsModal({ open, onClose }: StoreItemsModalProps) {
               disabled={changeCount === 0 || toggleMut.isPending}
             >
               {toggleMut.isPending
-                ? "Saving..."
+                ? "Saving…"
                 : `Apply ${changeCount} Change${changeCount !== 1 ? "s" : ""}`}
             </button>
           </div>
@@ -419,7 +419,7 @@ function StoreItemsModal({ open, onClose }: StoreItemsModalProps) {
       <div className="mb-4">
         <input
           className="input w-full"
-          placeholder="Search items..."
+          placeholder="Search items…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoFocus
@@ -481,7 +481,7 @@ function StoreItemsModal({ open, onClose }: StoreItemsModalProps) {
                 </div>
 
                 {isPending && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  <span className="text-2xs font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                     {enabled ? "Adding" : "Removing"}
                   </span>
                 )}

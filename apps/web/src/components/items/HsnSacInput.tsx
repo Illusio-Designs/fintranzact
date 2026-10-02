@@ -149,10 +149,10 @@ export function HsnSacInput({ value, onChange, itemType, label = "HSN / SAC Code
                   i === active ? "bg-surface-2" : "hover:bg-surface-1",
                 )}
               >
-                <span className="w-[4.75rem] shrink-0 font-mono text-[12.5px] font-semibold text-text-primary">{m.hsn}</span>
+                <span className="w-[4.75rem] shrink-0 font-mono text-xs font-semibold text-text-primary">{m.hsn}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="line-clamp-2 text-[12.5px] text-text-secondary">{m.description}</span>
-                  <span className="text-[11px] text-text-tertiary">{m.type === "services" ? "Service (SAC)" : "Goods (HSN)"}</span>
+                  <span className="line-clamp-2 text-xs text-text-secondary">{m.description}</span>
+                  <span className="text-2xs text-text-tertiary">{m.type === "services" ? "Service (SAC)" : "Goods (HSN)"}</span>
                 </span>
               </li>
             ))}

@@ -34,6 +34,7 @@ import {
   ZA,
 } from "country-flag-icons/react/3x2";
 import { cn } from "@/lib/utils";
+import { useFieldErrorToast } from "@/lib/field-error-toast";
 import { useAnchoredPopover } from "@/hooks/useAnchoredPopover";
 import { Icon } from "./Icon";
 
@@ -93,7 +94,7 @@ const FLAGS: Record<string, (props: { className?: string; title?: string }) => R
 function Flag({ code, className }: { code: string; className?: string }) {
   const F = FLAGS[code];
   if (!F) {
-    return <span className="text-[10px] font-bold text-text-secondary">{code}</span>;
+    return <span className="text-2xs font-bold text-text-secondary">{code}</span>;
   }
   return <F className={cn("block h-[14px] w-[21px] shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.08)]", className)} aria-hidden="true" />;
 }
@@ -157,6 +158,7 @@ export function PhoneInput({
   "aria-label": ariaLabel,
   onKeyDown,
 }: PhoneInputProps) {
+  useFieldErrorToast(label || ariaLabel || "Phone number", error);
   const [selected, setSelected] = useState<Country | undefined>(undefined);
   const { country, digits } = parsePhone(value, selected);
   const autoId = useId();
@@ -283,6 +285,7 @@ export function PhoneInput({
           required={required}
           aria-label={label ? undefined : (ariaLabel ?? "Phone number")}
           aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${inputId}-error` : undefined}
           value={digits}
           maxLength={maxDigitsFor(country)}
           placeholder={placeholder ?? (country.code === "IN" ? "98765 43210" : "Phone number")}
@@ -292,7 +295,7 @@ export function PhoneInput({
         />
       </div>
       {error ? (
-        <p className="mt-1 text-xs text-red-500">{error}</p>
+        <p id={`${inputId}-error`} className="sr-only">{error}</p>
       ) : hint ? (
         <p className="mt-1 text-xs text-text-tertiary">{hint}</p>
       ) : null}

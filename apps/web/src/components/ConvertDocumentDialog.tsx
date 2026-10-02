@@ -180,20 +180,20 @@ export function ConvertDocumentDialog({
                       <td className="px-3 py-2 font-medium text-text-primary">
                         {l.itemName}
                         {l.rejected > 0 && (
-                          <span className="block text-[11px] font-normal text-amber-600">{formatQty(l.rejected)} rejected earlier</span>
+                          <span className="block text-2xs font-normal text-amber-600">{formatQty(l.rejected)} rejected earlier</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-text-secondary">
                         {formatQty(l.ordered, l.selectedUnit)}
-                        {l.freeOrdered > 0 && <span className="block text-[11px]">+ {formatQty(l.freeOrdered)} free</span>}
+                        {l.freeOrdered > 0 && <span className="block text-2xs">+ {formatQty(l.freeOrdered)} free</span>}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-text-secondary">
                         {formatQty(l.fulfilled)}
-                        {l.freeFulfilled > 0 && <span className="block text-[11px]">+ {formatQty(l.freeFulfilled)} free</span>}
+                        {l.freeFulfilled > 0 && <span className="block text-2xs">+ {formatQty(l.freeFulfilled)} free</span>}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums font-medium">
                         {formatQty(l.pending)}
-                        {l.freePending > 0 && <span className="block text-[11px] font-normal">+ {formatQty(l.freePending)} free</span>}
+                        {l.freePending > 0 && <span className="block text-2xs font-normal">+ {formatQty(l.freePending)} free</span>}
                       </td>
                       <td className="px-3 py-1.5 text-right">
                         <input
@@ -255,7 +255,7 @@ export function ConvertDocumentDialog({
                       <tr className="bg-surface-1/40">
                         <td colSpan={5 + (hasFree ? 1 : 0) + (receiving ? 2 : 0)} className="px-3 py-1.5">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-[11px] text-text-tertiary">Batch</span>
+                            <span className="text-2xs text-text-tertiary">Batch</span>
                             <input
                               value={batchNo[l.lineId] ?? ""}
                               maxLength={60}
@@ -264,7 +264,7 @@ export function ConvertDocumentDialog({
                               placeholder="Batch no."
                               aria-label={`Batch number of ${l.itemName}`}
                             />
-                            <span className="text-[11px] text-text-tertiary">Expiry{b.trackExpiry ? " *" : ""}</span>
+                            <span className="text-2xs text-text-tertiary">Expiry{b.trackExpiry ? " *" : ""}</span>
                             <DateInput
                               value={expiry[l.lineId] ?? ""}
                               onChange={(e) => setExpiry((q) => ({ ...q, [l.lineId]: e.target.value }))}

@@ -70,7 +70,7 @@ function CompleteProfilePage() {
         // No invite: the app's routing (routes/__root.tsx) moves them on once
         // the refreshed session shows the name — to the partner portal,
         // onboarding or the app, depending on who they are.
-        setDoneMessage("Setting up your account...");
+        setDoneMessage("Setting up your account…");
         setStep("done");
       }
     },
@@ -111,7 +111,7 @@ function CompleteProfilePage() {
 
   function handleCreateOwn() {
     sessionStorage.removeItem("pendingInviteToken");
-    setDoneMessage("Setting up your organization...");
+    setDoneMessage("Setting up your organization…");
     setStep("done");
     setTimeout(() => navigate({ to: "/settings" }), 800);
   }
@@ -166,7 +166,7 @@ function CompleteProfilePage() {
                 disabled={profileMutation.isPending}
                 className="btn-primary w-full py-2.5"
               >
-                {profileMutation.isPending ? "Saving..." : "Continue"}
+                {profileMutation.isPending ? "Saving…" : "Continue"}
               </button>
             </form>
           </>

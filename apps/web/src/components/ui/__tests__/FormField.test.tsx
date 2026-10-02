@@ -120,6 +120,13 @@ describe("InputField — labelled text/number/date input field", () => {
     ).toBeInTheDocument();
   });
 
+  it("marks the input invalid and points it at the error so screen readers read it on focus", () => {
+    render(<InputField label="Email" type="email" error="Please enter a valid email address" />);
+    const input = screen.getByLabelText("Email");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription("Please enter a valid email address");
+  });
+
   it("has no WCAG 2.1 AA violations", async () => {
     const { container } = render(
       <InputField

@@ -317,12 +317,12 @@ function DaybookReport({
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-border bg-surface-2 backdrop-blur-sm">
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary w-7" />
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Description</th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Ref #</th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Mode</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Debit</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Credit</th>
+              <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary w-7" />
+              <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Description</th>
+              <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Ref #</th>
+              <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Mode</th>
+              <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Debit</th>
+              <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Credit</th>
             </tr>
           </thead>
           <tbody>
@@ -334,7 +334,7 @@ function DaybookReport({
                 <Fragment key={dateKey}>
                   {/* Date header row */}
                   <tr key={`day-${dateKey}`} className="bg-surface-2/30 border-b border-border/50">
-                    <td colSpan={6} className="px-4 py-2 text-[12px] font-semibold text-text-secondary">
+                    <td colSpan={6} className="px-4 py-2 text-xs font-semibold text-text-secondary">
                       {formatDate(dateKey)}
                     </td>
                   </tr>
@@ -349,33 +349,33 @@ function DaybookReport({
                         <EntryTypeIcon entryType={entry.entryType} />
                       </td>
                       <td className="px-2 py-2.5">
-                        <p className="text-text-primary text-[13px]">{entry.partyOrCategory}</p>
+                        <p className="text-text-primary text-ui">{entry.partyOrCategory}</p>
                         {entry.meta.description && (
-                          <p className="text-text-tertiary text-[11px] mt-0.5">{entry.meta.description}</p>
+                          <p className="text-text-tertiary text-2xs mt-0.5">{entry.meta.description}</p>
                         )}
                       </td>
                       <td className="px-4 py-2.5 hidden md:table-cell">
-                        <span className="text-text-tertiary text-[12px] font-mono">{entry.number ?? "—"}</span>
+                        <span className="text-text-tertiary text-xs font-mono">{entry.number ?? "—"}</span>
                       </td>
                       <td className="px-4 py-2.5 hidden lg:table-cell">
-                        <span className="text-text-secondary text-[12px] capitalize">{entry.mode ?? "—"}</span>
+                        <span className="text-text-secondary text-xs capitalize">{entry.mode ?? "—"}</span>
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         {parseFloat(entry.debit) > 0 ? (
-                          <span className="text-red-600 dark:text-red-400 text-[13px] font-medium tabular-nums">
+                          <span className="text-red-600 dark:text-red-400 text-ui font-medium tabular-nums">
                             {formatCurrency(entry.debit)}
                           </span>
                         ) : (
-                          <span className="text-text-tertiary text-[13px]">—</span>
+                          <span className="text-text-tertiary text-ui">—</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         {parseFloat(entry.credit) > 0 ? (
-                          <span className="text-emerald-600 dark:text-emerald-400 text-[13px] font-medium tabular-nums">
+                          <span className="text-emerald-600 dark:text-emerald-400 text-ui font-medium tabular-nums">
                             {formatCurrency(entry.credit)}
                           </span>
                         ) : (
-                          <span className="text-text-tertiary text-[13px]">—</span>
+                          <span className="text-text-tertiary text-ui">—</span>
                         )}
                       </td>
                     </tr>
@@ -383,19 +383,19 @@ function DaybookReport({
 
                   {/* Daily totals row */}
                   <tr key={`total-${dateKey}`} className="border-b border-border bg-surface-2/20">
-                    <td colSpan={4} className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary text-right hidden md:table-cell">
+                    <td colSpan={4} className="px-4 py-2 text-2xs font-semibold uppercase tracking-wider text-text-tertiary text-right hidden md:table-cell">
                       Day Total
                     </td>
-                    <td colSpan={2} className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary md:hidden">
+                    <td colSpan={2} className="px-4 py-2 text-2xs font-semibold uppercase tracking-wider text-text-tertiary md:hidden">
                       Day Total
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <span className="text-red-600 dark:text-red-400 text-[12px] font-semibold tabular-nums">
+                      <span className="text-red-600 dark:text-red-400 text-xs font-semibold tabular-nums">
                         {formatCurrency(dayDebit)}
                       </span>
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <span className="text-emerald-600 dark:text-emerald-400 text-[12px] font-semibold tabular-nums">
+                      <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold tabular-nums">
                         {formatCurrency(dayCredit)}
                       </span>
                     </td>
@@ -456,75 +456,75 @@ function AgingTable({
   if (bucket.parties.length === 0) return null;
   return (
     <div className="mb-6">
-      <h3 className="text-[12px] font-semibold uppercase tracking-wider text-text-tertiary mb-2 px-1">{label}</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-text-tertiary mb-2 px-1">{label}</h3>
       <div className="bg-surface rounded-2xl border border-border overflow-hidden">
         <div className="max-h-[calc(100vh-280px)] overflow-y-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-border bg-surface-2 backdrop-blur-sm">
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Party</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Current</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">31-60 days</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">61-90 days</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">90+ days</th>
-              <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Total</th>
+              <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Party</th>
+              <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Current</th>
+              <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">31-60 days</th>
+              <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">61-90 days</th>
+              <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">90+ days</th>
+              <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Total</th>
             </tr>
           </thead>
           <tbody>
             {bucket.parties.map((party) => (
               <tr key={party.partyId} className="border-b border-border/40 hover:bg-surface-2/40 transition-colors">
                 <td className="px-4 py-3">
-                  <p className="text-text-primary text-[13px] font-medium">{party.partyName}</p>
+                  <p className="text-text-primary text-ui font-medium">{party.partyName}</p>
                   {party.partyPhone && (
-                    <p className="text-text-tertiary text-[11px] mt-0.5">{party.partyPhone}</p>
+                    <p className="text-text-tertiary text-2xs mt-0.5">{party.partyPhone}</p>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right hidden md:table-cell">
-                  <span className="text-text-secondary text-[13px] tabular-nums">{formatCurrency(party.current)}</span>
+                  <span className="text-text-secondary text-ui tabular-nums">{formatCurrency(party.current)}</span>
                 </td>
                 <td className="px-4 py-3 text-right hidden lg:table-cell">
                   {parseFloat(party.days31_60) > 0 ? (
-                    <span className="text-amber-600 dark:text-amber-400 text-[13px] tabular-nums">{formatCurrency(party.days31_60)}</span>
+                    <span className="text-amber-600 dark:text-amber-400 text-ui tabular-nums">{formatCurrency(party.days31_60)}</span>
                   ) : (
-                    <span className="text-text-tertiary text-[13px]">—</span>
+                    <span className="text-text-tertiary text-ui">—</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right hidden lg:table-cell">
                   {parseFloat(party.days61_90) > 0 ? (
-                    <span className="text-orange-600 dark:text-orange-400 text-[13px] tabular-nums">{formatCurrency(party.days61_90)}</span>
+                    <span className="text-orange-600 dark:text-orange-400 text-ui tabular-nums">{formatCurrency(party.days61_90)}</span>
                   ) : (
-                    <span className="text-text-tertiary text-[13px]">—</span>
+                    <span className="text-text-tertiary text-ui">—</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right hidden md:table-cell">
                   {parseFloat(party.days90Plus) > 0 ? (
-                    <span className="text-red-600 dark:text-red-400 text-[13px] tabular-nums">{formatCurrency(party.days90Plus)}</span>
+                    <span className="text-red-600 dark:text-red-400 text-ui tabular-nums">{formatCurrency(party.days90Plus)}</span>
                   ) : (
-                    <span className="text-text-tertiary text-[13px]">—</span>
+                    <span className="text-text-tertiary text-ui">—</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <span className="text-text-primary text-[13px] font-semibold tabular-nums">{formatCurrency(party.total)}</span>
+                  <span className="text-text-primary text-ui font-semibold tabular-nums">{formatCurrency(party.total)}</span>
                 </td>
               </tr>
             ))}
             {/* Summary footer row */}
             <tr className="bg-surface-2/30 border-t border-border">
-              <td className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Total</td>
+              <td className="px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Total</td>
               <td className="px-4 py-2.5 text-right hidden md:table-cell">
-                <span className="text-text-secondary text-[12px] font-semibold tabular-nums">{formatCurrency(bucket.summary.current)}</span>
+                <span className="text-text-secondary text-xs font-semibold tabular-nums">{formatCurrency(bucket.summary.current)}</span>
               </td>
               <td className="px-4 py-2.5 text-right hidden lg:table-cell">
-                <span className="text-amber-600 dark:text-amber-400 text-[12px] font-semibold tabular-nums">{formatCurrency(bucket.summary.days31_60)}</span>
+                <span className="text-amber-600 dark:text-amber-400 text-xs font-semibold tabular-nums">{formatCurrency(bucket.summary.days31_60)}</span>
               </td>
               <td className="px-4 py-2.5 text-right hidden lg:table-cell">
-                <span className="text-orange-600 dark:text-orange-400 text-[12px] font-semibold tabular-nums">{formatCurrency(bucket.summary.days61_90)}</span>
+                <span className="text-orange-600 dark:text-orange-400 text-xs font-semibold tabular-nums">{formatCurrency(bucket.summary.days61_90)}</span>
               </td>
               <td className="px-4 py-2.5 text-right hidden md:table-cell">
-                <span className="text-red-600 dark:text-red-400 text-[12px] font-semibold tabular-nums">{formatCurrency(bucket.summary.days90Plus)}</span>
+                <span className="text-red-600 dark:text-red-400 text-xs font-semibold tabular-nums">{formatCurrency(bucket.summary.days90Plus)}</span>
               </td>
               <td className="px-4 py-2.5 text-right">
-                <span className="text-text-primary text-[12px] font-bold tabular-nums">{formatCurrency(bucket.summary.total)}</span>
+                <span className="text-text-primary text-xs font-bold tabular-nums">{formatCurrency(bucket.summary.total)}</span>
               </td>
             </tr>
           </tbody>
@@ -814,7 +814,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap",
+        "text-2xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap",
         styles[status] ?? "bg-surface-2 text-text-secondary",
       )}
     >
@@ -951,13 +951,13 @@ function RegisterReport({
   // Free goods are not priced, so the column only shows when there are some.
   const showFree = (summary.totalFreeQuantity ?? 0) > 0;
   const freeHeader = showFree && (
-    <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell" title="Given or received free on top of the billed quantity; not part of the taxable value">
+    <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell" title="Given or received free on top of the billed quantity; not part of the taxable value">
       Free Qty
     </th>
   );
   const freeCell = (q?: number) => showFree && (
     <td className="px-4 py-3 text-right hidden lg:table-cell">
-      <span className="text-text-secondary text-[13px] tabular-nums">{q ? q : "—"}</span>
+      <span className="text-text-secondary text-ui tabular-nums">{q ? q : "—"}</span>
     </td>
   );
 
@@ -987,38 +987,38 @@ function RegisterReport({
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-border bg-surface-2 backdrop-blur-sm">
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
                     Date
                   </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
                     Invoice #
                   </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
                     Doc Type
                   </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
                     Customer
                   </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
                     GSTIN
                   </th>
                   {freeHeader}
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
                     Subtotal
                   </th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
                     Discount
                   </th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
                     Tax
                   </th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
                     Total
                   </th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
                     Paid
                   </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
                     Status
                   </th>
                 </tr>
@@ -1029,57 +1029,57 @@ function RegisterReport({
                     key={row.id}
                     className="border-b border-border/40 hover:bg-surface-2/40 transition-colors"
                   >
-                    <td className="px-4 py-3 text-[12px] text-text-secondary whitespace-nowrap">
+                    <td className="px-4 py-3 text-xs text-text-secondary whitespace-nowrap">
                       {formatDate(String(row.invoiceDate))}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-text-primary text-[13px] font-medium font-mono">
+                      <span className="text-text-primary text-ui font-medium font-mono">
                         {row.invoiceNumber}
                       </span>
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-surface-2 text-text-secondary capitalize">
+                      <span className="text-2xs font-medium px-2 py-0.5 rounded-full bg-surface-2 text-text-secondary capitalize">
                         {row.documentType.replace("_", " ")}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-text-primary text-[13px]">{row.customerName}</p>
+                      <p className="text-text-primary text-ui">{row.customerName}</p>
                       {row.customerState && (
-                        <p className="text-text-tertiary text-[11px] mt-0.5">{row.customerState}</p>
+                        <p className="text-text-tertiary text-2xs mt-0.5">{row.customerState}</p>
                       )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-text-tertiary text-[12px] font-mono">
+                      <span className="text-text-tertiary text-xs font-mono">
                         {row.customerGstin ?? "—"}
                       </span>
                     </td>
                     {freeCell(row.freeQuantity)}
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
-                      <span className="text-text-secondary text-[13px] tabular-nums">
+                      <span className="text-text-secondary text-ui tabular-nums">
                         {formatCurrency(row.subtotal)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
                       {parseFloat(row.discountAmount) > 0 ? (
-                        <span className="text-amber-600 dark:text-amber-400 text-[13px] tabular-nums">
+                        <span className="text-amber-600 dark:text-amber-400 text-ui tabular-nums">
                           -{formatCurrency(row.discountAmount)}
                         </span>
                       ) : (
-                        <span className="text-text-tertiary text-[13px]">—</span>
+                        <span className="text-text-tertiary text-ui">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right hidden md:table-cell">
-                      <span className="text-text-secondary text-[13px] tabular-nums">
+                      <span className="text-text-secondary text-ui tabular-nums">
                         {formatCurrency(row.taxAmount)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="text-text-primary text-[13px] font-semibold tabular-nums">
+                      <span className="text-text-primary text-ui font-semibold tabular-nums">
                         {formatCurrency(row.totalAmount)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right hidden md:table-cell">
-                      <span className="text-emerald-600 dark:text-emerald-400 text-[13px] tabular-nums">
+                      <span className="text-emerald-600 dark:text-emerald-400 text-ui tabular-nums">
                         {formatCurrency(row.amountPaid)}
                       </span>
                     </td>
@@ -1094,35 +1094,35 @@ function RegisterReport({
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-border bg-surface-2 backdrop-blur-sm">
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
                     Date
                   </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
                     Invoice #
                   </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
                     Supplier
                   </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
                     GSTIN
                   </th>
                   {freeHeader}
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
                     Subtotal
                   </th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
                     Discount
                   </th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
                     Tax
                   </th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
                     Total
                   </th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
                     Paid
                   </th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                  <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
                     Status
                   </th>
                 </tr>
@@ -1133,49 +1133,49 @@ function RegisterReport({
                     key={row.id}
                     className="border-b border-border/40 hover:bg-surface-2/40 transition-colors"
                   >
-                    <td className="px-4 py-3 text-[12px] text-text-secondary whitespace-nowrap">
+                    <td className="px-4 py-3 text-xs text-text-secondary whitespace-nowrap">
                       {formatDate(String(row.invoiceDate))}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-text-primary text-[13px] font-medium font-mono">
+                      <span className="text-text-primary text-ui font-medium font-mono">
                         {row.invoiceNumber}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-text-primary text-[13px]">{row.supplierName}</p>
+                      <p className="text-text-primary text-ui">{row.supplierName}</p>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-text-tertiary text-[12px] font-mono">
+                      <span className="text-text-tertiary text-xs font-mono">
                         {row.supplierGstin ?? "—"}
                       </span>
                     </td>
                     {freeCell(row.freeQuantity)}
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
-                      <span className="text-text-secondary text-[13px] tabular-nums">
+                      <span className="text-text-secondary text-ui tabular-nums">
                         {formatCurrency(row.subtotal)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
                       {parseFloat(row.discountAmount) > 0 ? (
-                        <span className="text-amber-600 dark:text-amber-400 text-[13px] tabular-nums">
+                        <span className="text-amber-600 dark:text-amber-400 text-ui tabular-nums">
                           -{formatCurrency(row.discountAmount)}
                         </span>
                       ) : (
-                        <span className="text-text-tertiary text-[13px]">—</span>
+                        <span className="text-text-tertiary text-ui">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right hidden md:table-cell">
-                      <span className="text-text-secondary text-[13px] tabular-nums">
+                      <span className="text-text-secondary text-ui tabular-nums">
                         {formatCurrency(row.taxAmount)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="text-text-primary text-[13px] font-semibold tabular-nums">
+                      <span className="text-text-primary text-ui font-semibold tabular-nums">
                         {formatCurrency(row.totalAmount)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right hidden md:table-cell">
-                      <span className="text-emerald-600 dark:text-emerald-400 text-[13px] tabular-nums">
+                      <span className="text-emerald-600 dark:text-emerald-400 text-ui tabular-nums">
                         {formatCurrency(row.amountPaid)}
                       </span>
                     </td>
@@ -1319,7 +1319,7 @@ function PartyStatementReport({
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-lg font-semibold text-text-primary">{data.party.name}</h2>
           <span className={cn(
-            "text-[11px] font-medium px-2 py-0.5 rounded-full capitalize shrink-0",
+            "text-2xs font-medium px-2 py-0.5 rounded-full capitalize shrink-0",
             data.party.type === "customer"
               ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
               : "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
@@ -1329,13 +1329,13 @@ function PartyStatementReport({
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
           {data.party.gstin && (
-            <span className="text-[12px] text-text-tertiary font-mono">GSTIN: {data.party.gstin}</span>
+            <span className="text-xs text-text-tertiary font-mono">GSTIN: {data.party.gstin}</span>
           )}
           {data.party.phone && (
-            <span className="text-[12px] text-text-tertiary">{data.party.phone}</span>
+            <span className="text-xs text-text-tertiary">{data.party.phone}</span>
           )}
           {data.party.city && (
-            <span className="text-[12px] text-text-tertiary">
+            <span className="text-xs text-text-tertiary">
               {data.party.city}{data.party.state ? `, ${data.party.state}` : ""}
             </span>
           )}
@@ -1347,7 +1347,7 @@ function PartyStatementReport({
         <SummaryCard label="Total Debit" value={formatCurrency(data.summary.totalDebit)} accent="red" />
         <SummaryCard label="Total Credit" value={formatCurrency(data.summary.totalCredit)} accent="green" />
         <div className="bg-surface rounded-xl border border-border px-4 py-3 col-span-2 md:col-span-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Closing Balance</p>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Closing Balance</p>
           <div className="flex items-baseline gap-2 mt-1">
             <p className={cn(
               "text-xl font-semibold tabular-nums",
@@ -1356,7 +1356,7 @@ function PartyStatementReport({
               {formatCurrency(data.summary.closingBalance)}
             </p>
             <span className={cn(
-              "text-[10px] font-semibold uppercase tracking-wider",
+              "text-2xs font-semibold uppercase tracking-wider",
               data.summary.isDebit ? "text-red-500" : "text-emerald-500"
             )}>
               {data.summary.isDebit ? "Dr" : "Cr"}
@@ -1378,13 +1378,13 @@ function PartyStatementReport({
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-surface-2 backdrop-blur-sm">
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Date</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Type</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Ref #</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Description</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Debit</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Credit</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Balance</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Date</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Type</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Ref #</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Description</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Debit</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Credit</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Balance</th>
               </tr>
             </thead>
             <tbody>
@@ -1393,11 +1393,11 @@ function PartyStatementReport({
                 return (
                   <tr key={i} className="border-b border-border/40 hover:bg-surface-2/40 transition-colors">
                     <td className="px-4 py-2.5">
-                      <span className="text-text-secondary text-[12px]">{formatDate(entry.date)}</span>
+                      <span className="text-text-secondary text-xs">{formatDate(entry.date)}</span>
                     </td>
                     <td className="px-4 py-2.5 hidden md:table-cell">
                       <span className={cn(
-                        "text-[11px] font-medium px-2 py-0.5 rounded-full capitalize",
+                        "text-2xs font-medium px-2 py-0.5 rounded-full capitalize",
                         entry.type === "invoice"
                           ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
                           : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
@@ -1406,35 +1406,35 @@ function PartyStatementReport({
                       </span>
                     </td>
                     <td className="px-4 py-2.5 hidden lg:table-cell">
-                      <span className="text-text-tertiary text-[12px] font-mono">{entry.number || "—"}</span>
+                      <span className="text-text-tertiary text-xs font-mono">{entry.number || "—"}</span>
                     </td>
                     <td className="px-4 py-2.5">
-                      <p className="text-text-primary text-[13px]">{entry.description}</p>
+                      <p className="text-text-primary text-ui">{entry.description}</p>
                       {entry.status && (
-                        <span className="text-[10px] text-text-tertiary capitalize">{entry.status}</span>
+                        <span className="text-2xs text-text-tertiary capitalize">{entry.status}</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       {parseFloat(entry.debit) > 0 ? (
-                        <span className="text-red-600 dark:text-red-400 text-[13px] font-medium tabular-nums">
+                        <span className="text-red-600 dark:text-red-400 text-ui font-medium tabular-nums">
                           {formatCurrency(entry.debit)}
                         </span>
                       ) : (
-                        <span className="text-text-tertiary text-[13px]">—</span>
+                        <span className="text-text-tertiary text-ui">—</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       {parseFloat(entry.credit) > 0 ? (
-                        <span className="text-emerald-600 dark:text-emerald-400 text-[13px] font-medium tabular-nums">
+                        <span className="text-emerald-600 dark:text-emerald-400 text-ui font-medium tabular-nums">
                           {formatCurrency(entry.credit)}
                         </span>
                       ) : (
-                        <span className="text-text-tertiary text-[13px]">—</span>
+                        <span className="text-text-tertiary text-ui">—</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right hidden md:table-cell">
                       <span className={cn(
-                        "text-[13px] font-medium tabular-nums",
+                        "text-ui font-medium tabular-nums",
                         balance >= 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
                       )}>
                         {formatCurrency(entry.runningBalance)}
@@ -1599,7 +1599,7 @@ function StockSummaryReport() {
         <SummaryCard label="Total Sale Value" value={formatCurrency(data.summary.totalSaleValue)} accent="green" />
         <SummaryCard label="SKU Count" value={data.summary.totalSkuCount.toString()} />
         <div className="bg-surface rounded-xl border border-border px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Low Stock</p>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Low Stock</p>
           <p className={cn(
             "text-xl font-semibold tabular-nums mt-1",
             data.summary.lowStockCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-text-primary"
@@ -1634,13 +1634,13 @@ function StockSummaryReport() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-surface-2 backdrop-blur-sm">
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Item</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Category</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">HSN / Unit</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Stock</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Purchase Price</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Sale Price</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Stock Value</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Item</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Category</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">HSN / Unit</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Stock</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Purchase Price</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Sale Price</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Stock Value</th>
               </tr>
             </thead>
             <tbody>
@@ -1655,41 +1655,41 @@ function StockSummaryReport() {
                 >
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
-                      <p className="text-text-primary text-[13px] font-medium">{item.itemName}</p>
+                      <p className="text-text-primary text-ui font-medium">{item.itemName}</p>
                       {item.isLowStock && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 shrink-0">
+                        <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 shrink-0">
                           Low
                         </span>
                       )}
                     </div>
                   </td>
                   <td className="px-4 py-2.5 hidden md:table-cell">
-                    <span className="text-text-secondary text-[12px]">{item.category ?? "—"}</span>
+                    <span className="text-text-secondary text-xs">{item.category ?? "—"}</span>
                   </td>
                   <td className="px-4 py-2.5 hidden lg:table-cell">
-                    <span className="text-text-tertiary text-[12px] font-mono">{item.hsn ?? "—"}</span>
-                    {item.unit && <span className="text-text-tertiary text-[11px] ml-1">/ {item.unit}</span>}
+                    <span className="text-text-tertiary text-xs font-mono">{item.hsn ?? "—"}</span>
+                    {item.unit && <span className="text-text-tertiary text-2xs ml-1">/ {item.unit}</span>}
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <span className={cn(
-                      "text-[13px] font-medium tabular-nums",
+                      "text-ui font-medium tabular-nums",
                       item.isLowStock ? "text-amber-600 dark:text-amber-400" : "text-text-primary"
                     )}>
                       {item.currentStock}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right hidden md:table-cell">
-                    <span className="text-text-secondary text-[13px] tabular-nums">
+                    <span className="text-text-secondary text-ui tabular-nums">
                       {item.purchasePrice ? formatCurrency(item.purchasePrice) : "—"}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right hidden md:table-cell">
-                    <span className="text-text-secondary text-[13px] tabular-nums">
+                    <span className="text-text-secondary text-ui tabular-nums">
                       {item.salePrice ? formatCurrency(item.salePrice) : "—"}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <span className="text-text-primary text-[13px] font-medium tabular-nums">
+                    <span className="text-text-primary text-ui font-medium tabular-nums">
                       {formatCurrency(item.stockValue)}
                     </span>
                   </td>
@@ -1718,40 +1718,40 @@ function StockSummaryReport() {
                             size={14}
                             className={cn("text-text-tertiary transition-transform", isExpanded && "rotate-90")}
                           />
-                          <p className="text-text-primary text-[13px] font-medium">{item.itemName}</p>
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-surface-2 text-text-tertiary shrink-0">
+                          <p className="text-text-primary text-ui font-medium">{item.itemName}</p>
+                          <span className="text-2xs font-medium px-1.5 py-0.5 rounded bg-surface-2 text-text-tertiary shrink-0">
                             {item.variantDetails.length} variants
                           </span>
                           {hasLowStock && (
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 shrink-0">
+                            <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 shrink-0">
                               Low
                             </span>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-2.5 hidden md:table-cell">
-                        <span className="text-text-secondary text-[12px]">{item.category ?? "—"}</span>
+                        <span className="text-text-secondary text-xs">{item.category ?? "—"}</span>
                       </td>
                       <td className="px-4 py-2.5 hidden lg:table-cell">
-                        <span className="text-text-tertiary text-[12px] font-mono">{item.hsn ?? "—"}</span>
-                        {item.unit && <span className="text-text-tertiary text-[11px] ml-1">/ {item.unit}</span>}
+                        <span className="text-text-tertiary text-xs font-mono">{item.hsn ?? "—"}</span>
+                        {item.unit && <span className="text-text-tertiary text-2xs ml-1">/ {item.unit}</span>}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <span className={cn(
-                          "text-[13px] font-medium tabular-nums",
+                          "text-ui font-medium tabular-nums",
                           hasLowStock ? "text-amber-600 dark:text-amber-400" : "text-text-primary"
                         )}>
                           {item.totalStock}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-right hidden md:table-cell">
-                        <span className="text-text-tertiary text-[12px]">—</span>
+                        <span className="text-text-tertiary text-xs">—</span>
                       </td>
                       <td className="px-4 py-2.5 text-right hidden md:table-cell">
-                        <span className="text-text-tertiary text-[12px]">—</span>
+                        <span className="text-text-tertiary text-xs">—</span>
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        <span className="text-text-primary text-[13px] font-medium tabular-nums">
+                        <span className="text-text-primary text-ui font-medium tabular-nums">
                           {formatCurrency(item.totalValue)}
                         </span>
                       </td>
@@ -1771,15 +1771,15 @@ function StockSummaryReport() {
                         <td className="pl-10 pr-4 py-2">
                           <div className="flex items-center gap-2">
                             {variant.sku ? (
-                              <span className="text-text-secondary text-[12px] font-mono">{variant.sku}</span>
+                              <span className="text-text-secondary text-xs font-mono">{variant.sku}</span>
                             ) : (
-                              <span className="text-text-secondary text-[12px]">{formatAttributes(variant.attributes)}</span>
+                              <span className="text-text-secondary text-xs">{formatAttributes(variant.attributes)}</span>
                             )}
                             {variant.sku && variant.attributes && (
-                              <span className="text-text-tertiary text-[11px]">{formatAttributes(variant.attributes)}</span>
+                              <span className="text-text-tertiary text-2xs">{formatAttributes(variant.attributes)}</span>
                             )}
                             {variant.isLowStock && (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 shrink-0">
+                              <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 shrink-0">
                                 Low
                               </span>
                             )}
@@ -1789,24 +1789,24 @@ function StockSummaryReport() {
                         <td className="px-4 py-2 hidden lg:table-cell" />
                         <td className="px-4 py-2 text-right">
                           <span className={cn(
-                            "text-[12px] tabular-nums",
+                            "text-xs tabular-nums",
                             variant.isLowStock ? "text-amber-600 dark:text-amber-400 font-medium" : "text-text-secondary"
                           )}>
                             {variant.stock}
                           </span>
                         </td>
                         <td className="px-4 py-2 text-right hidden md:table-cell">
-                          <span className="text-text-tertiary text-[12px] tabular-nums">
+                          <span className="text-text-tertiary text-xs tabular-nums">
                             {variant.purchasePrice ? formatCurrency(variant.purchasePrice) : "—"}
                           </span>
                         </td>
                         <td className="px-4 py-2 text-right hidden md:table-cell">
-                          <span className="text-text-tertiary text-[12px] tabular-nums">
+                          <span className="text-text-tertiary text-xs tabular-nums">
                             {variant.salePrice ? formatCurrency(variant.salePrice) : "—"}
                           </span>
                         </td>
                         <td className="px-4 py-2 text-right">
-                          <span className="text-text-secondary text-[12px] tabular-nums">
+                          <span className="text-text-secondary text-xs tabular-nums">
                             {formatCurrency(variant.value)}
                           </span>
                         </td>
@@ -2026,7 +2026,7 @@ function PaymentSummaryReport({
       {/* By Payment Mode mini-table */}
       {data.byMode.length > 0 && (
         <div className="mb-5">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary mb-2">
+          <h3 className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary mb-2">
             By Payment Mode
           </h3>
           <div className="bg-surface rounded-xl border border-border overflow-hidden">
@@ -2034,26 +2034,26 @@ function PaymentSummaryReport({
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-border bg-surface-2 backdrop-blur-sm">
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Mode</th>
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Account</th>
-                  <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Count</th>
-                  <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Total</th>
+                  <th className="text-left px-4 py-2 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Mode</th>
+                  <th className="text-left px-4 py-2 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Account</th>
+                  <th className="text-right px-4 py-2 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Count</th>
+                  <th className="text-right px-4 py-2 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {data.byMode.map((row, i) => (
                   <tr key={i} className="border-b border-border/40 last:border-0 hover:bg-surface-2/40 transition-colors">
                     <td className="px-4 py-2.5">
-                      <span className="text-text-primary text-[13px]">{paymentModeLabel(row.mode)}</span>
+                      <span className="text-text-primary text-ui">{paymentModeLabel(row.mode)}</span>
                     </td>
                     <td className="px-4 py-2.5 hidden md:table-cell">
-                      <span className="text-text-tertiary text-[12px]">{row.bankAccountName ?? "—"}</span>
+                      <span className="text-text-tertiary text-xs">{row.bankAccountName ?? "—"}</span>
                     </td>
                     <td className="px-4 py-2.5 text-right">
-                      <span className="text-text-secondary text-[13px] tabular-nums">{row.count}</span>
+                      <span className="text-text-secondary text-ui tabular-nums">{row.count}</span>
                     </td>
                     <td className="px-4 py-2.5 text-right">
-                      <span className="text-text-primary text-[13px] font-medium tabular-nums">{formatCurrency(row.totalAmount)}</span>
+                      <span className="text-text-primary text-ui font-medium tabular-nums">{formatCurrency(row.totalAmount)}</span>
                     </td>
                   </tr>
                 ))}
@@ -2087,30 +2087,30 @@ function PaymentSummaryReport({
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-surface-2 backdrop-blur-sm">
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Date</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Payment #</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Party</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Type</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Amount</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Mode</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Date</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Payment #</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Party</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Type</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Amount</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Mode</th>
               </tr>
             </thead>
             <tbody>
               {data.recentPayments.map((pmt) => (
                 <tr key={pmt.id} className="border-b border-border/40 hover:bg-surface-2/40 transition-colors">
                   <td className="px-4 py-2.5">
-                    <span className="text-text-secondary text-[12px]">{formatDate(pmt.date)}</span>
+                    <span className="text-text-secondary text-xs">{formatDate(pmt.date)}</span>
                   </td>
                   <td className="px-4 py-2.5 hidden md:table-cell">
-                    <span className="text-text-tertiary text-[12px] font-mono">{pmt.paymentNumber ?? "—"}</span>
+                    <span className="text-text-tertiary text-xs font-mono">{pmt.paymentNumber ?? "—"}</span>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className="text-text-primary text-[13px]">{pmt.partyName}</span>
+                    <span className="text-text-primary text-ui">{pmt.partyName}</span>
                   </td>
                   <td className="px-4 py-2.5 hidden lg:table-cell">
                     <span
                       className={cn(
-                        "text-[11px] font-medium px-2 py-0.5 rounded-full",
+                        "text-2xs font-medium px-2 py-0.5 rounded-full",
                         pmt.partyType === "customer"
                           ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
                           : "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
@@ -2122,7 +2122,7 @@ function PaymentSummaryReport({
                   <td className="px-4 py-2.5 text-right">
                     <span
                       className={cn(
-                        "text-[13px] font-semibold tabular-nums",
+                        "text-ui font-semibold tabular-nums",
                         pmt.partyType === "customer"
                           ? "text-emerald-600 dark:text-emerald-400"
                           : "text-red-600 dark:text-red-400",
@@ -2132,7 +2132,7 @@ function PaymentSummaryReport({
                     </span>
                   </td>
                   <td className="px-4 py-2.5 hidden md:table-cell">
-                    <span className="text-text-tertiary text-[12px] capitalize">{pmt.mode}</span>
+                    <span className="text-text-tertiary text-xs capitalize">{pmt.mode}</span>
                   </td>
                 </tr>
               ))}
@@ -2194,36 +2194,36 @@ function TaxSummaryReport({
     if (rows.length === 0) return null;
     return (
       <div className="mb-5">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary mb-2">{title}</h3>
+        <h3 className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary mb-2">{title}</h3>
         <div className="bg-surface rounded-xl border border-border overflow-hidden">
           <div className="max-h-[calc(100vh-280px)] overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-surface-2 backdrop-blur-sm">
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Tax %</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Invoices</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Taxable Amt</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Tax Amt</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Gross Amt</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Tax %</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Invoices</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Taxable Amt</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Tax Amt</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Gross Amt</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, i) => (
                 <tr key={i} className="border-b border-border/40 last:border-0 hover:bg-surface-2/40 transition-colors">
                   <td className="px-4 py-2.5 text-right">
-                    <span className="text-text-primary text-[13px] font-medium tabular-nums">{row.taxPercent}%</span>
+                    <span className="text-text-primary text-ui font-medium tabular-nums">{row.taxPercent}%</span>
                   </td>
                   <td className="px-4 py-2.5 text-right hidden md:table-cell">
-                    <span className="text-text-secondary text-[13px] tabular-nums">{row.invoiceCount}</span>
+                    <span className="text-text-secondary text-ui tabular-nums">{row.invoiceCount}</span>
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <span className="text-text-secondary text-[13px] tabular-nums">{formatCurrency(row.taxableAmount)}</span>
+                    <span className="text-text-secondary text-ui tabular-nums">{formatCurrency(row.taxableAmount)}</span>
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <span className="text-text-primary text-[13px] font-semibold tabular-nums">{formatCurrency(row.taxAmount)}</span>
+                    <span className="text-text-primary text-ui font-semibold tabular-nums">{formatCurrency(row.taxAmount)}</span>
                   </td>
                   <td className="px-4 py-2.5 text-right hidden lg:table-cell">
-                    <span className="text-text-secondary text-[13px] tabular-nums">{formatCurrency(row.grossAmount)}</span>
+                    <span className="text-text-secondary text-ui tabular-nums">{formatCurrency(row.grossAmount)}</span>
                   </td>
                 </tr>
               ))}
@@ -2350,7 +2350,7 @@ function ItemSalesReport({
       {/* Controls + Export */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-text-tertiary font-medium uppercase tracking-wider shrink-0">Sort by</span>
+          <span className="text-2xs text-text-tertiary font-medium uppercase tracking-wider shrink-0">Sort by</span>
           <Select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
@@ -2384,16 +2384,16 @@ function ItemSalesReport({
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-surface-2 backdrop-blur-sm">
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Item</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Category</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Qty Sold</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Revenue (excl. GST)</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Avg Price</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Invoices</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Customers</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Margin %</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Item</th>
+                <th className="text-left px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Category</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Qty Sold</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Revenue (excl. GST)</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Avg Price</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">Invoices</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">Customers</th>
+                <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Margin %</th>
                 {compareToPrevious && (
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Change</th>
+                  <th className="text-right px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Change</th>
                 )}
               </tr>
             </thead>
@@ -2407,43 +2407,43 @@ function ItemSalesReport({
                     className="border-b border-border/40 hover:bg-surface-2/40 transition-colors"
                   >
                     <td className="px-4 py-3">
-                      <p className="text-text-primary text-[13px] font-medium">{row.itemName}</p>
+                      <p className="text-text-primary text-ui font-medium">{row.itemName}</p>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-text-tertiary text-[12px]">{row.category ?? "—"}</span>
+                      <span className="text-text-tertiary text-xs">{row.category ?? "—"}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="text-text-secondary text-[13px] tabular-nums">
+                      <span className="text-text-secondary text-ui tabular-nums">
                         {parseFloat(parseFloat(row.soldQty).toFixed(2))}
                         {row.unit ? ` ${row.unit}` : ""}
                       </span>
                       {parseFloat(row.freeQty ?? "0") > 0 && (
-                        <span className="block text-[11px] text-text-tertiary tabular-nums">
+                        <span className="block text-2xs text-text-tertiary tabular-nums">
                           + {parseFloat(parseFloat(row.freeQty!).toFixed(2))} free
                         </span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="text-text-primary text-[13px] font-semibold tabular-nums">
+                      <span className="text-text-primary text-ui font-semibold tabular-nums">
                         {formatCurrency(row.totalRevenue)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
-                      <span className="text-text-secondary text-[13px] tabular-nums">
+                      <span className="text-text-secondary text-ui tabular-nums">
                         {row.avgUnitPrice ? formatCurrency(row.avgUnitPrice) : "—"}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right hidden md:table-cell">
-                      <span className="text-text-secondary text-[13px] tabular-nums">{row.invoiceCount}</span>
+                      <span className="text-text-secondary text-ui tabular-nums">{row.invoiceCount}</span>
                     </td>
                     <td className="px-4 py-3 text-right hidden lg:table-cell">
-                      <span className="text-text-secondary text-[13px] tabular-nums">{row.uniqueCustomers}</span>
+                      <span className="text-text-secondary text-ui tabular-nums">{row.uniqueCustomers}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {margin !== null ? (
                         <span
                           className={cn(
-                            "text-[13px] font-medium tabular-nums",
+                            "text-ui font-medium tabular-nums",
                             margin >= 30
                               ? "text-emerald-600 dark:text-emerald-400"
                               : margin >= 10
@@ -2454,7 +2454,7 @@ function ItemSalesReport({
                           {margin.toFixed(1)}%
                         </span>
                       ) : (
-                        <span className="text-text-tertiary text-[13px]">—</span>
+                        <span className="text-text-tertiary text-ui">—</span>
                       )}
                     </td>
                     {compareToPrevious && (
@@ -2462,7 +2462,7 @@ function ItemSalesReport({
                         {change !== null ? (
                           <span
                             className={cn(
-                              "inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full tabular-nums",
+                              "inline-flex items-center gap-0.5 text-2xs font-semibold px-1.5 py-0.5 rounded-full tabular-nums",
                               change >= 0
                                 ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
                                 : "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400",
@@ -2472,7 +2472,7 @@ function ItemSalesReport({
                             {change.toFixed(1)}%
                           </span>
                         ) : (
-                          <span className="text-text-tertiary text-[12px]">—</span>
+                          <span className="text-text-tertiary text-xs">—</span>
                         )}
                       </td>
                     )}
@@ -2601,7 +2601,7 @@ function CollectionEfficiencyReport({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* On-Time Collection Rate */}
         <div className="bg-surface rounded-xl border border-border px-5 py-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary mb-3">
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary mb-3">
             On-Time Collection Rate
           </p>
           <p className={onTimeRateColor}>
@@ -2614,7 +2614,7 @@ function CollectionEfficiencyReport({
 
         {/* Days Sales Outstanding */}
         <div className="bg-surface rounded-xl border border-border px-5 py-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary mb-3">
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary mb-3">
             Days Sales Outstanding (DSO)
           </p>
           <div className="flex items-baseline gap-2">
@@ -2634,22 +2634,22 @@ function CollectionEfficiencyReport({
       {/* Second row: three stat cards */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-surface rounded-xl border border-border px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Total Invoices</p>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Total Invoices</p>
           <p className="text-xl font-semibold tabular-nums mt-1 text-text-primary">{eff.totalInvoices}</p>
         </div>
         <div className="bg-surface rounded-xl border border-border px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Paid On Time</p>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Paid On Time</p>
           <p className="text-xl font-semibold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">{eff.paidOnTime}</p>
         </div>
         <div className="bg-surface rounded-xl border border-border px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Paid Late</p>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Paid Late</p>
           <p className="text-xl font-semibold tabular-nums mt-1 text-red-600 dark:text-red-400">{eff.paidLate}</p>
         </div>
       </div>
 
       {/* Third row: DSO details card */}
       <div className="bg-surface rounded-xl border border-border px-5 py-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary mb-3">DSO Details</p>
+        <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary mb-3">DSO Details</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <p className="text-xs text-text-tertiary">Period</p>
@@ -2701,8 +2701,8 @@ function cashFlowAmountColor(value: string): string {
 function CashFlowLineItem({ description, amount }: { description: string; amount: string }) {
   return (
     <div className="flex items-center justify-between px-5 py-2.5 border-b border-border/40 last:border-b-0 hover:bg-surface-2/30 transition-colors">
-      <span className="text-[13px] text-text-secondary">{description}</span>
-      <span className={cn("text-[13px] font-medium tabular-nums", cashFlowAmountColor(amount))}>
+      <span className="text-ui text-text-secondary">{description}</span>
+      <span className={cn("text-ui font-medium tabular-nums", cashFlowAmountColor(amount))}>
         {formatCurrency(amount)}
       </span>
     </div>
@@ -2725,10 +2725,10 @@ function CashFlowSectionTotal({
         highlight ? "bg-surface-2/60" : "bg-surface-2/40",
       )}
     >
-      <span className={cn("text-[13px] font-semibold", highlight ? "text-text-primary" : "text-text-secondary")}>
+      <span className={cn("text-ui font-semibold", highlight ? "text-text-primary" : "text-text-secondary")}>
         {label}
       </span>
-      <span className={cn("text-[13px] font-bold tabular-nums", cashFlowAmountColor(amount))}>
+      <span className={cn("text-ui font-bold tabular-nums", cashFlowAmountColor(amount))}>
         {formatCurrency(amount)}
       </span>
     </div>
@@ -2749,7 +2749,7 @@ function CashFlowSection({
   return (
     <div className="bg-surface rounded-xl border border-border overflow-hidden">
       <div className="px-5 py-3 border-b border-border bg-surface-2/20">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">{title}</p>
+        <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">{title}</p>
       </div>
       {children}
       <CashFlowSectionTotal label={totalLabel} amount={total} />
@@ -2797,7 +2797,7 @@ function CashFlowReport({
       {/* Opening / Closing balance summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-surface rounded-xl border border-border px-5 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary mb-2">Opening Balance</p>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary mb-2">Opening Balance</p>
           <p className="text-2xl font-bold tabular-nums text-text-primary">{formatCurrency(openingCashBalance)}</p>
           <p className="text-xs text-text-tertiary mt-1">Cash + Bank at period start</p>
         </div>
@@ -2810,7 +2810,7 @@ function CashFlowReport({
               ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800"
               : "bg-surface border-border"
         )}>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary mb-2">Net Cash Flow</p>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary mb-2">Net Cash Flow</p>
           <p className={cn("text-2xl font-bold tabular-nums", cashFlowAmountColor(netCashFlow))}>
             {formatCurrency(netCashFlow)}
           </p>
@@ -2818,7 +2818,7 @@ function CashFlowReport({
         </div>
 
         <div className="bg-surface rounded-xl border border-border px-5 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary mb-2">Closing Balance</p>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary mb-2">Closing Balance</p>
           <p className="text-2xl font-bold tabular-nums text-text-primary">{formatCurrency(closingCashBalance)}</p>
           <p className="text-xs text-text-tertiary mt-1">Cash + Bank at period end</p>
         </div>
@@ -2836,14 +2836,14 @@ function CashFlowReport({
         ))}
         {operating.workingCapitalChanges.length > 0 && (
           <div className="px-5 pt-2 pb-0.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Working Capital Changes</p>
+            <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Working Capital Changes</p>
           </div>
         )}
         {operating.workingCapitalChanges.map((item) => (
           <CashFlowLineItem key={item.description} description={item.description} amount={item.amount} />
         ))}
         {operating.adjustments.length === 0 && operating.workingCapitalChanges.length === 0 && (
-          <p className="px-5 py-3 text-[13px] text-text-tertiary">No adjustments in this period.</p>
+          <p className="px-5 py-3 text-ui text-text-tertiary">No adjustments in this period.</p>
         )}
       </CashFlowSection>
 
@@ -2854,7 +2854,7 @@ function CashFlowReport({
         totalLabel="Net Cash from Investing Activities"
       >
         {investing.items.length === 0 ? (
-          <p className="px-5 py-3 text-[13px] text-text-tertiary">No investing activities in this period.</p>
+          <p className="px-5 py-3 text-ui text-text-tertiary">No investing activities in this period.</p>
         ) : (
           investing.items.map((item) => (
             <CashFlowLineItem key={item.description} description={item.description} amount={item.amount} />
@@ -2869,7 +2869,7 @@ function CashFlowReport({
         totalLabel="Net Cash from Financing Activities"
       >
         {financing.items.length === 0 ? (
-          <p className="px-5 py-3 text-[13px] text-text-tertiary">No financing activities in this period.</p>
+          <p className="px-5 py-3 text-ui text-text-tertiary">No financing activities in this period.</p>
         ) : (
           financing.items.map((item) => (
             <CashFlowLineItem key={item.description} description={item.description} amount={item.amount} />
@@ -2880,7 +2880,7 @@ function CashFlowReport({
       {/* Net Cash Flow reconciliation */}
       <div className="bg-surface rounded-xl border border-border overflow-hidden">
         <div className="px-5 py-3 border-b border-border bg-surface-2/20">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Reconciliation</p>
+          <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Reconciliation</p>
         </div>
         <CashFlowLineItem description="Opening Cash Balance" amount={openingCashBalance} />
         <CashFlowLineItem description="Net Cash from Operating Activities" amount={operating.totalOperating} />
@@ -2909,7 +2909,7 @@ function StickyPeriodHint({ visible }: { visible: boolean }) {
   if (!show) return null;
 
   return (
-    <div className="animate-hint-lifecycle text-[11px] text-text-tertiary py-1 flex items-center gap-1.5">
+    <div className="animate-hint-lifecycle text-2xs text-text-tertiary py-1 flex items-center gap-1.5">
       <Icon icon={InformationCircleIcon} size={12} className="text-brand-600 dark:text-brand-400" />
       <span>Tip: Your date range stays the same across all reports</span>
     </div>
@@ -3028,14 +3028,14 @@ function ReportsPage() {
         )}
       >
         <div className="px-4 py-4 border-b border-border shrink-0">
-          <h2 className="text-[13px] font-semibold text-text-primary">Reports</h2>
-          <p className="text-[11px] text-text-tertiary mt-0.5">Select a report to view</p>
+          <h2 className="text-ui font-semibold text-text-primary">Reports</h2>
+          <p className="text-2xs text-text-tertiary mt-0.5">Select a report to view</p>
         </div>
 
         <nav className="flex-1 py-2">
           {REPORT_GROUPS.map((group) => (
             <div key={group.label} className="mb-1">
-              <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-text-tertiary">
+              <p className="px-4 pt-3 pb-1 text-2xs font-semibold uppercase tracking-widest text-text-tertiary">
                 {group.label}
               </p>
               {group.reports.map((report) => (
@@ -3046,7 +3046,7 @@ function ReportsPage() {
                     setSidebarOpen(false);
                   }}
                   className={cn(
-                    "w-full text-left flex items-center gap-2 mx-2 px-3 py-[7px] rounded-lg text-[13px] transition-colors",
+                    "w-full text-left flex items-center gap-2 mx-2 px-3 py-[7px] rounded-lg text-ui transition-colors",
                     activeReport === report.id
                       ? "bg-brand-600/10 text-brand-700 dark:text-brand-400 font-medium"
                       : "text-text-secondary hover:bg-surface-2 hover:text-text-primary"

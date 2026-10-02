@@ -66,11 +66,11 @@ export function ParamTable({ params, title = "Parameters" }: { params: EndpointP
 function ParamName({ param }: { param: EndpointParam }) {
   return (
     <div className="min-w-0">
-      <code className="font-mono text-[13px] font-semibold text-[#0f1b3d] [overflow-wrap:anywhere] dark:text-cyan-200">
+      <code className="font-mono text-ui font-semibold text-[#0f1b3d] [overflow-wrap:anywhere] dark:text-cyan-200">
         {param.name}
       </code>
       {param.default !== undefined && (
-        <div className="mt-1 text-[11px] text-text-tertiary">
+        <div className="mt-1 text-2xs text-text-tertiary">
           default: <code className="font-mono">{String(param.default)}</code>
         </div>
       )}
@@ -86,9 +86,9 @@ function ParamType({ type }: { type: string }) {
 
 function Required({ required }: { required: boolean }) {
   return required ? (
-    <span className="text-[11px] font-semibold text-red-600 dark:text-red-400">required</span>
+    <span className="text-2xs font-semibold text-red-600 dark:text-red-400">required</span>
   ) : (
-    <span className="text-[11px] text-text-tertiary">optional</span>
+    <span className="text-2xs text-text-tertiary">optional</span>
   );
 }
 
@@ -103,7 +103,7 @@ function ParamDescription({ param }: { param: EndpointParam }) {
           {param.enumValues.map((v) => (
             <code
               key={v}
-              className="rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 font-mono text-[11px] text-purple-700 dark:border-purple-400/20 dark:bg-purple-400/10 dark:text-purple-200"
+              className="rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 font-mono text-2xs text-purple-700 dark:border-purple-400/20 dark:bg-purple-400/10 dark:text-purple-200"
             >
               {v}
             </code>

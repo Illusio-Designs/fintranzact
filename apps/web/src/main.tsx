@@ -8,6 +8,15 @@ import { PageSearchProvider } from "@/lib/page-search";
 import { routeTree } from "./routeTree.gen";
 import { hydrateDesktopSession } from "@/lib/desktop-session";
 import { isDesktop } from "@/lib/isDesktop";
+// Fonts ship with the app (no Google Fonts), so the desktop app and
+// self-hosted installs look the same offline.
+import "@fontsource-variable/dm-sans/opsz.css";
+import "@fontsource-variable/dm-sans/opsz-italic.css";
+import "@fontsource/plus-jakarta-sans/600.css";
+import "@fontsource/plus-jakarta-sans/700.css";
+import "@fontsource/plus-jakarta-sans/800.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/500.css";
 import "@/styles/globals.css";
 
 const router = createRouter({

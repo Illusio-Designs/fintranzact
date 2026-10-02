@@ -115,7 +115,7 @@ function AuthenticationGuide() {
               {ROLES.map(({ role, desc }) => (
                 <div key={role} className="grid grid-cols-1 gap-1 px-4 py-3.5 sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-4">
                   <dt>
-                    <code className="font-mono text-[13px] font-semibold text-brand-700 dark:text-brand-200">{role}</code>
+                    <code className="font-mono text-ui font-semibold text-brand-700 dark:text-brand-200">{role}</code>
                   </dt>
                   <dd className="text-sm leading-relaxed text-text-secondary">{desc}</dd>
                 </div>

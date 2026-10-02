@@ -25,13 +25,13 @@ export function ShortcutIndicator(): React.JSX.Element | null {
           {flash.keys.map((key, i) => (
             <kbd
               key={i}
-              className="inline-flex items-center justify-center min-w-[22px] h-6 px-1.5 rounded-md bg-white/15 text-[12px] font-mono font-semibold text-white/90 border border-white/10"
+              className="inline-flex items-center justify-center min-w-[22px] h-6 px-1.5 rounded-md bg-white/15 text-xs font-mono font-semibold text-white/90 border border-white/10"
             >
               {key}
             </kbd>
           ))}
         </span>
-        <span className="text-[13px] font-medium text-white/80">
+        <span className="text-ui font-medium text-white/80">
           {flash.description}
         </span>
       </div>

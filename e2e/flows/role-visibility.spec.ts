@@ -195,12 +195,12 @@ test.describe("Role: Seller", () => {
 
     const rows = rolePage.locator("tbody tr");
     const count = await rows.count();
-    // If there are rows, hover and check for absence of delete
+    // If there are rows, open the row's Actions menu: it must not offer delete.
     if (count > 0) {
-      await rows.first().hover();
-      // Seller should NOT have delete/trash button
-      const deleteBtn = rows.first().locator('[aria-label*="delete" i], [aria-label*="Delete" i], [title*="delete" i]');
-      await expect(deleteBtn).not.toBeVisible();
+      await rows.first().getByRole("button", { name: /^Actions for/ }).click();
+      await expect(rolePage.getByRole("menu")).toBeVisible();
+      await expect(rolePage.getByRole("menuitem", { name: /delete/i })).toHaveCount(0);
+      await rolePage.keyboard.press("Escape");
     }
   });
 

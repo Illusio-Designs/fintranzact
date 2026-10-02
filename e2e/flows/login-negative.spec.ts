@@ -75,7 +75,8 @@ test.describe("Login Negative Paths", () => {
       confirmPassword: "DifferentPass123!",
     });
 
-    await expect(page.getByText(/passwords don't match/i)).toBeVisible({ timeout: 5_000 });
+    // Shown as a toast (screen readers get a copy too, so match the toast itself).
+    await expect(page.locator("[data-sonner-toast]").filter({ hasText: /passwords don't match/i })).toBeVisible({ timeout: 5_000 });
 
     await page.close();
     await ctx.close();

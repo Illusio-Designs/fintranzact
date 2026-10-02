@@ -30,7 +30,7 @@ export function PartyCombobox({
   label = "Party",
   required,
   error,
-  placeholder = "Search parties...",
+  placeholder = "Search parties…",
   autoFocus,
 }: PartyComboboxProps) {
   const [search, setSearch] = useState("");

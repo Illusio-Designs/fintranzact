@@ -23,6 +23,13 @@
   --chart-3: #1baf7a;
   --chart-4: #eda100;
   --chart-5: #e87ba4;
+  /* Motion: fast, ease-out, never ease-in. Durations in ms. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-press: 120ms;
+  --dur-fast: 150ms;
+  --dur-pop: 180ms;
+  --dur-panel: 280ms;
 }
 
 /* Navy dark theme, matching the brand sidebar. Cards (surface-0) sit lighter
@@ -51,7 +58,7 @@
 }
 
 html {
-  font-family: "DM Sans", system-ui, sans-serif;
+  font-family: "DM Sans Variable", "DM Sans", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--surface-0);
@@ -74,9 +81,23 @@ body {
   outline-offset: 2px;
 }
 
-/* Smooth transitions */
+/* Smooth transitions: only colour, border and shadow (never "all", which
+   also animates layout and makes typing feel laggy). */
 button, a, input, select, textarea {
-  transition: all 0.15s ease;
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: ease;
+}
+
+/* Everything respects the device's reduced-motion setting: keep fades,
+   drop movement and long animations. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Input base */
@@ -88,14 +109,14 @@ input, select, textarea {
 @layer components {
   /* Buttons */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold transition-all duration-150 hover:bg-brand-700 active:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold transition duration-150 active:scale-[0.97] hover:bg-brand-700 active:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
     box-shadow: 0 8px 18px -8px rgba(59, 94, 170, 0.7);
   }
   .btn-primary:disabled {
     box-shadow: none;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 border disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition duration-150 active:scale-[0.97] border disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
     background: var(--surface-0);
     color: var(--text-secondary);
     border-color: var(--border-color);
@@ -105,7 +126,7 @@ input, select, textarea {
     color: var(--text-primary);
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 disabled:opacity-50 focus-visible:outline-none;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition duration-150 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-none;
     color: var(--text-secondary);
   }
   .btn-ghost:hover {
@@ -113,7 +134,7 @@ input, select, textarea {
     color: var(--text-primary);
   }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold transition-all duration-150 hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold transition duration-150 active:scale-[0.97] hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none;
   }
   .btn-icon {
     @apply inline-flex items-center justify-center p-2 rounded-lg transition-colors duration-150;
@@ -282,7 +303,7 @@ input, select, textarea {
   }
   /* Subtle lift on hover — opt-in via .card-interactive */
   .card-interactive {
-    @apply rounded-2xl transition-all duration-200;
+    @apply rounded-2xl transition duration-200;
     background: var(--surface-0);
     border: 1px solid var(--border-light);
   }
@@ -304,6 +325,12 @@ input, select, textarea {
   }
   .data-table th.text-right {
     text-align: right;
+  }
+  /* The header row stays in view while the rows scroll (inside TableScroll). */
+  .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
   }
   .data-table td {
     @apply px-4 py-3;
@@ -435,4 +462,19 @@ input, select, textarea {
 .landing-dots-dark {
   background-image: radial-gradient(rgba(255, 255, 255, 0.075) 1px, transparent 1px);
   background-size: 22px 22px;
+}
+
+/* goey-toast action buttons: readable white text on a solid fill in both
+   themes (goey's own dark theme uses dark red on red). */
+.gooey-actionButton.gooey-actionButton { font-weight: 600; color: #fff !important; }
+.gooey-actionButton.gooey-actionError { background: var(--danger) !important; }
+.gooey-actionButton.gooey-actionSuccess { background: var(--success) !important; }
+.gooey-actionButton.gooey-actionWarning { background: var(--warning) !important; }
+.gooey-actionButton.gooey-actionInfo, .gooey-actionButton.gooey-actionDefault { background: var(--brand-600) !important; }
+.gooey-actionButton.gooey-actionButton:hover { filter: brightness(1.08); }
+
+/* Invalid fields: red outline + soft ring. The message itself is a goey toast. */
+.input[aria-invalid="true"], [aria-invalid="true"].input, textarea[aria-invalid="true"], select[aria-invalid="true"] {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgb(220 38 38 / 0.15);
 }

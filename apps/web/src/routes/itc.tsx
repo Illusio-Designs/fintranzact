@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
 import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
@@ -17,6 +17,10 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
+import { usePageSize } from "@/hooks/usePageSize";
+import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
 
 export const Route = createFileRoute("/itc")({
   component: ITCPage,
@@ -59,8 +63,6 @@ const STATUS_OPTIONS = [
   { value: "blocked", label: "Blocked" },
   { value: "reclaimed", label: "Reclaimed" },
 ];
-
-const LEDGER_PAGE_SIZE = 25;
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -135,7 +137,7 @@ function ITCPage() {
       />
 
       {/* Tab bar — scrolls on its own on a phone, like the GST page's */}
-      <div className="mb-6 overflow-x-auto" data-testid="itc-tabs">
+      <div className="mb-6 min-w-0 max-w-full overflow-x-auto" data-testid="itc-tabs">
         <PillTabs
           tabs={tabs}
           value={activeTab}
@@ -256,7 +258,7 @@ function DashboardView({
 
       {/* Aging alerts preview */}
       {criticalAlerts.length > 0 && (
-        <div className="card overflow-hidden">
+        <div className="card overflow-clip">
           <div className="px-4 py-3 border-b border-border-light flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary">Critical Aging Alerts</h3>
             <button
@@ -294,7 +296,7 @@ function DashboardView({
 
       {/* Utilization summary if available */}
       {data.utilization && (
-        <div className="card overflow-hidden">
+        <div className="card overflow-clip">
           <div className="px-4 py-3 border-b border-border-light">
             <h3 className="text-sm font-semibold text-text-primary">Utilization Summary</h3>
           </div>
@@ -342,6 +344,8 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
   type LedgerStatus = "available" | "utilized" | "reversed" | "reclaimed" | "blocked";
   const [statusFilter, setStatusFilter] = useState<LedgerStatus | "">("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("itc-ledger", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [blockTarget, setBlockTarget] = useState<{
     invoiceId: string;
     invoiceNumber: string;
@@ -353,12 +357,20 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
     invoiceNumber: string;
   } | null>(null);
 
-  const { data, isLoading, error } = trpc.itc.ledger.useQuery({
+  // Back to page 1 whenever the period, status filter or rows per page change.
+  useEffect(() => {
+    setPage(1);
+  }, [returnPeriod, statusFilter, pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
+
+  const { data, isLoading, isFetching, error } = trpc.itc.ledger.useQuery({
     returnPeriod,
     status: statusFilter || undefined,
     page,
-    limit: LEDGER_PAGE_SIZE,
+    limit: pageSize,
   }, {
+    // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
@@ -395,7 +407,10 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
     });
   }
 
-  const totalPages = data ? Math.ceil(data.pagination.total / LEDGER_PAGE_SIZE) : 0;
+  const total = data?.pagination.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // The last entry of the last page left (e.g. a filter shrank the list): step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   return (
     <div className="space-y-4">
@@ -404,7 +419,7 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
         <div className="w-48">
           <Listbox
             value={statusFilter}
-            onChange={(v) => { setStatusFilter(v as LedgerStatus | ""); setPage(1); }}
+            onChange={(v) => setStatusFilter(v as LedgerStatus | "")}
             options={STATUS_OPTIONS}
             placeholder="All Statuses"
           />
@@ -427,8 +442,16 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
           description={statusFilter ? "No entries match the selected filter." : "No ITC entries for this period."}
         />
       ) : (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
+          <Pagination
+            placement="top"
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={total}
+            pageSize={pageSize}
+          />
+          <TableScroll ref={tableRef}>
             <table className="data-table">
               <thead>
                 <tr>
@@ -442,20 +465,22 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
                   <th className="text-right">IGST</th>
                   <th className="text-right">Total</th>
                   <th>RCM</th>
-                  <th></th>
+                  <th className="text-right"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {data.entries.map((entry) => {
-                  const total =
+                  const rowTotal =
                     (parseFloat(entry.cgst) || 0) +
                     (parseFloat(entry.sgst) || 0) +
                     (parseFloat(entry.igst) || 0) +
                     (parseFloat(entry.cess) || 0);
+                  const invoiceId = entry.invoiceId;
+                  const invoiceNumber = entry.invoiceNumber ?? "—";
 
                   return (
-                    <tr key={entry.id} className="group">
-                      <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
+                    <tr key={entry.id}>
+                      <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
                         {entry.invoiceNumber}
                       </td>
                       <td className="text-text-primary max-w-[160px] truncate">
@@ -476,7 +501,7 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
                       <td className="text-right tabular-nums text-text-secondary">{fmt(entry.sgst)}</td>
                       <td className="text-right tabular-nums text-text-secondary">{fmt(entry.igst)}</td>
                       <td className="text-right tabular-nums font-medium text-text-primary whitespace-nowrap">
-                        {fmt(total)}
+                        {fmt(rowTotal)}
                       </td>
                       <td>
                         {entry.isReverseCharge && (
@@ -486,68 +511,37 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
                         )}
                       </td>
                       <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {entry.status === "available" && entry.invoiceId && (
-                            <button
-                              onClick={() =>
-                                setBlockTarget({
-                                  invoiceId: entry.invoiceId!,
-                                  invoiceNumber: entry.invoiceNumber ?? "—",
-                                })
-                              }
-                              className="px-2 py-1 rounded text-[11px] font-medium text-red-600 hover:bg-red-600/[0.08] transition-colors"
-                              aria-label={`Block ITC for ${entry.invoiceNumber}`}
-                            >
-                              Block
-                            </button>
-                          )}
-                          {entry.status === "blocked" && entry.invoiceId && (
-                            <button
-                              onClick={() =>
-                                setUnblockTarget({
-                                  invoiceId: entry.invoiceId!,
-                                  invoiceNumber: entry.invoiceNumber ?? "—",
-                                })
-                              }
-                              className="px-2 py-1 rounded text-[11px] font-medium text-emerald-600 hover:bg-emerald-600/[0.08] transition-colors"
-                              aria-label={`Unblock ITC for ${entry.invoiceNumber}`}
-                            >
-                              Unblock
-                            </button>
-                          )}
-                        </div>
+                        {/* Only available or blocked credit has an action; other rows show none. */}
+                        <RowActions
+                          label={invoiceNumber}
+                          items={tidyMenu([
+                            entry.status === "blocked" && !!invoiceId && {
+                              label: "Unblock ITC",
+                              onSelect: () => setUnblockTarget({ invoiceId, invoiceNumber }),
+                            },
+                            { kind: "separator" },
+                            entry.status === "available" && !!invoiceId && {
+                              label: "Block ITC",
+                              danger: true,
+                              onSelect: () => setBlockTarget({ invoiceId, invoiceNumber }),
+                            },
+                          ])}
+                        />
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border-light">
-              <p className="text-xs text-text-tertiary">
-                Page {page} of {totalPages}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  className="btn-ghost text-xs"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Previous
-                </button>
-                <button
-                  className="btn-ghost text-xs"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+          </TableScroll>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={total}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       )}
 
@@ -576,13 +570,13 @@ function LedgerView({ returnPeriod }: { returnPeriod: string }) {
               value={blockReason}
               onChange={(v) => setBlockReason(v as ItcBlockReason)}
               options={BLOCK_REASONS}
-              placeholder="Select reason..."
+              placeholder="Select reason…"
             />
           </div>
 
           <TextareaField
             label="Notes (optional)"
-            placeholder="Additional details about the block..."
+            placeholder="Additional details about the block…"
             value={blockNotes}
             onChange={(e) => setBlockNotes(e.target.value)}
             rows={3}
@@ -697,13 +691,14 @@ function AgingAlertsView() {
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-clip">
         <div className="px-4 py-3 border-b border-border-light">
           <h3 className="text-sm font-semibold text-text-primary">
             Aging Alerts — {sorted.length} invoice{sorted.length !== 1 ? "s" : ""}
           </h3>
         </div>
-        <div className="overflow-x-auto">
+        {/* Not paged: the server returns every alert at once. */}
+        <TableScroll>
           <table className="data-table">
             <thead>
               <tr>
@@ -718,7 +713,7 @@ function AgingAlertsView() {
             <tbody>
               {sorted.map((alert) => (
                 <tr key={alert.invoiceId}>
-                  <td className="font-mono text-[13px] text-text-secondary whitespace-nowrap">
+                  <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
                     {alert.invoiceNumber}
                   </td>
                   <td className="text-text-primary max-w-[160px] truncate">
@@ -742,7 +737,7 @@ function AgingAlertsView() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       </div>
     </div>
   );
@@ -801,7 +796,7 @@ function UtilizationView({
     <div className="space-y-6">
       {/* Available balance (read-only) */}
       {dashboard && (
-        <div className="card overflow-hidden">
+        <div className="card overflow-clip">
           <div className="px-4 py-3 border-b border-border-light">
             <h3 className="text-sm font-semibold text-text-primary">
               Available ITC Balance — {months[month - 1]} {year}
@@ -837,7 +832,7 @@ function UtilizationView({
       )}
 
       {/* Utilization form */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-clip">
         <div className="px-4 py-3 border-b border-border-light">
           <h3 className="text-sm font-semibold text-text-primary">Record Utilization</h3>
         </div>
@@ -906,7 +901,7 @@ function UtilizationView({
 
           <TextareaField
             label="Notes (optional)"
-            placeholder="Any notes about this utilization..."
+            placeholder="Any notes about this utilization…"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
@@ -927,11 +922,11 @@ function UtilizationView({
 
       {/* Past utilization display */}
       {dashboard?.utilization && (
-        <div className="card overflow-hidden">
+        <div className="card overflow-clip">
           <div className="px-4 py-3 border-b border-border-light">
             <h3 className="text-sm font-semibold text-text-primary">Current Period Utilization</h3>
           </div>
-          <div className="overflow-x-auto">
+          <TableScroll>
             <table className="data-table">
               <thead>
                 <tr>
@@ -962,7 +957,7 @@ function UtilizationView({
                 </tr>
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         </div>
       )}
     </div>
@@ -1013,8 +1008,8 @@ function GSTR3BTable4View({ year, month }: { year: number; month: number }) {
         </p>
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="card overflow-clip">
+        <TableScroll>
           <table className="data-table">
             <thead>
               <tr>
@@ -1112,7 +1107,7 @@ function GSTR3BTable4View({ year, month }: { year: number; month: number }) {
               </tr>
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       </div>
     </div>
   );
@@ -1139,7 +1134,7 @@ function ReportSkeleton() {
           </div>
         ))}
       </div>
-      <div className="card overflow-hidden">
+      <div className="card overflow-clip">
         <div className="px-4 py-3 border-b border-border-light">
           <div className="skeleton h-4 w-32" />
         </div>

@@ -96,10 +96,10 @@ function DevelopersOverview() {
               Queries are sent as GET and mutations as POST to this address. The tRPC client does this for you.
             </p>
             <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#1f2c4f] bg-[#0b1530] py-1.5 pl-4 pr-1.5">
-              <span className="shrink-0 rounded border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-300">
+              <span className="shrink-0 rounded border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 font-mono text-2xs font-bold text-emerald-300">
                 HTTPS
               </span>
-              <code className="min-w-0 flex-1 truncate font-mono text-[13px] text-slate-200">{baseUrl}</code>
+              <code className="min-w-0 flex-1 truncate font-mono text-ui text-slate-200">{baseUrl}</code>
               <CopyButton text={baseUrl} />
             </div>
 

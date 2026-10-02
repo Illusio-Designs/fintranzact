@@ -25,6 +25,8 @@ import { assertNotLockedByGovernment, getGovernmentLock } from "../lib/governmen
 import { assertInBusiness } from "../lib/business-scope.js";
 import { logAudit } from "../lib/audit.js";
 import { escapeLike } from "../lib/escape-like.js";
+import { documentListOrder, documentSortSchema } from "../lib/document-list-order.js";
+import { documentFilterConditions, documentFilterSchema } from "../lib/document-list-filters.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPClient, IRPError } from "../lib/irp-client.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
@@ -104,8 +106,8 @@ export const invoiceRouter = router({
       toDate: z.string().datetime().nullish(),
       itemId: z.string().uuid().nullish(),
       search: z.string().nullish(),
-      sortBy: z.enum(["date", "amount", "number"]).nullish(),
-      sortDir: z.enum(["asc", "desc"]).nullish(),
+      ...documentSortSchema,
+      ...documentFilterSchema,
       ...paginationSchema.shape,
     }))
     .query(async ({ input, ctx }) => {
@@ -126,6 +128,7 @@ export const invoiceRouter = router({
         conditions.push(eq(invoices.status, input.status));
       }
       if (input.partyId) conditions.push(eq(invoices.partyId, input.partyId));
+      conditions.push(...documentFilterConditions(input));
       conditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
       if (input.search) {
         const term = `%${escapeLike(input.search)}%`;
@@ -191,13 +194,7 @@ export const invoiceRouter = router({
           .innerJoin(parties, eq(parties.id, invoices.partyId))
           .leftJoin(adjSq, eq(adjSq.refId, invoices.id))
           .where(and(...conditions))
-          .orderBy(
-            input.sortBy === "amount"
-              ? (input.sortDir === "asc" ? sql`${invoices.totalAmount}::numeric ASC` : sql`${invoices.totalAmount}::numeric DESC`)
-              : input.sortBy === "number"
-                ? (input.sortDir === "asc" ? invoices.invoiceNumber : desc(invoices.invoiceNumber))
-                : (input.sortDir === "asc" ? invoices.invoiceDate : desc(invoices.invoiceDate))
-          )
+          .orderBy(...documentListOrder(input.sortBy, input.sortDir))
           .limit(input.limit)
           .offset(offset),
         ctx.db.select({ count: sql<number>`count(*)::int` }).from(invoices)

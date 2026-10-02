@@ -80,7 +80,7 @@ export function CopyButton({ text, label = "Copy", className }: { text: string; 
 export function HighlightedCode({ code, lang, className }: { code: string; lang: string; className?: string }) {
   const lines = code.split("\n").length;
   return (
-    <div className={cn("dev-code flex text-[12.5px] leading-[1.75]", className)}>
+    <div className={cn("dev-code flex text-xs leading-[1.75]", className)}>
       <div aria-hidden="true" className="select-none pr-3 text-right font-mono text-slate-600">
         {Array.from({ length: lines }, (_, i) => (
           <div key={i}>{i + 1}</div>
@@ -163,7 +163,7 @@ export function CodePanel({ examples, outputExample }: { examples: CodeExamples;
             <span className="flex items-center gap-2 text-xs font-semibold">
               <Icon icon={CheckmarkCircle02Icon} size={15} className="text-emerald-400" />
               Response
-              <span className="rounded border border-emerald-400/25 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
+              <span className="rounded border border-emerald-400/25 bg-emerald-400/10 px-1.5 py-0.5 text-2xs text-emerald-300">
                 200 OK
               </span>
             </span>

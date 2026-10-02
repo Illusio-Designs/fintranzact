@@ -1018,7 +1018,7 @@ export function DocumentCreator({
             disabled={activeMutation.isPending || !partyId || !items.some((li) => li.itemName.trim() && li.unitPrice)}
           >
             {activeMutation.isPending
-              ? isEditing ? "Saving..." : "Creating..."
+              ? isEditing ? "Saving…" : "Creating…"
               : isEditing ? "Save Changes" : `Create ${label}`}
           </button>
         </div>
@@ -1101,7 +1101,7 @@ export function DocumentCreator({
               value={pickedSourceId}
               onChange={pickSourceInvoice}
               options={sourceOptions}
-              placeholder="Search invoice number or party..."
+              placeholder="Search invoice number or party…"
               emptyMessage="No invoices to return against"
               onQueryChange={setSourceSearch}
               isLoading={sourceInvoicesFetching && !!debouncedSourceSearch}
@@ -1143,7 +1143,7 @@ export function DocumentCreator({
 
         {/* Line items */}
         <div className="space-y-3">
-          <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">Line Items</p>
+          <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide">Line Items</p>
 
           {items.map((li) => {
             const calc = calcLine(li, intraState);
@@ -1220,7 +1220,7 @@ export function DocumentCreator({
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-qty`}
-                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                        className="text-2xs font-medium text-text-tertiary block mb-0.5"
                       >
                         {isGrn ? "Accepted" : "Qty"}
                       </label>
@@ -1238,7 +1238,7 @@ export function DocumentCreator({
                       {li.sourceQuantity && (
                         <p
                           className={cn(
-                            "mt-0.5 text-[10px] tabular-nums",
+                            "mt-0.5 text-2xs tabular-nums",
                             parseFloat(li.quantity || "0") - parseFloat(li.sourceQuantity) > 0.0005 ? "text-red-600" : "text-text-tertiary",
                           )}
                         >
@@ -1250,7 +1250,7 @@ export function DocumentCreator({
                       <div>
                         <label
                           htmlFor={`${lineItemIdPrefix}-${li.id}-free`}
-                          className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                          className="text-2xs font-medium text-text-tertiary block mb-0.5"
                           title="Given free on top of the billed quantity (10 + 1). Moves stock; not charged or taxed."
                         >
                           Free
@@ -1271,7 +1271,7 @@ export function DocumentCreator({
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-price`}
-                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                        className="text-2xs font-medium text-text-tertiary block mb-0.5"
                       >
                         Price
                       </label>
@@ -1287,13 +1287,13 @@ export function DocumentCreator({
                         placeholder="0.00"
                       />
                       {pricing.mrpWarningFor(li) && (
-                        <p className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400" role="alert">{pricing.mrpWarningFor(li)}</p>
+                        <p className="mt-0.5 text-2xs text-amber-600 dark:text-amber-400" role="alert">{pricing.mrpWarningFor(li)}</p>
                       )}
                     </div>
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-tax`}
-                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                        className="text-2xs font-medium text-text-tertiary block mb-0.5"
                       >
                         Tax %
                       </label>
@@ -1312,7 +1312,7 @@ export function DocumentCreator({
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-disc`}
-                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                        className="text-2xs font-medium text-text-tertiary block mb-0.5"
                       >
                         Disc %
                       </label>
@@ -1331,7 +1331,7 @@ export function DocumentCreator({
                     </div>
                   </div>
                   <div className="text-right shrink-0 pb-1">
-                    <p className="text-[10px] text-text-tertiary mb-0.5">Amount</p>
+                    <p className="text-2xs text-text-tertiary mb-0.5">Amount</p>
                     <p className="text-sm font-semibold tabular-nums text-text-primary">
                       {li.unitPrice ? formatCurrency(calc.total) : "—"}
                     </p>
@@ -1343,7 +1343,7 @@ export function DocumentCreator({
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-rejected`}
-                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                        className="text-2xs font-medium text-text-tertiary block mb-0.5"
                       >
                         Rejected
                       </label>
@@ -1362,7 +1362,7 @@ export function DocumentCreator({
                     <div>
                       <label
                         htmlFor={`${lineItemIdPrefix}-${li.id}-reason`}
-                        className="text-[10px] font-medium text-text-tertiary block mb-0.5"
+                        className="text-2xs font-medium text-text-tertiary block mb-0.5"
                       >
                         Reason for rejecting
                       </label>
@@ -1424,7 +1424,7 @@ export function DocumentCreator({
                   />
                   {li.notes.length > 400 && (
                     <p
-                      className={`absolute right-2 bottom-1 text-[10px] tabular-nums pointer-events-none ${
+                      className={`absolute right-2 bottom-1 text-2xs tabular-nums pointer-events-none ${
                         li.notes.length > 500
                           ? "text-red-500"
                           : "text-text-tertiary"
@@ -1493,7 +1493,7 @@ export function DocumentCreator({
                     aria-label="Discount in rupees"
                     aria-pressed={invoiceDiscountType === "amount"}
                     onClick={() => setInvoiceDiscountType("amount")}
-                    className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${invoiceDiscountType === "amount" ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400" : "text-text-tertiary hover:text-text-secondary"}`}
+                    className={`px-1.5 py-0.5 text-2xs font-medium transition-colors ${invoiceDiscountType === "amount" ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400" : "text-text-tertiary hover:text-text-secondary"}`}
                   >
                     ₹
                   </button>
@@ -1502,7 +1502,7 @@ export function DocumentCreator({
                     aria-label="Discount in percent"
                     aria-pressed={invoiceDiscountType === "percent"}
                     onClick={() => setInvoiceDiscountType("percent")}
-                    className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${invoiceDiscountType === "percent" ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400" : "text-text-tertiary hover:text-text-secondary"}`}
+                    className={`px-1.5 py-0.5 text-2xs font-medium transition-colors ${invoiceDiscountType === "percent" ? "bg-brand-600/[0.1] text-brand-700 dark:text-brand-400" : "text-text-tertiary hover:text-text-secondary"}`}
                   >
                     %
                   </button>
@@ -1583,7 +1583,7 @@ export function DocumentCreator({
                   <button
                     type="button"
                     onClick={() => setCharges([...charges, { label: "Shipping", amount: "" }])}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors border border-dashed border-border-light"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-2xs font-medium text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors border border-dashed border-border-light"
                   >
                     <Icon icon={DeliveryTruck01Icon} size={12} />
                     Shipping
@@ -1592,7 +1592,7 @@ export function DocumentCreator({
                 <button
                   type="button"
                   onClick={() => setCharges([...charges, { label: "", amount: "" }])}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-2xs font-medium text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
                 >
                   + Add charge
                 </button>
@@ -1615,7 +1615,7 @@ export function DocumentCreator({
                 <span className="text-text-secondary">Round Off</span>
                 {bizDefaultRoundOff && !isEditing && !roundOffOverridden && (
                   <span
-                    className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded text-brand-700 dark:text-brand-400 bg-brand-600/[0.1]"
+                    className="text-2xs font-medium uppercase tracking-wide px-1.5 py-0.5 rounded text-brand-700 dark:text-brand-400 bg-brand-600/[0.1]"
                     title="Auto-rounded down to nearest integer (per Settings → Documents). Edit to override."
                   >
                     Auto

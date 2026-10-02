@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Fragment, useState, useRef, useCallback } from "react";
+import { Fragment, useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { badgeColor } from "@/lib/badge-colors";
@@ -12,6 +12,10 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Icon } from "@/components/ui/Icon";
 import { Upload04Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
+import { usePageSize } from "@/hooks/usePageSize";
+import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
 
 export const Route = createFileRoute("/gstr2b")({
   component: GSTR2BPage,
@@ -64,6 +68,28 @@ function mismatchLabel(reason: string): string {
   }
 }
 
+/**
+ * Page state for one server-paged table: back to page 1 when `resetKey`
+ * changes (period, filter) or rows per page change, and each new page starts
+ * at its first row. Pair with `useTotalPages` once the query has a total.
+ */
+function usePagedTable(list: string, resetKey: string) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize(list, 25);
+  const tableRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setPage(1);
+  }, [resetKey, pageSize]);
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
+  return { page, setPage, pageSize, setPageSize, tableRef };
+}
+
+/** Page count for `total` rows; steps back a page when the current one no longer exists. */
+function useTotalPages(total: number, pageSize: number, page: number, setPage: (p: number) => void) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages, setPage]);
+  return totalPages;
+}
 
 // ── Upload Section ────────────────────────────────────────────
 
@@ -180,17 +206,25 @@ function UploadSection({
         )}
       </div>
 
-      {uploadMutation.isError && (
-        <p className="mt-3 text-sm text-red-600 dark:text-red-400">{uploadMutation.error.message}</p>
-      )}
     </div>
   );
 }
 
 // ── Upload History ────────────────────────────────────────────
 
-function UploadHistorySection({ onSelectUpload }: { onSelectUpload: (id: string) => void }) {
-  const { data, isLoading } = trpc.gstr2b.uploads.useQuery({ page: 1, limit: 20 });
+// The server caps this list at 50 rows a page.
+const UPLOAD_PAGE_SIZES = [10, 25, 50];
+
+function UploadHistorySection({ onSelectUpload }: { onSelectUpload: (returnPeriod: string) => void }) {
+  const { page, setPage, pageSize: savedSize, setPageSize, tableRef } = usePagedTable("gstr2b-uploads", "");
+  // A size saved before the cap (or set elsewhere) can't exceed what the server allows.
+  const pageSize = Math.min(savedSize, 50);
+  const { data, isLoading, isFetching } = trpc.gstr2b.uploads.useQuery(
+    { page, limit: pageSize },
+    // Keep the current page on screen while the next one loads.
+    { placeholderData: (prev) => prev },
+  );
+  const totalPages = useTotalPages(data?.total ?? 0, pageSize, page, setPage);
 
   if (isLoading) return <div className="py-8 flex justify-center"><Spinner /></div>;
 
@@ -204,42 +238,61 @@ function UploadHistorySection({ onSelectUpload }: { onSelectUpload: (id: string)
   }
 
   return (
-    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border-light bg-surface-1">
-            <th className="px-4 py-3 text-left font-medium text-text-secondary">Period</th>
-            <th className="px-4 py-3 text-left font-medium text-text-secondary">File</th>
-            <th className="px-4 py-3 text-right font-medium text-text-secondary">Total</th>
-            <th className="px-4 py-3 text-right font-medium text-text-secondary">Matched</th>
-            <th className="px-4 py-3 text-right font-medium text-text-secondary">Mismatch</th>
-            <th className="px-4 py-3 text-right font-medium text-text-secondary">Not in Books</th>
-            <th className="px-4 py-3 text-left font-medium text-text-secondary">Uploaded</th>
-            <th className="px-4 py-3" />
-          </tr>
-        </thead>
-        <tbody>
-          {data.uploads.map((u) => (
-            <tr key={u.id} className="border-b border-border-light last:border-0 hover:bg-surface-1 transition-colors">
-              <td className="px-4 py-3 font-medium text-text-primary">{u.returnPeriod}</td>
-              <td className="px-4 py-3 text-text-secondary max-w-[180px] truncate">{u.fileName}</td>
-              <td className="px-4 py-3 text-right text-text-primary">{u.totalRecords}</td>
-              <td className="px-4 py-3 text-right text-emerald-700 dark:text-emerald-400">{u.matchedRecords}</td>
-              <td className="px-4 py-3 text-right text-amber-700 dark:text-amber-400">{u.unmatchedRecords}</td>
-              <td className="px-4 py-3 text-right text-red-700 dark:text-red-400">{u.newRecords}</td>
-              <td className="px-4 py-3 text-text-tertiary text-xs">{u.uploadedAt ? formatDate(u.uploadedAt) : "—"}</td>
-              <td className="px-4 py-3">
-                <button
-                  className="btn-ghost text-xs px-2 py-1"
-                  onClick={() => onSelectUpload(u.id)}
-                >
-                  View
-                </button>
-              </td>
+    <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
+      <Pagination
+        placement="top"
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        total={data.total}
+        pageSize={pageSize}
+      />
+      <TableScroll ref={tableRef}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>File</th>
+              <th className="text-right">Total</th>
+              <th className="text-right">Matched</th>
+              <th className="text-right">Mismatch</th>
+              <th className="text-right">Not in Books</th>
+              <th>Uploaded</th>
+              <th className="text-right"><span className="sr-only">Actions</span></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.uploads.map((u) => (
+              <tr key={u.id} className="cursor-pointer" onClick={() => onSelectUpload(u.returnPeriod)}>
+                <td className="font-medium text-text-primary">{u.returnPeriod}</td>
+                <td className="text-text-secondary max-w-[180px] truncate">{u.fileName}</td>
+                <td className="text-right text-text-primary">{u.totalRecords}</td>
+                <td className="text-right text-emerald-700 dark:text-emerald-400">{u.matchedRecords}</td>
+                <td className="text-right text-amber-700 dark:text-amber-400">{u.unmatchedRecords}</td>
+                <td className="text-right text-red-700 dark:text-red-400">{u.newRecords}</td>
+                <td className="text-text-tertiary text-xs">{u.uploadedAt ? formatDate(u.uploadedAt) : "—"}</td>
+                <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                  <RowActions
+                    label={`${u.returnPeriod} upload`}
+                    items={tidyMenu([
+                      { label: "Open", hint: "Enter", onSelect: () => onSelectUpload(u.returnPeriod) },
+                    ])}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        total={data.total}
+        pageSize={pageSize}
+        onPageSizeChange={setPageSize}
+        pageSizeOptions={UPLOAD_PAGE_SIZES}
+      />
     </div>
   );
 }
@@ -254,7 +307,7 @@ function ReconciliationSection({
 }) {
   const period = returnPeriod(year, month);
   const [statusFilter, setStatusFilter] = useState<string>("");
-  const [page, setPage] = useState(1);
+  const { page, setPage, pageSize, setPageSize, tableRef } = usePagedTable("gstr2b-records", `${period}|${statusFilter}`);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data: summary } = trpc.gstr2b.summary.useQuery({ returnPeriod: period });
@@ -265,15 +318,20 @@ function ReconciliationSection({
   // Use summary to get the upload ID
   const resolvedUploadId = uploadId ?? summary?.uploadId ?? null;
 
-  const { data: records, isLoading } = trpc.gstr2b.records.useQuery(
+  const { data: records, isLoading, isFetching } = trpc.gstr2b.records.useQuery(
     {
       uploadId: resolvedUploadId!,
       matchStatus: statusFilter as "matched" | "mismatched" | "missing_in_books" | "pending" | "ignored" | undefined || undefined,
       page,
-      limit: 25,
+      limit: pageSize,
     },
-    { enabled: !!resolvedUploadId },
+    {
+      enabled: !!resolvedUploadId,
+      // Keep the current page on screen while the next one loads.
+      placeholderData: (prev) => prev,
+    },
   );
+  const totalPages = useTotalPages(records?.total ?? 0, pageSize, page, setPage);
 
   const utils = trpc.useUtils();
 
@@ -344,7 +402,7 @@ function ReconciliationSection({
         <Select
           className="input w-44 text-sm"
           value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+          onChange={(e) => setStatusFilter(e.target.value)}
           aria-label="Filter by match status"
         >
           {STATUS_OPTIONS.map((o) => (
@@ -360,22 +418,30 @@ function ReconciliationSection({
       )}
 
       {!isLoading && !!records?.records.length && (
-        <>
-          <div className="rounded-2xl border border-border-light bg-surface-0 overflow-x-auto">
-            <table className="w-full text-sm">
+        <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
+          <Pagination
+            placement="top"
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={records.total}
+            pageSize={pageSize}
+          />
+          <TableScroll ref={tableRef}>
+            <table className="data-table">
               <thead>
-                <tr className="border-b border-border-light bg-surface-1">
-                  <th className="px-4 py-3 text-left font-medium text-text-secondary">Supplier GSTIN</th>
-                  <th className="px-4 py-3 text-left font-medium text-text-secondary">Supplier</th>
-                  <th className="px-4 py-3 text-left font-medium text-text-secondary">Invoice #</th>
-                  <th className="px-4 py-3 text-left font-medium text-text-secondary">Date</th>
-                  <th className="px-4 py-3 text-right font-medium text-text-secondary">Taxable</th>
-                  <th className="px-4 py-3 text-right font-medium text-text-secondary">CGST</th>
-                  <th className="px-4 py-3 text-right font-medium text-text-secondary">SGST</th>
-                  <th className="px-4 py-3 text-right font-medium text-text-secondary">IGST</th>
-                  <th className="px-4 py-3 text-center font-medium text-text-secondary">ITC</th>
-                  <th className="px-4 py-3 text-center font-medium text-text-secondary">Status</th>
-                  <th className="px-4 py-3" />
+                <tr>
+                  <th>Supplier GSTIN</th>
+                  <th>Supplier</th>
+                  <th>Invoice #</th>
+                  <th>Date</th>
+                  <th className="text-right">Taxable</th>
+                  <th className="text-right">CGST</th>
+                  <th className="text-right">SGST</th>
+                  <th className="text-right">IGST</th>
+                  <th className="text-center">ITC</th>
+                  <th className="text-center">Status</th>
+                  <th className="text-right"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -384,24 +450,18 @@ function ReconciliationSection({
                   const expanded = expandedId === r.id;
                   return (
                     <Fragment key={r.id}>
-                      <tr
-                        key={r.id}
-                        className={cn(
-                          "border-b border-border-light last:border-0 transition-colors",
-                          expanded ? "bg-surface-1" : "hover:bg-surface-1",
-                        )}
-                      >
-                        <td className="px-4 py-3 font-mono text-xs text-text-secondary">{r.supplierGstin}</td>
-                        <td className="px-4 py-3 text-text-primary max-w-[140px] truncate">{r.supplierName ?? "—"}</td>
-                        <td className="px-4 py-3 text-text-primary font-medium">{r.invoiceNumber}</td>
-                        <td className="px-4 py-3 text-text-secondary text-xs">
+                      <tr className={cn(expanded && "bg-surface-1")}>
+                        <td className="font-mono text-xs text-text-secondary">{r.supplierGstin}</td>
+                        <td className="text-text-primary max-w-[140px] truncate">{r.supplierName ?? "—"}</td>
+                        <td className="text-text-primary font-medium">{r.invoiceNumber}</td>
+                        <td className="text-text-secondary text-xs">
                           {r.invoiceDate ? formatDate(r.invoiceDate) : "—"}
                         </td>
-                        <td className="px-4 py-3 text-right text-text-primary">{fmt(r.taxableValue)}</td>
-                        <td className="px-4 py-3 text-right text-text-secondary">{fmt(r.cgst)}</td>
-                        <td className="px-4 py-3 text-right text-text-secondary">{fmt(r.sgst)}</td>
-                        <td className="px-4 py-3 text-right text-text-secondary">{fmt(r.igst)}</td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="text-right text-text-primary">{fmt(r.taxableValue)}</td>
+                        <td className="text-right text-text-secondary">{fmt(r.cgst)}</td>
+                        <td className="text-right text-text-secondary">{fmt(r.sgst)}</td>
+                        <td className="text-right text-text-secondary">{fmt(r.igst)}</td>
+                        <td className="text-center">
                           <span className={cn(
                             "px-1.5 py-0.5 rounded text-xs font-medium",
                             r.itcAvailable === "Y"
@@ -411,40 +471,34 @@ function ReconciliationSection({
                             {r.itcAvailable === "Y" ? "Yes" : r.itcAvailable === "N" ? "No" : "—"}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="text-center">
                           <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", badge.cls)}>
                             {badge.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
-                            {(r.matchStatus === "mismatched" || r.mismatchReasons) && (
-                              <button
-                                className="btn-ghost text-xs px-2 py-0.5"
-                                onClick={() => setExpandedId(expanded ? null : r.id)}
-                                aria-label="Show details"
-                              >
-                                {expanded ? "Hide" : "Details"}
-                              </button>
-                            )}
-                            {r.matchStatus !== "ignored" && (
-                              <button
-                                className="btn-ghost text-xs px-2 py-0.5 text-text-tertiary"
-                                onClick={() => ignoreMutation.mutate({ recordId: r.id })}
-                                disabled={ignoreMutation.isPending}
-                                aria-label="Ignore this record"
-                              >
-                                Ignore
-                              </button>
-                            )}
-                          </div>
+                        <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <RowActions
+                            label={r.invoiceNumber}
+                            items={tidyMenu([
+                              (r.matchStatus === "mismatched" || !!r.mismatchReasons) && {
+                                label: expanded ? "Hide details" : "Show details",
+                                onSelect: () => setExpandedId(expanded ? null : r.id),
+                              },
+                              { kind: "separator" },
+                              r.matchStatus !== "ignored" && {
+                                label: "Ignore record",
+                                disabled: ignoreMutation.isPending,
+                                onSelect: () => ignoreMutation.mutate({ recordId: r.id }),
+                              },
+                            ])}
+                          />
                         </td>
                       </tr>
 
                       {/* Mismatch detail expansion */}
                       {expanded && r.mismatchReasons && r.mismatchReasons.length > 0 && (
-                        <tr key={`${r.id}-detail`} className="bg-amber-50/40 dark:bg-amber-950/20">
-                          <td colSpan={11} className="px-4 py-3">
+                        <tr className="bg-amber-50/40 dark:bg-amber-950/20">
+                          <td colSpan={11}>
                             <div className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">
                               Mismatch details:
                             </div>
@@ -463,31 +517,16 @@ function ReconciliationSection({
                 })}
               </tbody>
             </table>
-          </div>
-
-          {/* Pagination */}
-          {records.total > 25 && (
-            <div className="flex items-center justify-between mt-4 text-sm text-text-secondary">
-              <span>Showing {(page - 1) * 25 + 1}–{Math.min(page * 25, records.total)} of {records.total}</span>
-              <div className="flex gap-2">
-                <button
-                  className="btn-ghost px-3 py-1"
-                  disabled={page === 1}
-                  onClick={() => setPage(page - 1)}
-                >
-                  Previous
-                </button>
-                <button
-                  className="btn-ghost px-3 py-1"
-                  disabled={page * 25 >= records.total}
-                  onClick={() => setPage(page + 1)}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </>
+          </TableScroll>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={records.total}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+          />
+        </div>
       )}
     </div>
   );
@@ -497,15 +536,20 @@ function ReconciliationSection({
 
 function MissingInBooksSection({ year, month }: { year: number; month: number }) {
   const period = returnPeriod(year, month);
-  const [page, setPage] = useState(1);
+  const { page, setPage, pageSize, setPageSize, tableRef } = usePagedTable("gstr2b-missing-books", period);
 
   const { data: summary } = trpc.gstr2b.summary.useQuery({ returnPeriod: period });
   const resolvedUploadId = summary?.uploadId ?? null;
 
-  const { data, isLoading } = trpc.gstr2b.missingInBooks.useQuery(
-    { uploadId: resolvedUploadId!, page, limit: 25 },
-    { enabled: !!resolvedUploadId },
+  const { data, isLoading, isFetching } = trpc.gstr2b.missingInBooks.useQuery(
+    { uploadId: resolvedUploadId!, page, limit: pageSize },
+    {
+      enabled: !!resolvedUploadId,
+      // Keep the current page on screen while the next one loads.
+      placeholderData: (prev) => prev,
+    },
   );
+  const totalPages = useTotalPages(data?.total ?? 0, pageSize, page, setPage);
 
   if (!summary?.hasData) {
     return (
@@ -534,59 +578,67 @@ function MissingInBooksSection({ year, month }: { year: number; month: number })
         Create a purchase invoice to claim the ITC.
       </p>
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border-light bg-surface-1">
-              <th className="px-4 py-3 text-left font-medium text-text-secondary">Supplier GSTIN</th>
-              <th className="px-4 py-3 text-left font-medium text-text-secondary">Supplier</th>
-              <th className="px-4 py-3 text-left font-medium text-text-secondary">Invoice #</th>
-              <th className="px-4 py-3 text-left font-medium text-text-secondary">Date</th>
-              <th className="px-4 py-3 text-right font-medium text-text-secondary">Taxable</th>
-              <th className="px-4 py-3 text-right font-medium text-text-secondary">CGST</th>
-              <th className="px-4 py-3 text-right font-medium text-text-secondary">SGST</th>
-              <th className="px-4 py-3 text-right font-medium text-text-secondary">IGST</th>
-              <th className="px-4 py-3 text-center font-medium text-text-secondary">ITC</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.records.map((r) => (
-              <tr key={r.id} className="border-b border-border-light last:border-0 hover:bg-surface-1 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs text-text-secondary">{r.supplierGstin}</td>
-                <td className="px-4 py-3 text-text-primary">{r.supplierName ?? "—"}</td>
-                <td className="px-4 py-3 font-medium text-text-primary">{r.invoiceNumber}</td>
-                <td className="px-4 py-3 text-text-secondary text-xs">
-                  {r.invoiceDate ? formatDate(r.invoiceDate) : "—"}
-                </td>
-                <td className="px-4 py-3 text-right text-text-primary">{fmt(r.taxableValue)}</td>
-                <td className="px-4 py-3 text-right text-text-secondary">{fmt(r.cgst)}</td>
-                <td className="px-4 py-3 text-right text-text-secondary">{fmt(r.sgst)}</td>
-                <td className="px-4 py-3 text-right text-text-secondary">{fmt(r.igst)}</td>
-                <td className="px-4 py-3 text-center">
-                  <span className={cn(
-                    "px-1.5 py-0.5 rounded text-xs font-medium",
-                    r.itcAvailable === "Y"
-                      ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400"
-                      : "bg-surface-2 text-text-tertiary",
-                  )}>
-                    {r.itcAvailable === "Y" ? "Available" : r.itcAvailable === "N" ? "Blocked" : "—"}
-                  </span>
-                </td>
+      <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
+        <Pagination
+          placement="top"
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          total={data.total}
+          pageSize={pageSize}
+        />
+        <TableScroll ref={tableRef}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Supplier GSTIN</th>
+                <th>Supplier</th>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th className="text-right">Taxable</th>
+                <th className="text-right">CGST</th>
+                <th className="text-right">SGST</th>
+                <th className="text-right">IGST</th>
+                <th className="text-center">ITC</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.records.map((r) => (
+                <tr key={r.id}>
+                  <td className="font-mono text-xs text-text-secondary">{r.supplierGstin}</td>
+                  <td className="text-text-primary">{r.supplierName ?? "—"}</td>
+                  <td className="font-medium text-text-primary">{r.invoiceNumber}</td>
+                  <td className="text-text-secondary text-xs">
+                    {r.invoiceDate ? formatDate(r.invoiceDate) : "—"}
+                  </td>
+                  <td className="text-right text-text-primary">{fmt(r.taxableValue)}</td>
+                  <td className="text-right text-text-secondary">{fmt(r.cgst)}</td>
+                  <td className="text-right text-text-secondary">{fmt(r.sgst)}</td>
+                  <td className="text-right text-text-secondary">{fmt(r.igst)}</td>
+                  <td className="text-center">
+                    <span className={cn(
+                      "px-1.5 py-0.5 rounded text-xs font-medium",
+                      r.itcAvailable === "Y"
+                        ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400"
+                        : "bg-surface-2 text-text-tertiary",
+                    )}>
+                      {r.itcAvailable === "Y" ? "Available" : r.itcAvailable === "N" ? "Blocked" : "—"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableScroll>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          total={data.total}
+          pageSize={pageSize}
+          onPageSizeChange={setPageSize}
+        />
       </div>
-
-      {data.total > 25 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-text-secondary">
-          <span>Showing {(page - 1) * 25 + 1}–{Math.min(page * 25, data.total)} of {data.total}</span>
-          <div className="flex gap-2">
-            <button className="btn-ghost px-3 py-1" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
-            <button className="btn-ghost px-3 py-1" disabled={page * 25 >= data.total} onClick={() => setPage(page + 1)}>Next</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -595,9 +647,14 @@ function MissingInBooksSection({ year, month }: { year: number; month: number })
 
 function MissingIn2BSection({ year, month }: { year: number; month: number }) {
   const period = returnPeriod(year, month);
-  const [page, setPage] = useState(1);
+  const { page, setPage, pageSize, setPageSize, tableRef } = usePagedTable("gstr2b-missing-2b", period);
 
-  const { data, isLoading } = trpc.gstr2b.missingIn2B.useQuery({ returnPeriod: period, page, limit: 25 });
+  const { data, isLoading, isFetching } = trpc.gstr2b.missingIn2B.useQuery(
+    { returnPeriod: period, page, limit: pageSize },
+    // Keep the current page on screen while the next one loads.
+    { placeholderData: (prev) => prev },
+  );
+  const totalPages = useTotalPages(data?.total ?? 0, pageSize, page, setPage);
 
   if (isLoading) return <div className="py-8 flex justify-center"><Spinner /></div>;
 
@@ -617,47 +674,55 @@ function MissingIn2BSection({ year, month }: { year: number; month: number }) {
         supplier to ensure they file their return correctly.
       </p>
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border-light bg-surface-1">
-              <th className="px-4 py-3 text-left font-medium text-text-secondary">Supplier GSTIN</th>
-              <th className="px-4 py-3 text-left font-medium text-text-secondary">Supplier</th>
-              <th className="px-4 py-3 text-left font-medium text-text-secondary">Invoice #</th>
-              <th className="px-4 py-3 text-left font-medium text-text-secondary">Date</th>
-              <th className="px-4 py-3 text-right font-medium text-text-secondary">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.records.map((r) => (
-              <tr key={r.id} className="border-b border-border-light last:border-0 hover:bg-surface-1 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs text-text-secondary">{r.partyGstin ?? "—"}</td>
-                <td className="px-4 py-3 text-text-primary">{r.partyName ?? "—"}</td>
-                <td className="px-4 py-3 font-medium text-text-primary">
-                  {r.supplierInvoiceNumber ?? r.invoiceNumber}
-                  {r.supplierInvoiceNumber && (
-                    <span className="block text-xs font-normal text-text-tertiary">{r.invoiceNumber}</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-text-secondary text-xs">
-                  {r.invoiceDate ? formatDate(r.invoiceDate) : "—"}
-                </td>
-                <td className="px-4 py-3 text-right text-text-primary">{fmt(r.totalAmount)}</td>
+      <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
+        <Pagination
+          placement="top"
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          total={data.total}
+          pageSize={pageSize}
+        />
+        <TableScroll ref={tableRef}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Supplier GSTIN</th>
+                <th>Supplier</th>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th className="text-right">Amount</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.records.map((r) => (
+                <tr key={r.id}>
+                  <td className="font-mono text-xs text-text-secondary">{r.partyGstin ?? "—"}</td>
+                  <td className="text-text-primary">{r.partyName ?? "—"}</td>
+                  <td className="font-medium text-text-primary">
+                    {r.supplierInvoiceNumber ?? r.invoiceNumber}
+                    {r.supplierInvoiceNumber && (
+                      <span className="block text-xs font-normal text-text-tertiary">{r.invoiceNumber}</span>
+                    )}
+                  </td>
+                  <td className="text-text-secondary text-xs">
+                    {r.invoiceDate ? formatDate(r.invoiceDate) : "—"}
+                  </td>
+                  <td className="text-right text-text-primary">{fmt(r.totalAmount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableScroll>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          total={data.total}
+          pageSize={pageSize}
+          onPageSizeChange={setPageSize}
+        />
       </div>
-
-      {data.total > 25 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-text-secondary">
-          <span>Showing {(page - 1) * 25 + 1}–{Math.min(page * 25, data.total)} of {data.total}</span>
-          <div className="flex gap-2">
-            <button className="btn-ghost px-3 py-1" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
-            <button className="btn-ghost px-3 py-1" disabled={page * 25 >= data.total} onClick={() => setPage(page + 1)}>Next</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -696,7 +761,7 @@ function GSTR2BPage() {
 
       {/* Tab bar — five tabs don't fit a phone: the bar scrolls sideways on
           its own instead of the page. */}
-      <div className="mb-6 overflow-x-auto" data-testid="gstr2b-tabs">
+      <div className="mb-6 min-w-0 max-w-full overflow-x-auto" data-testid="gstr2b-tabs">
         <PillTabs
           tabs={tabs}
           value={activeTab}
@@ -749,7 +814,17 @@ function GSTR2BPage() {
         <MissingIn2BSection year={year} month={month} />
       )}
       {activeTab === "history" && (
-        <UploadHistorySection onSelectUpload={() => setActiveTab("reconciliation")} />
+        <UploadHistorySection
+          onSelectUpload={(period) => {
+            // Open the reconciliation for that upload's own month, not whatever month is picked above.
+            const [y, m] = period.split("-").map(Number);
+            if (y && m) {
+              setYear(y);
+              setMonth(m);
+            }
+            setActiveTab("reconciliation");
+          }}
+        />
       )}
     </div>
   );

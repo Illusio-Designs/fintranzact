@@ -33,9 +33,19 @@ export class PaymentsPage extends BasePage {
   }
 
   async expectDatePresets() {
-    // Payments page has date preset buttons, not a type toggle
-    await expect(this.page.getByText("This Month").first()).toBeVisible();
-    await expect(this.page.getByText("Last Month").first()).toBeVisible();
+    // One date button shows the period and opens the presets.
+    const dateBtn = this.page.getByRole("button", { name: /^Date range:/ }).first();
+    await expect(dateBtn).toContainText("This Month");
+    await dateBtn.click();
+    await expect(this.page.getByRole("menuitemradio", { name: "Last Month" })).toBeVisible();
+    await this.page.keyboard.press("Escape");
+  }
+
+  /** Pick a period from the date menu. */
+  async chooseDate(label: string) {
+    await this.page.getByRole("button", { name: /^Date range:/ }).first().click();
+    await this.page.getByRole("menuitemradio", { name: label }).click();
+    await expect(this.page.getByRole("button", { name: /^Date range:/ }).first()).toContainText(label);
   }
 
   async expectRecordButton() {

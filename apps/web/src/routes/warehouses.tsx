@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { keepPreviousData } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { Building03Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
@@ -12,6 +11,8 @@ import { Listbox } from "@/components/ui/Listbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { usePageSize } from "@/hooks/usePageSize";
 import { Icon } from "@/components/ui/Icon";
 import { cn } from "@/lib/utils";
 import { formatQty, useWarehouses } from "@/components/inventory/shared";
@@ -20,8 +21,6 @@ import { DefaultWarehouses, WarehouseManager } from "@/components/inventory/Ware
 export const Route = createFileRoute("/warehouses")({
   component: WarehousesPage,
 });
-
-const PAGE_SIZE = 25;
 
 const TYPE_OPTIONS = [
   { value: "main", label: "Main warehouse" },
@@ -139,11 +138,16 @@ function WarehousesPage() {
   const { data: warehouses, isLoading } = useWarehouses();
   const [search] = usePageSearch("Search item or SKU…");
   const [page, setPage] = useState(1);
-  // A new search starts from the first page.
-  useEffect(() => setPage(1), [search]);
+  const [pageSize, setPageSize] = usePageSize("warehouse-stock", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
+  // A new search or rows-per-page choice starts from the first page.
+  useEffect(() => setPage(1), [search, pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
   const { data: balances, isFetching } = trpc.stock.balances.useQuery(
-    { search: search || undefined, page, limit: PAGE_SIZE },
-    { placeholderData: keepPreviousData },
+    { search: search || undefined, page, limit: pageSize },
+    // Keep the current page on screen while the next one loads.
+    { placeholderData: (prev) => prev },
   );
 
   const { data: session } = trpc.auth.me.useQuery();
@@ -174,7 +178,10 @@ function WarehousesPage() {
   }, [needsSetup]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const active = (warehouses ?? []).filter((w) => w.status === "active");
-  const totalPages = balances ? Math.max(1, Math.ceil(balances.total / PAGE_SIZE)) : 1;
+  const total = balances?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // The last page emptied out (or rows per page grew): step back.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   return (
     <div>
@@ -203,13 +210,13 @@ function WarehousesPage() {
                   <p className="flex flex-wrap items-center gap-2 font-semibold text-text-primary">
                     <span className="truncate">{w.name}</span>
                     {w.isDefault && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-2xs font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                         <Icon icon={CheckmarkCircle02Icon} size={12} />
                         Default
                       </span>
                     )}
                     {w.status !== "active" && (
-                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text-secondary">Inactive</span>
+                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-2xs font-semibold text-text-secondary">Inactive</span>
                     )}
                   </p>
                   <p className="mt-0.5 truncate text-xs text-text-tertiary">
@@ -228,7 +235,7 @@ function WarehousesPage() {
               </div>
               <div className="mt-4 flex items-end justify-between border-t border-border-light pt-3">
                 <div>
-                  <p className="text-[11px] text-text-tertiary">Units in stock</p>
+                  <p className="text-2xs text-text-tertiary">Units in stock</p>
                   <p className="text-lg font-bold tabular-nums text-text-primary">{formatQty(w.quantity)}</p>
                 </div>
                 <p className="max-w-[55%] truncate text-right text-xs text-text-tertiary">{w.address || "No address"}</p>
@@ -241,7 +248,7 @@ function WarehousesPage() {
       <InventorySettings />
 
       {/* Stock by warehouse */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-clip">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-light px-4 py-3">
           <h2 className="text-sm font-semibold text-text-primary">Stock by warehouse</h2>
         </div>
@@ -253,9 +260,10 @@ function WarehousesPage() {
             description={search ? "No items match your search" : "Products you add under Items appear here"}
           />
         ) : (
-          <>
-            <div className={cn("overflow-x-auto", isFetching && "opacity-70")}>
-              <table className="data-table">
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination placement="top" page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={pageSize} />
+            <TableScroll ref={tableRef}>
+              <table className="data-table w-full">
                 <thead>
                   <tr>
                     <th>Item</th>
@@ -284,18 +292,23 @@ function WarehousesPage() {
                         })}
                         <td className={cn("text-right font-semibold tabular-nums", low ? "text-amber-700 dark:text-amber-400" : "text-text-primary")}>
                           {formatQty(row.total, row.unit)}
-                          {low && <span className="ml-1.5 text-[11px] font-medium">low</span>}
+                          {low && <span className="ml-1.5 text-2xs font-medium">low</span>}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            </div>
-            <div className="border-t border-border-light px-4 py-3">
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={balances.total} pageSize={PAGE_SIZE} />
-            </div>
-          </>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
+          </div>
         )}
       </div>
 
@@ -324,7 +337,7 @@ function WarehousesPage() {
                 })
               }
             >
-              {create.isPending ? "Adding..." : "Add warehouse"}
+              {create.isPending ? "Adding…" : "Add warehouse"}
             </button>
           </div>
         }

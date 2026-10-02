@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { useFieldErrorToast } from "@/lib/field-error-toast";
 import { lookupPincode } from "@/lib/pincode-lookup";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
@@ -16,6 +17,7 @@ interface PincodeInputProps {
 }
 
 export function PincodeInput({ value, onChange, onCityStateResolved, currentCity, currentState, error }: PincodeInputProps) {
+  useFieldErrorToast("Pincode", error);
   const inputId = useId();
   const [lookupState, setLookupState] = useState<"idle" | "found" | "found-mismatch" | "not-found">("idle");
   const [resolvedInfo, setResolvedInfo] = useState<{ district: string; state: string } | null>(null);
@@ -71,6 +73,8 @@ export function PincodeInput({ value, onChange, onCityStateResolved, currentCity
           maxLength={6}
           inputMode="numeric"
           placeholder="400001"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${inputId}-error` : undefined}
         />
         {lookupState === "found" && (
           <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
@@ -85,24 +89,24 @@ export function PincodeInput({ value, onChange, onCityStateResolved, currentCity
           </div>
         )}
       </div>
-      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+      {error && <p id={`${inputId}-error`} className="sr-only">{error}</p>}
       {lookupState === "found" && justFilled && !error && (
-        <p className="text-[11px] text-emerald-600 mt-1" style={{ animation: "pincode-slide 0.3s ease-out" }}>
+        <p className="text-2xs text-emerald-600 mt-1" style={{ animation: "pincode-slide 0.3s ease-out" }}>
           Got it! {resolvedInfo?.district}, {resolvedInfo?.state}
         </p>
       )}
       {lookupState === "found" && !justFilled && !error && (
-        <p className="text-[11px] text-emerald-600 mt-1">
+        <p className="text-2xs text-emerald-600 mt-1">
           {resolvedInfo?.district}, {resolvedInfo?.state}
         </p>
       )}
       {lookupState === "found-mismatch" && !error && resolvedInfo && (
-        <p className="text-[11px] text-amber-600 mt-1">
+        <p className="text-2xs text-amber-600 mt-1">
           PIN suggests {resolvedInfo.district}, {resolvedInfo.state} — your entry differs
         </p>
       )}
       {lookupState === "not-found" && !error && (
-        <p className="text-[11px] text-text-tertiary mt-1">Pincode not recognized — enter city and state manually</p>
+        <p className="text-2xs text-text-tertiary mt-1">Pincode not recognized — enter city and state manually</p>
       )}
       <style>{`
         @keyframes pincode-pop { 0% { transform: scale(0); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }

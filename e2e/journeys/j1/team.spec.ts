@@ -276,16 +276,22 @@ test.describe("J2 team", () => {
       await expect(mp.getByRole("heading", { name: "Invoices", level: 1 })).toBeVisible();
       const paidRow = mp.getByRole("row").filter({ hasText: paidInvoice.invoiceNumber });
       await expect(paidRow).toBeVisible();
-      await expect(paidRow.getByRole("button", { name: "Delete invoice" })).toHaveCount(0);
+      // Each row's actions are in its "Actions" menu; a paid invoice offers no delete.
+      await paidRow.getByRole("button", { name: /^Actions for/ }).click();
+      await expect(mp.getByRole("menu")).toBeVisible();
+      await expect(mp.getByRole("menuitem", { name: "Delete invoice" })).toHaveCount(0);
+      await mp.keyboard.press("Escape");
 
       const oldRow = mp.getByRole("row").filter({ hasText: oldInvoice.invoiceNumber });
-      await oldRow.getByRole("button", { name: "Delete invoice" }).click();
+      await oldRow.getByRole("button", { name: /^Actions for/ }).click();
+      await mp.getByRole("menuitem", { name: "Delete invoice" }).click();
       await mp.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
       await expect(toast(mp, "Can only delete invoices within 2 hours of creation")).toBeVisible();
       expect((await invoiceRow(oldInvoice.id))!.deleted_at).toBeNull();
 
       const freshRow = mp.getByRole("row").filter({ hasText: freshInvoice.invoiceNumber });
-      await freshRow.getByRole("button", { name: "Delete invoice" }).click();
+      await freshRow.getByRole("button", { name: /^Actions for/ }).click();
+      await mp.getByRole("menuitem", { name: "Delete invoice" }).click();
       await mp.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
       await expect(toast(mp, "Invoice deleted")).toBeVisible();
       await expect(freshRow).toHaveCount(0);

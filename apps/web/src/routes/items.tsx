@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { invalidateStockViews } from "@/lib/stock-cache";
@@ -9,6 +9,7 @@ import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
+import { usePageSize } from "@/hooks/usePageSize";
 import type { ItemType, ItemMode } from "@fintranzact/shared";
 import { MrpField } from "@/components/pricing/MrpField";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -29,6 +30,8 @@ import { Combobox } from "@/components/ui/Combobox";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { Pagination } from "@/components/ui/Pagination";
+import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
 import { UnitVariantEditor } from "@/components/UnitVariantEditor";
 import {
   type UiUnitVariant,
@@ -37,7 +40,7 @@ import {
   switchFactorForVariant,
 } from "@/lib/unit-variant-derivation";
 import { Icon } from "@/components/ui/Icon";
-import { ArrowDown01Icon, Cancel01Icon, Delete02Icon, Download04Icon } from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon, Cancel01Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
 import { StockGroupFilter, StockGroupPicker } from "@/components/inventory/StockGroups";
 import { BatchTrackingFields, ItemBatchesPanel, type BatchInValue } from "@/components/inventory/BatchFields";
@@ -119,7 +122,17 @@ function getCompatibleAltUnits(baseUnit: string) {
   return UNIT_OPTIONS.filter((o) => compatible.has(o.value));
 }
 
-const ITEMS_PAGE_SIZE = 20;
+type ItemSortKey = "updated" | "name" | "stock" | "price";
+
+const SORT_OPTIONS: SortOption<ItemSortKey>[] = [
+  { key: "updated", dir: "desc", label: "Recently updated" },
+  { key: "name", dir: "asc", label: "Name: A to Z" },
+  { key: "name", dir: "desc", label: "Name: Z to A" },
+  { key: "stock", dir: "asc", label: "Stock: low to high" },
+  { key: "stock", dir: "desc", label: "Stock: high to low" },
+  { key: "price", dir: "desc", label: "Price: high to low" },
+  { key: "price", dir: "asc", label: "Price: low to high" },
+];
 
 function countFilled(...values: string[]): number {
   return values.filter((v) => v.trim() !== "").length;
@@ -130,7 +143,10 @@ function ItemsPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [showLowStock, setShowLowStock] = useState(false);
   const [groupFilter, setGroupFilter] = useState("");
+  const [sort, setSort] = useState<SortState<ItemSortKey>>({ key: "updated", dir: "desc" });
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("items", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const deleteConfirm = useDeleteConfirmation();
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -142,16 +158,32 @@ function ItemsPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
-  // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter, showLowStock, groupFilter]);
+  // Back to page 1 whenever filters, sort or rows per page change
+  useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter, showLowStock, groupFilter, sort.key, sort.dir, pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const { data, isLoading } = trpc.item.list.useQuery({
+  const { data, isFetching, isLoading } = trpc.item.list.useQuery({
     search: debouncedSearch || undefined,
     lowStock: showLowStock || undefined,
     stockGroupId: groupFilter || undefined,
+    // Filter by type on the server so page counts and totals are right.
+    itemType: typeFilter === "all" ? undefined : (typeFilter as ItemType),
+    // "Recently updated" is the server's default order.
+    sortBy: sort.key === "updated" ? undefined : sort.key,
+    sortDir: sort.dir,
     page,
-    limit: ITEMS_PAGE_SIZE,
+    limit: pageSize,
+  }, {
+    // Keep the current page on screen while the next one loads.
+    placeholderData: (prev) => prev,
   });
+
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // Deleting the last row of the last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const { data: lowStockCount } = trpc.item.lowStockCount.useQuery();
   const utils = trpc.useUtils();
@@ -180,18 +212,15 @@ function ItemsPage() {
         search: debouncedSearch || undefined,
         lowStock: showLowStock || undefined,
         stockGroupId: groupFilter || undefined,
+        itemType: typeFilter === "all" ? undefined : (typeFilter as ItemType),
         page: pg,
         limit: 100,
       });
       allData = [...allData, ...result.data];
-      hasMore = allData.length < result.total;
+      hasMore = result.data.length > 0 && allData.length < result.total;
       pg++;
     }
-    // Apply client-side type filter
-    return allData.filter((item: any) => {
-      if (typeFilter === "all") return true;
-      return item.itemType === typeFilter;
-    });
+    return allData;
   }
 
   async function exportItemsCSV(mode: "simple" | "alt_units" | "variants" | "all" = "all") {
@@ -292,13 +321,6 @@ function ItemsPage() {
     },
   ]);
 
-  // Client-side filter by item type (the query doesn't have itemType filter)
-  const filteredItems =
-    data?.data.filter((item) => {
-      if (typeFilter === "all") return true;
-      return item.itemType === typeFilter;
-    }) ?? [];
-
   return (
     <div>
       <PageHeader
@@ -360,7 +382,7 @@ function ItemsPage() {
                 {exporting ? (
                   <>
                     <Spinner size="xs" />
-                    Preparing...
+                    Preparing…
                   </>
                 ) : (
                   <>
@@ -384,7 +406,7 @@ function ItemsPage() {
       {/* Table */}
       {isLoading ? (
         <SkeletonRows count={5} height="h-12" />
-      ) : !filteredItems.length ? (
+      ) : !rows.length && !isFetching ? (
         <EmptyState
           title="No items found"
           description="Add products or services to start creating invoices."
@@ -396,93 +418,107 @@ function ItemsPage() {
           }
         />
       ) : (
-        <div className="card overflow-hidden">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Item</th>
-                {barcodesOn && <th>Barcode</th>}
-                <th className="text-right">Sale Price</th>
-                <th className="text-right">Stock</th>
-                <th>Unit</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((item) => {
-                const isLow =
-                  item.itemMode !== "variants" &&
-                  item.lowStockAlert &&
-                  parseFloat(item.stockQuantity) <= parseFloat(item.lowStockAlert);
-                return (
-                  <tr key={item.id} className="group cursor-pointer" onClick={() => setSelectedItemId(item.id)}>
-                    <td>
-                      <div className="flex items-center gap-2">
-                        {item.itemType === "service" && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400 shrink-0">
-                            SVC
-                          </span>
-                        )}
-                        {item.itemMode === "variants" && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-400 shrink-0">
-                            VAR
-                          </span>
-                        )}
-                        <div>
-                          <p className="font-medium">{item.name}</p>
-                          {item.sku && (
-                            <p className="text-xs text-text-tertiary">SKU: {item.sku}</p>
+        // overflow-clip, not -hidden: rounds the corners without making the
+        // card a scroll box, so the header row can stay stuck inside TableScroll.
+        <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
+          <Pagination
+            placement="top"
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={total}
+            pageSize={pageSize}
+          >
+            <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
+          </Pagination>
+          <TableScroll ref={tableRef}>
+            <table className="data-table w-full">
+              <thead>
+                <tr>
+                  <SortableTh sortKey="name" sort={sort} onSort={setSort}>Item</SortableTh>
+                  {barcodesOn && <th>Barcode</th>}
+                  <SortableTh sortKey="price" sort={sort} onSort={setSort} firstDir="desc" align="right">Sale Price</SortableTh>
+                  <SortableTh sortKey="stock" sort={sort} onSort={setSort} align="right">Stock</SortableTh>
+                  <th>Unit</th>
+                  <th className="text-right"><span className="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((item) => {
+                  const isLow =
+                    item.itemMode !== "variants" &&
+                    item.lowStockAlert &&
+                    parseFloat(item.stockQuantity) <= parseFloat(item.lowStockAlert);
+                  return (
+                    <tr key={item.id} className="cursor-pointer" onClick={() => setSelectedItemId(item.id)}>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          {item.itemType === "service" && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400 shrink-0">
+                              SVC
+                            </span>
                           )}
+                          {item.itemMode === "variants" && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-400 shrink-0">
+                              VAR
+                            </span>
+                          )}
+                          <div>
+                            <p className="font-medium">{item.name}</p>
+                            {item.sku && (
+                              <p className="text-xs text-text-tertiary">SKU: {item.sku}</p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    {barcodesOn && (
-                      <td className="font-mono text-xs text-text-secondary">
-                        {item.itemMode === "variants" ? "Per variant" : item.barcode || <span className="text-text-tertiary">—</span>}
                       </td>
-                    )}
-                    <td className="text-right tabular-nums">
-                      {item.itemMode === "variants" ? (
-                        <span className="text-text-secondary text-xs">{(item as any).variantCount ?? 0} variants</span>
-                      ) : (
-                        item.salePrice ? formatCurrency(item.salePrice) : "—"
+                      {barcodesOn && (
+                        <td className="font-mono text-xs text-text-secondary">
+                          {item.itemMode === "variants" ? "Per variant" : item.barcode || <span className="text-text-tertiary">—</span>}
+                        </td>
                       )}
-                    </td>
-                    <td
-                      className={cn(
-                        "text-right tabular-nums font-medium",
-                        isLow ? "text-amber-600" : ""
-                      )}
-                    >
-                      {item.itemMode === "variants"
-                        ? ((item as any).variantTotalStock ? parseFloat((item as any).variantTotalStock).toLocaleString() : "0")
-                        : parseFloat(item.stockQuantity).toLocaleString()
-                      }
-                    </td>
-                    <td className="text-text-secondary text-xs">{item.unit}</td>
-                    <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        className="btn-icon opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
-                        onClick={() => deleteConfirm.requestDelete(item.id, item.name)}
-                        aria-label="Delete item"
+                      <td className="text-right tabular-nums">
+                        {item.itemMode === "variants" ? (
+                          <span className="text-text-secondary text-xs">{(item as any).variantCount ?? 0} variants</span>
+                        ) : (
+                          item.salePrice ? formatCurrency(item.salePrice) : "—"
+                        )}
+                      </td>
+                      <td
+                        className={cn(
+                          "text-right tabular-nums font-medium",
+                          isLow ? "text-amber-600" : ""
+                        )}
                       >
-                        <Icon icon={Delete02Icon} size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {data && (
-            <Pagination
-              page={page}
-              totalPages={Math.ceil(data.total / ITEMS_PAGE_SIZE)}
-              onPageChange={setPage}
-              total={data.total}
-              pageSize={ITEMS_PAGE_SIZE}
-            />
-          )}
+                        {item.itemMode === "variants"
+                          ? ((item as any).variantTotalStock ? parseFloat((item as any).variantTotalStock).toLocaleString() : "0")
+                          : parseFloat(item.stockQuantity).toLocaleString()
+                        }
+                      </td>
+                      <td className="text-text-secondary text-xs">{item.unit}</td>
+                      <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <RowActions
+                          label={item.name}
+                          items={tidyMenu([
+                            { label: "Open", hint: "Enter", onSelect: () => setSelectedItemId(item.id) },
+                            { kind: "separator" },
+                            { label: "Delete item", danger: true, onSelect: () => deleteConfirm.requestDelete(item.id, item.name) },
+                          ])}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableScroll>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={total}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       )}
 
@@ -753,7 +789,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
             onClick={handleCreate}
             disabled={createMutation.isPending || !name.trim()}
           >
-            {createMutation.isPending ? "Creating..." : "Create Item"}
+            {createMutation.isPending ? "Creating…" : "Create Item"}
           </button>
         </div>
       }
@@ -821,7 +857,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
 
         {/* Section divider */}
         <div className="flex items-center gap-3 pt-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
             Additional Details
           </span>
           <div className="flex-1 h-px bg-border-light" />
@@ -934,7 +970,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                   onAddRow={addUnitVariant}
                 />
                 {unitVariants.some((v) => v.unit && v.salePrice) && (
-                  <p className="text-[11px] text-teal-600 dark:text-teal-400 mt-1">
+                  <p className="text-2xs text-teal-600 dark:text-teal-400 mt-1">
                     Adding alternate units makes this an alt-unit product.
                   </p>
                 )}
@@ -1018,7 +1054,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                   </div>
 
                   {variantAttributes.length > 0 && (
-                    <p className="text-[11px] text-purple-600 dark:text-purple-400">
+                    <p className="text-2xs text-purple-600 dark:text-purple-400">
                       Adding variant attributes makes this a variant product. Stock and pricing are tracked per variant.
                     </p>
                   )}
@@ -1042,11 +1078,11 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                           <thead>
                             <tr className="border-b border-border-light">
                               {variantAttributes.map((a) => (
-                                <th key={a} className="text-left px-2 py-1.5 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">{a}</th>
+                                <th key={a} className="text-left px-2 py-1.5 text-2xs font-semibold text-text-tertiary uppercase tracking-wider">{a}</th>
                               ))}
-                              <th className="text-left px-2 py-1.5 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">SKU</th>
-                              <th className="text-right px-2 py-1.5 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Price</th>
-                              <th className="text-right px-2 py-1.5 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Stock</th>
+                              <th className="text-left px-2 py-1.5 text-2xs font-semibold text-text-tertiary uppercase tracking-wider">SKU</th>
+                              <th className="text-right px-2 py-1.5 text-2xs font-semibold text-text-tertiary uppercase tracking-wider">Price</th>
+                              <th className="text-right px-2 py-1.5 text-2xs font-semibold text-text-tertiary uppercase tracking-wider">Stock</th>
                               <th className="w-7"></th>
                             </tr>
                           </thead>
@@ -1087,7 +1123,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                                   <button
                                     type="button"
                                     onClick={() => removeVariantRow(i)}
-                                    className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950 text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                    className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950 text-red-500 opacity-0 group-hover:opacity-100 transition"
                                     aria-label="Remove variant"
                                   >
                                     <Icon icon={Cancel01Icon} size={12} />
@@ -1107,7 +1143,7 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
                       + Add variant manually
                     </button>
                     {variantRows.length > 0 && (
-                      <p className="text-[11px] text-text-tertiary">
+                      <p className="text-2xs text-text-tertiary">
                         {variantRows.length} variant{variantRows.length !== 1 ? "s" : ""} defined. Leave price blank to use the default price above.
                       </p>
                     )}
@@ -1322,7 +1358,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
             onClick={handleSave}
             disabled={updateMutation.isPending || !name.trim()}
           >
-            {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            {updateMutation.isPending ? "Saving…" : "Save Changes"}
           </button>
         </div>
       }
@@ -1403,7 +1439,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
               placeholder="Select unit"
             />
             {item && unit !== item.unit && (
-              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+              <p className="text-2xs text-amber-600 dark:text-amber-400 mt-1">
                 Saving will rename {item.unit.toUpperCase()} → {unit.toUpperCase()} on all existing invoices.
               </p>
             )}
@@ -1412,7 +1448,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
 
         {/* Section divider */}
         <div className="flex items-center gap-3 pt-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap">
             Additional Details
           </span>
           <div className="flex-1 h-px bg-border-light" />
@@ -1474,7 +1510,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
                   <div className="input flex items-center text-text-secondary cursor-not-allowed opacity-75 tabular-nums">
                     {parseFloat(stockQuantity).toLocaleString()}
                   </div>
-                  <p className="text-[10px] text-text-tertiary mt-1">Use "Adjust Stock" in the item detail panel.</p>
+                  <p className="text-2xs text-text-tertiary mt-1">Use "Adjust Stock" in the item detail panel.</p>
                 </div>
                 <InputField
                   label="Low Stock Alert"
@@ -1653,7 +1689,7 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
                         className="text-xs font-medium text-brand-600"
                         disabled={createVariantMutation.isPending}
                       >
-                        {createVariantMutation.isPending ? "Adding..." : "Add Variant"}
+                        {createVariantMutation.isPending ? "Adding…" : "Add Variant"}
                       </button>
                       <button onClick={() => setShowAddVariant(false)} className="text-xs text-text-tertiary">Cancel</button>
                     </div>
@@ -1824,7 +1860,7 @@ function PriceHistoryTab({
                 <tbody>
                   {priceChangedRows.map((h, i) => (
                     <tr key={i}>
-                      <td className="font-mono text-[13px]">
+                      <td className="font-mono text-ui">
                         <Link to="/invoices" search={{ id: h.invoiceId }} className="text-brand-600 hover:text-brand-700 hover:underline">
                           {h.invoiceNumber}
                         </Link>
@@ -1832,7 +1868,7 @@ function PriceHistoryTab({
                       <td className="text-right tabular-nums font-medium">
                         {formatCurrency(String(parseFloat(h.unitPrice) / parseFloat(h.conversionFactor || "1")))}
                         {h.selectedUnit && h.conversionFactor && parseFloat(h.conversionFactor) !== 1 && (
-                          <span className="text-[10px] text-text-tertiary ml-1">
+                          <span className="text-2xs text-text-tertiary ml-1">
                             ({formatCurrency(h.unitPrice)}/{h.selectedUnit})
                           </span>
                         )}
@@ -1999,7 +2035,7 @@ function StockMovementsTab({
               {tableRows.map((r, i) => (
                 <tr key={i}>
                   <td className="text-text-secondary text-xs">{r.date}</td>
-                  <td className="font-mono text-[13px]">
+                  <td className="font-mono text-ui">
                     <Link to={DOC_TYPE_ROUTE[r.documentType] ?? "/invoices"} search={{ id: r.invoiceId }} className="text-brand-600 hover:text-brand-700 hover:underline">
                       {r.invoiceNumber}
                     </Link>
@@ -2060,7 +2096,7 @@ function PeriodToggle({ value, onChange }: { value: PeriodFilter; onChange: (v: 
           key={o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors",
+            "px-2.5 py-1 rounded-full text-2xs font-medium transition-colors",
             value === o.value
               ? "bg-brand-600 text-white"
               : "bg-surface-1 text-text-secondary hover:bg-surface-2 border border-border-light"
@@ -2177,33 +2213,33 @@ function ItemDetailPanel({
             {/* Sales metrics row */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-surface-1 border border-border-light px-4 py-3">
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Total Sales</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider">Total Sales</p>
                 <p className="text-lg font-bold tabular-nums text-text-primary mt-1">
                   {salesStats ? formatCurrency(salesStats.totalSaleAmount) : "—"}
                 </p>
               </div>
               <div className="rounded-xl bg-surface-1 border border-border-light px-4 py-3">
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Total Qty Sold</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider">Total Qty Sold</p>
                 <p className="text-lg font-bold tabular-nums text-text-primary mt-1">
                   {salesStats ? parseFloat(salesStats.totalSaleQty).toLocaleString() : "—"}
                 </p>
-                {salesStats && <p className="text-[11px] text-text-tertiary">{item.unit}</p>}
+                {salesStats && <p className="text-2xs text-text-tertiary">{item.unit}</p>}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-surface-1 border border-border-light px-4 py-3">
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Avg List Price</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider">Avg List Price</p>
                 <p className="text-lg font-bold tabular-nums text-text-primary mt-1">
                   {salesStats ? formatCurrency(salesStats.avgGrossPrice) : "—"}
                 </p>
-                <p className="text-[11px] text-text-tertiary">per {item.unit}, before discount</p>
+                <p className="text-2xs text-text-tertiary">per {item.unit}, before discount</p>
               </div>
               <div className="rounded-xl bg-surface-1 border border-border-light px-4 py-3">
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Avg Realized Price</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider">Avg Realized Price</p>
                 <p className="text-lg font-bold tabular-nums text-text-primary mt-1">
                   {salesStats ? formatCurrency(salesStats.avgNetPrice) : "—"}
                 </p>
-                <p className="text-[11px] text-text-tertiary">per {item.unit}, after discount, excl. tax</p>
+                <p className="text-2xs text-text-tertiary">per {item.unit}, after discount, excl. tax</p>
               </div>
             </div>
 
@@ -2244,8 +2280,8 @@ function ItemDetailPanel({
             {item.itemMode === "variants" && item.variants && item.variants.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">Variants</p>
-                  <p className="text-[11px] text-text-tertiary">
+                  <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide">Variants</p>
+                  <p className="text-2xs text-text-tertiary">
                     Total stock: {item.variants.reduce((sum, v) => sum + parseFloat(v.stockQuantity), 0).toLocaleString()} {item.unit}
                   </p>
                 </div>
@@ -2285,7 +2321,7 @@ function ItemDetailPanel({
             {/* Unit Variants */}
             {item.unitVariants && Array.isArray(item.unitVariants) && item.unitVariants.length > 0 && (
               <div>
-                <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">Unit Variants</p>
+                <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">Unit Variants</p>
                 <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
                   <table className="data-table">
                     <thead>
@@ -2445,7 +2481,7 @@ function SwitchUnitModal({
                   type="button"
                   onClick={() => selectVariant(v.unit)}
                   className={cn(
-                    "w-full text-left px-3 py-2.5 rounded-lg border transition-all text-sm",
+                    "w-full text-left px-3 py-2.5 rounded-lg border transition text-sm",
                     newUnit === v.unit && !isCustom
                       ? "border-brand-500 bg-brand-600/[0.08]"
                       : "border-border-light hover:border-brand-300"
@@ -2469,13 +2505,13 @@ function SwitchUnitModal({
             type="button"
             onClick={selectCustom}
             className={cn(
-              "w-full text-left px-3 py-2.5 rounded-lg border transition-all text-sm",
+              "w-full text-left px-3 py-2.5 rounded-lg border transition text-sm",
               isCustom
                 ? "border-brand-500 bg-brand-600/[0.08]"
                 : "border-border-light hover:border-brand-300"
             )}
           >
-            <span className="font-medium">Custom unit...</span>
+            <span className="font-medium">Custom unit…</span>
           </button>
           {isCustom && (
             <div className="grid grid-cols-2 gap-3 mt-3">
@@ -2525,7 +2561,7 @@ function SwitchUnitModal({
             })}
             disabled={!newUnit || factor <= 0 || switchMutation.isPending}
           >
-            {switchMutation.isPending ? "Switching..." : "Switch Unit"}
+            {switchMutation.isPending ? "Switching…" : "Switch Unit"}
           </button>
         </div>
       </div>
@@ -2579,7 +2615,7 @@ function MergeItemModal({
             onChange={(e) => setTargetId(e.target.value)}
             className="input-field w-full"
           >
-            <option value="">Select target item...</option>
+            <option value="">Select target item…</option>
             {targetOptions.map((i) => (
               <option key={i.id} value={i.id}>
                 {i.name} ({i.unit.toUpperCase()}{i.salePrice ? ` — ₹${i.salePrice}` : ""})
@@ -2602,7 +2638,7 @@ function MergeItemModal({
               onChange={(e) => setConversionFactor(e.target.value)}
               placeholder="Conversion factor"
             />
-            <p className="text-[11px] text-text-tertiary mt-1">
+            <p className="text-2xs text-text-tertiary mt-1">
               Stock and invoice quantities will be converted using this factor.
             </p>
           </div>
@@ -2621,7 +2657,7 @@ function MergeItemModal({
             }
             disabled={!targetId || mergeMutation.isPending}
           >
-            {mergeMutation.isPending ? "Merging..." : "Merge & Delete"}
+            {mergeMutation.isPending ? "Merging…" : "Merge & Delete"}
           </button>
         </div>
       </div>
@@ -2708,7 +2744,7 @@ function AdjustStockModal({
             onClick={handleSubmit}
             disabled={!qty || adjustMutation.isPending || (isVariantItem && !selectedVariantId)}
           >
-            {adjustMutation.isPending ? "Adjusting..." : `${adjustType === "add" ? "Add" : "Remove"} Stock`}
+            {adjustMutation.isPending ? "Adjusting…" : `${adjustType === "add" ? "Add" : "Remove"} Stock`}
           </button>
         </div>
       }
@@ -2724,7 +2760,7 @@ function AdjustStockModal({
               onChange={(e) => setSelectedVariantId(e.target.value)}
               className="input w-full"
             >
-              <option value="">Select variant...</option>
+              <option value="">Select variant…</option>
               {variants.map((v) => {
                 const attrs = v.attributeValues as Record<string, string>;
                 const label = Object.values(attrs).join(" / ");
@@ -2740,7 +2776,7 @@ function AdjustStockModal({
 
         {/* Current stock display */}
         <div className="rounded-lg bg-surface-1 border border-border-light px-4 py-3">
-          <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Current Stock</p>
+          <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider">Current Stock</p>
           <p className="text-lg font-bold tabular-nums text-text-primary">
             {parseFloat(resolvedStock).toLocaleString()} <span className="text-sm font-normal text-text-tertiary">{unit}</span>
           </p>
@@ -2803,7 +2839,7 @@ function AdjustStockModal({
         {/* Recent adjustments */}
         {history && history.data.length > 0 && (
           <div>
-            <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider mb-2">Recent Adjustments</p>
+            <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wider mb-2">Recent Adjustments</p>
             <div className="space-y-1 max-h-32 overflow-y-auto">
               {history.data.map((adj) => (
                 <div key={adj.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-surface-1">

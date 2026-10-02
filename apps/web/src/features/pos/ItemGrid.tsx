@@ -72,7 +72,7 @@ export function ItemGrid({ search, onPick }: Props) {
             ₹{tile.unitPrice} / {tile.unit}
           </div>
           <div
-            className={`text-[11px] mt-1 tabular-nums ${
+            className={`text-2xs mt-1 tabular-nums ${
               parseFloat(tile.stockQuantity) <= 0
                 ? "text-red-500"
                 : "text-text-tertiary"

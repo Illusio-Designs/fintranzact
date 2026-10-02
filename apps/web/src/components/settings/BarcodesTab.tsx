@@ -300,7 +300,7 @@ export function BarcodesTab() {
               {shownType !== "qr" && (
                 <BarcodeSymbol code={current.sample} type={shownType} width={shownType === "ean13" ? 200 : 240} height={shownType === "ean13" ? 60 : 48} />
               )}
-              {shownType === "qr" && <span className="font-mono text-[10px]">{current.sample}</span>}
+              {shownType === "qr" && <span className="font-mono text-2xs">{current.sample}</span>}
               <span className="text-xs font-extrabold">₹25</span>
             </div>
           </div>

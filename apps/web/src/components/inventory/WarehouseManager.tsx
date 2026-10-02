@@ -111,7 +111,7 @@ function DetailsTab({ warehouse, onDeleted }: { warehouse: Warehouse; onDeleted:
               address: form.address.trim() || null,
             })}
           >
-            {update.isPending ? "Saving..." : "Save changes"}
+            {update.isPending ? "Saving…" : "Save changes"}
           </button>
         </div>
       </div>
@@ -210,7 +210,7 @@ function LocationsTab({ warehouseId }: { warehouseId: string }) {
               parentId: form.parentId || null,
             })}
           >
-            {create.isPending ? "Adding..." : "Add location"}
+            {create.isPending ? "Adding…" : "Add location"}
           </button>
         </div>
       </div>
@@ -272,7 +272,7 @@ function AccessTab({ warehouseId }: { warehouseId: string }) {
               <p className="text-xs text-text-tertiary">{m.role.replace(/_/g, " ")}</p>
             </div>
             {m.fullAccess ? (
-              <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium text-text-secondary">Full access</span>
+              <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-2xs font-medium text-text-secondary">Full access</span>
             ) : (
               <div className="flex items-center gap-4">
                 {ACCESS_FLAGS.map((f) => (
@@ -371,7 +371,7 @@ export function DefaultWarehouses({ canEdit }: { canEdit: boolean }) {
             disabled={save.isPending}
             onClick={() => save.mutate(Object.fromEntries(DEFAULTS.map((d) => [d.key, draft[d.key] || null])))}
           >
-            {save.isPending ? "Saving..." : "Save defaults"}
+            {save.isPending ? "Saving…" : "Save defaults"}
           </button>
         </div>
       )}

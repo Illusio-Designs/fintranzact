@@ -41,7 +41,7 @@ export function ReportTable<T>({ columns, rows, rowKey, footer }: {
                 <th
                   key={c.label}
                   className={cn(
-                    "px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap",
+                    "px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-text-tertiary whitespace-nowrap",
                     c.align === "right" ? "text-right" : "text-left",
                     hide(c),
                   )}
@@ -706,7 +706,7 @@ export function BatchStockReport({ status }: { status: "all" | "expiring" | "exp
                 )}>
                   {r.expiryDate ? formatDate(r.expiryDate) : "—"}
                   {r.daysToExpiry !== null && (
-                    <span className="block text-[11px]">
+                    <span className="block text-2xs">
                       {r.expired ? `${-r.daysToExpiry}d ago` : r.daysToExpiry === 0 ? "today" : `in ${r.daysToExpiry}d`}
                     </span>
                   )}

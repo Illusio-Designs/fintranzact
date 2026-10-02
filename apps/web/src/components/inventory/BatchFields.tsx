@@ -128,7 +128,7 @@ export function BatchOutSelect({
         onChange={(v) => onChange({ batchId: v })}
         options={options}
       />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-text-tertiary">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-text-tertiary">
         {!batchId && preview.short > 0.0005 && batches.length > 0 && (
           <span className="text-amber-700 dark:text-amber-400" role="alert">
             {expiredAlwaysAllowed ? "Batches are" : "Unexpired batches are"} {formatQty(preview.short, unit)} short
@@ -191,7 +191,7 @@ export function BatchInFields({
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       <div>
-        <label htmlFor={`${uid}-no`} className="mb-0.5 block text-[10px] font-medium text-text-tertiary">
+        <label htmlFor={`${uid}-no`} className="mb-0.5 block text-2xs font-medium text-text-tertiary">
           Batch no.
         </label>
         <input
@@ -210,11 +210,11 @@ export function BatchInFields({
           ))}
         </datalist>
         {existing && (
-          <p className="mt-0.5 text-[10px] text-text-tertiary">Existing batch · {formatQty(existing.quantity)} in stock</p>
+          <p className="mt-0.5 text-2xs text-text-tertiary">Existing batch · {formatQty(existing.quantity)} in stock</p>
         )}
       </div>
       <div>
-        <label htmlFor={`${uid}-exp`} className="mb-0.5 block text-[10px] font-medium text-text-tertiary">
+        <label htmlFor={`${uid}-exp`} className="mb-0.5 block text-2xs font-medium text-text-tertiary">
           Expiry{trackExpiry ? " *" : ""}
         </label>
         <DateInput
@@ -226,7 +226,7 @@ export function BatchInFields({
         />
       </div>
       <div>
-        <label htmlFor={`${uid}-mfg`} className="mb-0.5 block text-[10px] font-medium text-text-tertiary">
+        <label htmlFor={`${uid}-mfg`} className="mb-0.5 block text-2xs font-medium text-text-tertiary">
           Mfg date
         </label>
         <DateInput
@@ -238,7 +238,7 @@ export function BatchInFields({
         />
       </div>
       <div>
-        <label htmlFor={`${uid}-mrp`} className="mb-0.5 block text-[10px] font-medium text-text-tertiary">
+        <label htmlFor={`${uid}-mrp`} className="mb-0.5 block text-2xs font-medium text-text-tertiary">
           Batch MRP
         </label>
         <input
@@ -331,7 +331,7 @@ export function BatchTrackingFields({
           <p className="text-xs font-medium text-text-secondary">Opening stock batch</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <div>
-              <label htmlFor={`${uid}-ob-no`} className="mb-0.5 block text-[10px] font-medium text-text-tertiary">Batch no.</label>
+              <label htmlFor={`${uid}-ob-no`} className="mb-0.5 block text-2xs font-medium text-text-tertiary">Batch no.</label>
               <input
                 id={`${uid}-ob-no`}
                 className="input py-1.5 text-sm"
@@ -342,7 +342,7 @@ export function BatchTrackingFields({
               />
             </div>
             <div>
-              <label htmlFor={`${uid}-ob-exp`} className="mb-0.5 block text-[10px] font-medium text-text-tertiary">
+              <label htmlFor={`${uid}-ob-exp`} className="mb-0.5 block text-2xs font-medium text-text-tertiary">
                 Expiry{trackExpiry ? " *" : ""}
               </label>
               <DateInput
@@ -353,7 +353,7 @@ export function BatchTrackingFields({
               />
             </div>
             <div>
-              <label htmlFor={`${uid}-ob-mfg`} className="mb-0.5 block text-[10px] font-medium text-text-tertiary">Mfg date</label>
+              <label htmlFor={`${uid}-ob-mfg`} className="mb-0.5 block text-2xs font-medium text-text-tertiary">Mfg date</label>
               <DateInput
                 id={`${uid}-ob-mfg`}
                 className="input py-1.5 text-sm"
@@ -362,7 +362,7 @@ export function BatchTrackingFields({
               />
             </div>
           </div>
-          <p className="text-[10px] text-text-tertiary">Leave the number blank to keep opening stock outside any batch.</p>
+          <p className="text-2xs text-text-tertiary">Leave the number blank to keep opening stock outside any batch.</p>
         </div>
       )}
     </div>
@@ -398,10 +398,10 @@ export function ItemBatchesPanel({ itemId, unit }: { itemId: string; unit?: stri
                 <p className="font-medium text-text-primary">
                   {b.batchNumber}
                   {b.expired && (
-                    <span className="ml-2 rounded bg-red-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-400">Expired</span>
+                    <span className="ml-2 rounded bg-red-600/10 px-1.5 py-0.5 text-2xs font-semibold text-red-700 dark:text-red-400">Expired</span>
                   )}
                   {!b.expired && b.daysToExpiry !== null && b.daysToExpiry <= 30 && (
-                    <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                    <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-2xs font-semibold text-amber-700 dark:text-amber-400">
                       {b.daysToExpiry === 0 ? "Expires today" : `${b.daysToExpiry}d left`}
                     </span>
                   )}

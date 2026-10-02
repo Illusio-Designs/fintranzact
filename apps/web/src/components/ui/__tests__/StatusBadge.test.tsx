@@ -166,7 +166,7 @@ describe("StatusBadge — coloured status pill used on every document list row",
       const { container } = render(<StatusBadge status="paid" size="sm" />);
 
       const badge = container.firstChild as HTMLElement;
-      expect(badge.className).toMatch(/text-\[11px\]/);
+      expect(badge.className).toMatch(/text-2xs/);
       expect(badge.className).toMatch(/px-2/);
     });
   });

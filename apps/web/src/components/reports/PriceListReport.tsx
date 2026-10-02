@@ -69,7 +69,7 @@ export function PriceListReport({ asOf }: { asOf?: string }) {
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
-                <tr className="border-b border-border bg-surface-2 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                <tr className="border-b border-border bg-surface-2 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">
                   <th className="px-4 py-2.5 text-left">Item</th>
                   <th className="hidden px-4 py-2.5 text-left md:table-cell">Unit</th>
                   <th className="px-4 py-2.5 text-right">Sale price</th>

@@ -50,6 +50,12 @@ import {
 import { seedOwner, type SeededOwner } from "../../helpers/journey-seed";
 import { seedMoneyMasters, seedReceiptIntoAccount, type MoneyMasters } from "../../helpers/money-seed";
 import { choose, dialog, inr, listRow, openBusiness, openPage, pick, pickDateDaysAhead } from "../../helpers/journey-ui";
+
+/** Pick a period from the date menu (one "Date range: …" button). */
+async function chooseDateRange(page: import("@playwright/test").Page, label: string) {
+  await page.getByRole("button", { name: /^Date range:/ }).first().click();
+  await page.getByRole("menuitemradio", { name: label }).click();
+}
 import {
   bankAccountsOf,
   bankTransactionsOf,
@@ -241,7 +247,7 @@ test.describe("J8 money", () => {
     });
     await newExpense(page, { category: "Office Supplies", amount: "450", mode: "Cash", description: "Printer paper" });
     await newExpense(page, { category: "Travel", amount: "800", mode: "UPI", description: "Cab to the warehouse" });
-    await page.getByRole("button", { name: "All", exact: true }).first().click();
+    await chooseDateRange(page, "All");
     for (const [category, amount] of [["Rent", 25000], ["Electricity", 4500], ["Office Supplies", 450], ["Travel", 800]] as const) {
       await expect(listRow(page, category)).toContainText(inr(amount));
     }
@@ -377,9 +383,10 @@ test.describe("J8 money", () => {
 
     // ── That expense deleted: withdrawal reversed, line open again ─
     await openPage(page, "Expenses");
-    await page.getByRole("button", { name: "All", exact: true }).first().click();
+    await chooseDateRange(page, "All");
     const stationeryRow = listRow(page, "POS 4587XXXX STATIONERY MART");
-    await stationeryRow.getByRole("button", { name: "Delete expense" }).click();
+    await stationeryRow.getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Delete expense" }).click();
     const confirm = page.getByRole("alertdialog").or(page.getByRole("dialog")).filter({ hasText: /Delete/ });
     await expectNoHorizontalScroll(page, "delete expense");
     await confirm.getByRole("button", { name: /^Delete/ }).click();
@@ -510,7 +517,8 @@ test.describe("J8 money", () => {
       // Run now: next month's invoice raised early, the schedule moves on.
       await page.reload();
       await expect(tplRow.getByRole("cell").nth(-2)).toHaveText("1"); // runs
-      await tplRow.getByRole("button", { name: "Run now" }).click();
+      await tplRow.getByRole("button", { name: /^Actions for/ }).click();
+      await page.getByRole("menuitem", { name: "Run now" }).click();
       await expect(toast(page, "Invoice generated successfully")).toBeVisible();
       await expect(tplRow.getByRole("cell").nth(-2)).toHaveText("2");
       const runs = await recurringRunsOf(template.id);

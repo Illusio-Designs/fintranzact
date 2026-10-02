@@ -18,7 +18,7 @@ export function useDeveloperLocation() {
 }
 
 const ROW =
-  "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[14px] transition hover:bg-brand-50 hover:text-brand-700 dark:hover:bg-white/5 dark:hover:text-white";
+  "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition hover:bg-brand-50 hover:text-brand-700 dark:hover:bg-white/5 dark:hover:text-white";
 const ROW_ACTIVE = "bg-brand-50 font-semibold text-brand-700 dark:bg-white/10 dark:text-white";
 
 /**
@@ -177,7 +177,7 @@ export function DeveloperSidebar({ onNavigate }: { onNavigate?: () => void }) {
                                 onClick={() =>
                                   setExpanded((s) => toggle(s, isActive ? `closed:${group.id}` : group.id))
                                 }
-                                className="flex h-8 w-9 shrink-0 items-center justify-center gap-1 rounded-md text-[11px] text-text-tertiary hover:bg-surface-2 hover:text-text-primary"
+                                className="flex h-8 w-9 shrink-0 items-center justify-center gap-1 rounded-md text-2xs text-text-tertiary hover:bg-surface-2 hover:text-text-primary"
                               >
                                 {group.endpoints.length}
                                 <Icon icon={ArrowRight01Icon} size={12} className={cn("transition", isOpen && "rotate-90")} />
@@ -237,7 +237,7 @@ function EndpointLink({
       to="/developers/$section/$endpoint"
       params={{ section: groupId, endpoint: id }}
       onClick={onNavigate}
-      className={cn(ROW, "py-1 text-[13px]", active ? ROW_ACTIVE : "text-text-tertiary")}
+      className={cn(ROW, "py-1 text-ui", active ? ROW_ACTIVE : "text-text-tertiary")}
     >
       <MethodBadge method={method} size="sm" />
       <span className="truncate">{title}</span>

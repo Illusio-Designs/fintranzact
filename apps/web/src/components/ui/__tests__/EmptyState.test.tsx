@@ -70,7 +70,7 @@ describe("EmptyState — zero-data placeholder for list and filter views", () =>
   });
 
   describe("optional encouragement text", () => {
-    it("renders the encouragement line in a subtler italic style below the description to motivate first action", () => {
+    it("renders the encouragement line in a smaller, muted style below the description to motivate first action", () => {
       render(
         <EmptyState
           title="No invoices yet"
@@ -82,8 +82,9 @@ describe("EmptyState — zero-data placeholder for list and filter views", () =>
         "Every great business starts with a first invoice."
       );
       expect(encouragementEl).toBeInTheDocument();
-      // Encouragement must use italic styling per the component's design.
-      expect(encouragementEl.className).toMatch(/italic/);
+      // Encouragement is smaller and muted, under the description.
+      expect(encouragementEl.className).toMatch(/text-xs/);
+      expect(encouragementEl.className).toMatch(/text-text-tertiary/);
     });
   });
 

@@ -662,7 +662,7 @@ export function BusinessForm({
           rows={4}
           maxLength={2000}
           className="input w-full resize-y"
-          placeholder="Enter default terms and conditions..."
+          placeholder="Enter default terms and conditions…"
         />
       </div>
     </>
@@ -788,7 +788,7 @@ export function BusinessForm({
                 value={stateName}
                 onChange={setStateName}
                 options={stateOptions}
-                placeholder="Select state..."
+                placeholder="Select state…"
                 required
                 error={errors.stateName}
               />
@@ -798,7 +798,7 @@ export function BusinessForm({
                 value={countryOfOperations}
                 onChange={setCountryOfOperations}
                 options={countryOptions}
-                placeholder="Select country..."
+                placeholder="Select country…"
                 required
               />
             </div>
@@ -1683,7 +1683,7 @@ export function BusinessForm({
             <span className="font-display text-[17px] font-extrabold">Fintranzact</span>
           </div>
           <h2 className="mt-7 font-display text-[22px] font-extrabold leading-tight">Set up your business</h2>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-[#9fb0d6]">
+          <p className="mt-1.5 text-ui leading-relaxed text-[#9fb0d6]">
             Four quick steps. You can change any of this later in Settings.
           </p>
           <ol className="mt-7 flex gap-3 overflow-x-auto lg:flex-col lg:gap-0 lg:overflow-visible">
@@ -1769,12 +1769,12 @@ export function BusinessForm({
                 Back
               </button>
             ) : (
-              <span className="text-[13px] text-text-tertiary">
+              <span className="text-ui text-text-tertiary">
                 Fields marked <span className="text-red-500">*</span> are required
               </span>
             )}
             <button type="submit" disabled={isPending} className="btn-primary h-11 px-6">
-              {isPending ? "Saving..." : isLastStep ? "Create business" : "Continue"}
+              {isPending ? "Saving…" : isLastStep ? "Create business" : "Continue"}
               {!isPending && <Icon icon={ArrowRight01Icon} size={16} strokeWidth={2} />}
             </button>
           </div>
@@ -1796,7 +1796,7 @@ export function BusinessForm({
 
         {onboardingMode && (
           <div className="mt-3">
-            <div className="flex justify-between text-[10px] uppercase tracking-widest text-text-tertiary mb-2">
+            <div className="flex justify-between text-2xs uppercase tracking-widest text-text-tertiary mb-2">
               <span>
                 Step {currentStep + 1} of {wizardSteps.length}
               </span>
@@ -1806,7 +1806,7 @@ export function BusinessForm({
 
             <div className="h-2 w-full rounded-full bg-surface-2 overflow-hidden">
               <div
-                className="h-full rounded-full bg-brand-600 transition-all"
+                className="h-full rounded-full bg-brand-600 transition-[width]"
                 style={{
                   width: `${((currentStep + 1) / wizardSteps.length) * 100
                     }% `,
@@ -1849,7 +1849,7 @@ export function BusinessForm({
             className="btn-primary flex-1"
           >
             {isPending
-              ? "Saving..."
+              ? "Saving…"
               : onboardingMode
                 ? isLastStep
                   ? "Create Business"

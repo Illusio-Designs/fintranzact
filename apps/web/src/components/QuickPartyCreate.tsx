@@ -139,7 +139,7 @@ export function QuickPartyCreate({
             onClick={handleSubmit}
             disabled={createMutation.isPending || !canSubmit}
           >
-            {createMutation.isPending ? "Creating..." : "Create & Select"}
+            {createMutation.isPending ? "Creating…" : "Create & Select"}
           </button>
         </div>
       </div>

@@ -89,7 +89,7 @@ test.describe("J14 partner", () => {
     await expect(page).toHaveURL(/\/login/);
     await page.getByLabel("Email address").fill(email);
     await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "We sent a sign-in link to" })).toContainText(email);
+    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Sign-in link sent" })).toContainText(email);
     await page.goto(`/auth/verify?token=${encodeURIComponent(await claimLatestMagicLink(email))}`);
     await expect(page.getByRole("heading", { name: "Welcome to Fintranzact" })).toBeVisible({ timeout: 15_000 });
     await page.getByLabel("Your name").fill("Nikhil Shah");

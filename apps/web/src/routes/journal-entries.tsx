@@ -401,8 +401,8 @@ function JournalEntriesPage() {
               >
                 {isSubmitting
                   ? editEntryId
-                    ? "Saving..."
-                    : "Creating..."
+                    ? "Saving…"
+                    : "Creating…"
                   : editEntryId
                     ? "Save Changes"
                     : "Create Entry"}
@@ -426,7 +426,7 @@ function JournalEntriesPage() {
             <div className="col-span-2">
               <TextareaField
                 label="Narration"
-                placeholder="Purpose of this journal entry..."
+                placeholder="Purpose of this journal entry…"
                 value={form.narration}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, narration: e.target.value }))
@@ -461,7 +461,7 @@ function JournalEntriesPage() {
                         value={line.accountId}
                         onChange={(val) => updateLine(idx, "accountId", val)}
                         options={accountOptions}
-                        placeholder="Search account..."
+                        placeholder="Search account…"
                         label="Account"
                         required
                       />
@@ -618,7 +618,7 @@ function JournalEntriesPage() {
                 }
               >
                 {templateCreateMutation.isPending
-                  ? "Saving..."
+                  ? "Saving…"
                   : "Save Template"}
               </button>
             </div>
@@ -817,7 +817,7 @@ function EntryRow({
         <td>
           <span
             className={cn(
-              "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase",
+              "inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase",
               isManual
                 ? "bg-blue-600/[0.08] text-blue-700 dark:text-blue-400"
                 : "bg-surface-2 text-text-secondary"
@@ -830,11 +830,11 @@ function EntryRow({
         {/* Status */}
         <td>
           {isVoided ? (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-600/[0.08] text-red-600 dark:text-red-400">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium bg-red-600/[0.08] text-red-600 dark:text-red-400">
               Voided
             </span>
           ) : (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400">
               Active
             </span>
           )}
@@ -881,7 +881,7 @@ function EntryRow({
               {isFetchingDetail ? (
                 <div className="flex items-center gap-2 text-sm text-text-tertiary py-2">
                   <Spinner size="xs" />
-                  Loading details...
+                  Loading details…
                 </div>
               ) : expandedEntry ? (
                 <div>
@@ -966,7 +966,7 @@ function TemplatesTab({
       <div className="card p-8">
         <div className="flex items-center justify-center gap-2 text-sm text-text-tertiary">
           <Spinner size="sm" />
-          Loading templates...
+          Loading templates…
         </div>
       </div>
     );

@@ -122,7 +122,7 @@ export function UnitVariantEditor({
             </div>
 
             {showPreview && (
-              <p className="text-[11px] text-text-tertiary pl-0.5">
+              <p className="text-2xs text-text-tertiary pl-0.5">
                 1 {v.unit} = {v.conversionFactor} {baseUnit} → ₹{v.salePrice} each
                 {v.__manual && !staleDerived && (
                   <>
@@ -164,7 +164,7 @@ export function UnitVariantEditor({
       </button>
 
       {variants.length > 0 && baseUnit && (
-        <p className="text-[11px] text-text-tertiary mt-1">
+        <p className="text-2xs text-text-tertiary mt-1">
           Base: {baseUnit.toUpperCase()}. Enter how many {baseUnit} fit in 1 of each alt unit — prices auto-compute.
         </p>
       )}

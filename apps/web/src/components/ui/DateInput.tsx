@@ -349,12 +349,12 @@ export function DateInput({
                 placeholder="Type DDMMYY, e.g. 120325"
                 aria-label="Type date (DDMMYY)"
                 aria-invalid={typedError ? true : undefined}
-                className="w-full rounded-lg border border-border bg-surface-1 px-2.5 py-1.5 text-[13px] tabular-nums text-text-primary placeholder:text-text-tertiary focus:border-brand-500 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-surface-1 px-2.5 py-1.5 text-ui tabular-nums text-text-primary placeholder:text-text-tertiary focus:border-brand-500 focus:outline-none"
               />
               {typed && (
                 <p
                   aria-live="polite"
-                  className={cn("mt-1 text-[11.5px]", typedError ? "text-red-600 dark:text-red-400" : "text-text-secondary")}
+                  className={cn("mt-1 text-2xs", typedError ? "text-red-600 dark:text-red-400" : "text-text-secondary")}
                 >
                   {typedError ?? `${formatDisplayDate(typedIso!)} · press Enter`}
                 </p>
@@ -421,7 +421,7 @@ export function DateInput({
                       }}
                       aria-label={`${label} ${view.y}`}
                       className={cn(
-                        "h-10 rounded-lg text-[13px] text-text-primary hover:bg-surface-2",
+                        "h-10 rounded-lg text-ui text-text-primary hover:bg-surface-2",
                         sel?.y === view.y && sel.m === m && "bg-brand-600 font-bold text-white hover:bg-brand-700",
                       )}
                     >
@@ -445,7 +445,7 @@ export function DateInput({
                         setMode("months");
                       }}
                       className={cn(
-                        "h-10 rounded-lg text-[13px] tabular-nums text-text-primary hover:bg-surface-2",
+                        "h-10 rounded-lg text-ui tabular-nums text-text-primary hover:bg-surface-2",
                         selY === y && "bg-brand-600 font-bold text-white hover:bg-brand-700",
                         y === new Date().getFullYear() && selY !== y && "font-bold ring-1 ring-inset ring-brand-500",
                       )}
@@ -459,7 +459,7 @@ export function DateInput({
             {mode === "days" && (
             <div role="grid" className="grid grid-cols-7 gap-0.5 text-center">
               {WEEKDAYS.map((w) => (
-                <span key={w} role="columnheader" className="py-1 text-[11px] font-semibold text-text-tertiary">
+                <span key={w} role="columnheader" className="py-1 text-2xs font-semibold text-text-tertiary">
                   {w}
                 </span>
               ))}
@@ -477,7 +477,7 @@ export function DateInput({
                     disabled={outOfRange(iso)}
                     onClick={() => pick(iso)}
                     className={cn(
-                      "h-9 rounded-full text-[13px] tabular-nums text-text-primary transition-colors",
+                      "h-9 rounded-full text-ui tabular-nums text-text-primary transition-colors",
                       "hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent",
                       iso === today && iso !== current && "font-bold ring-1 ring-inset ring-brand-500",
                       iso === focusIso && iso !== current && "bg-surface-2",

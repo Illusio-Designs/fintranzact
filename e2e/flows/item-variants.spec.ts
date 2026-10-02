@@ -6,7 +6,7 @@
  *
  * Key UI facts (from items.tsx):
  *   - Items table row click → sets selectedItemId → renders ItemDetailPanel as SlideOver (role="dialog").
- *   - Search placeholder: "Search items..."
+ *   - Search placeholder: "Search items…"
  *   - Detail tabs: "Overview", "Price History", "Stock Movements"
  *   - Variant items show a "Variants" badge / mode indicator in the list.
  *   - The item.create API derives itemMode from variantAttributes: if variantAttributes.length > 0

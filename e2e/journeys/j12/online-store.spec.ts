@@ -117,7 +117,7 @@ test.describe("J12 online store", () => {
     await expect(page.getByText(/^0 of \d+ items on your store$/)).toBeVisible();
     await page.getByRole("button", { name: "Manage Items" }).click();
     const manage = dialog(page, "Manage Store Items");
-    await manage.getByPlaceholder("Search items...").fill(id);
+    await manage.getByPlaceholder("Search items…").fill(id);
     await manage.getByRole("checkbox", { name: mango.name }).click();
     await manage.getByRole("checkbox", { name: cashew.name }).click();
     await expect(manage.getByRole("checkbox", { name: mango.name })).toHaveAttribute("aria-checked", "true");

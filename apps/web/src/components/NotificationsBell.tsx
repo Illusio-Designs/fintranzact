@@ -172,7 +172,7 @@ export function NotificationsBell({
       >
         <Icon icon={Notification03Icon} size={19} />
         {unseen > 0 && (
-          <span className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white ring-2 ring-surface-0">
+          <span className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-red-600 px-1 text-2xs font-bold text-white ring-2 ring-surface-0">
             {unseen}
           </span>
         )}

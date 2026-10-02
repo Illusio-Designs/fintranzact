@@ -6,7 +6,7 @@
  * plan. No payment gateway is called and no money is taken; card and UPI
  * details never leave the browser. Real Razorpay replaces the API call later.
  */
-import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { planCheckoutAmount, PLAN_GST_RATE_PERCENT, type BillingCycle, type PlanId } from "@fintranzact/shared";
 import { BankIcon, CheckmarkCircle02Icon, CreditCardIcon, QrCodeIcon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
@@ -23,6 +23,7 @@ import {
 } from "@/lib/demo-payment";
 import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/components/ui/Icon";
+import { toast } from "@/hooks/useToast";
 
 export type DemoPaymentMethod = "upi" | "card" | "netbanking";
 
@@ -66,6 +67,10 @@ export function DemoCheckout({ open, plan, cycle, onClose, onContinue, processin
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [stage, setStage] = useState<"form" | "processing" | "success">("form");
   const [error, setError] = useState<string | null>(null);
+  // Payment problems show as a goey toast.
+  useEffect(() => {
+    if (error) toast.error("Payment didn't go through", error);
+  }, [error]);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [continuing, setContinuing] = useState(false);
   const tabRefs = useRef<Record<DemoPaymentMethod, HTMLButtonElement | null>>({ upi: null, card: null, netbanking: null });
@@ -338,12 +343,6 @@ export function DemoCheckout({ open, plan, cycle, onClose, onContinue, processin
                 </fieldset>
               )}
             </div>
-
-            {error && (
-              <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-                {error}
-              </p>
-            )}
 
             <button type="submit" className="btn-primary mt-5 w-full py-3" disabled={!valid || stage === "processing"}>
               {stage === "processing" ? "Processing…" : `Pay ${rupees(amount.totalPaise)}`}

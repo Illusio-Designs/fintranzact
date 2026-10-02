@@ -301,7 +301,7 @@ export function Select({
               return (
                 <Fragment key={`${o.value}-${i}`}>
                   {showGroup && (
-                    <li role="presentation" className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-text-tertiary">
+                    <li role="presentation" className="px-2.5 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide text-text-tertiary">
                       {o.group}
                     </li>
                   )}

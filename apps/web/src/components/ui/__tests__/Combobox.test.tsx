@@ -190,7 +190,7 @@ describe("Combobox — searchable dropdown for large option lists (parties, item
       const input = screen.getByRole("combobox");
       await userEvent.click(input);
 
-      expect(screen.getByText("Searching...")).toBeInTheDocument();
+      expect(screen.getByText("Searching…")).toBeInTheDocument();
     });
   });
 

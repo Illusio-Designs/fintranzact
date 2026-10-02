@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { useFieldErrorToast } from "@/lib/field-error-toast";
 
 interface GstinInputProps {
   value: string;
@@ -14,13 +15,17 @@ export function GstinInput({ value, onChange, onPanDetected, error }: GstinInput
   const isValid = !value || gstinRegex.test(value);
   const showError = blurred && value.length > 0 && !isValid;
   const detectedPan = value.length === 15 && isValid ? value.slice(2, 12) : null;
+  const message = error || (showError ? "Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5)" : "");
+  useFieldErrorToast("GSTIN", message);
 
   return (
     <div>
       <label className="label" htmlFor={inputId}>GSTIN</label>
       <input
-          id={inputId}
-        className={`input font-mono tracking-wide ${showError || error ? "border-red-500" : ""}`}
+        id={inputId}
+        className="input font-mono tracking-wide"
+        aria-invalid={message ? true : undefined}
+        aria-describedby={message ? `${inputId}-error` : undefined}
         value={value}
         onChange={(e) => {
           const upper = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -35,15 +40,12 @@ export function GstinInput({ value, onChange, onPanDetected, error }: GstinInput
         spellCheck={false}
         autoCapitalize="characters"
       />
-      {showError && (
-        <p className="text-[11px] text-red-500 mt-1">Invalid GSTIN format</p>
-      )}
-      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
-      {!showError && !error && (
-        <p className="text-[11px] text-text-tertiary mt-1">15-character GST Identification Number</p>
+      {message && <p id={`${inputId}-error`} className="sr-only">{message}</p>}
+      {!message && (
+        <p className="text-2xs text-text-tertiary mt-1">15-character GST Identification Number</p>
       )}
       {detectedPan && (
-        <p className="text-[11px] text-brand-600 mt-1">
+        <p className="text-2xs text-brand-600 mt-1">
           PAN detected: {detectedPan}
         </p>
       )}

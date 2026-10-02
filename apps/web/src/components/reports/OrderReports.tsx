@@ -124,7 +124,7 @@ function PendingReport({ kind }: { kind: PendingKind }) {
           rowKey={(r) => r.lineId}
           columns={[
             { label: "Date", hideBelow: "md", render: (r) => formatDate(r.documentDate) },
-            { label: copy.number, render: (r) => <span className="font-mono text-[13px] text-text-secondary">{r.documentNumber}</span> },
+            { label: copy.number, render: (r) => <span className="font-mono text-ui text-text-secondary">{r.documentNumber}</span> },
             { label: "Party", render: (r) => r.partyName },
             { label: "Item", render: (r) => r.itemName },
             { label: "Ordered", align: "right", hideBelow: "lg", render: (r) => formatQty(r.ordered, r.unit) },

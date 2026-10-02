@@ -99,7 +99,7 @@ export function BarcodeSymbol({
         ))}
       </svg>
       {showText && (
-        <span className="font-mono text-[10px] leading-3 text-black tracking-wide">{data.text}</span>
+        <span className="font-mono text-2xs leading-3 text-black tracking-wide">{data.text}</span>
       )}
     </div>
   );

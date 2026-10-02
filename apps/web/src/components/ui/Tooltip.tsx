@@ -84,7 +84,7 @@ export function Tooltip({ label, disabled, side = "right", children }: TooltipPr
             role="tooltip"
             className={
               "pointer-events-none fixed z-[100] whitespace-nowrap rounded-md " +
-              "bg-text-primary px-2 py-1 text-[11px] font-medium text-surface-0 shadow-lg"
+              "bg-text-primary px-2 py-1 text-2xs font-medium text-surface-0 shadow-lg"
             }
             style={
               side === "right"

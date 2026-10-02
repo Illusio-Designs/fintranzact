@@ -27,12 +27,12 @@ export function EndpointDoc({ endpoint, standalone = false }: { endpoint: Endpoi
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <MethodBadge method={endpoint.method} />
-            <code className="rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1 font-mono text-[13px] font-semibold text-brand-700 [overflow-wrap:anywhere] dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-200">
+            <code className="rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1 font-mono text-ui font-semibold text-brand-700 [overflow-wrap:anywhere] dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-200">
               {endpoint.path}
             </code>
             <AuthBadge auth={endpoint.auth} />
             {endpoint.requiredRole && (
-              <span className="rounded-full border border-border-light px-2.5 py-[3px] text-[11px] text-text-tertiary">
+              <span className="rounded-full border border-border-light px-2.5 py-[3px] text-2xs text-text-tertiary">
                 min role: <code className="font-mono font-semibold text-text-secondary">{endpoint.requiredRole}</code>
               </span>
             )}
@@ -147,7 +147,7 @@ function RelatedEndpoints({ ids }: { ids: string[] }) {
             >
               <Icon icon={ArrowRight01Icon} size={16} className="mt-0.5 text-brand-500 transition group-hover:translate-x-0.5" />
               <span className="min-w-0 [overflow-wrap:anywhere]">
-                <code className="font-mono text-[13px]">{ep.path}</code>
+                <code className="font-mono text-ui">{ep.path}</code>
                 <span className="text-text-tertiary"> · {ep.title}</span>
               </span>
             </Link>

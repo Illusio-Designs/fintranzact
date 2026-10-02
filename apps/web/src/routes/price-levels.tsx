@@ -98,7 +98,7 @@ function PriceLevelsPage() {
                 <p className="font-semibold text-text-primary">
                   {l.name}
                   {l.isDefault && (
-                    <span className="ml-2 rounded-full bg-brand-600/10 px-2 py-0.5 text-[10px] font-medium text-brand-600">Default</span>
+                    <span className="ml-2 rounded-full bg-brand-600/10 px-2 py-0.5 text-2xs font-medium text-brand-600">Default</span>
                   )}
                 </p>
                 <p className="mt-0.5 text-xs text-text-tertiary">
@@ -177,7 +177,7 @@ function PriceLevelsPage() {
                             />
                             <button
                               type="button"
-                              className="mt-0.5 block w-full text-right text-[10px] text-brand-600 hover:underline"
+                              className="mt-0.5 block w-full text-right text-2xs text-brand-600 hover:underline"
                               onClick={() => setSlabs({ level: l, row: r })}
                             >
                               {extra > 0 ? `+${extra} slab/unit/dated` : "Slabs…"}
@@ -199,7 +199,7 @@ function PriceLevelsPage() {
                   <button className="btn-secondary" onClick={() => setEdits({})} disabled={saveGrid.isPending}>Discard</button>
                 )}
                 <button className="btn-primary" disabled={dirty === 0 || saveGrid.isPending} onClick={save}>
-                  {saveGrid.isPending ? "Saving..." : dirty > 0 ? `Save ${dirty} change${dirty === 1 ? "" : "s"}` : "Save"}
+                  {saveGrid.isPending ? "Saving…" : dirty > 0 ? `Save ${dirty} change${dirty === 1 ? "" : "s"}` : "Save"}
                 </button>
               </div>
             </div>
@@ -253,7 +253,7 @@ function LevelForm({ level, onClose }: { level: Level | null; onClose: () => voi
             disabled={pending || !data.name}
             onClick={() => (level ? update.mutate({ id: level.id, data }) : create.mutate(data))}
           >
-            {pending ? "Saving..." : "Save"}
+            {pending ? "Saving…" : "Save"}
           </button>
         </div>
       }
@@ -305,7 +305,7 @@ function BulkUpdate({ levels, onClose }: { levels: Level[]; onClose: () => void 
             disabled={!valid || bulk.isPending}
             onClick={() => bulk.mutate({ priceLevelId: levelId, basis, percent: pct, round, category: category.trim() || undefined })}
           >
-            {bulk.isPending ? "Updating..." : "Update prices"}
+            {bulk.isPending ? "Updating…" : "Update prices"}
           </button>
         </div>
       }
@@ -423,7 +423,7 @@ function SlabEditor({ level, row, onClose }: { level: Level; row: Row; onClose: 
               })
             }
           >
-            {save.isPending ? "Saving..." : ready.length === 0 && current.length > 0 ? "Remove these slabs" : "Save slabs"}
+            {save.isPending ? "Saving…" : ready.length === 0 && current.length > 0 ? "Remove these slabs" : "Save slabs"}
           </button>
         </div>
       }

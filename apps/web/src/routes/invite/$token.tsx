@@ -160,7 +160,7 @@ function InviteAcceptPage() {
                     disabled={isActing}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-border-light hover:border-border-medium hover:bg-surface-1 transition-colors text-sm font-medium text-text-secondary"
                   >
-                    {createOrgMutation.isPending ? "Creating..." : "I also want my own organization"}
+                    {createOrgMutation.isPending ? "Creating…" : "I also want my own organization"}
                   </button>
                 </>
               )}
@@ -173,7 +173,7 @@ function InviteAcceptPage() {
               <Icon icon={Loading03Icon} size={24} className="text-brand-600 animate-spin" />
             </div>
             <h1 className="text-lg font-semibold text-text-primary mb-1">
-              Accepting your invitation...
+              Accepting your invitation…
             </h1>
             <p className="text-sm text-text-tertiary">
               Just a moment

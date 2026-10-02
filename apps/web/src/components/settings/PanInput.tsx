@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { useFieldErrorToast } from "@/lib/field-error-toast";
 
 interface PanInputProps {
   value: string;
@@ -12,6 +13,8 @@ export function PanInput({ value, onChange, error }: PanInputProps) {
   const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
   const isValid = !value || panRegex.test(value);
   const showError = blurred && value.length > 0 && !isValid;
+  const message = error || (showError ? "Enter a valid PAN: 5 letters, 4 digits, 1 letter (e.g. AAAAA0000A)" : "");
+  useFieldErrorToast("PAN", message);
 
   return (
     <div>
@@ -22,15 +25,14 @@ export function PanInput({ value, onChange, error }: PanInputProps) {
         value={value}
         onChange={(e) => onChange(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
         onBlur={() => setBlurred(true)}
+        aria-invalid={message ? true : undefined}
+        aria-describedby={message ? `${inputId}-error` : undefined}
         maxLength={10}
         placeholder="AAAAA0000A"
         spellCheck={false}
         autoCapitalize="characters"
       />
-      {showError && (
-        <p className="text-[11px] text-red-500 mt-1">Invalid PAN format (5 letters + 4 digits + 1 letter)</p>
-      )}
-      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+      {message && <p id={`${inputId}-error`} className="sr-only">{message}</p>}
     </div>
   );
 }

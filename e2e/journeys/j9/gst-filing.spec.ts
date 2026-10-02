@@ -242,7 +242,7 @@ test.describe("J9 GST filing", () => {
     await expectTheme(page, "light");
     await openPage(page, "Invoices");
     await page.getByRole("button", { name: "Sales", exact: true }).click();
-    await expect(page.getByRole("button", { name: "This Month", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Date range: This Month" }).first()).toBeVisible();
     for (const key of ["boundary", "b2bIntra", "b2bInter", "b2cl", "exempt"]) {
       await expect(listRow(page, booked[key].number)).toHaveCount(1);
     }

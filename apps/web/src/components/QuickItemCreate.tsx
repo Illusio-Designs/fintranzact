@@ -191,7 +191,7 @@ export function QuickItemCreate({
           onChange={(e) => setUnit(e.target.value as Unit)}
         >
           <option value="" disabled>
-            Select unit...
+            Select unit…
           </option>
           {units.map((u) => (
             <option key={u} value={u}>
@@ -214,7 +214,7 @@ export function QuickItemCreate({
             onClick={handleSubmit}
             disabled={createMutation.isPending || !canSubmit}
           >
-            {createMutation.isPending ? "Creating..." : "Create & Select"}
+            {createMutation.isPending ? "Creating…" : "Create & Select"}
           </button>
         </div>
       </div>

@@ -82,7 +82,7 @@ export function StockGroupPicker({ value, onChange, label = "Stock group" }: {
             disabled={!name.trim() || create.isPending}
             onClick={() => create.mutate({ name: name.trim() })}
           >
-            {create.isPending ? "Adding..." : "Add"}
+            {create.isPending ? "Adding…" : "Add"}
           </button>
         </div>
       )}

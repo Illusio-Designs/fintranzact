@@ -48,7 +48,7 @@ export function Combobox({
   value,
   onChange,
   options,
-  placeholder = "Search...",
+  placeholder = "Search…",
   label,
   required,
   error,
@@ -340,7 +340,7 @@ export function Combobox({
           {isLoading ? (
             <li className="px-3 py-2 text-sm text-text-tertiary flex items-center gap-2" role="option" aria-selected={false}>
               <Spinner size="xs" className="shrink-0" />
-              Searching...
+              Searching…
             </li>
           ) : (
             <>

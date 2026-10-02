@@ -304,7 +304,7 @@ function SessionsContent() {
                           {ua.browser} on {ua.os}
                         </span>
                         {session.isCurrent && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400 shrink-0">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400 shrink-0">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                             This device
                           </span>
@@ -667,7 +667,7 @@ function ApiKeysContent() {
                 onClick={handleCreate}
                 disabled={!newKeyName.trim() || createMutation.isPending}
               >
-                {createMutation.isPending ? "Creating..." : "Create Key"}
+                {createMutation.isPending ? "Creating…" : "Create Key"}
               </button>
             </div>
           </div>

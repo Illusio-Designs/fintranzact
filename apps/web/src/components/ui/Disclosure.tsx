@@ -67,7 +67,7 @@ export function Disclosure({
         </span>
 
         {hasFilled && (
-          <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-surface-2 text-text-secondary">
+          <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium bg-surface-2 text-text-secondary">
             {count} filled
           </span>
         )}

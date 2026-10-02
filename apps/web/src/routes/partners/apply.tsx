@@ -16,6 +16,7 @@ import { InputField, SelectField, TextareaField } from "@/components/ui/FormFiel
 import { PhoneInput } from "@/components/ui/PhoneInput";
 import { PARTNER_PROGRAMS, parsePartnerType } from "@/lib/partner-programs";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/useToast";
 
 type ApplySearch = {
   /** Programme to pick on the form, from the "Apply as …" buttons on /partners. */
@@ -59,7 +60,10 @@ function PartnerApplyPage() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [sent, setSent] = useState(false);
 
-  const submit = trpc.partner.submitApplication.useMutation({ onSuccess: () => setSent(true) });
+  const submit = trpc.partner.submitApplication.useMutation({
+    onSuccess: () => setSent(true),
+    onError: (err) => toast.error("Couldn't send your application", err.message),
+  });
 
   // Bot protection: the Turnstile modal hands us a token, then we submit.
   const [showTurnstile, setShowTurnstile] = useState(false);
@@ -241,11 +245,6 @@ function PartnerApplyPage() {
                 />
                 <span>Once approved, list my firm in the Fintranzact partner directory (company name, city and website only).</span>
               </label>
-              {submit.error ? (
-                <p role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-                  {submit.error.message}
-                </p>
-              ) : null}
               <button
                 type="submit"
                 disabled={submit.isPending}

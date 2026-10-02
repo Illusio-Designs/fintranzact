@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
@@ -18,13 +18,13 @@ import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
+import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
+import { usePageSize } from "@/hooks/usePageSize";
 import {
   ArrowDown01Icon,
   Delete02Icon,
-  PauseIcon,
-  PlayIcon,
-  FlashIcon,
-  PencilEdit02Icon,
   BulbIcon,
 } from "@hugeicons/core-free-icons";
 
@@ -33,8 +33,6 @@ export const Route = createFileRoute("/automated-invoices")({
 });
 
 // ── Constants ──────────────────────────────────────────────────
-
-const PAGE_SIZE = 25;
 
 const STATUS_TABS = [
   { value: "", label: "All" },
@@ -150,6 +148,8 @@ function AutomatedInvoicesPage() {
   const [search] = usePageSearch("Search templates…");
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("recurring_invoices", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
 
   const [showFormSlideOver, setShowFormSlideOver] = useState(false);
   const [editTemplateId, setEditTemplateId] = useState<string | null>(null);
@@ -162,9 +162,12 @@ function AutomatedInvoicesPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
+  // Back to page 1 whenever the filter, search or rows per page change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, statusFilter, pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   useHotkeys([
     {
@@ -180,7 +183,10 @@ function AutomatedInvoicesPage() {
   const { data, isFetching, isLoading } = trpc.recurringInvoice.list.useQuery({
     status: (statusFilter || undefined) as "active" | "paused" | "completed" | "expired" | undefined,
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
+  }, {
+    // Keep the current page on screen while the next one loads.
+    placeholderData: (prev) => prev,
   });
 
   const templates = data?.data ?? [];
@@ -439,7 +445,9 @@ function AutomatedInvoicesPage() {
 
   // ── Pagination ─────────────────────────────────────────────────
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // Deleting the last template of the last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   return (
     <div>
@@ -470,7 +478,7 @@ function AutomatedInvoicesPage() {
             <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
               <div
                 className={cn(
-                  "h-full rounded-full transition-all duration-300",
+                  "h-full rounded-full transition-[width] duration-300",
                   planUsage.runsThisMonth >= planUsage.limit
                     ? "bg-red-500"
                     : planUsage.runsThisMonth >= planUsage.limit * 0.8
@@ -489,7 +497,7 @@ function AutomatedInvoicesPage() {
 
       {/* Suggestions Panel */}
       {suggestions && suggestions.length > 0 && (
-        <div className="card mb-5 overflow-hidden">
+        <div className="card mb-5 overflow-clip">
           <button
             type="button"
             className="w-full px-4 py-3 flex items-center justify-between text-left border-b border-border-light hover:bg-surface-1 transition-colors"
@@ -502,7 +510,7 @@ function AutomatedInvoicesPage() {
               <span className="text-sm font-medium text-text-primary">
                 Smart Suggestions
               </span>
-              <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-400">
+              <span className="text-2xs font-medium px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-400">
                 {suggestions.length}
               </span>
             </div>
@@ -544,16 +552,16 @@ function AutomatedInvoicesPage() {
       )}
 
       {/* Filters + Table */}
-      <div className="card mb-5 overflow-hidden">
-        <div className="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-border-light">
-        </div>
-
-        <div className="px-4 py-2 border-b border-border-light">
-          <PillTabs
-            tabs={STATUS_TABS}
-            value={statusFilter}
-            onChange={setStatusFilter}
-          />
+      <div className="card mb-5 overflow-clip">
+        <div className="px-4 py-3 border-b border-border-light">
+          {/* The status tabs scroll sideways on phones instead of wrapping. */}
+          <div className="min-w-0 max-w-full overflow-x-auto">
+            <PillTabs
+              tabs={STATUS_TABS}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
+          </div>
         </div>
 
         {/* Table */}
@@ -576,8 +584,16 @@ function AutomatedInvoicesPage() {
             }
           />
         ) : (
-          <>
-            <div className="overflow-x-auto">
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+            />
+            <TableScroll ref={tableRef}>
               <table className="data-table">
                 <thead>
                   <tr>
@@ -587,14 +603,14 @@ function AutomatedInvoicesPage() {
                     <th>Status</th>
                     <th>Next Run</th>
                     <th className="text-right">Runs</th>
-                    <th></th>
+                    <th className="text-right"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredTemplates.map((template: any) => (
                     <tr
                       key={template.id}
-                      className="group cursor-pointer"
+                      className="cursor-pointer"
                       onClick={() => setDetailTemplateId(template.id)}
                     >
                       <td className="text-text-primary font-medium max-w-[200px] truncate">
@@ -619,92 +635,50 @@ function AutomatedInvoicesPage() {
                         {template.maxRuns ? ` / ${template.maxRuns}` : ""}
                       </td>
                       <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {template.status === "active" && (
-                            <button
-                              onClick={() => pauseMutation.mutate({ id: template.id })}
-                              className="p-1.5 rounded-lg text-text-tertiary hover:text-amber-600 hover:bg-amber-600/[0.08] transition-colors"
-                              aria-label="Pause template"
-                              title="Pause"
-                              disabled={pauseMutation.isPending}
-                            >
-                              <Icon icon={PauseIcon} size={14} />
-                            </button>
-                          )}
-                          {template.status === "paused" && (
-                            <button
-                              onClick={() => resumeMutation.mutate({ id: template.id })}
-                              className="p-1.5 rounded-lg text-text-tertiary hover:text-emerald-600 hover:bg-emerald-600/[0.08] transition-colors"
-                              aria-label="Resume template"
-                              title="Resume"
-                              disabled={resumeMutation.isPending}
-                            >
-                              <Icon icon={PlayIcon} size={14} />
-                            </button>
-                          )}
-                          {(template.status === "active" || template.status === "paused") && (
-                            <button
-                              onClick={() => runNowMutation.mutate({ id: template.id })}
-                              className="p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition-colors"
-                              aria-label="Run now"
-                              title="Run Now"
-                              disabled={runNowMutation.isPending}
-                            >
-                              <Icon icon={FlashIcon} size={14} />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => openEdit(template)}
-                            className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors"
-                            aria-label="Edit template"
-                            title="Edit"
-                          >
-                            <Icon icon={PencilEdit02Icon} size={14} />
-                          </button>
-                          <button
-                            onClick={() => deleteConfirm.requestDelete(template.id, template.name || "Untitled")}
-                            className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
-                            aria-label="Delete template"
-                            title="Delete"
-                          >
-                            <Icon icon={Delete02Icon} size={14} />
-                          </button>
-                        </div>
+                        {/* One menu instead of icons that only showed on hover. */}
+                        <RowActions
+                          label={template.name || "Untitled"}
+                          items={tidyMenu([
+                            { label: "Open", hint: "Enter", onSelect: () => setDetailTemplateId(template.id) },
+                            template.status === "active" && {
+                              label: "Pause",
+                              disabled: pauseMutation.isPending,
+                              onSelect: () => pauseMutation.mutate({ id: template.id }),
+                            },
+                            template.status === "paused" && {
+                              label: "Resume",
+                              disabled: resumeMutation.isPending,
+                              onSelect: () => resumeMutation.mutate({ id: template.id }),
+                            },
+                            (template.status === "active" || template.status === "paused") && {
+                              label: "Run now",
+                              disabled: runNowMutation.isPending,
+                              onSelect: () => runNowMutation.mutate({ id: template.id }),
+                            },
+                            { label: "Edit", onSelect: () => openEdit(template) },
+                            { kind: "separator" },
+                            {
+                              label: "Delete template",
+                              danger: true,
+                              onSelect: () => deleteConfirm.requestDelete(template.id, template.name || "Untitled"),
+                            },
+                          ])}
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-
-            {/* Pagination footer */}
-            <div className="px-4 py-3 border-t border-border-light flex items-center justify-between">
-              <p className="text-xs text-text-tertiary">
-                {total.toLocaleString()} template{total !== 1 ? "s" : ""}
-              </p>
-              {totalPages > 1 && (
-                <div className="flex items-center gap-1">
-                  <button
-                    className="btn-ghost text-xs px-2 py-1"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                  >
-                    Previous
-                  </button>
-                  <span className="text-xs text-text-secondary tabular-nums px-2">
-                    Page {page} of {totalPages}
-                  </span>
-                  <button
-                    className="btn-ghost text-xs px-2 py-1"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages}
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
+          </div>
         )}
       </div>
 
@@ -730,8 +704,8 @@ function AutomatedInvoicesPage() {
             >
               {isSubmitting
                 ? editTemplateId
-                  ? "Saving..."
-                  : "Creating..."
+                  ? "Saving…"
+                  : "Creating…"
                 : editTemplateId
                   ? "Save Changes"
                   : "Create Template"}
@@ -856,7 +830,7 @@ function AutomatedInvoicesPage() {
                       {/* Item picker (optional) */}
                       {itemOptions.length > 0 && (
                         <div>
-                          <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                          <label className="block text-2xs font-medium text-text-tertiary mb-1">
                             Item (optional)
                           </label>
                           <Listbox
@@ -872,12 +846,12 @@ function AutomatedInvoicesPage() {
                               }
                             }}
                             options={[{ value: "", label: "None" }, ...itemOptions]}
-                            placeholder="Link to an item..."
+                            placeholder="Link to an item…"
                           />
                         </div>
                       )}
                       <div>
-                        <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                        <label className="block text-2xs font-medium text-text-tertiary mb-1">
                           Item Name <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -891,7 +865,7 @@ function AutomatedInvoicesPage() {
                       </div>
                       <div className="grid grid-cols-4 gap-2">
                         <div>
-                          <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                          <label className="block text-2xs font-medium text-text-tertiary mb-1">
                             Qty
                           </label>
                           <input
@@ -906,7 +880,7 @@ function AutomatedInvoicesPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                          <label className="block text-2xs font-medium text-text-tertiary mb-1">
                             Unit Price
                           </label>
                           <input
@@ -921,7 +895,7 @@ function AutomatedInvoicesPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                          <label className="block text-2xs font-medium text-text-tertiary mb-1">
                             Tax %
                           </label>
                           <input
@@ -936,7 +910,7 @@ function AutomatedInvoicesPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                          <label className="block text-2xs font-medium text-text-tertiary mb-1">
                             Discount %
                           </label>
                           <input
@@ -954,7 +928,7 @@ function AutomatedInvoicesPage() {
                       {/* Free-text line notes — rendered as italic secondary
                           text beneath the item name on the generated PDFs. */}
                       <div>
-                        <label className="block text-[10px] font-medium text-text-tertiary mb-1">
+                        <label className="block text-2xs font-medium text-text-tertiary mb-1">
                           Notes (optional)
                         </label>
                         <div className="relative">
@@ -969,7 +943,7 @@ function AutomatedInvoicesPage() {
                           />
                           {li.notes.length > 400 && (
                             <p
-                              className={`absolute right-2 bottom-1 text-[10px] tabular-nums pointer-events-none ${
+                              className={`absolute right-2 bottom-1 text-2xs tabular-nums pointer-events-none ${
                                 li.notes.length > 500 ? "text-red-500" : "text-text-tertiary"
                               }`}
                               aria-live="polite"
@@ -1170,11 +1144,11 @@ function TemplateDetailSlideOver({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-surface-1">
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Item</th>
-                      <th className="text-right px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Qty</th>
-                      <th className="text-right px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Price</th>
-                      <th className="text-right px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Tax%</th>
-                      <th className="text-right px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Amount</th>
+                      <th className="text-left px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Item</th>
+                      <th className="text-right px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Qty</th>
+                      <th className="text-right px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Price</th>
+                      <th className="text-right px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Tax%</th>
+                      <th className="text-right px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Amount</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -1241,10 +1215,10 @@ function TemplateDetailSlideOver({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-surface-1">
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Date</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Invoice #</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Status</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-text-tertiary uppercase">Error</th>
+                      <th className="text-left px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Date</th>
+                      <th className="text-left px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Invoice #</th>
+                      <th className="text-left px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Status</th>
+                      <th className="text-left px-3 py-2 text-2xs font-medium text-text-tertiary uppercase">Error</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-light">
@@ -1309,7 +1283,7 @@ function TemplateDetailSlideOver({
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[11px] font-medium text-text-tertiary uppercase">{label}</dt>
+      <dt className="text-2xs font-medium text-text-tertiary uppercase">{label}</dt>
       <dd className="text-sm text-text-primary mt-0.5">{value}</dd>
     </div>
   );

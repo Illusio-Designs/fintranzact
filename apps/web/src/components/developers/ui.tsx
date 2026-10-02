@@ -29,7 +29,7 @@ export function MethodBadge({ method, size = "md" }: { method: EndpointDef["meth
     <span
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-full border font-mono font-bold tracking-wide",
-        size === "sm" ? "w-[38px] py-px text-[9px]" : "px-2.5 py-[3px] text-[10px]",
+        size === "sm" ? "w-[38px] py-px text-2xs" : "px-2.5 py-[3px] text-2xs",
         isGet
           ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300"
           : "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/25 dark:bg-orange-400/10 dark:text-orange-300",
@@ -60,7 +60,7 @@ const AUTH_LABELS: Record<EndpointDef["auth"], { label: string; className: strin
 export function AuthBadge({ auth }: { auth: EndpointDef["auth"] }) {
   const { label, className } = AUTH_LABELS[auth];
   return (
-    <span className={cn("inline-flex items-center rounded-full border px-2.5 py-[3px] text-[11px] font-semibold", className)}>
+    <span className={cn("inline-flex items-center rounded-full border px-2.5 py-[3px] text-2xs font-semibold", className)}>
       {label}
     </span>
   );

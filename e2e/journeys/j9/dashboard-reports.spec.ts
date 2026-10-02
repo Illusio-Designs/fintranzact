@@ -54,11 +54,12 @@ async function columnOf(page: Page, header: string) {
   return i;
 }
 
-/** Pick "Last Month" in the page's date-range bar. */
+/** Pick "Last Month" from the page's date menu. */
 async function lastMonth(page: Page) {
-  const button = page.getByRole("button", { name: "Last Month", exact: true }).first();
-  await button.click();
-  await expect(button).toHaveAttribute("aria-pressed", "true");
+  const dateBtn = page.getByRole("button", { name: /^Date range:/ }).first();
+  await dateBtn.click();
+  await page.getByRole("menuitemradio", { name: "Last Month" }).click();
+  await expect(dateBtn).toHaveAccessibleName("Date range: Last Month");
 }
 
 test.describe("J10 dashboard & reports", () => {

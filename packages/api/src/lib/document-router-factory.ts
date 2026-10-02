@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { documentIsIntraState, withAllocatedLines } from "./document-totals.js";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -28,6 +28,8 @@ import { assertNotLockedByGovernment } from "./government-lock.js";
 import { assertInBusiness } from "./business-scope.js";
 import { buildBusinessDateFilter } from "./business-date.js";
 import { escapeLike } from "./escape-like.js";
+import { documentListOrder, documentSortSchema } from "./document-list-order.js";
+import { documentFilterConditions, documentFilterSchema } from "./document-list-filters.js";
 import { fulfilmentStatuses, isPendingTracked } from "./order-fulfilment.js";
 import { assertLineExtras, lineExtras } from "./line-extras.js";
 import { resolveDeliveryMethod } from "./delivery-methods.js";
@@ -149,6 +151,8 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           itemId: z.string().uuid().optional(),
           /** Orders, challans and GRNs: filter by how much is still pending. */
           fulfilment: z.enum(["open", "partial", "fulfilled", "closed"]).optional(),
+          ...documentSortSchema,
+          ...documentFilterSchema,
           ...paginationSchema.shape,
         })
       )
@@ -169,6 +173,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           }
         }
         if (input.partyId) conditions.push(eq(invoices.partyId, input.partyId));
+        conditions.push(...documentFilterConditions(input));
         conditions.push(...buildBusinessDateFilter(invoices, { from: input.fromDate, to: input.toDate }));
         if (input.search) {
           const term = `%${escapeLike(input.search)}%`;
@@ -212,8 +217,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
           const candidates = await ctx.db
             .select({ id: invoices.id, status: invoices.status, deletedAt: invoices.deletedAt, closedAt: invoices.closedAt })
             .from(invoices)
+            .innerJoin(parties, eq(parties.id, invoices.partyId))
             .where(and(...conditions))
-            .orderBy(desc(invoices.createdAt));
+            .orderBy(...documentListOrder(input.sortBy, input.sortDir, "created"));
           const statuses = await fulfilmentStatuses(ctx.db, ctx.businessId, candidates);
           const matching = candidates.filter((c) => statuses.get(c.id) === input.fulfilment).map((c) => c.id);
           const pageIds = matching.slice(offset, offset + input.limit);
@@ -221,8 +227,9 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             .select(columns)
             .from(invoices)
             .innerJoin(parties, eq(parties.id, invoices.partyId))
-            .where(and(eq(invoices.businessId, ctx.businessId), inArray(invoices.id, pageIds)))
-            .orderBy(desc(invoices.createdAt));
+            .where(and(eq(invoices.businessId, ctx.businessId), inArray(invoices.id, pageIds)));
+          // Keep the order worked out above.
+          rows.sort((a, b) => pageIds.indexOf(a.id) - pageIds.indexOf(b.id));
           const data = rows.map(({ deletedAt: _deletedAt, ...r }) => ({ ...r, fulfilmentStatus: statuses.get(r.id) ?? null }));
           return { data, total: matching.length, page: input.page, limit: input.limit };
         }
@@ -233,7 +240,7 @@ export function createDocumentRouter(config: DocumentRouterConfig) {
             .from(invoices)
             .innerJoin(parties, eq(parties.id, invoices.partyId))
             .where(and(...conditions))
-            .orderBy(desc(invoices.createdAt))
+            .orderBy(...documentListOrder(input.sortBy, input.sortDir, "created"))
             .limit(input.limit)
             .offset(offset),
           ctx.db

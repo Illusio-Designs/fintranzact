@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { keepPreviousData } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
@@ -10,6 +9,8 @@ import { InputField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { usePageSize } from "@/hooks/usePageSize";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { WarehouseSelect, formatQty, unitKey, useWarehouses } from "@/components/inventory/shared";
 import { useBarcodeSetup } from "@/components/barcodes/BarcodeSymbol";
@@ -17,8 +18,6 @@ import { useBarcodeSetup } from "@/components/barcodes/BarcodeSymbol";
 export const Route = createFileRoute("/physical-stock")({
   component: PhysicalStockPage,
 });
-
-const PAGE_SIZE = 20;
 
 type View =
   | { name: "home" }
@@ -159,7 +158,17 @@ function HomeScreen({ onStart, onOpen }: { onStart: (warehouseId: string) => voi
   const { data: warehouses } = useWarehouses();
   const [warehouseId, setWarehouseId] = useState("");
   const [page, setPage] = useState(1);
-  const { data } = trpc.stock.counts.useQuery({ page, limit: PAGE_SIZE }, { placeholderData: keepPreviousData });
+  const [pageSize, setPageSize] = usePageSize("physical-counts", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
+  // Back to page 1 when rows per page change.
+  useEffect(() => setPage(1), [pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
+  const { data, isFetching } = trpc.stock.counts.useQuery(
+    { page, limit: pageSize },
+    // Keep the current page on screen while the next one loads.
+    { placeholderData: (prev) => prev },
+  );
 
   useEffect(() => {
     if (!warehouseId && warehouses?.length) {
@@ -167,7 +176,10 @@ function HomeScreen({ onStart, onOpen }: { onStart: (warehouseId: string) => voi
     }
   }, [warehouses, warehouseId]);
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // The last page emptied out (or rows per page grew): step back.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   return (
     <div>
@@ -182,7 +194,7 @@ function HomeScreen({ onStart, onOpen }: { onStart: (warehouseId: string) => voi
         </button>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-clip">
         <div className="border-b border-border-light px-4 py-3">
           <h2 className="text-sm font-semibold text-text-primary">Past counts</h2>
         </div>
@@ -191,9 +203,10 @@ function HomeScreen({ onStart, onOpen }: { onStart: (warehouseId: string) => voi
         ) : data.data.length === 0 ? (
           <EmptyState title="No counts yet" description="Finished scans and their reports are listed here." />
         ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="data-table">
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination placement="top" page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={pageSize} />
+            <TableScroll ref={tableRef}>
+              <table className="data-table w-full">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -230,11 +243,16 @@ function HomeScreen({ onStart, onOpen }: { onStart: (warehouseId: string) => voi
                   ))}
                 </tbody>
               </table>
-            </div>
-            <div className="border-t border-border-light px-4 py-3">
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={data.total} pageSize={PAGE_SIZE} />
-            </div>
-          </>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -523,7 +541,7 @@ function ReportBody({ report }: { report: ReportData }) {
                     <tr key={unitKey(r.itemId, r.variantId)}>
                       <td>
                         <p className="font-medium text-text-primary">{r.name}</p>
-                        <span className={cn("mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold", kindStyle[r.kind])}>{r.kind}</span>
+                        <span className={cn("mt-1 inline-block rounded-full px-2 py-0.5 text-2xs font-bold", kindStyle[r.kind])}>{r.kind}</span>
                       </td>
                       <td className="text-right tabular-nums">{formatQty(r.booksN)}</td>
                       <td className="text-right tabular-nums">{formatQty(r.scannedN)}</td>

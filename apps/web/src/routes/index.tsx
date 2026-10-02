@@ -277,7 +277,7 @@ function TargetRow({ target }: { target: TargetProgress }) {
         <span className="text-xs font-medium text-text-primary">
           {getTargetLabel(target)}
         </span>
-        <span className="text-[11px] tabular-nums text-text-tertiary">
+        <span className="text-2xs tabular-nums text-text-tertiary">
           {currentFormatted} / {targetFormatted}
         </span>
       </div>
@@ -299,10 +299,10 @@ function TargetRow({ target }: { target: TargetProgress }) {
 
       {/* Status row */}
       <div className="flex items-center justify-between mt-1">
-        <span className="text-[11px] text-text-tertiary">
+        <span className="text-2xs text-text-tertiary">
           {daysLeft === 0 ? "Last day" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} remaining`}
         </span>
-        <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium", msgColor)}>
+        <span className={cn("inline-flex items-center gap-1 text-2xs font-medium", msgColor)}>
           <Icon icon={meta.icon} size={12} />
           {meta.message}
         </span>
@@ -602,7 +602,7 @@ function InvoiceStatusChart({ fromDate, toDate }: { fromDate?: string; toDate?: 
       />
       <Link
         to="/invoices"
-        className="mt-auto border-t border-border-light px-5 py-3 text-[13px] font-semibold text-brand-700 hover:bg-surface-1 dark:text-brand-300"
+        className="mt-auto border-t border-border-light px-5 py-3 text-ui font-semibold text-brand-700 hover:bg-surface-1 dark:text-brand-300"
       >
         View all invoices →
       </Link>
@@ -853,7 +853,7 @@ function CollectionEfficiencyWidget({ fromDate, toDate }: { fromDate?: string; t
         </div>
         {delta !== null && (
           <span className={cn(
-            "flex items-center gap-0.5 text-[11px] font-medium tabular-nums shrink-0",
+            "flex items-center gap-0.5 text-2xs font-medium tabular-nums shrink-0",
             isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
           )}>
             <Icon icon={isUp ? ArrowUp01Icon : ArrowDown01Icon} size={12} strokeWidth={2.25} />
@@ -873,11 +873,11 @@ function CollectionEfficiencyWidget({ fromDate, toDate }: { fromDate?: string; t
       {/* Progress bar */}
       <div className="w-full h-2 rounded-full bg-surface-2 overflow-hidden">
         <div
-          className={cn("h-full rounded-full transition-all duration-500", barColor)}
+          className={cn("h-full rounded-full transition-[width] duration-500", barColor)}
           style={{ width: `${Math.min(pct, 100)}%` }}
         />
       </div>
-      <div className="flex justify-between text-[11px] text-text-tertiary">
+      <div className="flex justify-between text-2xs text-text-tertiary">
         <span>{formatCurrency(data.totalCollected)} collected</span>
         <span>{formatCurrency(data.totalInvoiced)} invoiced</span>
       </div>
@@ -907,7 +907,7 @@ function ExpenseCategoryWidget({ fromDate, toDate }: { fromDate?: string; toDate
   return (
     <div className={cn(PANEL, "overflow-hidden")}>
       <PanelHeader title="Expenses by Category" icon={PieChartIcon}>
-        <span className="text-[11px] text-text-tertiary tabular-nums">{formatCurrency(data.grandTotal)} total</span>
+        <span className="text-2xs text-text-tertiary tabular-nums">{formatCurrency(data.grandTotal)} total</span>
       </PanelHeader>
       <div className="px-4 py-4" style={{ height: 260 }}>
         {renderResponsive(
@@ -971,11 +971,11 @@ function MonthlyComparisonWidget() {
   if (!data) return null;
 
   function DeltaBadge({ pct }: { pct: number | null }) {
-    if (pct === null) return <span className="text-[11px] text-text-tertiary">—</span>;
+    if (pct === null) return <span className="text-2xs text-text-tertiary">—</span>;
     const isUp = pct >= 0;
     return (
       <span className={cn(
-        "flex items-center gap-0.5 text-[11px] font-semibold tabular-nums",
+        "flex items-center gap-0.5 text-2xs font-semibold tabular-nums",
         isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
       )}>
         <Icon icon={isUp ? ArrowUp01Icon : ArrowDown01Icon} size={12} strokeWidth={2.25} />
@@ -995,7 +995,7 @@ function MonthlyComparisonWidget() {
       <PanelHeader title="Month on Month" icon={Analytics01Icon} />
       <div className="px-4 py-3">
         {/* Header row */}
-        <div className="grid grid-cols-4 gap-2 mb-2 text-[11px] font-medium text-text-tertiary">
+        <div className="grid grid-cols-4 gap-2 mb-2 text-2xs font-medium text-text-tertiary">
           <span />
           <span className="text-right">{data.prevMonth}</span>
           <span className="text-right">{data.currMonth}</span>
@@ -1066,7 +1066,7 @@ function SummaryCards({
         {hero.map((c) => (
           <div key={c.label} className={cn(PANEL, "p-4 sm:p-5")}>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[13px] font-semibold text-text-tertiary">{c.label}</span>
+              <span className="text-ui font-semibold text-text-tertiary">{c.label}</span>
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300">
                 <Icon icon={c.icon} size={18} />
               </span>
@@ -1097,11 +1097,11 @@ function SummaryCards({
               )}
             />
             <div className="min-w-0">
-              <p className="text-[11px] font-medium text-text-tertiary">{c.label}</p>
+              <p className="text-2xs font-medium text-text-tertiary">{c.label}</p>
               <p
                 data-testid={`dashboard-${c.label.toLowerCase().replace(/\s+/g, "-")}`}
                 className={cn(
-                  "truncate text-[13.5px] font-bold tabular-nums sm:text-[15px]",
+                  "truncate text-ui font-bold tabular-nums sm:text-[15px]",
                   c.signed
                     ? c.value >= 0
                       ? "text-emerald-700 dark:text-emerald-400"
@@ -1140,7 +1140,7 @@ function RecentInvoices() {
   return (
     <div className={cn(PANEL, "overflow-hidden")}>
       <PanelHeader title="Recent invoices" icon={Invoice01Icon}>
-        <Link to="/invoices" className="text-[13px] font-semibold text-brand-700 hover:underline dark:text-brand-300">
+        <Link to="/invoices" className="text-ui font-semibold text-brand-700 hover:underline dark:text-brand-300">
           See all
         </Link>
       </PanelHeader>
@@ -1150,7 +1150,7 @@ function RecentInvoices() {
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[520px] text-sm">
             <thead>
-              <tr className="bg-surface-1 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-text-tertiary">
+              <tr className="bg-surface-1 text-left text-2xs font-semibold uppercase tracking-[0.06em] text-text-tertiary">
                 <th scope="col" className="px-5 py-2 font-semibold">Invoice</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Party</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Date</th>
@@ -1215,7 +1215,7 @@ function GstThisMonth() {
           3B due {formatDateShort(due)}
         </span>
       </div>
-      <dl className="mt-3 space-y-2 text-[13.5px] text-[#c3cee6]">
+      <dl className="mt-3 space-y-2 text-ui text-[#c3cee6]">
         <div className="flex justify-between">
           <dt>Output GST</dt>
           <dd className="font-semibold tabular-nums text-white">{formatCurrency(String(output))}</dd>

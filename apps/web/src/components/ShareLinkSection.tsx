@@ -65,7 +65,7 @@ export function ShareLinkSection({ documentId, documentLabel, partyPhone }: Shar
 
   return (
     <div data-testid="share-link-section">
-      <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide mb-2">Share link</p>
+      <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">Share link</p>
       {!link ? (
         <div className="card p-3 flex items-center justify-between gap-3">
           <p className="text-xs text-text-secondary">
@@ -108,7 +108,7 @@ export function ShareLinkSection({ documentId, documentLabel, partyPhone }: Shar
               WhatsApp
             </a>
           </div>
-          <div className="flex items-center justify-between text-[11px] text-text-tertiary">
+          <div className="flex items-center justify-between text-2xs text-text-tertiary">
             <span>
               {link.viewCount === 0
                 ? "Not opened yet"

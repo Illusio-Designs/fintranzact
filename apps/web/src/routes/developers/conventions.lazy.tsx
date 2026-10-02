@@ -63,7 +63,7 @@ function ConventionsGuide() {
           <dl className="mt-5 divide-y divide-border-light overflow-hidden rounded-xl border border-border-light">
             {CONVENTIONS.map((item) => (
               <div key={item.key} className="grid grid-cols-1 gap-1 px-4 py-4 sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-4">
-                <dt className="font-mono text-[13px] font-bold text-brand-700 dark:text-brand-200">{item.key}</dt>
+                <dt className="font-mono text-ui font-bold text-brand-700 dark:text-brand-200">{item.key}</dt>
                 <dd className="text-[15px] leading-relaxed text-text-secondary [overflow-wrap:anywhere]">
                   <RichText text={item.value} />
                 </dd>

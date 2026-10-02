@@ -11,26 +11,26 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon, title, description, encouragement, action }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3">
+    <div className="flex flex-col items-center justify-center py-14 gap-1.5 text-center animate-fade-in">
       {icon && (
-        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-surface-2 text-text-tertiary">
+        <div className="mb-2 flex items-center justify-center w-11 h-11 rounded-xl bg-surface-2 text-text-secondary">
           {icon}
         </div>
       )}
-      <p className="text-sm font-semibold text-text-primary">
+      <p className="text-[15px] font-semibold text-text-primary">
         {title}
       </p>
       {description && (
-        <p className="text-sm text-center max-w-xs text-text-tertiary">
+        <p className="text-ui text-center max-w-sm text-text-tertiary">
           {description}
         </p>
       )}
       {encouragement && (
-        <p className="text-xs text-center max-w-xs text-text-tertiary/70 italic">
+        <p className="text-xs text-center max-w-sm text-text-tertiary">
           {encouragement}
         </p>
       )}
-      {action && <div className="mt-1">{action}</div>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }

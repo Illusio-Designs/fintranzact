@@ -34,28 +34,28 @@ export function StatCard({
     return (
       <div
         className={cn(
-          "bg-surface rounded-xl border border-border px-4 py-3",
+          "card px-4 py-3",
           accentColor && `border-l-4 ${accentColor}`,
           className,
         )}
       >
         {chip}
-        <p className={cn("text-[11px] font-semibold uppercase tracking-wider text-text-tertiary", labelColor)}>
+        <p className={cn("text-ui font-medium text-text-tertiary", labelColor)}>
           {label}
         </p>
         <p
           className={cn(
-            "text-2xl font-semibold tabular-nums mt-1",
+            "text-2xl font-semibold tracking-tight tabular-nums mt-0.5",
             valueColor ?? "text-text-primary",
           )}
         >
           {value}
         </p>
-        {note && <p className="text-sm text-text-secondary mt-0.5">{note}</p>}
+        {note && <p className="text-xs text-text-tertiary mt-0.5">{note}</p>}
         {subItems && subItems.length > 0 && (
           <div className="mt-2 space-y-0.5">
             {subItems.map((item) => (
-              <p key={item.label} className="text-[11px] text-text-tertiary">
+              <p key={item.label} className="text-2xs text-text-tertiary">
                 {item.label}: {item.value}
               </p>
             ))}
@@ -75,20 +75,20 @@ export function StatCard({
         )}
       >
         {chip}
-        <p className={cn("text-xs font-medium text-text-tertiary mb-1", labelColor)}>{label}</p>
+        <p className={cn("text-ui font-medium text-text-tertiary mb-0.5", labelColor)}>{label}</p>
         <p
           className={cn(
-            "text-xl font-bold tabular-nums",
+            "text-xl font-semibold tracking-tight tabular-nums",
             valueColor ?? "text-text-primary",
           )}
         >
           {value}
         </p>
-        {note && <p className="text-sm text-text-secondary mt-0.5">{note}</p>}
+        {note && <p className="text-xs text-text-tertiary mt-0.5">{note}</p>}
         {subItems && subItems.length > 0 && (
           <div className="mt-2 space-y-0.5">
             {subItems.map((item) => (
-              <p key={item.label} className="text-[11px] text-text-tertiary">
+              <p key={item.label} className="text-2xs text-text-tertiary">
                 {item.label}: {item.value}
               </p>
             ))}
@@ -108,7 +108,7 @@ export function StatCard({
       )}
     >
       {chip}
-      <p className={cn("text-xs text-text-tertiary mb-1", labelColor)}>{label}</p>
+      <p className={cn("text-ui font-medium text-text-tertiary mb-0.5", labelColor)}>{label}</p>
       <p
         className={cn(
           "text-base font-semibold tabular-nums",
@@ -117,11 +117,11 @@ export function StatCard({
       >
         {value}
       </p>
-      {note && <p className="text-sm text-text-secondary mt-0.5">{note}</p>}
+      {note && <p className="text-xs text-text-tertiary mt-0.5">{note}</p>}
       {subItems && subItems.length > 0 && (
         <div className="mt-2 space-y-0.5">
           {subItems.map((item) => (
-            <p key={item.label} className="text-[11px] text-text-tertiary">
+            <p key={item.label} className="text-2xs text-text-tertiary">
               {item.label}: {item.value}
             </p>
           ))}

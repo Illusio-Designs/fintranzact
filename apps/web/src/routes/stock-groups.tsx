@@ -177,7 +177,7 @@ function StockGroupsPage() {
               Cancel
             </button>
             <button className="btn-primary" disabled={pending || !editing?.name.trim()} onClick={() => save().catch(() => {})}>
-              {pending ? "Saving..." : "Save"}
+              {pending ? "Saving…" : "Save"}
             </button>
           </div>
         }
@@ -244,7 +244,7 @@ function StockGroupsPage() {
                   )
                 }
               >
-                {remove.isPending ? "Deleting..." : "Delete group"}
+                {remove.isPending ? "Deleting…" : "Delete group"}
               </button>
             </div>
           </div>

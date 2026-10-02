@@ -1,32 +1,31 @@
 /**
- * Pagination — prev/next navigation bar for paginated lists
+ * Pagination — page bar above and below paginated lists
  *
  * Pagination appears at the bottom of every paginated list in Fintranzact —
  * invoices, parties, items, expenses.  Correctness here directly impacts
  * usability: a disabled Prev button on page 1 prevents navigating to a
  * non-existent page 0; a disabled Next on the last page prevents an empty
- * results fetch.  The "Showing X-Y of Z" summary helps the user understand
+ * results fetch.  The "1–20 of 50" range helps the user understand
  * where they are in the full dataset without having to count pages.
  *
  * These tests verify:
  *   1. The component renders null when totalPages <= 1 so single-page lists
  *      don't show unnecessary navigation chrome.
- *   2. The "Showing X-Y of Z" text is computed correctly from page, pageSize
+ *   2. The "1–20 of 50" range text is computed correctly from page, pageSize
  *      and total, including boundary conditions (last page with a partial
  *      page of results).
  *   3. The Prev button is disabled on page 1 to prevent navigating to page 0.
  *   4. The Next button is disabled on the last page to prevent overfetch.
  *   5. Clicking Prev calls onPageChange(page - 1), decrementing the page.
  *   6. Clicking Next calls onPageChange(page + 1), incrementing the page.
- *   7. The page indicator text shows "X / Y" so users always know their
- *      current position relative to the total page count.
+ *   7. Page numbers jump straight to a page; the current one is marked.
  *   8. Neither button is disabled on a middle page, allowing free navigation.
  */
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Pagination } from "../Pagination";
+import { Pagination, pageList } from "../Pagination";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -82,47 +81,24 @@ describe("Pagination — prev/next navigation bar for paginated lists", () => {
     });
   });
 
-  // ─── Showing X-Y of Z text ────────────────────────────────────────────────
+  // ─── Range text ────────────────────────────────────────────────
 
-  describe("'Showing X-Y of Z' summary text", () => {
-    it("shows the correct range for the first page: Showing 1-20 of 50", () => {
+  describe("range text: which rows are on screen", () => {
+    it("shows 1–20 of 50 on the first page", () => {
       renderPagination({ page: 1, totalPages: 3, total: 50, pageSize: 20 });
-
-      // The component renders an en-dash (–) between start and end.
-      expect(screen.getByText(/showing 1/i)).toBeInTheDocument();
-      expect(screen.getByText(/of 50/i)).toBeInTheDocument();
+      expect(screen.getByText("1–20 of 50")).toBeInTheDocument();
     });
 
-    it("shows the correct range for a middle page: Showing 21-40 of 50", () => {
-      renderPagination({ page: 2, totalPages: 3, total: 50, pageSize: 20 });
-
-      expect(screen.getByText(/21/)).toBeInTheDocument();
-      expect(screen.getByText(/40/)).toBeInTheDocument();
-    });
-
-    it("caps the end value at total on the last partial page: Showing 41-50 of 50 (not 41-60)", () => {
+    it("caps the end at the total on the last, partial page: 41–50, not 41–60", () => {
       renderPagination({ page: 3, totalPages: 3, total: 50, pageSize: 20 });
-
-      // The last page has only 10 items, so end should be 50, not 60.
-      const summaryText = screen.getByText(/showing/i).textContent;
-      expect(summaryText).toMatch(/41/);
-      expect(summaryText).toMatch(/50/);
-      // Ensure 60 does not appear — that would indicate Math.min was not applied.
-      expect(summaryText).not.toMatch(/60/);
+      expect(screen.getByText("41–50 of 50")).toBeInTheDocument();
     });
 
-    it("shows Showing 1-10 of 10 when all results fit on one page and totalPages is exactly 2 (edge case)", () => {
-      // 15 items, pageSize 10: page 1 shows 1-10, page 2 shows 11-15.
-      renderPagination({ page: 1, totalPages: 2, total: 15, pageSize: 10 });
-
-      const summaryText = screen.getByText(/showing/i).textContent;
-      expect(summaryText).toMatch(/1/);
-      expect(summaryText).toMatch(/10/);
-      expect(summaryText).toMatch(/15/);
+    it("writes large totals the Indian way", () => {
+      renderPagination({ page: 1, totalPages: 500, total: 12500, pageSize: 25 });
+      expect(screen.getByText("1–25 of 12,500")).toBeInTheDocument();
     });
   });
-
-  // ─── Prev button disabled state ───────────────────────────────────────────
 
   describe("Prev button disabled state", () => {
     it("disables the Prev button on page 1 to prevent navigating to a non-existent page 0", () => {
@@ -261,29 +237,51 @@ describe("Pagination — prev/next navigation bar for paginated lists", () => {
 
   // ─── Page indicator text ──────────────────────────────────────────────────
 
-  describe("page indicator text — current position relative to total pages", () => {
-    it("shows '2 / 3' on page 2 of 3 so users know their exact position in the page sequence", () => {
-      renderPagination({ page: 2, totalPages: 3, total: 50, pageSize: 20 });
-
-      expect(screen.getByText("2 / 3")).toBeInTheDocument();
+  describe("page numbers", () => {
+    it("marks the current page so screen readers announce it", () => {
+      renderPagination({ page: 2, totalPages: 3 });
+      expect(screen.getByRole("button", { name: "Page 2" })).toHaveAttribute("aria-current", "page");
+      expect(screen.getByRole("button", { name: "Page 1" })).not.toHaveAttribute("aria-current");
     });
 
-    it("shows '1 / 5' on page 1 of 5", () => {
-      renderPagination({ page: 1, totalPages: 5, total: 100, pageSize: 20 });
-
-      expect(screen.getByText("1 / 5")).toBeInTheDocument();
+    it("jumps straight to a page when its number is clicked", async () => {
+      const onPageChange = vi.fn();
+      renderPagination({ page: 1, totalPages: 3, onPageChange });
+      await userEvent.click(screen.getByRole("button", { name: "Page 3" }));
+      expect(onPageChange).toHaveBeenCalledWith(3);
     });
 
-    it("shows '5 / 5' on the last page of 5", () => {
-      renderPagination({ page: 5, totalPages: 5, total: 100, pageSize: 20 });
-
-      expect(screen.getByText("5 / 5")).toBeInTheDocument();
-    });
-
-    it("shows '2 / 2' on a two-page list when on the second page", () => {
-      renderPagination({ page: 2, totalPages: 2, total: 25, pageSize: 20 });
-
-      expect(screen.getByText("2 / 2")).toBeInTheDocument();
+    it("shortens long lists to first, last and the pages around the current one", () => {
+      expect(pageList(1, 20)).toEqual([1, 2, 3, 4, 5, "…", 20]);
+      expect(pageList(10, 20)).toEqual([1, "…", 9, 10, 11, "…", 20]);
+      expect(pageList(20, 20)).toEqual([1, "…", 16, 17, 18, 19, 20]);
+      expect(pageList(4, 6)).toEqual([1, 2, 3, 4, 5, 6]);
     });
   });
+
+  describe("rows per page", () => {
+    it("offers 10, 25, 50 and 100 rows and reports the choice", async () => {
+      const onPageSizeChange = vi.fn();
+      renderPagination({ page: 1, totalPages: 2, total: 40, pageSize: 25, onPageSizeChange });
+      await userEvent.click(screen.getByRole("combobox", { name: "Rows per page" }));
+      await userEvent.click(screen.getByRole("option", { name: "50" }));
+      expect(onPageSizeChange).toHaveBeenCalledWith(50);
+    });
+
+    it("is shown even when everything fits on one page, so a smaller page can be picked", () => {
+      renderPagination({ page: 1, totalPages: 1, total: 18, pageSize: 25, onPageSizeChange: vi.fn() });
+      expect(screen.getByRole("combobox", { name: "Rows per page" })).toBeInTheDocument();
+    });
+  });
+
+  describe("top bar", () => {
+    it("goes to the page picked in the Page box", async () => {
+      const onPageChange = vi.fn();
+      renderPagination({ page: 1, totalPages: 3, onPageChange, placement: "top" });
+      await userEvent.click(screen.getByRole("combobox", { name: "Go to page" }));
+      await userEvent.click(screen.getByRole("option", { name: "3" }));
+      expect(onPageChange).toHaveBeenCalledWith(3);
+    });
+  });
+
 });

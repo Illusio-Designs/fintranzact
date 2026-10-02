@@ -279,8 +279,8 @@ export function LabelPrintPanel({
             <table className="w-full text-sm">
               <thead className="bg-surface-2">
                 <tr>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Item</th>
-                  <th className="w-32 px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Labels</th>
+                  <th className="px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Item</th>
+                  <th className="w-32 px-3 py-2 text-right text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Labels</th>
                 </tr>
               </thead>
               <tbody>
@@ -348,7 +348,7 @@ export function LabelPrintPanel({
                     <BarcodeSymbol code={sample} type="qr" width={80} height={80} showText={false} />
                     <div className="text-xs">
                       {showName && <p className="font-bold">{printable[0]?.name}</p>}
-                      <p className="font-mono text-[10px]">{sample}</p>
+                      <p className="font-mono text-2xs">{sample}</p>
                     </div>
                   </>
                 ) : (

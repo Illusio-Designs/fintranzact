@@ -97,7 +97,7 @@ function VerifyEmailChangePage() {
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-brand-100 dark:bg-brand-600/20 flex items-center justify-center">
               <Icon icon={Loading03Icon} size={24} className="text-brand-600 animate-spin" />
             </div>
-            <h1 className="text-lg font-semibold text-text-primary mb-1">Confirming your new email...</h1>
+            <h1 className="text-lg font-semibold text-text-primary mb-1">Confirming your new email…</h1>
             <p className="text-sm text-text-tertiary">Just a moment</p>
           </>
         )}

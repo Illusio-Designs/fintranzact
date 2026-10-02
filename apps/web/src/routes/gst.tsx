@@ -242,9 +242,9 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
               <tbody>
                 {data.b2b.map((row, i) => (
                   <tr key={i}>
-                    <td className="font-mono text-[13px] text-text-secondary">{row.partyGstin}</td>
+                    <td className="font-mono text-ui text-text-secondary">{row.partyGstin}</td>
                     <td className="text-text-primary">{row.partyName}</td>
-                    <td className="font-mono text-[13px] text-text-secondary">{row.invoiceNumber}</td>
+                    <td className="font-mono text-ui text-text-secondary">{row.invoiceNumber}</td>
                     <td className="text-right tabular-nums">{fmt(row.taxableValue)}</td>
                     <td className="text-right tabular-nums text-text-secondary">{fmt(row.cgst)}</td>
                     <td className="text-right tabular-nums text-text-secondary">{fmt(row.sgst)}</td>
@@ -280,7 +280,7 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
                 {b2clInvoices.map((row) => (
                   <tr key={row.invoiceNumber}>
                     <td className="text-text-primary">{row.state}</td>
-                    <td className="font-mono text-[13px] text-text-secondary">{row.invoiceNumber}</td>
+                    <td className="font-mono text-ui text-text-secondary">{row.invoiceNumber}</td>
                     <td className="text-text-secondary">{formatDate(row.invoiceDate)}</td>
                     <td className="text-right tabular-nums">{fmt(row.taxableValue)}</td>
                     <td className="text-right tabular-nums text-text-secondary">{fmt(row.igst)}</td>
@@ -356,9 +356,9 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
                 {notes.map((n) => (
                   <tr key={n.invoiceNumber}>
                     <td className="text-text-primary">{sectionLabel(n.section)}</td>
-                    <td className="font-mono text-[13px] text-text-secondary">{n.invoiceNumber}</td>
+                    <td className="font-mono text-ui text-text-secondary">{n.invoiceNumber}</td>
                     <td className="text-text-secondary">{n.kind}</td>
-                    <td className="font-mono text-[13px] text-text-secondary">{n.originalInvoiceNumber ?? "—"}</td>
+                    <td className="font-mono text-ui text-text-secondary">{n.originalInvoiceNumber ?? "—"}</td>
                     <td className="text-text-primary">{n.partyName}</td>
                     <td className="text-right tabular-nums">{fmtStr(n.taxableAmount)}</td>
                     <td className="text-right tabular-nums text-text-secondary">{fmt(n.cgst ?? 0)}</td>
@@ -396,7 +396,7 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
               <tbody>
                 {data.hsn.map((row) => (
                   <tr key={`${row.hsn}-${row.rate}-${row.uqc}`}>
-                    <td className="font-mono text-[13px] text-text-primary">{row.hsn}</td>
+                    <td className="font-mono text-ui text-text-primary">{row.hsn}</td>
                     <td className="text-text-secondary">{row.uqc ?? "OTH"}</td>
                     <td className="text-right tabular-nums">{row.quantity}</td>
                     <td className="text-right tabular-nums">{row.rate ?? 0}%</td>
@@ -763,7 +763,7 @@ function ProfitAndLossView() {
               <p className={`text-lg font-bold tabular-nums ${parseFloat(data.grossProfit) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                 {fmtStr(data.grossProfit)}
               </p>
-              <p className="text-[11px] text-text-tertiary mt-0.5">{data.grossMarginPercent}% margin</p>
+              <p className="text-2xs text-text-tertiary mt-0.5">{data.grossMarginPercent}% margin</p>
             </div>
             <div className="card px-4 py-3">
               <p className="text-xs text-text-tertiary mb-1">Expenses</p>
@@ -774,7 +774,7 @@ function ProfitAndLossView() {
               <p className={`text-xl font-bold tabular-nums ${parseFloat(data.netProfit) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                 {fmtStr(data.netProfit)}
               </p>
-              <p className="text-[11px] text-text-tertiary mt-0.5">{data.netMarginPercent}% margin</p>
+              <p className="text-2xs text-text-tertiary mt-0.5">{data.netMarginPercent}% margin</p>
             </div>
           </div>
 
@@ -800,7 +800,7 @@ function ProfitAndLossView() {
                 <tr>
                   <td className="text-text-secondary pl-6">
                     Less: Closing stock
-                    <span className="ml-1 text-[11px] text-text-tertiary">
+                    <span className="ml-1 text-2xs text-text-tertiary">
                       ({data.valuationMethod === "fifo" ? "FIFO" : "average cost"})
                     </span>
                   </td>
@@ -813,7 +813,7 @@ function ProfitAndLossView() {
                 <tr className="border-t border-border-light bg-surface-1">
                   <td className="font-semibold text-text-primary">Gross Profit</td>
                   <td className={`text-right tabular-nums font-semibold ${parseFloat(data.grossProfit) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {fmtStr(data.grossProfit)} <span className="text-[11px] font-normal text-text-tertiary">({data.grossMarginPercent}%)</span>
+                    {fmtStr(data.grossProfit)} <span className="text-2xs font-normal text-text-tertiary">({data.grossMarginPercent}%)</span>
                   </td>
                 </tr>
                 {data.expenses.length > 0 && (
@@ -834,7 +834,7 @@ function ProfitAndLossView() {
                 <tr className="border-t-2 border-border-color bg-surface-1">
                   <td className="font-bold text-text-primary">Net Profit / (Loss)</td>
                   <td className={`text-right tabular-nums font-bold text-lg ${parseFloat(data.netProfit) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {fmtStr(data.netProfit)} <span className="text-[11px] font-normal text-text-tertiary">({data.netMarginPercent}%)</span>
+                    {fmtStr(data.netProfit)} <span className="text-2xs font-normal text-text-tertiary">({data.netMarginPercent}%)</span>
                   </td>
                 </tr>
               </tbody>
@@ -885,7 +885,7 @@ function VarianceCell({
       {prefix}
       {fmtStr(variance)}
       {variancePercent !== "N/A" && (
-        <span className="text-[11px] ml-1 opacity-70">
+        <span className="text-2xs ml-1 opacity-70">
           ({prefix}
           {variancePercent}%)
         </span>
@@ -974,9 +974,9 @@ function TrialBalanceView() {
               <tbody>
                 {data.accounts.map((a) => (
                   <tr key={a.accountCode}>
-                    <td className="font-mono text-[13px] text-text-secondary">{a.accountCode}</td>
+                    <td className="font-mono text-ui text-text-secondary">{a.accountCode}</td>
                     <td className="text-text-primary">{a.accountName}</td>
-                    <td className="text-[13px] text-text-secondary capitalize">{a.accountType}</td>
+                    <td className="text-ui text-text-secondary capitalize">{a.accountType}</td>
                     <td className="text-right tabular-nums">
                       {parseFloat(a.debit) > 0 ? fmtStr(a.debit) : <span className="text-text-tertiary">—</span>}
                     </td>
@@ -1033,7 +1033,7 @@ function TrialBalanceView() {
               <tbody>
                 {cmpData.accounts.map((a) => (
                   <tr key={a.accountCode}>
-                    <td className="font-mono text-[13px] text-text-secondary">{a.accountCode}</td>
+                    <td className="font-mono text-ui text-text-secondary">{a.accountCode}</td>
                     <td className="text-text-primary">{a.accountName}</td>
                     <td className="text-right tabular-nums border-l border-border-light">
                       {parseFloat(a.currentDebit) > 0 ? fmtStr(a.currentDebit) : <span className="text-text-tertiary">—</span>}
@@ -1173,7 +1173,7 @@ function BsSection({
         <tbody>
           {items.map((item) => (
             <tr key={item.accountCode}>
-              <td className="font-mono text-[13px] text-text-secondary w-20">{item.accountCode}</td>
+              <td className="font-mono text-ui text-text-secondary w-20">{item.accountCode}</td>
               <td className="text-text-primary">{item.accountName}</td>
               <td className="text-right tabular-nums font-medium">{fmtStr(item.balance)}</td>
             </tr>
@@ -1234,7 +1234,7 @@ function ComparativeBsSection({
           <tbody>
             {items.map((item) => (
               <tr key={item.accountCode}>
-                <td className="font-mono text-[13px] text-text-secondary">{item.accountCode}</td>
+                <td className="font-mono text-ui text-text-secondary">{item.accountCode}</td>
                 <td className="text-text-primary">{item.accountName}</td>
                 <td className="text-right tabular-nums font-medium">{fmtStr(item.currentBalance)}</td>
                 <td className="text-right tabular-nums text-text-secondary">{fmtStr(item.previousBalance)}</td>
@@ -1511,7 +1511,7 @@ function PartyLedgerView() {
         <div className="w-full max-w-sm">
           <Combobox
             label="Select Party"
-            placeholder="Search parties..."
+            placeholder="Search parties…"
             value={partyId}
             onChange={setPartyId}
             options={partyOptions}
@@ -1592,7 +1592,7 @@ function PartyLedgerView() {
                     {exporting ? (
                       <>
                         <Spinner size="xs" />
-                        Exporting...
+                        Exporting…
                       </>
                     ) : (
                       <>
@@ -1609,7 +1609,7 @@ function PartyLedgerView() {
                     {exportingPdf ? (
                       <>
                         <Spinner size="xs" />
-                        Exporting...
+                        Exporting…
                       </>
                     ) : (
                       <>
@@ -1642,8 +1642,8 @@ function PartyLedgerView() {
                     </tr>
                     {data.entries.map((e, i) => (
                       <tr key={i}>
-                        <td className="text-text-secondary text-[13px]">{formatDate(e.date)}</td>
-                        <td className="font-mono text-[13px] text-text-secondary">{e.number || "—"}</td>
+                        <td className="text-text-secondary text-ui">{formatDate(e.date)}</td>
+                        <td className="font-mono text-ui text-text-secondary">{e.number || "—"}</td>
                         <td className="text-text-primary">{e.description}</td>
                         <td className="text-right tabular-nums">
                           {e.debit !== "0" && e.debit !== "0.00" ? fmtStr(e.debit) : <span className="text-text-tertiary">—</span>}
@@ -1750,7 +1750,7 @@ function TallyExportView() {
             {downloading ? (
               <>
                 <Spinner size="sm" className="text-white" />
-                Preparing...
+                Preparing…
               </>
             ) : (
               <>
@@ -1787,9 +1787,9 @@ function TallyExportView() {
               <tbody>
                 {data.preview.map((row, i) => (
                   <tr key={i}>
-                    <td className="text-text-secondary text-[13px] tabular-nums">{row.date}</td>
-                    <td className="text-text-secondary text-[13px]">{row.vchType}</td>
-                    <td className="font-mono text-[13px] text-text-secondary">{row.vchNo || "—"}</td>
+                    <td className="text-text-secondary text-ui tabular-nums">{row.date}</td>
+                    <td className="text-text-secondary text-ui">{row.vchType}</td>
+                    <td className="font-mono text-ui text-text-secondary">{row.vchNo || "—"}</td>
                     <td className="text-text-primary">{row.debitLedger}</td>
                     <td className="text-text-primary">{row.creditLedger}</td>
                     <td className="text-right tabular-nums font-medium">{fmtStr(row.amount)}</td>
@@ -2136,7 +2136,7 @@ function GSTR9View() {
               {downloading ? (
                 <>
                   <Spinner size="sm" className="text-white" />
-                  Preparing...
+                  Preparing…
                 </>
               ) : (
                 <>

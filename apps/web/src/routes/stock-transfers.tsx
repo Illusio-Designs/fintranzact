@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { keepPreviousData } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
 import { invalidateStockViews } from "@/lib/stock-cache";
@@ -12,6 +11,8 @@ import { InputField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { usePageSize } from "@/hooks/usePageSize";
 import { Icon } from "@/components/ui/Icon";
 import {
   StockLinesEditor,
@@ -26,14 +27,19 @@ export const Route = createFileRoute("/stock-transfers")({
   component: StockTransfersPage,
 });
 
-const PAGE_SIZE = 25;
-
 function StockTransfersPage() {
   const utils = trpc.useUtils();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("stock-transfers", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
+  // Back to page 1 when rows per page change.
+  useEffect(() => setPage(1), [pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
   const { data, isFetching } = trpc.stock.transfers.useQuery(
-    { page, limit: PAGE_SIZE },
-    { placeholderData: keepPreviousData },
+    { page, limit: pageSize },
+    // Keep the current page on screen while the next one loads.
+    { placeholderData: (prev) => prev },
   );
 
   const [open, setOpen] = useState(false);
@@ -60,7 +66,10 @@ function StockTransfersPage() {
   });
 
   const ready = readyLines(lines);
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // The last page emptied out (or rows per page grew): step back.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   return (
     <div>
@@ -74,7 +83,7 @@ function StockTransfersPage() {
         }
       />
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-clip">
         {!data ? (
           <SkeletonRows />
         ) : data.data.length === 0 ? (
@@ -88,9 +97,10 @@ function StockTransfersPage() {
             }
           />
         ) : (
-          <>
-            <div className={cn("overflow-x-auto", isFetching && "opacity-70")}>
-              <table className="data-table">
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination placement="top" page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={pageSize} />
+            <TableScroll ref={tableRef}>
+              <table className="data-table w-full">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -121,11 +131,16 @@ function StockTransfersPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
-            <div className="border-t border-border-light px-4 py-3">
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={data.total} pageSize={PAGE_SIZE} />
-            </div>
-          </>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
+          </div>
         )}
       </div>
 
@@ -151,7 +166,7 @@ function StockTransfersPage() {
                 })
               }
             >
-              {transfer.isPending ? "Transferring..." : `Transfer ${ready.length || ""} item${ready.length === 1 ? "" : "s"}`}
+              {transfer.isPending ? "Transferring…" : `Transfer ${ready.length || ""} item${ready.length === 1 ? "" : "s"}`}
             </button>
           </div>
         }

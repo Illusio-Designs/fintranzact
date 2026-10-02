@@ -5,9 +5,15 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"DM Sans"', "system-ui", "sans-serif"],
-        display: ['"Plus Jakarta Sans"', '"DM Sans"', "system-ui", "sans-serif"],
-        mono: ['"JetBrains Mono"', "monospace"],
+        sans: ['"DM Sans Variable"', '"DM Sans"', "system-ui", "sans-serif"],
+        display: ['"Plus Jakarta Sans"', '"DM Sans Variable"', '"DM Sans"', "system-ui", "sans-serif"],
+        mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
+      },
+      // Type scale for app UI. Use these instead of text-[NNpx].
+      // 2xs 11 · xs 12 · ui 13 · sm 14 · base 16 (Tailwind defaults above that).
+      fontSize: {
+        "2xs": ["11px", { lineHeight: "16px" }],
+        ui: ["13px", { lineHeight: "20px" }],
       },
       colors: {
         brand: {
@@ -51,6 +57,12 @@ export default {
       },
       borderRadius: {
         DEFAULT: "0.5rem",
+        // Three radii: controls 8px (lg), cards 10px (xl), panels and dialogs 14px (2xl).
+        xl: "10px",
+        "2xl": "14px",
+      },
+      transitionTimingFunction: {
+        out: "cubic-bezier(0.23, 1, 0.32, 1)",
       },
       boxShadow: {
         card: "0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)",

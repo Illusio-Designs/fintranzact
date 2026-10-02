@@ -246,7 +246,7 @@ test.describe("J3 masters", () => {
     await detail.getByRole("button", { name: "Merge", exact: true }).click();
     const merge = page.getByRole("dialog", { name: "Merge Parties" });
     await expect(merge.getByText("1 invoice")).toBeVisible();
-    await merge.getByPlaceholder("Search parties...").fill(customer);
+    await merge.getByPlaceholder("Search parties…").fill(customer);
     await merge.getByRole("button", { name: new RegExp(customer) }).first().click();
     await merge.getByRole("checkbox").check();
     await expectNoHorizontalScroll(page, "merge parties");
@@ -294,13 +294,15 @@ test.describe("J3 masters", () => {
     // ── Delete rules ────────────────────────────────────────────
     guard.allow(/status of 409 .*party\.delete/); // the refusal below is a 409 by design
     row = await findParty(page, customer);
-    await row.getByRole("button", { name: "Delete party" }).click();
+    await row.getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Delete party" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
     await expect(toast(page, /has invoices or payments/)).toBeVisible();
     expect(await partiesNamed(owner.businessId, customer)).toHaveLength(1);
 
     row = await findParty(page, supplier);
-    await row.getByRole("button", { name: "Delete party" }).click();
+    await row.getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Delete party" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
     await expect(toast(page, "Party deleted")).toBeVisible();
     await expect(row).toHaveCount(0);
@@ -595,7 +597,8 @@ test.describe("J3 masters — items (dark theme)", () => {
     await page.reload();
     for (const name of [names.laptop, names.install]) {
       const r = page.getByRole("row").filter({ hasText: name });
-      await r.getByRole("button", { name: "Delete item" }).click();
+      await r.getByRole("button", { name: /^Actions for/ }).click();
+      await page.getByRole("menuitem", { name: "Delete item" }).click();
       await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
       await expect(toast(page, "Item deleted")).toBeVisible();
       await expect(r).toHaveCount(0);
