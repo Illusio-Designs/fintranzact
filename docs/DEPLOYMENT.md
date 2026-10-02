@@ -74,11 +74,19 @@ The web and store frontends are deployed by Vercel's Git integration (see `apps/
 | `ENCRYPTION_KEY` | Yes | AES-256-GCM key for field-level encryption (64-char hex). Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` | `a1b2c3...` |
 | `SANDBOX_API_KEY` | No | Sandbox.co.in API key for GST e-invoice, e-way bill, GSTIN lookup and TDS/TCS. `key_test_…` uses the test host, `key_live_…` the live host | `key_live_abc…` |
 | `SANDBOX_API_SECRET` | No | Sandbox.co.in API secret that pairs with the key (server-side only) | |
+| `SANDBOX_MONTHLY_QUOTA` | No | Calls per month included in your Sandbox plan. A deployment-wide counter alerts at 80% and 100%. Unset = no quota alerts | `10000` |
+| `GOV_API_PROVIDER` | No | `direct` forces the direct NIC client even when Sandbox keys are set (rollback switch); `sandbox` forces Sandbox. Unset = Sandbox when `SANDBOX_API_KEY` is set | `direct` |
+| `GOV_RATE_E_INVOICE_PAISE` | No | Price per successfully generated e-invoice, in paise, before GST. Default `200` (₹2) | `200` |
+| `GOV_RATE_E_WAY_BILL_PAISE` | No | Price per e-way bill, in paise, before GST. Default `200` | `200` |
+| `GOV_RATE_GSTR1_PAISE` | No | Price per GSTR-1 filing, in paise, before GST. Default `0` | `0` |
+| `GOV_RATE_GSTR3B_PAISE` | No | Price per GSTR-3B filing, in paise, before GST. Default `0` | `0` |
 | `ENCRYPTION_KEY_PREVIOUS` | No | Previous encryption key — set only during key rotation | |
 | `RESEND_API_KEY` | Yes | Email service API key (email-change links, invites) | `re_xxx` |
 | `EMAIL_FROM` | No | From address for emails | `Fintranzact <noreply@fintranzact.com>` |
 | `MULTI_TENANT` | No | Enable multi-tenancy | `true` |
 | `CONTROL_DATABASE_URL` | No | Separate control DB (multi-tenant only) | `postgresql://...` |
+
+Rates must be whole paise (integers, 0 or more); an invalid value falls back to the default. See [SANDBOX-INTEGRATION.md](SANDBOX-INTEGRATION.md) for how metering and billing work.
 
 ### GitHub Actions Secrets
 

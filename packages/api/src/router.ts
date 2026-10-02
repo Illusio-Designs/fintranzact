@@ -41,11 +41,13 @@ import { tdsRouter } from "./routers/tds.js";
 import { periodRouter } from "./routers/period.js";
 import { bankReconRouter } from "./routers/bankRecon.js";
 import { gstr2bRouter } from "./routers/gstr2b.js";
+import { gstReturnsRouter } from "./routers/gstReturns.js";
 import { systemRouter } from "./routers/system.js";
 import { partnerRouter } from "./routers/partner.js";
 import { platformRouter } from "./routers/platform.js";
 import { planRouter } from "./routers/plan.js";
 import { billingRouter } from "./routers/billing.js";
+import { govUsageRouter } from "./routers/govUsage.js";
 import { selfExportRouter } from "./routers/selfExport.js";
 import { selfImportRouter } from "./routers/selfImport.js";
 import { posRouter } from "./routers/pos.js";
@@ -102,11 +104,13 @@ export const appRouter = router({
   period: periodRouter,
   bankRecon: bankReconRouter,
   gstr2b: gstr2bRouter,
+  gstReturns: gstReturnsRouter,
   system: systemRouter,
   platform: platformRouter,
   partner: partnerRouter,
   plan: planRouter,
   billing: billingRouter,
+  govUsage: govUsageRouter,
   selfExport: selfExportRouter,
   selfImport: selfImportRouter,
   pos: posRouter,

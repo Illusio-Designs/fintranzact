@@ -1,0 +1,40 @@
+---
+title: Set up e-invoicing and e-way bills (create your API user)
+description: Create an API user on the e-invoice portal for your GSTIN, save it in Fintranzact, test the connection, and learn how GST returns and per-document pricing work.
+sidebar:
+  order: 7
+---
+
+To file e-invoices and e-way bills, Fintranzact signs in to the government portal as an **API user** that you create for your GSTIN. You create it once, on the portal, and then save its ID and password in Fintranzact.
+
+## 1. Create your API user on the portal
+
+1. Open the e-invoice portal at **einvoice1.gst.gov.in** and log in with your normal GST portal username and password.
+2. Go to **API Registration**.
+3. Create an **API user** and a **password** for your GSTIN. Note them down. They are separate from your normal portal login.
+
+The same API login works for e-way bills.
+
+## 2. Save the API user in Fintranzact
+
+1. Go to **Settings → Business** and click **Edit**.
+2. In the **Statutory & compliance details** step, set **GST Registration** to **Regular**.
+3. Under **Compliance features**, turn on **Enable e-Invoice**, then enter your **Portal ID** (the API user ID) and **Portal Password** (the API password).
+4. For e-way bills, turn on **Enable E-Way Bill** in the same place and enter the **Portal ID** and **Portal Password** there too. Use the same API user.
+5. Save the business.
+
+The password is stored encrypted and is never shown again. See [E-Invoicing](/help/gst/e-invoicing) for the **e-Invoicing → Settings** tab, which holds the same connection.
+
+## 3. Test the connection
+
+Open **e-Invoicing** (under **Reports** in the sidebar), go to the **Settings** tab, click **Save Settings**, then **Test Connection**. It shows either *"Successfully connected to IRP"* or the error the portal returned.
+
+A new connection starts with **Use Sandbox (Testing)** switched on, which issues test IRNs only. Turn it off and save when you are ready for real e-invoices.
+
+## GST returns need an OTP
+
+Filing GSTR-1 and GSTR-3B does not use the API user. The GST portal sends a one-time password (OTP) to the mobile number registered on the portal, and you enter it when asked. Filing needs a further OTP sent to the authorised signatory.
+
+## Pricing
+
+Government filing is charged **per document**, only for documents that were filed successfully. Failed attempts are not charged. There is no advance payment: usage is billed after the month ends, with GST added. You can see the current month, each document type's rate and past statements in **Settings → Billing** under **Government filing usage**.

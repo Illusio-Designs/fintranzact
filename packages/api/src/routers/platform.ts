@@ -24,6 +24,8 @@ import { router, protectedProcedure } from "../trpc.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { ensureRoadmapSeeded } from "../lib/roadmap.js";
 import { isPlatformAdmin } from "../lib/platform-admin.js";
+import { sandboxQuotaStatus, tenantsWithUnbilledUsage, periodIsClosed } from "../lib/gov-usage.js";
+import { closeGovUsagePeriod } from "../lib/billing/service.js";
 
 /**
  * Platform admin: every organisation on this server, and the plan each is on.
@@ -396,6 +398,30 @@ export const platformRouter = router({
   // ── Partners ─────────────────────────────────────────────────
 
   /** Partner applications, newest first, with a count per status. */
+  /** Calls used this month against the Sandbox plan quota. */
+  sandboxQuota: platformAdminProcedure.query(() => sandboxQuotaStatus()),
+
+  /** Month-end: raise the government API usage statement for every tenant with unbilled usage. */
+  closeGovUsageMonth: platformAdminProcedure
+    .input(z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM") }))
+    .mutation(async ({ input }) => {
+      if (!periodIsClosed(input.period)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `${input.period} has not ended yet, so it cannot be billed.` });
+      }
+      const tenantIds = await tenantsWithUnbilledUsage(input.period);
+      let billed = 0;
+      const failed: string[] = [];
+      for (const tenantId of tenantIds) {
+        try {
+          if (await closeGovUsagePeriod(tenantId, input.period)) billed++;
+        } catch (err) {
+          logger.error({ err, tenantId, period: input.period }, "Could not close government API usage");
+          failed.push(tenantId);
+        }
+      }
+      return { period: input.period, tenants: tenantIds.length, billed, failed: failed.length };
+    }),
+
   partners: platformAdminProcedure
     .input(
       z.object({

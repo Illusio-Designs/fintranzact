@@ -11,6 +11,7 @@ import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
 import { cn, formatCurrency } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
 import { DemoCheckout } from "@/components/billing/DemoCheckout";
+import { GovUsageSection } from "@/components/settings/GovUsageSection";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, CheckmarkCircle02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import type { BillingCycle, PlanId } from "@fintranzact/shared";
@@ -351,6 +352,8 @@ export function BillingTab() {
         onSaved={refresh}
       />
 
+      <GovUsageSection />
+
       {/* ── Payment history ── */}
       <section className="card overflow-hidden p-0">
         <h3 className="border-b border-border-light px-5 py-4 text-sm font-semibold text-text-primary">Invoices & payments</h3>
@@ -377,6 +380,9 @@ export function BillingTab() {
                       {p.description}
                       {p.status === "failed" ? (
                         <p className="text-xs text-red-600">{p.failureReason ?? "Payment failed"}</p>
+                      ) : null}
+                      {p.status === "due" ? (
+                        <p className="text-xs font-medium text-amber-600">Payment due</p>
                       ) : null}
                     </td>
                     <td className={cn("whitespace-nowrap px-5 py-3 text-right tabular-nums", p.status === "failed" ? "text-text-tertiary line-through" : p.totalPaise < 0 ? "text-emerald-600" : "text-text-primary")}>

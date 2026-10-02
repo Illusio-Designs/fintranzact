@@ -28,7 +28,7 @@ import {
   money,
   splitIntraStateTax,
 } from "@fintranzact/shared";
-import { router, viewerProcedure, adminProcedure } from "../trpc.js";
+import { router, viewerProcedure, adminProcedure, type TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import {
   parseGSTR2BJSON,
@@ -50,6 +50,167 @@ const ZERO = "0.00";
  */
 const GSTR2B_DOCUMENT_TYPES = ["invoice", "credit_note", "debit_note"] as const;
 
+/** Minimal context the import needs; satisfied by the tRPC authorized context. */
+export interface Gstr2bImportCtx {
+  db: TenantDatabase;
+  businessId: string;
+  user: { id: string };
+}
+
+/**
+ * Parse, reconcile against purchase invoices and persist a GSTR-2B file.
+ * Shared by `gstr2b.upload` (user file) and `gstReturns.pull2b` (downloaded JSON).
+ */
+export async function importGstr2b(ctx: Gstr2bImportCtx, input: z.infer<typeof gstr2bUploadSchema>) {
+  // Parse the uploaded file
+  let parsed: GSTR2BRecord[];
+  try {
+    if (input.format === "json") {
+      parsed = parseGSTR2BJSON(input.content);
+    } else {
+      parsed = parseGSTR2BCSV(input.content);
+    }
+  } catch (err) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: err instanceof Error ? err.message : "Failed to parse file",
+    });
+  }
+
+  if (parsed.length === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "No records found in the uploaded file",
+    });
+  }
+
+  // Load purchase invoices for this business with GSTIN info
+  const purchaseRows = await ctx.db
+    .select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      supplierInvoiceNumber: invoices.supplierInvoiceNumber,
+      invoiceDate: invoices.invoiceDate,
+      subtotal: invoices.subtotal,
+      discountAmount: invoices.discountAmount,
+      additionalCharges: invoices.additionalCharges,
+      taxAmount: invoices.taxAmount,
+      partyGstin: parties.gstin,
+      partyStateCode: parties.stateCode,
+      businessId: invoices.businessId,
+    })
+    .from(invoices)
+    .leftJoin(parties, eq(invoices.partyId, parties.id))
+    .where(
+      and(
+        eq(invoices.businessId, ctx.businessId),
+        eq(invoices.type, "purchase"),
+        inArray(invoices.documentType, [...GSTR2B_DOCUMENT_TYPES]),
+        sql`${invoices.status} != 'cancelled'`,
+        isNull(invoices.deletedAt),
+      ),
+    );
+
+  const [biz] = await ctx.db
+    .select({ stateCode: businesses.stateCode, gstin: businesses.gstin })
+    .from(businesses)
+    .where(eq(businesses.id, ctx.businessId))
+    .limit(1);
+  const recipientState = biz?.stateCode || biz?.gstin?.substring(0, 2) || null;
+
+  // For each purchase invoice, derive the tax split. Supplier state (party
+  // stateCode, falling back to its GSTIN prefix) vs our own state decides
+  // the place-of-supply treatment: same state → CGST+SGST (paise-exact
+  // halves, as in the ITC ledger), different state → IGST.
+  const purchaseInvoices: PurchaseInvoice[] = purchaseRows.map((r) => {
+    const taxPaise = Math.round(parseFloat(r.taxAmount ?? "0") * 100);
+    // Shared place-of-supply rule: unknown state on either side is intra-state
+    const interState = !isIntraStateSupply(
+      { stateCode: recipientState },
+      { stateCode: r.partyStateCode, gstin: r.partyGstin },
+    );
+    // CGST = half rounded to the paisa, SGST the rest (shared rule)
+    const { cgst: cgstRs } = splitIntraStateTax(taxPaise / 100);
+    const halfPaise = Math.round(cgstRs * 100);
+    return {
+      id: r.id,
+      // The supplier reports its own bill number; ours is internal
+      invoiceNumber: r.supplierInvoiceNumber || r.invoiceNumber,
+      invoiceDate: r.invoiceDate,
+      partyGstin: r.partyGstin ?? null,
+      // Taxable value: lines less the document discount, plus charges
+      subtotal: money.add(money.sub(r.subtotal, r.discountAmount || "0"), r.additionalCharges || "0"),
+      cgst: interState ? ZERO : (halfPaise / 100).toFixed(2),
+      sgst: interState ? ZERO : ((taxPaise - halfPaise) / 100).toFixed(2),
+      igst: interState ? (taxPaise / 100).toFixed(2) : ZERO,
+      cess: ZERO,
+    };
+  });
+
+  // Reconcile
+  const { results, missingIn2B: _missingIn2B } = reconcileWithBooks(parsed, purchaseInvoices);
+
+  // Count by status
+  let matchedCount = 0, mismatchedCount = 0, missingInBooksCount = 0;
+  for (const r of results) {
+    if (r.matchStatus === "matched") matchedCount++;
+    else if (r.matchStatus === "mismatched") mismatchedCount++;
+    else if (r.matchStatus === "missing_in_books") missingInBooksCount++;
+  }
+  const unmatchedCount = mismatchedCount; // alias for summary
+
+  // Persist upload record
+  const [upload] = await ctx.db
+    .insert(gstr2bUploads)
+    .values({
+      businessId: ctx.businessId,
+      returnPeriod: input.returnPeriod,
+      fileName: input.fileName,
+      totalRecords: results.length,
+      matchedRecords: matchedCount,
+      unmatchedRecords: unmatchedCount,
+      newRecords: missingInBooksCount,
+      createdByUserId: ctx.user.id,
+    })
+    .returning();
+
+  // Persist all records in batches of 500
+  const BATCH = 500;
+  for (let i = 0; i < results.length; i += BATCH) {
+    const batch = results.slice(i, i + BATCH).map((r) => ({
+      uploadId: upload.id,
+      businessId: ctx.businessId,
+      supplierGstin: r.record.supplierGstin,
+      supplierName: r.record.supplierName,
+      invoiceNumber: r.record.invoiceNumber,
+      invoiceDate: r.record.invoiceDate,
+      invoiceValue: r.record.invoiceValue,
+      taxableValue: r.record.taxableValue,
+      cgst: r.record.cgst,
+      sgst: r.record.sgst,
+      igst: r.record.igst,
+      cess: r.record.cess,
+      itcAvailable: r.record.itcAvailable,
+      reason: r.record.reason,
+      sourceType: r.record.sourceType,
+      matchStatus: r.matchStatus,
+      matchedInvoiceId: r.matchedInvoiceId,
+      mismatchReasons: r.mismatchReasons.length > 0 ? r.mismatchReasons : null,
+    }));
+    await ctx.db.insert(gstr2bRecords).values(batch);
+  }
+
+  return {
+    uploadId: upload.id,
+    returnPeriod: input.returnPeriod,
+    totalRecords: results.length,
+    matchedRecords: matchedCount,
+    mismatchedRecords: mismatchedCount,
+    missingInBooks: missingInBooksCount,
+    missingIn2B: _missingIn2B.length,
+  };
+}
+
 // ── Router ────────────────────────────────────────────────────
 
 export const gstr2bRouter = router({
@@ -61,154 +222,7 @@ export const gstr2bRouter = router({
     .input(gstr2bUploadSchema)
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "GstReport");
-
-      // Parse the uploaded file
-      let parsed: GSTR2BRecord[];
-      try {
-        if (input.format === "json") {
-          parsed = parseGSTR2BJSON(input.content);
-        } else {
-          parsed = parseGSTR2BCSV(input.content);
-        }
-      } catch (err) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: err instanceof Error ? err.message : "Failed to parse file",
-        });
-      }
-
-      if (parsed.length === 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "No records found in the uploaded file",
-        });
-      }
-
-      // Load purchase invoices for this business with GSTIN info
-      const purchaseRows = await ctx.db
-        .select({
-          id: invoices.id,
-          invoiceNumber: invoices.invoiceNumber,
-          supplierInvoiceNumber: invoices.supplierInvoiceNumber,
-          invoiceDate: invoices.invoiceDate,
-          subtotal: invoices.subtotal,
-          discountAmount: invoices.discountAmount,
-          additionalCharges: invoices.additionalCharges,
-          taxAmount: invoices.taxAmount,
-          partyGstin: parties.gstin,
-          partyStateCode: parties.stateCode,
-          businessId: invoices.businessId,
-        })
-        .from(invoices)
-        .leftJoin(parties, eq(invoices.partyId, parties.id))
-        .where(
-          and(
-            eq(invoices.businessId, ctx.businessId),
-            eq(invoices.type, "purchase"),
-            inArray(invoices.documentType, [...GSTR2B_DOCUMENT_TYPES]),
-            sql`${invoices.status} != 'cancelled'`,
-            isNull(invoices.deletedAt),
-          ),
-        );
-
-      const [biz] = await ctx.db
-        .select({ stateCode: businesses.stateCode, gstin: businesses.gstin })
-        .from(businesses)
-        .where(eq(businesses.id, ctx.businessId))
-        .limit(1);
-      const recipientState = biz?.stateCode || biz?.gstin?.substring(0, 2) || null;
-
-      // For each purchase invoice, derive the tax split. Supplier state (party
-      // stateCode, falling back to its GSTIN prefix) vs our own state decides
-      // the place-of-supply treatment: same state → CGST+SGST (paise-exact
-      // halves, as in the ITC ledger), different state → IGST.
-      const purchaseInvoices: PurchaseInvoice[] = purchaseRows.map((r) => {
-        const taxPaise = Math.round(parseFloat(r.taxAmount ?? "0") * 100);
-        // Shared place-of-supply rule: unknown state on either side is intra-state
-        const interState = !isIntraStateSupply(
-          { stateCode: recipientState },
-          { stateCode: r.partyStateCode, gstin: r.partyGstin },
-        );
-        // CGST = half rounded to the paisa, SGST the rest (shared rule)
-        const { cgst: cgstRs } = splitIntraStateTax(taxPaise / 100);
-        const halfPaise = Math.round(cgstRs * 100);
-        return {
-          id: r.id,
-          // The supplier reports its own bill number; ours is internal
-          invoiceNumber: r.supplierInvoiceNumber || r.invoiceNumber,
-          invoiceDate: r.invoiceDate,
-          partyGstin: r.partyGstin ?? null,
-          // Taxable value: lines less the document discount, plus charges
-          subtotal: money.add(money.sub(r.subtotal, r.discountAmount || "0"), r.additionalCharges || "0"),
-          cgst: interState ? ZERO : (halfPaise / 100).toFixed(2),
-          sgst: interState ? ZERO : ((taxPaise - halfPaise) / 100).toFixed(2),
-          igst: interState ? (taxPaise / 100).toFixed(2) : ZERO,
-          cess: ZERO,
-        };
-      });
-
-      // Reconcile
-      const { results, missingIn2B: _missingIn2B } = reconcileWithBooks(parsed, purchaseInvoices);
-
-      // Count by status
-      let matchedCount = 0, mismatchedCount = 0, missingInBooksCount = 0;
-      for (const r of results) {
-        if (r.matchStatus === "matched") matchedCount++;
-        else if (r.matchStatus === "mismatched") mismatchedCount++;
-        else if (r.matchStatus === "missing_in_books") missingInBooksCount++;
-      }
-      const unmatchedCount = mismatchedCount; // alias for summary
-
-      // Persist upload record
-      const [upload] = await ctx.db
-        .insert(gstr2bUploads)
-        .values({
-          businessId: ctx.businessId,
-          returnPeriod: input.returnPeriod,
-          fileName: input.fileName,
-          totalRecords: results.length,
-          matchedRecords: matchedCount,
-          unmatchedRecords: unmatchedCount,
-          newRecords: missingInBooksCount,
-          createdByUserId: ctx.user.id,
-        })
-        .returning();
-
-      // Persist all records in batches of 500
-      const BATCH = 500;
-      for (let i = 0; i < results.length; i += BATCH) {
-        const batch = results.slice(i, i + BATCH).map((r) => ({
-          uploadId: upload.id,
-          businessId: ctx.businessId,
-          supplierGstin: r.record.supplierGstin,
-          supplierName: r.record.supplierName,
-          invoiceNumber: r.record.invoiceNumber,
-          invoiceDate: r.record.invoiceDate,
-          invoiceValue: r.record.invoiceValue,
-          taxableValue: r.record.taxableValue,
-          cgst: r.record.cgst,
-          sgst: r.record.sgst,
-          igst: r.record.igst,
-          cess: r.record.cess,
-          itcAvailable: r.record.itcAvailable,
-          reason: r.record.reason,
-          sourceType: r.record.sourceType,
-          matchStatus: r.matchStatus,
-          matchedInvoiceId: r.matchedInvoiceId,
-          mismatchReasons: r.mismatchReasons.length > 0 ? r.mismatchReasons : null,
-        }));
-        await ctx.db.insert(gstr2bRecords).values(batch);
-      }
-
-      return {
-        uploadId: upload.id,
-        returnPeriod: input.returnPeriod,
-        totalRecords: results.length,
-        matchedRecords: matchedCount,
-        mismatchedRecords: mismatchedCount,
-        missingInBooks: missingInBooksCount,
-        missingIn2B: _missingIn2B.length,
-      };
+      return importGstr2b(ctx, input);
     }),
 
   /**
