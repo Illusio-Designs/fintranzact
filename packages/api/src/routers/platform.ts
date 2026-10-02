@@ -473,8 +473,17 @@ export const platformRouter = router({
           ...(status ? { status, reviewedAt: new Date(), reviewedByUserId: ctx.user.id } : {}),
         })
         .where(eq(partners.id, id))
-        .returning({ id: partners.id, status: partners.status, companyName: partners.companyName });
+        .returning({ id: partners.id, status: partners.status, companyName: partners.companyName, email: partners.email });
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Partner not found" });
+      // Approving a partner is how their email gets verified: the admin has
+      // checked who applied. An account made with that email (now, or before
+      // a later re-approval) opens the partner portal from then on.
+      if (row.status === "approved") {
+        await controlDb
+          .update(users)
+          .set({ emailVerified: true })
+          .where(sql`lower(${users.email}) = ${row.email.trim().toLowerCase()}`);
+      }
       // Approved partners get the referral code they share with businesses.
       const referralCode = row.status === "approved" ? await ensureReferralCode(row.id) : null;
 
@@ -501,7 +510,8 @@ export const platformRouter = router({
           logger.warn({ err, partnerId: row.id }, "Could not email the approved partner");
         }
       }
-      return { ...row, referralCode, emailed };
+      const { email: _email, ...result } = row;
+      return { ...result, referralCode, emailed };
     }),
 
   /** One partner: their referral code, badge, the organisations they brought in, and payouts. */

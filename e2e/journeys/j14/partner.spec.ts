@@ -97,9 +97,10 @@ test.describe("J14 partner", () => {
     // A partner with no business of their own is taken to their portal.
     await expect(page).toHaveURL(/\/partner-portal/, { timeout: 20_000 });
     await expect(page.getByText("Your application is being reviewed")).toBeVisible();
-    await expect(page.getByText(company)).toBeVisible();
+    // Until approval verifies the email, the firm's details stay hidden.
+    await expect(page.getByText(company)).toHaveCount(0);
     await expectNoHorizontalScroll(page, "partner portal (pending)");
-    expect(await userByEmail(email)).toMatchObject({ name: "Nikhil Shah", has_password: true });
+    expect(await userByEmail(email)).toMatchObject({ name: "Nikhil Shah", has_password: true, email_verified: false });
 
     // ── A platform admin approves it ────────────────────────────
     const adminContext = await newJourneyContext(browser, guard, { viewport: page.viewportSize()!, hasTouch: isPhone(page) });
@@ -113,6 +114,8 @@ test.describe("J14 partner", () => {
     await expect(toast(admin, "Partner approved")).toBeVisible();
     const approved = await partnerByEmail(email);
     expect(approved!.status).toBe("approved");
+    // Approval verifies the partner's email.
+    expect(await userByEmail(email)).toMatchObject({ email_verified: true });
     const code = approved!.referral_code!;
     expect(code).toMatch(/^FTZ-[A-Z0-9]{4,}$/);
 

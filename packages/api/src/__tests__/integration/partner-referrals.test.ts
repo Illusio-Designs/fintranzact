@@ -254,6 +254,25 @@ describe("partner portal (signed in)", () => {
     });
   });
 
+  it("shows an unverified applicant the status only, and approval verifies their email", async () => {
+    await publicCaller().partner.submitApplication({
+      contactName: "New Signup",
+      companyName: "Signup Firm",
+      email: "signup@firm.in",
+      phone: "+91 91234 56780",
+      city: "Surat",
+      partnerType: "reseller",
+    });
+    const signup = await createUser({ email: "signup@firm.in", emailVerified: false });
+    expect(await callerAs(signup).partner.portal()).toMatchObject({ kind: "application", status: "pending", companyName: null });
+
+    const pending = (await adminCaller().platform.partners({ search: "Signup Firm" })).data[0]!;
+    const spy = vi.spyOn(emailService, "sendPartnerApproved").mockResolvedValue(undefined);
+    await adminCaller().platform.updatePartner({ id: pending.id, status: "approved" });
+    spy.mockRestore();
+    expect(await callerAs(signup).partner.portal()).toMatchObject({ kind: "partner", companyName: "Signup Firm" });
+  });
+
   it("tells anyone else they are not a partner", async () => {
     const stranger = await createUser({ email: "stranger@example.in" });
     expect(await callerAs(stranger).partner.me()).toEqual({ status: null });

@@ -253,10 +253,11 @@ test.describe("J8 money", () => {
     }
     await expectNoHorizontalScroll(page, "Expenses");
     // By category.
-    await page.getByRole("button", { name: "Rent", exact: true }).click();
+    const category = page.getByRole("combobox", { name: "Filter by category" });
+    await choose(page, category, "Rent");
     await expect(listRow(page, "Shop rent")).toBeVisible();
     await expect(listRow(page, "Printer paper")).toHaveCount(0);
-    await page.getByRole("button", { name: "All", exact: true }).last().click();
+    await choose(page, category, "All categories");
     await expect(listRow(page, "Printer paper")).toBeVisible();
 
     const expensesBefore = await expensesOf(owner.businessId);
