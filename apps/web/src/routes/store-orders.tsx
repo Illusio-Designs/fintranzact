@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
@@ -12,6 +12,10 @@ import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { PillTabs } from "@/components/ui/Tabs";
 import { Icon } from "@/components/ui/Icon";
 import { ShoppingBag01Icon } from "@hugeicons/core-free-icons";
+import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
+import { usePageSize } from "@/hooks/usePageSize";
 
 export const Route = createFileRoute("/store-orders")({
   component: StoreOrdersPage,
@@ -552,28 +556,38 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
 
 // ── Page ──────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 30;
-
 function StoreOrdersPage() {
   const [status, setStatus] = useState<OrderStatus | "">("");
   const [search] = usePageSearch("Search customer, order #…");
   const [page, setPage] = useState(1);
-  // A new search starts from the first page.
-  useEffect(() => setPage(1), [search]);
+  const [pageSize, setPageSize] = usePageSize("store-orders", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inlineConfirmId, setInlineConfirmId] = useState<string | null>(null);
   const [inlineCancelId, setInlineCancelId] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
-  const { data, isLoading } = trpc.store.listOrders.useQuery({
+  const { data, isLoading, isFetching } = trpc.store.listOrders.useQuery({
     status: (status || undefined) as OrderStatus | undefined,
     search: search.trim() || undefined,
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
+  }, {
+    // Keep the current page on screen while the next one loads.
+    placeholderData: (prev) => prev,
   });
 
   const orders = (data?.data ?? []) as OrderRow[];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // Back to page 1 whenever the status, search or rows per page change.
+  useEffect(() => { setPage(1); }, [status, search, pageSize]);
+  // Cancelling the last row of a status tab's last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   const confirmOrder = trpc.store.confirmOrder.useMutation({
     onSuccess: () => {
@@ -614,17 +628,17 @@ function StoreOrdersPage() {
         description="Manage and track customer orders from your store"
       />
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
         {/* Filters */}
         <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
-          <PillTabs
-            tabs={STATUS_TABS}
-            value={status}
-            onChange={(v) => {
-              setStatus(v as OrderStatus | "");
-              setPage(1);
-            }}
-          />
+          {/* Seven statuses scroll sideways on phones instead of wrapping. */}
+          <div className="min-w-0 max-w-full overflow-x-auto">
+            <PillTabs
+              tabs={STATUS_TABS}
+              value={status}
+              onChange={(v) => setStatus(v as OrderStatus | "")}
+            />
+          </div>
         </div>
 
         {/* Content */}
@@ -632,7 +646,7 @@ function StoreOrdersPage() {
           <div className="p-4">
             <SkeletonRows count={7} height="h-14" />
           </div>
-        ) : !orders.length ? (
+        ) : !orders.length && !isFetching ? (
           <EmptyState
             icon={
               <Icon icon={ShoppingBag01Icon} size={24} className="text-text-tertiary" />
@@ -647,155 +661,112 @@ function StoreOrdersPage() {
             }
           />
         ) : (
-          // Scrolls sideways on a phone: the card around it clips, which hid the
-          // Total, Status and action columns.
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th className="whitespace-nowrap">Order #</th>
-                  <th>Customer</th>
-                  <th className="whitespace-nowrap">Phone</th>
-                  <th className="text-center">Items</th>
-                  <th className="text-right whitespace-nowrap">Total</th>
-                  <th>Status</th>
-                  <th className="whitespace-nowrap">Date</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr
-                    key={order.id}
-                    className="group cursor-pointer"
-                    onClick={() => setSelectedId(order.id)}
-                  >
-                    <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
-                      {order.orderNumber}
-                    </td>
-                    <td className="font-medium">
-                      <span className="block truncate max-w-[180px]">
-                        {order.customerName}
-                      </span>
-                    </td>
-                    <td className="text-text-secondary font-mono text-ui whitespace-nowrap">
-                      {order.customerPhone ?? "—"}
-                    </td>
-                    <td className="text-center tabular-nums text-text-secondary">
-                      {order.itemCount}
-                    </td>
-                    <td className="text-right tabular-nums font-medium whitespace-nowrap">
-                      {formatCurrency(order.totalAmount)}
-                    </td>
-                    <td className="whitespace-nowrap">
-                      <OrderStatusBadge status={order.status} />
-                    </td>
-                    <td className="text-text-secondary text-xs whitespace-nowrap">
-                      {formatDate(order.createdAt)}
-                    </td>
-                    <td
-                      className="text-right"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {order.status === "pending" && (
-                          <button
-                            onClick={() => setInlineConfirmId(order.id)}
-                            className="text-xs px-2 py-1 rounded font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
-                          >
-                            Confirm
-                          </button>
-                        )}
-                        {order.status === "confirmed" && (
-                          <button
-                            onClick={() =>
-                              updateStatus.mutate({
-                                orderId: order.id,
-                                status: "preparing",
-                              })
-                            }
-                            disabled={updateStatus.isPending}
-                            className="text-xs px-2 py-1 rounded font-medium text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-colors disabled:opacity-50"
-                          >
-                            Preparing
-                          </button>
-                        )}
-                        {order.status === "preparing" && (
-                          <button
-                            onClick={() =>
-                              updateStatus.mutate({
-                                orderId: order.id,
-                                status: "ready",
-                              })
-                            }
-                            disabled={updateStatus.isPending}
-                            className="text-xs px-2 py-1 rounded font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors disabled:opacity-50"
-                          >
-                            Ready
-                          </button>
-                        )}
-                        {order.status === "ready" && (
-                          <button
-                            onClick={() =>
-                              updateStatus.mutate({
-                                orderId: order.id,
-                                status: "delivered",
-                              })
-                            }
-                            disabled={updateStatus.isPending}
-                            className="text-xs px-2 py-1 rounded font-medium text-green-600 hover:bg-green-50 dark:hover:bg-green-950 transition-colors disabled:opacity-50"
-                          >
-                            Delivered
-                          </button>
-                        )}
-                        {order.status !== "delivered" &&
-                          order.status !== "cancelled" && (
-                            <button
-                              onClick={() => setInlineCancelId(order.id)}
-                              className="text-xs px-2 py-1 rounded font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        <button
-                          onClick={() => setSelectedId(order.id)}
-                          className="text-xs px-2 py-1 rounded font-medium text-text-secondary hover:bg-surface-2 transition-colors"
-                        >
-                          View
-                        </button>
-                      </div>
-                    </td>
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+            />
+            {/* Scrolls sideways on a phone so Total, Status and Actions stay reachable. */}
+            <TableScroll ref={tableRef}>
+              <table className="data-table w-full">
+                <thead>
+                  <tr>
+                    <th className="whitespace-nowrap">Order #</th>
+                    <th>Customer</th>
+                    <th className="whitespace-nowrap">Phone</th>
+                    <th className="text-center">Items</th>
+                    <th className="text-right whitespace-nowrap">Total</th>
+                    <th>Status</th>
+                    <th className="whitespace-nowrap">Date</th>
+                    <th className="text-right"><span className="sr-only">Actions</span></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {orders.map((order) => (
+                    <tr
+                      key={order.id}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedId(order.id)}
+                    >
+                      <td className="font-mono text-ui text-text-secondary whitespace-nowrap">
+                        {order.orderNumber}
+                      </td>
+                      <td className="font-medium">
+                        <span className="block truncate max-w-[180px]">
+                          {order.customerName}
+                        </span>
+                      </td>
+                      <td className="text-text-secondary font-mono text-ui whitespace-nowrap">
+                        {order.customerPhone ?? "—"}
+                      </td>
+                      <td className="text-center tabular-nums text-text-secondary">
+                        {order.itemCount}
+                      </td>
+                      <td className="text-right tabular-nums font-medium whitespace-nowrap">
+                        {formatCurrency(order.totalAmount)}
+                      </td>
+                      <td className="whitespace-nowrap">
+                        <OrderStatusBadge status={order.status} />
+                      </td>
+                      <td className="text-text-secondary text-xs whitespace-nowrap">
+                        {formatDate(order.createdAt)}
+                      </td>
+                      <td
+                        className="text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Same actions as before, now always visible instead of on hover only. */}
+                        <RowActions
+                          label={order.orderNumber}
+                          items={tidyMenu([
+                            { label: "Open", hint: "Enter", onSelect: () => setSelectedId(order.id) },
+                            { kind: "separator" },
+                            order.status === "pending" && {
+                              label: "Confirm order",
+                              onSelect: () => setInlineConfirmId(order.id),
+                            },
+                            order.status === "confirmed" && {
+                              label: "Mark preparing",
+                              disabled: updateStatus.isPending,
+                              onSelect: () => updateStatus.mutate({ orderId: order.id, status: "preparing" }),
+                            },
+                            order.status === "preparing" && {
+                              label: "Mark ready",
+                              disabled: updateStatus.isPending,
+                              onSelect: () => updateStatus.mutate({ orderId: order.id, status: "ready" }),
+                            },
+                            order.status === "ready" && {
+                              label: "Mark delivered",
+                              disabled: updateStatus.isPending,
+                              onSelect: () => updateStatus.mutate({ orderId: order.id, status: "delivered" }),
+                            },
+                            { kind: "separator" },
+                            order.status !== "delivered" && order.status !== "cancelled" && {
+                              label: "Cancel order",
+                              danger: true,
+                              onSelect: () => setInlineCancelId(order.id),
+                            },
+                          ])}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-            {/* Pagination */}
-            {data && data.total > PAGE_SIZE && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-border-light">
-                <p className="text-xs text-text-tertiary">
-                  Showing {(page - 1) * PAGE_SIZE + 1}–
-                  {Math.min(page * PAGE_SIZE, data.total)} of{" "}
-                  {data.total.toLocaleString()} orders
-                </p>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="text-xs px-2.5 py-1 rounded-lg border border-border-light text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    onClick={() => setPage((p) => p + 1)}
-                    disabled={page * PAGE_SIZE >= data.total}
-                    className="text-xs px-2.5 py-1 rounded-lg border border-border-light text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         )}
       </div>

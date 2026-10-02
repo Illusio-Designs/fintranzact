@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Add01Icon, ArrowRight01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
@@ -13,6 +13,8 @@ import { Listbox } from "@/components/ui/Listbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { usePageSize } from "@/hooks/usePageSize";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
 import { WarehouseSelect, formatQty, parseUnitKey, unitKey } from "@/components/inventory/shared";
@@ -22,7 +24,6 @@ export const Route = createFileRoute("/manufacturing")({
   component: ManufacturingPage,
 });
 
-const PAGE_SIZE = 25;
 const QTY = /^\d+(\.\d{1,3})?$/;
 const MONEY = /^\d+(\.\d{1,2})?$/;
 
@@ -36,14 +37,25 @@ const newLine = (): Line => ({ key: nextKey(), unitKey: "", info: null, standard
 function ManufacturingPage() {
   const utils = trpc.useUtils();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("manufacturing", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const { data, isFetching } = trpc.manufacturing.journals.useQuery(
-    { page, limit: PAGE_SIZE },
-    { placeholderData: keepPreviousData },
+    { page, limit: pageSize },
+    // Keep the current page on screen while the next one loads.
+    { placeholderData: (prev) => prev },
   );
   const [formOpen, setFormOpen] = useState(false);
   const [formVersion, setFormVersion] = useState(0);
   const [viewing, setViewing] = useState<string | null>(null);
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // Back to page 1 when rows per page change.
+  useEffect(() => { setPage(1); }, [pageSize]);
+  // Cancelling or deleting the last row of the last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   const openForm = () => {
     setFormVersion((v) => v + 1);
@@ -58,7 +70,7 @@ function ManufacturingPage() {
         actions={<button className="btn-primary" onClick={openForm}>+ Manufacture</button>}
       />
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-clip">
         {!data ? (
           <SkeletonRows />
         ) : data.data.length === 0 ? (
@@ -68,9 +80,17 @@ function ManufacturingPage() {
             action={<button className="btn-primary" onClick={openForm}>Manufacture</button>}
           />
         ) : (
-          <>
-            <div className={cn("overflow-x-auto", isFetching && "opacity-70")}>
-              <table className="data-table">
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+            />
+            <TableScroll ref={tableRef}>
+              <table className="data-table w-full">
                 <thead>
                   <tr>
                     <th>No.</th>
@@ -115,11 +135,16 @@ function ManufacturingPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
-            <div className="border-t border-border-light px-4 py-3">
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={data.total} pageSize={PAGE_SIZE} />
-            </div>
-          </>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
+          </div>
         )}
       </div>
 

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { cn, formatCurrency, formatDate, formatDateInput, toISOString, toISOStringEndOfDay, todayISODate } from "@/lib/utils";
@@ -17,6 +17,8 @@ import { DateInput } from "@/components/ui/DateInput";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, Download04Icon, PencilEdit02Icon, StarIcon } from "@hugeicons/core-free-icons";
 import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { usePageSize } from "@/hooks/usePageSize";
 import { useDebounce } from "@/hooks/useDebounce";
 import { toast } from "@/hooks/useToast";
 import { getDatePreset } from "@/hooks/useDateRange";
@@ -41,14 +43,16 @@ function CashAndBankPage() {
   const [untrackedSearch] = usePageSearch("Search party or payment #…");
   const [untrackedMode, setUntrackedMode] = useState("");
   const [untrackedPage, setUntrackedPage] = useState(1);
+  const [untrackedPageSize, setUntrackedPageSize] = usePageSize("bank_untracked", 25);
+  const untrackedTableRef = useRef<HTMLDivElement>(null);
   const debouncedUntrackedSearch = useDebounce(untrackedSearch, 300);
 
-  // Reset page and selection when filters change
+  // Reset page and selection when filters or rows per page change
   useEffect(() => {
     setUntrackedPage(1);
     setSelectedUntracked(new Set());
     setSelectAllMatching(false);
-  }, [debouncedUntrackedSearch, untrackedMode]);
+  }, [debouncedUntrackedSearch, untrackedMode, untrackedPageSize]);
   const [datePreset, setDatePreset] = useState<string | null>(null); // null = no preset selected yet
   const [dateRange, setDateRange] = useState<{ fromDate: string; toDate: string }>({ fromDate: "", toDate: "" });
   const [exporting, setExporting] = useState(false);
@@ -58,57 +62,39 @@ function CashAndBankPage() {
   const { data: summary } = trpc.bankAccount.summary.useQuery(undefined, {
     staleTime: 60_000, // cache for 1 min — summary changes slowly
   });
-  // Infinite scroll for transactions
-  const TXN_PAGE_SIZE = 50;
+  // Transactions come a page at a time. Each row's running balance is worked
+  // out on the server over the whole account, so it is right on any page.
   const [txnPage, setTxnPage] = useState(1);
-  const [allTxns, setAllTxns] = useState<any[]>([]);
-  const [txnTotal, setTxnTotal] = useState(0);
-  const txnScrollRef = useRef<HTMLDivElement>(null);
+  const [txnPageSize, setTxnPageSize] = usePageSize("bank_transactions", 25);
+  const txnTableRef = useRef<HTMLDivElement>(null);
 
   const { data: transactions, isFetching: txnFetching } = trpc.bankAccount.listTransactions.useQuery(
     {
       bankAccountId: selectedAccountId!,
       page: txnPage,
-      limit: TXN_PAGE_SIZE,
+      limit: txnPageSize,
       fromDate: dateRange.fromDate || undefined,
       toDate: dateRange.toDate || undefined,
     },
-    { enabled: !!selectedAccountId && datePreset !== null }
+    {
+      enabled: !!selectedAccountId && datePreset !== null,
+      // Keep the current page on screen while the next one loads.
+      placeholderData: (prev) => prev,
+    }
   );
+  const txns = transactions?.data ?? [];
+  const txnTotal = transactions?.total ?? 0;
+  const txnTotalPages = Math.max(1, Math.ceil(txnTotal / txnPageSize));
 
-  // Reset accumulated transactions when account or date range changes
+  // Back to page 1 when the account, period or rows per page change
   useEffect(() => {
-    setAllTxns([]);
     setTxnPage(1);
-    setTxnTotal(0);
-  }, [selectedAccountId, dateRange.fromDate, dateRange.toDate]);
+  }, [selectedAccountId, dateRange.fromDate, dateRange.toDate, txnPageSize]);
+  // Fewer rows than before (e.g. a shorter period): step back to the last page.
+  useEffect(() => { if (txnPage > txnTotalPages) setTxnPage(txnTotalPages); }, [txnPage, txnTotalPages]);
+  // A new page starts at its first row.
+  useEffect(() => { txnTableRef.current?.scrollTo({ top: 0 }); }, [txnPage]);
 
-  // Accumulate pages as they load
-  useEffect(() => {
-    if (transactions?.data) {
-      setAllTxns(prev => {
-        if (txnPage === 1) return transactions.data;
-        // Append new page, dedup by id
-        const existingIds = new Set(prev.map((t: any) => t.id));
-        const newItems = transactions.data.filter((t: any) => !existingIds.has(t.id));
-        return [...prev, ...newItems];
-      });
-      setTxnTotal(transactions.total);
-    }
-  }, [transactions, txnPage]);
-
-  const hasMoreTxns = allTxns.length < txnTotal;
-
-  // Scroll handler for infinite scroll
-  const handleTxnScroll = useCallback(() => {
-    const el = txnScrollRef.current;
-    if (!el || txnFetching || !hasMoreTxns) return;
-    // Load more when scrolled within 100px of bottom
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
-      setTxnPage(p => p + 1);
-    }
-  }, [txnFetching, hasMoreTxns]);
-  const UNTRACKED_PAGE_SIZE = 25;
   // Lazy-load untracked payments — delay initial fetch to prioritize account list rendering
   const [untrackedEnabled, setUntrackedEnabled] = useState(false);
   useEffect(() => {
@@ -117,10 +103,21 @@ function CashAndBankPage() {
   }, []);
   const { data: untrackedData, isFetching: untrackedFetching } = trpc.payment.untrackedPayments.useQuery({
     page: untrackedPage,
-    limit: UNTRACKED_PAGE_SIZE,
+    limit: untrackedPageSize,
     search: debouncedUntrackedSearch || undefined,
     mode: (untrackedMode || undefined) as any,
-  }, { enabled: untrackedEnabled });
+  }, {
+    enabled: untrackedEnabled,
+    // Keep the current page on screen while the next one loads.
+    placeholderData: (prev) => prev,
+  });
+  const untrackedTotalPages = Math.max(1, Math.ceil((untrackedData?.total ?? 0) / untrackedPageSize));
+  // Assigning the last rows of the last page: step back a page.
+  useEffect(() => {
+    if (untrackedPage > untrackedTotalPages) setUntrackedPage(untrackedTotalPages);
+  }, [untrackedPage, untrackedTotalPages]);
+  // A new page starts at its first row.
+  useEffect(() => { untrackedTableRef.current?.scrollTo({ top: 0 }); }, [untrackedPage]);
   // Track if we've ever seen untracked payments — prevents section from vanishing on refetch
   // Only hide when there are truly 0 untracked (no filters applied, query finished, total is 0)
   const [hadUntracked, setHadUntracked] = useState(false);
@@ -284,7 +281,7 @@ function CashAndBankPage() {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left: Account list */}
         <div className="min-w-0 md:col-span-4">
-          <div className="card overflow-hidden">
+          <div className="card overflow-clip">
             <div
               className="px-4 py-3 flex items-center justify-between border-b border-border-light"
             >
@@ -307,10 +304,10 @@ function CashAndBankPage() {
             ) : (
               <div className="divide-y divide-border-light">
                 {accounts.map((account) => (
-                  <div key={account.id} className="relative group">
+                  <div key={account.id} className="relative">
                     <button
                       className={cn(
-                        "w-full px-4 py-3 text-left transition-colors [@media(hover:none)]:pr-10",
+                        "w-full py-3 pl-4 pr-11 text-left transition-colors",
                         selectedAccountId === account.id
                           ? "bg-brand-600/[0.08] border-l-2 border-brand-600"
                           : "hover:bg-surface-1"
@@ -341,9 +338,10 @@ function CashAndBankPage() {
                         </p>
                       </div>
                     </button>
-                    {/* Edit button — always available on hover */}
+                    {/* Edit button — always shown, so it can be found without hovering
+                        (this is a picker list, not a table, so it keeps its icon). */}
                     <button
-                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition"
+                      className="absolute top-1/2 right-2 -translate-y-1/2 p-1.5 rounded-lg text-text-tertiary hover:text-brand-600 hover:bg-brand-600/[0.08] transition"
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditAccountId(account.id);
@@ -362,7 +360,7 @@ function CashAndBankPage() {
         {/* Right: Transactions */}
         <div className="min-w-0 md:col-span-8">
           {selectedAccountId ? (
-            <div className="card overflow-hidden">
+            <div className="card overflow-clip">
               <div
                 className="px-4 py-3 flex items-center justify-between border-b border-border-light"
               >
@@ -442,7 +440,7 @@ function CashAndBankPage() {
                   </div>
                 )}
                 </div>
-                {allTxns.length > 0 && (
+                {txns.length > 0 && (
                   <button
                     onClick={exportTransactionsCSV}
                     disabled={exporting}
@@ -462,88 +460,90 @@ function CashAndBankPage() {
                 <div className="py-10 text-center">
                   <p className="text-sm text-text-tertiary">Select a time period above to load transactions</p>
                 </div>
-              ) : allTxns.length === 0 && !txnFetching ? (
+              ) : txns.length === 0 && !txnFetching ? (
                 <EmptyState
                   title="No transactions"
                   description="No transactions in this period"
                 />
-              ) : allTxns.length === 0 && txnFetching ? (
+              ) : txns.length === 0 && txnFetching ? (
                 <TransactionTableSkeleton />
               ) : (
-                <div
-                  ref={txnScrollRef}
-                  onScroll={handleTxnScroll}
-                  className="max-h-[480px] overflow-y-auto"
-                >
-                  <table className="data-table">
-                    <thead className="sticky top-0 z-10">
-                      <tr>
-                        <th>Date</th>
-                        <th>Description</th>
-                        <th>Type</th>
-                        <th className="text-right">Amount</th>
-                        <th className="text-right">Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allTxns.map((txn: any) => (
-                        <tr
-                          key={txn.id}
-                          className={txn.referenceType === "payment" ? "cursor-pointer hover:bg-surface-1" : ""}
-                          onClick={() => {
-                            if (txn.referenceType === "payment" && txn.referenceId) {
-                              navigate({ to: "/payments", search: { q: txn.description?.match(/Payment (\S+)/)?.[1] || "" } as any });
-                            }
-                          }}
-                        >
-                          <td className="text-text-secondary">
-                            {formatDate(txn.transactionDate)}
-                          </td>
-                          <td className={txn.referenceType === "payment" ? "text-brand-600 dark:text-brand-400 hover:underline" : "text-text-primary"}>
-                            {txn.description || "—"}
-                          </td>
-                          <td>
-                            <span
-                              className={cn(
-                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium",
-                                txn.type === "deposit"
-                                  ? "bg-emerald-600/[0.08] text-emerald-600 dark:text-emerald-400"
-                                  : txn.type === "withdrawal"
-                                    ? "bg-red-600/[0.08] text-red-600 dark:text-red-400"
-                                    : "bg-blue-600/[0.08] text-blue-600 dark:text-blue-400"
-                              )}
-                            >
-                              {txn.type}
-                            </span>
-                          </td>
-                          <td
-                            className={`text-right tabular-nums font-medium ${txn.type === "deposit"
-                              ? "text-emerald-600"
-                              : "text-red-600"
-                              }`}
-                          >
-                            {txn.type === "deposit" ? "+" : "-"}
-                            {formatCurrency(txn.amount)}
-                          </td>
-                          <td className="text-right tabular-nums text-text-secondary">
-                            {formatCurrency(txn.balanceAfter)}
-                          </td>
+                <div className={cn("transition-opacity", txnFetching && "opacity-60")}>
+                  <Pagination
+                    placement="top"
+                    page={txnPage}
+                    totalPages={txnTotalPages}
+                    onPageChange={setTxnPage}
+                    total={txnTotal}
+                    pageSize={txnPageSize}
+                  />
+                  <TableScroll ref={txnTableRef}>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Description</th>
+                          <th>Type</th>
+                          <th className="text-right">Amount</th>
+                          <th className="text-right">Balance</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {/* Infinite scroll loading indicator */}
-                  {txnFetching && allTxns.length > 0 && (
-                    <div className="flex items-center justify-center py-3 border-t border-border-light">
-                      <Spinner size="sm" className="text-brand-600" />
-                      <span className="ml-2 text-xs text-text-tertiary">Loading more…</span>
-                    </div>
-                  )}
-                  {!hasMoreTxns && allTxns.length > TXN_PAGE_SIZE && (
-                    <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
-                      All {txnTotal.toLocaleString()} transactions loaded
-                    </div>
-                  )}
+                      </thead>
+                      <tbody>
+                        {txns.map((txn: any) => (
+                          <tr
+                            key={txn.id}
+                            className={txn.referenceType === "payment" ? "cursor-pointer hover:bg-surface-1" : ""}
+                            onClick={() => {
+                              if (txn.referenceType === "payment" && txn.referenceId) {
+                                navigate({ to: "/payments", search: { q: txn.description?.match(/Payment (\S+)/)?.[1] || "" } as any });
+                              }
+                            }}
+                          >
+                            <td className="text-text-secondary">
+                              {formatDate(txn.transactionDate)}
+                            </td>
+                            <td className={txn.referenceType === "payment" ? "text-brand-600 dark:text-brand-400 hover:underline" : "text-text-primary"}>
+                              {txn.description || "—"}
+                            </td>
+                            <td>
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium",
+                                  txn.type === "deposit"
+                                    ? "bg-emerald-600/[0.08] text-emerald-600 dark:text-emerald-400"
+                                    : txn.type === "withdrawal"
+                                      ? "bg-red-600/[0.08] text-red-600 dark:text-red-400"
+                                      : "bg-blue-600/[0.08] text-blue-600 dark:text-blue-400"
+                                )}
+                              >
+                                {txn.type}
+                              </span>
+                            </td>
+                            <td
+                              className={`text-right tabular-nums font-medium ${txn.type === "deposit"
+                                ? "text-emerald-600"
+                                : "text-red-600"
+                                }`}
+                            >
+                              {txn.type === "deposit" ? "+" : "-"}
+                              {formatCurrency(txn.amount)}
+                            </td>
+                            <td className="text-right tabular-nums text-text-secondary">
+                              {formatCurrency(txn.balanceAfter)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </TableScroll>
+                  <Pagination
+                    page={txnPage}
+                    totalPages={txnTotalPages}
+                    onPageChange={setTxnPage}
+                    total={txnTotal}
+                    pageSize={txnPageSize}
+                    onPageSizeChange={setTxnPageSize}
+                  />
                 </div>
               )}
             </div>
@@ -578,18 +578,21 @@ function CashAndBankPage() {
 
           {/* Filters row */}
           <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <PillTabs
-              tabs={[
-                { value: "cash", label: "Cash" },
-                { value: "upi", label: "UPI" },
-                { value: "bank", label: "Bank" },
-                { value: "cheque", label: "Cheque" },
-                { value: "other", label: "Other" },
-                { value: "", label: "All" },
-              ]}
-              value={untrackedMode}
-              onChange={setUntrackedMode}
-            />
+            {/* The mode tabs scroll sideways on phones instead of wrapping. */}
+            <div className="min-w-0 max-w-full overflow-x-auto">
+              <PillTabs
+                tabs={[
+                  { value: "cash", label: "Cash" },
+                  { value: "upi", label: "UPI" },
+                  { value: "bank", label: "Bank" },
+                  { value: "cheque", label: "Cheque" },
+                  { value: "other", label: "Other" },
+                  { value: "", label: "All" },
+                ]}
+                value={untrackedMode}
+                onChange={setUntrackedMode}
+              />
+            </div>
           </div>
 
           {/* Bulk assign toolbar — appears when items are selected */}
@@ -687,87 +690,98 @@ function CashAndBankPage() {
             </div>
           )}
           {untrackedData && untrackedData.data.length > 0 && (
-            <div className="card overflow-hidden">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th className="w-10">
-                      <input
-                        type="checkbox"
-                        checked={
-                          untrackedData.data.length > 0 &&
-                          untrackedData.data.every((p) => selectedUntracked.has(p.id))
-                        }
-                        onChange={(e) => {
-                          const next = new Set(selectedUntracked);
-                          if (e.target.checked) {
-                            untrackedData.data.forEach((p) => next.add(p.id));
-                          } else {
-                            untrackedData.data.forEach((p) => next.delete(p.id));
-                          }
-                          setSelectedUntracked(next);
-                        }}
-                        className="w-4 h-4 rounded"
-                      />
-                    </th>
-                    <th>Payment #</th>
-                    <th>Party</th>
-                    <th>Date</th>
-                    <th>Mode</th>
-                    <th className="text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {untrackedData.data.map((pmt) => (
-                    <tr
-                      key={pmt.id}
-                      className="group cursor-pointer"
-                      onClick={() => navigate({ to: "/payments", search: { q: pmt.paymentNumber || pmt.partyName } as any })}
-                    >
-                      <td onClick={(e) => e.stopPropagation()}>
+            <div className={cn("card overflow-clip transition-opacity", untrackedFetching && "opacity-60")}>
+              <Pagination
+                placement="top"
+                page={untrackedPage}
+                totalPages={untrackedTotalPages}
+                onPageChange={setUntrackedPage}
+                total={untrackedData.total}
+                pageSize={untrackedPageSize}
+              />
+              <TableScroll ref={untrackedTableRef}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th className="w-10">
                         <input
                           type="checkbox"
-                          checked={selectedUntracked.has(pmt.id)}
+                          checked={
+                            untrackedData.data.length > 0 &&
+                            untrackedData.data.every((p) => selectedUntracked.has(p.id))
+                          }
                           onChange={(e) => {
                             const next = new Set(selectedUntracked);
-                            if (e.target.checked) next.add(pmt.id);
-                            else next.delete(pmt.id);
+                            if (e.target.checked) {
+                              untrackedData.data.forEach((p) => next.add(p.id));
+                            } else {
+                              untrackedData.data.forEach((p) => next.delete(p.id));
+                            }
                             setSelectedUntracked(next);
                           }}
                           className="w-4 h-4 rounded"
                         />
-                      </td>
-                      <td className="font-mono text-ui text-brand-600 dark:text-brand-400 hover:underline">
-                        {pmt.paymentNumber || "—"}
-                      </td>
-                      <td className="font-medium">{pmt.partyName}</td>
-                      <td className="text-text-secondary">{formatDate(pmt.paymentDate)}</td>
-                      <td>
-                        <Badge
-                          size="sm"
-                          color={
-                            pmt.mode === "upi" ? "bg-brand-600/[0.08] text-brand-700 dark:text-brand-400" :
-                            pmt.mode === "cash" ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400" :
-                            pmt.mode === "bank" ? "bg-blue-600/[0.08] text-blue-700 dark:text-blue-400" :
-                            "bg-surface-2 text-text-secondary"
-                          }
-                        >
-                          {pmt.mode.toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="text-right tabular-nums font-semibold text-emerald-600">
-                        {formatCurrency(pmt.amount)}
-                      </td>
+                      </th>
+                      <th>Payment #</th>
+                      <th>Party</th>
+                      <th>Date</th>
+                      <th>Mode</th>
+                      <th className="text-right">Amount</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {untrackedData.data.map((pmt) => (
+                      <tr
+                        key={pmt.id}
+                        className="group cursor-pointer"
+                        onClick={() => navigate({ to: "/payments", search: { q: pmt.paymentNumber || pmt.partyName } as any })}
+                      >
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedUntracked.has(pmt.id)}
+                            onChange={(e) => {
+                              const next = new Set(selectedUntracked);
+                              if (e.target.checked) next.add(pmt.id);
+                              else next.delete(pmt.id);
+                              setSelectedUntracked(next);
+                            }}
+                            className="w-4 h-4 rounded"
+                          />
+                        </td>
+                        <td className="font-mono text-ui text-brand-600 dark:text-brand-400 hover:underline">
+                          {pmt.paymentNumber || "—"}
+                        </td>
+                        <td className="font-medium">{pmt.partyName}</td>
+                        <td className="text-text-secondary">{formatDate(pmt.paymentDate)}</td>
+                        <td>
+                          <Badge
+                            size="sm"
+                            color={
+                              pmt.mode === "upi" ? "bg-brand-600/[0.08] text-brand-700 dark:text-brand-400" :
+                              pmt.mode === "cash" ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400" :
+                              pmt.mode === "bank" ? "bg-blue-600/[0.08] text-blue-700 dark:text-blue-400" :
+                              "bg-surface-2 text-text-secondary"
+                            }
+                          >
+                            {pmt.mode.toUpperCase()}
+                          </Badge>
+                        </td>
+                        <td className="text-right tabular-nums font-semibold text-emerald-600">
+                          {formatCurrency(pmt.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableScroll>
               <Pagination
                 page={untrackedPage}
-                totalPages={Math.ceil(untrackedData.total / UNTRACKED_PAGE_SIZE)}
+                totalPages={untrackedTotalPages}
                 onPageChange={setUntrackedPage}
                 total={untrackedData.total}
-                pageSize={UNTRACKED_PAGE_SIZE}
+                pageSize={untrackedPageSize}
+                onPageSizeChange={setUntrackedPageSize}
               />
             </div>
           )}

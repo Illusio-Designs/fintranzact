@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, downloadCSV, cn, formatDateInput, toISOString } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
 import { useHotkeys } from "@/hooks/useHotkeys";
-import { useInfiniteList } from "@/hooks/useInfiniteList";
+import { usePageSize } from "@/hooks/usePageSize";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -17,6 +17,8 @@ import { Icon } from "@/components/ui/Icon";
 import { DeliveryTruck01Icon } from "@hugeicons/core-free-icons";
 import { Select } from "@/components/ui/Select";
 import { DateInput } from "@/components/ui/DateInput";
+import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
 
 export const Route = createFileRoute("/shipments")({
   component: ShipmentsPage,
@@ -71,8 +73,6 @@ const MODE_OPTIONS: { value: string; label: string }[] = [
   { value: "transport", label: "Transport" },
   { value: "post", label: "Post" },
 ];
-
-const PAGE_SIZE = 20;
 
 // ── Status badge ──────────────────────────────────────────────────
 
@@ -451,6 +451,8 @@ function ShipmentDetailPanel({ shipmentId, onClose, onUpdated }: ShipmentDetailP
 function ShipmentsPage() {
   const [status, setStatus] = useState<ShipmentStatus | "">("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("shipments", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -458,25 +460,25 @@ function ShipmentsPage() {
 
   const utils = trpc.useUtils();
 
-  const loadMore = useCallback(() => setPage((p) => p + 1), []);
-
   const { data, isFetching, isLoading } = trpc.shipment.list.useQuery({
     status: (status || undefined) as ShipmentStatus | undefined,
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
   }, {
+    // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
-  const list = useInfiniteList({
-    key: "shipments",
-    data: data?.data as ShipmentRow[] | undefined,
-    total: data?.total ?? 0,
-    page,
-    isFetching,
-    onLoadMore: loadMore,
-    resetDeps: [status],
-  });
+  const rows = (data?.data ?? []) as ShipmentRow[];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // Back to page 1 whenever the status filter or rows per page change.
+  useEffect(() => { setPage(1); }, [status, pageSize]);
+  // Deleting the last row of the last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   async function exportCSV() {
     setExporting(true);
@@ -529,14 +531,17 @@ function ShipmentsPage() {
         }
       />
 
-      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
         {/* Status filter */}
         <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-3">
-          <PillTabs
-            tabs={STATUS_TABS}
-            value={status}
-            onChange={(v) => { setStatus(v as ShipmentStatus | ""); setPage(1); }}
-          />
+          {/* Six statuses scroll sideways on phones instead of wrapping. */}
+          <div className="min-w-0 max-w-full overflow-x-auto">
+            <PillTabs
+              tabs={STATUS_TABS}
+              value={status}
+              onChange={(v) => setStatus(v as ShipmentStatus | "")}
+            />
+          </div>
         </div>
 
         {/* Content */}
@@ -544,7 +549,7 @@ function ShipmentsPage() {
           <div className="p-4">
             <SkeletonRows count={6} height="h-14" />
           </div>
-        ) : !list.items.length && !isFetching ? (
+        ) : !rows.length && !isFetching ? (
           <EmptyState
             icon={
               <Icon icon={DeliveryTruck01Icon} size={24} className="text-text-tertiary" />
@@ -553,14 +558,18 @@ function ShipmentsPage() {
             description={status ? `No shipments with status "${status}".` : "No shipments have been created yet."}
           />
         ) : (
-          <div>
-            <div
-              ref={list.scrollRef}
-              onScroll={list.onScroll}
-              className="max-h-[600px] overflow-y-auto"
-            >
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+            />
+            <TableScroll ref={tableRef}>
               <table className="data-table w-full">
-                <thead className="sticky top-0 z-10">
+                <thead>
                   <tr>
                     <th className="whitespace-nowrap">Date</th>
                     <th className="whitespace-nowrap">Invoice #</th>
@@ -573,7 +582,7 @@ function ShipmentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {list.items.map((s) => (
+                  {rows.map((s) => (
                     <tr
                       key={s.id}
                       className="group cursor-pointer"
@@ -618,31 +627,15 @@ function ShipmentsPage() {
                   ))}
                 </tbody>
               </table>
-              {list.loadingMore && (
-                <div className="border-t border-border-light">
-                  <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                    <div className="h-3 bg-surface-2 rounded w-32" />
-                    <div className="h-3 bg-surface-2 rounded w-20" />
-                    <div className="h-3 bg-surface-2 rounded w-24" />
-                    <div className="h-3 bg-surface-2 rounded w-16 ml-auto" />
-                  </div>
-                </div>
-              )}
-              {list.hasMore && !list.loadingMore && (
-                <button
-                  type="button"
-                  onClick={list.loadMore}
-                  className="w-full py-2.5 text-xs text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/20 border-t border-border-light transition-colors"
-                >
-                  Load more
-                </button>
-              )}
-              {!list.hasMore && list.items.length > PAGE_SIZE && (
-                <div className="py-2 text-center text-xs text-text-tertiary border-t border-border-light">
-                  All {list.total.toLocaleString()} records loaded
-                </div>
-              )}
-            </div>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         )}
       </div>

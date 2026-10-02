@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
@@ -13,6 +13,10 @@ import { InputField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { Spinner } from "@/components/ui/Spinner";
 import { Select } from "@/components/ui/Select";
+import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
+import { usePageSize } from "@/hooks/usePageSize";
 
 import { Alert02Icon, CancelCircleIcon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/Icon";
@@ -32,8 +36,6 @@ const CANCEL_REASONS = [
 ] as const;
 
 type CancelReason = (typeof CANCEL_REASONS)[number]["value"];
-
-const PAGE_SIZE = 25;
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -63,16 +65,28 @@ function DashboardTab() {
   const [tab, setTab] = useState("");
   const [search] = usePageSearch("Search invoice # or party…");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("e-invoices", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState<CancelReason>("1");
   const [cancelRemarks, setCancelRemarks] = useState("");
 
-  const { data, isLoading } = trpc.eInvoice.dashboard.useQuery({
+  // Back to page 1 whenever the status tab, search or rows per page change.
+  useEffect(() => {
+    setPage(1);
+  }, [tab, search, pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
+
+  const { data, isLoading, isFetching } = trpc.eInvoice.dashboard.useQuery({
     status: (tab as "pending" | "generated" | "failed" | "cancelled") || undefined,
     search: search || undefined,
     page,
-    limit: PAGE_SIZE,
-  }, { placeholderData: (prev) => prev });
+    limit: pageSize,
+  }, {
+    // Keep the current page on screen while the next one loads.
+    placeholderData: (prev) => prev,
+  });
 
   const utils = trpc.useUtils();
 
@@ -103,7 +117,9 @@ function DashboardTab() {
 
   const counts = data?.counts ?? { generated: 0, pending: 0, failed: 0, cancelled: 0 };
   const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // The last row of the last page left (e.g. a filter shrank the list): step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const statusTabs = [
     { value: "", label: `All (${Object.values(counts).reduce((a, b) => a + b, 0)})` },
@@ -133,7 +149,7 @@ function DashboardTab() {
       </div>
 
       {/* Filters + bulk retry */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-clip">
         <div className="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-border-light">
           {hasFailed && (
             <button
@@ -149,7 +165,10 @@ function DashboardTab() {
 
         {/* Status tabs */}
         <div className="px-4 py-2 border-b border-border-light">
-          <PillTabs tabs={statusTabs} value={tab} onChange={(v) => { setTab(v); setPage(1); }} />
+          {/* Five tabs with counts scroll sideways on phones instead of wrapping. */}
+          <div className="min-w-0 max-w-full overflow-x-auto">
+            <PillTabs tabs={statusTabs} value={tab} onChange={setTab} />
+          </div>
         </div>
 
         {/* Table */}
@@ -165,106 +184,95 @@ function DashboardTab() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Invoice #</th>
-                  <th>Date</th>
-                  <th>Party</th>
-                  <th>Amount</th>
-                  <th>IRN</th>
-                  <th>Ack Date</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.data.map((inv) => (
-                  <tr key={inv.id} className="group">
-                    <td className="font-mono text-xs text-text-primary">{inv.invoiceNumber}</td>
-                    <td className="text-text-secondary whitespace-nowrap">{formatDate(inv.invoiceDate)}</td>
-                    <td className="text-text-primary max-w-[180px] truncate">{inv.partyName}</td>
-                    <td className="text-right tabular-nums font-semibold">{formatCurrency(inv.totalAmount)}</td>
-                    <td className="font-mono text-2xs text-text-tertiary max-w-[140px] truncate">
-                      {inv.irn ?? "—"}
-                    </td>
-                    <td className="text-text-secondary whitespace-nowrap text-xs">
-                      {inv.irnAckDate ? formatDate(inv.irnAckDate) : "—"}
-                    </td>
-                    <td>
-                      <Badge size="sm" color={statusColor(inv.eInvoiceStatus)} className="uppercase">
-                        {statusLabel(inv.eInvoiceStatus)}
-                      </Badge>
-                      {inv.eInvoiceError && (
-                        <span className="ml-1.5 inline-flex align-middle text-red-500" title={inv.eInvoiceError} aria-label={inv.eInvoiceError}>
-                          <Icon icon={Alert02Icon} size={12} />
-                        </span>
-                      )}
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {(inv.eInvoiceStatus === "failed" || inv.eInvoiceStatus === "pending") && (
-                          <button
-                            onClick={() => generateMutation.mutate({ invoiceId: inv.id })}
-                            disabled={generateMutation.isPending}
-                            className="text-2xs px-2 py-0.5 rounded bg-brand-600/[0.08] text-brand-700 dark:text-brand-400 hover:bg-brand-600/[0.14] transition-colors"
-                            title="Retry"
-                          >
-                            Retry
-                          </button>
-                        )}
-                        {inv.eInvoiceStatus === null && (
-                          <button
-                            onClick={() => generateMutation.mutate({ invoiceId: inv.id })}
-                            disabled={generateMutation.isPending}
-                            className="text-2xs px-2 py-0.5 rounded bg-brand-600/[0.08] text-brand-700 dark:text-brand-400 hover:bg-brand-600/[0.14] transition-colors"
-                          >
-                            Generate
-                          </button>
-                        )}
-                        {inv.eInvoiceStatus === "generated" && inv.irn && (
-                          <button
-                            onClick={() => {
-                              setCancelId(inv.id);
-                              setCancelReason("1");
-                              setCancelRemarks("");
-                            }}
-                            className="text-2xs px-2 py-0.5 rounded bg-red-600/[0.08] text-red-600 dark:text-red-400 hover:bg-red-600/[0.14] transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    </td>
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+            />
+            <TableScroll ref={tableRef}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Invoice #</th>
+                    <th>Date</th>
+                    <th>Party</th>
+                    <th className="text-right">Amount</th>
+                    <th>IRN</th>
+                    <th>Ack Date</th>
+                    <th>Status</th>
+                    <th className="text-right"><span className="sr-only">Actions</span></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-border-light flex items-center justify-between text-sm text-text-secondary">
-            <span>{total} invoices</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="px-2 py-1 rounded border border-border-light hover:bg-surface-2 disabled:opacity-40"
-              >
-                Prev
-              </button>
-              <span className="text-xs">{page} / {totalPages}</span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="px-2 py-1 rounded border border-border-light hover:bg-surface-2 disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
+                </thead>
+                <tbody>
+                  {data.data.map((inv) => (
+                    <tr key={inv.id}>
+                      <td className="font-mono text-xs text-text-primary">{inv.invoiceNumber}</td>
+                      <td className="text-text-secondary whitespace-nowrap">{formatDate(inv.invoiceDate)}</td>
+                      <td className="text-text-primary max-w-[180px] truncate">{inv.partyName}</td>
+                      <td className="text-right tabular-nums font-semibold">{formatCurrency(inv.totalAmount)}</td>
+                      <td className="font-mono text-2xs text-text-tertiary max-w-[140px] truncate">
+                        {inv.irn ?? "—"}
+                      </td>
+                      <td className="text-text-secondary whitespace-nowrap text-xs">
+                        {inv.irnAckDate ? formatDate(inv.irnAckDate) : "—"}
+                      </td>
+                      <td>
+                        <Badge size="sm" color={statusColor(inv.eInvoiceStatus)} className="uppercase">
+                          {statusLabel(inv.eInvoiceStatus)}
+                        </Badge>
+                        {inv.eInvoiceError && (
+                          <span className="ml-1.5 inline-flex align-middle text-red-500" title={inv.eInvoiceError} aria-label={inv.eInvoiceError}>
+                            <Icon icon={Alert02Icon} size={12} />
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                        {/* Generate/Retry live in the menu too: IRNs are normally made
+                            automatically when an invoice is saved, and "Retry All Failed"
+                            above covers the bulk case, so a per-row button isn't the main task here. */}
+                        <RowActions
+                          label={inv.invoiceNumber}
+                          items={tidyMenu([
+                            (inv.eInvoiceStatus === "failed" || inv.eInvoiceStatus === "pending") && {
+                              label: "Retry IRN",
+                              disabled: generateMutation.isPending,
+                              onSelect: () => generateMutation.mutate({ invoiceId: inv.id }),
+                            },
+                            inv.eInvoiceStatus === null && {
+                              label: "Generate IRN",
+                              disabled: generateMutation.isPending,
+                              onSelect: () => generateMutation.mutate({ invoiceId: inv.id }),
+                            },
+                            { kind: "separator" },
+                            inv.eInvoiceStatus === "generated" && !!inv.irn && {
+                              label: "Cancel IRN",
+                              danger: true,
+                              onSelect: () => {
+                                setCancelId(inv.id);
+                                setCancelReason("1");
+                                setCancelRemarks("");
+                              },
+                            },
+                          ])}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         )}
       </div>

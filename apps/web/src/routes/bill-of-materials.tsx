@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { keepPreviousData } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
@@ -12,6 +11,8 @@ import { InputField, TextareaField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { usePageSize } from "@/hooks/usePageSize";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
@@ -21,8 +22,6 @@ import { UnitCombobox, type UnitChoice } from "@/components/inventory/UnitCombob
 export const Route = createFileRoute("/bill-of-materials")({
   component: BillOfMaterialsPage,
 });
-
-const PAGE_SIZE = 25;
 
 type Row = { key: string; unitKey: string; info: UnitChoice | null; quantity: string; wastage: string };
 
@@ -57,12 +56,24 @@ const QTY = /^\d+(\.\d{1,3})?$/;
 function BillOfMaterialsPage() {
   const utils = trpc.useUtils();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("bill-of-materials", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const debounced = useDebounce(search, 300);
   const { data, isFetching } = trpc.manufacturing.boms.useQuery(
-    { search: debounced || undefined, page, limit: PAGE_SIZE },
-    { placeholderData: keepPreviousData },
+    { search: debounced || undefined, page, limit: pageSize },
+    // Keep the current page on screen while the next one loads.
+    { placeholderData: (prev) => prev },
   );
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // Back to page 1 whenever the search or rows per page change.
+  useEffect(() => { setPage(1); }, [debounced, pageSize]);
+  // Deleting the last row of the last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Form>(emptyForm);
@@ -144,7 +155,6 @@ function BillOfMaterialsPage() {
   }
 
   const saving = create.isPending || update.isPending;
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
   const openNew = () => {
     setForm(emptyForm());
     setOpen(true);
@@ -159,10 +169,10 @@ function BillOfMaterialsPage() {
       />
 
       <div className="mb-4 max-w-sm">
-        <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search BOMs or items" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search BOMs or items" />
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-clip">
         {!data ? (
           <SkeletonRows />
         ) : data.data.length === 0 ? (
@@ -172,9 +182,17 @@ function BillOfMaterialsPage() {
             action={!debounced ? <button className="btn-primary" onClick={openNew}>Create a BOM</button> : undefined}
           />
         ) : (
-          <>
-            <div className={cn("overflow-x-auto", isFetching && "opacity-70")}>
-              <table className="data-table">
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+            />
+            <TableScroll ref={tableRef}>
+              <table className="data-table w-full">
                 <thead>
                   <tr>
                     <th>Item made</th>
@@ -204,11 +222,16 @@ function BillOfMaterialsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
-            <div className="border-t border-border-light px-4 py-3">
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={data.total} pageSize={PAGE_SIZE} />
-            </div>
-          </>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
+          </div>
         )}
       </div>
 

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc, getBusinessId } from "@/lib/trpc";
 import { formatDate, formatCurrency, cn } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
@@ -16,6 +16,10 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Combobox } from "@/components/ui/Combobox";
 import { useDebounce } from "@/hooks/useDebounce";
 import { openPdf } from "@/lib/open-pdf";
+import { usePageSize } from "@/hooks/usePageSize";
+import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
 
 export const Route = createFileRoute("/eway-bills")({
   component: EWayBillsPage,
@@ -188,6 +192,12 @@ function EWayBillsPage() {
   const [activeTab, setActiveTab] = useState<EWBTab>("dashboard");
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("eway-bills", 25);
+
+  // Back to page 1 whenever the status filter or rows per page change.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, pageSize]);
 
   // Modals
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -227,11 +237,17 @@ function EWayBillsPage() {
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
-  const { data: dashboardData, isLoading: dashLoading } = trpc.ewayBill.dashboard.useQuery({
+  const { data: dashboardData, isLoading: dashLoading, isFetching: dashFetching } = trpc.ewayBill.dashboard.useQuery({
     status: (statusFilter || undefined) as "generated" | "active" | "cancelled" | "expired" | undefined,
     page,
-    limit: 20,
-  }, { placeholderData: (prev) => prev });
+    limit: pageSize,
+  }, {
+    // Keep the current page on screen while the next one loads.
+    placeholderData: (prev) => prev,
+  });
+  const dashTotalPages = Math.max(1, Math.ceil((dashboardData?.total ?? 0) / pageSize));
+  // The last bill of the last page went (e.g. a filter shrank the list): step back a page.
+  useEffect(() => { if (page > dashTotalPages) setPage(dashTotalPages); }, [page, dashTotalPages]);
 
   const { data: expiringData, isLoading: expiringLoading } = trpc.ewayBill.expiringList.useQuery();
 
@@ -357,13 +373,13 @@ function EWayBillsPage() {
           label="Generated"
           count={generatedCount}
           color="blue"
-          onClick={() => { setStatusFilter("generated"); setPage(1); setActiveTab("dashboard"); }}
+          onClick={() => { setStatusFilter("generated"); setActiveTab("dashboard"); }}
         />
         <SummaryCard
           label="Active"
           count={activeCount}
           color="green"
-          onClick={() => { setStatusFilter("active"); setPage(1); setActiveTab("dashboard"); }}
+          onClick={() => { setStatusFilter("active"); setActiveTab("dashboard"); }}
         />
         <SummaryCard
           label="Expiring Soon"
@@ -375,7 +391,7 @@ function EWayBillsPage() {
           label="Expired"
           count={expiredCount}
           color="red"
-          onClick={() => { setStatusFilter("expired"); setPage(1); setActiveTab("dashboard"); }}
+          onClick={() => { setStatusFilter("expired"); setActiveTab("dashboard"); }}
         />
       </div>
 
@@ -392,10 +408,14 @@ function EWayBillsPage() {
         <DashboardTab
           data={dashboardData}
           isLoading={dashLoading}
+          isFetching={dashFetching}
           statusFilter={statusFilter}
-          onStatusFilterChange={(v) => { setStatusFilter(v); setPage(1); }}
+          onStatusFilterChange={setStatusFilter}
           page={page}
+          totalPages={dashTotalPages}
           onPageChange={setPage}
+          pageSize={pageSize}
+          onPageSizeChange={setPageSize}
           onUpdateVehicle={(ewbId) => {
             setUpdateVehicleEwbId(ewbId);
             setUpdateForm(EMPTY_UPDATE_FORM);
@@ -415,6 +435,7 @@ function EWayBillsPage() {
             setUpdateForm(EMPTY_UPDATE_FORM);
             setUpdateErrors({});
           }}
+          onViewDetail={(ewbId) => setDetailEwbId(ewbId)}
         />
       )}
 
@@ -656,38 +677,51 @@ function EWayBillsPage() {
 function DashboardTab({
   data,
   isLoading,
+  isFetching,
   statusFilter,
   onStatusFilterChange,
   page,
+  totalPages,
   onPageChange,
+  pageSize,
+  onPageSizeChange,
   onUpdateVehicle,
   onCancel,
   onViewDetail,
 }: {
   data: DashboardData | undefined;
   isLoading: boolean;
+  isFetching: boolean;
   statusFilter: string;
   onStatusFilterChange: (v: string) => void;
   page: number;
+  totalPages: number;
   onPageChange: (p: number) => void;
+  pageSize: number;
+  onPageSizeChange: (size: number) => void;
   onUpdateVehicle: (ewbId: string) => void;
   onCancel: (ewbId: string) => void;
   onViewDetail: (invoiceId: string) => void;
 }) {
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
-  const limit = data?.limit ?? 20;
+  const tableRef = useRef<HTMLDivElement>(null);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   const statusTabs = STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-clip">
       <div className="px-4 py-3 border-b border-border-light">
-        <PillTabs
-          tabs={statusTabs}
-          value={statusFilter}
-          onChange={onStatusFilterChange}
-        />
+        {/* Five status tabs scroll sideways on phones instead of wrapping. */}
+        <div className="min-w-0 max-w-full overflow-x-auto">
+          <PillTabs
+            tabs={statusTabs}
+            value={statusFilter}
+            onChange={onStatusFilterChange}
+          />
+        </div>
       </div>
 
       {isLoading ? (
@@ -698,8 +732,16 @@ function DashboardTab({
           description={statusFilter ? `No ${statusFilter} E-Way Bills found` : "Generate your first E-Way Bill to get started"}
         />
       ) : (
-        <>
-          <div className="overflow-x-auto">
+        <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+          <Pagination
+            placement="top"
+            page={page}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+            total={total}
+            pageSize={pageSize}
+          />
+          <TableScroll ref={tableRef}>
             <table className="data-table">
               <thead>
                 <tr>
@@ -711,7 +753,7 @@ function DashboardTab({
                   <th>Generated</th>
                   <th>Valid Upto</th>
                   <th>Status</th>
-                  <th></th>
+                  <th className="text-right"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -721,9 +763,15 @@ function DashboardTab({
                     ? (Date.now() - new Date(row.ewbDate).getTime()) < 24 * 60 * 60 * 1000
                     : false;
                   const canUpdate = row.status === "generated" || row.status === "active";
+                  // The details (and vehicle history) are looked up by invoice.
+                  const invoiceId = row.invoiceId;
 
                   return (
-                    <tr key={row.id} className="group">
+                    <tr
+                      key={row.id}
+                      className={cn(invoiceId && "cursor-pointer")}
+                      onClick={invoiceId ? () => onViewDetail(invoiceId) : undefined}
+                    >
                       <td className="font-mono text-xs text-text-primary">
                         {row.ewbNumber ?? "—"}
                       </td>
@@ -756,84 +804,32 @@ function DashboardTab({
                         </Badge>
                       </td>
                       <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
-                          {row.ewbNumber && (
-                            <button
-                              className="p-1.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors text-xs"
-                              onClick={() => printEwayBill(row.id, row.ewbNumber)}
-                              title="Print e-way bill"
-                              aria-label={`Print e-way bill ${row.ewbNumber}`}
-                            >
-                              Print
-                            </button>
-                          )}
-                          {row.invoiceId && (
-                            <button
-                              className="p-1.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors text-xs"
-                              onClick={() => onViewDetail(row.invoiceId!)}
-                              title="View details"
-                            >
-                              View
-                            </button>
-                          )}
-                          {canUpdate && (
-                            <button
-                              className="p-1.5 rounded text-text-tertiary hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/20 transition-colors text-xs"
-                              onClick={() => onUpdateVehicle(row.id)}
-                              title="Update vehicle"
-                            >
-                              Update
-                            </button>
-                          )}
-                          {canCancel && (
-                            <button
-                              className="p-1.5 rounded text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors text-xs"
-                              onClick={() => onCancel(row.id)}
-                              title="Cancel EWB"
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </div>
+                        <RowActions
+                          label={row.ewbNumber ?? row.invoiceNumber ?? "e-way bill"}
+                          items={tidyMenu([
+                            !!invoiceId && { label: "Open", hint: "Enter", onSelect: () => onViewDetail(invoiceId) },
+                            !!row.ewbNumber && { label: "Print e-way bill", onSelect: () => printEwayBill(row.id, row.ewbNumber) },
+                            canUpdate && { label: "Update vehicle", onSelect: () => onUpdateVehicle(row.id) },
+                            { kind: "separator" },
+                            canCancel && { label: "Cancel e-way bill", danger: true, onSelect: () => onCancel(row.id) },
+                          ])}
+                        />
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </div>
-
-          {/* Pagination */}
-          {total > limit && (
-            <div className="px-4 py-3 border-t border-border-light flex items-center justify-between">
-              <p className="text-xs text-text-tertiary">
-                Page {page} of {Math.ceil(total / limit)} ({total.toLocaleString()} records)
-              </p>
-              <div className="flex gap-2">
-                <button
-                  className="btn-secondary text-xs px-2 py-1"
-                  onClick={() => onPageChange(page - 1)}
-                  disabled={page <= 1}
-                >
-                  Previous
-                </button>
-                <button
-                  className="btn-secondary text-xs px-2 py-1"
-                  onClick={() => onPageChange(page + 1)}
-                  disabled={page >= Math.ceil(total / limit)}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="px-4 py-2.5 border-t border-border-light">
-            <p className="text-xs text-text-tertiary">
-              {total.toLocaleString()} E-Way Bill{total !== 1 ? "s" : ""}
-            </p>
-          </div>
-        </>
+          </TableScroll>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+            total={total}
+            pageSize={pageSize}
+            onPageSizeChange={onPageSizeChange}
+          />
+        </div>
       )}
     </div>
   );
@@ -845,10 +841,12 @@ function ExpiringTab({
   data,
   isLoading,
   onUpdateVehicle,
+  onViewDetail,
 }: {
   data: EWBRow[] | undefined;
   isLoading: boolean;
   onUpdateVehicle: (ewbId: string) => void;
+  onViewDetail: (invoiceId: string) => void;
 }) {
   if (isLoading) return <EWBTableSkeleton />;
 
@@ -864,7 +862,7 @@ function ExpiringTab({
   }
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-clip">
       <div className="px-4 py-3 border-b border-border-light flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
         <span className="text-sm font-medium text-text-primary">
@@ -872,7 +870,8 @@ function ExpiringTab({
         </span>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Not paged: the server returns every bill expiring in the next 24 hours. */}
+      <TableScroll>
         <table className="data-table">
           <thead>
             <tr>
@@ -883,7 +882,7 @@ function ExpiringTab({
               <th>Vehicle</th>
               <th>Expires</th>
               <th>Time Left</th>
-              <th></th>
+              <th className="text-right"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -891,9 +890,14 @@ function ExpiringTab({
               const validUpto = row.validUpto ? new Date(row.validUpto) : null;
               const hours = validUpto ? hoursUntil(validUpto) : null;
               const urgent = hours !== null && hours < 8;
+              const invoiceId = row.invoiceId;
 
               return (
-                <tr key={row.id} className={cn("group", urgent && "bg-red-600/[0.02]")}>
+                <tr
+                  key={row.id}
+                  className={cn(urgent && "bg-red-600/[0.02]", invoiceId && "cursor-pointer")}
+                  onClick={invoiceId ? () => onViewDetail(invoiceId) : undefined}
+                >
                   <td className="font-mono text-xs">{row.ewbNumber ?? "—"}</td>
                   <td className="text-text-secondary text-xs">{row.invoiceNumber ?? "—"}</td>
                   <td className="max-w-[140px] truncate">{row.partyName ?? "—"}</td>
@@ -914,21 +918,20 @@ function ExpiringTab({
                     ) : "—"}
                   </td>
                   <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        className="px-2 py-1 rounded text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/20 transition-colors"
-                        onClick={() => onUpdateVehicle(row.id)}
-                      >
-                        Update Vehicle
-                      </button>
-                    </div>
+                    <RowActions
+                      label={row.ewbNumber ?? row.invoiceNumber ?? "e-way bill"}
+                      items={tidyMenu([
+                        !!invoiceId && { label: "Open", hint: "Enter", onSelect: () => onViewDetail(invoiceId) },
+                        { label: "Update vehicle", onSelect: () => onUpdateVehicle(row.id) },
+                      ])}
+                    />
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     </div>
   );
 }

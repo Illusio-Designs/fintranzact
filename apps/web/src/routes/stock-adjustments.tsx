@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { keepPreviousData } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
@@ -12,6 +11,8 @@ import { Listbox } from "@/components/ui/Listbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { usePageSize } from "@/hooks/usePageSize";
 import { PillTabs } from "@/components/ui/Tabs";
 import {
   StockLinesEditor,
@@ -25,8 +26,6 @@ import {
 export const Route = createFileRoute("/stock-adjustments")({
   component: StockAdjustmentsPage,
 });
-
-const PAGE_SIZE = 25;
 
 const REASONS = [
   "Damaged goods",
@@ -42,9 +41,16 @@ function StockAdjustmentsPage() {
   const utils = trpc.useUtils();
   const [page, setPage] = useState(1);
   const [kind, setKind] = useState<"all" | "physical">("all");
+  const [pageSize, setPageSize] = usePageSize("stock-adjustments", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
+  // Back to page 1 when the tab or rows per page change.
+  useEffect(() => setPage(1), [kind, pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
   const { data, isFetching } = trpc.stock.adjustments.useQuery(
-    { kind, page, limit: PAGE_SIZE },
-    { placeholderData: keepPreviousData },
+    { kind, page, limit: pageSize },
+    // Keep the current page on screen while the next one loads.
+    { placeholderData: (prev) => prev },
   );
 
   const [open, setOpen] = useState(false);
@@ -68,7 +74,10 @@ function StockAdjustmentsPage() {
 
   const ready = readyLines(lines);
   const finalReason = reason === "Other" ? otherReason.trim() : reason;
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // The last page emptied out (or rows per page grew): step back.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   return (
     <div>
@@ -82,28 +91,29 @@ function StockAdjustmentsPage() {
         }
       />
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-clip">
         <div className="border-b border-border-light px-4 py-2">
-          <PillTabs
-            tabs={[
-              { value: "all", label: "All adjustments" },
-              { value: "physical", label: "From physical counts" },
-            ]}
-            value={kind}
-            onChange={(v) => {
-              setKind(v as "all" | "physical");
-              setPage(1);
-            }}
-          />
+          {/* The tabs scroll sideways on narrow phones instead of wrapping. */}
+          <div className="min-w-0 max-w-full overflow-x-auto">
+            <PillTabs
+              tabs={[
+                { value: "all", label: "All adjustments" },
+                { value: "physical", label: "From physical counts" },
+              ]}
+              value={kind}
+              onChange={(v) => setKind(v as "all" | "physical")}
+            />
+          </div>
         </div>
         {!data ? (
           <SkeletonRows />
         ) : data.data.length === 0 ? (
           <EmptyState title="No adjustments" description="Damaged, expired, found or counted stock changes show up here." />
         ) : (
-          <>
-            <div className={cn("overflow-x-auto", isFetching && "opacity-70")}>
-              <table className="data-table">
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination placement="top" page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={pageSize} />
+            <TableScroll ref={tableRef}>
+              <table className="data-table w-full">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -147,11 +157,16 @@ function StockAdjustmentsPage() {
                   })}
                 </tbody>
               </table>
-            </div>
-            <div className="border-t border-border-light px-4 py-3">
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={data.total} pageSize={PAGE_SIZE} />
-            </div>
-          </>
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
+          </div>
         )}
       </div>
 

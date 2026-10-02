@@ -517,7 +517,8 @@ test.describe("J8 money", () => {
       // Run now: next month's invoice raised early, the schedule moves on.
       await page.reload();
       await expect(tplRow.getByRole("cell").nth(-2)).toHaveText("1"); // runs
-      await tplRow.getByRole("button", { name: "Run now" }).click();
+      await tplRow.getByRole("button", { name: /^Actions for/ }).click();
+      await page.getByRole("menuitem", { name: "Run now" }).click();
       await expect(toast(page, "Invoice generated successfully")).toBeVisible();
       await expect(tplRow.getByRole("cell").nth(-2)).toHaveText("2");
       const runs = await recurringRunsOf(template.id);

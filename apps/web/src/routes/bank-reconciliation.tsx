@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, toISOString } from "@/lib/utils";
 import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
@@ -16,6 +16,8 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { Spinner } from "@/components/ui/Spinner";
 import { Pagination } from "@/components/ui/Pagination";
+import { TableScroll } from "@/components/ui/Table";
+import { usePageSize } from "@/hooks/usePageSize";
 import { usePageSearch } from "@/lib/page-search";
 import { STATEMENT_FILE_ACCEPT, StatementFileError, statementFileToCsv } from "@/lib/bank-statement-file";
 
@@ -51,8 +53,6 @@ const DATE_FORMAT_OPTIONS = [
   { value: "YYYY-MM-DD", label: "YYYY-MM-DD (ISO)" },
   { value: "DD-MMM-YYYY", label: "DD-MMM-YYYY (01-Jan-2024)" },
 ];
-
-const PAGE_SIZE = 20;
 
 /** Card surface shared with the dashboard. */
 const PANEL = "rounded-2xl border border-border-light bg-surface-0";
@@ -186,11 +186,24 @@ function HubTab({
   onUpload: () => void;
 }) {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("bank_imports", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const { data: accounts } = trpc.bankAccount.list.useQuery();
-  const { data: imports, isLoading } = trpc.bankRecon.importList.useQuery({
+  const { data: imports, isLoading, isFetching } = trpc.bankRecon.importList.useQuery({
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
+  }, {
+    // Keep the current page on screen while the next one loads.
+    placeholderData: (prev) => prev,
   });
+  const totalPages = Math.max(1, Math.ceil((imports?.total ?? 0) / pageSize));
+
+  // Back to page 1 when rows per page change
+  useEffect(() => { setPage(1); }, [pageSize]);
+  // Fewer imports than before: step back to the last page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   // Cash in hand has no bank statement to reconcile against.
   const bankAccounts = (accounts ?? []).filter((a) => a.accountType !== "cash");
@@ -247,7 +260,7 @@ function HubTab({
       </section>
 
       {/* Import history */}
-      <section className={PANEL}>
+      <section className={cn(PANEL, "overflow-clip")}>
         <PanelHeader title="Recent imports">
           {imports && imports.data.length > 0 && (
             <button className="btn-secondary" onClick={onUpload}>Import statement</button>
@@ -256,34 +269,44 @@ function HubTab({
         {isLoading ? (
           <div className="flex justify-center py-10"><Spinner /></div>
         ) : imports && imports.data.length > 0 ? (
-          <div className="mt-4">
-            <div className="overflow-x-auto border-t border-border-light">
-              <table className="table-auto w-full text-sm">
+          <div className={cn("mt-4 border-t border-border-light transition-opacity", isFetching && "opacity-60")}>
+            <Pagination
+              placement="top"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={imports.total}
+              pageSize={pageSize}
+            />
+            <TableScroll ref={tableRef}>
+              <table className="data-table">
                 <thead>
-                  <tr className="border-b border-border-light bg-surface-1">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-text-secondary">File</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary">Status</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-text-secondary">Lines</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-text-secondary">Matched</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-text-secondary">Unmatched</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary">Date</th>
-                    <th className="px-5 py-3" />
+                  <tr>
+                    <th>File</th>
+                    <th>Status</th>
+                    <th className="text-right">Lines</th>
+                    <th className="text-right">Matched</th>
+                    <th className="text-right">Unmatched</th>
+                    <th>Date</th>
+                    <th className="text-right"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {imports.data.map((imp) => (
-                    <tr key={imp.id} className="border-b border-border-light last:border-0 hover:bg-surface-hover">
-                      <td className="px-5 py-3 text-text-primary font-medium">{imp.fileName}</td>
-                      <td className="px-4 py-3">
+                    <tr key={imp.id}>
+                      <td className="text-text-primary font-medium">{imp.fileName}</td>
+                      <td>
                         <Badge size="md" color={importStatusColor(imp.status)}>
                           {imp.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-text-secondary">{imp.totalLines}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-emerald-600">{imp.matchedLines}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-red-500">{imp.unmatchedLines}</td>
-                      <td className="px-4 py-3 text-text-secondary">{formatDate(imp.createdAt)}</td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="text-right tabular-nums text-text-secondary">{imp.totalLines}</td>
+                      <td className="text-right tabular-nums text-emerald-600">{imp.matchedLines}</td>
+                      <td className="text-right tabular-nums text-red-500">{imp.unmatchedLines}</td>
+                      <td className="text-text-secondary">{formatDate(imp.createdAt)}</td>
+                      <td className="text-right">
+                        {/* Reviewing is the whole point of an import row, so it
+                            stays a visible link rather than going into a menu. */}
                         <button
                           className="text-brand-600 hover:text-brand-700 text-xs font-semibold"
                           onClick={() => onOpenReview(imp.id)}
@@ -295,18 +318,15 @@ function HubTab({
                   ))}
                 </tbody>
               </table>
-            </div>
-            {imports.total > PAGE_SIZE && (
-              <div className="border-t border-border-light px-5 py-3">
-                <Pagination
-                  page={page}
-                  total={imports.total}
-                  pageSize={PAGE_SIZE}
-                  totalPages={Math.ceil(imports.total / PAGE_SIZE)}
-                  onPageChange={setPage}
-                />
-              </div>
-            )}
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={imports.total}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         ) : (
           <div className="p-5">
@@ -884,6 +904,8 @@ function UploadTab({ onSuccess }: { onSuccess: (importId: string) => void }) {
 function ReviewTab({ importId }: { importId: string | null }) {
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("bank_statement_lines", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [manualMatchLine, setManualMatchLine] = useState<any | null>(null);
   const [createExpenseLine, setCreateExpenseLine] = useState<any | null>(null);
   const [confirmUnmatchId, setConfirmUnmatchId] = useState<string | null>(null);
@@ -894,15 +916,27 @@ function ReviewTab({ importId }: { importId: string | null }) {
     { enabled: !!importId },
   );
 
-  const { data: lines, isLoading } = trpc.bankRecon.lines.useQuery(
+  const { data: lines, isLoading, isFetching } = trpc.bankRecon.lines.useQuery(
     {
       importId: importId!,
       status: statusFilter as any || undefined,
       page,
-      limit: PAGE_SIZE,
+      limit: pageSize,
     },
-    { enabled: !!importId },
+    {
+      enabled: !!importId,
+      // Keep the current page on screen while the next one loads.
+      placeholderData: (prev) => prev,
+    },
   );
+  const totalPages = Math.max(1, Math.ceil((lines?.total ?? 0) / pageSize));
+
+  // Back to page 1 when the import, status filter or rows per page change
+  useEffect(() => { setPage(1); }, [importId, statusFilter, pageSize]);
+  // Matching the last lines of a filtered last page: step back a page.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   const confirmMutation = trpc.bankRecon.confirmMatch.useMutation({
     onSuccess: () => {
@@ -973,12 +1007,12 @@ function ReviewTab({ importId }: { importId: string | null }) {
         </div>
       )}
 
-      {/* Filter */}
-      <div className="overflow-x-auto">
+      {/* Filter — the tabs scroll sideways on phones instead of wrapping. */}
+      <div className="min-w-0 max-w-full overflow-x-auto">
         <PillTabs
           tabs={MATCH_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           value={statusFilter}
-          onChange={(v) => { setStatusFilter(v); setPage(1); }}
+          onChange={setStatusFilter}
         />
       </div>
 
@@ -986,129 +1020,132 @@ function ReviewTab({ importId }: { importId: string | null }) {
       {isLoading ? (
         <div className="flex justify-center py-10"><Spinner /></div>
       ) : lines && lines.data.length > 0 ? (
-        <>
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="table-auto w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border-light bg-surface-1">
-                    <th className="text-left px-4 py-3 text-text-secondary font-medium">#</th>
-                    <th className="text-left px-4 py-3 text-text-secondary font-medium">Date</th>
-                    <th className="text-left px-4 py-3 text-text-secondary font-medium">Narration</th>
-                    <th className="text-right px-4 py-3 text-text-secondary font-medium">Debit</th>
-                    <th className="text-right px-4 py-3 text-text-secondary font-medium">Credit</th>
-                    <th className="text-left px-4 py-3 text-text-secondary font-medium">Status</th>
-                    <th className="text-right px-4 py-3 text-text-secondary font-medium">Confidence</th>
-                    <th className="px-4 py-3 text-text-secondary font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.data.map((line) => (
-                    <tr
-                      key={line.id}
-                      className="border-b border-border-light last:border-0 hover:bg-surface-hover"
-                    >
-                      <td className="px-4 py-3 text-text-tertiary text-xs">{line.lineNumber}</td>
-                      <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
-                        {formatDate(line.transactionDate)}
-                      </td>
-                      <td className="px-4 py-3 text-text-primary max-w-xs">
-                        <p className="truncate">{line.narration || "—"}</p>
-                        {line.referenceNumber && (
-                          <p className="text-xs text-text-tertiary truncate">{line.referenceNumber}</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {parseFloat(line.debit) > 0 ? (
-                          <span className="text-red-500 font-medium">{fmt(line.debit)}</span>
-                        ) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {parseFloat(line.credit) > 0 ? (
-                          <span className="text-emerald-600 font-medium">{fmt(line.credit)}</span>
-                        ) : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge size="md" color={matchStatusColor(line.matchStatus)}>
-                          {matchStatusLabel(line.matchStatus)}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-right text-text-secondary text-xs">
-                        {line.matchConfidence
-                          ? `${Math.round(parseFloat(line.matchConfidence) * 100)}%`
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2 justify-end">
-                          {line.matchStatus === "auto_matched" && (
-                            <>
-                              <button
-                                className="text-emerald-600 hover:text-emerald-700 text-xs font-medium"
-                                onClick={() => confirmMutation.mutate({ lineId: line.id })}
-                                disabled={confirmMutation.isPending}
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                className="text-red-500 hover:text-red-600 text-xs font-medium"
-                                onClick={() => setConfirmUnmatchId(line.id)}
-                              >
-                                Reject
-                              </button>
-                            </>
-                          )}
-                          {line.matchStatus === "manual_matched" && (
+        <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
+          <Pagination
+            placement="top"
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={lines.total}
+            pageSize={pageSize}
+          />
+          <TableScroll ref={tableRef}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Date</th>
+                  <th>Narration</th>
+                  <th className="text-right">Debit</th>
+                  <th className="text-right">Credit</th>
+                  <th>Status</th>
+                  <th className="text-right">Confidence</th>
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.data.map((line) => (
+                  <tr key={line.id}>
+                    <td className="text-text-tertiary text-xs">{line.lineNumber}</td>
+                    <td className="text-text-secondary whitespace-nowrap">
+                      {formatDate(line.transactionDate)}
+                    </td>
+                    <td className="text-text-primary max-w-xs">
+                      <p className="truncate">{line.narration || "—"}</p>
+                      {line.referenceNumber && (
+                        <p className="text-xs text-text-tertiary truncate">{line.referenceNumber}</p>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      {parseFloat(line.debit) > 0 ? (
+                        <span className="text-red-500 font-medium">{fmt(line.debit)}</span>
+                      ) : "—"}
+                    </td>
+                    <td className="text-right">
+                      {parseFloat(line.credit) > 0 ? (
+                        <span className="text-emerald-600 font-medium">{fmt(line.credit)}</span>
+                      ) : "—"}
+                    </td>
+                    <td>
+                      <Badge size="md" color={matchStatusColor(line.matchStatus)}>
+                        {matchStatusLabel(line.matchStatus)}
+                      </Badge>
+                    </td>
+                    <td className="text-right text-text-secondary text-xs">
+                      {line.matchConfidence
+                        ? `${Math.round(parseFloat(line.matchConfidence) * 100)}%`
+                        : "—"}
+                    </td>
+                    <td>
+                      {/* Confirming or matching a line is the task on this screen,
+                          so these stay visible buttons instead of a row menu. */}
+                      <div className="flex gap-2 justify-end">
+                        {line.matchStatus === "auto_matched" && (
+                          <>
+                            <button
+                              className="text-emerald-600 hover:text-emerald-700 text-xs font-medium"
+                              onClick={() => confirmMutation.mutate({ lineId: line.id })}
+                              disabled={confirmMutation.isPending}
+                            >
+                              Confirm
+                            </button>
                             <button
                               className="text-red-500 hover:text-red-600 text-xs font-medium"
                               onClick={() => setConfirmUnmatchId(line.id)}
                             >
-                              Unmatch
+                              Reject
                             </button>
-                          )}
-                          {line.matchStatus === "unmatched" && (
-                            <>
+                          </>
+                        )}
+                        {line.matchStatus === "manual_matched" && (
+                          <button
+                            className="text-red-500 hover:text-red-600 text-xs font-medium"
+                            onClick={() => setConfirmUnmatchId(line.id)}
+                          >
+                            Unmatch
+                          </button>
+                        )}
+                        {line.matchStatus === "unmatched" && (
+                          <>
+                            <button
+                              className="text-brand-600 hover:text-brand-700 text-xs font-medium"
+                              onClick={() => setManualMatchLine(line)}
+                            >
+                              Match
+                            </button>
+                            {parseFloat(line.debit) > 0 && (
                               <button
-                                className="text-brand-600 hover:text-brand-700 text-xs font-medium"
-                                onClick={() => setManualMatchLine(line)}
+                                className="text-amber-600 hover:text-amber-700 text-xs font-medium"
+                                onClick={() => setCreateExpenseLine(line)}
                               >
-                                Match
+                                + Expense
                               </button>
-                              {parseFloat(line.debit) > 0 && (
-                                <button
-                                  className="text-amber-600 hover:text-amber-700 text-xs font-medium"
-                                  onClick={() => setCreateExpenseLine(line)}
-                                >
-                                  + Expense
-                                </button>
-                              )}
-                              <button
-                                className="text-text-secondary hover:text-text-primary text-xs font-medium"
-                                onClick={() => ignoreMutation.mutate({ lineId: line.id })}
-                                disabled={ignoreMutation.isPending}
-                              >
-                                Ignore
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {lines.total > PAGE_SIZE && (
-            <Pagination
-              page={page}
-              total={lines.total}
-              pageSize={PAGE_SIZE}
-              totalPages={Math.ceil(lines.total / PAGE_SIZE)}
-              onPageChange={setPage}
-            />
-          )}
-        </>
+                            )}
+                            <button
+                              className="text-text-secondary hover:text-text-primary text-xs font-medium"
+                              onClick={() => ignoreMutation.mutate({ lineId: line.id })}
+                              disabled={ignoreMutation.isPending}
+                            >
+                              Ignore
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={lines.total}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+          />
+        </div>
       ) : (
         <EmptyState
           title="No lines"
