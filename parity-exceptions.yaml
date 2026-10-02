@@ -323,6 +323,21 @@ exceptions:
       - tds.deleteChallan
       - tds.returnData
       - tds.tcsPreview
+      # TDS certificates, 26AS reconciliation, reminders and PAN checks, government API
+      # usage statements and composition (GSTR-4) settings are web-only owner/accountant
+      # screens for now.
+      - tds.certificateParties
+      - tds.ignore26as
+      - tds.import26as
+      - tds.link26as
+      - tds.reconciliation26as
+      - tds.reminders
+      - tds.verifyDeductee
+      - govUsage.statements
+      - govUsage.summary
+      - gst.compositionSettings
+      - gst.gstr4
+      - gst.updateCompositionSettings
 
       # --- Period locks & year-end close ---
       # Set up and reviewed from the web app by the owner or accountant. The locks
@@ -457,6 +472,21 @@ exceptions:
       - tds.deleteChallan
       - tds.returnData
       - tds.tcsPreview
+      # TDS certificates, 26AS reconciliation, reminders and PAN checks, government API
+      # usage statements and composition (GSTR-4) settings are web-only owner/accountant
+      # screens for now.
+      - tds.certificateParties
+      - tds.ignore26as
+      - tds.import26as
+      - tds.link26as
+      - tds.reconciliation26as
+      - tds.reminders
+      - tds.verifyDeductee
+      - govUsage.statements
+      - govUsage.summary
+      - gst.compositionSettings
+      - gst.gstr4
+      - gst.updateCompositionSettings
 
       # --- Period locks & year-end close ---
       # Set up and reviewed from the web app by the owner or accountant. The locks
@@ -716,6 +746,21 @@ exceptions:
       - tds.deleteChallan
       - tds.returnData
       - tds.tcsPreview
+      # TDS certificates, 26AS reconciliation, reminders and PAN checks, government API
+      # usage statements and composition (GSTR-4) settings are web-only owner/accountant
+      # screens for now.
+      - tds.certificateParties
+      - tds.ignore26as
+      - tds.import26as
+      - tds.link26as
+      - tds.reconciliation26as
+      - tds.reminders
+      - tds.verifyDeductee
+      - govUsage.statements
+      - govUsage.summary
+      - gst.compositionSettings
+      - gst.gstr4
+      - gst.updateCompositionSettings
 
       # --- Period locks & year-end close ---
       # Set up and reviewed from the web app by the owner or accountant. The locks
