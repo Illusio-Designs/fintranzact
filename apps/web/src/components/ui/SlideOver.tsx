@@ -1,6 +1,8 @@
 import { ReactNode, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useLastWhileOpen, usePresence } from "@/hooks/usePresence";
+import { cn } from "@/lib/utils";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "./Icon";
 
@@ -70,22 +72,31 @@ export function SlideOver({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, onClose, onCloseAttempt]);
 
-  if (!open) return null;
+  // Slides back out when closed, still showing what it had, instead of vanishing.
+  const { mounted, closing } = usePresence(open, 200);
+  const shown = useLastWhileOpen(open, { title, description, children, footer });
+
+  if (!mounted) return null;
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50"
+      className={cn("fixed inset-0 z-50", closing && "pointer-events-none")}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
+      aria-hidden={closing || undefined}
+      inert={closing || undefined}
     >
       <div
-        className="fixed inset-0 bg-black/40 animate-fade-in"
+        className={cn("fixed inset-0 bg-black/40", closing ? "animate-fade-out" : "animate-fade-in")}
         onClick={attemptClose}
       />
       <div
         ref={dialogRef}
-        className="fixed right-0 top-0 bottom-0 w-full max-w-3xl flex flex-col animate-slide-in shadow-modal bg-surface-0"
+        className={cn(
+          "fixed right-0 top-0 bottom-0 w-full max-w-3xl flex flex-col shadow-modal bg-surface-0",
+          closing ? "animate-slide-out" : "animate-slide-in",
+        )}
       >
         <div className="flex items-start justify-between px-6 py-4 shrink-0 border-b border-border-light">
           <div>
@@ -93,11 +104,11 @@ export function SlideOver({
               id={titleId}
               className="text-base font-semibold text-text-primary"
             >
-              {title}
+              {shown.title}
             </h2>
-            {description && (
+            {shown.description && (
               <p className="text-sm mt-0.5 text-text-tertiary">
-                {description}
+                {shown.description}
               </p>
             )}
           </div>
@@ -110,10 +121,10 @@ export function SlideOver({
             <Icon icon={Cancel01Icon} size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4">{children}</div>
-        {footer && (
+        <div className="flex-1 overflow-y-auto px-6 py-4">{shown.children}</div>
+        {shown.footer && (
           <div className="shrink-0 px-6 py-4 border-t border-border-light">
-            {footer}
+            {shown.footer}
           </div>
         )}
       </div>

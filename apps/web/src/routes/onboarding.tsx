@@ -1,9 +1,9 @@
+import { BootSplash } from "@/components/ui/BootSplash";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BusinessForm } from "@/components/settings/BusinessTab";
 import { Logo } from "@/components/ui/Logo";
 import { trpc } from "@/lib/trpc";
 
-import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
 });
@@ -25,14 +25,7 @@ function OnboardingPage() {
     (canCreate ?? true);
 
   if (sessionLoading || businessesLoading || !session) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-1">
-        <div className="flex flex-col items-center gap-3">
-          <Logo className="w-10 h-10" />
-          <Spinner size="md" className="text-brand-600" />
-        </div>
-      </div>
-    );
+    return <BootSplash className="bg-surface-1" />;
   }
 
   if (!canManageBusinesses) {

@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
+import { useSaveTick } from "@/hooks/useSaveTick";
+import { SavedTick } from "@/components/ui/SavedTick";
 import { trpc } from "@/lib/trpc";
-import { formatCurrency, todayISODate, toISOString } from "@/lib/utils";
+import { cn, formatCurrency, todayISODate, toISOString } from "@/lib/utils";
 import { apiUrl } from "@/lib/api-url";
 import { getBusinessId } from "@/lib/trpc";
 import { Select } from "@/components/ui/Select";
@@ -74,12 +76,14 @@ export function InvoiceCreator({ type, onClose }: Props) {
   const { data: itemsData } = trpc.item.list.useQuery({ page: 1, limit: 100 });
 
   const utils = trpc.useUtils();
+  // The save button shows a tick before the panel closes.
+  const tick = useSaveTick();
   const createMutation = trpc.invoice.create.useMutation({
     onSuccess: () => {
       utils.invoice.list.invalidate();
       utils.dashboard.summary.invalidate();
       utils.item.list.invalidate();
-      onClose();
+      tick.finish(onClose);
     },
     onError: (err) => toast.error("Couldn't save the invoice", err.message),
   });
@@ -566,10 +570,10 @@ export function InvoiceCreator({ type, onClose }: Props) {
               </button>
               <button
                 type="submit"
-                disabled={createMutation.isPending || !partyId || !items.some((li) => li.itemName.trim() && li.unitPrice)}
-                className="px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium disabled:opacity-50 transition-colors"
+                disabled={createMutation.isPending || tick.saved || !partyId || !items.some((li) => li.itemName.trim() && li.unitPrice)}
+                className={cn("px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium disabled:opacity-50 transition-colors", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
               >
-                {createMutation.isPending ? "Creating…" : "Create invoice"}
+                {tick.saved ? <SavedTick label="Created" /> : createMutation.isPending ? "Creating…" : "Create invoice"}
               </button>
             </div>
           </div>

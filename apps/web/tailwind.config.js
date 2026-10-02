@@ -102,6 +102,43 @@ export default {
           from: { strokeDashoffset: "20", opacity: "0" },
           to: { strokeDashoffset: "0", opacity: "1" },
         },
+        "slide-out-right": {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(100%)" },
+        },
+        "fade-out": {
+          from: { opacity: "1" },
+          to: { opacity: "0" },
+        },
+        "scale-out": {
+          from: { opacity: "1", transform: "scale(1)" },
+          to: { opacity: "0", transform: "scale(0.96)" },
+        },
+        "dialog-in": {
+          from: { opacity: "0", transform: "translateY(6px) scale(0.96)" },
+          to: { opacity: "1", transform: "none" },
+        },
+        "pop-in": {
+          from: { opacity: "0", transform: "translateY(-4px) scale(0.96)" },
+          to: { opacity: "1", transform: "none" },
+        },
+        "rise-in": {
+          from: { opacity: "0", transform: "translateY(6px)" },
+          to: { opacity: "1", transform: "none" },
+        },
+        "row-flash": {
+          "0%, 20%": { backgroundColor: "rgb(16 185 129 / 0.14)" },
+          "100%": { backgroundColor: "transparent" },
+        },
+        "star-pop": {
+          "0%": { transform: "scale(1)" },
+          "40%": { transform: "scale(1.3) rotate(-8deg)" },
+          "100%": { transform: "scale(1)" },
+        },
+        shimmer: {
+          from: { backgroundPosition: "200% 0" },
+          to: { backgroundPosition: "-200% 0" },
+        },
         "hint-lifecycle": {
           "0%": { opacity: "0", transform: "translateY(-4px)" },
           "10%": { opacity: "1", transform: "translateY(0)" },
@@ -110,8 +147,18 @@ export default {
         },
       },
       animation: {
-        "slide-in": "slide-in-right 0.3s ease-out",
-        "fade-in": "fade-in 0.2s ease-out",
+        // D6 motion: entrances ease out fast, exits are quicker than entrances.
+        "slide-in": "slide-in-right 280ms cubic-bezier(0.32, 0.72, 0, 1)",
+        "slide-out": "slide-out-right 200ms cubic-bezier(0.23, 1, 0.32, 1) forwards",
+        "fade-out": "fade-out 200ms ease forwards",
+        "scale-out": "scale-out 120ms ease forwards",
+        "dialog-in": "dialog-in 220ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "pop-in": "pop-in 160ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "rise-in": "rise-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both",
+        "row-flash": "row-flash 1.6s ease-out",
+        "star-pop": "star-pop 340ms cubic-bezier(0.23, 1, 0.32, 1)",
+        shimmer: "shimmer 1.4s linear infinite",
+        "fade-in": "fade-in 200ms ease-out",
         "scale-in": "scale-in 0.2s ease-out",
         "toast-in": "toast-in 0.3s ease-out",
         "shortcut-flash": "shortcut-flash 1.2s ease-out forwards",

@@ -4,12 +4,12 @@
  * — billed and free quantities apart. Receiving a purchase order on a GRN
  * also records what was rejected, and why.
  */
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { Fragment, useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { invalidateStockViews } from "@/lib/stock-cache";
 import { cn, getDocumentTypeLabel } from "@/lib/utils";
 import { Modal } from "@/components/ui/Modal";
-import { Spinner } from "@/components/ui/Spinner";
 import { toast } from "@/hooks/useToast";
 import { WarehouseSelect, formatQty, useWarehouses } from "@/components/inventory/shared";
 import type { DocumentType } from "@/components/DocumentCreator";
@@ -124,9 +124,7 @@ export function ConvertDocumentDialog({
   return (
     <Modal open onClose={onClose} title="Convert pending items" className={receiving ? "max-w-4xl" : "max-w-2xl"}>
       {isLoading || !data ? (
-        <div className="flex justify-center py-10">
-          <Spinner size="md" className="text-brand-600" />
-        </div>
+        <TableSkeleton rows={4} columns={[{ label: "Item" }, { label: "Ordered", align: "right" }, { label: "Done", align: "right" }, { label: "Pending", align: "right" }, { align: "right", kind: "button" }, { label: "Free", align: "right" }, { label: "Reject", align: "right" }, { label: "Reason" }]} />
       ) : (
         <div className="space-y-4">
           {targets.length > 1 && (

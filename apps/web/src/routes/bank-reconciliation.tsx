@@ -1,3 +1,4 @@
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
@@ -267,7 +268,7 @@ function HubTab({
           )}
         </PanelHeader>
         {isLoading ? (
-          <div className="flex justify-center py-10"><Spinner /></div>
+          <TableSkeleton rows={6} columns={[{ label: "File" }, { label: "Status", kind: "badge" }, { label: "Lines", align: "right" }, { label: "Matched", align: "right" }, { label: "Unmatched", align: "right" }, { label: "Date" }, { align: "right", kind: "button" }]} />
         ) : imports && imports.data.length > 0 ? (
           <div className={cn("mt-4 border-t border-border-light transition-opacity", isFetching && "opacity-60")}>
             <Pagination
@@ -1018,7 +1019,7 @@ function ReviewTab({ importId }: { importId: string | null }) {
 
       {/* Lines table */}
       {isLoading ? (
-        <div className="flex justify-center py-10"><Spinner /></div>
+        <TableSkeleton rows={6} columns={[{ label: "#", kind: "mono" }, { label: "Date" }, { label: "Narration" }, { label: "Debit", align: "right" }, { label: "Credit", align: "right" }, { label: "Status", kind: "badge" }, { label: "Confidence", align: "right" }, { label: "Actions", align: "right" }]} />
       ) : lines && lines.data.length > 0 ? (
         <div className={cn("card overflow-clip transition-opacity", isFetching && "opacity-60")}>
           <Pagination
@@ -1415,7 +1416,7 @@ function SummaryTab({ accountId }: { accountId: string | null }) {
         />
       </div>
 
-      {isLoading && <div className="flex justify-center py-8"><Spinner /></div>}
+      {isLoading && <TableSkeleton rows={6} columns={[{ label: "Match" }, { label: "Pattern" }, { label: "Action" }, { label: "Category" }, { label: "Priority", align: "right" }, { label: "Hits", align: "right" }, { label: "Status", kind: "badge" }]} />}
 
       {summary && (
         <div className="card p-5 space-y-4">
@@ -1592,7 +1593,7 @@ function RulesTab() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-8"><Spinner /></div>
+        <TableSkeleton rows={6} columns={[{ label: "Match" }, { label: "Pattern" }, { label: "Action" }, { label: "Category" }, { label: "Priority", align: "right" }, { label: "Hits", align: "right" }, { label: "Status", kind: "badge" }]} />
       ) : rules && rules.length > 0 ? (
         <div className="card overflow-hidden">
           <table className="table-auto w-full text-sm">
@@ -1823,7 +1824,7 @@ function TemplatesTab() {
       </p>
 
       {isLoading ? (
-        <div className="flex justify-center py-10"><Spinner /></div>
+        <TableSkeleton rows={6} columns={[{ label: "Bank" }, { label: "Version" }, { label: "Type", kind: "badge" }, { label: "Format" }, { label: "Label" }, { label: "Status", kind: "badge" }]} />
       ) : templates && templates.length > 0 ? (
         <div className="card overflow-hidden">
           <table className="table-auto w-full text-sm">

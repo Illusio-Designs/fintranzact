@@ -89,6 +89,7 @@ export class PaymentsPage extends BasePage {
   }
 
   async clickTypeTab(label: string) {
-    await this.page.getByText(label).first().click();
+    // The page itself, not a sidebar link with the same name (closed sidebar groups keep theirs in the DOM).
+    await this.page.getByTestId("app-content").getByText(label).first().click();
   }
 }

@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useLastWhileOpen, usePresence } from "@/hooks/usePresence";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "./Icon";
 
@@ -39,35 +40,42 @@ export function Modal({ open, onClose, title, children, className, labelledBy, d
     return () => document.removeEventListener("keydown", handler, true);
   }, [open, onClose]);
 
-  if (!open) return null;
+  // Settles in from just below and fades out on close, keeping its content meanwhile.
+  const { mounted, closing } = usePresence(open, 120);
+  const shown = useLastWhileOpen(open, { title, children });
+
+  if (!mounted) return null;
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className={cn("fixed inset-0 z-50 flex items-center justify-center p-4", closing && "pointer-events-none")}
       role="dialog"
       aria-modal="true"
-      aria-labelledby={title ? titleId : labelledBy}
+      aria-labelledby={shown.title ? titleId : labelledBy}
       aria-describedby={describedBy}
+      aria-hidden={closing || undefined}
+      inert={closing || undefined}
     >
       <div
-        className="fixed inset-0 bg-black/40 animate-fade-in"
+        className={cn("fixed inset-0 bg-black/40", closing ? "animate-fade-out" : "animate-fade-in")}
         onClick={onClose}
       />
       <div
         ref={dialogRef}
         className={cn(
-          "relative z-10 w-full max-w-lg rounded-xl animate-scale-in shadow-modal bg-surface-0",
+          "relative z-10 w-full max-w-lg rounded-xl shadow-modal bg-surface-0",
+          closing ? "animate-scale-out" : "animate-dialog-in",
           className
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        {title && (
+        {shown.title && (
           <div className="flex items-center justify-between px-6 py-4 border-b border-border-light">
             <h2
               id={titleId}
               className="text-base font-semibold text-text-primary"
             >
-              {title}
+              {shown.title}
             </h2>
             <button
               type="button"
@@ -79,7 +87,7 @@ export function Modal({ open, onClose, title, children, className, labelledBy, d
             </button>
           </div>
         )}
-        <div className="overflow-y-auto max-h-[80vh] px-6 py-4">{children}</div>
+        <div className="overflow-y-auto max-h-[80vh] px-6 py-4">{shown.children}</div>
       </div>
     </div>,
     document.body

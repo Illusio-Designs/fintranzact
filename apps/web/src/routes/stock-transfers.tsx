@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableScroll } from "@/components/ui/Table";
 import { usePageSize } from "@/hooks/usePageSize";
@@ -85,7 +85,7 @@ function StockTransfersPage() {
 
       <div className="card overflow-clip">
         {!data ? (
-          <SkeletonRows />
+          <TableSkeleton columns={[{ label: "Date" }, { label: "From → To" }, { label: "Items" }, { label: "Quantity", align: "right" }]} rows={6} />
         ) : data.data.length === 0 ? (
           <EmptyState
             title="No transfers yet"

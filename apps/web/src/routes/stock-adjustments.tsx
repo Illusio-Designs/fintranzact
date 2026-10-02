@@ -9,7 +9,7 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableScroll } from "@/components/ui/Table";
 import { usePageSize } from "@/hooks/usePageSize";
@@ -106,7 +106,7 @@ function StockAdjustmentsPage() {
           </div>
         </div>
         {!data ? (
-          <SkeletonRows />
+          <TableSkeleton columns={[{ label: "Date" }, { label: "Item" }, { label: "Warehouse" }, { label: "Change", align: "right" }, { label: "Stock after", align: "right" }, { label: "Reason" }, { label: "By" }]} rows={6} />
         ) : data.data.length === 0 ? (
           <EmptyState title="No adjustments" description="Damaged, expired, found or counted stock changes show up here." />
         ) : (

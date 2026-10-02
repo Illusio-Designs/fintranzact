@@ -1,6 +1,9 @@
+import { Bone, TableSkeleton } from "@/components/ui/Skeleton";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePageSearch } from "@/lib/page-search";
+import { useSaveTick } from "@/hooks/useSaveTick";
+import { SavedTick } from "@/components/ui/SavedTick";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -24,7 +27,6 @@ import { usePageSize } from "@/hooks/usePageSize";
 import { Icon } from "@/components/ui/Icon";
 import { AlertCircleIcon, ArrowRight01Icon, Delete02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 
-import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/journal-entries")({
   component: JournalEntriesPage,
 });
@@ -120,11 +122,13 @@ function JournalEntriesPage() {
 
   // ── Mutations ──────────────────────────────────────────────
 
+  // The save button shows a tick before the panel closes.
+  const tick = useSaveTick();
   const createMutation = trpc.journal.create.useMutation({
     onSuccess: () => {
       utils.journal.list.invalidate();
       toast.success("Journal entry created");
-      closeForm();
+      tick.finish(closeForm);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -134,7 +138,7 @@ function JournalEntriesPage() {
       utils.journal.list.invalidate();
       utils.journal.getById.invalidate();
       toast.success("Journal entry updated");
-      closeForm();
+      tick.finish(closeForm);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -402,11 +406,11 @@ function JournalEntriesPage() {
                 Cancel
               </button>
               <button
-                className="btn-primary"
+                className={cn("btn-primary", tick.saved && "!bg-emerald-600 disabled:!opacity-100")}
                 onClick={handleSubmit}
-                disabled={!canSubmit || isSubmitting}
+                disabled={!canSubmit || isSubmitting || tick.saved}
               >
-                {isSubmitting
+                {tick.saved ? <SavedTick label={editEntryId ? "Saved" : "Created"} /> : isSubmitting
                   ? editEntryId
                     ? "Saving…"
                     : "Creating…"
@@ -916,11 +920,16 @@ function EntryRow({
       {isExpanded && (
         <tr>
           <td colSpan={8} className="p-0">
-            <div className="bg-surface-1/50 border-y border-border-light px-6 py-4">
+            <div className="bg-surface-1/50 border-y border-border-light px-6 py-4 animate-rise-in">
               {isFetchingDetail ? (
-                <div className="flex items-center gap-2 text-sm text-text-tertiary py-2">
-                  <Spinner size="xs" />
-                  Loading details…
+                <div role="status" aria-label="Loading lines" className="grid gap-3 py-1">
+                  {[0, 1].map((i) => (
+                    <div key={i} aria-hidden className="flex items-center justify-between gap-6">
+                      <Bone className={i ? "w-40" : "w-48"} />
+                      <Bone className="w-24" />
+                      <Bone className="w-24" />
+                    </div>
+                  ))}
                 </div>
               ) : expandedEntry ? (
                 <div>
@@ -1002,11 +1011,8 @@ function TemplatesTab({
 }) {
   if (!templates) {
     return (
-      <div className="card p-8">
-        <div className="flex items-center justify-center gap-2 text-sm text-text-tertiary">
-          <Spinner size="sm" />
-          Loading templates…
-        </div>
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
+        <TableSkeleton rows={4} columns={[{ label: "Name" }, { label: "Narration" }, { label: "Lines" }, { align: "right", kind: "button" }]} />
       </div>
     );
   }
@@ -1065,18 +1071,8 @@ function TemplatesTab({
 
 function JournalTableSkeleton() {
   return (
-    <div className="divide-y divide-border-light">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="px-4 py-3 flex items-center gap-4">
-          <div className="h-3 w-4 bg-surface-2 rounded animate-pulse" />
-          <div className="h-3.5 w-16 bg-surface-2 rounded animate-pulse" />
-          <div className="h-3.5 w-20 bg-surface-2 rounded animate-pulse" />
-          <div className="h-3.5 w-40 bg-surface-2 rounded animate-pulse flex-1" />
-          <div className="h-3.5 w-20 bg-surface-2 rounded animate-pulse" />
-          <div className="h-5 w-14 bg-surface-2 rounded animate-pulse" />
-          <div className="h-5 w-14 bg-surface-2 rounded animate-pulse" />
-        </div>
-      ))}
-    </div>
+    <TableSkeleton
+      columns={[{}, { label: "Entry #", kind: "mono" }, { label: "Date" }, { label: "Narration" }, { label: "Amount", align: "right" }, { label: "Source", kind: "badge" }, { label: "Status", kind: "badge" }, { align: "right", kind: "button" }]}
+    />
   );
 }

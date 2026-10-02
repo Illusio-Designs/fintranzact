@@ -1,3 +1,4 @@
+import { CardGridSkeleton, KpiSkeleton } from "@/components/ui/Skeleton";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { partnerBadges, partnerTypeInfo, type PartnerType } from "@fintranzact/shared";
@@ -5,7 +6,6 @@ import type { RouterOutputs } from "@fintranzact/api";
 import { ArrowLeft01Icon, Award01Icon, Logout01Icon, UserShield01Icon } from "@hugeicons/core-free-icons";
 import { Logo } from "@/components/ui/Logo";
 import { Icon } from "@/components/ui/Icon";
-import { Spinner } from "@/components/ui/Spinner";
 import { PartnerBadge } from "@/components/ui/PartnerBadge";
 import { trpc, setBusinessId } from "@/lib/trpc";
 import { clearDesktopToken } from "@/lib/desktop-session";
@@ -46,8 +46,9 @@ function PartnerPortalPage() {
   return (
     <PortalShell email={session?.user?.email} hasOrganisation={!!session?.tenantId}>
       {isLoading || !portal ? (
-        <div className="flex justify-center py-24">
-          <Spinner size="md" className="text-brand-600" />
+        <div className="grid gap-5 py-6">
+          <KpiSkeleton />
+          <CardGridSkeleton count={3} />
         </div>
       ) : portal.kind === "partner" ? (
         <PartnerDashboard data={portal} />

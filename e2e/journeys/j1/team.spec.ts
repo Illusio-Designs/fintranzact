@@ -54,19 +54,19 @@ const ROLE_LABEL: Record<Role, string> = {
 /** Sidebar sections each role must (and must not) see. */
 const SIDEBAR: Record<Role, { visible: string[]; hidden: string[] }> = {
   admin: {
-    visible: ["Dashboard", "Parties", "Cash & Bank", "Stock Items", "Invoices", "Payments", "Expenses", "Journal Entries", "Business Reports", "GST Returns"],
+    visible: ["Dashboard", "Parties", "Cash & Bank", "Stock Items", "Invoices", "Payments", "Expenses", "Journal Entries", "Reports"],
     hidden: [],
   },
   seller_manager: {
     visible: ["Parties", "Stock Items", "Invoices", "Quotations", "Payments"],
-    hidden: ["Dashboard", "Cash & Bank", "Expenses", "Journal Entries", "Business Reports", "GST Returns"],
+    hidden: ["Dashboard", "Cash & Bank", "Expenses", "Journal Entries", "Reports"],
   },
   seller: {
     visible: ["Parties", "Stock Items", "Invoices", "Quotations", "Payments"],
-    hidden: ["Dashboard", "Cash & Bank", "Expenses", "Journal Entries", "Business Reports", "GST Returns"],
+    hidden: ["Dashboard", "Cash & Bank", "Expenses", "Journal Entries", "Reports"],
   },
   accountant: {
-    visible: ["Dashboard", "Parties", "Cash & Bank", "Stock Items", "Invoices", "Payments", "Expenses", "Journal Entries", "Business Reports", "GST Returns"],
+    visible: ["Dashboard", "Parties", "Cash & Bank", "Stock Items", "Invoices", "Payments", "Expenses", "Journal Entries", "Reports"],
     hidden: [],
   },
 };

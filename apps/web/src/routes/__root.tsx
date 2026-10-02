@@ -1,3 +1,5 @@
+import { Bone } from "@/components/ui/Skeleton";
+import { BootSplash } from "@/components/ui/BootSplash";
 import {
   createRootRoute,
   Link,
@@ -5,7 +7,7 @@ import {
   useNavigate,
   useLocation,
 } from "@tanstack/react-router";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { trpc, setBusinessId, queryClient } from "@/lib/trpc";
 import { canAccess } from "@/lib/permissions";
 import { needsPlanSelection } from "@/lib/plan-selection";
@@ -50,7 +52,6 @@ import {
   Award01Icon,
   ShippingTruck01Icon,
   ShoppingCart01Icon,
-  TaxesIcon,
   UnfoldMoreIcon,
   UserIcon,
   Search01Icon,
@@ -60,11 +61,7 @@ import {
   Call02Icon,
   PlusSignIcon,
   BookOpen01Icon,
-  QrCodeIcon,
-  Route01Icon,
-  DocumentValidationIcon,
   Analytics01Icon,
-  Coins01Icon,
   CheckListIcon,
   Building03Icon,
   HierarchySquare01Icon,
@@ -122,7 +119,6 @@ const AFTER_LOGIN_KEY = "fintranzact:after-login";
 function isRoleHome(pathname: string): boolean {
   return ["/platform", "/partner-portal"].some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
-const NAV_SECTIONS_KEY = "fintranzact:nav-sections";
 
 // ── Sidebar nav structure ──────────────────────────────────────
 
@@ -368,45 +364,6 @@ const navSections = [
         resource: "Report",
         action: "read",
       },
-      {
-        to: "/gst",
-        label: "__REPORTS__",
-        icon: TaxesIcon,
-        resource: "GstReport",
-        action: "read",
-      }, // label set dynamically based on GST status
-      {
-        to: "/gstr2b",
-        label: "GSTR-2B Recon",
-        icon: DocumentValidationIcon,
-        resource: "GstReport",
-        action: "read",
-        gstOnly: true,
-      },
-      {
-        to: "/itc",
-        label: "Input Tax Credit",
-        icon: Coins01Icon,
-        resource: "ITC",
-        action: "read",
-        gstOnly: true,
-      },
-      {
-        to: "/e-invoicing",
-        label: "e-Invoicing",
-        icon: QrCodeIcon,
-        resource: "EInvoice",
-        action: "read",
-        gstOnly: true,
-      },
-      {
-        to: "/eway-bills",
-        label: "E-Way Bills",
-        icon: Route01Icon,
-        resource: "EWayBill",
-        action: "read",
-        gstOnly: true,
-      },
     ],
   },
 ];
@@ -452,8 +409,9 @@ function NoOrgScreen() {
         </div>
 
         {invitesLoading ? (
-          <div className="text-center py-4">
-            <Spinner size="md" className="text-brand-600 mx-auto" />
+          <div role="status" aria-label="Loading invitations" className="grid gap-3 py-2">
+            <Bone className="mx-auto h-4 w-40" />
+            <Bone className="h-14 w-full rounded-xl" />
           </div>
         ) : pendingInvites && pendingInvites.length > 0 ? (
           <>
@@ -742,24 +700,6 @@ function RootLayout() {
     }
   }, [navCollapsed]);
 
-  // Which nav groups are expanded. Absent from the map means open, so a fresh
-  // install shows the full menu and collapsing is an explicit choice.
-  const [closedSections, setClosedSections] = useState<Record<string, boolean>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(NAV_SECTIONS_KEY) || "{}");
-    } catch {
-      return {};
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(NAV_SECTIONS_KEY, JSON.stringify(closedSections));
-    } catch {
-      // Non-fatal: groups just reset next session.
-    }
-  }, [closedSections]);
-
   const activeSection = useMemo(() => {
     for (const section of navSections) {
       for (const item of section.items) {
@@ -773,16 +713,28 @@ function RootLayout() {
     return null;
   }, [pathname]);
 
+  // The sidebar is an accordion: one group open at a time. The group holding
+  // the current page opens on its own; opening another closes it.
+  const [openSection, setOpenSection] = useState<string | null>(activeSection);
   useEffect(() => {
-    if (!activeSection) return;
-    setClosedSections((prev) =>
-      prev[activeSection] ? { ...prev, [activeSection]: false } : prev,
-    );
+    if (activeSection) setOpenSection(activeSection);
   }, [activeSection]);
 
   const toggleSection = useCallback((label: string) => {
-    setClosedSections((prev) => ({ ...prev, [label]: !prev[label] }));
+    setOpenSection((prev) => (prev === label ? null : label));
   }, []);
+  // A group that just closed keeps its links for the length of its slide;
+  // after that a closed group renders none, so nothing hidden is left behind.
+  const [closingSection, setClosingSection] = useState<string | null>(null);
+  const prevOpenSection = useRef(openSection);
+  useEffect(() => {
+    const prev = prevOpenSection.current;
+    prevOpenSection.current = openSection;
+    if (!prev || prev === openSection) return;
+    setClosingSection(prev);
+    const t = setTimeout(() => setClosingSection(null), 220);
+    return () => clearTimeout(t);
+  }, [openSection]);
 
   const selectTenantMutation = trpc.tenant.select.useMutation({
     onSuccess: () => {
@@ -1263,14 +1215,7 @@ function RootLayout() {
 
   // ── Render logic (NO early returns before here — all hooks are above) ──
 
-  const loadingSpinner = (
-    <div className="min-h-screen flex items-center justify-center bg-surface-0">
-      <div className="flex flex-col items-center gap-3">
-        <Logo className="w-10 h-10" />
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    </div>
-  );
+  const loadingSpinner = <BootSplash />;
 
   if (showsStandalonePage) return <Outlet />;
 
@@ -1334,14 +1279,7 @@ function RootLayout() {
     }
 
     if (tenantList.length === 1) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-surface-0">
-          <div className="flex flex-col items-center gap-3">
-            <Logo className="w-10 h-10" />
-            <Spinner size="md" className="text-brand-600" />
-          </div>
-        </div>
-      );
+      return <BootSplash />;
     }
 
     // Multiple tenants — show picker
@@ -1617,16 +1555,6 @@ function RootLayout() {
                       (!("barcodeOnly" in item && item.barcodeOnly) || barcodesOn),
                   )
                   .map((item) => {
-                    // Rename reports label based on GST status (always visible)
-                    if (item.to === "/gst") {
-                      return {
-                        ...item,
-                        label: isGstRegistered ? "GST Returns" : "Tax Reports",
-                      };
-                    }
-                    if (item.to === "/reports") {
-                      return { ...item, label: "Business Reports" };
-                    }
                     return item;
                   });
                 if (visibleItems.length === 0) return null;
@@ -1644,11 +1572,11 @@ function RootLayout() {
                 // arrows, so there the group is just a rule and every item
                 // stays reachable.
                 const isRail = navCollapsed;
-                const closed = !isRail && !!closedSections[section.label];
+                const closed = !isRail && openSection !== section.label;
                 const panelId = `nav-section-${section.label.toLowerCase()}`;
 
                 return (
-                  <div key={section.label}>
+                  <div key={section.label} data-nav-group={section.label}>
                     {isRail ? (
                       <div
                         className="mx-3 my-2 border-t border-white/10 md:block hidden"
@@ -1686,8 +1614,19 @@ function RootLayout() {
                       />
                     </button>
 
-                    <div id={panelId} hidden={closed}>
-                    {visibleItems.map((item) => (
+                    {/* Opens and closes smoothly; a closed group is out of the tab order. */}
+                    <div
+                      id={panelId}
+                      inert={closed || undefined}
+                      aria-hidden={closed || undefined}
+                      className={cn(
+                        // visibility flips after the close animation, so a closed group's links are truly hidden.
+                        "grid transition-[grid-template-rows,opacity,visibility] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none",
+                        closed ? "invisible grid-rows-[0fr] opacity-0" : "visible grid-rows-[1fr] opacity-100",
+                      )}
+                    >
+                    <div className="min-h-0 overflow-hidden">
+                    {(!closed || closingSection === section.label) && visibleItems.map((item) => (
                       <Tooltip
                         key={item.to}
                         label={item.label}
@@ -1720,6 +1659,7 @@ function RootLayout() {
                         </Link>
                       </Tooltip>
                     ))}
+                    </div>
                     </div>
                   </div>
                 );
@@ -1943,7 +1883,10 @@ function RootLayout() {
 
           {/* Scrollable content */}
           <div data-testid="app-content" className="flex-1 overflow-y-auto">
-            <div className="max-w-[1400px] mx-auto px-6 py-6">
+            {/* Each page rises in slightly when you move to it; the sidebar and top bar stay still.
+                Fill mode "backwards": once it ends the animation lets go of the page, so it
+                doesn't stay a layer of its own that traps the page's pop-ups under the panels. */}
+            <div key={pathname} className="max-w-[1400px] mx-auto px-6 py-6 animate-rise-in [animation-duration:200ms] [animation-fill-mode:backwards]">
               <Outlet />
             </div>
           </div>

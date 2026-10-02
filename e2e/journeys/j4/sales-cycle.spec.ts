@@ -55,6 +55,7 @@ import {
   toast,
 } from "../../helpers/journey";
 import { seedOwner, type SeededOwner } from "../../helpers/journey-seed";
+import { STATUTORY, openStatutoryReport } from "../../helpers/journey-ui";
 import { seedSalesMasters, type SalesMasters } from "../../helpers/sales-seed";
 import {
   businessRow,
@@ -84,6 +85,8 @@ async function openBusiness(page: Page, owner: SeededOwner) {
 }
 
 async function openPage(page: Page, label: string, heading: string = label) {
+  // GST pages moved to Reports → Statutory reports.
+  if (label in STATUTORY) return openStatutoryReport(page, STATUTORY[label]);
   await navTo(page, label);
   await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
   await expectNoHorizontalScroll(page, label);

@@ -72,7 +72,7 @@ export function ProfitAndLossView() {
         )}
       </div>
 
-      {isLoading2 && <ReportSkeleton />}
+      {isLoading2 && <ReportSkeleton summary={0} statement={[5, 4, 3]} />}
 
       {error2 && (
         <div className="card px-5 py-4 border-red-200 bg-red-50">
@@ -373,7 +373,7 @@ export function TrialBalanceView() {
         <CompareToggle enabled={compareMode} onToggle={() => setCompareMode((v) => !v)} />
       </div>
 
-      {loading && <ReportSkeleton />}
+      {loading && <ReportSkeleton columns={[{ label: "Code", kind: "mono" }, { label: "Account" }, { label: "Type", kind: "badge" }, { label: "Debit", align: "right" }, { label: "Credit", align: "right" }, { label: "Balance", align: "right" }]} />}
       {err && (
         <div className="card px-5 py-4 border-red-200 bg-red-50">
           <p className="text-sm text-red-700">Failed to load trial balance: {err.message}</p>
@@ -526,7 +526,7 @@ export function BalanceSheetView() {
         <CompareToggle enabled={compareMode} onToggle={() => setCompareMode((v) => !v)} />
       </div>
 
-      {loading && <ReportSkeleton />}
+      {loading && <ReportSkeleton summary={0} statement={[5, 4, 3]} />}
       {err && (
         <div className="card px-5 py-4 border-red-200 bg-red-50">
           <p className="text-sm text-red-700">Failed to load balance sheet: {err.message}</p>
@@ -724,7 +724,7 @@ export function AgingReportView() {
         </p>
       </div>
 
-      {isLoading && <ReportSkeleton />}
+      {isLoading && <ReportSkeleton columns={[{ label: "Party" }, { label: "0–30 days", align: "right" }, { label: "31–60 days", align: "right" }, { label: "61–90 days", align: "right" }, { label: "90+ days", align: "right" }, { label: "Total", align: "right" }]} />}
 
       {error && (
         <div className="card px-5 py-4 border-red-200 bg-red-50">
@@ -957,7 +957,7 @@ export function PartyLedgerView() {
         />
       )}
 
-      {partyId && isLoading && <ReportSkeleton />}
+      {partyId && isLoading && <ReportSkeleton columns={[{ label: "Date" }, { label: "Document #", kind: "mono" }, { label: "Description" }, { label: "Debit", align: "right" }, { label: "Credit", align: "right" }, { label: "Balance", align: "right" }]} />}
 
       {partyId && error && (
         <div className="card px-5 py-4 border-red-200 bg-red-50">
@@ -1186,7 +1186,7 @@ export function TallyExportView() {
       </div>
 
       {/* Preview table */}
-      {isLoading && <ReportSkeleton />}
+      {isLoading && <ReportSkeleton columns={[{ label: "Date" }, { label: "Vch Type" }, { label: "Vch No." }, { label: "Debit Ledger" }, { label: "Credit Ledger" }, { label: "Amount", align: "right" }]} />}
 
       {data && data.preview.length > 0 && (
         <div className="card overflow-hidden">

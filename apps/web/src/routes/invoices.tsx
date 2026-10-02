@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
+import { useFlashRows } from "@/hooks/useFlashRows";
 import { invalidateStockViews } from "@/lib/stock-cache";
 import { useCan } from "@/lib/permissions";
 import { getBusinessId } from "@/lib/trpc";
@@ -15,7 +16,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PillTabs } from "@/components/ui/Tabs";
 import { SegmentedControl } from "@/components/ui/Tabs";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { DetailSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
 import { DetailField } from "@/components/ui/DetailField";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -687,7 +688,7 @@ function InvoiceDetailPanel({
       }
     >
       {isLoading ? (
-        <SkeletonRows count={5} height="h-8" className="space-y-3 animate-pulse" />
+        <DetailSkeleton />
       ) : !invoice ? (
         <p className="text-text-tertiary text-sm">Invoice not found.</p>
       ) : (
@@ -1092,7 +1093,7 @@ function InvoicesPage() {
   // A new page starts at its first row.
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const { data, isFetching, isLoading } = trpc.invoice.list.useQuery({
+  const listInput = {
     type,
     status: (status || undefined) as any,
     search: debouncedSearch || undefined,
@@ -1103,12 +1104,15 @@ function InvoicesPage() {
     ...filterParams(filters),
     page,
     limit: pageSize,
-  }, {
+  };
+  const { data, isFetching, isLoading, isPlaceholderData } = trpc.invoice.list.useQuery(listInput, {
     // Keep the current page on screen while the next one loads.
     placeholderData: (prev) => prev,
   });
 
   const rows = data?.data ?? [];
+  // Rows just added or saved glow green for a moment.
+  const flash = useFlashRows(isPlaceholderData ? undefined : data?.data, JSON.stringify(listInput));
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   // Deleting the last row of the last page: step back a page.
@@ -1257,7 +1261,7 @@ function InvoicesPage() {
         {/* Content */}
         {isLoading ? (
           <div className="p-4">
-            <SkeletonRows count={6} height="h-14" />
+            <TableSkeleton columns={[{ label: "Party" }, { label: "Invoice #", kind: "mono" }, { label: "Date" }, { label: "Due" }, { label: "Source", kind: "badge" }, { label: "Seller" }, { label: "Amount", align: "right" }, { label: "Status", kind: "badge" }, { align: "right", kind: "button" }]} rows={6} />
           </div>
         ) : !rows.length && !isFetching ? (
           <EmptyState
@@ -1322,7 +1326,7 @@ function InvoicesPage() {
                     return (
                       <tr
                         key={inv.id}
-                        className="cursor-pointer"
+                        className={cn("cursor-pointer", flash.has(inv.id) && "animate-row-flash")}
                         onClick={() => setSelectedInvoiceId(inv.id)}
                       >
                         <td className="font-medium"><span className="block truncate max-w-[250px]">{inv.partyName}</span></td>

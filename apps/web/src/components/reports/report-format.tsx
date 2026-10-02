@@ -1,3 +1,4 @@
+import { KpiSkeleton, StatementSkeleton, TableSkeleton, type SkeletonColumn } from "@/components/ui/Skeleton";
 /**
  * Formatting and loading pieces shared by the GST returns page and the
  * accounting reports (P&L, trial balance, balance sheet and the rest).
@@ -23,29 +24,26 @@ export function fmtStr(s: string): string {
 }
 
 
-export function ReportSkeleton() {
+/**
+ * A report loading: its summary cards, then either its table (with the real
+ * column headings) or, for statements like P&L, headed sections of lines.
+ */
+export function ReportSkeleton({
+  summary = 4,
+  columns = [{ label: "Name" }, { label: "Details" }, { align: "right" }, { align: "right" }],
+  statement,
+  rows = 8,
+}: {
+  summary?: number;
+  columns?: SkeletonColumn[];
+  statement?: number[];
+  rows?: number;
+}) {
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="card px-4 py-3">
-            <div className="skeleton h-3 w-20 mb-2" />
-            <div className="skeleton h-6 w-24" />
-          </div>
-        ))}
-      </div>
+    <div role="status" aria-label="Loading report" className="space-y-4">
+      {summary > 0 && <KpiSkeleton count={summary} />}
       <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-border-light">
-          <div className="skeleton h-4 w-32" />
-        </div>
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="flex gap-4 px-4 py-3 border-b border-border-light last:border-0">
-            <div className="skeleton h-4 w-24" />
-            <div className="skeleton h-4 flex-1" />
-            <div className="skeleton h-4 w-20" />
-            <div className="skeleton h-4 w-16" />
-          </div>
-        ))}
+        {statement ? <StatementSkeleton sections={statement} /> : <TableSkeleton columns={columns} rows={rows} />}
       </div>
     </div>
   );

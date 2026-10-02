@@ -2,11 +2,11 @@
  * Send goods a GRN rejected back to the supplier on a purchase return or a
  * debit note. Rejected goods never came into stock, so neither moves stock.
  */
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn, getDocumentTypeLabel } from "@/lib/utils";
 import { Modal } from "@/components/ui/Modal";
-import { Spinner } from "@/components/ui/Spinner";
 import { toast } from "@/hooks/useToast";
 import { formatQty } from "@/components/inventory/shared";
 
@@ -52,9 +52,7 @@ export function ReturnRejectedDialog({ grnId, onClose }: { grnId: string; onClos
   return (
     <Modal open onClose={onClose} title="Return rejected goods" className="max-w-2xl">
       {isLoading || !data ? (
-        <div className="flex justify-center py-10">
-          <Spinner size="md" className="text-brand-600" />
-        </div>
+        <TableSkeleton rows={4} columns={[{ label: "Item" }, { label: "Reason" }, { label: "Rejected", align: "right" }, { label: "Returned", align: "right" }, { label: "Return now", align: "right" }]} />
       ) : rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-text-secondary">Every rejected item on this GRN has already gone back.</p>
       ) : (

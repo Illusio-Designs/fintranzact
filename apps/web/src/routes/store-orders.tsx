@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { DetailSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
 import { PillTabs } from "@/components/ui/Tabs";
 import { Icon } from "@/components/ui/Icon";
 import { ShoppingBag01Icon } from "@hugeicons/core-free-icons";
@@ -361,7 +361,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
         }
       >
         {isLoading ? (
-          <SkeletonRows count={7} height="h-8" className="space-y-3 animate-pulse" />
+          <DetailSkeleton />
         ) : !o ? (
           <p className="text-text-tertiary text-sm">Order not found.</p>
         ) : (
@@ -644,7 +644,7 @@ function StoreOrdersPage() {
         {/* Content */}
         {isLoading ? (
           <div className="p-4">
-            <SkeletonRows count={7} height="h-14" />
+            <TableSkeleton columns={[{ label: "Order #", kind: "mono" }, { label: "Customer" }, { label: "Phone" }, { label: "Items", align: "center" }, { label: "Total", align: "right" }, { label: "Status", kind: "badge" }, { label: "Date" }, { align: "right", kind: "button" }]} rows={7} />
           </div>
         ) : !orders.length && !isFetching ? (
           <EmptyState

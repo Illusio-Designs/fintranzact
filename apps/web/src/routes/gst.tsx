@@ -1,5 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useEmbeddedReport } from "@/lib/embedded-report";
 import { trpc, getBusinessId } from "@/lib/trpc";
 import { formatDate } from "@/lib/utils";
 
@@ -26,16 +27,22 @@ const months = [
 type ReportTab = "gstr1" | "gstr3b" | "gstr9" | "cmp08";
 const REPORT_TABS: ReportTab[] = ["gstr1", "gstr3b", "gstr9", "cmp08"];
 
-function GSTReportsPage() {
+export function GSTReportsPage() {
+  const embedded = useEmbeddedReport();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   // A tab saved before P&L and the other statements moved to Reports falls back to GSTR-1.
-  const [activeTab, setActiveTabRaw] = useState<ReportTab>(() => {
+  const [savedTab, setActiveTabRaw] = useState<ReportTab>(() => {
     const saved = localStorage.getItem("fintranzact_gst_tab") as ReportTab | null;
     return saved && REPORT_TABS.includes(saved) ? saved : "gstr1";
   });
+  // In the Reports Centre each return is its own report, so the tab is fixed.
+  const activeTab = embedded?.gstTab ?? savedTab;
+  const navigate = useNavigate();
   const setActiveTab = (tab: ReportTab) => {
+    // Inside the Centre each return is its own report: the tabs move between them.
+    if (embedded) return void navigate({ to: "/reports", search: { report: tab } });
     setActiveTabRaw(tab);
     localStorage.setItem("fintranzact_gst_tab", tab);
   };
@@ -73,7 +80,7 @@ function GSTReportsPage() {
       />
 
       {/* Tab bar — scrolls sideways on its own on a phone instead of the page. */}
-      <div className="mb-2 overflow-x-auto" data-testid="gst-report-tabs">
+      <div className={embedded ? "mb-5 overflow-x-auto" : "mb-2 overflow-x-auto"} data-testid="gst-report-tabs">
         <PillTabs
           tabs={tabs}
           value={activeTab}
@@ -81,6 +88,8 @@ function GSTReportsPage() {
           className="w-max"
         />
       </div>
+      {!embedded && (
+      <>
       <p className="mb-6 text-xs text-text-tertiary">
         Profit &amp; Loss, Balance Sheet, Trial Balance, Ageing, Party Ledger and Tally Export are now in{" "}
         <Link to="/reports" search={{ report: "pnl" }} className="font-medium text-brand-600 hover:underline dark:text-brand-400">
@@ -88,6 +97,8 @@ function GSTReportsPage() {
         </Link>
         .
       </p>
+      </>
+      )}
 
       {/* Period selector — only shown for GST tabs */}
       {(activeTab === "gstr1" || activeTab === "gstr3b") && (
@@ -113,7 +124,7 @@ function GSTReportsPage() {
             ))}
           </Select>
 
-          <div className="sm:ml-4">
+          {!embedded && <div className="sm:ml-4">
             <SegmentedControl
               tabs={[
                 { value: "gstr1", label: tab1Label },
@@ -122,7 +133,7 @@ function GSTReportsPage() {
               value={activeTab}
               onChange={(v) => setActiveTab(v as ReportTab)}
             />
-          </div>
+          </div>}
         </div>
       )}
 
@@ -175,7 +186,7 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
     }
   }
 
-  if (isLoading) return <ReportSkeleton />;
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Party GSTIN" }, { label: "Name" }, { label: "Invoice #", kind: "mono" }, { label: "Taxable", align: "right" }, { label: "CGST", align: "right" }, { label: "SGST", align: "right" }, { label: "IGST", align: "right" }, { label: "Total", align: "right" }]} />;
   if (error) return (
     <div className="card px-5 py-4 border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800">
       <p className="text-sm text-red-700 dark:text-red-400">Failed to load report: {error.message}</p>
@@ -424,7 +435,7 @@ function GSTR1View({ year, month }: { year: number; month: number }) {
 function GSTR3BView({ year, month }: { year: number; month: number }) {
   const { data, isLoading, error } = trpc.gst.gstr3b.useQuery({ year, month });
 
-  if (isLoading) return <ReportSkeleton />;
+  if (isLoading) return <ReportSkeleton columns={[{ label: "Nature of supplies" }, { label: "Taxable value", align: "right" }, { label: "IGST", align: "right" }, { label: "CGST", align: "right" }, { label: "SGST", align: "right" }]} />;
   if (error) return (
     <div className="card px-5 py-4 border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800">
       <p className="text-sm text-red-700 dark:text-red-400">Failed to load report: {error.message}</p>

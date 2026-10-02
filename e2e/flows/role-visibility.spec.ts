@@ -16,6 +16,7 @@
 import { test, expect, ApiHelper } from "../helpers/fixtures";
 import { openRegisterForm, fillRegisterForm } from "../helpers/auth";
 import { loadSeed } from "../helpers/seed";
+import { sidebarLabels } from "../helpers/journey";
 
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
 
@@ -39,7 +40,7 @@ const ROLE_NAV_VISIBLE: Record<string, string[]> = {
     "Payments",
     "Cash & Bank",
     "Expenses",
-    "Business Reports",
+    "Reports",
   ],
 };
 
@@ -48,7 +49,7 @@ const ROLE_NAV_VISIBLE: Record<string, string[]> = {
  * section in the sidebar, so only sellers have hidden items.
  */
 const ROLE_NAV_HIDDEN = {
-  seller: ["Dashboard", "Cash & Bank", "Expenses", "GST Returns", "E-Way Bills"],
+  seller: ["Dashboard", "Cash & Bank", "Expenses"],
 };
 
 /**
@@ -141,26 +142,17 @@ test.describe("Role: Seller", () => {
     await rolePage.goto("/invoices");
     await rolePage.locator("h1").first().waitFor({ state: "visible", timeout: 10_000 });
 
-    const sidebar = rolePage.locator("nav, aside").first();
-
-    for (const item of ROLE_NAV_VISIBLE.seller) {
-      await expect(
-        sidebar.getByText(item, { exact: true }).first(),
-      ).toBeVisible({ timeout: 5_000 });
-    }
+    // Every group's links, opening the accordion group by group.
+    const labels = await sidebarLabels(rolePage);
+    for (const item of ROLE_NAV_VISIBLE.seller) expect(labels).toContain(item);
   });
 
   test("seller does NOT see restricted nav items", async () => {
     await rolePage.goto("/invoices");
     await rolePage.locator("h1").first().waitFor({ state: "visible", timeout: 10_000 });
 
-    const sidebar = rolePage.locator("nav, aside").first();
-
-    for (const item of ROLE_NAV_HIDDEN.seller) {
-      await expect(
-        sidebar.getByText(item, { exact: true }),
-      ).not.toBeVisible();
-    }
+    const labels = await sidebarLabels(rolePage);
+    for (const item of ROLE_NAV_HIDDEN.seller) expect(labels).not.toContain(item);
   });
 
   test("seller is redirected from dashboard to invoices", async () => {
@@ -267,13 +259,8 @@ test.describe("Role: Accountant", () => {
     await rolePage.goto("/invoices");
     await rolePage.locator("h1").first().waitFor({ state: "visible", timeout: 10_000 });
 
-    const sidebar = rolePage.locator("nav, aside").first();
-
-    for (const item of ROLE_NAV_VISIBLE.accountant) {
-      await expect(
-        sidebar.getByText(item, { exact: true }).first(),
-      ).toBeVisible({ timeout: 5_000 });
-    }
+    const labels = await sidebarLabels(rolePage);
+    for (const item of ROLE_NAV_VISIBLE.accountant) expect(labels).toContain(item);
   });
 
   test("accountant can access expenses page", async () => {

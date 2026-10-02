@@ -1,3 +1,4 @@
+import { BootSplash } from "@/components/ui/BootSplash";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
@@ -37,7 +38,6 @@ import { Icon } from "@/components/ui/Icon";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Pagination } from "@/components/ui/Pagination";
-import { Spinner } from "@/components/ui/Spinner";
 import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
 import { RoadmapView } from "@/components/platform/RoadmapView";
 
@@ -105,11 +105,7 @@ function PlatformAdminPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (meLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-surface-0">
-        <Spinner size="md" className="text-brand-600" />
-      </div>
-    );
+    return <BootSplash />;
   }
 
   if (!isAdmin) {

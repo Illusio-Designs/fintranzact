@@ -2,6 +2,7 @@
  * Inventory reports: stock ledger, movement summary, godown summary, stock
  * ageing, reorder status and dead stock. Rendered from the Reports page.
  */
+import { ReportSkeleton } from "./report-format";
 import { useState, type ReactNode } from "react";
 import { Alert02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
@@ -10,7 +11,6 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { Combobox } from "@/components/ui/Combobox";
 import { Listbox } from "@/components/ui/Listbox";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Spinner } from "@/components/ui/Spinner";
 import { StatCard } from "@/components/ui/StatCard";
 import { Icon } from "@/components/ui/Icon";
 import { formatQty, useWarehouses } from "@/components/inventory/shared";
@@ -73,11 +73,7 @@ export function ReportTable<T>({ columns, rows, rowKey, footer }: {
 }
 
 export function Loading() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <Spinner size="md" className="text-brand-600" />
-    </div>
-  );
+  return <ReportSkeleton summary={3} columns={[{ label: "Item", kind: "pair" }, { label: "Warehouse" }, { label: "Quantity", align: "right" }, { label: "Value", align: "right" }]} />;
 }
 
 export function LoadError({ what }: { what: string }) {

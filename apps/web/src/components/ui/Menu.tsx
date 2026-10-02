@@ -18,6 +18,7 @@ import { createPortal } from "react-dom";
 import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { useAnchoredPopover } from "@/hooks/useAnchoredPopover";
+import { usePresence } from "@/hooks/usePresence";
 import { Icon } from "./Icon";
 
 export type MenuEntry =
@@ -66,7 +67,8 @@ export function Menu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
-  const style = useAnchoredPopover(triggerRef, open, {
+  const { mounted, closing } = usePresence(open, 100);
+  const style = useAnchoredPopover(triggerRef, mounted, {
     width,
     align,
     estimatedHeight: Math.min(420, items.length * 36 + 8),
@@ -130,17 +132,22 @@ export function Menu({
           />
         )}
       </button>
-      {open &&
+      {mounted &&
         createPortal(
           <div
             ref={listRef}
             id={menuId}
             role="menu"
             aria-label={menuLabel ?? ariaLabel}
+            aria-hidden={closing || undefined}
             onKeyDown={onKey}
             onClick={(e) => e.stopPropagation()}
-            style={style}
-            className="z-50 max-h-[420px] overflow-y-auto animate-scale-in rounded-xl border border-border-light bg-surface-0 p-1 shadow-dropdown"
+            // Grows out of the button's corner, and fades out on close.
+            style={{ ...style, transformOrigin: `${"bottom" in style ? "bottom" : "top"} ${align === "end" ? "right" : "left"}` }}
+            className={cn(
+              "z-50 max-h-[420px] overflow-y-auto rounded-xl border border-border-light bg-surface-0 p-1 shadow-dropdown",
+              closing ? "pointer-events-none animate-fade-out [animation-duration:100ms]" : "animate-pop-in",
+            )}
           >
             {items.map((it, i) => {
               if (it.kind === "separator") {

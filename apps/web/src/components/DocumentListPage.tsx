@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useFlashRows } from "@/hooks/useFlashRows";
 import { trpc } from "@/lib/trpc";
 import { useCan } from "@/lib/permissions";
 import { invalidateStockViews } from "@/lib/stock-cache";
@@ -249,8 +250,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
   useEffect(() => { setFilters((f) => (f.parties ? { ...f, parties: undefined } : f)); }, [type]);
   useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
 
-  const { data, isLoading, isFetching } = router.list.useQuery(
-    {
+  const listInput = {
       type,
       status: (status && !byFulfilment ? status : undefined) as never,
       fulfilment: byFulfilment ? status : undefined,
@@ -260,10 +260,14 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
       ...filterParams(filters),
       page,
       limit: pageSize,
-    },
+  };
+  const { data, isLoading, isFetching, isPlaceholderData } = router.list.useQuery(
+    listInput,
     // Keep the current page on screen while the next one loads.
     { placeholderData: (prev: unknown) => prev },
   );
+  // Rows just added or saved glow green for a moment.
+  const flash = useFlashRows(isPlaceholderData ? undefined : (data as { data?: { id: string; updatedAt?: string }[] } | undefined)?.data, JSON.stringify(listInput));
   const total: number = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
@@ -432,7 +436,7 @@ export function DocumentListPage({ config, initialSelectedId }: DocumentListPage
               <tbody>
                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 {data.data.map((doc: any) => (
-                  <tr key={doc.id} className="cursor-pointer" onClick={() => setSelectedId(doc.id)}>
+                  <tr key={doc.id} className={cn("cursor-pointer", flash.has(doc.id) && "animate-row-flash")} onClick={() => setSelectedId(doc.id)}>
                     <td className="font-medium">{doc.partyName}</td>
                     <td className="font-mono text-ui text-text-secondary">
                       {doc.invoiceNumber}

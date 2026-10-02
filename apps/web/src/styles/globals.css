@@ -348,9 +348,12 @@ input, select, textarea {
   }
 
   /* Skeleton */
+  /* Loading placeholder: a soft light sweeps across instead of blinking. */
   .skeleton {
-    @apply animate-pulse rounded;
-    background: var(--surface-2);
+    @apply rounded;
+    background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 45%, var(--surface-2) 90%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
   }
 }
 
@@ -434,6 +437,9 @@ input, select, textarea {
 
 /* Reduced-motion: disable all decorative animations */
 @media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
   .card-interactive {
     transition: none;
   }
@@ -477,4 +483,10 @@ input, select, textarea {
 .input[aria-invalid="true"], [aria-invalid="true"].input, textarea[aria-invalid="true"], select[aria-invalid="true"] {
   border-color: var(--danger) !important;
   box-shadow: 0 0 0 3px rgb(220 38 38 / 0.15);
+}
+
+/* The skeleton's sweep (also available as Tailwind's animate-shimmer). */
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
 }
