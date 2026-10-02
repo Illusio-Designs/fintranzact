@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
+import { z } from "zod";
 import { trpc } from "@/lib/trpc";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SettingsNav } from "@/components/settings/SettingsNav";
@@ -20,12 +21,15 @@ import { Icon } from "@/components/ui/Icon";
 import { Add01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
 
 export const Route = createFileRoute("/settings")({
+  // ?tab=pos opens a section directly, e.g. from the POS "turned off" screen.
+  validateSearch: z.object({ tab: z.string().optional() }),
   component: SettingsPage,
 });
 
 function SettingsPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState(() => sessionStorage.getItem("settings-tab") || "business");
+  const { tab: linkedTab } = Route.useSearch();
+  const [tab, setTab] = useState(() => linkedTab || sessionStorage.getItem("settings-tab") || "business");
   const handleTabChange = (t: string) => { setTab(t); sessionStorage.setItem("settings-tab", t); };
   // Always refetched on opening Settings: the document counters ("Next #")
   // move with every invoice, payment or order saved elsewhere in the app.

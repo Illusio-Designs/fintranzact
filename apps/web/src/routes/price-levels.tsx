@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { mrpWarning } from "@fintranzact/shared";
 import { usePageSearch } from "@/lib/page-search";
@@ -14,6 +14,11 @@ import { Listbox } from "@/components/ui/Listbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
+import { Badge } from "@/components/ui/Badge";
+import { Pagination } from "@/components/ui/Pagination";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
+import { TableScroll } from "@/components/ui/Table";
+import { usePageSize } from "@/hooks/usePageSize";
 
 export const Route = createFileRoute("/price-levels")({
   component: PriceLevelsPage,
@@ -58,6 +63,24 @@ function PriceLevelsPage() {
     onError: (e) => toast({ title: "Couldn't delete", description: e.message, variant: "error" }),
   });
 
+  const makeDefault = trpc.priceLevel.update.useMutation({
+    onSuccess: async () => {
+      await invalidate();
+      toast({ title: "Default level changed", variant: "success" });
+    },
+    onError: (e) => toast({ title: "Couldn't change the default", description: e.message, variant: "error" }),
+  });
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("price-levels", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
+  // A new search or rows-per-page choice starts from the first page.
+  useEffect(() => setPage(1), [debounced, pageSize]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
+  const totalPages = Math.max(1, Math.ceil((grid?.rows.length ?? 0) / pageSize));
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+
   const dirty = Object.keys(edits).length;
   function save() {
     const cells = Object.entries(edits).map(([key, price]) => {
@@ -75,7 +98,7 @@ function PriceLevelsPage() {
     <div>
       <PageHeader
         title="Price Levels"
-        description="Selling prices per customer group: Retail, Wholesale, Dealer and so on. A customer is billed at their level, or the default level; items without a price on it sell at their own sale price."
+        description="Selling prices per customer group, such as Retail, Wholesale or Dealer. A customer is billed at their level (or the default one); a blank price falls back to the item's sale price."
         actions={
           <div className="flex gap-2">
             {levels && levels.length > 0 && (
@@ -91,33 +114,40 @@ function PriceLevelsPage() {
       />
 
       {levels && levels.length > 0 && (
-        <div className="mb-6 flex flex-wrap gap-3">
+        <div className="mb-5 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
           {levels.map((l) => (
-            <div key={l.id} className="card flex min-w-[200px] items-start justify-between gap-4 p-4">
-              <div>
-                <p className="font-semibold text-text-primary">
-                  {l.name}
-                  {l.isDefault && (
-                    <span className="ml-2 rounded-full bg-brand-600/10 px-2 py-0.5 text-2xs font-medium text-brand-600">Default</span>
-                  )}
+            <div key={l.id} className="card flex items-start justify-between gap-3 p-4">
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-center gap-2 font-semibold text-text-primary">
+                  <span className="truncate">{l.name}</span>
+                  {l.isDefault && <Badge size="md" color="bg-brand-600/10 text-brand-600 dark:text-brand-400">Default</Badge>}
                 </p>
-                <p className="mt-0.5 text-xs text-text-tertiary">
+                <p className="mt-1 whitespace-nowrap text-xs tabular-nums text-text-tertiary">
                   {l.entryCount} price{l.entryCount === 1 ? "" : "s"} · {l.partyCount} customer{l.partyCount === 1 ? "" : "s"}
                 </p>
-                {l.description && <p className="mt-1 text-xs text-text-secondary">{l.description}</p>}
+                {l.description && <p className="mt-1 line-clamp-2 text-xs text-text-secondary">{l.description}</p>}
               </div>
-              <div className="flex gap-2 text-xs">
-                <button className="text-brand-600 hover:underline" onClick={() => setLevelForm(l)}>Edit</button>
-                <button className="text-red-600 hover:underline" onClick={() => setDeleting(l)}>Delete</button>
-              </div>
+              <RowActions
+                label={l.name}
+                items={tidyMenu([
+                  { label: "Edit level", onSelect: () => setLevelForm(l) },
+                  !l.isDefault && {
+                    label: "Make default",
+                    disabled: makeDefault.isPending,
+                    onSelect: () => makeDefault.mutate({ id: l.id, data: { isDefault: true } }),
+                  },
+                  { kind: "separator" },
+                  { label: "Delete level", danger: true, onSelect: () => setDeleting(l) },
+                ])}
+              />
             </div>
           ))}
         </div>
       )}
 
-      <div className="card overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
         {!levels || !grid ? (
-          <SkeletonRows />
+          <div className="p-4"><SkeletonRows /></div>
         ) : levels.length === 0 ? (
           <EmptyState
             title="No price levels yet"
@@ -127,9 +157,10 @@ function PriceLevelsPage() {
         ) : grid.rows.length === 0 ? (
           <EmptyState title="No items" description={search ? "No items match your search." : "Add stock items to price them."} />
         ) : (
-          <>
-            <div className={cn("overflow-x-auto", isFetching && "opacity-70")}>
-              <table className="data-table">
+          <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+            <Pagination placement="top" page={page} totalPages={totalPages} onPageChange={setPage} total={grid.rows.length} pageSize={pageSize} />
+            <TableScroll ref={tableRef}>
+              <table className="data-table w-full">
                 <thead>
                   <tr>
                     <th>Item</th>
@@ -141,7 +172,7 @@ function PriceLevelsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {grid.rows.map((r) => (
+                  {grid.rows.slice((page - 1) * pageSize, page * pageSize).map((r) => (
                     <tr key={`${r.itemId}:${r.variantId ?? ""}`}>
                       <td className={cn("font-medium text-text-primary", r.variantId && "pl-8 font-normal text-text-secondary")}>
                         {r.name}
@@ -177,7 +208,10 @@ function PriceLevelsPage() {
                             />
                             <button
                               type="button"
-                              className="mt-0.5 block w-full text-right text-2xs text-brand-600 hover:underline"
+                              className={cn(
+                                "mt-1 block w-full text-right text-2xs hover:underline",
+                                extra > 0 ? "font-medium text-brand-600 dark:text-brand-400" : "text-text-tertiary hover:text-brand-600",
+                              )}
                               onClick={() => setSlabs({ level: l, row: r })}
                             >
                               {extra > 0 ? `+${extra} slab/unit/dated` : "Slabs…"}
@@ -189,10 +223,26 @@ function PriceLevelsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
-            <div className="flex items-center justify-between border-t border-border-light px-4 py-3">
+            </TableScroll>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              total={grid.rows.length}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
+            {/* Stays in view while scrolling a long grid, so unsaved prices are never out of sight. */}
+            <div
+              className={cn(
+                "sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-border-light px-4 py-3 transition-colors",
+                dirty > 0 ? "bg-brand-50/90 backdrop-blur dark:bg-brand-950/60" : "bg-surface-0",
+              )}
+            >
               <p className="text-xs text-text-tertiary">
-                A blank cell means the item sells at its own sale price on that level.
+                {dirty > 0
+                  ? `${dirty} unsaved price${dirty === 1 ? "" : "s"}, kept when you change page.`
+                  : "A blank cell means the item sells at its own sale price on that level."}
               </p>
               <div className="flex gap-2">
                 {dirty > 0 && (
@@ -203,7 +253,7 @@ function PriceLevelsPage() {
                 </button>
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
 

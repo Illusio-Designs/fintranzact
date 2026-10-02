@@ -1,6 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { FolderLibraryIcon } from "@hugeicons/core-free-icons";
+import { useMemo, useState } from "react";
+import { Folder01Icon, FolderLibraryIcon } from "@hugeicons/core-free-icons";
+import { usePageSearch } from "@/lib/page-search";
+import { cn } from "@/lib/utils";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
+import { TableScroll } from "@/components/ui/Table";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -11,6 +15,20 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonRows } from "@/components/ui/SkeletonRows";
 import { Icon } from "@/components/ui/Icon";
 import { indentedName, useStockGroups } from "@/components/inventory/StockGroups";
+
+/** The part of a name that matches the search, highlighted. */
+function Highlight({ text, query }: { text: string; query: string }) {
+  const q = query.trim();
+  const at = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  if (at < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark className="rounded-sm bg-amber-200/60 text-inherit dark:bg-amber-400/25">{text.slice(at, at + q.length)}</mark>
+      {text.slice(at + q.length)}
+    </>
+  );
+}
 
 export const Route = createFileRoute("/stock-groups")({
   component: StockGroupsPage,
@@ -58,6 +76,20 @@ function StockGroupsPage() {
   });
 
   const all = groups ?? [];
+  const [search] = usePageSearch("Search stock groups…");
+  // A match keeps its parents on screen so the tree still reads.
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    const byId = new Map(all.map((g) => [g.id, g]));
+    const keep = new Set<string>();
+    for (const g of all) {
+      if (!g.name.toLowerCase().includes(q)) continue;
+      for (let at: Group | undefined = g; at && !keep.has(at.id); at = at.parentId ? byId.get(at.parentId) : undefined) keep.add(at.id);
+    }
+    return all.filter((g) => keep.has(g.id));
+  }, [all, search]);
+  const topLevel = all.filter((g) => !g.parentId).length;
   const pending = create.isPending || rename.isPending || move.isPending;
 
   async function save() {
@@ -96,75 +128,97 @@ function StockGroupsPage() {
         }
       />
 
-      <div className="card overflow-hidden">
+      <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
         {isLoading ? (
-          <SkeletonRows count={4} />
+          <div className="p-4"><SkeletonRows count={4} /></div>
         ) : all.length === 0 ? (
           <EmptyState
             icon={<Icon icon={FolderLibraryIcon} size={22} />}
             title="No stock groups yet"
             description="Add groups such as Electronics or Groceries, then choose a group on each item."
+            action={canEdit && <button className="btn-primary" onClick={() => setEditing({ name: "", parentId: "" })}>+ Add group</button>}
           />
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Group</th>
-                <th className="text-right">Sub-groups</th>
-                <th className="text-right">Items</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {all.map((g) => (
-                <tr key={g.id}>
-                  <td>
-                    <span className="font-medium text-text-primary" style={{ paddingLeft: g.depth * 20 }}>
-                      {g.depth > 0 && <span className="mr-1.5 text-text-tertiary">└</span>}
-                      {g.name}
-                    </span>
-                  </td>
-                  <td className="text-right tabular-nums text-text-secondary">{g.childCount || "—"}</td>
-                  <td className="text-right tabular-nums">
-                    {g.itemCount}
-                    {g.itemCount !== g.directItemCount && (
-                      <span className="ml-1 text-xs text-text-tertiary">({g.directItemCount} direct)</span>
-                    )}
-                  </td>
-                  <td className="text-right whitespace-nowrap">
-                    {canEdit && (
-                      <button
-                        className="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
-                        onClick={() => setEditing({ id: g.id, name: g.name, parentId: g.parentId ?? "" })}
-                      >
-                        Edit
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button
-                        className="ml-4 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400"
-                        onClick={() => {
-                          setMoveTo("");
-                          setDeleting(g);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            {/* Summary bar, same place as the range and sort bar on other lists. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border-light px-4 py-2.5 text-xs text-text-tertiary">
+              <span className="tabular-nums">
+                {shown.length === all.length
+                  ? `${all.length} group${all.length === 1 ? "" : "s"}`
+                  : `${shown.length} of ${all.length} groups`}
+                {" · "}
+                {topLevel} at the top level
+              </span>
+              {ungroupedItemCount > 0 && (
+                <span>
+                  {ungroupedItemCount} item{ungroupedItemCount === 1 ? " is" : "s are"} not in any group ·{" "}
+                  <Link to="/items" className="font-medium text-brand-600 hover:underline dark:text-brand-400">Open Stock Items</Link>
+                </span>
+              )}
+            </div>
+            {shown.length === 0 ? (
+              <EmptyState title="No matching groups" description={`No group matches "${search.trim()}".`} />
+            ) : (
+              <TableScroll>
+                <table className="data-table w-full">
+                  <thead>
+                    <tr>
+                      <th>Group</th>
+                      <th className="text-right whitespace-nowrap">Sub-groups</th>
+                      <th className="text-right">Items</th>
+                      <th className="text-right"><span className="sr-only">Actions</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((g) => (
+                      <tr key={g.id}>
+                        <td>
+                          <span className="flex items-center gap-2" style={{ paddingLeft: g.depth * 22 }}>
+                            {g.depth > 0 && <span aria-hidden className="-mt-2 h-3 w-3 shrink-0 rounded-bl border-b border-l border-border" />}
+                            <Icon
+                              icon={g.childCount > 0 ? FolderLibraryIcon : Folder01Icon}
+                              size={15}
+                              className={g.depth === 0 ? "text-brand-600 dark:text-brand-400" : "text-text-tertiary"}
+                            />
+                            <span className={cn("text-text-primary", g.depth === 0 ? "font-semibold" : "font-medium")}>
+                              <Highlight text={g.name} query={search} />
+                            </span>
+                          </span>
+                        </td>
+                        <td className="text-right tabular-nums text-text-secondary">{g.childCount || "—"}</td>
+                        <td className="text-right tabular-nums whitespace-nowrap">
+                          <span className={g.itemCount ? "text-text-primary" : "text-text-tertiary"}>{g.itemCount}</span>
+                          {g.itemCount !== g.directItemCount && (
+                            <span className="ml-1 text-xs text-text-tertiary">({g.directItemCount} direct)</span>
+                          )}
+                        </td>
+                        <td className="text-right">
+                          <RowActions
+                            label={g.name}
+                            items={tidyMenu([
+                              canEdit && { label: "Edit group", onSelect: () => setEditing({ id: g.id, name: g.name, parentId: g.parentId ?? "" }) },
+                              canEdit && { label: "Add sub-group", onSelect: () => setEditing({ name: "", parentId: g.id }) },
+                              { kind: "separator" },
+                              canDelete && {
+                                label: "Delete group",
+                                danger: true,
+                                onSelect: () => {
+                                  setMoveTo("");
+                                  setDeleting(g);
+                                },
+                              },
+                            ])}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableScroll>
+            )}
+          </>
         )}
       </div>
-
-      {ungroupedItemCount > 0 && (
-        <p className="mt-3 text-xs text-text-tertiary">
-          {ungroupedItemCount} item{ungroupedItemCount === 1 ? " is" : "s are"} not in any group.{" "}
-          <Link to="/items" className="text-brand-600 hover:underline dark:text-brand-400">Open Stock Items</Link> to file them.
-        </p>
-      )}
 
       <SlideOver
         open={!!editing}
