@@ -114,6 +114,17 @@ describe("referral codes", () => {
     expect(await tenantOf("meena@shahtraders.in")).toMatchObject({ partnerId, referralCode });
   });
 
+  it("link a second organisation registered with the code", async () => {
+    await publicCaller().auth.register({
+      name: "Ravi Patel",
+      email: "ravi@patelstores.in",
+      password: "a-long-test-password",
+      confirmPassword: "a-long-test-password",
+      referralCode,
+    });
+    expect(await tenantOf("ravi@patelstores.in")).toMatchObject({ partnerId, referralCode });
+  });
+
   it("keep an unknown code as typed without linking a partner", async () => {
     await publicCaller().auth.register({
       name: "Anil Rao",
