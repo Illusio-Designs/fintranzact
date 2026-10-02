@@ -52,8 +52,13 @@ describe("TcsSectionField", () => {
   });
 
   it("says what a chosen section collects", () => {
-    render(<TcsSectionField value="206C_SCRAP" onChange={vi.fn()} />);
+    render(<TcsSectionField value="206C_SCRAP" onChange={vi.fn()} financialYear="2025-26" />);
     expect(screen.getByText(/collect 1% TCS from the customer, with the invoice/)).toBeInTheDocument();
+  });
+
+  it("shows the 2026-27 rate for a 2026-27 year", () => {
+    render(<TcsSectionField value="206C_SCRAP" onChange={vi.fn()} financialYear="2026-27" />);
+    expect(screen.getByText(/collect 2% TCS from the customer, with the invoice \(FY 2026-27/)).toBeInTheDocument();
   });
 
   it("mentions the value limit for motor vehicles", () => {

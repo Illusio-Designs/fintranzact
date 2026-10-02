@@ -24,7 +24,7 @@ export const tdsEndpoints: EndpointGroup = {
       method: "query",
       path: "tds.sections",
       title: "List Sections",
-      description: "Every TDS section for a financial year with this business's overrides applied. `defaults` holds the built-in values so an edit can be compared.",
+      description: "Every TDS (or, with `kind: \"tcs\"`, TCS) section for a financial year with this business's overrides applied. `defaults` holds the built-in values of that year so an edit can be compared. The built-in defaults are year-versioned: years before 2026-27 use the Income-tax Act 1961 values, 2026-27 onward the Income-tax Act 2025 values (TCS scrap, alcohol, coal / lignite / iron ore 2%, tendu leaves 2%). `meta` says where they came from.",
       auth: "business",
       requiredRole: "viewer",
       input: [{ ...FY, required: false, description: "Defaults to the current financial year." }, KIND],
@@ -33,15 +33,20 @@ export const tdsEndpoints: EndpointGroup = {
         example: {
           financialYear: "2026-27",
           sections: [
-            { code: "194J_PROF", label: "194J · Professional fees", rate: "10", individualRate: null, rateWithoutPan: "20", singleThreshold: null, aggregateThreshold: "50000", basis: "payments", excessOnly: false, isActive: true, overridden: false },
+            { code: "194J_PROF", label: "194J · Professional fees", rate: "10", individualRate: null, rateWithoutPan: "20", singleThreshold: null, aggregateThreshold: "50000", basis: "payments", excessOnly: false, isActive: true, overridden: false, actSection: "393(1) Table 6(iii)", paymentCode: "1027" },
           ],
+          meta: { sourceNotes: ["…"], lastReviewed: "2026-10-02", verifyWithCA: true, actNote: "From 1 April 2026 the Income-tax Act, 2025 applies: …", newAct: true },
         },
       },
       codeExamples: {
         curl: get("tds.sections", `{"financialYear":"2026-27"}`),
         javascript: `const { sections } = await trpc.tds.sections.query({ financialYear: "2026-27" });`,
       },
-      gotchas: ["BAD_REQUEST when the second half of the year is not the next year (`2026-28`)."],
+      gotchas: [
+        "BAD_REQUEST when the second half of the year is not the next year (`2026-28`).",
+        "`actSection` and `paymentCode` appear for 2026-27 onward only and are display metadata; the old code (`194C`, `206C_SCRAP` ...) stays the id everywhere. All values are from secondary sources: verify with a CA (`meta.verifyWithCA`).",
+        "Resolution: this business's override for the year first, else the built-in default of that year. Computation takes the year from the transaction's own date, and recorded deductions keep their stored rate. Form names for tax years from 2026-27 are not changed by the API: confirm them with a CA.",
+      ],
       relatedEndpoints: ["tds-update-section", "tds-reset-section"],
     },
     {

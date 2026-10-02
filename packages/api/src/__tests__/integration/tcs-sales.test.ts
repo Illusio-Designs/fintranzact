@@ -49,8 +49,12 @@ const db = () => getTenantTestDb();
 const line = (itemId: string, price: string, qty = "1") => ({
   itemId, itemName: "Goods", quantity: qty, unitPrice: price, taxPercent: "18", discountPercent: "0",
 });
+// Sales are dated in 2025-26 unless a test says otherwise, so the s.206C rates (scrap 1%) apply whatever day the suite runs.
+// From 1 April 2026 (2026-27) scrap is 2%: see "TCS rates follow the year of the sale".
+const OLD_YEAR_DATE = "2025-11-10T06:30:00.000Z";
+const NEW_YEAR_DATE = "2026-06-10T06:30:00.000Z";
 const sale = (partyId: string, lines: ReturnType<typeof line>[], extra: Record<string, unknown> = {}) =>
-  c.invoice.create({ partyId, type: "sale", lineItems: lines, ...extra } as InvoiceInput);
+  c.invoice.create({ partyId, type: "sale", invoiceDate: OLD_YEAR_DATE, lineItems: lines, ...extra } as InvoiceInput);
 const row = async (id: string) => (await db().select().from(invoices).where(eq(invoices.id, id)))[0]!;
 const tcsRows = (invoiceId: string) =>
   db().select().from(taxDeductions).where(and(eq(taxDeductions.invoiceId, invoiceId), eq(taxDeductions.kind, "tcs")));
@@ -189,10 +193,10 @@ describe("TCS rates and lines", () => {
 
 describe("tcsPreview", () => {
   it("shows the TCS the form will collect, by section, with a no-PAN warning", async () => {
-    const p = await c.tds.tcsPreview({ partyId: withPan.id, lines: [{ itemId: scrap.id, taxable: "100000" }, { itemId: plain.id, taxable: "5000" }, { itemId: null, taxable: "10" }] });
+    const p = await c.tds.tcsPreview({ partyId: withPan.id, invoiceDate: OLD_YEAR_DATE, lines: [{ itemId: scrap.id, taxable: "100000" }, { itemId: plain.id, taxable: "5000" }, { itemId: null, taxable: "10" }] });
     expect(p).toMatchObject({ hasPan: true, amount: "1000.00", warnings: [] });
     expect(p.sections).toEqual([{ sectionCode: "206C_SCRAP", base: "100000.00", rate: "1", amount: "1000.00", label: "206C · Scrap" }]);
-    const n = await c.tds.tcsPreview({ partyId: noPan.id, lines: [{ itemId: scrap.id, taxable: "100000" }] });
+    const n = await c.tds.tcsPreview({ partyId: noPan.id, invoiceDate: OLD_YEAR_DATE, lines: [{ itemId: scrap.id, taxable: "100000" }] });
     expect(n).toMatchObject({ hasPan: false, amount: "5000.00" });
     expect(n.warnings.join(" ")).toMatch(/higher rate/);
     expect((await c.tds.tcsPreview({ partyId: withPan.id, lines: [] })).amount).toBe("0.00");
@@ -201,7 +205,7 @@ describe("tcsPreview", () => {
 
 describe("TCS ledger, challans and return data", () => {
   it("lists and summarises TCS with its own due dates (7th of next month, 27EQ dates)", async () => {
-    const fy = (await c.tds.summary({ kind: "tcs" })).financialYear;
+    const fy = "2025-26";
     const s = await c.tds.summary({ financialYear: fy, kind: "tcs" });
     expect(s.kind).toBe("tcs");
     expect(parseFloat(s.payable.total)).toBeGreaterThan(0);
@@ -257,7 +261,7 @@ describe("TCS ledger, challans and return data", () => {
   });
 
   it("lists TCS sections with their own rates and lets a business override one", async () => {
-    const fy = (await c.tds.sections({ kind: "tcs" })).financialYear;
+    const fy = "2025-26";
     const r = await c.tds.sections({ financialYear: fy, kind: "tcs" });
     expect(r.kind).toBe("tcs");
     expect(r.sections.find((s) => s.code === "206C_SCRAP")).toMatchObject({ rate: "1", rateWithoutPan: "5", overridden: false });
@@ -268,6 +272,29 @@ describe("TCS ledger, challans and return data", () => {
     } finally {
       await c.tds.resetSection({ financialYear: fy, sectionCode: "206C_SCRAP" });
     }
+  });
+});
+
+describe("TCS rates follow the year of the sale", () => {
+  it("collects 2% on scrap sold in 2026-27 and keeps 1% on the earlier invoice, even after it is edited", async () => {
+    const older = await sale(withPan.id, [line(scrap.id, "100000")]);
+    const newer = await sale(withPan.id, [line(scrap.id, "100000")], { invoiceDate: NEW_YEAR_DATE });
+    expect(await row(older.id)).toMatchObject({ tcsAmount: "1000.00" });
+    expect(await row(newer.id)).toMatchObject({ tcsAmount: "2000.00", totalAmount: "120000.00" });
+    expect((await tcsRows(newer.id))[0]).toMatchObject({ financialYear: "2026-27", rate: "2.000", amount: "2000.00" });
+    // Re-working the old invoice uses its own year's rate, not today's.
+    await c.invoice.update({ id: older.id, lineItems: [line(scrap.id, "200000")] });
+    expect(await row(older.id)).toMatchObject({ tcsAmount: "2000.00" }); // 1% of 200,000
+    expect((await tcsRows(older.id))[0]).toMatchObject({ financialYear: "2025-26", rate: "1.000" });
+  });
+
+  it("previews with the rate of the invoice date and lists the new-Act reference for 2026-27", async () => {
+    const p = await c.tds.tcsPreview({ partyId: withPan.id, invoiceDate: NEW_YEAR_DATE, lines: [{ itemId: scrap.id, taxable: "100000" }] });
+    expect(p.sections[0]).toMatchObject({ rate: "2", amount: "2000.00" });
+    const r = await c.tds.sections({ financialYear: "2026-27", kind: "tcs" });
+    expect(r.sections.find((s) => s.code === "206C_SCRAP")).toMatchObject({ rate: "2", actSection: "394(1)", overridden: false });
+    expect(r.meta).toMatchObject({ verifyWithCA: true, newAct: true, lastReviewed: "2026-10-02" });
+    expect((await c.tds.sections({ financialYear: "2025-26", kind: "tcs" })).meta.newAct).toBe(false);
   });
 });
 

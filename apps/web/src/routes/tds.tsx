@@ -907,6 +907,17 @@ function SettingsTab({ fy, kind }: { fy: string; kind: Kind }) {
           ? "Set the TCS section on an item (Items → Identification) to collect TCS when you sell it."
           : "Set a section on each supplier (Parties) to deduct TDS on their bills automatically."}
       </p>
+      <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-text-secondary space-y-1" data-testid="tds-rules-meta">
+        <p>{data.meta.actNote}</p>
+        <p>
+          Built-in values for FY {fy} were last reviewed on <strong>{data.meta.lastReviewed}</strong> from secondary sources.
+          {data.meta.verifyWithCA ? " Verify with your CA before filing." : ""}
+        </p>
+        <details>
+          <summary className="cursor-pointer">Sources and notes</summary>
+          <ul className="list-disc pl-5 mt-1">{data.meta.sourceNotes.map((n) => <li key={n}>{n}</li>)}</ul>
+        </details>
+      </div>
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="data-table">
@@ -918,8 +929,20 @@ function SettingsTab({ fy, kind }: { fy: string; kind: Kind }) {
                 <tr key={s.code} className={s.isActive ? "" : "opacity-50"}>
                   <td>
                     {s.label}
-                    {s.overridden && <Badge size="sm" color={badgeColor("blue")} className="ml-2">Edited</Badge>}
+                    {s.overridden
+                      ? <Badge size="sm" color={badgeColor("blue")} className="ml-2">Overridden</Badge>
+                      : <Badge size="sm" color={badgeColorFallback} className="ml-2">Default</Badge>}
                     {!s.isActive && <Badge size="sm" color={badgeColorFallback} className="ml-2">Off</Badge>}
+                    {s.actSection && (
+                      <div className="text-xs text-text-tertiary">
+                        Income-tax Act 2025: s.{s.actSection}{s.paymentCode ? ` · payment code ${s.paymentCode}` : ""}
+                      </div>
+                    )}
+                    {s.overridden && (
+                      <div className="text-xs text-text-tertiary">
+                        Built-in default: {s.defaults.rate}%{s.defaults.singleThreshold != null ? `, single limit ${formatCurrency(s.defaults.singleThreshold)}` : ""}{s.defaults.aggregateThreshold != null ? `, yearly limit ${formatCurrency(s.defaults.aggregateThreshold)}` : ""}
+                      </div>
+                    )}
                   </td>
                   <td className="text-right tabular-nums">{s.rate}%</td>
                   <td className="text-right tabular-nums">{s.individualRate ? `${s.individualRate}%` : "—"}</td>

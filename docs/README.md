@@ -25,7 +25,7 @@ This folder contains **internal architecture documents, audit reports, and desig
 ### Deployment
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — Production deployment guide (Docker, ONCE, Vercel)
 - [`SANDBOX-INTEGRATION.md`](SANDBOX-INTEGRATION.md) — Sandbox.co.in government API integration (provider adapter, metering, billing, quota alerts, go-live checklist)
-- [`TDS-CA-VERIFICATION.md`](TDS-CA-VERIFICATION.md) — Yearly CA checklist for TDS/TCS rates, thresholds, due dates, certificates and 26AS
+- [`TDS-CA-VERIFICATION.md`](TDS-CA-VERIFICATION.md) — Yearly CA checklist for TDS/TCS: year-versioned rates and thresholds (FY 2025-26 vs 2026-27, Income-tax Act 2025 mapping and payment codes), the yearly update runbook, due dates, certificates and 26AS
 - [`GSTR-4.md`](GSTR-4.md) — CA checklist for GSTR-4 and CMP-08: year-versioned editable defaults (rates, due dates, interest, late fee), the yearly update runbook, table mapping and the best-effort (unverified) portal JSON keys
 - [`ROLLBACK.md`](ROLLBACK.md) — Rollback procedures (app rollback, forward-fix migrations, backup restore, reverse SQL for every migration in the unified, control and tenant sets)
 
