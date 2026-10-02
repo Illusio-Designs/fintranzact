@@ -239,6 +239,7 @@ exceptions:
       - platform.tenants
       - platform.tenant
       - platform.setPlan
+      - platform.setTrial
       - platform.plans
       - platform.savePlan
       - platform.resetPlan
@@ -602,6 +603,7 @@ exceptions:
       - platform.tenants
       - platform.tenant
       - platform.setPlan
+      - platform.setTrial
       - platform.plans
       - platform.savePlan
       - platform.resetPlan
@@ -884,6 +886,7 @@ exceptions:
       - platform.tenants
       - platform.tenant
       - platform.setPlan
+      - platform.setTrial
       - platform.plans
       - platform.savePlan
       - platform.resetPlan

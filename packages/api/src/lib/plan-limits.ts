@@ -7,13 +7,14 @@
  * Self-hosted defaults to "free" plan — same limits apply including PDF branding.
  */
 
-import { TRPCError } from "@trpc/server";
 import { eq, and, gt, isNull, count } from "drizzle-orm";
 import { controlDb, tenants, tenantMembers, invitations } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 import { businesses } from "@fintranzact/db";
 import { PLAN_LIMITS, type PlanLimits } from "@fintranzact/shared";
 import { getPlanLimits } from "./plan-catalog.js";
+import { getEntitlements } from "./entitlements.js";
+import { limitError } from "./entitlement-error.js";
 
 // ── Plan limit definitions ────────────────────────────────────────────────────
 // Defined once in @fintranzact/shared so the pricing page shows exactly the
@@ -33,13 +34,9 @@ export const RECURRING_RUNS_PER_MONTH_FREE = PLAN_LIMITS.free.recurringRunsPerMo
 
 // ── Enforcement helpers ───────────────────────────────────────────────────────
 
-async function getTenantPlan(tenantId: string): Promise<string> {
-  const [row] = await controlDb
-    .select({ plan: tenants.plan })
-    .from(tenants)
-    .where(eq(tenants.id, tenantId))
-    .limit(1);
-  return row?.plan ?? "free";
+/** The limits in force for an organisation: one source, shared with the read-only/add-on checks. */
+async function getTenantLimits(tenantId: string): Promise<PlanLimits> {
+  return (await getEntitlements(tenantId)).limits;
 }
 
 /**
@@ -49,7 +46,7 @@ async function getTenantPlan(tenantId: string): Promise<string> {
  */
 export async function recurringRunLimit(tenantId: string | null): Promise<number> {
   if (!tenantId || process.env.MULTI_TENANT !== "true") return RECURRING_RUNS_PER_MONTH_FREE;
-  return (await getLimits(await getTenantPlan(tenantId))).recurringRunsPerMonth;
+  return (await getTenantLimits(tenantId)).recurringRunsPerMonth;
 }
 
 /**
@@ -93,10 +90,9 @@ export async function enforceOrgCreationLimit(userId: string): Promise<void> {
   if (limits.maxOwnedOrgs === Infinity) return;
 
   if (ownedOrgs.length >= limits.maxOwnedOrgs) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `Your plan allows up to ${limits.maxOwnedOrgs} organization${limits.maxOwnedOrgs === 1 ? "" : "s"}. Upgrade to create more.`,
-    });
+    throw limitError(
+      `Your plan allows up to ${limits.maxOwnedOrgs} organization${limits.maxOwnedOrgs === 1 ? "" : "s"}. Upgrade to create more.`,
+    );
   }
 }
 
@@ -105,8 +101,7 @@ export async function enforceOrgCreationLimit(userId: string): Promise<void> {
  * Counts existing businesses in the tenant DB and compares against the plan limit.
  */
 export async function enforceBusinessLimit(tenantId: string, tenantDb: TenantDatabase): Promise<void> {
-  const plan = await getTenantPlan(tenantId);
-  const limits = await getLimits(plan);
+  const limits = await getTenantLimits(tenantId);
   if (limits.maxBusinesses === Infinity) return;
 
   const [{ count: bizCount }] = await tenantDb
@@ -114,10 +109,9 @@ export async function enforceBusinessLimit(tenantId: string, tenantDb: TenantDat
     .from(businesses);
 
   if (bizCount >= limits.maxBusinesses) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `Your plan allows up to ${limits.maxBusinesses} business${limits.maxBusinesses === 1 ? "" : "es"}. Upgrade to add more.`,
-    });
+    throw limitError(
+      `Your plan allows up to ${limits.maxBusinesses} business${limits.maxBusinesses === 1 ? "" : "es"}. Upgrade to add more.`,
+    );
   }
 }
 
@@ -126,8 +120,7 @@ export async function enforceBusinessLimit(tenantId: string, tenantDb: TenantDat
  * Counts current members + pending invitations against the plan limit.
  */
 export async function enforceTeamMemberLimit(tenantId: string): Promise<void> {
-  const plan = await getTenantPlan(tenantId);
-  const limits = await getLimits(plan);
+  const limits = await getTenantLimits(tenantId);
   if (limits.maxTeamMembers === Infinity) return;
 
   const [[members], [pending]] = await Promise.all([
@@ -143,10 +136,9 @@ export async function enforceTeamMemberLimit(tenantId: string): Promise<void> {
 
   const total = (members?.count ?? 0) + (pending?.count ?? 0);
   if (total >= limits.maxTeamMembers) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `Your plan allows up to ${limits.maxTeamMembers} team members (including pending invites). Upgrade to invite more.`,
-    });
+    throw limitError(
+      `Your plan allows up to ${limits.maxTeamMembers} team members (including pending invites). Upgrade to invite more.`,
+    );
   }
 }
 
@@ -155,13 +147,11 @@ export async function enforceTeamMemberLimit(tenantId: string): Promise<void> {
  * Called from apiKey.create — counts existing keys for the user+tenant.
  */
 export async function enforceApiKeyLimit(tenantId: string): Promise<void> {
-  const plan = await getTenantPlan(tenantId);
-  const limits = await getLimits(plan);
+  const limits = await getTenantLimits(tenantId);
   if (limits.maxApiKeys === 0) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "API keys are available on paid plans. Upgrade to Pro to use the CLI and MCP server.",
-    });
+    throw limitError(
+      "API keys are available on paid plans. Upgrade to Pro to use the CLI and MCP server.",
+    );
   }
   if (limits.maxApiKeys === Infinity) return;
 
@@ -172,10 +162,9 @@ export async function enforceApiKeyLimit(tenantId: string): Promise<void> {
     .where(eq(apiKeys.tenantId, tenantId));
 
   if (keyCount >= limits.maxApiKeys) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `Your plan allows up to ${limits.maxApiKeys} API key${limits.maxApiKeys === 1 ? "" : "s"}. Upgrade to create more.`,
-    });
+    throw limitError(
+      `Your plan allows up to ${limits.maxApiKeys} API key${limits.maxApiKeys === 1 ? "" : "s"}. Upgrade to create more.`,
+    );
   }
 }
 
@@ -204,8 +193,7 @@ export async function enforceSessionLimit(userId: string, parentTx?: ControlTxLi
     .where(eq(tenantMembers.userId, userId))
     .limit(1);
 
-  const plan = membership ? await getTenantPlan(membership.tenantId) : "free";
-  const limits = await getLimits(plan);
+  const limits = membership ? await getTenantLimits(membership.tenantId) : await getLimits("free");
   if (limits.maxConcurrentSessions === Infinity) return;
 
   const activeSessions = await db
@@ -230,12 +218,10 @@ export async function enforceSessionLimit(userId: string, parentTx?: ControlTxLi
  * Enforce data export access.
  */
 export async function enforceDataExport(tenantId: string): Promise<void> {
-  const plan = await getTenantPlan(tenantId);
-  const limits = await getLimits(plan);
+  const limits = await getTenantLimits(tenantId);
   if (!limits.dataExport) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Data export is available on paid plans. Upgrade to export your data.",
-    });
+    throw limitError(
+      "Data export is available on paid plans. Upgrade to export your data.",
+    );
   }
 }

@@ -33,6 +33,7 @@ import {
 import { getPlanCatalog } from "../plan-catalog.js";
 import { getGateway, type BillingProvider } from "./gateway.js";
 import { logger } from "../logger.js";
+import { invalidateEntitlements } from "../entitlements-cache.js";
 import { GOV_DOC_LABELS, periodIsClosed, type GovDocKind } from "../gov-usage.js";
 
 export type SubscriptionRow = typeof billingSubscriptions.$inferSelect;
@@ -59,8 +60,10 @@ export async function recordBillingEvent(opts: {
   eventId?: string | null;
   payload?: unknown;
   error?: string | null;
+  /** Pass a transaction to make the insert part of it. */
+  executor?: Pick<typeof controlDb, "insert">;
 }): Promise<void> {
-  await controlDb.insert(billingEvents).values({
+  await (opts.executor ?? controlDb).insert(billingEvents).values({
     provider: opts.provider,
     type: opts.type,
     tenantId: opts.tenantId ?? null,
@@ -289,28 +292,27 @@ export async function startCheckout(opts: {
 
   // A live plan subscription blocks a second one: plan changes go through
   // changePlan so proration and the old gateway subscription are handled.
+  // A halted one does not: the owner must be able to buy their way out of
+  // read-only, so it is retired below, in the same transaction as the new row.
+  let haltedPlanSubs: Array<{ id: string; providerSubscriptionId: string | null; plan: string | null }> = [];
   if (opts.kind === "plan") {
-    const [live] = await controlDb
-      .select({ id: billingSubscriptions.id })
+    const existing = await controlDb
+      .select({
+        id: billingSubscriptions.id,
+        status: billingSubscriptions.status,
+        providerSubscriptionId: billingSubscriptions.providerSubscriptionId,
+        plan: billingSubscriptions.plan,
+      })
       .from(billingSubscriptions)
       .where(and(
         eq(billingSubscriptions.tenantId, opts.tenantId),
         eq(billingSubscriptions.kind, "plan"),
         inArray(billingSubscriptions.status, ["active", "past_due", "halted"]),
-      ))
-      .limit(1);
-    if (live) {
+      ));
+    if (existing.some((e) => e.status !== "halted")) {
       throw new TRPCError({ code: "CONFLICT", message: "This organisation already has a plan subscription. Change the plan instead." });
     }
-    // A stale half-finished checkout gives way to a fresh one.
-    await controlDb
-      .update(billingSubscriptions)
-      .set({ status: "cancelled", endedAt: new Date(), updatedAt: new Date() })
-      .where(and(
-        eq(billingSubscriptions.tenantId, opts.tenantId),
-        eq(billingSubscriptions.kind, "plan"),
-        eq(billingSubscriptions.status, "created"),
-      ));
+    haltedPlanSubs = existing;
   }
 
   const amount = cycleAmount(monthlyPriceInr, opts.cycle);
@@ -323,30 +325,69 @@ export async function startCheckout(opts: {
     notes: { tenantId: opts.tenantId, item: itemKey, cycle: opts.cycle },
   });
 
-  const [sub] = await controlDb
-    .insert(billingSubscriptions)
-    .values({
+  // Retire what the new plan replaces (halted, and any half-finished checkout)
+  // and insert the new row in one transaction: the unique live-plan index
+  // would otherwise reject the insert while the old row is still not cancelled.
+  const sub = await controlDb.transaction(async (tx) => {
+    if (opts.kind === "plan") {
+      const now = new Date();
+      await tx
+        .update(billingSubscriptions)
+        .set({ status: "cancelled", endedAt: now, updatedAt: now })
+        .where(and(
+          eq(billingSubscriptions.tenantId, opts.tenantId),
+          eq(billingSubscriptions.kind, "plan"),
+          inArray(billingSubscriptions.status, ["created", "halted"]),
+        ));
+      for (const halted of haltedPlanSubs) {
+        await recordBillingEvent({
+          provider: "local",
+          type: "subscription.retired",
+          tenantId: opts.tenantId,
+          subscriptionId: halted.id,
+          payload: { reason: "halted subscription replaced by a new plan purchase", oldPlan: halted.plan, newPlan: opts.plan },
+          executor: tx,
+        });
+      }
+    }
+    const [row] = await tx
+      .insert(billingSubscriptions)
+      .values({
+        tenantId: opts.tenantId,
+        kind: opts.kind,
+        plan: opts.kind === "plan" ? opts.plan : null,
+        addon: opts.kind === "addon" ? opts.addon : null,
+        cycle: opts.cycle,
+        status: "created",
+        provider: gateway.name,
+        providerSubscriptionId: created.id,
+        basePaise: amount.basePaise,
+      })
+      .returning();
+    await recordBillingEvent({
+      provider: "local",
+      type: "checkout.started",
       tenantId: opts.tenantId,
-      kind: opts.kind,
-      plan: opts.kind === "plan" ? opts.plan : null,
-      addon: opts.kind === "addon" ? opts.addon : null,
-      cycle: opts.cycle,
-      status: "created",
-      provider: gateway.name,
-      providerSubscriptionId: created.id,
-      basePaise: amount.basePaise,
-    })
-    .returning();
-
-  await recordBillingEvent({
-    provider: "local",
-    type: "checkout.started",
-    tenantId: opts.tenantId,
-    subscriptionId: sub!.id,
-    payload: { item: itemKey, cycle: opts.cycle, totalPaise: amount.totalPaise, provider: gateway.name },
+      subscriptionId: row!.id,
+      payload: { item: itemKey, cycle: opts.cycle, totalPaise: amount.totalPaise, provider: gateway.name },
+      executor: tx,
+    });
+    return row!;
   });
 
-  return { subscription: sub!, provider: gateway.name, providerSubscriptionId: created.id, totalPaise: amount.totalPaise };
+  // The halted subscription is already dead at the gateway; ask it to release
+  // the mandate anyway, but never let that failure block the purchase.
+  for (const halted of haltedPlanSubs) {
+    if (!halted.providerSubscriptionId) continue;
+    try {
+      await gateway.cancelSubscription(halted.providerSubscriptionId, false);
+    } catch (err) {
+      logger.warn({ err, subscriptionId: halted.id }, "[billing] could not cancel the halted gateway subscription");
+    }
+  }
+  invalidateEntitlements(opts.tenantId);
+
+  return { subscription: sub, provider: gateway.name, providerSubscriptionId: created.id, totalPaise: amount.totalPaise };
 }
 
 // ── Activation & renewals ──────────────────────────────────────────────────
@@ -409,6 +450,7 @@ export async function activateSubscription(opts: {
     subscriptionId: sub.id,
     payload: { providerPaymentId: opts.providerPaymentId ?? null, creditPaise: credit },
   });
+  invalidateEntitlements(sub.tenantId);
 }
 
 /** A renewal charge succeeded: extend the period and issue the next invoice. */
@@ -420,10 +462,16 @@ export async function recordRenewal(sub: SubscriptionRow, opts: {
   const now = new Date();
   const start = sub.currentPeriodEnd && sub.currentPeriodEnd > now ? sub.currentPeriodEnd : now;
   const periodEnd = nextPeriodEnd(start, sub.cycle);
-  await controlDb
-    .update(billingSubscriptions)
-    .set({ status: "active", currentPeriodStart: start, currentPeriodEnd: periodEnd, graceUntil: null, updatedAt: now })
-    .where(eq(billingSubscriptions.id, sub.id));
+  // A late charge on a halted subscription reactivates it (the owner paid up).
+  // One that was already retired (cancelled, e.g. replaced by a new purchase)
+  // stays cancelled: reviving it would clash with the replacement row. The
+  // payment is still recorded below, since the money was taken.
+  if (sub.status !== "cancelled") {
+    await controlDb
+      .update(billingSubscriptions)
+      .set({ status: "active", currentPeriodStart: start, currentPeriodEnd: periodEnd, graceUntil: null, updatedAt: now })
+      .where(and(eq(billingSubscriptions.id, sub.id), sql`${billingSubscriptions.status} <> 'cancelled'`));
+  }
 
   await recordPayment({
     tenantId: sub.tenantId,
@@ -438,6 +486,10 @@ export async function recordRenewal(sub: SubscriptionRow, opts: {
     periodStart: start,
     periodEnd,
   });
+  if (sub.status === "halted") {
+    await recordBillingEvent({ provider: "local", type: "subscription.reactivated", tenantId: sub.tenantId, subscriptionId: sub.id, payload: { reason: "late renewal paid" } });
+  }
+  invalidateEntitlements(sub.tenantId);
 }
 
 /**
@@ -461,22 +513,27 @@ export async function recordRenewalFailure(sub: SubscriptionRow, reason: string 
     provider: sub.provider as BillingProvider,
     failureReason: reason,
   });
+  invalidateEntitlements(sub.tenantId);
 }
 
-/** Grace ran out or the gateway halted the subscription: the account goes read-only (enforced by P4). */
+/** Grace ran out or the gateway halted the subscription: the account goes read-only (enforced via lib/entitlements.ts). */
 export async function haltSubscription(subscriptionId: string): Promise<void> {
-  await controlDb
+  const [row] = await controlDb
     .update(billingSubscriptions)
     .set({ status: "halted", updatedAt: new Date() })
-    .where(and(eq(billingSubscriptions.id, subscriptionId), inArray(billingSubscriptions.status, ["active", "past_due"])));
+    .where(and(eq(billingSubscriptions.id, subscriptionId), inArray(billingSubscriptions.status, ["active", "past_due"])))
+    .returning({ tenantId: billingSubscriptions.tenantId });
+  if (row) invalidateEntitlements(row.tenantId);
 }
 
 /** The subscription ended at the gateway (period ran out after a cancel, or admin action). */
 export async function endSubscription(subscriptionId: string): Promise<void> {
-  await controlDb
+  const [row] = await controlDb
     .update(billingSubscriptions)
     .set({ status: "cancelled", endedAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(billingSubscriptions.id, subscriptionId), sql`${billingSubscriptions.status} <> 'cancelled'`));
+    .where(and(eq(billingSubscriptions.id, subscriptionId), sql`${billingSubscriptions.status} <> 'cancelled'`))
+    .returning({ tenantId: billingSubscriptions.tenantId });
+  if (row) invalidateEntitlements(row.tenantId);
 }
 
 // ── Owner actions ──────────────────────────────────────────────────────────
@@ -508,6 +565,7 @@ export async function cancelAtPeriodEnd(opts: { tenantId: string; subscriptionId
     subscriptionId: sub.id,
     payload: { runsOutAt: sub.currentPeriodEnd?.toISOString() ?? null },
   });
+  invalidateEntitlements(sub.tenantId);
 }
 
 /**
@@ -536,12 +594,37 @@ export async function changePlan(opts: { tenantId: string; plan: string; cycle: 
     .where(and(
       eq(billingSubscriptions.tenantId, opts.tenantId),
       eq(billingSubscriptions.kind, "plan"),
-      inArray(billingSubscriptions.status, ["active", "past_due"]),
+      inArray(billingSubscriptions.status, ["active", "past_due", "halted"]),
     ))
     .limit(1);
   if (!current) {
     throw new TRPCError({ code: "NOT_FOUND", message: "No plan subscription to change. Buy a plan first." });
   }
+
+  // A halted subscription (payment failed, read-only) cannot be changed, only
+  // bought again: startCheckout retires it and starts a fresh purchase. There
+  // is no credit (nothing unused was paid for) and the same plan is allowed.
+  if (current.status === "halted") {
+    const checkout = await startCheckout({ tenantId: opts.tenantId, kind: "plan", plan: opts.plan, cycle: opts.cycle });
+    if (checkout.provider === "demo") {
+      await activateSubscription({ subscriptionId: checkout.subscription.id, method: "rebuy" });
+    }
+    await recordBillingEvent({
+      provider: "local",
+      type: "subscription.rebought",
+      tenantId: opts.tenantId,
+      subscriptionId: checkout.subscription.id,
+      payload: { fromPlan: current.plan, toPlan: opts.plan, replacedSubscriptionId: current.id },
+    });
+    invalidateEntitlements(opts.tenantId);
+    return {
+      applied: "now",
+      ...(checkout.provider === "razorpay"
+        ? { checkout: { subscriptionId: checkout.subscription.id, providerSubscriptionId: checkout.providerSubscriptionId, totalPaise: checkout.totalPaise } }
+        : {}),
+    };
+  }
+
   if (current.plan === opts.plan && current.cycle === opts.cycle) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "You are already on this plan." });
   }
@@ -571,6 +654,7 @@ export async function changePlan(opts: { tenantId: string; plan: string; cycle: 
       subscriptionId: current.id,
       payload: { toPlan: opts.plan, toCycle: opts.cycle, at: current.currentPeriodEnd?.toISOString() ?? null },
     });
+    invalidateEntitlements(opts.tenantId);
     return { applied: "at_period_end" };
   }
 
@@ -618,6 +702,7 @@ export async function changePlan(opts: { tenantId: string; plan: string; cycle: 
     subscriptionId: checkout.subscription.id,
     payload: { fromPlan: current.plan, toPlan: opts.plan, creditPaise: credit },
   });
+  invalidateEntitlements(opts.tenantId);
   return {
     applied: "now",
     ...(checkout.provider === "razorpay"
@@ -631,7 +716,7 @@ export async function changePlan(opts: { tenantId: string; plan: string; cycle: 
 export interface BillingState {
   planSubscription: SubscriptionRow | null;
   addonSubscriptions: SubscriptionRow[];
-  /** True once a plan subscription is halted (grace over) — P4 enforces it. */
+  /** True once a plan subscription is halted (grace over); getEntitlements is the enforced source. */
   readOnly: boolean;
   graceUntil: Date | null;
 }
@@ -661,7 +746,7 @@ export async function getBillingState(tenantId: string): Promise<BillingState> {
 }
 
 /** Overdue state changes applied on read, so no scheduler is needed. */
-async function applyLazyTransitions(tenantId: string): Promise<void> {
+export async function applyLazyTransitions(tenantId: string): Promise<void> {
   const now = new Date();
   const subs = await controlDb
     .select()

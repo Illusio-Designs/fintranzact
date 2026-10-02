@@ -314,6 +314,7 @@
 | platform.sandboxQuota | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.setTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.subscriptions | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenant | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenants | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { invalidateEntitlements } from "../lib/entitlements-cache.js";
 import { TRPCError } from "@trpc/server";
 import { controlDb, getTenantDb, tenants, tenantMembers, invitations, users, sessions, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
 import { eq, and, gt, isNull, desc } from "drizzle-orm";
@@ -78,6 +79,7 @@ export const tenantRouter = router({
       await controlDb.update(tenants)
         .set({ plan: input.plan, planSelectedAt: new Date(), updatedAt: new Date() })
         .where(eq(tenants.id, tenantId));
+      invalidateEntitlements(tenantId);
 
       return { plan: input.plan };
     }),

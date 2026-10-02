@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 
-const { planRow } = vi.hoisted(() => ({ planRow: { plan: "forever_free" as string | null } }));
+const { planRow } = vi.hoisted(() => ({ planRow: { plan: "forever_free" as string | null, status: "active", trialEndsAt: null } }));
 
 vi.mock("@fintranzact/db", async () => {
   const actual = await vi.importActual<typeof import("@fintranzact/db")>("@fintranzact/db");
-  const chain = { from: () => chain, where: () => chain, limit: async () => [planRow] };
+  // Tenant row via .where().limit(); the (empty) subscription list is awaited after .where().
+  const where = () => Object.assign(Promise.resolve([] as unknown[]), { limit: async () => [planRow] });
+  const chain = { from: () => chain, where };
   return { ...actual, controlDb: { select: () => chain } };
 });
 
@@ -17,11 +19,13 @@ vi.mock("../lib/plan-catalog.js", async () => {
   };
 });
 
+import { clearEntitlementsCache } from "../lib/entitlements-cache.js";
 import { recurringRunLimit, RECURRING_RUNS_PER_MONTH_FREE } from "../lib/plan-limits.js";
 
 describe("recurringRunLimit — monthly recurring-invoice runs by plan", () => {
   const original = process.env.MULTI_TENANT;
   afterEach(() => {
+    clearEntitlementsCache();
     process.env.MULTI_TENANT = original;
   });
 

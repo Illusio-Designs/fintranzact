@@ -7,6 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { defineAbilityFor, mapDbRole, type AppAbility } from "./lib/permissions.js";
 import { getMaintenanceStatus } from "./lib/maintenance-cache.js";
 import { isFirstPartyRequestedWith } from "./lib/client-headers.js";
+import { entitlementDataOf } from "./lib/entitlement-error.js";
 
 // ── Middleware context shape interfaces ────────────────────────
 // These represent the enriched context after each middleware runs.
@@ -49,12 +50,15 @@ const t = initTRPC.context<Context>().create({
     // Never expose internal error details (DB errors, stack traces) to clients
     const isInternal = error.code === "INTERNAL_SERVER_ERROR";
     const zodMessage = error.code === "BAD_REQUEST" ? friendlyZodMessage(error.cause) : null;
+    const entitlement = entitlementDataOf(error);
     return {
       ...shape,
       message: isInternal ? "Something went wrong. Please try again." : (zodMessage ?? shape.message),
       data: {
         ...shape.data,
         zodError: error.cause instanceof Error ? undefined : null,
+        // Why a plan / trial / add-on / read-only check refused (see lib/entitlement-error.ts).
+        ...(entitlement ? { entitlement } : {}),
       },
     };
   },
