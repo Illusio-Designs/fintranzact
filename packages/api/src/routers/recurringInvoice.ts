@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, gte, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -29,7 +29,7 @@ async function assertTemplateRefs(
 import { logAudit } from "../lib/audit.js";
 import { generateInvoiceFromTemplate, computeNextRunDate } from "../lib/recurring-invoice-generator.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
-import { recurringRunLimit } from "../lib/plan-limits.js";
+import { recurringRunLimit, enforceRecurringRunLimit, countRecurringRunsThisMonth } from "../lib/plan-limits.js";
 
 /** Every item on the lines must be a live item of this business. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -347,6 +347,8 @@ export const recurringInvoiceRouter = router({
       if (tpl.status !== "active" && tpl.status !== "paused") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Template must be active or paused" });
       }
+      // A manual run counts against the same monthly allowance as the scheduler.
+      await enforceRecurringRunLimit(ctx.tenantId, ctx.db, ctx.businessId);
 
       const result = await generateInvoiceFromTemplate(ctx.db, {
         ...tpl,
@@ -398,18 +400,7 @@ export const recurringInvoiceRouter = router({
   planUsage: viewerProcedure
     .query(async ({ ctx }) => {
       requireCan(ctx.ability, "read", "RecurringInvoice");
-      // Count successful runs this month
-      const monthStart = new Date();
-      monthStart.setDate(1);
-      monthStart.setHours(0, 0, 0, 0);
-
-      const [{ count }] = await ctx.db.select({ count: sql<number>`count(*)::int` })
-        .from(recurringInvoiceRuns)
-        .where(and(
-          eq(recurringInvoiceRuns.businessId, ctx.businessId),
-          eq(recurringInvoiceRuns.status, "success"),
-          gte(recurringInvoiceRuns.executedAt, monthStart),
-        ));
+      const count = await countRecurringRunsThisMonth(ctx.db, ctx.businessId);
 
       const [{ templates }] = await ctx.db.select({ templates: sql<number>`count(*)::int` })
         .from(recurringInvoiceTemplates)

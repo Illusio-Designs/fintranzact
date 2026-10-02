@@ -92,6 +92,23 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Write mutations that sit on a protected/public base (so entitlementGate never
+ * runs) but still must be refused while read-only or suspended. Each one calls
+ * assertWritable (or assertOwnedOrgsWritable) explicitly inside its router.
+ * entitlement-exempt.test.ts asserts this is exactly the set of ungated
+ * mutations that are not in READ_ONLY_EXEMPT, so a new protected-base write
+ * cannot be forgotten.
+ *   apiKey.create       - issuing a credential for the selected organisation
+ *   selfImport.request  - restoring a backup into the organisation (also re-checked on the upload route)
+ *   tenant.create       - a new organisation, refused while any owned organisation is read-only/suspended
+ */
+export const INLINE_WRITE_GUARDED: ReadonlySet<string> = new Set([
+  "apiKey.create",
+  "selfImport.request",
+  "tenant.create",
+]);
+
+/**
  * What a SUSPENDED organisation may still call on a gated base: just enough
  * for the client to learn why it is blocked and show the suspended screen.
  * Everything else (every other query, every mutation not in READ_ONLY_EXEMPT)

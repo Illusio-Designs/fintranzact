@@ -26,7 +26,8 @@ import { router, tenantProcedure, viewerProcedure, adminProcedure, type TenantDa
 import { requireCan } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { validateLogoDataUrl } from "../lib/validate-logo.js";
-import { enforceBusinessLimit, enforceDataExport, getLimits } from "../lib/plan-limits.js";
+import { enforceBusinessLimit, enforceDataExport, getLimits, auditWindowStart } from "../lib/plan-limits.js";
+import { getEntitlements } from "../lib/entitlements.js";
 import { seedChartOfAccounts } from "../lib/coa-seed.js";
 import {
   encryptCarrierCredentials,
@@ -887,6 +888,9 @@ export const businessRouter = router({
       const offset = (input.page - 1) * input.limit;
 
       const conditions = [eq(auditLog.businessId, ctx.businessId)];
+      // The plan's auditRetentionDays is a visible window: older entries stay stored but are hidden.
+      const windowStart = auditWindowStart((await getEntitlements(ctx.tenantId)).limits.auditRetentionDays);
+      if (windowStart) conditions.push(gte(auditLog.createdAt, windowStart));
       if (input.fromDate) conditions.push(gte(auditLog.createdAt, new Date(input.fromDate)));
       if (input.toDate) conditions.push(lte(auditLog.createdAt, new Date(input.toDate)));
 

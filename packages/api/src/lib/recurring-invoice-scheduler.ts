@@ -6,7 +6,9 @@
 
 import { eq, and, sql, gte, lte } from "drizzle-orm";
 import { getTenantDb, controlDb, tenants, recurringInvoiceTemplates, recurringInvoiceRuns } from "@fintranzact/db";
-import { generateInvoiceFromTemplate } from "./recurring-invoice-generator.js";
+import { generateInvoiceFromTemplate, nextRunDateAfter } from "./recurring-invoice-generator.js";
+import { getEntitlements } from "./entitlements.js";
+import { logger } from "./logger.js";
 import { RECURRING_RUNS_PER_MONTH_FREE, getLimits } from "./plan-limits.js";
 
 const TICK_MS = 60_000; // 60 seconds
@@ -29,8 +31,13 @@ async function tick() {
 
       for (const tenant of activeTenants) {
         try {
-          const db = await getTenantDb(tenant.id);
-          await processDueTemplates(db, (await getLimits(tenant.plan ?? "free")).recurringRunsPerMonth);
+          await tickTenant(tenant.id, {
+            readOnly: async (id) => (await getEntitlements(id)).readOnly,
+            runsPerMonth: async () => (await getLimits(tenant.plan ?? "free")).recurringRunsPerMonth,
+            getDb: getTenantDb,
+            process: processDueTemplates,
+            skip: skipDueTemplates,
+          });
         } catch (err) {
           console.error(`[recurring-scheduler] tenant ${tenant.id} error:`, err);
         }
@@ -39,6 +46,65 @@ async function tick() {
   } catch (err) {
     console.error("[recurring-scheduler] tick error:", err);
   }
+}
+
+type TenantDb = Awaited<ReturnType<typeof getTenantDb>>;
+
+export interface TenantTickDeps {
+  readOnly: (tenantId: string) => Promise<boolean>;
+  runsPerMonth: () => Promise<number>;
+  getDb: (tenantId: string) => Promise<TenantDb>;
+  process: (db: TenantDb, runsPerMonth: number) => Promise<void>;
+  skip: (db: TenantDb) => Promise<void>;
+}
+
+/**
+ * One organisation's turn in the scheduler. A read-only organisation (trial
+ * over, payment failed, plan ended) generates nothing: its due templates are
+ * moved on to their next future date (skipDueTemplates), no run is recorded
+ * and nothing is marked failed. (Suspended organisations never get here: the
+ * tick only lists tenants whose status is active.) Takes its dependencies so
+ * the decision can be tested without a database.
+ */
+export async function tickTenant(tenantId: string, deps: TenantTickDeps): Promise<"skipped" | "processed"> {
+  if (await deps.readOnly(tenantId)) {
+    logger.debug({ tenantId }, "[recurring-scheduler] organisation is read-only; skipping its due templates");
+    await deps.skip(await deps.getDb(tenantId));
+    return "skipped";
+  }
+  await deps.process(await deps.getDb(tenantId), await deps.runsPerMonth());
+  return "processed";
+}
+
+/**
+ * Move due active templates past now WITHOUT generating invoices. The skipped
+ * occurrences are dropped for good (decision: a recovered organisation must not
+ * get a burst of back-dated invoices, so lapsed periods are not made up).
+ * totalRuns and lastRunDate are untouched; a template whose end date passes is
+ * completed, as the generator would.
+ */
+export async function skipDueTemplates(db: TenantDb): Promise<void> {
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    const due = await tx.select()
+      .from(recurringInvoiceTemplates)
+      .where(and(
+        eq(recurringInvoiceTemplates.status, "active"),
+        lte(recurringInvoiceTemplates.nextRunDate, now),
+      ))
+      .limit(200)
+      .for("update", { skipLocked: true });
+    for (const tpl of due) {
+      const next = nextRunDateAfter(tpl.nextRunDate, tpl.frequency, tpl.customIntervalDays, now);
+      await tx.update(recurringInvoiceTemplates)
+        .set({
+          nextRunDate: next,
+          status: tpl.endDate && next > tpl.endDate ? "completed" : undefined,
+          updatedAt: now,
+        })
+        .where(eq(recurringInvoiceTemplates.id, tpl.id));
+    }
+  });
 }
 
 /**

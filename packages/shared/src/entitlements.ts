@@ -105,6 +105,23 @@ export interface AccessInput {
   now: Date;
 }
 
+/**
+ * What each add-on will unlock on the server, and where it is checked. Nothing
+ * is gated by an add-on yet: no router or endpoint for any of these exists
+ * (the AI assistant, payroll, and Store Pro's custom domain, themes and online
+ * checkout are all roadmap items without code). When one lands, its procedures
+ * call requireAddon(ctx.tenantId, "<id>") (packages/api/src/lib/entitlements.ts)
+ * and this entry says what it covers. Do not add a requireAddon call for a
+ * feature that does not exist. The basic online store is a PLAN limit
+ * (onlineStore), not Store Pro.
+ */
+export const ADDON_FEATURES: Record<AddonId, { unlocks: string; implemented: boolean }> = {
+  ai_assistant: { unlocks: "AI assistant questions (150 a month); a future ai.* router", implemented: false },
+  ai_plus: { unlocks: "AI assistant questions (500 a month, priority); also grants ai_assistant", implemented: false },
+  payroll: { unlocks: "Employees, attendance, leave, payroll runs and payslips; a future payroll.* router", implemented: false },
+  store_pro: { unlocks: "Store custom domain, themes and page builder, online payments at checkout", implemented: false },
+};
+
 export interface Access {
   state: AccessState;
   /** True when creating and editing is refused (reads, search, PDFs, exports stay open). */

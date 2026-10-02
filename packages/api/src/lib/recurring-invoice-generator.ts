@@ -86,6 +86,28 @@ export function computeNextRunDate(
 }
 
 /**
+ * The first run date strictly after `now`, stepping from `from` by the
+ * template's frequency. Used when a tenant is read-only: its due runs are
+ * dropped (not generated, not marked failed) and the schedule moves on, so a
+ * recovered tenant does not get a burst of back-dated invoices. Bounded so a
+ * bad frequency can never loop forever.
+ */
+export function nextRunDateAfter(
+  from: Date,
+  frequency: string,
+  customIntervalDays: number | null | undefined,
+  now: Date,
+): Date {
+  let next = from;
+  for (let i = 0; i < 2000 && next <= now; i++) {
+    const stepped = computeNextRunDate(next, frequency, customIntervalDays);
+    if (stepped <= next) break; // unknown frequency: no progress possible
+    next = stepped;
+  }
+  return next;
+}
+
+/**
  * Generate an invoice from a recurring template inside a transaction.
  * Returns the created invoice and run record, or throws on failure.
  */

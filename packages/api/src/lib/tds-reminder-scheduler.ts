@@ -88,6 +88,10 @@ async function tick() {
     if (!isMultiTenant) {
       await processTdsReminders(await getTenantDb("single"));
     } else {
+      // Only active tenants: a suspended organisation (tenants.status) gets no
+      // reminder emails. Read-only organisations (trial over, payment failed)
+      // DO still get them: a deposit reminder is useful to them, and the
+      // reminder log it writes is bookkeeping, not business data.
       const active = await controlDb.select({ id: tenants.id }).from(tenants).where(eq(tenants.status, "active"));
       for (const t of active) {
         try {
