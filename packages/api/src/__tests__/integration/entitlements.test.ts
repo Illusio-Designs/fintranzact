@@ -19,7 +19,7 @@ import { getControlDb, truncateAllTables, closeTestDb } from "../helpers/test-db
 import { createUser, createTenant, addMember, type TestUser, type TestTenant } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
 import { invalidatePlanCatalog } from "../../lib/plan-catalog.js";
-import { assertWritable, getEntitlements } from "../../lib/entitlements.js";
+import { assertWritable, getEntitlements, invalidateEntitlements } from "../../lib/entitlements.js";
 import { entitlementDataOf } from "../../lib/entitlement-error.js";
 import { endSubscription, haltSubscription, recordRenewal, recordRenewalFailure } from "../../lib/billing/service.js";
 
@@ -60,6 +60,9 @@ async function haltedOrg(email: string) {
     .update(billingSubscriptions)
     .set({ graceUntil: new Date(Date.now() - 1000) })
     .where(eq(billingSubscriptions.id, sub!.id));
+  // Grace is over, but the flip to halted is applied lazily on the next entitlement read.
+  invalidateEntitlements(tenant.id);
+  await getEntitlements(tenant.id);
   return { owner, tenant, c, halted: sub! };
 }
 
@@ -199,7 +202,9 @@ describe("entitlement cache", () => {
   it("follows platform.setPlan", async () => {
     const { tenant } = await freshOwnerOrg("cache.setplan@mehtatraders.in");
     const c = caller(admin, tenant.id);
-    expect((await getEntitlements(tenant.id)).plan).toBe("forever_free");
+    // The fixture's default plan is whatever createTenant uses; change to two others and watch the cache follow.
+    await c.platform.setPlan({ tenantId: tenant.id, plan: "pro" });
+    expect((await getEntitlements(tenant.id)).plan).toBe("pro");
     await c.platform.setPlan({ tenantId: tenant.id, plan: "business" });
     expect((await getEntitlements(tenant.id)).plan).toBe("business");
   });

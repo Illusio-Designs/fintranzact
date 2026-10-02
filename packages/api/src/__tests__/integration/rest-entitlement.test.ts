@@ -59,24 +59,39 @@ async function request(
 
 type State = "active" | "halted" | "suspended";
 
-/** Put organisation A into a state; every test sets what it needs. */
-async function setState(state: State) {
+/** Put an organisation (A unless told otherwise) into a state; every test sets what it needs. */
+async function setState(state: State, tenant: { id: string } = world.tenantA) {
   const db = getControlDb();
-  await db.delete(billingSubscriptions).where(eq(billingSubscriptions.tenantId, world.tenantA.id));
-  await db.update(tenants).set({ status: state === "suspended" ? "suspended" : "active" }).where(eq(tenants.id, world.tenantA.id));
+  await db.delete(billingSubscriptions).where(eq(billingSubscriptions.tenantId, tenant.id));
+  await db.update(tenants).set({ status: state === "suspended" ? "suspended" : "active" }).where(eq(tenants.id, tenant.id));
   if (state === "halted") {
     await db.insert(billingSubscriptions).values({
-      tenantId: world.tenantA.id,
+      tenantId: tenant.id,
       kind: "plan",
       plan: "pro",
       cycle: "monthly",
       status: "halted",
       provider: "razorpay",
-      providerSubscriptionId: "sub_RESTENT0001",
+      providerSubscriptionId: `sub_RESTENT_${tenant.id.slice(0, 8)}`,
       basePaise: 99900,
     });
   }
-  invalidateEntitlements(world.tenantA.id);
+  invalidateEntitlements(tenant.id);
+}
+
+/**
+ * In hosted mode the shipping webhook and the public store find a business by
+ * scanning the ACTIVE organisations' databases. The test world keeps every
+ * organisation in one shared database, so an active organisation B would find
+ * A's business and serve it. To see A's state decide the answer, B is put in the
+ * same state for those cases (and set back to active afterwards).
+ */
+async function setBothStates(state: State) {
+  await setState(state, world.tenantA);
+  await setState(state, world.tenantB);
+}
+async function resetB() {
+  await setState("active", world.tenantB);
 }
 
 const owner = (): TestUser => world.usersA.owner;
@@ -220,7 +235,7 @@ describe("POST /webhooks/shipping/:businessId", () => {
   });
 
   it("refuses a suspended organisation and records nothing", async () => {
-    await setState("suspended");
+    await setBothStates("suspended");
     const awb = `AWBSU${Date.now()}`;
     const sql = getTestClient();
     await sql`UPDATE shipments SET tracking_number = ${awb} WHERE id = ${world.a1.ids.shipment!}`;
@@ -228,6 +243,7 @@ describe("POST /webhooks/shipping/:businessId", () => {
     expect(res.status).toBe(404);
     const rows = await sql`SELECT count(*)::int AS n FROM shipment_events WHERE shipment_id = ${world.a1.ids.shipment!} AND status = 'delivered'`;
     expect(rows[0]!.n).toBe(0);
+    await resetB();
   });
 });
 
@@ -235,7 +251,7 @@ describe("public endpoints are neutral for a read-only organisation", () => {
   it("the store answers 404 'Store not found' with no billing wording (hosted mode)", async () => {
     process.env.MULTI_TENANT = "true";
     try {
-      await setState("halted");
+      await setBothStates("halted");
       const sql = getTestClient();
       await sql`UPDATE businesses SET store_enabled = true, store_slug = ${"rest-ent-store"} WHERE id = ${world.a1.id}`;
       const res = await request("/store/rest-ent-store/catalog.json");
@@ -244,6 +260,7 @@ describe("public endpoints are neutral for a read-only organisation", () => {
       expect(text).not.toMatch(/plan|trial|billing|suspend/i);
     } finally {
       process.env.MULTI_TENANT = "false";
+      await resetB();
     }
   });
 });
