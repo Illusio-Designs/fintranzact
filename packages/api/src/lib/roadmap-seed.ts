@@ -2063,6 +2063,31 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-02-sandbox",
+    updates: [
+      {
+        // Built after the first Sandbox batch: e-way bill, setup guide, alerts
+        // (log + billing-events only), usage metering, the per-document charge
+        // on a monthly "payment due" statement (closed by a platform admin, no
+        // automatic collection) and the customer usage page. Left unticked on
+        // purpose: GSTR-1 / GSTR-3B / GSTR-2B (code exists, but the GST-returns
+        // endpoint paths are from memory and GSTR-1/3B are only partly mapped,
+        // so they are not verified against Sandbox), the quote, the test
+        // account and keys, and the test run / go-live.
+        title: "Connect e-invoice, e-way bill and GST returns through Sandbox.co.in",
+        status: "in_progress",
+        done: [
+          "E-way bill: generate (from IRN and standalone), update vehicle, cancel",
+          "Customer setup guide: create API user on the e-invoice portal",
+          "Quota and wallet balance alerts for our Sandbox account",
+          "Per-document usage metering (successful calls only)",
+          "Per-document charge on the customer's monthly bill (no advance)",
+          "Customer usage page: count, rate, amount this month",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */
