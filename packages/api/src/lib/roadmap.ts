@@ -8,14 +8,18 @@
  * Batches added to the roadmap later (ROADMAP_ADDITIONS) reach a board that
  * was seeded before they existed: each is inserted once, skipping titles the
  * board already has, and marked done so deleting its items later sticks.
+ *
+ * Progress batches (ROADMAP_PROGRESS) then move items built since, once per
+ * board, on new and old boards alike.
  */
 
-import { count, inArray, max, sql } from "drizzle-orm";
+import { count, eq, inArray, max, sql } from "drizzle-orm";
 import { controlDb, roadmapItems, systemConfig } from "@fintranzact/db";
-import { ROADMAP_ADDITIONS, ROADMAP_SEED, type RoadmapSeedItem } from "./roadmap-seed.js";
+import { ROADMAP_ADDITIONS, ROADMAP_PROGRESS, ROADMAP_SEED, type RoadmapSeedItem } from "./roadmap-seed.js";
 
 export const ROADMAP_SEEDED_KEY = "roadmap_seeded";
 export const roadmapAdditionKey = (key: string) => `roadmap_added:${key}`;
+export const roadmapProgressKey = (key: string) => `roadmap_progress:${key}`;
 
 const toRow = (item: RoadmapSeedItem, sortOrder: number) => ({
   title: item.title,
@@ -66,28 +70,65 @@ export async function ensureRoadmapSeeded(): Promise<number> {
         .insert(systemConfig)
         .values(markerKeys.map((key) => ({ key, value: { at, items: key === ROADMAP_SEEDED_KEY ? inserted : 0 } })))
         .onConflictDoNothing();
-      return inserted;
+    } else {
+      inserted = await addBatches(tx, done, at);
     }
-
-    for (const batch of ROADMAP_ADDITIONS) {
-      const key = roadmapAdditionKey(batch.key);
-      if (done.has(key)) continue;
-      const have = new Set(
-        (await tx.select({ title: roadmapItems.title }).from(roadmapItems).where(inArray(roadmapItems.title, batch.items.map((i) => i.title)))).map(
-          (r) => r.title,
-        ),
-      );
-      const fresh = batch.items.filter((item) => !have.has(item.title));
-      if (fresh.length > 0) {
-        const [last] = await tx.select({ n: max(roadmapItems.sortOrder) }).from(roadmapItems);
-        const start = (last?.n ?? -1) + 1;
-        await tx.insert(roadmapItems).values(fresh.map((item, i) => toRow(item, start + i)));
-        inserted += fresh.length;
-      }
-      await tx.insert(systemConfig).values({ key, value: { at, items: fresh.length } }).onConflictDoNothing();
-    }
+    await applyProgress(tx, at);
     return inserted;
   });
   seeded = true;
   return added;
+}
+
+type Tx = Parameters<Parameters<typeof controlDb.transaction>[0]>[0];
+
+async function addBatches(tx: Tx, done: Set<string>, at: string): Promise<number> {
+  let inserted = 0;
+  for (const batch of ROADMAP_ADDITIONS) {
+    const key = roadmapAdditionKey(batch.key);
+    if (done.has(key)) continue;
+    const have = new Set(
+      (await tx.select({ title: roadmapItems.title }).from(roadmapItems).where(inArray(roadmapItems.title, batch.items.map((i) => i.title)))).map(
+        (r) => r.title,
+      ),
+    );
+    const fresh = batch.items.filter((item) => !have.has(item.title));
+    if (fresh.length > 0) {
+      const [last] = await tx.select({ n: max(roadmapItems.sortOrder) }).from(roadmapItems);
+      const start = (last?.n ?? -1) + 1;
+      await tx.insert(roadmapItems).values(fresh.map((item, i) => toRow(item, start + i)));
+      inserted += fresh.length;
+    }
+    await tx.insert(systemConfig).values({ key, value: { at, items: fresh.length } }).onConflictDoNothing();
+  }
+  return inserted;
+}
+
+/** Applies each progress batch the board has not had yet. */
+async function applyProgress(tx: Tx, at: string): Promise<void> {
+  const keys = ROADMAP_PROGRESS.map((batch) => roadmapProgressKey(batch.key));
+  if (keys.length === 0) return;
+  const applied = new Set(
+    (await tx.select({ key: systemConfig.key }).from(systemConfig).where(inArray(systemConfig.key, keys))).map((r) => r.key),
+  );
+  for (const batch of ROADMAP_PROGRESS) {
+    const key = roadmapProgressKey(batch.key);
+    if (applied.has(key)) continue;
+    let changed = 0;
+    for (const update of batch.updates) {
+      const rows = await tx
+        .select({ id: roadmapItems.id, status: roadmapItems.status, checklist: roadmapItems.checklist })
+        .from(roadmapItems)
+        .where(eq(roadmapItems.title, update.title));
+      for (const row of rows) {
+        const ticks = new Set(update.done);
+        const checklist = (row.checklist ?? []).map((c) => (ticks.has(c.text) ? { ...c, done: true } : c));
+        // An admin who already moved the item has the last word on its status.
+        const status = row.status === "idea" || row.status === "planned" ? update.status : row.status;
+        await tx.update(roadmapItems).set({ status, checklist, updatedAt: new Date() }).where(eq(roadmapItems.id, row.id));
+        changed++;
+      }
+    }
+    await tx.insert(systemConfig).values({ key, value: { at, items: changed } }).onConflictDoNothing();
+  }
 }
