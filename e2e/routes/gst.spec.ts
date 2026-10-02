@@ -46,7 +46,7 @@ test.describe("GST / Tax Reports — Presence", () => {
     }
     // P&L, trial balance and the rest moved to Reports
     await expect(tabs.getByRole("button", { name: "Profit & Loss" })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Reports" })).toHaveAttribute("href", /\/reports\?report=pnl/);
+    await expect(page.getByTestId("app-content").getByRole("link", { name: "Reports", exact: true })).toHaveAttribute("href", /\/reports\?report=pnl/);
   });
 
   test("renders period selector with current year", async ({ page }) => {
