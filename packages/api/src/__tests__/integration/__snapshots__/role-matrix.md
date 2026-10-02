@@ -152,6 +152,8 @@
 | goodsReceiptNote.getById | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
 | goodsReceiptNote.list | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
 | goodsReceiptNote.updateStatus | mutation | authorized | update:Invoice | ✓ | ✓ | ✓ | ✓ | ✗ |
+| govUsage.statements | query | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| govUsage.summary | query | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | gst.cmp08 | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr1 | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
 | gst.gstr1CSV | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -283,6 +285,7 @@
 | period.unlockGstMonth | mutation | authorized | — (+ only the owner unlocks a period) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | plan.list | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | platform.billingSummary | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.closeGovUsageMonth | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.deletePayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.me | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | platform.overview | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -296,6 +299,7 @@
 | platform.roadmapList | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapReorder | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapUpdate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.sandboxQuota | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.subscriptions | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |

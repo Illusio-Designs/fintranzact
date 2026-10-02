@@ -14,8 +14,8 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { controlDb, billingEvents, billingPayments, billingSubscriptions, tenants } from "@fintranzact/db";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { controlDb, govApiUsage, billingEvents, billingPayments, billingSubscriptions, tenants } from "@fintranzact/db";
 import {
   ADDONS,
   BILLING_GRACE_DAYS,
@@ -33,6 +33,7 @@ import {
 import { getPlanCatalog } from "../plan-catalog.js";
 import { getGateway, type BillingProvider } from "./gateway.js";
 import { logger } from "../logger.js";
+import { GOV_DOC_LABELS, periodIsClosed, type GovDocKind } from "../gov-usage.js";
 
 export type SubscriptionRow = typeof billingSubscriptions.$inferSelect;
 
@@ -80,26 +81,31 @@ export async function recordBillingEvent(opts: {
 export async function recordPayment(opts: {
   tenantId: string;
   subscriptionId: string | null;
-  status: "captured" | "failed" | "refunded" | "credit";
+  /** "due" = billed in arrears, not yet paid (government API usage statements). */
+  status: "captured" | "failed" | "refunded" | "credit" | "due";
   description: string;
   basePaise: number;
-  provider: BillingProvider;
+  /** "usage" = a statement the platform raised itself, with no payment gateway behind it. */
+  provider: BillingProvider | "usage";
   method?: string | null;
   providerPaymentId?: string | null;
   providerInvoiceId?: string | null;
   periodStart?: Date | null;
   periodEnd?: Date | null;
   failureReason?: string | null;
+  /** Pass a transaction to make the insert part of it. */
+  executor?: Pick<typeof controlDb, "select" | "insert">;
 }): Promise<{ id: string; invoiceNumber: string | null }> {
+  const db = opts.executor ?? controlDb;
   const gstPaise = gstOnPaise(opts.basePaise);
-  const numbered = opts.status === "captured" || opts.status === "credit";
-  const [tenant] = await controlDb
+  const numbered = opts.status === "captured" || opts.status === "credit" || opts.status === "due";
+  const [tenant] = await db
     .select({ name: tenants.name, billingName: tenants.billingName, billingGstin: tenants.billingGstin, billingAddress: tenants.billingAddress })
     .from(tenants)
     .where(eq(tenants.id, opts.tenantId))
     .limit(1);
 
-  const [row] = await controlDb
+  const [row] = await db
     .insert(billingPayments)
     .values({
       tenantId: opts.tenantId,
@@ -124,6 +130,84 @@ export async function recordPayment(opts: {
     .returning({ id: billingPayments.id, invoiceSeq: billingPayments.invoiceSeq });
 
   return { id: row!.id, invoiceNumber: formatBillingInvoiceNumber(row!.invoiceSeq) };
+}
+
+// ── Government API usage statements ────────────────────────────────────────
+
+const GOV_DOC_PLURALS: Record<GovDocKind, string> = {
+  e_invoice: "e-invoice",
+  e_way_bill: "e-way bill",
+  gstr1_filed: "GSTR-1 filing",
+  gstr3b_filed: "GSTR-3B filing",
+};
+
+/** [start, end] instants of an IST calendar month "YYYY-MM". */
+function istMonthBounds(period: string): { start: Date; end: Date } {
+  const [y, m] = period.split("-").map(Number) as [number, number];
+  const start = new Date(`${period}-01T00:00:00+05:30`);
+  const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+  return { start, end: new Date(new Date(`${next}-01T00:00:00+05:30`).getTime() - 1) };
+}
+
+/**
+ * Month-end statement for government API usage: one "due" billing_payments row
+ * (numbered like any GST invoice) for the tenant's unbilled, priced documents
+ * in `period`, which are then stamped with it. Refuses a month that has not
+ * ended; a second call finds nothing unbilled and does nothing.
+ */
+export async function closeGovUsagePeriod(
+  tenantId: string,
+  period: string,
+): Promise<{ paymentId: string; invoiceNumber: string | null; totalPaise: number } | null> {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Period must look like 2026-09." });
+  }
+  if (!periodIsClosed(period)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `${period} has not ended yet, so it cannot be billed.` });
+  }
+
+  return controlDb.transaction(async (tx) => {
+    // FOR UPDATE: a concurrent close waits here, then sees the rows already stamped.
+    const rows = await tx
+      .select({ id: govApiUsage.id, kind: govApiUsage.kind, ratePaise: govApiUsage.ratePaise })
+      .from(govApiUsage)
+      .where(and(
+        eq(govApiUsage.tenantId, tenantId),
+        eq(govApiUsage.period, period),
+        isNull(govApiUsage.statementPaymentId),
+        gt(govApiUsage.ratePaise, 0),
+      ))
+      .for("update");
+    const basePaise = rows.reduce((n, r) => n + r.ratePaise, 0);
+    if (rows.length === 0 || basePaise <= 0) return null;
+
+    const counts = new Map<string, number>();
+    for (const r of rows) counts.set(r.kind, (counts.get(r.kind) ?? 0) + 1);
+    const parts = [...counts.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([kind, n]) => {
+        const noun = GOV_DOC_PLURALS[kind as GovDocKind] ?? GOV_DOC_LABELS[kind as GovDocKind] ?? kind;
+        return `${n} ${noun}${n === 1 ? "" : "s"}`;
+      });
+    const { start, end } = istMonthBounds(period);
+
+    const payment = await recordPayment({
+      tenantId,
+      subscriptionId: null,
+      status: "due",
+      description: `Government API usage — ${period} (${parts.join(", ")})`,
+      basePaise,
+      provider: "usage",
+      periodStart: start,
+      periodEnd: end,
+      executor: tx,
+    });
+    await tx
+      .update(govApiUsage)
+      .set({ statementPaymentId: payment.id })
+      .where(inArray(govApiUsage.id, rows.map((r) => r.id)));
+    return { paymentId: payment.id, invoiceNumber: payment.invoiceNumber, totalPaise: basePaise + gstOnPaise(basePaise) };
+  });
 }
 
 /** "FIN-00042" from the sequence value; null for unnumbered (failed) rows. */

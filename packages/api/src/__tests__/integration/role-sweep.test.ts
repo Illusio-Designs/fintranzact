@@ -96,6 +96,8 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   "billing.updateBillingDetails": { allow: ["owner"], why: "org owner only" },
   "billing.changePlan": { allow: ["owner"], why: "org owner only" },
   "billing.cancelSubscription": { allow: ["owner"], why: "org owner only" },
+  "govUsage.summary": { allow: ["owner"], why: "org owner only" },
+  "govUsage.statements": { allow: ["owner"], why: "org owner only" },
   "business.members": { allow: ADMINS, why: "requireTenantAdmin" },
   "business.addMember": { allow: ADMINS, why: "requireTenantAdmin" },
   "business.updateMemberRole": { allow: ADMINS, why: "requireTenantAdmin" },

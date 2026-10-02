@@ -378,6 +378,9 @@ export function BillingTab() {
                       {p.status === "failed" ? (
                         <p className="text-xs text-red-600">{p.failureReason ?? "Payment failed"}</p>
                       ) : null}
+                      {p.status === "due" ? (
+                        <p className="text-xs font-medium text-amber-600">Payment due</p>
+                      ) : null}
                     </td>
                     <td className={cn("whitespace-nowrap px-5 py-3 text-right tabular-nums", p.status === "failed" ? "text-text-tertiary line-through" : p.totalPaise < 0 ? "text-emerald-600" : "text-text-primary")}>
                       {p.totalPaise < 0 ? "−" : ""}{rupees(Math.abs(p.totalPaise))}
