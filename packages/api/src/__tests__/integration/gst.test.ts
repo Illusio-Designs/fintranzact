@@ -863,7 +863,11 @@ describe("Composition scheme enforcement", () => {
       businessId: compositionBusiness.id,
     });
     // Financial-year quarters: Q4 of FY 2025-26 is Jan–Mar 2026, Q1 of FY 2026-27 is Apr–Jun 2026
-    expect((await caller.gst.cmp08({ year: 2025, quarter: 4 })).taxableValue).toBe("1300.00");
+    const q4 = await caller.gst.cmp08({ year: 2025, quarter: 4 });
+    expect(q4.taxableValue).toBe("1300.00");
+    // CMP-08 is filed for Jan-Mar too: due 18 April (midnight IST)
+    expect(q4.cmp08Applicable).toBe(true);
+    expect(q4.dueDate).toBe("2026-04-17T18:30:00.000Z");
     expect((await caller.gst.cmp08({ year: 2026, quarter: 1 })).taxableValue).toBe("7000.00");
     // Q3 of FY 2025-26 (Oct–Dec 2025) still holds only its own invoices
     expect((await caller.gst.cmp08({ year: 2025, quarter: 3 })).taxableValue).toBe("10000.00");

@@ -600,12 +600,7 @@ function CMP08View() {
               {formatDate(data.quarterStart)} — {formatDate(data.quarterEnd)} · outward supplies net of credit notes, at {data.rate}% ({categoryLabel(data.category)})
             </p>
           </div>
-          {!data.cmp08Applicable ? (
-            <p className="px-4 py-4 text-sm text-text-secondary">
-              There is no CMP-08 for Jan–Mar: the tax for this quarter is declared and paid with the annual return GSTR-4. See the GSTR-4 tab.
-            </p>
-          ) : (
-            <>
+          <>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4">
                 <StatCard label="Outward supplies (turnover)" value={fmtStr(data.taxableValue)} />
                 <StatCard
@@ -630,16 +625,15 @@ function CMP08View() {
                 />
               </div>
               <div className="px-4 pb-4 space-y-1 text-xs text-text-secondary">
-                <p>Due date: <strong>{data.dueDate ? formatDate(data.dueDate) : "—"}</strong> (18th of the month after the quarter).</p>
+                <p>Due date: <strong>{formatDate(data.dueDate)}</strong> (CMP-08 is filed for every quarter, Jan–Mar included; the due day is a setting above).</p>
                 <p>
                   Interest: {fmtStr(data.interest)}
                   {data.interestBasis === "payment_date_unknown" && " — payment date not recorded, so late interest is not worked out."}
                   {data.interestBasis === "paid_late" && " — payment was after the due date."}
                 </p>
-                <p className="text-text-tertiary">Rates, due dates and interest change by notification. Verify with your CA before filing.</p>
+                <p className="text-text-tertiary">Interest at {data.interestRatePercent}% a year. Rates, due dates and interest change by notification. Verify with your CA before filing.</p>
               </div>
-            </>
-          )}
+          </>
         </div>
       )}
     </div>
@@ -656,15 +650,22 @@ function GSTR4View() {
   const now = new Date();
   const thisFy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   const [fy, setFy] = useState(thisFy - 1); // the last completed year is the one due for filing
-  const [paid, setPaid] = useState<{ 1: string; 2: string; 3: string }>({ 1: "", 2: "", 3: "" });
+  const [paid, setPaid] = useState<{ 1: string; 2: string; 3: string; 4: string }>({ 1: "", 2: "", 3: "", 4: "" });
+  // Optional: the date GSTR-4 is (to be) filed and the balance paid. Without it interest on the balance and the late fee show 0.
+  const [filedOn, setFiledOn] = useState("");
   const [downloading, setDownloading] = useState(false);
   const utils = trpc.useUtils();
 
   // A quarter left blank is assumed paid in full; only valid amounts are sent.
   const cmp08Paid = Object.fromEntries(
-    ([1, 2, 3] as const).filter((q) => AMOUNT_RE.test(paid[q].trim())).map((q) => [q, paid[q].trim()]),
-  ) as { 1?: string; 2?: string; 3?: string };
-  const input = { financialYear: fyString(fy), cmp08Paid: Object.keys(cmp08Paid).length ? cmp08Paid : undefined };
+    ([1, 2, 3, 4] as const).filter((q) => AMOUNT_RE.test(paid[q].trim())).map((q) => [q, paid[q].trim()]),
+  ) as { 1?: string; 2?: string; 3?: string; 4?: string };
+  const filedOnDate = /^\d{4}-\d{2}-\d{2}$/.test(filedOn) ? new Date(`${filedOn}T12:00:00+05:30`) : undefined;
+  const input = {
+    financialYear: fyString(fy),
+    cmp08Paid: Object.keys(cmp08Paid).length ? cmp08Paid : undefined,
+    filedOn: filedOnDate,
+  };
   const { data, isLoading, error } = trpc.gst.gstr4.useQuery(input, FRESH);
   const fyOptions = Array.from({ length: 6 }, (_, i) => thisFy - i);
 
@@ -701,17 +702,22 @@ function GSTR4View() {
       ["Table 4 inward supplies", "Taxable value", "Central tax", "State/UT tax", "Integrated tax", "Cess"],
       ...data.inward.rows.map((r) => [r.label, r.taxableValue, r.centralTax, r.stateTax, r.integratedTax, r.cess]),
       [],
-      ["Table 5 outward by quarter", "Turnover", "Rate %", "Tax"],
-      ...data.outward.quarters.map((r) => [quarterLabels[r.quarter - 1]!, r.taxableValue, r.rate, r.tax]),
+      ["Table 5 self-assessed liability per CMP-08", "Turnover", "Rate %", "Composition tax", "Reverse charge tax", "Total", "Due date"],
+      ...data.cmp08Summary.quarters.map((r) => [quarterLabels[r.quarter - 1]!, r.taxableValue, r.rate, r.compositionTax, r.rcmTax, r.totalTax, formatDate(r.dueDate)]),
       [],
-      ["Table 6 rate-wise", "Rate %", "Turnover", "Central tax", "State/UT tax", "Integrated tax"],
-      ...data.rateWise.map((r) => ["", r.rate, r.taxableValue, r.centralTax, r.stateTax, r.integratedTax]),
+      ["Table 6 rate-wise outward", "Rate %", "Turnover", "Central tax", "State/UT tax", "Integrated tax"],
+      ...data.rateWise.outward.map((r) => ["", r.rate, r.taxableValue, r.centralTax, r.stateTax, r.integratedTax]),
+      ["Table 6 inward (reverse charge)", "", data.rateWise.inwardRcm.taxableValue, data.rateWise.inwardRcm.centralTax, data.rateWise.inwardRcm.stateTax, data.rateWise.inwardRcm.integratedTax],
       [],
-      ["Tax payable and paid", "Payable", "Paid through CMP-08", "Assumed paid"],
+      ["Table 7 TDS/TCS credit received", "TDS", "TCS"],
+      ["", data.tdsTcs.tds, data.tdsTcs.tcs],
+      [],
+      ["Table 8 tax, interest and late fee", "Payable", "Paid through CMP-08", "Assumed paid"],
       ...data.taxPaid.quarters.map((r) => [quarterLabels[r.quarter - 1]!, r.payable, r.paid, r.paidAssumed ? "yes" : "no"]),
       ["Total", data.taxPaid.totalPayable, data.taxPaid.paidThroughCmp08, data.taxPaid.paidAssumed ? "yes" : "no"],
       ["Balance payable with GSTR-4", data.taxPaid.balancePayable],
       ["Interest", data.taxPaid.interest],
+      ["Late fee", data.taxPaid.lateFee, data.taxPaid.filingDateKnown ? "" : "filing date not entered"],
     ];
     save(lines.map((l) => l.map(q).join(",")).join("\n"), "text/csv", `GSTR4_FY${data.financialYear.replace("-", "_")}_summary.csv`);
     toast.success("GSTR-4 summary exported");
@@ -725,6 +731,16 @@ function GSTR4View() {
             <option key={y} value={y}>{fyLabel(y)}{y === thisFy ? " (to date)" : ""}</option>
           ))}
         </Select>
+        <label className="flex items-center gap-2 text-xs text-text-tertiary">
+          Filed / paid on
+          <input
+            type="date"
+            className="input w-40"
+            aria-label="GSTR-4 filed or paid on"
+            value={filedOn}
+            onChange={(e) => setFiledOn(e.target.value)}
+          />
+        </label>
         <div className="sm:ml-auto flex flex-wrap gap-2 print:hidden">
           <button type="button" onClick={handleExportCsv} disabled={!data} className="btn-secondary">Export CSV</button>
           <button type="button" onClick={() => window.print()} disabled={!data} className="btn-secondary">Print</button>
@@ -748,8 +764,8 @@ function GSTR4View() {
         <div className="space-y-5" data-testid="gstr4">
           <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 px-4 py-2">
             <p className="text-xs text-blue-700 dark:text-blue-400">
-              Annual return for FY {data.financialYear}. Due date: <strong>{formatDate(data.dueDate)}</strong> (30 April after the year). Due dates are often extended: verify with your CA.
-              The JSON download is best effort and its field names are not verified against the GST portal schema.
+              Annual return for FY {data.financialYear}. Due date: <strong>{formatDate(data.dueDate)}</strong> ({data.dueDateSource === "override" ? "set for this year in the settings above" : "30 June after the year since FY 2024-25; a setting above"}). Due dates are often extended: verify with your CA.
+              The JSON download is best effort: table numbers, row numbers and field names are not verified against the GST offline tool.
             </p>
           </div>
 
@@ -792,10 +808,10 @@ function GSTR4View() {
             </div>
           </div>
 
-          {/* Tables 5 and 6 */}
+          {/* Table 5 */}
           <div className="card overflow-hidden" data-testid="gstr4-table5">
             <div className="px-4 py-3 border-b border-border-light bg-surface-1">
-              <h3 className="text-sm font-semibold text-text-primary">Table 5 — Outward turnover and Table 6 — tax by rate</h3>
+              <h3 className="text-sm font-semibold text-text-primary">Table 5 — Summary of self-assessed liability per CMP-08</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="data-table">
@@ -805,47 +821,67 @@ function GSTR4View() {
                     <th className="text-right">Turnover</th>
                     <th className="text-right">Rate</th>
                     <th className="text-right">Composition tax</th>
+                    <th className="text-right">Reverse charge tax</th>
+                    <th className="text-right">CMP-08 due</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.outward.quarters.map((q) => (
+                  {data.cmp08Summary.quarters.map((q) => (
                     <tr key={q.quarter}>
                       <td className="text-text-primary">{quarterLabels[q.quarter - 1]}</td>
                       <td className="text-right tabular-nums">{fmtStr(q.taxableValue)}</td>
                       <td className="text-right tabular-nums text-text-secondary">{q.rate}%</td>
-                      <td className="text-right tabular-nums">{fmtStr(q.tax)}</td>
+                      <td className="text-right tabular-nums">{fmtStr(q.compositionTax)}</td>
+                      <td className="text-right tabular-nums text-text-secondary">{fmtStr(q.rcmTax)}</td>
+                      <td className="text-right tabular-nums text-text-secondary">{formatDate(q.dueDate)}</td>
                     </tr>
                   ))}
                   <tr className="font-semibold">
                     <td>Year</td>
-                    <td className="text-right tabular-nums">{fmtStr(data.outward.taxableValue)}</td>
+                    <td className="text-right tabular-nums">{fmtStr(data.cmp08Summary.taxableValue)}</td>
                     <td />
-                    <td className="text-right tabular-nums">{fmtStr(data.outward.tax)}</td>
+                    <td className="text-right tabular-nums">{fmtStr(data.cmp08Summary.compositionTax)}</td>
+                    <td className="text-right tabular-nums">{fmtStr(data.cmp08Summary.rcmTax)}</td>
+                    <td />
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div className="overflow-x-auto border-t border-border-light">
+          </div>
+
+          {/* Table 6 */}
+          <div className="card overflow-hidden" data-testid="gstr4-table6">
+            <div className="px-4 py-3 border-b border-border-light bg-surface-1">
+              <h3 className="text-sm font-semibold text-text-primary">Table 6 — Tax rate-wise: inward (reverse charge) and outward supplies</h3>
+            </div>
+            <div className="overflow-x-auto">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Rate</th>
-                    <th className="text-right">Turnover</th>
+                    <th>Supplies</th>
+                    <th className="text-right">Turnover / taxable value</th>
                     <th className="text-right">Central tax</th>
                     <th className="text-right">State / UT tax</th>
                     <th className="text-right">Integrated tax</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.rateWise.map((r) => (
+                  {data.rateWise.outward.map((r) => (
                     <tr key={r.rate}>
-                      <td>{r.rate}%</td>
+                      <td>Outward at {r.rate}%</td>
                       <td className="text-right tabular-nums">{fmtStr(r.taxableValue)}</td>
                       <td className="text-right tabular-nums text-text-secondary">{fmtStr(r.centralTax)}</td>
                       <td className="text-right tabular-nums text-text-secondary">{fmtStr(r.stateTax)}</td>
                       <td className="text-right tabular-nums text-text-secondary">{fmtStr(r.integratedTax)}</td>
                     </tr>
                   ))}
+                  <tr>
+                    <td>Inward under reverse charge</td>
+                    <td className="text-right tabular-nums">{fmtStr(data.rateWise.inwardRcm.taxableValue)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmtStr(data.rateWise.inwardRcm.centralTax)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmtStr(data.rateWise.inwardRcm.stateTax)}</td>
+                    <td className="text-right tabular-nums text-text-secondary">{fmtStr(data.rateWise.inwardRcm.integratedTax)}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -854,10 +890,21 @@ function GSTR4View() {
             </p>
           </div>
 
+          {/* Table 7 */}
+          <div className="card overflow-hidden" data-testid="gstr4-table7">
+            <div className="px-4 py-3 border-b border-border-light bg-surface-1">
+              <h3 className="text-sm font-semibold text-text-primary">Table 7 — TDS / TCS credit received</h3>
+            </div>
+            <div className="px-4 py-3 text-sm text-text-secondary space-y-1">
+              <p>TDS {fmtStr(data.tdsTcs.tds)} · TCS {fmtStr(data.tdsTcs.tcs)}</p>
+              <p className="text-xs text-text-tertiary">{data.tdsTcs.note}</p>
+            </div>
+          </div>
+
           {/* Tax payable vs paid */}
           <div className="card overflow-hidden" data-testid="gstr4-tax-paid">
             <div className="px-4 py-3 border-b border-border-light bg-surface-1">
-              <h3 className="text-sm font-semibold text-text-primary">Tax payable and paid through CMP-08</h3>
+              <h3 className="text-sm font-semibold text-text-primary">Table 8 — Tax, interest and late fee payable and paid</h3>
             </div>
             {data.taxPaid.paidAssumed && (
               <div role="alert" className="mx-4 mt-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-4 py-2">
@@ -881,33 +928,44 @@ function GSTR4View() {
                       <td className="text-text-primary">{quarterLabels[q.quarter - 1]}</td>
                       <td className="text-right tabular-nums">{fmtStr(q.payable)}</td>
                       <td className="text-right">
-                        {q.quarter === 4 ? (
-                          <span className="text-xs text-text-tertiary">Paid with GSTR-4</span>
-                        ) : (
-                          <div className="inline-flex items-center gap-2">
-                            <input
-                              className="input w-32 text-right"
-                              inputMode="decimal"
-                              aria-label={`Paid in ${quarterLabels[q.quarter - 1]}`}
-                              placeholder={q.paidAssumed ? q.paid : ""}
-                              value={paid[q.quarter as 1 | 2 | 3]}
-                              onChange={(e) => setPaid((p) => ({ ...p, [q.quarter]: e.target.value }))}
-                              aria-invalid={paid[q.quarter as 1 | 2 | 3].trim() !== "" && !AMOUNT_RE.test(paid[q.quarter as 1 | 2 | 3].trim())}
-                            />
-                            {q.paidAssumed && <span className="text-xs text-amber-700 dark:text-amber-400">assumed paid</span>}
-                          </div>
-                        )}
+                        <div className="inline-flex items-center gap-2">
+                          <input
+                            className="input w-32 text-right"
+                            inputMode="decimal"
+                            aria-label={`Paid in ${quarterLabels[q.quarter - 1]}`}
+                            placeholder={q.paidAssumed ? q.paid : ""}
+                            value={paid[q.quarter as 1 | 2 | 3 | 4]}
+                            onChange={(e) => setPaid((p) => ({ ...p, [q.quarter]: e.target.value }))}
+                            aria-invalid={paid[q.quarter as 1 | 2 | 3 | 4].trim() !== "" && !AMOUNT_RE.test(paid[q.quarter as 1 | 2 | 3 | 4].trim())}
+                          />
+                          {q.paidAssumed && <span className="text-xs text-amber-700 dark:text-amber-400">assumed paid</span>}
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 p-4">
               <StatCard label="Total payable" value={fmtStr(data.taxPaid.totalPayable)} note={`Composition ${fmtStr(data.taxPaid.compositionTaxPayable)} + reverse charge ${fmtStr(data.taxPaid.rcmTaxPayable)}`} />
               <StatCard label="Paid through CMP-08" value={fmtStr(data.taxPaid.paidThroughCmp08)} />
               <StatCard label="Balance to pay with GSTR-4" value={fmtStr(data.taxPaid.balancePayable)} valueColor="text-amber-600" />
-              <StatCard label="Interest" value={fmtStr(data.taxPaid.interest)} />
+              <StatCard
+                label="Interest"
+                value={fmtStr(data.taxPaid.interest)}
+                note={data.taxPaid.filingDateKnown ? `${data.taxPaid.interestRatePercent}% a year` : "Enter filing date"}
+              />
+              <StatCard
+                label={data.taxPaid.nilReturn ? "Late fee (nil return)" : "Late fee"}
+                value={fmtStr(data.taxPaid.lateFee)}
+                note={data.taxPaid.filingDateKnown
+                  ? (data.taxPaid.lateFeeDetail ? `${data.taxPaid.lateFeeDetail.daysLate} days late${data.taxPaid.lateFeeDetail.capped ? ", at the cap" : ""}` : undefined)
+                  : "Enter filing date"}
+                subItems={data.taxPaid.lateFeeDetail ? [
+                  { label: "Central tax", value: fmtStr(data.taxPaid.lateFeeDetail.centralTax) },
+                  { label: "State / UT tax", value: fmtStr(data.taxPaid.lateFeeDetail.stateTax) },
+                ] : undefined}
+              />
             </div>
             <div className="px-4 pb-4 space-y-1 text-xs text-text-tertiary">
               {parseFloat(data.taxPaid.excessPaid) > 0 && <p>Paid {fmtStr(data.taxPaid.excessPaid)} more than payable: the excess stays in your cash ledger.</p>}

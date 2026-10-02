@@ -67,11 +67,23 @@ describe("buildCmp08Quarter", () => {
     expect(onTime.interest).toBe("0.00");
   });
 
-  it("has no CMP-08 for Q4 (tax goes in GSTR-4)", () => {
-    const q = buildCmp08Quarter({ ...base, quarter: 4, outward: [doc("invoice", "1000")], paidOn: new Date("2027-06-01") });
-    expect(q.cmp08Applicable).toBe(false);
-    expect(q.dueDate).toBeNull();
-    expect(q.interest).toBe("0.00");
-    expect(q.taxPayable).toBe("10.00");
+  it("files CMP-08 for Q4 too: due 18 April, tax and interest worked out like any quarter", () => {
+    const q = buildCmp08Quarter({ ...base, quarter: 4, outward: [doc("invoice", "100000")], paidOn: new Date("2027-05-18T06:00:00Z") });
+    expect(q.cmp08Applicable).toBe(true);
+    expect(q.dueDate.toISOString()).toBe("2027-04-17T18:30:00.000Z"); // 18 Apr 2027 IST
+    expect(q.taxPayable).toBe("1000.00");
+    expect(q.interestBasis).toBe("paid_late");
+    expect(q.interest).toBe("14.79"); // 30 days late
+  });
+
+  it("follows the business overrides at once: rate, CMP-08 due day and interest rate", () => {
+    const outward = [doc("invoice", "100000")];
+    const paidOn = new Date("2026-08-17T06:00:00Z");
+    const def = buildCmp08Quarter({ ...base, outward, paidOn });
+    const custom = buildCmp08Quarter({ ...base, outward, paidOn, overrides: { rate: "2", cmp08DueDay: 28, interestRate: "12" } });
+    expect(def).toMatchObject({ rate: "1", taxPayable: "1000.00", interest: "14.79", interestRatePercent: "18" });
+    expect(custom).toMatchObject({ rate: "2", taxPayable: "2000.00", interestRatePercent: "12" });
+    expect(custom.dueDate.toISOString()).toBe("2026-07-27T18:30:00.000Z"); // 28 Jul IST
+    expect(custom.interest).toBe("13.15"); // 2000 x 12% x 20 / 365
   });
 });

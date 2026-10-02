@@ -551,14 +551,18 @@ export const moneyTables: TableCoverage[] = [
     table: "composition_settings",
     rules: [
       rule("composition_settings", "valid", "error",
-        "A composition setting is for an April-March financial year (YYYY-YY, the second part the next year), a known category (manufacturer_trader, restaurant or other_service), and its rate, when set, is 0-100 percent.",
+        "A composition setting is for an April-March financial year (YYYY-YY, the second part the next year), a known category (manufacturer_trader, restaurant or other_service), its rate and interest rate, when set, are 0-100 percent, its late-fee amounts are not negative and its CMP-08 due day is 1-28.",
         ["gst.updateCompositionSettings (composition scheme setting)"],
         `SELECT s.business_id, s.id::text, s.financial_year || ' ' || s.category
          FROM composition_settings s
          WHERE s.financial_year !~ '^[0-9]{4}-[0-9]{2}$'
             OR (s.financial_year ~ '^[0-9]{4}-[0-9]{2}$' AND LPAD(((SUBSTRING(s.financial_year, 1, 4)::int + 1) % 100)::text, 2, '0') <> SUBSTRING(s.financial_year, 6, 2))
             OR s.category NOT IN ('manufacturer_trader', 'restaurant', 'other_service')
-            OR s.rate::numeric NOT BETWEEN 0 AND 100`),
+            OR s.rate::numeric NOT BETWEEN 0 AND 100
+            OR s.interest_rate::numeric NOT BETWEEN 0 AND 100
+            OR s.late_fee_per_day::numeric < 0 OR s.late_fee_cap::numeric < 0
+            OR s.late_fee_nil_per_day::numeric < 0 OR s.late_fee_nil_cap::numeric < 0
+            OR s.cmp08_due_day NOT BETWEEN 1 AND 28`),
       rule("composition_settings", "audit-trail", "error",
         "Every composition setting has an audit entry for the change that created or last changed it.",
         ["gst.updateCompositionSettings (composition scheme setting)"],

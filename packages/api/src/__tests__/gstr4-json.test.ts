@@ -19,7 +19,7 @@ const report = () => buildGstr4({
     purchase({ subtotal: "2000", taxAmount: "360", isReverseCharge: true, partyGstin: null, partyRegistrationType: "unregistered" }),
     purchase({ subtotal: "1000", partyGstin: null, partyRegistrationType: "unregistered" }),
   ],
-  cmp08Paid: { 1: "1000", 2: "1000", 3: "1000" },
+  cmp08Paid: { 1: "1000", 2: "1000", 3: "1000", 4: "0" },
 });
 
 describe("gstr4ToPortalJson", () => {
@@ -40,9 +40,11 @@ describe("gstr4ToPortalJson", () => {
   it("maps outward turnover by quarter, rate-wise tax and tax paid", () => {
     expect(json.table5.txval).toBe(400000);
     expect(json.table5.qtrs).toHaveLength(4);
-    expect(json.table5.qtrs[0]).toEqual({ qtr: 1, txval: 100000, rt: 1, tax: 1000 });
-    expect(json.table6).toEqual([{ rt: 1, txval: 400000, camt: 2000, samt: 2000, iamt: 0 }]);
-    expect(json.table7).toMatchObject({ cmp_tax: 4000, rcm_tax: 0, tot_tax: 4000, paid_cmp08: 3000, bal_pay: 1000, excess_paid: 0, lfee: 0 });
+    expect(json.table5.qtrs[0]).toEqual({ qtr: 1, txval: 100000, rt: 1, tax: 1000, rcm_tax: 0, tot_tax: 1000 });
+    expect(json.table6.outward).toEqual([{ rt: 1, txval: 400000, camt: 2000, samt: 2000, iamt: 0 }]);
+    expect(json.table6.inward_rcm).toMatchObject({ txval: 0, camt: 0 });
+    expect(json.table7).toEqual({ tds: 0, tcs: 0 });
+    expect(json.table8).toMatchObject({ cmp_tax: 4000, rcm_tax: 0, tot_tax: 4000, paid_cmp08: 3000, bal_pay: 1000, excess_paid: 0, lfee: 0 });
   });
 
   it("serialises to plain JSON", () => {
