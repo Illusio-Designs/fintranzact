@@ -72,7 +72,8 @@ async function setState(state: State, tenant: { id: string } = world.tenantA) {
       cycle: "monthly",
       status: "halted",
       provider: "razorpay",
-      providerSubscriptionId: `sub_RESTENT_${tenant.id.slice(0, 8)}`,
+      // Organisation A keeps the id the Razorpay webhook test posts; B only needs a unique one.
+      providerSubscriptionId: tenant.id === world.tenantA.id ? "sub_RESTENT0001" : "sub_RESTENT_B0001",
       basePaise: 99900,
     });
   }
