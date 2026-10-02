@@ -44,7 +44,7 @@ async function choosePlan(page: Page, planName: RegExp) {
   await expect(page.getByRole("heading", { name: "Select the plan that fits your business" })).toBeVisible();
   await expectNoHorizontalScroll(page, "plan selection");
   await page.getByRole("button", { name: planName }).first().click();
-  await page.getByRole("button", { name: "Continue to dashboard" }).click();
+  await page.getByRole("button", { name: "Create your company" }).click();
 }
 
 /** Pick the paid Business plan and pay for it with the test card in the demo checkout. */
@@ -78,7 +78,7 @@ async function payForBusinessPlan(page: Page) {
 
   await expect(checkout.getByText("Payment successful")).toBeVisible({ timeout: 15_000 });
   await expect(checkout.getByTestId("payment-id")).toHaveText(/^pay_demo_[\w-]{14}$/);
-  await checkout.getByRole("button", { name: "Continue to set up your business" }).click();
+  await checkout.getByRole("button", { name: "Create your company" }).click();
 }
 
 /** The wizard's current step title (the big heading above the fields). */

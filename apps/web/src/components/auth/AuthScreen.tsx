@@ -259,6 +259,9 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
   async function leaveAfterSignIn(to: "/" | "/auth/plan-selection") {
     setSignedIn(true);
     await new Promise((resolve) => setTimeout(resolve, 400));
+    // The app may already have taken them on (an admin to /platform, a
+    // partner to their portal) and they may have moved on from there.
+    if (!["/login", "/register"].includes(window.location.pathname)) return;
     navigate({ to });
   }
 

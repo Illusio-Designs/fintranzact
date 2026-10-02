@@ -92,8 +92,6 @@ test.describe("J14 partner", () => {
     await page.getByLabel("Password", { exact: true }).fill("Partner@12345");
     await page.getByLabel("Retype password").fill("Partner@12345");
     await page.locator("form").getByRole("button", { name: "Create free account" }).click();
-    await expect(page).toHaveURL(/\/auth\/plan-selection/, { timeout: 20_000 });
-    await page.goto("/partner-portal");
     // A partner with no business of their own is taken to their portal.
     await expect(page).toHaveURL(/\/partner-portal/, { timeout: 20_000 });
     await expect(page.getByText("Your application is being reviewed")).toBeVisible();
@@ -144,7 +142,7 @@ test.describe("J14 partner", () => {
     await expectNoHorizontalScroll(signup, "register with referral");
     await signup.locator("form").getByRole("button", { name: "Create free account" }).click();
     await expect(signup.getByRole("heading", { name: "Select the plan that fits your business" })).toBeVisible({ timeout: 20_000 });
-    await signup.getByRole("button", { name: "Continue to dashboard" }).click();
+    await signup.getByRole("button", { name: "Create your company" }).click();
     await expect(signup).not.toHaveURL(/plan-selection/, { timeout: 20_000 });
     const owner = await userByEmail(ownerEmail);
     const [membership] = await membershipsOf(owner!.id);
