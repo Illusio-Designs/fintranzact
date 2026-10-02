@@ -311,8 +311,7 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
   },
 
   // 14b. TDS / TCS — rates per year a business edited, the challans it deposited
-  //      tax with, and every deduction (which points at its payment, bill, party
-  //      and challan, so it comes after all of those).
+  //      tax with (the deductions themselves follow expenses, see 16b).
   {
     tableName: "tds_section_settings",
     drizzleTable: tdsSectionSettings,
@@ -326,16 +325,6 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
   {
     tableName: "tax_challans",
     drizzleTable: taxChallans,
-    redactedFields: [],
-    importable: true,
-    selfFkFields: [],
-    chunkSize: 5000,
-    recomputeOnImport: [],
-    scope: { type: "direct" },
-  },
-  {
-    tableName: "tax_deductions",
-    drizzleTable: taxDeductions,
     redactedFields: [],
     importable: true,
     selfFkFields: [],
@@ -382,6 +371,19 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
   {
     tableName: "expenses",
     drizzleTable: expenses,
+    redactedFields: [],
+    importable: true,
+    selfFkFields: [],
+    chunkSize: 5000,
+    recomputeOnImport: [],
+    scope: { type: "direct" },
+  },
+
+  // 16b. TDS / TCS deductions — point at their payment, bill, expense, party and
+  //      challan, so they come after all of those.
+  {
+    tableName: "tax_deductions",
+    drizzleTable: taxDeductions,
     redactedFields: [],
     importable: true,
     selfFkFields: [],

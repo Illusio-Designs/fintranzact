@@ -10,6 +10,9 @@
  *                   system payment (payments.source = 'tds', no bank account).
  *                   Balances, statuses and statements need no special case:
  *                   the bill shows total, TDS adjusted, and what is left to pay.
+ *   Expense         An expense paid to a payee (rent, professional fees…) can
+ *                   carry TDS: syncExpenseTds() keeps one deduction row for it.
+ *                   The expense amount is gross; the bank moves amount - TDS.
  *   On account      A payment to a supplier that is not against a bill (an
  *                   advance) carries its own TDS.
  *   Customer pays   A customer who withholds TDS from what they pay us:
@@ -25,7 +28,7 @@
 
 import { and, eq, gte, isNull, lte, ne, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { invoices, parties, paymentAllocations, payments, taxDeductions, tdsSectionSettings } from "@fintranzact/db";
+import { expenses, invoices, parties, paymentAllocations, payments, taxDeductions, tdsSectionSettings } from "@fintranzact/db";
 import {
   computeTds,
   defaultTdsSectionRules,
@@ -38,6 +41,7 @@ import {
   type TdsSectionRule,
 } from "@fintranzact/shared";
 import { applyInvoicePayment } from "./invoice-status.js";
+import { assertPeriodOpen } from "./period-lock.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -88,8 +92,8 @@ export async function loadSectionRules(db: Db, businessId: string, fy: string): 
 /**
  * What one supplier has been bought from / paid under a section this financial
  * year, before the given bill or payment, and how much of it TDS was already
- * deducted on. Counts purchase bills (by bill date) plus on-account payments
- * that carry the section, so a payment against a bill is never counted twice.
+ * deducted on. Counts purchase bills (by bill date), expenses to the payee
+ * and on-account payments that carry the section, so a payment against a bill is never counted twice.
  */
 export async function partyYearToDate(
   db: Db,
@@ -97,7 +101,7 @@ export async function partyYearToDate(
   partyId: string,
   sectionCode: string,
   fy: string,
-  exclude: { invoiceId?: string; paymentId?: string } = {},
+  exclude: { invoiceId?: string; paymentId?: string; expenseId?: string } = {},
 ): Promise<{ paid: string; taxedBase: string }> {
   const { from, to } = tdsFinancialYearRange(fy);
 
@@ -132,6 +136,19 @@ export async function partyYearToDate(
       exclude.paymentId ? ne(payments.id, exclude.paymentId) : undefined,
     ));
 
+  const [spent] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${expenses.amount}::numeric), 0)::text` })
+    .from(expenses)
+    .where(and(
+      eq(expenses.businessId, businessId),
+      eq(expenses.partyId, partyId),
+      eq(expenses.tdsSection, sectionCode),
+      isNull(expenses.deletedAt),
+      gte(expenses.expenseDate, from),
+      lte(expenses.expenseDate, to),
+      exclude.expenseId ? ne(expenses.id, exclude.expenseId) : undefined,
+    ));
+
   const [taxed] = await db
     .select({ total: sql<string>`COALESCE(SUM(${taxDeductions.baseAmount}::numeric), 0)::text` })
     .from(taxDeductions)
@@ -145,10 +162,11 @@ export async function partyYearToDate(
       eq(taxDeductions.financialYear, fy),
       exclude.invoiceId ? sql`${taxDeductions.invoiceId} IS DISTINCT FROM ${exclude.invoiceId}` : sql`TRUE`,
       exclude.paymentId ? sql`${taxDeductions.paymentId} IS DISTINCT FROM ${exclude.paymentId}` : sql`TRUE`,
+      exclude.expenseId ? sql`${taxDeductions.expenseId} IS DISTINCT FROM ${exclude.expenseId}` : sql`TRUE`,
     ));
 
   return {
-    paid: money.add(bills?.total ?? "0", advances?.total ?? "0"),
+    paid: money.add(money.add(bills?.total ?? "0", advances?.total ?? "0"), spent?.total ?? "0"),
     taxedBase: taxed?.total ?? "0",
   };
 }
@@ -182,6 +200,7 @@ export async function previewPartyTds(
     sectionCode?: string | null;
     excludePaymentId?: string;
     excludeInvoiceId?: string;
+    excludeExpenseId?: string;
   },
 ): Promise<TdsPreview> {
   const date = input.paymentDate ?? new Date();
@@ -212,6 +231,7 @@ export async function previewPartyTds(
   const ytd = await partyYearToDate(db, businessId, input.partyId, sectionCode, fy, {
     invoiceId: input.excludeInvoiceId,
     paymentId: input.excludePaymentId,
+    expenseId: input.excludeExpenseId,
   });
   const result = computeTds({
     section,
@@ -385,6 +405,145 @@ export async function syncBillTds(
     deductedOn: bill.invoiceDate,
   });
   return setBill(tds, sectionCode);
+}
+
+// ── Expenses ───────────────────────────────────────────────────
+
+export type ExpenseTdsMode = "none" | "auto" | "manual";
+
+/**
+ * Checks the TDS settings entered on an expense and returns what to store.
+ * `none` carries no section or amount. `auto` keeps the chosen section (or
+ * leaves it to the payee's) and the amount is worked out on save. `manual`
+ * needs the section and an amount below the expense.
+ */
+export function assertExpenseTdsInput(
+  mode: ExpenseTdsMode,
+  partyId: string | null | undefined,
+  section: string | null | undefined,
+  amount: string | null | undefined,
+  total: string,
+): { mode: ExpenseTdsMode; section: string | null; amount: string } {
+  if (mode === "none") return { mode, section: null, amount: "0" };
+  if (!partyId) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose who was paid to deduct TDS on this expense" });
+  if (mode === "auto") return { mode, section: section || null, amount: "0" };
+  if (!section) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the TDS section for the TDS entered on this expense" });
+  const amt = amount && amount.length > 0 ? amount : "0";
+  if (money.compare(amt, total) >= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "TDS must be less than the expense amount" });
+  return { mode, section, amount: amt };
+}
+
+/**
+ * Makes an expense's TDS match its current state: removes its deduction row,
+ * then adds one again if TDS applies. Call after an expense is created,
+ * edited or deleted, and use the returned tdsAmount to size the bank
+ * withdrawal (amount - TDS).
+ *
+ *   auto    section chosen on the expense (else the payee's), worked out from
+ *           the payee's PAN, the year to date and the section's limits
+ *   manual  the section and amount entered on the expense
+ *   none    no TDS
+ *
+ * Throws if the current TDS is already deposited against a challan, or the
+ * expense's date is in a locked period.
+ */
+export async function syncExpenseTds(
+  db: Db,
+  input: { businessId: string; expenseId: string },
+): Promise<{ tdsAmount: string; tdsSection: string | null }> {
+  const { businessId, expenseId } = input;
+  const [exp] = await db
+    .select()
+    .from(expenses)
+    .where(and(eq(expenses.id, expenseId), eq(expenses.businessId, businessId)))
+    .limit(1);
+  if (!exp) return { tdsAmount: "0.00", tdsSection: null };
+
+  // 1. Take the expense's current deduction out.
+  const existing = await db
+    .select({ id: taxDeductions.id, challanId: taxDeductions.challanId })
+    .from(taxDeductions)
+    .where(and(eq(taxDeductions.businessId, businessId), eq(taxDeductions.expenseId, expenseId)));
+  if (existing.length > 0) {
+    await assertPeriodOpen(db, businessId, [exp.expenseDate]);
+    if (existing.some((d: { challanId: string | null }) => d.challanId)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "The TDS here is already deposited against a challan. Remove it from the challan first.",
+      });
+    }
+    await db.delete(taxDeductions).where(and(eq(taxDeductions.businessId, businessId), eq(taxDeductions.expenseId, expenseId)));
+  }
+
+  const setExpense = async (tdsAmount: string, tdsSection: string | null) => {
+    await db.update(expenses).set({ tdsAmount, tdsSection }).where(eq(expenses.id, expenseId));
+    return { tdsAmount, tdsSection };
+  };
+
+  const mode = exp.tdsMode as ExpenseTdsMode;
+  if (exp.deletedAt || mode === "none" || !exp.partyId) {
+    // A deleted expense keeps what was entered; it just has no deduction row.
+    if (exp.deletedAt) return { tdsAmount: exp.tdsAmount, tdsSection: exp.tdsSection };
+    return setExpense("0.00", null);
+  }
+
+  const [party] = await db
+    .select({ pan: parties.pan, gstin: parties.gstin, constitution: parties.constitution, tdsSection: parties.tdsSection })
+    .from(parties)
+    .where(and(eq(parties.id, exp.partyId), eq(parties.businessId, businessId)))
+    .limit(1);
+  const sectionCode: string | null = exp.tdsSection ?? party?.tdsSection ?? null;
+  if (!sectionCode) return setExpense("0.00", null);
+
+  const fy = tdsFinancialYear(exp.expenseDate);
+  const hasPan = !!(party?.pan?.trim() || panFromGstin(party?.gstin));
+
+  let tds = "0.00";
+  let base: string = exp.amount;
+  let rate = "0";
+  if (mode === "manual") {
+    tds = exp.tdsAmount;
+    rate = money.isPositive(exp.amount) ? ((parseFloat(tds) / parseFloat(exp.amount)) * 100).toFixed(3) : "0";
+  } else {
+    const rules = await loadSectionRules(db, businessId, fy);
+    const section = rules.find((r) => r.code === sectionCode);
+    if (!section) return setExpense("0.00", sectionCode);
+    const ytd = await partyYearToDate(db, businessId, exp.partyId, sectionCode, fy, { expenseId });
+    const result = computeTds({
+      section,
+      hasPan,
+      isIndividual: INDIVIDUAL_CONSTITUTIONS.includes(party?.constitution ?? ""),
+      amount: exp.amount,
+      ytdBase: ytd.paid,
+      ytdTaxedBase: ytd.taxedBase,
+    });
+    if (!result.applicable) return setExpense("0.00", sectionCode);
+    tds = result.tds;
+    base = result.base;
+    rate = result.rate;
+  }
+  if (!money.isPositive(tds)) return setExpense("0.00", sectionCode);
+  if (money.compare(tds, exp.amount) >= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "TDS must be less than the expense amount" });
+  }
+
+  // 2. Record the deduction (TDS payable).
+  await db.insert(taxDeductions).values({
+    businessId,
+    kind: "tds",
+    direction: "payable",
+    partyId: exp.partyId,
+    expenseId,
+    sectionCode,
+    financialYear: fy,
+    quarter: tdsQuarter(exp.expenseDate),
+    baseAmount: base,
+    rate,
+    amount: tds,
+    hasPan,
+    deductedOn: exp.expenseDate,
+  });
+  return setExpense(tds, sectionCode);
 }
 
 // ── Payment rows (on-account advances and customer receipts) ──

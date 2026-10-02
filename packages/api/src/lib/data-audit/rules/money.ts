@@ -156,7 +156,7 @@ export const moneyTables: TableCoverage[] = [
     table: "expenses",
     rules: [
       rule("expenses", "bank-posting", "error",
-        "A live expense has at most one withdrawal for its amount and date (referenced as 'expense', or 'gateway_charge' for a gateway's fee); when the expense is pinned to an account the withdrawal is on that account; a deleted expense has none.",
+        "A live expense has at most one withdrawal for its amount (less any TDS deducted) and date (referenced as 'expense', or 'gateway_charge' for a gateway's fee); when the expense is pinned to an account the withdrawal is on that account; a deleted expense has none.",
         EXPENSE_WRITERS,
         `SELECT e.business_id, e.id::text, e.category || ' ' || e.amount || ': ' || COUNT(t.id) || ' txns' ||
                 COALESCE(' [' || string_agg(t.type::text || ' ' || t.amount || ' on ' || t.bank_account_id, '; ') || ']', '')
@@ -167,8 +167,27 @@ export const moneyTables: TableCoverage[] = [
                    OR (e.bank_account_id IS NOT NULL AND COUNT(t.id) = 0)
                    OR bool_or(t.bank_account_id <> e.bank_account_id)
                    OR bool_or(t.type <> 'withdrawal')
-                   OR bool_or(ABS(t.amount::numeric - e.amount::numeric) > ${MONEY_TOLERANCE})
+                   OR bool_or(ABS(t.amount::numeric - (e.amount::numeric - e.tds_amount::numeric)) > ${MONEY_TOLERANCE})
                    OR bool_or(t.transaction_date <> e.expense_date)))`),
+      rule("expenses", "tds-consistent", "error",
+        "TDS on an expense: the mode is none, auto or manual; the tax is never negative and is below the expense; a live expense with tax has a payee of its business, a section, and exactly one payable tax_deductions row for the same amount, payee, section and date; an expense with no tax (or a deleted one) has no deduction row.",
+        EXPENSE_WRITERS,
+        `SELECT e.business_id, e.id::text, e.category || ' ' || e.amount || ': tds ' || e.tds_amount || ' (' || e.tds_mode || '), section ' || COALESCE(e.tds_section, 'NULL') ||
+                ', ' || COUNT(d.id) || ' deduction rows'
+         FROM expenses e LEFT JOIN tax_deductions d ON d.expense_id = e.id
+         GROUP BY e.id
+         HAVING e.tds_mode NOT IN ('none', 'auto', 'manual') OR e.tds_amount::numeric < 0
+             OR (e.tds_amount::numeric > 0 AND (e.tds_amount::numeric >= e.amount::numeric OR e.tds_section IS NULL OR e.party_id IS NULL))
+             OR (e.tds_mode = 'none' AND e.tds_amount::numeric <> 0)
+             OR (e.deleted_at IS NOT NULL AND COUNT(d.id) > 0)
+             OR (e.deleted_at IS NULL AND e.tds_amount::numeric = 0 AND COUNT(d.id) > 0)
+             OR (e.deleted_at IS NULL AND e.tds_amount::numeric > 0 AND (
+                   COUNT(d.id) <> 1
+                   OR bool_or(ABS(d.amount::numeric - e.tds_amount::numeric) > ${MONEY_TOLERANCE})
+                   OR bool_or(d.party_id IS DISTINCT FROM e.party_id)
+                   OR bool_or(d.section_code IS DISTINCT FROM e.tds_section)
+                   OR bool_or(d.deducted_on <> e.expense_date)
+                   OR bool_or(d.direction <> 'payable')))`),
       rule("expenses", "account-same-business", "error",
         "An expense's bank account belongs to its business.",
         EXPENSE_WRITERS,
@@ -583,14 +602,15 @@ export const moneyTables: TableCoverage[] = [
             OR d.financial_year <> y.fy_start || '-' || LPAD(((y.fy_start + 1) % 100)::text, 2, '0')
             OR d.quarter <> FLOOR(((EXTRACT(MONTH FROM x.ist)::int + 8) % 12) / 3) + 1`),
       rule("tax_deductions", "links", "error",
-        "A deduction's payment, party and challan belong to its business, a challan covers the same kind, year and quarter, and only tax we owe (payable) is deposited.",
+        "A deduction's payment, expense, party and challan belong to its business, a challan covers the same kind, year and quarter, and only tax we owe (payable) is deposited.",
         PAYMENT_WRITERS,
         `SELECT d.business_id, d.id::text, d.kind || ' ' || d.direction || ' ' || d.section_code
          FROM tax_deductions d
          LEFT JOIN payments p ON p.id = d.payment_id
+         LEFT JOIN expenses x ON x.id = d.expense_id
          JOIN parties pp ON pp.id = d.party_id
          LEFT JOIN tax_challans c ON c.id = d.challan_id
-         WHERE pp.business_id <> d.business_id OR p.business_id <> d.business_id OR c.business_id <> d.business_id
+         WHERE pp.business_id <> d.business_id OR p.business_id <> d.business_id OR x.business_id <> d.business_id OR c.business_id <> d.business_id
             OR (c.id IS NOT NULL AND (c.kind <> d.kind OR c.financial_year <> d.financial_year OR c.quarter <> d.quarter))
             OR (c.id IS NOT NULL AND d.direction <> 'payable')`),
     ],

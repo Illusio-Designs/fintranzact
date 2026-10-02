@@ -662,6 +662,17 @@ export const createExpenseSchema = z.object({
   expenseDate: z.string().datetime().optional(),
   referenceNumber: z.string().max(100).optional(),
   bankAccountId: z.string().uuid().optional(),
+  /** Who was paid (landlord, consultant…). Required when TDS is deducted. */
+  partyId: z.string().uuid().nullable().optional(),
+  /**
+   * TDS deducted from this payment: none (the default), auto (worked out from
+   * the section, the payee's PAN and the year's limits) or manual
+   * (tdsSection + tdsAmount entered here). The amount above is gross; the
+   * bank moves amount - TDS.
+   */
+  tdsMode: z.enum(["none", "auto", "manual"]).optional(),
+  tdsSection: z.enum(tdsSectionCodes).nullable().optional(),
+  tdsAmount: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/).optional(),
 });
 
 // ── Payment Gateway Configs ───────────────────────────────────

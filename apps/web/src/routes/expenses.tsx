@@ -23,6 +23,7 @@ import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { usePageSize } from "@/hooks/usePageSize";
 import { SortableTh, type SortOption, type SortState } from "@/components/ui/Table";
+import { TdsExpensePanel, emptyTdsExpense, type TdsExpenseValue } from "@/components/TdsExpensePanel";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 
 export const Route = createFileRoute("/expenses")({
@@ -94,6 +95,7 @@ function ExpensesPage() {
   const [editExpenseId, setEditExpenseId] = useState<string | null>(null);
   const deleteConfirm = useDeleteConfirmation();
   const [form, setForm] = useState<ExpenseFormState>(EMPTY_FORM);
+  const [tds, setTds] = useState<TdsExpenseValue>(emptyTdsExpense);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof ExpenseFormState, string>>>({});
   const [exporting, setExporting] = useState(false);
 
@@ -203,6 +205,7 @@ function ExpensesPage() {
   function openAdd() {
     setEditExpenseId(null);
     setForm({ ...EMPTY_FORM, expenseDate: todayISODate() });
+    setTds(emptyTdsExpense);
     setFormErrors({});
     setShowAddModal(true);
   }
@@ -217,6 +220,12 @@ function ExpensesPage() {
       expenseDate: formatDateInput(exp.expenseDate),
       referenceNumber: exp.referenceNumber || "",
     });
+    setTds({
+      mode: exp.tdsMode ?? "none",
+      partyId: exp.partyId ?? "",
+      section: exp.tdsSection ?? "",
+      amount: exp.tdsMode === "manual" ? exp.tdsAmount : "",
+    });
     setFormErrors({});
     setShowAddModal(true);
   }
@@ -227,6 +236,8 @@ function ExpensesPage() {
     if (!form.amount || isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0)
       errs.amount = "Valid amount required";
     if (!form.mode) errs.mode = "Payment mode is required";
+    if (tds.mode !== "none" && !tds.partyId) errs.amount = "Choose who was paid to deduct TDS";
+    if (tds.mode === "manual" && !tds.section) errs.amount = "Choose the TDS section";
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -240,6 +251,10 @@ function ExpensesPage() {
       mode: form.mode as any,
       expenseDate: toISOString(form.expenseDate),
       referenceNumber: form.referenceNumber.trim() || undefined,
+      tdsMode: tds.mode,
+      partyId: tds.mode === "none" ? null : tds.partyId,
+      tdsSection: tds.mode === "none" || !tds.section ? null : (tds.section as any),
+      tdsAmount: tds.mode === "manual" ? (parseFloat(tds.amount) || 0).toFixed(2) : undefined,
     };
     if (editExpenseId) {
       updateMutation.mutate({ id: editExpenseId, data: payload });
@@ -271,7 +286,7 @@ function ExpensesPage() {
         pg++;
       }
 
-      const headers = ["Date", "Category", "Description", "Mode", "Reference", "Amount"];
+      const headers = ["Date", "Category", "Description", "Mode", "Reference", "Amount", "TDS", "Paid"];
       const rows = allData.map((exp: any) => [
         formatDate(exp.expenseDate),
         exp.category || "",
@@ -279,6 +294,8 @@ function ExpensesPage() {
         exp.mode,
         exp.referenceNumber || "",
         exp.amount,
+        exp.tdsAmount ?? "0.00",
+        (parseFloat(exp.amount) - parseFloat(exp.tdsAmount ?? "0")).toFixed(2),
       ]);
 
       downloadCSV(`expenses_${dateRange.preset}`, headers, rows);
@@ -379,6 +396,11 @@ function ExpensesPage() {
                       </td>
                       <td className="text-right tabular-nums font-semibold text-red-600 whitespace-nowrap">
                         {formatCurrency(exp.amount)}
+                        {parseFloat(exp.tdsAmount) > 0 && (
+                          <span className="block text-[11px] font-normal text-text-tertiary">
+                            incl. TDS {formatCurrency(exp.tdsAmount)} · {exp.tdsSection}
+                          </span>
+                        )}
                       </td>
                       <td className="text-right" onClick={(e) => e.stopPropagation()}>
                         {/* Rows don't open on click, so Edit is the way in. */}
@@ -494,6 +516,15 @@ function ExpensesPage() {
                 placeholder="Brief note about this expense"
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              />
+            </div>
+            <div className="col-span-2">
+              <TdsExpensePanel
+                amount={parseFloat(form.amount) || 0}
+                expenseDate={toISOString(form.expenseDate)}
+                expenseId={editExpenseId}
+                value={tds}
+                onChange={setTds}
               />
             </div>
           </div>

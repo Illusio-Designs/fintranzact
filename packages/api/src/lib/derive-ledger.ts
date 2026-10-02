@@ -19,7 +19,7 @@
  *                    → Dr 1512 Input IGST  / Cr 2000 Payable (inter-state)
  *   Payment Received → Dr 1000/1010 Cash/Bank / Cr 1100 Receivable
  *   Payment Made     → Dr 2000 Payable / Cr 1000/1010 Cash/Bank
- *   Expense          → Dr 5xxx (by category) / Cr 1000/1010 Cash/Bank
+ *   Expense          → Dr 5xxx (by category) / Cr 1000/1010 Cash/Bank (net) + Cr 2200 TDS Payable
  *   Credit Note / Sales Return  → Dr 4010 Sales Returns + Dr Output GST / Cr 1100 Receivable
  *   Debit Note (sale-side)      → Dr 1100 Receivable / Cr 4000 Sales + Cr Output GST
  *   Debit Note / Purchase Return → Dr 2000 Payable / Cr 5010 Purchase Returns + Cr Input GST
@@ -530,6 +530,7 @@ export async function deriveLedger(
     category: string;
     description: string | null;
     amount: string;
+    tdsAmount: string;
     mode: string;
     expenseDate: Date;
   }> = await db
@@ -538,6 +539,7 @@ export async function deriveLedger(
       category: expenses.category,
       description: expenses.description,
       amount: expenses.amount,
+      tdsAmount: expenses.tdsAmount,
       mode: expenses.mode,
       expenseDate: expenses.expenseDate,
     })
@@ -562,9 +564,11 @@ export async function deriveLedger(
     const cashOrBankCode = exp.mode === "cash" ? "1000" : "1010";
     const cashOrBank = getAccount(coa, cashOrBankCode);
 
-    // Debit expense account, Credit Cash/Bank
+    // Debit expense account (gross), Credit Cash/Bank (net of TDS) and TDS Payable
+    const tds = exp.tdsAmount ?? "0";
     lines.push(debitLine(expAccount, amount));
-    lines.push(creditLine(cashOrBank, amount));
+    lines.push(creditLine(cashOrBank, money.sub(amount, tds)));
+    if (parseFloat(tds) > 0) lines.push(creditLine(getAccount(coa, "2200"), tds));
 
     const narration = exp.description
       ? `${exp.category} — ${exp.description}`

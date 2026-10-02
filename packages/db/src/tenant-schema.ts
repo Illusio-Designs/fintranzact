@@ -984,6 +984,8 @@ export const taxDeductions = pgTable("tax_deductions", {
   partyId: uuid("party_id").notNull().references(() => parties.id, { onDelete: "restrict" }),
   paymentId: uuid("payment_id").references(() => payments.id, { onDelete: "cascade" }),
   invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+  // TDS withheld on an expense entry (rent, professional fees…) points here.
+  expenseId: uuid("expense_id").references(() => expenses.id, { onDelete: "cascade" }),
   sectionCode: text("section_code").notNull(),
   financialYear: text("financial_year").notNull(),
   quarter: integer("quarter").notNull(),
@@ -1000,6 +1002,7 @@ export const taxDeductions = pgTable("tax_deductions", {
   index("tax_deductions_period_idx").on(t.businessId, t.kind, t.direction, t.financialYear, t.quarter),
   index("tax_deductions_party_year_idx").on(t.businessId, t.partyId, t.financialYear, t.sectionCode),
   index("tax_deductions_payment_idx").on(t.paymentId),
+  index("tax_deductions_expense_idx").on(t.expenseId),
   index("tax_deductions_challan_idx").on(t.challanId),
 ]);
 
@@ -1015,6 +1018,13 @@ export const expenses = pgTable("expenses", {
   expenseDate: timestamp("expense_date", { withTimezone: true }).defaultNow().notNull(),
   referenceNumber: text("reference_number"),
   bankAccountId: uuid("bank_account_id").references(() => bankAccounts.id),
+  // Payee (landlord, consultant…) — set when TDS is withheld from the payment.
+  partyId: uuid("party_id").references(() => parties.id, { onDelete: "set null" }),
+  // "none" (no TDS) or "auto" / "manual" when TDS is deducted. The expense
+  // amount is gross; the bank moves amount - tds_amount.
+  tdsMode: text("tds_mode").default("none").notNull(),
+  tdsSection: text("tds_section"),
+  tdsAmount: numeric("tds_amount", { precision: 15, scale: 2 }).default("0").notNull(),
   createdByUserId: uuid("created_by_user_id"),
   createdByName: text("created_by_name"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

@@ -173,6 +173,8 @@ export const tdsRouter = router({
       paymentDate: z.string().datetime().optional(),
       sectionCode: z.enum(tdsSectionCodes).optional(),
       excludePaymentId: z.string().uuid().optional(),
+      /** The expense being edited, so it is not counted against the year twice. */
+      excludeExpenseId: z.string().uuid().optional(),
     }))
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Payment");
@@ -182,6 +184,7 @@ export const tdsRouter = router({
         paymentDate: input.paymentDate ? new Date(input.paymentDate) : undefined,
         sectionCode: input.sectionCode,
         excludePaymentId: input.excludePaymentId,
+        excludeExpenseId: input.excludeExpenseId,
       });
     }),
 
