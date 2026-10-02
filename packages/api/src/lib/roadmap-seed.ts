@@ -2110,6 +2110,33 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-02-entitlements",
+    updates: [
+      {
+        // P4 enforcement built: shared deriveAccess + getEntitlements, a tRPC
+        // gate that refuses writes in read-only mode by default (explicit
+        // allowlist), an explicit policy for every REST route, plan limits and
+        // add-on flags enforced on the server, schedulers skipping read-only
+        // tenants, web banner and prompts, mobile handler and banner, and CLI/MCP
+        // plan_required errors with a billing status command. Tests are written
+        // (unit tests pass); the integration tests had not run against Postgres
+        // when this was ticked, so CI is their first verification. Kept in
+        // progress for that reason and for live checks after the trial start flow.
+        title: "P4. Plan & add-on access enforcement",
+        status: "in_progress",
+        done: [
+          "Shared entitlement check (plan, add-ons, trial, read-only)",
+          "Enforce in every tRPC router and REST endpoint",
+          "Read-only middleware for writes after trial/expiry",
+          "Mobile app: limits, add-ons and read-only handling",
+          "CLI/MCP: same checks and clear errors",
+          "Upgrade prompts in web and mobile",
+          "Tests for each plan, add-on and read-only case",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */
