@@ -4,10 +4,11 @@
  * about an organisation and hands it to the shared pure deriveAccess, so web,
  * mobile and the API agree.
  *
- * What is cached (30s per organisation) is the loaded data, not the verdict:
- * the clock is applied on every call, so a trial or grace period ends on time
- * even inside the cache window. Every billing, plan, trial and status change
- * calls invalidateEntitlements so the change shows at once on this server.
+ * What is cached (30s per organisation) is the subscription data, not the
+ * verdict: the clock is applied on every call, so a trial or grace period ends
+ * on time even inside the cache window. The organisation row (plan, status,
+ * trial end) is read fresh on every call. Every billing change calls
+ * invalidateEntitlements so the subscription data shows at once on this server.
  *
  * Overdue billing transitions (grace over → halted, cancel at period end,
  * scheduled downgrade, demo renewal) are applied here, once per load and only
@@ -40,14 +41,11 @@ export interface Entitlements extends Access {
   limits: PlanLimits;
 }
 
+/** What is cached: the subscription-derived data. The tenant row (plan, status, trial) is read fresh. */
 interface Snapshot {
-  plan: string;
-  tenantStatus: string;
-  trialEndsAt: Date | null;
   planSubscription: AccessPlanSubscription | null;
   everHadPlanSubscription: boolean;
   addons: AccessAddon[];
-  limits: PlanLimits;
 }
 
 type SubRow = {
@@ -82,12 +80,6 @@ async function loadSubs(tenantId: string): Promise<SubRow[]> {
 }
 
 async function loadSnapshot(tenantId: string): Promise<Snapshot> {
-  const [tenant] = await controlDb
-    .select({ plan: tenants.plan, status: tenants.status, trialEndsAt: tenants.trialEndsAt })
-    .from(tenants)
-    .where(eq(tenants.id, tenantId))
-    .limit(1);
-
   let subs = await loadSubs(tenantId);
   if (transitionDue(subs, new Date())) {
     await applyLazyTransitions(tenantId);
@@ -97,20 +89,29 @@ async function loadSnapshot(tenantId: string): Promise<Snapshot> {
   const planRows = subs.filter((s) => s.kind === "plan");
   const planSub = planRows.find((s) => s.status === "active" || s.status === "past_due" || s.status === "halted") ?? null;
 
-  // A tenant that no longer exists behaves like the legacy default so callers
-  // that only read limits keep working.
-  const plan = tenant?.plan ?? "free";
   return {
-    plan,
-    tenantStatus: tenant?.status ?? "active",
-    trialEndsAt: tenant?.trialEndsAt ?? null,
     planSubscription: planSub ? { status: planSub.status, graceUntil: planSub.graceUntil, currentPeriodEnd: planSub.currentPeriodEnd } : null,
     everHadPlanSubscription: planRows.length > 0,
     addons: subs
       .filter((s) => s.kind === "addon" && s.addon && (s.status === "active" || s.status === "past_due"))
       .map((s) => ({ addon: s.addon!, status: s.status, graceUntil: s.graceUntil })),
-    limits: await getPlanLimits(plan),
   };
+}
+
+/**
+ * The organisation row is read on every call (one primary-key lookup), never
+ * cached: a plan or status change made by anything that does not know about the
+ * cache (another process, a direct database edit, a request already in flight
+ * when the change landed) must show at once. A tenant that no longer exists
+ * behaves like the legacy default so callers that only read limits keep working.
+ */
+async function loadTenant(tenantId: string): Promise<{ plan: string; tenantStatus: string; trialEndsAt: Date | null }> {
+  const [tenant] = await controlDb
+    .select({ plan: tenants.plan, status: tenants.status, trialEndsAt: tenants.trialEndsAt })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+  return { plan: tenant?.plan ?? "free", tenantStatus: tenant?.status ?? "active", trialEndsAt: tenant?.trialEndsAt ?? null };
 }
 
 /** What the organisation may do right now: access state, add-ons and plan limits. */
@@ -120,16 +121,17 @@ export async function getEntitlements(tenantId: string, now: Date = new Date()):
     snap = await loadSnapshot(tenantId);
     cacheSet(tenantId, snap);
   }
+  const tenant = await loadTenant(tenantId);
   const access = deriveAccess({
-    plan: snap.plan,
-    tenantStatus: snap.tenantStatus,
-    trialEndsAt: snap.trialEndsAt,
+    plan: tenant.plan,
+    tenantStatus: tenant.tenantStatus,
+    trialEndsAt: tenant.trialEndsAt,
     planSubscription: snap.planSubscription,
     everHadPlanSubscription: snap.everHadPlanSubscription,
     addons: snap.addons,
     now,
   });
-  return { ...access, plan: snap.plan, tenantStatus: snap.tenantStatus, limits: snap.limits };
+  return { ...access, plan: tenant.plan, tenantStatus: tenant.tenantStatus, limits: await getPlanLimits(tenant.plan) };
 }
 
 /**

@@ -8,20 +8,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const h = vi.hoisted(() => ({
   tenant: { plan: "pro", status: "active", trialEndsAt: null } as { plan: string; status: string; trialEndsAt: Date | null } | null,
   subs: [] as Array<Record<string, unknown>>,
-  loads: 0,
+  loads: 0, // organisation-row reads (every call)
+  wheres: 0, // all where() calls: row reads + subscription loads
   lazy: vi.fn(async () => {}),
 }));
 
 vi.mock("@fintranzact/db", async () => {
   const actual = await vi.importActual<typeof import("@fintranzact/db")>("@fintranzact/db");
   // Tenant row comes through .where().limit(); the subscription list is awaited after .where().
-  const where = () =>
-    Object.assign(Promise.resolve(h.subs), {
+  const where = () => {
+    h.wheres++;
+    return Object.assign(Promise.resolve(h.subs), {
       limit: async () => {
         h.loads++;
         return h.tenant ? [h.tenant] : [];
       },
     });
+  };
   const chain = { from: () => chain, where };
   return { ...actual, controlDb: { select: () => chain } };
 });
@@ -40,6 +43,8 @@ import { entitlementDataOf, entitlementError, limitError } from "../lib/entitlem
 import { router } from "../trpc.js";
 
 const DAY = 86_400_000;
+/** Subscription-list loads: the where() calls that were not organisation-row reads. */
+const subLoads = () => h.wheres - h.loads;
 const planSub = (over: Record<string, unknown> = {}) => ({
   kind: "plan", addon: null, status: "active", graceUntil: null, currentPeriodEnd: new Date(Date.now() + 10 * DAY), ...over,
 });
@@ -49,6 +54,7 @@ beforeEach(() => {
   h.tenant = { plan: "pro", status: "active", trialEndsAt: null };
   h.subs = [];
   h.loads = 0;
+  h.wheres = 0;
   h.lazy.mockClear();
 });
 
@@ -80,16 +86,26 @@ describe("getEntitlements", () => {
     expect((await getEntitlements("t1")).addons).toMatchObject({ payroll: true, store_pro: false });
   });
 
-  it("caches per organisation for the cache window and reloads after invalidation", async () => {
+  it("caches the subscription data per organisation for the cache window and reloads it after invalidation", async () => {
     await getEntitlements("t1");
     await getEntitlements("t1");
-    expect(h.loads).toBe(1);
+    expect(subLoads()).toBe(1);
+    expect(h.loads).toBe(2); // the organisation row is read on every call
     await getEntitlements("t2");
-    expect(h.loads).toBe(2);
+    expect(subLoads()).toBe(2);
     h.subs = [planSub({ status: "halted" })];
-    expect((await getEntitlements("t1")).readOnly).toBe(false); // still the cached picture
+    expect((await getEntitlements("t1")).readOnly).toBe(false); // still the cached subscription picture
     invalidateEntitlements("t1");
     expect((await getEntitlements("t1")).readOnly).toBe(true);
+  });
+
+  it("shows a plan, status or trial change at once, with no invalidation (the organisation row is never cached)", async () => {
+    h.tenant!.plan = "free";
+    expect((await getEntitlements("t1")).limits.maxBusinesses).toBe(PLAN_DEFAULTS.free.limits.maxBusinesses);
+    h.tenant!.plan = "forever_free"; // changed behind the cache's back (another process, a direct edit, a request in flight)
+    expect((await getEntitlements("t1")).limits).toEqual(PLAN_DEFAULTS.forever_free.limits);
+    h.tenant!.status = "suspended";
+    expect(await getEntitlements("t1")).toMatchObject({ readOnly: true, reason: "tenant_suspended" });
   });
 
   it("applies the clock on every call, so a trial ends on time inside the cache window", async () => {
@@ -98,7 +114,7 @@ describe("getEntitlements", () => {
     expect(await getEntitlements("t1", now)).toMatchObject({ state: "trialing", trialDaysLeft: 1 });
     const later = new Date(now.getTime() + DAY);
     expect(await getEntitlements("t1", later)).toMatchObject({ state: "trial_expired", readOnly: true });
-    expect(h.loads).toBe(1);
+    expect(subLoads()).toBe(1);
   });
 
   describe("lazy billing transitions", () => {
