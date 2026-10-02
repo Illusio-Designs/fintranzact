@@ -1,13 +1,10 @@
 /**
  * reports.spec.ts — Layer 1 (Presence) specification for /reports.
  *
- * The Reports page uses a two-panel layout:
- *   - Left sidebar: group headings (Financial, Receivables & Payables,
- *     Inventory, Payments & Tax) with individual report buttons beneath each.
- *   - Right panel: active report content with a sticky date-range bar.
- *
- * Default active report is "Daybook" (persisted in localStorage; the global
- * setup uses a fresh context so localStorage is empty → falls back to daybook).
+ * The Reports page is a Reports Centre: categories on the left (Favourites
+ * and Recently viewed first), the selected category's reports on the right,
+ * and "Go to a report" to find any report by name. A report opens at
+ * /reports?report=<id> with a trail back.
  */
 import { test, expect, waitForPageReady } from "../helpers/fixtures";
 
@@ -21,29 +18,25 @@ test.describe("Reports — Presence", () => {
     await waitForPageReady(page);
   });
 
-  test("renders sidebar with Daybook entry visible", async ({ page }) => {
-    // Sidebar always renders all report buttons; Daybook is in the Financial group
-    await expect(
-      page.getByText("Daybook").first(),
-    ).toBeVisible({ timeout: 10_000 });
-  });
-
-  test("renders report group headings", async ({ page }) => {
-    // Each group label is rendered as uppercase tracking text above the report list
-    for (const group of ["Financial", "Receivables", "Inventory", "Payments"]) {
-      await expect(
-        page.getByText(group, { exact: false }).first(),
-      ).toBeVisible();
+  test("renders the report categories", async ({ page }) => {
+    const rail = page.getByRole("navigation", { name: "Report categories" });
+    for (const group of ["Favourites", "Recently viewed", "Business overview", "Receivables", "Inventory", "Accountant"]) {
+      await expect(rail.getByRole("button", { name: new RegExp(`^${group}`) })).toBeVisible({ timeout: 10_000 });
     }
   });
 
-  test("renders individual report buttons in sidebar", async ({ page }) => {
-    for (const report of [
-      "Daybook",
-      "Sales Register",
-      "Outstanding Report",
-    ]) {
-      await expect(page.getByText(report).first()).toBeVisible();
+  test("lists the favourite reports first", async ({ page }) => {
+    for (const report of ["Outstanding Report", "Profit & Loss", "Sales Register"]) {
+      await expect(page.getByRole("button", { name: report, exact: true })).toBeVisible();
     }
+  });
+
+  test("finds and opens a report with Go to a report", async ({ page }) => {
+    await page.getByRole("searchbox", { name: "Go to a report" }).fill("daybook");
+    await page.getByRole("button", { name: "Daybook", exact: true }).click();
+    await expect(page).toHaveURL(/report=daybook/);
+    await expect(page.getByRole("heading", { name: "Daybook", level: 1 })).toBeVisible();
+    await page.getByRole("navigation", { name: "Where you are" }).getByRole("button", { name: "Reports" }).click();
+    await expect(page.getByRole("heading", { name: "Reports", level: 1 })).toBeVisible();
   });
 });

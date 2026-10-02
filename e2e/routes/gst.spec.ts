@@ -9,9 +9,8 @@
  * The global setup seeds a business with gstin "27AABCU9603R1ZM" so the
  * GST-registered variant is expected.
  *
- * Tabs always present regardless of GST status:
- *   Profit & Loss, Trial Balance, Balance Sheet, Aging Report,
- *   Party Ledger, Tally Export.
+ * Profit & Loss, Trial Balance, Balance Sheet, Ageing Report, Party Ledger
+ * and Tally Export live in Reports; this page links there.
  *
  * Period selector (month + year dropdowns) is visible when the GSTR-1 or
  * GSTR-3B tab is active (which is the default).
@@ -40,10 +39,14 @@ test.describe("GST / Tax Reports — Presence", () => {
     await expect(page.getByText("GSTR-1").first()).toBeVisible();
   });
 
-  test("renders always-present report tabs", async ({ page }) => {
-    for (const tab of ["Profit & Loss", "Trial Balance", "Balance Sheet"]) {
-      await expect(page.getByText(tab).first()).toBeVisible();
+  test("renders the GST return tabs and points to Reports for the statements", async ({ page }) => {
+    const tabs = page.getByTestId("gst-report-tabs");
+    for (const tab of ["GSTR-3B", "GSTR-9"]) {
+      await expect(tabs.getByRole("button", { name: tab })).toBeVisible();
     }
+    // P&L, trial balance and the rest moved to Reports
+    await expect(tabs.getByRole("button", { name: "Profit & Loss" })).toHaveCount(0);
+    await expect(page.getByTestId("app-content").getByRole("link", { name: "Reports", exact: true })).toHaveAttribute("href", /\/reports\?report=pnl/);
   });
 
   test("renders period selector with current year", async ({ page }) => {
