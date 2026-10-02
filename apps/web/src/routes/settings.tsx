@@ -32,6 +32,8 @@ function SettingsPage() {
   const navigate = useNavigate();
   const { tab: linkedTab } = Route.useSearch();
   const [tab, setTab] = useState(() => linkedTab || sessionStorage.getItem("settings-tab") || "business");
+  // A link to ?tab=billing while Settings is already open (banner, toast action).
+  useEffect(() => { if (linkedTab) setTab(linkedTab); }, [linkedTab]);
   const handleTabChange = (t: string) => { setTab(t); sessionStorage.setItem("settings-tab", t); };
   // Always refetched on opening Settings: the document counters ("Next #")
   // move with every invoice, payment or order saved elsewhere in the app.
