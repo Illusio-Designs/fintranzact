@@ -14,7 +14,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { FintranzactClient } from "../client.js";
 import { wrapTool } from "../lib/errors.js";
 
-const MEMBER_ROLES = ["admin", "seller_manager", "seller", "accountant"] as const;
+const MEMBER_ROLES = ["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"] as const;
 
 export function registerTenantTools(server: McpServer, client: FintranzactClient) {
 
@@ -62,13 +62,13 @@ export function registerTenantTools(server: McpServer, client: FintranzactClient
       "Invite a user to join the current tenant by email address.",
       "Requires admin or owner role in the current tenant.",
       "The invitation link is valid for 7 days. The raw token is returned exactly once — save it to send via email.",
-      "Available roles: 'admin' (full access), 'seller_manager' (manage sales team), 'seller' (create invoices), 'accountant' (read-only reports).",
+      "Available roles: 'admin' (full access), 'seller_manager' (manage sales team), 'seller' (create invoices), 'accountant' (bookkeeping: payments, expenses, bank), 'auditor' (read-only accountant), 'ca_filing' (read-only accountant who can also prepare and file GST returns).",
     ].join(" "),
     {
       email: z.string().email()
         .describe("Email address of the person to invite."),
       role: z.enum(MEMBER_ROLES).default("seller")
-        .describe("Role to assign: 'admin', 'seller_manager', 'seller', or 'accountant'."),
+        .describe("Role to assign: 'admin', 'seller_manager', 'seller', 'accountant', 'auditor', or 'ca_filing'."),
     },
     wrapTool(async (input) => {
       const result = await client.tenant.inviteMember(input.email, input.role);
@@ -114,13 +114,13 @@ export function registerTenantTools(server: McpServer, client: FintranzactClient
     [
       "Change the role of an existing tenant member. Requires admin or owner role.",
       "Cannot change the role of a superadmin or owner.",
-      "Available roles: 'admin' (full access), 'seller_manager', 'seller', 'accountant' (read-only).",
+      "Available roles: 'admin' (full access), 'seller_manager', 'seller', 'accountant' (bookkeeping), 'auditor' (read-only), 'ca_filing' (read-only plus GST filing).",
     ].join(" "),
     {
       user_id: z.string().uuid()
         .describe("UUID of the member whose role you want to change."),
       role: z.enum(MEMBER_ROLES)
-        .describe("New role: 'admin', 'seller_manager', 'seller', or 'accountant'."),
+        .describe("New role: 'admin', 'seller_manager', 'seller', 'accountant', 'auditor', or 'ca_filing'."),
     },
     wrapTool(async (input) => {
       const result = await client.tenant.updateMemberRole(input.user_id, input.role);

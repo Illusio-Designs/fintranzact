@@ -4,7 +4,7 @@ import type { Context } from "./context.js";
 import { getTenantDb, type TenantDatabase, controlDb, businesses, businessMembers, tenantMembers } from "@fintranzact/db";
 import { backfillLegacyBusinessMembers } from "./lib/business-membership.js";
 import { eq, and } from "drizzle-orm";
-import { defineAbilityFor, mapDbRole, type AppAbility } from "./lib/permissions.js";
+import { defineAbilityFor, mapDbRole, caRoleMutationAllowed, CA_READ_ONLY_MESSAGE, CA_FILING_ONLY_MESSAGE, type AppAbility } from "./lib/permissions.js";
 import { getMaintenanceStatus } from "./lib/maintenance-cache.js";
 import { isFirstPartyRequestedWith } from "./lib/client-headers.js";
 import { entitlementDataOf, entitlementError } from "./lib/entitlement-error.js";
@@ -294,7 +294,7 @@ export const businessProcedure = baseProcedure.use(isAuthenticated).use(hasTenan
 // Tenant membership proves the user belongs to the tenant;
 // business_members determines what they can do inside the selected business.
 function withPermissions() {
-  return t.middleware(async ({ ctx, next }) => {
+  return t.middleware(async ({ ctx, type, path, next }) => {
     const user = ctx.user as NonNullable<Context["user"]>;
     const tenantId = ctx.tenantId as string;
     const businessId = ctx.businessId as string;
@@ -335,6 +335,16 @@ function withPermissions() {
     const permissionRole = businessMembership.role === "admin"
       ? (tenantRole === "superadmin" ? "superadmin" : "admin")
       : tenantRole;
+
+    // Mutation backstop for the accountant access roles: they may only call the
+    // allowlisted filing mutations, whatever a procedure's own CASL check says
+    // (some mutations are gated only by a read check, e.g. share.create).
+    if (type === "mutation" && !caRoleMutationAllowed(permissionRole, path)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: permissionRole === "auditor" ? CA_READ_ONLY_MESSAGE : CA_FILING_ONLY_MESSAGE,
+      });
+    }
 
     const ability = defineAbilityFor({
       userId: user.id,

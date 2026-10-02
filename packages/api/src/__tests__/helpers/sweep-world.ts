@@ -31,7 +31,7 @@ import { genProcedureInput } from "./sweep-input.js";
 
 export const CANARY = "ZZCANARYB";
 
-export const SWEEP_ROLES = ["owner", "admin", "seller_manager", "seller", "accountant"] as const;
+export const SWEEP_ROLES = ["owner", "admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"] as const;
 export type SweepRole = (typeof SWEEP_ROLES)[number];
 
 export type Caller = ReturnType<typeof createTestCaller>;
@@ -101,6 +101,8 @@ export async function buildSweepWorld(): Promise<SweepWorld> {
     seller: await mk("seller", `seller.a.${stamp}@sweep.in`),
     viewer: await mk("viewer", `viewer.a.${stamp}@sweep.in`),
     accountant: await mk("accountant", `accountant.a.${stamp}@sweep.in`),
+    auditor: await mk("auditor", `auditor.a.${stamp}@sweep.in`),
+    ca_filing: await mk("ca_filing", `cafiling.a.${stamp}@sweep.in`),
   };
   const ownerB = await createUser({ email: `owner.b.${stamp}@sweep.in`, name: `Owner ${CANARY}` });
   await addMember(tenantB.id, ownerB.id, "owner");

@@ -2,7 +2,7 @@ import { FintranzactClient, FintranzactApiError } from "../../client.js";
 import { requireAuth } from "../../config.js";
 import { fatalError, outputJSON, EXIT, success } from "../../output.js";
 
-const VALID_ROLES = ["admin", "seller_manager", "seller", "accountant"] as const;
+const VALID_ROLES = ["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"] as const;
 type TenantRole = typeof VALID_ROLES[number];
 
 interface InviteResult {

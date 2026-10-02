@@ -59,8 +59,8 @@ describe("twoFactorRequiredForMember", () => {
       required: false, blocked: false, graceEndsAt: null,
     });
   });
-  it("admins policy covers owner/superadmin/admin only", () => {
-    for (const role of ["owner", "superadmin", "admin"]) {
+  it("admins policy covers owner/superadmin/admin and the accountant access roles only", () => {
+    for (const role of ["owner", "superadmin", "admin", "auditor", "ca_filing"]) {
       expect(twoFactorRequiredForMember({ ...base, policy: "admins", role }).required).toBe(true);
     }
     for (const role of ["member", "viewer", "seller", "seller_manager", "accountant"]) {

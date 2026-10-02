@@ -18,8 +18,8 @@ export const MAX_CHALLENGE_ATTEMPTS = 5;
 export const LOCKOUT_FAILURE_THRESHOLD = 5;
 export const BACKUP_CODE_COUNT = 10;
 
-/** Roles an "admins" policy applies to. */
-export const TWO_FACTOR_ADMIN_ROLES = ["owner", "superadmin", "admin"] as const;
+/** Roles an "admins" policy applies to. Accountant roles are included: they see every number and may file returns. */
+export const TWO_FACTOR_ADMIN_ROLES = ["owner", "superadmin", "admin", "auditor", "ca_filing"] as const;
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;

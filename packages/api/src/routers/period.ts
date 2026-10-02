@@ -19,7 +19,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { businesses, financialYearCloses, periodLocks } from "@fintranzact/db";
 import { financialYearRange, istDateParts, istReturnPeriod } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
-import { requireCan } from "../lib/permissions.js";
+import { requireCan, canMarkGstFiled } from "../lib/permissions.js";
 import { withAudit } from "../lib/audit.js";
 import { formatLockDate, formatReturnPeriod, indianDay, loadPeriodLockState } from "../lib/period-lock.js";
 import { buildYearCloseSnapshot, startYearOf, yearBounds, yearCloseWarnings } from "../lib/year-close.js";
@@ -86,6 +86,7 @@ export const periodRouter = router({
         .sort((a, b) => b.returnPeriod.localeCompare(a.returnPeriod)),
       closedYears: closes,
       canLock,
+      canMarkGstFiled: canMarkGstFiled(ctx.ability),
       canUnlock: ctx.role === "superadmin",
       today: today(),
       latestLockableDate: yesterday(),
@@ -161,7 +162,8 @@ export const periodRouter = router({
   lockGstMonth: memberProcedure
     .input(z.object({ returnPeriod, note }))
     .mutation(withAudit(async ({ input, ctx }) => {
-      requireCan(ctx.ability, "create", "PeriodLock");
+      // Lockers, and the filing accountant (who files returns but may not lock books).
+      requireCan(ctx.ability, "create", canMarkGstFiled(ctx.ability) && !ctx.ability.can("create", "PeriodLock") ? "GstReport" : "PeriodLock");
       if (input.returnPeriod >= istReturnPeriod(new Date())) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `${formatReturnPeriod(input.returnPeriod)} isn't over yet, so its return can't be marked as filed.` });
       }

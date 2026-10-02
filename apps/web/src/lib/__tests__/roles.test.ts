@@ -8,7 +8,9 @@ describe("formatRole", () => {
     expect(formatRole("admin")).toBe("Admin");
     expect(formatRole("seller_manager")).toBe("Sales Manager");
     expect(formatRole("seller")).toBe("Seller");
-    expect(formatRole("accountant")).toBe("Accountant");
+    expect(formatRole("accountant")).toBe("Accountant (bookkeeping)");
+    expect(formatRole("auditor")).toBe("Accountant (read-only)");
+    expect(formatRole("ca_filing")).toBe("Accountant (filing)");
     expect(formatRole("member")).toBe("Member");
   });
 
@@ -18,7 +20,7 @@ describe("formatRole", () => {
   });
 
   it("roleLabels covers every role used in the CASL permissions system", () => {
-    const expectedRoles = ["owner", "superadmin", "admin", "seller_manager", "seller", "accountant", "member"];
+    const expectedRoles = ["owner", "superadmin", "admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing", "member"];
     for (const role of expectedRoles) {
       expect(roleLabels[role]).toBeDefined();
     }

@@ -27,7 +27,7 @@ export function registerTenantCommands(program: Command): void {
   tenant
     .command("invite <email>")
     .description("Invite a user to the tenant")
-    .option("--role <role>", "Role: admin, seller_manager, seller, accountant (default: seller)")
+    .option("--role <role>", "Role: admin, seller_manager, seller, accountant, auditor, ca_filing (default: seller)")
     .option("--json", "JSON output")
     .action(async (email, opts) => {
       const { tenantInviteCommand } = await import("../../commands/tenant/invite.js");
@@ -46,7 +46,7 @@ export function registerTenantCommands(program: Command): void {
 
   tenant
     .command("update-role <userId> <role>")
-    .description("Update a member's role (admin, seller_manager, seller, accountant)")
+    .description("Update a member's role (admin, seller_manager, seller, accountant, auditor, ca_filing)")
     .option("--json", "JSON output")
     .action(async (userId, role, opts) => {
       const { tenantUpdateRoleCommand } = await import("../../commands/tenant/update-role.js");

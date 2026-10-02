@@ -6,7 +6,9 @@ export const roleLabels: Record<string, string> = {
   seller_manager: "Sales Manager",
   member: "Member",
   seller: "Seller",
-  accountant: "Accountant",
+  accountant: "Accountant (bookkeeping)",
+  auditor: "Accountant (read-only)",
+  ca_filing: "Accountant (filing)",
 };
 
 /** Get a display-friendly label for a role code. */

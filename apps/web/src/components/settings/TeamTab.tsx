@@ -12,6 +12,8 @@ const roleOptions = [
   { value: "seller_manager", label: formatRole("seller_manager") },
   { value: "seller", label: formatRole("seller") },
   { value: "accountant", label: formatRole("accountant") },
+  { value: "auditor", label: formatRole("auditor") },
+  { value: "ca_filing", label: formatRole("ca_filing") },
 ];
 
 function TeamSection() {
@@ -196,7 +198,7 @@ function TeamSection() {
                             <Listbox
                               value={m.role}
                               onChange={(role) =>
-                                updateRole.mutate({ userId: m.userId, role: role as "admin" | "seller_manager" | "seller" | "accountant" })
+                                updateRole.mutate({ userId: m.userId, role: role as "admin" | "seller_manager" | "seller" | "accountant" | "auditor" | "ca_filing" })
                               }
                               options={roleOptions}
                             />
@@ -251,7 +253,7 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    inviteMutation.mutate({ email, role: role as "admin" | "seller_manager" | "seller" | "accountant" });
+    inviteMutation.mutate({ email, role: role as "admin" | "seller_manager" | "seller" | "accountant" | "auditor" | "ca_filing" });
   }
 
   return (

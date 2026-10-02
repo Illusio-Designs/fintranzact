@@ -24,7 +24,9 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   seller_manager: "Seller Manager",
   seller: "Seller",
-  accountant: "Accountant",
+  accountant: "Accountant (bookkeeping)",
+  auditor: "Accountant (read-only)",
+  ca_filing: "Accountant (filing)",
   member: "Member",
   viewer: "Viewer",
 };
@@ -33,7 +35,9 @@ const INVITE_ROLES: Array<{ key: string; label: string }> = [
   { key: "admin", label: "Admin" },
   { key: "seller_manager", label: "Seller Manager" },
   { key: "seller", label: "Seller" },
-  { key: "accountant", label: "Accountant" },
+  { key: "accountant", label: "Accountant (bookkeeping)" },
+  { key: "auditor", label: "Accountant (read-only)" },
+  { key: "ca_filing", label: "Accountant (filing)" },
 ];
 
 function RoleBadge({ role }: { role: string }) {

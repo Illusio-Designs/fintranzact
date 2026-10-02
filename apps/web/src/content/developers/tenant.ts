@@ -398,7 +398,7 @@ resp = httpx.post(
       auth: "protected",
       input: [
         { name: "email", type: "string (email)", required: true, description: "Email address to invite" },
-        { name: "role", type: "enum", required: false, description: "Role to assign when invitation is accepted", default: "seller", enumValues: ["admin", "seller_manager", "seller", "accountant"] },
+        { name: "role", type: "enum", required: false, description: "Role to assign when invitation is accepted", default: "seller", enumValues: ["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"] },
       ],
       output: {
         description: "The raw invitation token (for the email link) and expiration date.",
@@ -650,7 +650,7 @@ httpx.post(
       auth: "protected",
       input: [
         { name: "userId", type: "string (UUID)", required: true, description: "The user ID whose role to change" },
-        { name: "role", type: "enum", required: true, description: "The new role to assign", enumValues: ["admin", "seller_manager", "seller", "accountant"] },
+        { name: "role", type: "enum", required: true, description: "The new role to assign", enumValues: ["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"] },
       ],
       output: {
         description: "Success confirmation.",
@@ -676,7 +676,7 @@ httpx.post(
       gotchas: [
         "Only owners, superadmins, and admins can change roles. Returns FORBIDDEN otherwise.",
         "Cannot change the role of an owner or superadmin — these are immutable.",
-        "Available roles: `admin` (full access), `seller_manager` (manage sellers), `seller` (create invoices), `accountant` (financial access).",
+        "Available roles: `admin` (full access), `seller_manager` (manage sellers), `seller` (create invoices), `accountant` (bookkeeping: payments, expenses, bank), `auditor` (read-only access to every book and report), `ca_filing` (read-only plus preparing and filing GST returns).",
       ],
       relatedEndpoints: ["tenant-members", "tenant-remove-member"],
     },

@@ -414,7 +414,7 @@ export const tenantRouter = router({
   inviteMember: tenantProcedure
     .input(z.object({
       email: z.string().email(),
-      role: z.enum(["admin", "seller_manager", "seller", "accountant"]).default("seller"),
+      role: z.enum(["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"]).default("seller"),
     }))
     .mutation(async ({ input, ctx }) => {
       // Check caller has permission (owner/superadmin or admin)
@@ -752,7 +752,7 @@ export const tenantRouter = router({
   updateMemberRole: tenantProcedure
     .input(z.object({
       userId: z.string().uuid(),
-      role: z.enum(["admin", "seller_manager", "seller", "accountant"]),
+      role: z.enum(["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"]),
     }))
     .mutation(async ({ input, ctx }) => {
       const [callerMembership] = await controlDb.select({ role: tenantMembers.role })

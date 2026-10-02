@@ -15,6 +15,8 @@ export const memberRoleEnum = pgEnum("member_role", [
   "owner", "admin", "member", "viewer",
   // New CASL-based roles (require ALTER TYPE migration in production)
   "superadmin", "seller_manager", "seller", "accountant",
+  // Accountant access (read-only / filing-only); see docs/ACCOUNTANT-ACCESS.md
+  "auditor", "ca_filing",
 ]);
 
 // ── Tenants ────────────────────────────────────────────────────
