@@ -19,7 +19,7 @@ import { PillTabs } from "@/components/ui/Tabs";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
 import { useDateRange, getGranularity } from "@/hooks/useDateRange";
 import { Icon, IconCircle, type IconSvgElement } from "@/components/ui/Icon";
-import { Alert02Icon, Analytics01Icon, ArrowDown01Icon, ArrowUp01Icon, Award01Icon, Cancel01Icon, ChartBarLineIcon, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineData01Icon, Coins01Icon, CreditCardIcon, FireIcon, Invoice01Icon, Invoice03Icon, MoneyReceive01Icon, MoneySend01Icon, PackageIcon, PieChartIcon, SproutIcon, Rocket01Icon, ShoppingCart01Icon, StarIcon, Target02Icon, UserGroupIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, ArrowDownLeft01Icon, ArrowUpRight01Icon, ReceiptDollarIcon, Analytics01Icon, ArrowDown01Icon, ArrowUp01Icon, Award01Icon, Cancel01Icon, ChartBarLineIcon, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineData01Icon, Coins01Icon, CreditCardIcon, FireIcon, Invoice01Icon, Invoice03Icon, PackageIcon, PieChartIcon, SproutIcon, Rocket01Icon, ShoppingCart01Icon, StarIcon, Target02Icon, UserGroupIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 
 // ─── Milestone banner ─────────────────────────────────────────────────────────
 
@@ -389,6 +389,11 @@ function renderResponsive(children: React.ReactElement, width: string, height: s
 // ─── Panel primitives ─────────────────────────────────────────────────────────
 
 /** Card surface used by every dashboard section. */
+const TONE = {
+  brand: "bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300",
+  in: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400",
+  out: "bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400",
+};
 const PANEL = "rounded-2xl border border-border-light bg-surface-0";
 
 function PanelHeader({
@@ -1047,15 +1052,17 @@ function SummaryCards({
   const grossProfit = parseFloat(data.grossProfit);
   const netProfit = parseFloat(data.netProfit);
 
-  const hero: Array<{ label: string; value: string; note: string; icon: IconSvgElement }> = [
-    { label: "Sales", value: data.totalSales, note: periodLabel, icon: ChartLineData01Icon },
-    { label: "Purchases", value: data.totalPurchases, note: periodLabel, icon: ShoppingCart01Icon },
-    { label: "To collect", value: data.receivable, note: "Receivable today", icon: MoneyReceive01Icon },
-    { label: "To pay", value: data.payable, note: "Payable today", icon: MoneySend01Icon },
+  // Each figure opens the report behind it. Money coming in is green, going out amber, so the two
+  // "today" cards read apart at a glance.
+  const hero: Array<{ label: string; value: string; note: string; icon: IconSvgElement; report: string; tone: string }> = [
+    { label: "Sales", value: data.totalSales, note: periodLabel, icon: ChartLineData01Icon, report: "sales-register", tone: TONE.brand },
+    { label: "Purchases", value: data.totalPurchases, note: periodLabel, icon: ShoppingCart01Icon, report: "purchase-register", tone: TONE.brand },
+    { label: "To collect", value: data.receivable, note: "Receivable today", icon: ArrowDownLeft01Icon, report: "outstanding", tone: TONE.in },
+    { label: "To pay", value: data.payable, note: "Payable today", icon: ArrowUpRight01Icon, report: "outstanding", tone: TONE.out },
   ];
   const secondary: Array<{ label: string; value: number; icon: IconSvgElement; signed?: boolean }> = [
     { label: "Cash position", value: parseFloat(data.cashInHand), icon: Wallet01Icon },
-    { label: "Expenses", value: parseFloat(data.totalExpenses), icon: Invoice01Icon },
+    { label: "Expenses", value: parseFloat(data.totalExpenses), icon: ReceiptDollarIcon },
     { label: "Gross profit", value: grossProfit, icon: grossProfit >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon, signed: true },
     { label: "Net profit", value: netProfit, icon: netProfit >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon, signed: true },
   ];
@@ -1064,10 +1071,19 @@ function SummaryCards({
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {hero.map((c) => (
-          <div key={c.label} className={cn(PANEL, "p-4 sm:p-5")}>
+          <Link
+            key={c.label}
+            to="/reports"
+            search={{ report: c.report }}
+            aria-label={`${c.label}: ${formatCurrency(c.value)}. Open the report`}
+            className={cn(
+              PANEL,
+              "group block p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md focus-visible:-translate-y-0.5 motion-reduce:transform-none sm:p-5 dark:hover:border-brand-700",
+            )}
+          >
             <div className="flex items-center justify-between gap-2">
               <span className="text-ui font-semibold text-text-tertiary">{c.label}</span>
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300">
+              <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-transform duration-150 group-hover:scale-105", c.tone)}>
                 <Icon icon={c.icon} size={18} />
               </span>
             </div>
@@ -1078,7 +1094,7 @@ function SummaryCards({
               {formatCurrency(c.value)}
             </p>
             <p className="mt-1 truncate text-xs text-text-tertiary">{c.note}</p>
-          </div>
+          </Link>
         ))}
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, cn, todayISODate, toISOString, formatDateInput } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
@@ -14,9 +15,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteConfirmDialog } from "@/components/ui/DeleteConfirmDialog";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
-import { SegmentedControl } from "@/components/ui/Tabs";
+import { PillTabs, SegmentedControl } from "@/components/ui/Tabs";
+import { Badge } from "@/components/ui/Badge";
+import { Pagination } from "@/components/ui/Pagination";
+import { RowActions, tidyMenu } from "@/components/ui/Menu";
+import { SortableTh, SortMenu, TableScroll, type SortOption, type SortState } from "@/components/ui/Table";
+import { usePageSize } from "@/hooks/usePageSize";
 import { Icon } from "@/components/ui/Icon";
-import { AlertCircleIcon, ArrowRight01Icon, Copy01Icon, Delete02Icon, PencilEdit02Icon, Tick02Icon, UnavailableIcon } from "@hugeicons/core-free-icons";
+import { AlertCircleIcon, ArrowRight01Icon, Delete02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 
 import { Spinner } from "@/components/ui/Spinner";
 export const Route = createFileRoute("/journal-entries")({
@@ -350,6 +356,7 @@ function JournalEntriesPage() {
           onEdit={openEdit}
           onVoid={(id) => setVoidEntryId(id)}
           onSaveAsTemplate={handleSaveAsTemplate}
+          onNew={openCreate}
         />
       ) : (
         <TemplatesTab
@@ -643,6 +650,15 @@ function JournalEntriesPage() {
 
 // ── Entries Tab ─────────────────────────────────────────────────
 
+type EntrySortKey = "date" | "number" | "amount";
+const SORT_OPTIONS: SortOption<EntrySortKey>[] = [
+  { key: "date", dir: "desc", label: "Newest first" },
+  { key: "date", dir: "asc", label: "Oldest first" },
+  { key: "amount", dir: "desc", label: "Amount: high to low" },
+  { key: "amount", dir: "asc", label: "Amount: low to high" },
+  { key: "number", dir: "asc", label: "Entry #: low to high" },
+];
+
 function EntriesTab({
   entries,
   isLoading,
@@ -654,6 +670,7 @@ function EntriesTab({
   onEdit,
   onVoid,
   onSaveAsTemplate,
+  onNew,
 }: {
   entries: any;
   isLoading: boolean;
@@ -665,11 +682,53 @@ function EntriesTab({
   onEdit: (entry: any) => void;
   onVoid: (id: string) => void;
   onSaveAsTemplate: (entry: any) => void;
+  onNew: () => void;
 }) {
+  const [search] = usePageSearch("Search entry # or narration…");
+  const [status, setStatus] = useState("all");
+  const [sort, setSort] = useState<SortState<EntrySortKey>>({ key: "date", dir: "desc" });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("journal-entries", 25);
+  const tableRef = useRef<HTMLDivElement>(null);
+  // A new search, filter, sort or rows-per-page choice starts from the first page.
+  useEffect(() => setPage(1), [search, status, sort, pageSize, dateRange.preset]);
+  // A new page starts at its first row.
+  useEffect(() => { tableRef.current?.scrollTo({ top: 0 }); }, [page]);
+
+  const all: any[] = entries ?? [];
+  const matching = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? all.filter((e) => `${e.entryNumber} ${e.narration ?? ""}`.toLowerCase().includes(q)) : all;
+  }, [all, search]);
+  const voidedCount = matching.filter((e) => e.isVoided).length;
+  const statusTabs = [
+    { value: "all", label: "All", count: matching.length },
+    { value: "active", label: "Active", count: matching.length - voidedCount },
+    { value: "voided", label: "Voided", count: voidedCount },
+  ];
+  const rows = useMemo(() => {
+    const list = matching.filter((e) => status === "all" || (status === "voided") === !!e.isVoided);
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const val = (e: any) =>
+      sort.key === "amount" ? parseFloat(e.totalAmount) : sort.key === "number" ? e.entryNumber : new Date(e.entryDate).getTime();
+    // Ties keep the newest entry first.
+    return [...list].sort((x, y) => {
+      const a = val(x), b = val(y);
+      const c = typeof a === "string" ? a.localeCompare(b as string, undefined, { numeric: true }) : (a as number) - (b as number);
+      return c * dir || y.entryNumber.localeCompare(x.entryNumber, undefined, { numeric: true });
+    });
+  }, [matching, status, sort]);
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // The last page emptied out (or rows per page grew): step back.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
+  const filtered = !!search.trim() || status !== "all";
+
   return (
-    <div className="card mb-5 overflow-hidden">
-      {/* Date filters */}
-      <div className="px-4 py-3 border-b border-border-light">
+    <div className="mb-5 rounded-2xl border border-border-light bg-surface-0 overflow-clip">
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap border-b border-border-light px-4 py-2">
         <DateRangeBar
           preset={dateRange.preset}
           onPresetChange={dateRange.setPreset}
@@ -677,64 +736,73 @@ function EntriesTab({
           customTo={dateRange.customTo}
           onCustomChange={dateRange.setCustomRange}
         />
+        <div className="min-w-0 max-w-full overflow-x-auto sm:ml-auto">
+          <PillTabs tabs={statusTabs} value={status} onChange={setStatus} />
+        </div>
       </div>
 
       {/* Table */}
       {isLoading ? (
         <JournalTableSkeleton />
-      ) : !entries?.length ? (
-        <EmptyState
-          title="No journal entries"
-          description="Create your first journal entry to record manual accounting adjustments"
-        />
+      ) : !total ? (
+        filtered ? (
+          <EmptyState
+            title="No matching entries"
+            description={search.trim() ? `No ${status === "all" ? "" : status + " "}entries match "${search.trim()}".` : `No ${status} entries in this period.`}
+          />
+        ) : (
+          <EmptyState
+            title="No journal entries"
+            description="Create your first journal entry to record manual accounting adjustments"
+            action={<button className="btn-primary" onClick={onNew}>+ New Entry</button>}
+          />
+        )
       ) : (
         <>
-          <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
-            <table className="data-table">
-              <thead className="sticky top-0 z-10">
+          <Pagination placement="top" page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={pageSize}>
+            <SortMenu options={SORT_OPTIONS} sort={sort} onSort={setSort} />
+          </Pagination>
+          <TableScroll ref={tableRef}>
+            <table className="data-table w-full">
+              <thead>
                 <tr>
-                  <th className="w-8"></th>
-                  <th>Entry #</th>
-                  <th>Date</th>
+                  <th className="w-8"><span className="sr-only">Expand</span></th>
+                  <SortableTh sortKey="number" sort={sort} onSort={setSort}>Entry #</SortableTh>
+                  <SortableTh sortKey="date" sort={sort} onSort={setSort} firstDir="desc">Date</SortableTh>
                   <th>Narration</th>
-                  <th className="text-right">Amount</th>
+                  <SortableTh sortKey="amount" sort={sort} onSort={setSort} firstDir="desc" align="right">Amount</SortableTh>
                   <th>Source</th>
                   <th>Status</th>
-                  <th></th>
+                  <th className="text-right"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry: any) => {
-                  const isExpanded = expandedEntryId === entry.id;
-                  const isVoided = entry.isVoided;
-                  const isManual = entry.source === "manual";
-
-                  return (
-                    <EntryRow
-                      key={entry.id}
-                      entry={entry}
-                      isExpanded={isExpanded}
-                      isVoided={isVoided}
-                      isManual={isManual}
-                      expandedEntry={expandedEntry}
-                      isFetchingDetail={isFetchingDetail}
-                      onToggleExpand={() => onToggleExpand(entry.id)}
-                      onEdit={() => onEdit(entry)}
-                      onVoid={() => onVoid(entry.id)}
-                      onSaveAsTemplate={() => onSaveAsTemplate(entry)}
-                    />
-                  );
-                })}
+                {pageRows.map((entry: any) => (
+                  <EntryRow
+                    key={entry.id}
+                    entry={entry}
+                    isExpanded={expandedEntryId === entry.id}
+                    isVoided={entry.isVoided}
+                    isManual={entry.source === "manual"}
+                    expandedEntry={expandedEntry}
+                    isFetchingDetail={isFetchingDetail}
+                    onToggleExpand={() => onToggleExpand(entry.id)}
+                    onEdit={() => onEdit(entry)}
+                    onVoid={() => onVoid(entry.id)}
+                    onSaveAsTemplate={() => onSaveAsTemplate(entry)}
+                  />
+                ))}
               </tbody>
             </table>
-          </div>
-
-          <div className="px-4 py-3 border-t border-border-light">
-            <p className="text-xs text-text-tertiary">
-              {entries.length.toLocaleString()} entr
-              {entries.length !== 1 ? "ies" : "y"}
-            </p>
-          </div>
+          </TableScroll>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={total}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+          />
         </>
       )}
     </div>
@@ -770,7 +838,7 @@ function EntryRow({
     <>
       <tr
         className={cn(
-          "group cursor-pointer transition-colors hover:bg-surface-1",
+          "cursor-pointer",
           isVoided && "opacity-60",
           isExpanded && "bg-surface-1"
         )}
@@ -815,61 +883,32 @@ function EntryRow({
 
         {/* Source badge */}
         <td>
-          <span
-            className={cn(
-              "inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium uppercase",
-              isManual
-                ? "bg-blue-600/[0.08] text-blue-700 dark:text-blue-400"
-                : "bg-surface-2 text-text-secondary"
-            )}
-          >
+          <Badge color={isManual ? "bg-blue-600/[0.08] text-blue-700 dark:text-blue-400" : "bg-surface-2 text-text-secondary"}>
             {isManual ? "Manual" : "System"}
-          </span>
+          </Badge>
         </td>
 
         {/* Status */}
         <td>
           {isVoided ? (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium bg-red-600/[0.08] text-red-600 dark:text-red-400">
-              Voided
-            </span>
+            <Badge color="bg-red-600/[0.08] text-red-600 dark:text-red-400">Voided</Badge>
           ) : (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400">
-              Active
-            </span>
+            <Badge color="bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400">Active</Badge>
           )}
         </td>
 
         {/* Actions */}
         <td className="text-right" onClick={(e) => e.stopPropagation()}>
-          {isManual && !isVoided && (
-            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={onEdit}
-                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors"
-                aria-label="Edit entry"
-                title="Edit"
-              >
-                <Icon icon={PencilEdit02Icon} size={14} />
-              </button>
-              <button
-                onClick={onVoid}
-                className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
-                aria-label="Void entry"
-                title="Void"
-              >
-                <Icon icon={UnavailableIcon} size={14} />
-              </button>
-              <button
-                onClick={onSaveAsTemplate}
-                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors"
-                aria-label="Save as template"
-                title="Save as template"
-              >
-                <Icon icon={Copy01Icon} size={14} />
-              </button>
-            </div>
-          )}
+          <RowActions
+            label={entry.entryNumber}
+            items={tidyMenu([
+              { label: isExpanded ? "Hide lines" : "Show lines", onSelect: onToggleExpand },
+              isManual && !isVoided && { label: "Edit entry", onSelect: onEdit },
+              isManual && !isVoided && { label: "Save as template", onSelect: onSaveAsTemplate },
+              { kind: "separator" },
+              isManual && !isVoided && { label: "Void entry", danger: true, onSelect: onVoid },
+            ])}
+          />
         </td>
       </tr>
 
@@ -984,19 +1023,19 @@ function TemplatesTab({
   }
 
   return (
-    <div className="card overflow-hidden">
-      <table className="data-table">
+    <div className="rounded-2xl border border-border-light bg-surface-0 overflow-clip">
+      <table className="data-table w-full">
         <thead>
           <tr>
             <th>Name</th>
             <th>Narration</th>
             <th>Lines</th>
-            <th></th>
+            <th className="text-right"><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
           {templates.map((tpl: any) => (
-            <tr key={tpl.id} className="group">
+            <tr key={tpl.id}>
               <td className="font-medium text-text-primary">{tpl.name}</td>
               <td className="text-text-secondary max-w-[250px] truncate">
                 {tpl.narration || "--"}
@@ -1005,21 +1044,14 @@ function TemplatesTab({
                 {tpl.lines?.length ?? 0} lines
               </td>
               <td className="text-right">
-                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => onUse(tpl)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/20 transition-colors"
-                  >
-                    Use
-                  </button>
-                  <button
-                    onClick={() => onDelete(tpl.id, tpl.name)}
-                    className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-600/[0.08] transition-colors"
-                    aria-label="Delete template"
-                  >
-                    <Icon icon={Delete02Icon} size={14} />
-                  </button>
-                </div>
+                <RowActions
+                  label={tpl.name}
+                  items={[
+                    { label: "Use template", onSelect: () => onUse(tpl) },
+                    { kind: "separator" },
+                    { label: "Delete template", danger: true, onSelect: () => onDelete(tpl.id, tpl.name) },
+                  ]}
+                />
               </td>
             </tr>
           ))}

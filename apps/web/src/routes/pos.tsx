@@ -1,5 +1,10 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState, type ReactNode } from "react";
+import { CashierIcon } from "@hugeicons/core-free-icons";
+import { toast } from "@/hooks/useToast";
+import { Icon } from "@/components/ui/Icon";
+import { Logo } from "@/components/ui/Logo";
+import { Spinner } from "@/components/ui/Spinner";
 import { trpc, getBusinessId, setBusinessId } from "@/lib/trpc";
 import { POSShell } from "@/features/pos/POSShell";
 
@@ -44,6 +49,19 @@ function POSRoute() {
     }
   }, [activeBiz, preselectedId]);
 
+  const utils = trpc.useUtils();
+  const { data: session } = trpc.auth.me.useQuery();
+  const canEnable = ["owner", "admin", "superadmin"].includes(session?.role ?? "");
+  // Turning POS on here opens the register straight away, no reload needed.
+  const enable = trpc.business.setPosEnabled.useMutation({
+    onSuccess: () => {
+      toast.success("POS mode enabled");
+      utils.business.list.invalidate();
+      utils.business.getById.invalidate();
+    },
+    onError: (err) => toast.error("Could not turn on POS", err.message),
+  });
+
   const ensureWalkIn = trpc.business.ensureWalkInParty.useMutation();
   const [walkInPartyId, setWalkInPartyId] = useState<string | null>(null);
 
@@ -67,50 +85,80 @@ function POSRoute() {
   }, [activeBiz?.id, activeBiz?.posEnabled]);
 
   if (isPending) {
-    return <div className="p-10 text-center text-text-secondary">Loading POS…</div>;
+    return <POSGate busy title="Opening the register…" />;
   }
 
   if (!activeBiz) {
     return (
-      <div className="p-10 max-w-xl mx-auto text-center space-y-4">
-        <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-[#0f1b3d] dark:text-white">No business yet</h1>
-        <p className="text-sm text-text-secondary">
-          POS needs at least one business. Create one in Settings first.
-        </p>
-        <button
-          className="btn-primary"
-          onClick={() => navigate({ to: "/settings" })}
-        >
-          Go to Settings
-        </button>
-      </div>
+      <POSGate
+        title="No business yet"
+        description="The register bills for a business. Create one in Settings first."
+        actions={
+          <button className="btn-primary" onClick={() => navigate({ to: "/settings" })}>
+            Go to Settings
+          </button>
+        }
+      />
     );
   }
 
   if (!activeBiz.posEnabled) {
     return (
-      <div className="p-10 max-w-xl mx-auto text-center space-y-4">
-        <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-[#0f1b3d] dark:text-white">POS mode is off for {activeBiz.name}</h1>
-        <p className="text-sm text-text-secondary">
-          Enable Point-of-Sale in Settings, then reload.
-        </p>
-        <button
-          className="btn-primary"
-          onClick={() => navigate({ to: "/settings", search: { tab: "pos" } as any })}
-        >
-          Open Settings → POS
-        </button>
-      </div>
+      <POSGate
+        title="Point-of-Sale is off"
+        description={`Turn it on to bill walk-in customers of ${activeBiz.name} from a fullscreen counter: quick item grid, barcode scanning, parked sales and thermal receipts.`}
+        note={canEnable ? "You can turn it off again any time in Settings → Point-of-Sale." : "Ask an owner or admin to turn it on in Settings → Point-of-Sale."}
+        actions={
+          <>
+            <Link to="/" className="btn-secondary">Back to Dashboard</Link>
+            {canEnable && (
+              <button
+                className="btn-primary"
+                disabled={enable.isPending}
+                onClick={() => enable.mutate({ id: activeBiz.id, enabled: true })}
+              >
+                {enable.isPending ? "Turning on…" : "Turn on POS"}
+              </button>
+            )}
+          </>
+        }
+      />
     );
   }
 
   if (!walkInPartyId) {
-    return (
-      <div className="p-10 text-center text-text-secondary">
-        Preparing register…
-      </div>
-    );
+    return <POSGate busy title="Preparing the register…" />;
   }
 
   return <POSShell businessId={activeBiz.id} walkInPartyId={walkInPartyId} />;
+}
+
+/** The screen before the register opens: POS off, no business, or loading. Fullscreen, like the register. */
+function POSGate({
+  title,
+  description,
+  note,
+  actions,
+  busy,
+}: {
+  title: string;
+  description?: string;
+  note?: string;
+  actions?: ReactNode;
+  busy?: boolean;
+}) {
+  return (
+    <main className="flex min-h-dvh flex-col items-center justify-center gap-8 bg-surface-1 px-4 py-10">
+      <Logo className="h-8" />
+      <div className="w-full max-w-md animate-scale-in rounded-2xl border border-border-light bg-surface-0 p-8 text-center shadow-sm">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-400">
+          {busy ? <Spinner size="sm" /> : <Icon icon={CashierIcon} size={24} />}
+        </div>
+        <h1 className="font-display text-xl font-extrabold tracking-[-0.02em] text-text-primary text-balance">{title}</h1>
+        {description && <p className="mt-2 text-sm leading-relaxed text-text-secondary">{description}</p>}
+        {actions && <div className="mt-6 flex flex-wrap justify-center gap-3">{actions}</div>}
+        {note && <p className="mt-4 text-xs text-text-tertiary">{note}</p>}
+      </div>
+    </main>
+  );
 }

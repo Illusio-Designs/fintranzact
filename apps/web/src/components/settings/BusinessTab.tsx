@@ -234,55 +234,67 @@ function BusinessCard({
   biz: any;
   onEdit: () => void;
 }) {
-  const fields: [string, string | undefined | null][] = [
-    ["Business Type", biz.businessType],
-    ["Legal Name", biz.legalName],
-    ["GSTIN", biz.gstin],
-    ["PAN", biz.pan],
-    ["TAN", biz.tan],
-    ["CIN", biz.cin],
-    ["LLPIN", biz.llpin],
-    ["Udyam Number", biz.udyamNumber],
-    ["IEC Code", biz.iecCode],
-    ["LUT ARN", biz.lutArn],
-    ["Phone", biz.phone],
-    ["Email", biz.email],
-    ["Address", biz.address],
-    ["City", biz.city],
-    ["State", biz.state],
-    ["Pincode", biz.pincode],
-    ["Currency", biz.currency],
+  const typeLabel = BUSINESS_TYPE_OPTIONS.find((o) => o.value === biz.businessType)?.label ?? biz.businessType;
+  const address = [biz.address, biz.city, [biz.state, biz.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  // Grouped the way the edit form is; registrations not added yet are listed once instead of as a column of dashes.
+  const sections: { title: string; mono?: boolean; fields: [string, string | undefined | null][] }[] = [
+    { title: "Business", fields: [["Business type", typeLabel], ["Legal name", biz.legalName], ["Currency", biz.currency]] },
+    { title: "Contact", fields: [["Phone", biz.phone], ["Email", biz.email], ["Address", address]] },
+    {
+      title: "Tax & registration",
+      mono: true,
+      fields: [
+        ["GSTIN", biz.gstin],
+        ["PAN", biz.pan],
+        ["TAN", biz.tan],
+        ["CIN", biz.cin],
+        ["LLPIN", biz.llpin],
+        ["Udyam number", biz.udyamNumber],
+        ["IEC code", biz.iecCode],
+        ["LUT ARN", biz.lutArn],
+      ],
+    },
   ];
 
   return (
     <div className="card p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold text-text-primary">
-          {biz.name}
-        </h3>
-
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <h3 className="min-w-0 truncate text-base font-semibold text-text-primary">{biz.name}</h3>
         <button className="btn-secondary" onClick={onEdit}>
           Edit
         </button>
       </div>
 
-      {/* One column on a phone; long values (emails, legal names) wrap
-          instead of pushing the page sideways. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
-        {fields.map(([label, value]) => (
-          <div key={label} className="min-w-0">
-            <span className="text-xs text-text-tertiary">{label}</span>
-
-            <p
-              className={cn(
-                "break-words",
-                value ? "text-text-primary" : "text-text-tertiary",
+      <div className="divide-y divide-border-light">
+        {sections.map(({ title, mono, fields }) => {
+          const filled = fields.filter(([, v]) => v);
+          const missing = fields.filter(([, v]) => !v).map(([l]) => l);
+          return (
+            <section key={title} className="py-4 first:pt-0 last:pb-0">
+              <h4 className="mb-3 text-2xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">{title}</h4>
+              {/* One column on a phone; long values (emails, legal names) wrap
+                  instead of pushing the page sideways. */}
+              {filled.length > 0 && (
+                <dl className="grid grid-cols-1 gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
+                  {filled.map(([label, value]) => (
+                    <div key={label} className="min-w-0">
+                      <dt className="text-xs text-text-tertiary">{label}</dt>
+                      <dd className={cn("break-words text-text-primary", mono && "font-mono text-ui tracking-wide")}>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
               )}
-            >
-              {value || "—"}
-            </p>
-          </div>
-        ))}
+              {missing.length > 0 && (
+                <p className={cn("text-xs text-text-tertiary", filled.length > 0 && "mt-3")}>
+                  Not added: {missing.join(", ")} ·{" "}
+                  <button type="button" className="font-medium text-brand-600 hover:underline dark:text-brand-400" onClick={onEdit}>
+                    Add
+                  </button>
+                </p>
+              )}
+            </section>
+          );
+        })}
       </div>
     </div>
   );
