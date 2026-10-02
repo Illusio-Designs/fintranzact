@@ -495,7 +495,7 @@ const BEFORE_LAUNCH: RoadmapSeedItem[] = [
 - TDS payable and TCS payable ledgers per section
 - Challan entry (ITNS 281 / challan number, BSR code, date) to mark tax as paid; due-date reminders (by the 7th of the next month, verify with CA)
 - Form 26Q data (TDS on non-salary payments) and Form 27EQ data (TCS), quarterly
-- Form 16A / 27D certificates to download and share
+- Form 16A / 27D certificates to download and share (generated from the books, not TRACES-issued)
 - Filing, certificates and PAN/TAN checks through Sandbox.co.in — see "TDS & TCS return filing and certificates through Sandbox.co.in"`,
     [
       "TDS section master with rates and thresholds per financial year",
@@ -1997,8 +1997,8 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
       {
         // TDS on bills and payments, TDS receivable, TCS on sales, challans and
-        // 26Q/27EQ data. Still to come: TDS on expenses, due-date reminders,
-        // 26AS/AIS reconciliation and certificates.
+        // 26Q/27EQ data. Expenses, reminders, 26AS/AIS and certificates were
+        // ticked by the "2026-10-02-tds-2" batch below.
         title: "TDS & TCS on transactions",
         status: "in_progress",
         done: [
@@ -2040,6 +2040,26 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
         title: "Store Pro add-on billing",
         status: "in_progress",
         done: ["Razorpay subscription billing monthly/yearly"],
+      },
+    ],
+  },
+  {
+    key: "2026-10-02-tds-2",
+    updates: [
+      {
+        // Built after the first TDS batch. Certificates are generated from the
+        // books (not issued by TRACES). Left unticked on purpose: CA
+        // verification; Sandbox filing/certificates are a separate item.
+        title: "TDS & TCS on transactions",
+        status: "in_progress",
+        done: [
+          "TDS section on parties and expense ledgers",
+          "TDS on purchase bills and expense entries",
+          "TDS receivable reconciliation with 26AS / AIS",
+          "Challan entry (BSR code, challan no., date) and due-date reminders",
+          "Form 16A / 27D certificates",
+          "TDS/TCS reports: deducted, paid, pending",
+        ],
       },
     ],
   },

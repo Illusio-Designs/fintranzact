@@ -35,6 +35,10 @@ import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trp
 import { requireCan } from "../lib/permissions.js";
 import { withAudit } from "../lib/audit.js";
 import { previewPartyTds } from "../lib/tds-service.js";
+import { useSandboxProvider } from "../lib/gov-provider.js";
+import { getSandboxClient } from "../lib/sandbox/client.js";
+import { SandboxTdsClient, TdsApiError } from "../lib/sandbox/tds.js";
+import { logger } from "../lib/logger.js";
 import { buildTdsReturn } from "../lib/tds-return.js";
 import { loadTcsSectionRules, tcsForLines } from "../lib/tcs-service.js";
 import { depositDue, depositsDueFromMonths, loadTdsReminders, returnDue } from "../lib/tds-reminders.js";
@@ -186,6 +190,34 @@ export const tdsRouter = router({
         excludePaymentId: input.excludePaymentId,
         excludeExpenseId: input.excludeExpenseId,
       });
+    }),
+
+  /**
+   * Check a party's PAN with Sandbox.co.in. Advisory only: never blocks saving a party or
+   * deducting tax, and never changes the s.206AA no-PAN rate. A failed lookup comes back as
+   * `error`, not an exception. `available:false` when the Sandbox provider is off.
+   */
+  verifyDeductee: memberProcedure
+    .input(z.object({ partyId: z.string().uuid() }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "Party");
+      const sandbox = useSandboxProvider() ? getSandboxClient() : null;
+      if (!sandbox) return { available: false as const };
+      const [party] = await ctx.db
+        .select({ name: parties.name, legalName: parties.legalName, pan: parties.pan })
+        .from(parties)
+        .where(and(eq(parties.id, input.partyId), eq(parties.businessId, ctx.businessId)))
+        .limit(1);
+      if (!party) throw new TRPCError({ code: "NOT_FOUND", message: "Party not found" });
+      if (!party.pan?.trim()) return { available: true as const, checked: false as const, reason: "This party has no PAN on file." };
+      try {
+        const r = await new SandboxTdsClient(sandbox).verifyPan(party.pan, party.legalName || party.name);
+        return { available: true as const, checked: true as const, valid: r.valid, nameMatch: r.nameMatch, status: r.status };
+      } catch (err) {
+        logger.warn({ err, partyId: input.partyId }, "PAN verification failed");
+        const retryable = err instanceof TdsApiError ? err.retryable : false;
+        return { available: true as const, checked: false as const, reason: "PAN verification is unavailable right now.", retryable };
+      }
     }),
 
   /**

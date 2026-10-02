@@ -457,6 +457,7 @@
 | tds.summary | query | authorized | read:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
 | tds.tcsPreview | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tds.updateSection | mutation | authorized | update:Tds | ✓ | ✓ | ✗ | ✗ | ✓ |
+| tds.verifyDeductee | query | authorized | read:Party | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.acceptById | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.acceptInvitation | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.canCreateOrg | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
