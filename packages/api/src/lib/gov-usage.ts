@@ -19,6 +19,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { controlDb, govApiUsage, sandboxCallCounters, billingEvents } from "@fintranzact/db";
 import { gstOnPaise } from "@fintranzact/shared";
 import { logger } from "./logger.js";
+import { isWalletOrQuotaError } from "./sandbox/funding.js";
 
 export type GovDocKind = "e_invoice" | "e_way_bill" | "gstr1_filed" | "gstr3b_filed";
 
@@ -227,11 +228,8 @@ export async function sandboxQuotaStatus(): Promise<QuotaStatus> {
 let lastWalletAlertAt = 0;
 const WALLET_ALERT_GAP_MS = 60 * 60 * 1000;
 
-/** True when a gateway error means our wallet is empty or the plan quota is spent. */
-export function isWalletOrQuotaError(httpStatus: number | undefined, message: string): boolean {
-  if (httpStatus === 402) return true;
-  return /wallet|insufficient (balance|credit)|quota (exceeded|exhausted)|limit exceeded/i.test(message);
-}
+// The pure check lives in sandbox/funding.ts (no DB import) so the client and smoke script can use it.
+export { isWalletOrQuotaError };
 
 /** Alert (at most hourly) that filing is blocked because our Sandbox balance or quota ran out. */
 export async function noteSandboxFundingFailure(httpStatus: number | undefined, message: string): Promise<void> {
@@ -241,8 +239,8 @@ export async function noteSandboxFundingFailure(httpStatus: number | undefined, 
   lastWalletAlertAt = now;
   await raiseSandboxAlert(
     "sandbox.wallet_or_quota_blocked",
-    `Sandbox rejected a call for balance or quota: ${message}. E-invoices and e-way bills may be failing for customers — top up the wallet or raise the plan.`,
-    { httpStatus, message },
+    `Sandbox rejected a call for balance or quota: ${message}. E-invoices, e-way bills, GST filing and GSTIN/HSN lookups may be failing for customers. Top up the Sandbox wallet at console.sandbox.co.in (or raise the plan).`,
+    { httpStatus, rawMessage: message },
   );
 }
 

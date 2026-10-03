@@ -13,7 +13,8 @@
  * are NOT billed to customers and write no gov_api_usage row.
  */
 
-import { SandboxClient, SandboxError } from "./client.js";
+import { SandboxClient, SandboxError, SandboxFundingError } from "./client.js";
+import { fundingFrom } from "./funding.js";
 
 // ── Endpoint (VERIFY against Sandbox docs) ───────────────────
 
@@ -56,6 +57,10 @@ export class HsnLookupError extends Error {
 
 function toError(err: unknown): HsnLookupError {
   if (err instanceof HsnLookupError) return err;
+  if (err instanceof SandboxFundingError) {
+    // Our wallet is empty: callers fall back to the bundled list exactly as for an outage.
+    return fundingFrom(new HsnLookupError("Sandbox is unavailable", "unavailable", err.httpStatus), err);
+  }
   if (err instanceof SandboxError) {
     // Only the status and code are kept; the gateway message is not passed on.
     const s = err.httpStatus;

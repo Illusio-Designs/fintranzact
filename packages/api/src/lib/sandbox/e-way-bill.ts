@@ -17,7 +17,8 @@ import type {
   EWBVehicleUpdateResponse,
   GenerateEWBPayload,
 } from "../ewb-client.js";
-import { SandboxClient, SandboxError, type PortalCredentials } from "./client.js";
+import { SandboxClient, SandboxError, SandboxFundingError, type PortalCredentials } from "./client.js";
+import { fundingFrom } from "./funding.js";
 
 const BASE = "/gst/compliance/e-way-bill";
 
@@ -53,6 +54,9 @@ function unwrap<T>(env: EWBEnvelope<T> | undefined, what: string): T {
 
 function toApiError(err: unknown, what: string): Error {
   if (err instanceof EWBApiError) return err;
+  if (err instanceof SandboxFundingError) {
+    return fundingFrom(new EWBApiError(err.customerMessage, "funding", true), err);
+  }
   if (err instanceof SandboxError) {
     return new EWBApiError(`EWB ${what} failed: ${err.message}`, err.code, err.isRetryable);
   }

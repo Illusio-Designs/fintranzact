@@ -33,7 +33,8 @@ import {
   type GSTR1Report,
   type GSTR3BReport,
 } from "../gst-reports.js";
-import { SandboxClient, SandboxError } from "./client.js";
+import { SandboxClient, SandboxError, SandboxFundingError } from "./client.js";
+import { fundingFrom } from "./funding.js";
 
 // ── Endpoint paths (VERIFY against test-api.sandbox.co.in before go-live) ──
 
@@ -154,6 +155,9 @@ function unwrap<T extends GstnData>(data: T | undefined, what: string, tx?: stri
 
 function toError(err: unknown, what: string): Error {
   if (err instanceof GstReturnsError) return err;
+  if (err instanceof SandboxFundingError) {
+    return fundingFrom(new GstReturnsError(err.customerMessage, "funding", true, err.transactionId), err);
+  }
   if (err instanceof SandboxError) {
     const expired = err.httpStatus === 401 || err.httpStatus === 403;
     return new GstReturnsError(

@@ -36,6 +36,7 @@ import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPError } from "../lib/irp-client.js";
+import { FUNDING_CUSTOMER_MESSAGE, isFundingFailure } from "../lib/sandbox/funding.js";
 import { createIRPClient, useSandboxProvider } from "../lib/gov-provider.js";
 import { recordGovUsage } from "../lib/gov-usage.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
@@ -230,6 +231,9 @@ async function generateIRNForInvoice(
       })
       .where(eq(invoices.id, invoiceId));
 
+    if (isFundingFailure(err)) {
+      throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: FUNDING_CUSTOMER_MESSAGE, cause: err });
+    }
     throw new TRPCError({
       code: isRetryable ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST",
       message: `IRP submission failed: ${errorMsg}`,

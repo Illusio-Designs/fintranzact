@@ -18,7 +18,8 @@
  *   generated from the books, not issued by TRACES.
  */
 
-import { SandboxClient, SandboxError } from "./client.js";
+import { SandboxClient, SandboxError, SandboxFundingError } from "./client.js";
+import { fundingFrom } from "./funding.js";
 
 // ── Endpoint paths (VERIFY against test-api.sandbox.co.in before go-live) ──
 
@@ -45,6 +46,9 @@ export class TdsApiError extends Error {
 
 function toError(err: unknown, what: string): Error {
   if (err instanceof TdsApiError) return err;
+  if (err instanceof SandboxFundingError) {
+    return fundingFrom(new TdsApiError(err.customerMessage, "funding", true, err.transactionId), err);
+  }
   if (err instanceof SandboxError) {
     return new TdsApiError(`${what} failed: ${err.message}`, err.code, err.isRetryable, err.transactionId);
   }
