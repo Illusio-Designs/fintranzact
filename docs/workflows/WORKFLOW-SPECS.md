@@ -1016,7 +1016,7 @@ processDueTemplates:
   FOR EACH template:
     STEP 2: Plan limit check
       COUNT successful runs this month for this business
-      BRANCH: >= the plan's recurringRunsPerMonth (unlimited on the built-in plans)
+      (no plan caps recurring runs; the old skipped_limit branch is gone)
         INSERT recurringInvoiceRun (status="skipped_limit", errorMessage)
         Advance nextRunDate (so we don't retry every tick)
         CONTINUE
@@ -1348,7 +1348,6 @@ The schema defines `shipmentEvents` for status timeline tracking, but the curren
 | maxTeamMembers | 3 | 15 | unlimited | unlimited |
 | maxConcurrentSessions | 3 | 10 | unlimited | unlimited |
 | maxApiKeys | 0 | 3 | unlimited | unlimited |
-| recurringRunsPerMonth | 5 | unlimited | unlimited | unlimited |
 | auditRetentionDays | 30 | 365 | unlimited | unlimited |
 | dataExport | no | yes | yes | yes |
 | onlineStore | no | yes | yes | yes |
@@ -1362,7 +1361,6 @@ The schema defines `shipmentEvents` for status timeline tracking, but the curren
 | maxTeamMembers | tenant.inviteMember | FORBIDDEN error (counts members + pending invites) |
 | maxConcurrentSessions | session creation | FIFO eviction (oldest session deleted, login NOT blocked) |
 | maxApiKeys | apiKey.create | FORBIDDEN error (0 on free = feature gated) |
-| recurringRunsPerMonth | scheduler tick | Run skipped, run record created with status="skipped_limit" |
 | dataExport | business.exportData | FORBIDDEN error |
 
 ---

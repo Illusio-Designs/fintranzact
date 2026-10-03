@@ -242,10 +242,10 @@ describe("billing.demoCheckout", () => {
     invalidatePlanCatalog();
   });
 
-  it("charges the plan's own yearly price when it has one (Starter: ₹2,999 + GST)", async () => {
+  it("charges the plan's own yearly price when it has one (Starter: ₹2,990 + GST)", async () => {
     const { user, tenantId } = await signUp("anjali.starteryearly@mehtatraders.in");
     const result = await caller(user, tenantId).billing.demoCheckout({ plan: "starter", cycle: "yearly", method: "card" });
-    expect(result.amountPaise).toBe(planCheckoutAmount(299, "yearly", 2999).totalPaise);
-    expect(result.amountPaise).toBe(353_882);
+    expect(result.amountPaise).toBe(planCheckoutAmount(299, "yearly", 2990).totalPaise);
+    expect(result.amountPaise).toBe(352_820);
   });
 });

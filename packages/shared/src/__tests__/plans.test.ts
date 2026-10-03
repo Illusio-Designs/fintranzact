@@ -53,9 +53,9 @@ describe("plan catalogue", () => {
 
   it("has the published monthly and yearly prices, ex-GST", () => {
     expect(PLAN_PRICES).toEqual({
-      starter: { monthlyInr: 299, yearlyInr: 2999 },
-      growth: { monthlyInr: 699, yearlyInr: 6999 },
-      business: { monthlyInr: 1499, yearlyInr: 14999 },
+      starter: { monthlyInr: 299, yearlyInr: 2990 },
+      growth: { monthlyInr: 699, yearlyInr: 6990 },
+      business: { monthlyInr: 1499, yearlyInr: 14990 },
     });
     for (const p of PLANS) {
       expect(p.monthlyPriceInr).toBe(PLAN_PRICES[p.id].monthlyInr);
@@ -63,11 +63,11 @@ describe("plan catalogue", () => {
     }
   });
 
-  it("yearly is two months free: ten months of the monthly price, give or take the rounding to a 9", () => {
+  it("yearly is exactly two months free: ten months of the monthly price", () => {
     expect(YEARLY_SAVING_MONTHS).toBe(2);
     expect(yearlyPrice(299)).toBe(2990);
     for (const { monthlyInr, yearlyInr } of Object.values(PLAN_PRICES)) {
-      expect(yearlyInr - monthlyInr * 10).toBe(9);
+      expect(yearlyInr).toBe(monthlyInr * 10);
       expect(yearlyInr).toBeLessThan(monthlyInr * 12);
     }
   });
@@ -84,9 +84,9 @@ describe("plan catalogue", () => {
     expect(withGst(1000)).toBe(1180);
     const monthly = planCheckoutAmount(699, "monthly");
     expect(monthly).toEqual({ basePaise: 69_900, gstPaise: 12_582, totalPaise: 82_482 });
-    const yearly = planCheckoutAmount(699, "yearly", 6999);
-    expect(yearly.basePaise).toBe(699_900);
-    expect(yearly.totalPaise).toBe(699_900 + 125_982);
+    const yearly = planCheckoutAmount(699, "yearly", 6990);
+    expect(yearly.basePaise).toBe(699_000);
+    expect(yearly.totalPaise).toBe(699_000 + 125_820);
     expect(planCheckoutAmount(699, "yearly").basePaise).toBe(699_000); // derived: ten months
   });
 
@@ -94,7 +94,7 @@ describe("plan catalogue", () => {
     expect(formatPlanPrice({ monthlyPriceInr: 299 })).toBe("₹299");
     expect(formatPlanPrice({ monthlyPriceInr: 149900 })).toBe("₹1,49,900");
     expect(formatPlanPrice({ monthlyPriceInr: null })).toBe("Custom");
-    expect(formatYearlyPlanPrice({ monthlyPriceInr: 299, yearlyPriceInr: 2999 })).toBe("₹2,999");
+    expect(formatYearlyPlanPrice({ monthlyPriceInr: 299, yearlyPriceInr: 2990 })).toBe("₹2,990");
     expect(formatYearlyPlanPrice({ monthlyPriceInr: 299, yearlyPriceInr: null })).toBe("₹2,990");
   });
 
@@ -108,7 +108,7 @@ describe("plan catalogue", () => {
 });
 
 describe("plan limits per plan", () => {
-  it("Starter: 1 business, 3 users, no API, no export or store, no PDF branding", () => {
+  it("Starter: 1 business, 3 users, no API, no export or store", () => {
     expect(PLAN_LIMITS.starter).toMatchObject({
       maxBusinesses: 1,
       maxTeamMembers: 3,
@@ -116,7 +116,7 @@ describe("plan limits per plan", () => {
       maxApiKeys: 0,
       dataExport: false,
       onlineStore: false,
-      pdfBranding: false,
+      pdfBranding: true,
       gstReports: true,
       eWayBills: true,
       recurringInvoices: true,
@@ -132,7 +132,7 @@ describe("plan limits per plan", () => {
       maxApiKeys: 3,
       dataExport: true,
       onlineStore: true,
-      pdfBranding: false,
+      pdfBranding: true,
       eInvoicing: true,
       multiWarehouse: true,
       batchesExpiry: true,
@@ -157,12 +157,39 @@ describe("plan limits per plan", () => {
       onboardingHelp: true,
     });
     for (const key of PLAN_FLAG_KEYS) {
-      if (PLAN_LIMITS.growth[key] && key !== "pdfBranding") expect(PLAN_LIMITS.business[key]).toBe(true);
+      if (PLAN_LIMITS.growth[key]) expect(PLAN_LIMITS.business[key]).toBe(true);
     }
   });
 
-  it("no plan shows Fintranzact branding on PDFs", () => {
-    for (const id of PLAN_IDS) expect(PLAN_LIMITS[id].pdfBranding).toBe(false);
+  it("all three plans show the small Powered by Fintranzact line on PDFs (editable per plan)", () => {
+    for (const id of PLAN_IDS) expect(PLAN_LIMITS[id].pdfBranding).toBe(true);
+  });
+});
+
+describe("no plan caps how many documents or records a customer can create", () => {
+  /** The only numeric limits: spec ones (businesses, users) plus the non-creation ones. */
+  const ALLOWED_NUMERIC = ["maxBusinesses", "maxTeamMembers", "maxOwnedOrgs", "maxConcurrentSessions", "maxApiKeys", "auditRetentionDays"];
+
+  it("every plan limit is a boolean flag or one of the allowed numeric limits", () => {
+    for (const id of PLAN_IDS) {
+      const stored = limitsToStored(PLAN_LIMITS[id]);
+      const numeric = Object.entries(stored).filter(([, v]) => typeof v !== "boolean").map(([k]) => k);
+      expect(numeric.sort(), `${id}: a new numeric plan limit must be added to the allowlist on purpose (it must not cap creating documents or records)`).toEqual([...ALLOWED_NUMERIC].sort());
+    }
+  });
+
+  it("the editable settings schema has no other numeric limit either", () => {
+    const shape = planSettingsSchema.shape.limits.shape as Record<string, { _def: { typeName: string } }>;
+    const numeric = Object.entries(shape).filter(([, v]) => v._def.typeName !== "ZodBoolean").map(([k]) => k);
+    expect(numeric.sort()).toEqual([...ALLOWED_NUMERIC].sort());
+  });
+
+  it("no plan card or feature line advertises a document or record count", () => {
+    for (const plan of PLANS) {
+      for (const f of plan.features) {
+        expect(f, `${plan.id}: ${f}`).not.toMatch(/\b\d[\d,]*\s+(invoices?|documents?|quotations?|bills?|orders?|payments?|parties|items|records|e-?way|entries|expenses)\b/i);
+      }
+    }
   });
 });
 
@@ -187,7 +214,7 @@ describe("planSettingsSchema and warnings", () => {
     name: "Growth",
     tagline: "x",
     monthlyPriceInr: 699,
-    yearlyPriceInr: 6999,
+    yearlyPriceInr: 6990,
     features: ["a"],
     highlight: true,
     visible: true,
@@ -219,7 +246,7 @@ describe("planSettingsSchema and warnings", () => {
   });
 
   it("warns, but does not fail, when yearly costs more than 12 months", () => {
-    expect(planSettingsWarnings({ monthlyPriceInr: 699, yearlyPriceInr: 6999 })).toEqual([]);
+    expect(planSettingsWarnings({ monthlyPriceInr: 699, yearlyPriceInr: 6990 })).toEqual([]);
     expect(planSettingsWarnings({ monthlyPriceInr: 699, yearlyPriceInr: 8388 })).toEqual([]); // exactly 12x
     expect(planSettingsWarnings({ monthlyPriceInr: 699, yearlyPriceInr: 8389 })).toHaveLength(1);
     expect(planSettingsWarnings({ monthlyPriceInr: null, yearlyPriceInr: 100 })).toHaveLength(1);

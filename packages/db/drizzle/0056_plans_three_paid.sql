@@ -7,6 +7,8 @@
 --   forever_free -> business + tenants.access_grandfathered = true (permanent full access; testing plan, removed)
 --   free -> starter     pro -> growth     business -> business     enterprise -> business
 --
+-- Yearly prices are exactly ten months of the monthly price (two months free). pdfBranding is true on all three plans
+-- (the small "Powered by Fintranzact" line on PDFs); an admin who changed it keeps their value.
 -- Mirror of oldPlanToNew in packages/shared/src/plan-migration.ts. Rollback notes: docs/ROLLBACK.md.
 -- Stored plan_settings: name, tagline, price, visibility and every limit an admin edited are kept; anything
 -- still equal to the old built-in value becomes the new built-in value. Features text is reset (it is written
@@ -59,29 +61,30 @@ BEGIN
     CASE WHEN o.features IN (m.old_features_code, m.old_features_seed) THEN m.new_features ELSE o.features END AS features,
     (m.new_plan = 'growth') AS highlight,
     (o.visible OR o.plan = 'free') AS visible,
-    m.new_limits || COALESCE(
+    -- recurringRunsPerMonth is gone: no plan caps how many invoices recurring templates make.
+    (m.new_limits || COALESCE(
       (SELECT jsonb_object_agg(e.key, e.value) FROM jsonb_each(o.limits) e
        WHERE e.value IS DISTINCT FROM (m.old_limits -> e.key)),
-      '{}'::jsonb) AS limits,
+      '{}'::jsonb)) - 'recurringRunsPerMonth' AS limits,
     o.updated_at,
     o.updated_by_user_id
   FROM "plan_settings" o
   JOIN (VALUES
-    ('free', 'starter', 'Starter', 'For a single business', 299, 2999,
-      '["1 business and 3 users","Invoices, quotations, payments, parties and items","GST reports and e-way bills","Basic inventory, recurring invoices and POS","No Fintranzact branding on PDFs"]'::jsonb,
-      '{"maxOwnedOrgs":1,"maxBusinesses":1,"maxTeamMembers":3,"maxConcurrentSessions":3,"maxApiKeys":0,"recurringRunsPerMonth":null,"auditRetentionDays":30,"dataExport":false,"onlineStore":false,"pdfBranding":false,"gstReports":true,"eWayBills":true,"recurringInvoices":true,"pos":true,"eInvoicing":false,"multiWarehouse":false,"batchesExpiry":false,"bankReconciliation":false,"manufacturing":false,"approvals":false,"prioritySupport":false,"onboardingHelp":false}'::jsonb,
+    ('free', 'starter', 'Starter', 'For a single business', 299, 2990,
+      '["1 business and 3 users","Invoices, quotations, payments, parties and items","GST reports and e-way bills","Basic inventory, recurring invoices and POS"]'::jsonb,
+      '{"maxOwnedOrgs":1,"maxBusinesses":1,"maxTeamMembers":3,"maxConcurrentSessions":3,"maxApiKeys":0,"auditRetentionDays":30,"dataExport":false,"onlineStore":false,"pdfBranding":true,"gstReports":true,"eWayBills":true,"recurringInvoices":true,"pos":true,"eInvoicing":false,"multiWarehouse":false,"batchesExpiry":false,"bankReconciliation":false,"manufacturing":false,"approvals":false,"prioritySupport":false,"onboardingHelp":false}'::jsonb,
       '{"maxOwnedOrgs":1,"maxBusinesses":1,"maxTeamMembers":3,"maxConcurrentSessions":3,"maxApiKeys":0,"recurringRunsPerMonth":5,"auditRetentionDays":30,"dataExport":false,"onlineStore":false,"pdfBranding":true}'::jsonb,
       '["One business","Up to 3 team members"]'::jsonb,
       '["One business","Up to 3 team members"]'::jsonb),
-    ('pro', 'growth', 'Growth', 'Best for growing businesses', 699, 6999,
+    ('pro', 'growth', 'Growth', 'Best for growing businesses', 699, 6990,
       '["3 businesses and 10 users","Everything in Starter","e-Invoicing","Multiple warehouses, batches and expiry","Bank reconciliation","Basic online store and API access","Data export"]'::jsonb,
-      '{"maxOwnedOrgs":3,"maxBusinesses":3,"maxTeamMembers":10,"maxConcurrentSessions":10,"maxApiKeys":3,"recurringRunsPerMonth":null,"auditRetentionDays":365,"dataExport":true,"onlineStore":true,"pdfBranding":false,"gstReports":true,"eWayBills":true,"recurringInvoices":true,"pos":true,"eInvoicing":true,"multiWarehouse":true,"batchesExpiry":true,"bankReconciliation":true,"manufacturing":false,"approvals":false,"prioritySupport":false,"onboardingHelp":false}'::jsonb,
+      '{"maxOwnedOrgs":3,"maxBusinesses":3,"maxTeamMembers":10,"maxConcurrentSessions":10,"maxApiKeys":3,"auditRetentionDays":365,"dataExport":true,"onlineStore":true,"pdfBranding":true,"gstReports":true,"eWayBills":true,"recurringInvoices":true,"pos":true,"eInvoicing":true,"multiWarehouse":true,"batchesExpiry":true,"bankReconciliation":true,"manufacturing":false,"approvals":false,"prioritySupport":false,"onboardingHelp":false}'::jsonb,
       '{"maxOwnedOrgs":3,"maxBusinesses":5,"maxTeamMembers":15,"maxConcurrentSessions":10,"maxApiKeys":3,"recurringRunsPerMonth":null,"auditRetentionDays":365,"dataExport":true,"onlineStore":true,"pdfBranding":false}'::jsonb,
       '["Advanced automation and workflows","Priority support","Expanded collaboration"]'::jsonb,
       '["Up to 5 businesses and 15 team members","e-Invoicing and e-way bills","Multiple warehouses, batches and expiry","Bank reconciliation","Online store and API access","Data export, no Fintranzact branding on documents"]'::jsonb),
-    ('business', 'business', 'Business', 'Scale without limits', 1499, 14999,
+    ('business', 'business', 'Business', 'Scale without limits', 1499, 14990,
       '["Unlimited businesses and users","Everything in Growth","Manufacturing and bill of materials","Approvals","Full audit history","Priority support and onboarding help"]'::jsonb,
-      '{"maxOwnedOrgs":null,"maxBusinesses":null,"maxTeamMembers":null,"maxConcurrentSessions":null,"maxApiKeys":null,"recurringRunsPerMonth":null,"auditRetentionDays":null,"dataExport":true,"onlineStore":true,"pdfBranding":false,"gstReports":true,"eWayBills":true,"recurringInvoices":true,"pos":true,"eInvoicing":true,"multiWarehouse":true,"batchesExpiry":true,"bankReconciliation":true,"manufacturing":true,"approvals":true,"prioritySupport":true,"onboardingHelp":true}'::jsonb,
+      '{"maxOwnedOrgs":null,"maxBusinesses":null,"maxTeamMembers":null,"maxConcurrentSessions":null,"maxApiKeys":null,"auditRetentionDays":null,"dataExport":true,"onlineStore":true,"pdfBranding":true,"gstReports":true,"eWayBills":true,"recurringInvoices":true,"pos":true,"eInvoicing":true,"multiWarehouse":true,"batchesExpiry":true,"bankReconciliation":true,"manufacturing":true,"approvals":true,"prioritySupport":true,"onboardingHelp":true}'::jsonb,
       '{"maxOwnedOrgs":null,"maxBusinesses":null,"maxTeamMembers":null,"maxConcurrentSessions":null,"maxApiKeys":null,"recurringRunsPerMonth":null,"auditRetentionDays":null,"dataExport":true,"onlineStore":true,"pdfBranding":false}'::jsonb,
       '["Multi-tenant controls","Premium reporting","Dedicated onboarding"]'::jsonb,
       '["Unlimited businesses and team members","Everything in Pro","Manufacturing and bill of materials","Full audit history","Priority support and onboarding help"]'::jsonb)

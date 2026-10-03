@@ -269,9 +269,12 @@ export function PageHero({
 export function CtaBand({
   title = "Ready to set up your business?",
   body = "Sign up, pick a plan and add your business details in a few minutes.",
+  cta = "Start free trial",
 }: {
   title?: string;
   body?: string;
+  /** Button label. */
+  cta?: string;
 }) {
   return (
     <section>
@@ -285,7 +288,7 @@ export function CtaBand({
             to="/register"
             className="inline-flex h-[52px] shrink-0 items-center rounded-xl bg-white px-6 text-base font-bold text-brand-900 transition hover:bg-brand-50"
           >
-            Start free trial
+            {cta}
           </Link>
         </div>
       </div>

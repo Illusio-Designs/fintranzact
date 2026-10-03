@@ -227,10 +227,14 @@ export function signatureBlock(c: Ctx, x: number, y: number, w: number, o: { siz
   return y;
 }
 
-/** Small "Powered by Fintranzact" line for a plan with pdfBranding on, on the last page of a copy. */
+/**
+ * Small "Powered by Fintranzact" line for a plan with pdfBranding on, on the last
+ * page of a copy. It links to brandingUrl (the sign-up page with the partner's
+ * referral code when a partner referred the organisation, else the site).
+ */
 export function branding(c: Ctx, y?: number) {
   if (c.m.data.isPaidPlan) return;
-  text(c.doc, "Powered by Fintranzact", 0, y ?? c.H - 12, { w: c.W, size: 5.5, color: "#a0a0a8", align: "center" });
+  text(c.doc, "Powered by Fintranzact", 0, y ?? c.H - 12, { w: c.W, size: 5.5, color: "#a0a0a8", align: "center", link: c.m.data.brandingUrl });
 }
 
 /** Generic continuation header: seller · title · number, with a rule. */

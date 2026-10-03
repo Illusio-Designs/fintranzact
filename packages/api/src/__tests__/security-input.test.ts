@@ -46,11 +46,10 @@ describe("plan limits — Business is truly unlimited", () => {
     expect(limits.maxTeamMembers).toBe(Infinity);
     expect(limits.maxConcurrentSessions).toBe(Infinity);
     expect(limits.maxApiKeys).toBe(Infinity);
-    expect(limits.recurringRunsPerMonth).toBe(Infinity);
     expect(limits.auditRetentionDays).toBeNull();
     expect(limits.dataExport).toBe(true);
     expect(limits.onlineStore).toBe(true);
-    expect(limits.pdfBranding).toBe(false);
+    expect(limits.pdfBranding).toBe(true);
   });
 });
 

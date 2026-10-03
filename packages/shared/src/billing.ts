@@ -7,6 +7,8 @@
  * checkout, the subscription service and the billing page.
  */
 
+import { isStateCode } from "./indian-states.js";
+import { stateCodeFromGstin } from "./party-compliance.js";
 import { PLAN_GST_RATE_PERCENT, planCheckoutAmount, type BillingCycle, type PlanCheckoutAmount } from "./plans.js";
 
 // ── Add-ons ────────────────────────────────────────────────────────────────
@@ -144,4 +146,37 @@ export function prorationCreditPaise(opts: {
   const left = opts.periodEnd.getTime() - at.getTime();
   const fraction = Math.min(1, Math.max(0, left / whole));
   return Math.round(opts.basePaise * fraction);
+}
+
+// ── GST on Finvera's own invoices: place of supply ─────────────────────────
+
+export interface BillingPlaceOfSupply {
+  /** The state that decides the tax: from the GSTIN, else the billing state; null when unknown. */
+  stateCode: string | null;
+  source: "gstin" | "state" | "none";
+  /** Same state as the seller: CGST + SGST. Otherwise (including unknown) IGST. */
+  intraState: boolean;
+  /** Both a GSTIN and a different billing state were given; the GSTIN won. */
+  stateMismatch: boolean;
+}
+
+/**
+ * Which GST applies to a subscription invoice. A valid GSTIN decides (a
+ * registered buyer's place of supply is its registered state); without one the
+ * billing state does; with neither it is IGST, the safe default. The free-text
+ * address is never used. An invalid GSTIN counts as none.
+ */
+export function billingPlaceOfSupply(
+  customer: { gstin?: string | null; state?: string | null },
+  sellerStateCode: string,
+): BillingPlaceOfSupply {
+  const fromGstin = stateCodeFromGstin(customer.gstin);
+  const given = isStateCode(customer.state) ? customer.state : null;
+  const stateCode = fromGstin ?? given;
+  return {
+    stateCode,
+    source: fromGstin ? "gstin" : given ? "state" : "none",
+    intraState: !!stateCode && stateCode === sellerStateCode,
+    stateMismatch: !!fromGstin && !!given && fromGstin !== given,
+  };
 }

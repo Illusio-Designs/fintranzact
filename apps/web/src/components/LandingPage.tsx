@@ -164,7 +164,7 @@ const TILE_TONES = [
 const FAQS = [
   {
     q: "Is there a free trial?",
-    a: "Yes. Every new organization gets a 14-day free trial on the plan it picks, with no card needed. There is no free plan after the trial, and no plan puts Fintranzact branding on your documents.",
+    a: "Yes. Every new organization gets a 14-day free trial on the plan it picks, with no card needed. There is no free plan after the trial.",
   },
   {
     q: "Do I need a credit card to sign up?",
@@ -172,7 +172,7 @@ const FAQS = [
   },
   {
     q: "Does Fintranzact handle e-Invoicing and e-Way Bills?",
-    a: "Yes. Generate IRN, signed QR codes and e-way bills directly from your invoices, and get file-ready GSTR-1 and GSTR-3B summaries.",
+    a: "Yes. Generate e-way bills on every plan, and IRN with signed QR codes on Growth and Business, directly from your invoices, plus file-ready GSTR-1 and GSTR-3B summaries.",
   },
   {
     q: "Can I bring my existing data?",
@@ -183,8 +183,8 @@ const FAQS = [
     a: "Yes. Invite your team and your accountant with role-based access, across as many businesses as you run.",
   },
   {
-    q: "How is Pro and Business pricing decided?",
-    a: "Paid plans are priced to your team size and needs. Contact us and we'll send a quote.",
+    q: "How much does it cost?",
+    a: "Three plans, Starter, Growth and Business, with prices before 18% GST and two months free on yearly billing.",
   },
 ];
 
@@ -195,7 +195,7 @@ export function LandingPage() {
       announcement={
         <span className="inline-flex flex-wrap items-center justify-center gap-2.5">
           <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-bold tracking-wide text-white">NEW</span>
-          <span>e-Invoicing and e-Way Bills are built into every plan.</span>
+          <span>e-Way Bills are built into every plan, and e-Invoicing comes with Growth.</span>
           <Link to={feature("e-invoicing")} className="inline-flex items-center gap-0.5 font-semibold text-white hover:underline">
             See how
             <Icon icon={ArrowRight01Icon} size={14} strokeWidth={2} />

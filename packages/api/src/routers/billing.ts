@@ -10,6 +10,7 @@ import {
   BILLING_CYCLES,
   planIdSchema,
   effectiveYearlyPriceInr,
+  isStateCode,
   SUBSCRIPTION_STATUS_LABELS,
   cycleAmount,
   entitlementMessage,
@@ -215,6 +216,7 @@ export const billingRouter = router({
         billingName: tenants.billingName,
         billingGstin: tenants.billingGstin,
         billingAddress: tenants.billingAddress,
+        billingState: tenants.billingState,
         billingEmail: tenants.billingEmail,
       })
       .from(tenants)
@@ -286,6 +288,8 @@ export const billingRouter = router({
         gstin: tenant.billingGstin,
         address: tenant.billingAddress,
         email: tenant.billingEmail,
+        /** GST state code, or null. When a GSTIN is set the GSTIN's state decides the tax (see billingPlaceOfSupply). */
+        state: tenant.billingState,
       },
       usage: {
         invoicesThisMonth,
@@ -312,6 +316,8 @@ export const billingRouter = router({
       gstin: z.string().trim().toUpperCase().regex(/^[0-9]{2}[A-Z0-9]{13}$/, "Enter a valid 15-character GSTIN").nullable(),
       address: z.string().trim().max(500).nullable(),
       email: z.string().trim().email().max(254).nullable(),
+      /** GST state code (e.g. "24"), from the shared list; null clears it. Omitted = unchanged. */
+      state: z.string().trim().nullable().optional().refine((v) => v == null || v === "" || isStateCode(v), "Choose a state or UT from the list"),
     }))
     .mutation(async ({ input, ctx }) => {
       const tenantId = await requirePlanManagerTenant(ctx);
@@ -322,6 +328,7 @@ export const billingRouter = router({
           billingGstin: input.gstin,
           billingAddress: input.address,
           billingEmail: input.email,
+          ...(input.state === undefined ? {} : { billingState: input.state || null }),
           updatedAt: new Date(),
         })
         .where(eq(tenants.id, tenantId));

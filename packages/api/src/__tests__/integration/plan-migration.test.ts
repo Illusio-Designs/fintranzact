@@ -1,5 +1,5 @@
 /**
- * Migration 0055 (plans: Starter / Growth / Business) against a real
+ * Migration 0056 (plans: Starter / Growth / Business) against a real
  * database. It builds scratch databases, so it never touches the shared test
  * database:
  *   1. a database migrated to 0054 and seeded with organisations on every
@@ -23,7 +23,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { LEGACY_PLAN_IDS, PLAN_DEFAULTS, PLAN_IDS, PLAN_PRICES, limitsToStored, oldPlanToNew } from "@fintranzact/shared";
 
-const MIGRATION_TAG = "0055_plans_three_paid";
+const MIGRATION_TAG = "0056_plans_three_paid";
 const DB_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../db");
 const baseUrl = process.env.TEST_DATABASE_URL ?? "postgresql://test:test@localhost:5433/fintranzact_test";
 const suffix = `${process.pid}_${Date.now()}`;
@@ -50,7 +50,7 @@ async function runMigrations(sql: ReturnType<typeof postgres>, folder: string) {
   await migrate(drizzle(sql), { migrationsFolder: folder });
 }
 
-/** The unified migration folder without 0055 (and anything after it). */
+/** The unified migration folder without 0056 (and anything after it). */
 function folderBefore(tag: string): string {
   const dst = join(workDir, "before");
   cpSync(join(DB_DIR, "drizzle"), dst, { recursive: true });
@@ -79,7 +79,7 @@ afterAll(async () => {
 
 const T = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
 
-describe("0055: a database with organisations on every old plan", () => {
+describe("0056: a database with organisations on every old plan", () => {
   let sql: ReturnType<typeof postgres>;
 
   beforeAll(async () => {
@@ -106,7 +106,7 @@ describe("0055: a database with organisations on every old plan", () => {
       limits = jsonb_set(limits, '{maxBusinesses}', '7'), features = '["Custom thing"]'::jsonb WHERE plan = 'pro'`;
     await sql`INSERT INTO plan_settings (plan, name, tagline, monthly_price_inr, features, highlight, visible, limits) VALUES
       ('free', 'Free (legacy)', 'Older organisations', 0, '["One business","Up to 3 team members"]', false, false,
-       '{"maxOwnedOrgs":1,"maxBusinesses":1,"maxTeamMembers":4,"maxConcurrentSessions":3,"maxApiKeys":0,"recurringRunsPerMonth":5,"auditRetentionDays":30,"dataExport":false,"onlineStore":false,"pdfBranding":true}'),
+       '{"maxOwnedOrgs":1,"maxBusinesses":1,"maxTeamMembers":4,"maxConcurrentSessions":3,"maxApiKeys":0,"recurringRunsPerMonth":5,"auditRetentionDays":30,"dataExport":false,"onlineStore":false,"pdfBranding":false}'),
       ('forever_free', 'Forever Free', 'Unlimited for life', 0, '["x"]', true, true, '{"maxBusinesses":null}'),
       ('enterprise', 'Enterprise', 'For large organisations', NULL, '["y"]', false, false, '{"maxBusinesses":null}')`;
 
@@ -159,6 +159,7 @@ describe("0055: a database with organisations on every old plan", () => {
     expect(limits.maxBusinesses).toBe(7); // edited, kept
     expect(limits.maxTeamMembers).toBe(PLAN_DEFAULTS.growth.limits.maxTeamMembers); // 15 was the old default: now 10
     expect(limits.eInvoicing).toBe(true); // new flag, plan default
+    expect(limits.pdfBranding).toBe(true); // was false (the old default): the new default is on
   });
 
   it("gives the unedited rows the published names, prices and limits", async () => {
@@ -171,7 +172,7 @@ describe("0055: a database with organisations on every old plan", () => {
       highlight: false,
     });
     expect(starter!.features).toEqual(PLAN_DEFAULTS.starter.features);
-    expect(starter!.limits).toMatchObject({ ...limitsToStored(PLAN_DEFAULTS.starter.limits), maxTeamMembers: 4 }); // 4 was an admin edit of the old free row
+    expect(starter!.limits).toMatchObject({ ...limitsToStored(PLAN_DEFAULTS.starter.limits), maxTeamMembers: 4, pdfBranding: false }); // 4 and the footer switched off were admin edits of the old free row
 
     const [business] = await sql<Record<string, any>[]>`SELECT * FROM plan_settings WHERE plan = 'business'`;
     expect(business).toMatchObject({
@@ -192,15 +193,15 @@ describe("0055: a database with organisations on every old plan", () => {
   });
 });
 
-describe("0055: a fresh database", () => {
+describe("0056: a fresh database", () => {
   it("ends with Growth and Business rows at the published prices, and tenants defaulting to starter", async () => {
     const { sql } = await scratchDb("fresh");
     try {
       await runMigrations(sql, join(DB_DIR, "drizzle"));
       const rows = await sql<Record<string, any>[]>`SELECT plan, name, monthly_price_inr, yearly_price_inr, highlight FROM plan_settings ORDER BY plan`;
       expect(rows).toEqual([
-        { plan: "growth", name: "Growth", monthly_price_inr: 699, yearly_price_inr: 6999, highlight: true },
-        { plan: "business", name: "Business", monthly_price_inr: 1499, yearly_price_inr: 14999, highlight: false },
+        { plan: "growth", name: "Growth", monthly_price_inr: 699, yearly_price_inr: 6990, highlight: true },
+        { plan: "business", name: "Business", monthly_price_inr: 1499, yearly_price_inr: 14990, highlight: false },
       ]); // ORDER BY plan follows the enum order: starter, growth, business
       const [t] = await sql<{ plan: string; g: boolean }[]>`INSERT INTO tenants (name, slug) VALUES ('New', 'new') RETURNING plan, access_grandfathered AS g`;
       expect(t).toEqual({ plan: "starter", g: false });

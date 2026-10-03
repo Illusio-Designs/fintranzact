@@ -11,7 +11,7 @@ import { eq, and, gt, gte, isNull, count, sql, inArray, notInArray } from "drizz
 import { controlDb, tenants, tenantMembers, invitations } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 import { businesses, recurringInvoiceRuns } from "@fintranzact/db";
-import { PLAN_LIMITS, CA_ROLES, type PlanLimits } from "@fintranzact/shared";
+import { CA_ROLES, type PlanLimits } from "@fintranzact/shared";
 import { getPlanLimits } from "./plan-catalog.js";
 import { getEntitlements, assertWritable } from "./entitlements.js";
 import { limitError } from "./entitlement-error.js";
@@ -29,24 +29,11 @@ export function getLimits(plan: string): Promise<PlanLimits> {
   return getPlanLimits(plan);
 }
 
-/** Backwards-compat export used by recurring invoice scheduler. */
-export const RECURRING_RUNS_PER_MONTH_SELF_HOSTED = PLAN_LIMITS.starter.recurringRunsPerMonth;
-
 // ── Enforcement helpers ───────────────────────────────────────────────────────
 
 /** The limits in force for an organisation: one source, shared with the read-only/add-on checks. */
 async function getTenantLimits(tenantId: string): Promise<PlanLimits> {
   return (await getEntitlements(tenantId)).limits;
-}
-
-/**
- * Recurring-invoice runs a tenant may make per month, per business. Hosted
- * (multi-tenant) deployments use the organization's plan; a self-hosted
- * single-tenant install keeps the Starter allowance.
- */
-export async function recurringRunLimit(tenantId: string | null): Promise<number> {
-  if (!tenantId || process.env.MULTI_TENANT !== "true") return RECURRING_RUNS_PER_MONTH_SELF_HOSTED;
-  return (await getTenantLimits(tenantId)).recurringRunsPerMonth;
 }
 
 /**
@@ -296,17 +283,7 @@ export async function storeServesTenant(tenantId: string): Promise<boolean> {
   return storeAvailable(await getEntitlements(tenantId));
 }
 
-/**
- * Whether a recurring run may happen now. `runsThisMonth` counts successful
- * runs this month for the business; the limit is the plan's
- * recurringRunsPerMonth (Infinity = unlimited). Shared by the scheduler and
- * recurringInvoice.runNow so both count the same way.
- */
-export function recurringRunAllowed(runsThisMonth: number, limit: number): boolean {
-  return !Number.isFinite(limit) || runsThisMonth < limit;
-}
-
-/** Successful recurring runs this calendar month for a business: the one counter the limit uses. */
+/** Successful recurring runs this calendar month for a business (shown as usage; nothing is capped). */
 export async function countRecurringRunsThisMonth(
   db: TenantDatabase,
   businessId: string,
@@ -326,29 +303,11 @@ export async function countRecurringRunsThisMonth(
   return n;
 }
 
-/** Refuse a manual recurring run once the plan's monthly allowance is used. */
-export async function enforceRecurringRunLimit(
-  tenantId: string | null,
-  db: TenantDatabase,
-  businessId: string,
-): Promise<void> {
-  // The organisation's own plan (a real tenant row exists in hosted AND
-  // self-hosted mode here), not the scheduler's self-hosted free allowance.
-  const limit = tenantId ? await getTenantLimits(tenantId).then((l) => l.recurringRunsPerMonth) : RECURRING_RUNS_PER_MONTH_SELF_HOSTED;
-  if (!Number.isFinite(limit)) return;
-  const used = await countRecurringRunsThisMonth(db, businessId);
-  if (!recurringRunAllowed(used, limit)) {
-    throw limitError(
-      `Your plan allows ${limit} recurring invoice run${limit === 1 ? "" : "s"} a month per business, and this month's are used. Upgrade for more.`,
-    );
-  }
-}
-
 /**
  * Whether a PDF is printed WITHOUT the "Powered by Fintranzact" footer. The
  * plan's `pdfBranding` limit decides (so a platform admin's edit in
- * plan_settings takes effect). No built-in plan shows branding (all three set
- * pdfBranding false). The PDF data field is still called
+ * plan_settings takes effect). All three built-in plans show the small line
+ * (pdfBranding true); a plan can later switch it off. The PDF data field is still called
  * isPaidPlan for historical reasons.
  */
 export async function pdfBrandingHidden(plan: string): Promise<boolean> {

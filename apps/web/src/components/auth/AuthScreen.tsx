@@ -53,7 +53,7 @@ const PANEL: Record<AuthMode, { title: string; accent: string; points: string[] 
   register: {
     title: "Start billing in minutes.",
     accent: `${TRIAL_DAYS}-day free trial.`,
-    points: ["Unlimited invoices, parties and payments", "GST reports and e-Way Bills built in", "No branding on your documents"],
+    points: ["Unlimited invoices, parties and payments", "GST reports and e-Way Bills built in", "Share by WhatsApp, email or link"],
   },
 };
 

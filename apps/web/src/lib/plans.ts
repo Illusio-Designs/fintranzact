@@ -34,7 +34,7 @@ export const FALLBACK_PLANS: PlanOption[] = PLANS.map((plan) => ({
 }));
 
 export interface PlanPriceDisplay {
-  /** "₹699", "₹6,999" or "Custom". */
+  /** "₹699", "₹6,990" or "Custom". */
   amount: string;
   /** "/month", "/year" or "" for a plan priced on request. */
   unit: string;

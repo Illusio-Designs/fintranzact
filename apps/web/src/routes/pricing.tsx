@@ -4,9 +4,9 @@ import {
   MarketingLayout,
   PageHero,
 } from "@/components/marketing/MarketingLayout";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { formatPlanLimit, usePlans, type PlanOption } from "@/lib/plans";
-import { PLAN_GST_RATE_PERCENT, TRIAL_DAYS, YEARLY_SAVING_MONTHS } from "@fintranzact/shared";
+import { ADDONS, PLAN_GST_RATE_PERCENT, TRIAL_DAYS, YEARLY_SAVING_MONTHS, yearlyPrice, type BillingCycle } from "@fintranzact/shared";
 import { cn } from "@/lib/utils";
 import { EYEBROW, FaqAccordion, HEADING, PricingCards } from "@/components/marketing/sections";
 
@@ -26,10 +26,13 @@ export const Route = createFileRoute("/pricing")({
   component: PricingPage,
 });
 
+/** The call to action the pricing page and its closing band use. */
+const TRIAL_CTA = `Start your ${TRIAL_DAYS}-day Full Access Trial — no card needed`;
+
 const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "Is there a free plan?",
-    a: `No. There are three paid plans, and every new organization starts with a ${TRIAL_DAYS}-day free trial on the plan it picks. Your documents carry no Fintranzact branding on any plan.`,
+    a: `No. There are three paid plans, and every new organization starts with a ${TRIAL_DAYS}-day free trial on the plan it picks.`,
   },
   {
     q: "Do I need a credit card to start the trial?",
@@ -37,15 +40,23 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "What happens when the trial ends?",
-    a: "Your account becomes read-only until you choose a plan: you can still view, search, download PDFs and export your data. Nothing is deleted, and choosing a plan unlocks it at once.",
+    a: "Your account becomes read-only until you choose a plan. You can still view and search everything and download PDFs, and export your data on plans that include data export (Growth and Business). Nothing is deleted, and choosing a plan unlocks everything at once.",
   },
   {
     q: "Are the prices with GST?",
-    a: `Prices are before ${PLAN_GST_RATE_PERCENT}% GST, which is added at checkout and shown on your invoice. Yearly billing gives you ${YEARLY_SAVING_MONTHS} months free.`,
+    a: `Prices are before ${PLAN_GST_RATE_PERCENT}% GST. GST is added at checkout and you get a GST invoice for every payment. Pay yearly and you get ${YEARLY_SAVING_MONTHS} months free.`,
+  },
+  {
+    q: "How does cancelling work?",
+    a: "Cancel any time from Settings → Billing. Your plan keeps running until the end of the period you have paid for, then the account becomes read-only and your data is kept. Moving to a cheaper plan takes effect at the end of the period; moving to a dearer one applies straight away, with credit for the unused time.",
+  },
+  {
+    q: "What are add-ons?",
+    a: "Optional extras you buy on top of a plan and pay for separately: AI Assistant or AI Plus, Payroll and Store Pro. Each is billed monthly (or yearly with two months free), with GST added. AI Assistant and AI Plus are two tiers of one add-on, so choosing one replaces the other. Cancel an add-on any time; it stays until the end of the period you paid for.",
   },
   {
     q: "Can I switch plans later?",
-    a: "Yes. Upgrade or downgrade from Settings → Billing; your data stays exactly where it is.",
+    a: "Yes. Change plan from Settings → Billing; your data stays exactly where it is.",
   },
 ];
 
@@ -84,7 +95,6 @@ function buildComparison(plans: PlanOption[]): Array<{ group: string; rows: Arra
         row("e-way bills", (l) => l.eWayBills),
         row("e-invoicing", (l) => l.eInvoicing),
         row("Recurring invoices", (l) => l.recurringInvoices),
-        row("No Fintranzact branding on documents", (l) => !l.pdfBranding),
       ],
     },
     {
@@ -144,9 +154,54 @@ function CellValue({ value }: { value: Cell }) {
   return <span className="text-sm font-semibold text-text-primary">{value}</span>;
 }
 
+/** The paid add-ons, from the same catalogue the billing page sells (ex-GST, monthly; yearly is ten months). */
+function AddonsSection({ cycle }: { cycle: BillingCycle }) {
+  return (
+    <section>
+      <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
+        <p className={cn(EYEBROW, "text-center")}>Add-ons</p>
+        <h2 className={cn(HEADING, "mt-3 text-center text-3xl md:text-[40px]")}>Extras you can add to any plan</h2>
+        <p className="mx-auto mt-3 max-w-2xl text-center text-[15px] leading-relaxed text-text-tertiary">
+          Billed separately from your plan. AI Assistant and AI Plus are two tiers of one add-on: choosing one replaces the other.
+        </p>
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {ADDONS.map((addon) => {
+            const yearly = cycle === "yearly";
+            const price = yearly ? yearlyPrice(addon.monthlyPriceInr) : addon.monthlyPriceInr;
+            return (
+              <div key={addon.id} className="flex flex-col rounded-2xl border border-border-light bg-surface-0 p-6">
+                <h3 className="text-base font-bold text-text-primary">{addon.name}</h3>
+                <p className="mt-1 text-sm text-text-tertiary">{addon.tagline}</p>
+                <p className="mt-4 font-display text-3xl font-extrabold text-[#0f1b3d] dark:text-white">
+                  ₹{price.toLocaleString("en-IN")}
+                  <span className="text-sm font-medium text-text-tertiary"> {yearly ? "/year" : "/month"}</span>
+                </p>
+                <p className="text-xs text-text-tertiary">
+                  + {PLAN_GST_RATE_PERCENT}% GST
+                  {yearly ? <span className="ml-1 font-bold text-emerald-600">· {YEARLY_SAVING_MONTHS} months free</span> : null}
+                </p>
+                <ul className="mt-4 flex-1 space-y-2 text-sm text-text-secondary">
+                  {addon.features.map((f) => (
+                    <li key={f} className="flex gap-2">
+                      <Icon icon={Tick02Icon} size={16} strokeWidth={2.5} className="mt-0.5 shrink-0 text-brand-600 dark:text-brand-300" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-6 text-center text-sm text-text-tertiary">Add-on prices are before {PLAN_GST_RATE_PERCENT}% GST.</p>
+      </div>
+    </section>
+  );
+}
+
 function PricingPage() {
   const { plans } = usePlans();
   const compare = useMemo(() => buildComparison(plans), [plans]);
+  const [cycle, setCycle] = useState<BillingCycle>("monthly");
   return (
     <MarketingLayout
       title="Pricing"
@@ -160,9 +215,20 @@ function PricingPage() {
 
       <section className="bg-surface-1">
         <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
-          <PricingCards />
+          <PricingCards cycle={cycle} onCycleChange={setCycle} />
+          <div className="mt-8 flex justify-center">
+            <Link
+              to="/register"
+              search={{ plan: "growth" }}
+              className="inline-flex h-[52px] items-center rounded-xl bg-brand-600 px-6 text-base font-bold text-white transition hover:bg-brand-700"
+            >
+              {TRIAL_CTA}
+            </Link>
+          </div>
         </div>
       </section>
+
+      <AddonsSection cycle={cycle} />
 
       <section>
         <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
@@ -249,7 +315,7 @@ function PricingPage() {
         </div>
       </section>
 
-      <CtaBand />
+      <CtaBand cta={TRIAL_CTA} />
     </MarketingLayout>
   );
 }

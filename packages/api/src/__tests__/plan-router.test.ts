@@ -39,8 +39,8 @@ describe("GET /api/plans payload", () => {
     const json = JSON.parse(JSON.stringify(await listPublicPlansJson()));
     expect(json.map((p: { id: string }) => p.id)).toEqual(["starter", "growth", "business"]);
     expect(json.map((p: { monthlyPriceInr: number }) => p.monthlyPriceInr)).toEqual([299, 699, 1499]);
-    expect(json.map((p: { yearlyPriceInr: number }) => p.yearlyPriceInr)).toEqual([2999, 6999, 14999]);
-    expect(json.map((p: { yearlyPrice: string }) => p.yearlyPrice)).toEqual(["₹2,999", "₹6,999", "₹14,999"]);
+    expect(json.map((p: { yearlyPriceInr: number }) => p.yearlyPriceInr)).toEqual([2990, 6990, 14990]);
+    expect(json.map((p: { yearlyPrice: string }) => p.yearlyPrice)).toEqual(["₹2,990", "₹6,990", "₹14,990"]);
     expect(json.filter((p: { highlight: boolean }) => p.highlight).map((p: { id: string }) => p.id)).toEqual(["growth"]);
     expect(json.some((p: { id: string }) => (REMOVED_PLAN_IDS as readonly string[]).includes(p.id))).toBe(false);
   });

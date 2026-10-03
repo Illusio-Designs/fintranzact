@@ -29,7 +29,7 @@ async function assertTemplateRefs(
 import { logAudit } from "../lib/audit.js";
 import { generateInvoiceFromTemplate, computeNextRunDate } from "../lib/recurring-invoice-generator.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
-import { recurringRunLimit, enforceRecurringRunLimit, countRecurringRunsThisMonth } from "../lib/plan-limits.js";
+import { countRecurringRunsThisMonth } from "../lib/plan-limits.js";
 
 /** Every item on the lines must be a live item of this business. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -348,7 +348,6 @@ export const recurringInvoiceRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Template must be active or paused" });
       }
       // A manual run counts against the same monthly allowance as the scheduler.
-      await enforceRecurringRunLimit(ctx.tenantId, ctx.db, ctx.businessId);
 
       const result = await generateInvoiceFromTemplate(ctx.db, {
         ...tpl,
@@ -406,9 +405,8 @@ export const recurringInvoiceRouter = router({
         .from(recurringInvoiceTemplates)
         .where(eq(recurringInvoiceTemplates.businessId, ctx.businessId));
 
-      const limit = await recurringRunLimit(ctx.tenantId);
-      // null = unlimited on this plan
-      return { runsThisMonth: count, totalTemplates: templates, limit: Number.isFinite(limit) ? limit : null };
+      // No plan caps recurring runs: `limit` stays in the response (always null = unlimited) for older clients.
+      return { runsThisMonth: count, totalTemplates: templates, limit: null };
     }),
 
   suggestions: viewerProcedure.query(async ({ ctx }) => {

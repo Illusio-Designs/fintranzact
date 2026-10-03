@@ -62,6 +62,7 @@ export function registerBillingInvoiceRoute(app: Hono): void {
         name: payment.billingName ?? "Customer",
         gstin: payment.billingGstin,
         address: payment.billingAddress,
+        state: payment.billingState,
       },
       isCreditNote: payment.status === "credit",
     });

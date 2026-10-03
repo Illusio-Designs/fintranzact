@@ -59,7 +59,7 @@ const GLANCE: Array<[IconSvgElement, string]> = [
 ];
 
 const WHY: Array<[IconSvgElement, string, string]> = [
-  [Money03Icon, "Simple, honest pricing", "Three plans with unlimited invoices, parties and payments, a 14-day free trial and no branding on your documents."],
+  [Money03Icon, "Simple, honest pricing", "Three plans with unlimited invoices, parties and payments, and a 14-day free trial."],
   [TaxesIcon, "GST done properly", "Tax is worked out on every line, and returns, e-Invoices and e-Way Bills come straight from your data."],
   [UserGroupIcon, "Made for teams", "Invite staff and your accountant with role-based access, across every business you run."],
   [Download04Icon, "No lock-in", "Import from spreadsheets and your old software, and export everything whenever you like."],

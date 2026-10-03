@@ -23,9 +23,20 @@ export const HEADING = "font-display font-extrabold tracking-[-0.025em] text-[#0
  * are before GST, with a monthly / yearly switch (yearly is two months free).
  * Everything shown comes from the plan settings, so admin edits appear here.
  */
-export function PricingCards({ className }: { className?: string }) {
+export function PricingCards({
+  className,
+  cycle: controlledCycle,
+  onCycleChange,
+}: {
+  className?: string;
+  /** Controlled billing period, when a page shows other prices (add-ons) that follow the same switch. */
+  cycle?: BillingCycle;
+  onCycleChange?: (cycle: BillingCycle) => void;
+}) {
   const { plans } = usePlans();
-  const [cycle, setCycle] = useState<BillingCycle>("monthly");
+  const [ownCycle, setOwnCycle] = useState<BillingCycle>("monthly");
+  const cycle = controlledCycle ?? ownCycle;
+  const setCycle = onCycleChange ?? setOwnCycle;
   const cta = `Start ${TRIAL_DAYS}-day free trial`;
   return (
     <div className={className}>

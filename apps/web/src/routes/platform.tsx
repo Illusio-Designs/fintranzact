@@ -476,7 +476,6 @@ const LIMIT_FIELDS: { key: keyof StoredPlanLimits; label: string; unit?: string 
   { key: "maxOwnedOrgs", label: "Organisations an owner can create" },
   { key: "maxConcurrentSessions", label: "Signed-in devices per user" },
   { key: "maxApiKeys", label: "API keys" },
-  { key: "recurringRunsPerMonth", label: "Recurring invoices per month" },
   { key: "auditRetentionDays", label: "Audit log kept for", unit: "days" },
 ];
 /** The flags the API enforces today; the rest only describe the plan. */
@@ -762,7 +761,7 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wide text-text-tertiary">Features</h3>
             <p className="text-xs text-text-tertiary">
-              Data export, Online store and the PDF branding switch are enforced. Every other feature below is{" "}
+              Data export, Online store and the “Powered by Fintranzact” PDF line are enforced. Every other feature below is{" "}
               <strong>shown on the plan; not enforced yet</strong>: switching it off does not stop anyone using it.
             </p>
             {PLAN_FLAG_GROUPS.map((group) => (

@@ -18,7 +18,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { PLAN_DEFAULTS, limitsToStored, type PlanId } from "@fintranzact/shared";
+import type { PlanId } from "@fintranzact/shared";
 import { apiKeys, auditLog, getTenantDb, invoices, planSettings, recurringInvoiceRuns, recurringInvoiceTemplates } from "@fintranzact/db";
 import { getControlDb, getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createUser, createTenant, addMember, createBusiness, createParty } from "../helpers/fixtures.js";
@@ -50,23 +50,6 @@ async function org(opts: { plan: PlanId; readOnly?: boolean; status?: "active" |
   return { owner, tenant, biz, caller };
 }
 
-/** An admin edit to Starter: recurringRunsPerMonth capped (plan_settings), catalogue refreshed. */
-async function capStarterRuns(runs: number) {
-  const base = PLAN_DEFAULTS.starter;
-  await getControlDb().insert(planSettings).values({
-    plan: "starter",
-    name: base.name,
-    tagline: base.tagline,
-    monthlyPriceInr: base.monthlyPriceInr,
-    yearlyPriceInr: base.yearlyPriceInr,
-    features: base.features,
-    highlight: false,
-    visible: true,
-    limits: { ...limitsToStored(base.limits), recurringRunsPerMonth: runs },
-  }).onConflictDoUpdate({ target: planSettings.plan, set: { limits: { ...limitsToStored(base.limits), recurringRunsPerMonth: runs } } });
-  invalidatePlanCatalog();
-}
-
 afterAll(async () => {
   await getControlDb().delete(planSettings);
   invalidatePlanCatalog();
@@ -74,37 +57,24 @@ afterAll(async () => {
   await closeTestDb();
 });
 
-describe("recurringInvoice.runNow and the monthly allowance", () => {
-  it("is refused once the plan's runs this month are used, and counts the scheduler's counter", async () => {
-    // Starter has no recurring cap built in; an admin may set one (here 5 a month).
-    await capStarterRuns(5);
-    const { biz, caller, tenant } = await org({ plan: "starter" });
-    const db = getTenantTestDb();
-    const party = await createParty(db, biz.id);
-    const [tpl] = await db.insert(recurringInvoiceTemplates).values({
-      businessId: biz.id, partyId: party.id, name: "Monthly", type: "sale", frequency: "monthly",
-      startDate: new Date(), nextRunDate: new Date(Date.now() + 30 * DAY),
-      lineItems: [{ itemName: "Fee", quantity: "1", unitPrice: "100.00", taxPercent: "0", discountPercent: "0" }],
-      additionalCharges: "0",
-    }).returning();
-    for (let i = 0; i < 5; i++) {
-      await db.insert(recurringInvoiceRuns).values({ templateId: tpl!.id, businessId: biz.id, status: "success" });
+describe("recurringInvoice.runNow is not capped by any plan", () => {
+  it("keeps running on every plan after many runs this month", async () => {
+    for (const plan of ["starter", "growth", "business"] as const) {
+      const { biz, caller } = await org({ plan });
+      const db = getTenantTestDb();
+      const party = await createParty(db, biz.id);
+      const [tpl] = await db.insert(recurringInvoiceTemplates).values({
+        businessId: biz.id, partyId: party.id, name: "Monthly", type: "sale", frequency: "monthly",
+        startDate: new Date(), nextRunDate: new Date(Date.now() + 30 * DAY),
+        lineItems: [{ itemName: "Fee", quantity: "1", unitPrice: "100.00", taxPercent: "0", discountPercent: "0" }],
+        additionalCharges: "0",
+      }).returning();
+      for (let i = 0; i < 25; i++) {
+        await db.insert(recurringInvoiceRuns).values({ templateId: tpl!.id, businessId: biz.id, status: "success" });
+      }
+      await expect(caller().recurringInvoice.runNow({ id: tpl!.id }), plan).resolves.toBeTruthy();
+      expect((await caller().recurringInvoice.planUsage()).limit).toBeNull();
     }
-    expect((await getEntitlements(tenant.id)).limits.recurringRunsPerMonth).toBe(5);
-    await expect(caller().recurringInvoice.runNow({ id: tpl!.id })).rejects.toThrow(/recurring invoice runs? a month/);
-  });
-
-  it("still runs on a plan with unlimited runs", async () => {
-    const { biz, caller } = await org({ plan: "business" });
-    const db = getTenantTestDb();
-    const party = await createParty(db, biz.id);
-    const [tpl] = await db.insert(recurringInvoiceTemplates).values({
-      businessId: biz.id, partyId: party.id, name: "Monthly", type: "sale", frequency: "monthly",
-      startDate: new Date(), nextRunDate: new Date(Date.now() + 30 * DAY),
-      lineItems: [{ itemName: "Fee", quantity: "1", unitPrice: "100.00", taxPercent: "0", discountPercent: "0" }],
-      additionalCharges: "0",
-    }).returning();
-    await expect(caller().recurringInvoice.runNow({ id: tpl!.id })).resolves.toBeTruthy();
   });
 });
 
@@ -251,7 +221,6 @@ describe("recurring scheduler and read-only organisations", () => {
 
     const outcome = await tickTenant(tenant.id, {
       readOnly: async (id) => (await getEntitlements(id)).readOnly,
-      runsPerMonth: async () => 5,
       getDb: getTenantDb,
       process: processDueTemplates,
       skip: skipDueTemplates,

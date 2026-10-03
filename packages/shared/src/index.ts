@@ -9,6 +9,7 @@ export { calculateGatewayCharge } from "./gateway.js";
 export type { GatewayChargeConfig, GatewayChargeRate, GatewayChargeResult } from "./gateway.js";
 export * from "./plans.js";
 export * from "./plan-migration.js";
+export * from "./indian-states.js";
 export * from "./billing.js";
 export * from "./entitlements.js";
 export * from "./partners.js";

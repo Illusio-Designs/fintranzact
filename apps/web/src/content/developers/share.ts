@@ -114,7 +114,7 @@ await navigator.clipboard.writeText(url);`,
         { name: "token", type: "string (path)", required: true, description: "The 43-character share token from the link URL" },
       ],
       output: {
-        description: "`payment` is present when the business has a UPI id (with a pay URL and a QR code data URL); `bank` when it has a bank account number on its documents. `business.hasLogo` tells the page whether to request `/api/share/:token/logo`. `poweredBy` is true on plans that show Fintranzact branding. Errors: 404 `{ error: \"This link is not valid any more\" }`, 429 when rate limited.",
+        description: "`payment` is present when the business has a UPI id (with a pay URL and a QR code data URL); `bank` when it has a bank account number on its documents. `business.hasLogo` tells the page whether to request `/api/share/:token/logo`. `poweredBy` is true when the plan shows the small \"Made with Fintranzact\" line (all three built-in plans do); `poweredByUrl` is where it links: sign-up with the referring partner's referral code (`/register?ref=CODE`), or null for the plain site. Errors: 404 `{ error: \"This link is not valid any more\" }`, 429 when rate limited.",
         example: {
           document: {
             documentType: "invoice",
@@ -151,6 +151,7 @@ await navigator.clipboard.writeText(url);`,
           payment: { upiId: "mehtahardware@okicici", payUrl: "https://api.example.com/pay/upi?...", qrDataUrl: "data:image/png;base64,iVBOR..." },
           bank: { accountName: "Mehta Hardware Pvt Ltd", accountNumber: "50200012345678", ifsc: "HDFC0000123", bankName: "HDFC Bank" },
           poweredBy: false,
+          poweredByUrl: null,
         },
       },
       codeExamples: {

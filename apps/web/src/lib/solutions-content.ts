@@ -724,7 +724,7 @@ export const SOLUTIONS: Solution[] = [
     summary: "GST invoicing and simple books for one-person businesses.",
     title: "GST invoicing for freelancers and small shops",
     subtitle:
-      "Create professional GST invoices in seconds, share them on WhatsApp, get paid by UPI and keep simple books, from ₹299 a month.",
+      "Create professional GST invoices in seconds, share them on WhatsApp, get paid by UPI and keep simple books, with a 14-day free trial.",
     description:
       "GST invoicing for freelancers and small shops: professional invoices, shareable links with UPI QR, payments, expenses and GST return summaries.",
     pains: [
@@ -738,7 +738,7 @@ export const SOLUTIONS: Solution[] = [
       },
       {
         pain: "You cannot afford accounting software yet.",
-        answer: "Start with a 14-day free trial, then Starter is ₹299 a month before GST. There is no invoice limit and no Fintranzact branding on your documents.",
+        answer: "Start with a 14-day free trial, then pick a plan from the pricing page (prices are before GST). There is no invoice limit.",
       },
       {
         pain: "Filing season means scrambling for numbers.",
@@ -755,7 +755,7 @@ export const SOLUTIONS: Solution[] = [
     faqs: [
       {
         q: "Is there a free trial?",
-        a: "Yes. Every new organization gets a 14-day free trial, with no card needed. After that, plans start at ₹299 a month before GST, with no invoice cap and no Fintranzact branding on your documents.",
+        a: "Yes. Every new organization gets a 14-day free trial, with no card needed. After that, pick a plan from the pricing page (prices are before GST); there is no invoice cap.",
       },
       {
         q: "I am not GST registered. Can I still use it?",

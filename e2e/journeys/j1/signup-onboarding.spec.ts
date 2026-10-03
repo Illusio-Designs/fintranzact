@@ -144,6 +144,12 @@ test.describe("J1 sign-up & onboarding", () => {
     await expect(page.getByText(/Forever Free/i)).toHaveCount(0);
     await page.getByRole("button", { name: /Yearly/ }).first().click();
     await expect(page.getByText("2 months free").first()).toBeVisible();
+    // Add-ons with prices, the GST note and the trial call to action.
+    await expect(page.getByRole("heading", { name: "Extras you can add to any plan" })).toBeVisible();
+    for (const addon of ["AI Assistant", "AI Plus", "Payroll", "Store Pro"]) await expect(page.getByRole("heading", { name: addon, exact: true })).toBeVisible();
+    await expect(page.getByText("₹3,990").first()).toBeVisible(); // AI Assistant yearly: ten months of ₹399
+    await expect(page.getByText(/before 18% GST/).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: `Start your ${TRIAL_DAYS}-day Full Access Trial — no card needed` }).first()).toBeVisible();
     await page.getByRole("link", { name: `Start ${TRIAL_DAYS}-day free trial` }).nth(1).click();
     await expect(page).toHaveURL(/\/register\?plan=growth/);
 
@@ -258,7 +264,7 @@ test.describe("J1 sign-up with no plan chosen (dark theme)", () => {
     await expect(page.getByRole("button", { name: /^Most popular Growth/ })).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: /^Yearly/ }).click();
     await expect(page.getByText("2 months free").first()).toBeVisible();
-    await expect(page.getByText("₹6,999").first()).toBeVisible();
+    await expect(page.getByText("₹6,990").first()).toBeVisible();
     await expect(page.getByText("+ 18% GST").first()).toBeVisible();
     const signedUp = await userByEmail(email);
     const [defaultOrg] = await membershipsOf(signedUp!.id);

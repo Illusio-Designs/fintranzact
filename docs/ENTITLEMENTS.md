@@ -58,6 +58,12 @@ Every route in `server.ts` and `http/*.ts` has an explicit decision in `REST_ENT
 
 Notes: `POST /api/items/labels` generates a label PDF, so it is a download and stays allowed. `GET /api/billing/invoices/:paymentId/pdf` is owner-gated and stays available so a halted owner can fetch Finvera invoices.
 
+## The "Powered by Fintranzact" PDF line
+
+The plan's `pdfBranding` limit decides (`pdfBrandingHidden` in `lib/plan-limits.ts`): `true`, the default on all three plans, prints a small "Powered by Fintranzact" line on the last page of invoices and the other invoice-template documents, thermal receipts and e-way bill prints; the public share page shows a matching "Made with Fintranzact" link. An admin can switch it off per plan (Plans console), and an edited value survives the plan migration.
+
+Where the line links is decided by `lib/pdf-branding.ts`: an organisation referred by an **approved** partner (`tenants.partner_id`) links to `<APP_URL>/register?ref=<their referral code>`, the same parameter the partner portal's link uses; everyone else links to the plain `APP_URL`. A partner who is pending or rejected, or has no code, gives the plain link. The URL carries the referral code only (no organisation, user, document or tracking data), and no partner name or contact is printed. With no `APP_URL` and no request origin the line is plain text. The link is passed into the PDF data as `brandingUrl` next to `isPaidPlan` (true = line hidden).
+
 ## How to add things
 
 - New tRPC mutation: nothing to do; it is gated. Run `pnpm --filter @fintranzact/api test entitlement-exempt` (with `-u` for snapshot files) and review `mutation-gate.md`. Allowlist only if it must work read-only.

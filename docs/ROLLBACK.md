@@ -963,7 +963,7 @@ How to read the tables:
 | `0018_silly_quicksilver.sql` | New tables `inventory_settings`, `warehouse_permissions`. | `DROP TABLE warehouse_permissions, inventory_settings;` |
 | `0019_empty_jane_foster.sql` | Replaces `stock_balances_unique_idx` with four partial unique indexes (`stock_balances_base_unique_idx`, `_location_unique_idx`, `_variant_unique_idx`, `_location_variant_unique_idx`). | Drop the four indexes, then `CREATE UNIQUE INDEX stock_balances_unique_idx ON stock_balances (business_id, warehouse_id, location_id, item_id, variant_id);` |
 | `0020_add_user_referral_code.sql` | `users.referral_code` (`IF EXISTS` / `IF NOT EXISTS`). See [known issues](#7-known-issues-in-the-migration-sets). | `ALTER TABLE users DROP COLUMN IF EXISTS referral_code;` |
-| `0021_stiff_shooting_star.sql` | Adds an early plan id to enum `tenant_plan` (the type is rebuilt by 0055); `tenants.referral_code`; `businesses`: `business_type`, `tan`, `cin`, `llpin`, `udyam_number`, `iec_code`, `lut_arn`, `e_invoice_enabled`, `e_way_bill_enabled`, `address_line_1`, `address_line_2`, `landmark`, `country_of_operations`, `financial_year_start_date`. | `DROP COLUMN` each new column. The enum value cannot be dropped; see 0055. |
+| `0021_stiff_shooting_star.sql` | Adds an early plan id to enum `tenant_plan` (the type is rebuilt by 0056); `tenants.referral_code`; `businesses`: `business_type`, `tan`, `cin`, `llpin`, `udyam_number`, `iec_code`, `lut_arn`, `e_invoice_enabled`, `e_way_bill_enabled`, `address_line_1`, `address_line_2`, `landmark`, `country_of_operations`, `financial_year_start_date`. | `DROP COLUMN` each new column. The enum value cannot be dropped; see 0056. |
 | `0022_add_session_auth_fields.sql` | Enum type `session_auth_method`; `sessions.auth_method`, `sessions.max_expires_at`. | `ALTER TABLE sessions DROP COLUMN auth_method, DROP COLUMN max_expires_at; DROP TYPE session_auth_method;` |
 | `0023_loose_miracleman.sql` | `businesses`: `assessee_of_other_territory`, `gst_return_periodicity`, `e_way_bill_threshold`. | `DROP COLUMN` each. |
 | `0024_omniscient_ultron.sql` | `businesses`: `deductor_type`, `responsible_person_name`, `responsible_person_pan`, `responsible_person_designation`. | `DROP COLUMN` each. |
@@ -979,7 +979,7 @@ How to read the tables:
 | `0034_free_qty_rejections.sql` | `invoice_items`: `free_quantity`, `rejected_quantity`, `rejection_reason`. | `DROP COLUMN` each. |
 | `0035_item_batches.sql` | New table `item_batches`; `invoice_items.batch_id`; `items.track_batches`, `items.track_expiry`; FK `stock_movements_batch_id_item_batches_id_fk`. **Data change**: sets every existing `stock_movements.batch_id` to `NULL`. | `ALTER TABLE stock_movements DROP CONSTRAINT stock_movements_batch_id_item_batches_id_fk; ALTER TABLE invoice_items DROP COLUMN batch_id; ALTER TABLE items DROP COLUMN track_batches, DROP COLUMN track_expiry; DROP TABLE item_batches;` Old `batch_id` values: restore from backup. |
 | `0036_roadmap_items.sql` | New table `roadmap_items`. | `DROP TABLE roadmap_items;` |
-| `0055_plans_three_paid.sql` | Rebuilds enum `tenant_plan` as `starter`, `growth`, `business`; converts `tenants.plan`, `plan_settings.plan`, `billing_subscriptions.plan` / `scheduled_plan`; adds `tenants.access_grandfathered` and `plan_settings.yearly_price_inr`. Lossy: see [Rolling back the plan model](#rolling-back-the-plan-model-0055--0018). | [Reverse SQL below](#rolling-back-the-plan-model-0055--0018), or restore a backup taken before the deploy. |
+| `0056_plans_three_paid.sql` | Rebuilds enum `tenant_plan` as `starter`, `growth`, `business`; converts `tenants.plan`, `plan_settings.plan`, `billing_subscriptions.plan` / `scheduled_plan`; adds `tenants.access_grandfathered` and `plan_settings.yearly_price_inr`. Lossy: see [Rolling back the plan model](#rolling-back-the-plan-model-0056--0019). | [Reverse SQL below](#rolling-back-the-plan-model-0056--0019), or restore a backup taken before the deploy. |
 
 ### 4.2 Control set (`packages/db/drizzle-control/`, multi-tenant mode, control DB)
 
@@ -990,11 +990,11 @@ How to read the tables:
 | `0002_exotic_owl.sql` | Enum type `session_auth_method`; `sessions.auth_method`, `sessions.max_expires_at`. | `ALTER TABLE sessions DROP COLUMN auth_method, DROP COLUMN max_expires_at; DROP TYPE session_auth_method;` |
 | `0003_woozy_psylocke.sql` | New table `access_tokens` (short-lived `at_` tokens, FK to `sessions`). | `DROP TABLE access_tokens;` (signs out clients using access tokens) |
 | `0000_add_tenant_referral_code` (journal entry 4) | **No SQL file exists.** See [known issues](#7-known-issues-in-the-migration-sets). | Nothing to reverse. |
-| `0005_useful_darkhawk.sql` | Adds an early plan id to enum `tenant_plan` (the type is rebuilt by 0018); `tenants.referral_code`; `users.referral_code`. | `ALTER TABLE tenants DROP COLUMN referral_code; ALTER TABLE users DROP COLUMN referral_code;` The enum value cannot be dropped; see 0018. |
+| `0005_useful_darkhawk.sql` | Adds an early plan id to enum `tenant_plan` (the type is rebuilt by 0019); `tenants.referral_code`; `users.referral_code`. | `ALTER TABLE tenants DROP COLUMN referral_code; ALTER TABLE users DROP COLUMN referral_code;` The enum value cannot be dropped; see 0019. |
 | `0006_share_links.sql` | New table `share_links`. | `DROP TABLE share_links;` |
 | `0007_plans_and_partners.sql` | New tables `partners`, `partner_payouts`, `plan_settings`; `magic_link_tokens.referral_code`; `tenants.partner_id`. | Same as unified 0032. |
 | `0008_roadmap_items.sql` | New table `roadmap_items`. | `DROP TABLE roadmap_items;` |
-| `0018_plans_three_paid.sql` | Same SQL as unified `0055_plans_three_paid.sql` (plan model: Starter / Growth / Business). | Same as unified 0055: [Rolling back the plan model](#rolling-back-the-plan-model-0055--0018). |
+| `0019_plans_three_paid.sql` | Same SQL as unified `0056_plans_three_paid.sql` (plan model: Starter / Growth / Business). | Same as unified 0056: [Rolling back the plan model](#rolling-back-the-plan-model-0056--0019). |
 
 ### 4.3 Tenant set (`packages/db/drizzle-tenant/`, multi-tenant mode, every tenant DB)
 
@@ -1029,7 +1029,7 @@ Run the reverse SQL in each tenant database you are rolling back, or restore jus
 | `0024_free_qty_rejections.sql` | Same as unified 0034. | Same as unified 0034. |
 | `0025_item_batches.sql` | Same as unified 0035, including clearing `stock_movements.batch_id`. | Same as unified 0035. |
 
-### Rolling back the plan model (0055 / 0018)
+### Rolling back the plan model (0056 / 0019)
 
 What the migration did (one transaction, skipped when `tenant_plan` is already `starter`/`growth`/`business`):
 
@@ -1045,7 +1045,7 @@ The same mapping applies to `billing_subscriptions.plan` and `scheduled_plan`. `
 
 Preferred rollback: restore the backup taken before the deploy. The app of the previous release can also run against the converted data only if you reverse the migration first, because it reads `tenant_plan` values that no longer exist.
 
-Reverse SQL (run in the control database in multi-tenant mode, the single database otherwise; tested against a migrated copy). Not recoverable: which `business` organisations were `enterprise`, and anything an admin changed in `plan_settings` after the deploy. Then delete the `0055` row (unified) or `0018` row (control) from the tracking table, or the runner will not re-apply it later:
+Reverse SQL (run in the control database in multi-tenant mode, the single database otherwise; tested against a migrated copy). Not recoverable: which `business` organisations were `enterprise`, and anything an admin changed in `plan_settings` after the deploy. Then delete the `0056` row (unified) or `0019` row (control) from the tracking table, or the runner will not re-apply it later:
 
 ```sql
 BEGIN;

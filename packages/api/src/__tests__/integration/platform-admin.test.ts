@@ -197,11 +197,11 @@ describe("editing plans", () => {
       visible: true,
       highlight: true,
       monthlyPriceInr: 699,
-      yearlyPriceInr: 6_999,
-      effectiveYearlyPriceInr: 6_999,
+      yearlyPriceInr: 6_990,
+      effectiveYearlyPriceInr: 6_990,
       limits: { maxBusinesses: 3, maxTeamMembers: 10, eInvoicing: true },
     });
-    expect(plans.find((p) => p.id === "starter")!).toMatchObject({ monthlyPriceInr: 299, yearlyPriceInr: 2_999, limits: { maxBusinesses: 1, maxTeamMembers: 3 } });
+    expect(plans.find((p) => p.id === "starter")!).toMatchObject({ monthlyPriceInr: 299, yearlyPriceInr: 2_990, limits: { maxBusinesses: 1, maxTeamMembers: 3 } });
     expect(plans.find((p) => p.id === "business")!.limits.maxBusinesses).toBeNull();
     for (const p of plans) expect(p.grandfatheredCount).toBeGreaterThanOrEqual(0);
   });

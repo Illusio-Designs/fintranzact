@@ -40,11 +40,10 @@ export interface PlanLimits {
   maxTeamMembers: number; // members + pending invites per tenant
   maxConcurrentSessions: number;
   maxApiKeys: number; // 0 = no API access
-  recurringRunsPerMonth: number;
   auditRetentionDays: number | null; // null = unlimited (full audit history)
   dataExport: boolean;
   onlineStore: boolean;
-  pdfBranding: boolean; // true = shows "Powered by Fintranzact"; false on every plan
+  pdfBranding: boolean; // true = the small "Powered by Fintranzact" line on PDFs; on for all three plans, editable per plan
   // Feature flags. Editable per plan in the admin console and shown on the
   // pricing page. Only the flags listed in PLAN_FLAGS_ENFORCED are enforced by
   // the API today; the rest describe the plan and gate nothing yet.
@@ -89,7 +88,6 @@ export const PLAN_COUNT_KEYS = [
   "maxTeamMembers",
   "maxConcurrentSessions",
   "maxApiKeys",
-  "recurringRunsPerMonth",
 ] as const;
 export type PlanCountKey = (typeof PLAN_COUNT_KEYS)[number];
 
@@ -117,7 +115,7 @@ export const PLAN_FLAG_GROUPS: ReadonlyArray<{ group: string; flags: ReadonlyArr
       { key: "eWayBills", label: "e-way bills" },
       { key: "eInvoicing", label: "e-invoicing" },
       { key: "recurringInvoices", label: "Recurring invoices" },
-      { key: "pdfBranding", label: "“Powered by Fintranzact” on PDFs" },
+      { key: "pdfBranding", label: "Show “Powered by Fintranzact” on PDFs" },
     ],
   },
   {
@@ -153,11 +151,10 @@ const STARTER_LIMITS: PlanLimits = {
   maxTeamMembers: 3,
   maxConcurrentSessions: 3,
   maxApiKeys: 0,
-  recurringRunsPerMonth: Infinity,
   auditRetentionDays: 30,
   dataExport: false,
   onlineStore: false,
-  pdfBranding: false,
+  pdfBranding: true,
   gstReports: true,
   eWayBills: true,
   recurringInvoices: true,
@@ -210,15 +207,14 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
 
 /** Built-in prices in whole rupees, before GST. */
 export const PLAN_PRICES: Record<PlanId, { monthlyInr: number; yearlyInr: number }> = {
-  starter: { monthlyInr: 299, yearlyInr: 2_999 },
-  growth: { monthlyInr: 699, yearlyInr: 6_999 },
-  business: { monthlyInr: 1_499, yearlyInr: 14_999 },
+  starter: { monthlyInr: 299, yearlyInr: 2_990 },
+  growth: { monthlyInr: 699, yearlyInr: 6_990 },
+  business: { monthlyInr: 1_499, yearlyInr: 14_990 },
 };
 
 /**
  * The yearly price when none is set: a year costs 10 months (2 months free).
- * The built-in prices are the published ones (PLAN_PRICES), a few rupees above
- * this, and are stored explicitly.
+ * The built-in prices (PLAN_PRICES) are exactly this.
  */
 export function yearlyPrice(monthlyPriceInr: number): number {
   return monthlyPriceInr * YEARLY_CYCLE_MONTHS;
@@ -265,7 +261,6 @@ export const PLANS: PlanInfo[] = [
       "Invoices, quotations, payments, parties and items",
       "GST reports and e-way bills",
       "Basic inventory, recurring invoices and POS",
-      "No Fintranzact branding on PDFs",
     ],
   },
   {
@@ -334,7 +329,6 @@ export const planSettingsSchema = z.object({
     maxTeamMembers: countLimit,
     maxConcurrentSessions: countLimit.refine((v) => v === null || v >= 1, "At least one session"),
     maxApiKeys: countLimit,
-    recurringRunsPerMonth: countLimit,
     auditRetentionDays: countLimit,
     dataExport: z.boolean(),
     onlineStore: z.boolean(),
@@ -410,7 +404,7 @@ export function formatPlanPrice(plan: Pick<PlanInfo, "monthlyPriceInr">): string
   return "₹" + plan.monthlyPriceInr.toLocaleString("en-IN");
 }
 
-/** "₹2,999" or "Custom": the yearly price in force. */
+/** "₹2,990" or "Custom": the yearly price in force. */
 export function formatYearlyPlanPrice(plan: Pick<PlanInfo, "monthlyPriceInr" | "yearlyPriceInr">): string {
   const yearly = effectiveYearlyPriceInr(plan);
   return yearly === null ? "Custom" : "₹" + yearly.toLocaleString("en-IN");

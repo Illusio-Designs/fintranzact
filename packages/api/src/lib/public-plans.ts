@@ -4,7 +4,7 @@ import { getPlanCatalog } from "./plan-catalog.js";
 export interface PublicPlan extends PlanInfo {
   /** Display monthly price, e.g. "₹299", "₹1,499" or "Custom". */
   price: string;
-  /** Display yearly price (two months free), e.g. "₹2,999". */
+  /** Display yearly price (two months free), e.g. "₹2,990". */
   yearlyPrice: string;
   /** The limits the API enforces for this plan. */
   limits: PlanLimits;

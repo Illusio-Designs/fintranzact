@@ -44,7 +44,7 @@ export const tenants = pgTable("tenants", {
   /**
    * Permanent full access: no trial, no payment, never read-only. True only
    * for the organisations that were on the removed Forever Free plan when the
-   * three-plan model shipped (migration 0055 / control 0018). Never set for a
+   * three-plan model shipped (migration 0056 / control 0019). Never set for a
    * new organisation; shown as "Grandfathered" in the admin console.
    */
   accessGrandfathered: boolean("access_grandfathered").default(false).notNull(),
@@ -77,6 +77,8 @@ export const tenants = pgTable("tenants", {
   billingGstin: text("billing_gstin"),
   billingAddress: text("billing_address"),
   billingEmail: text("billing_email"),
+  /** GST state code (e.g. "24") the subscription GST invoice is taxed by when there is no GSTIN; null = unknown (IGST). */
+  billingState: text("billing_state"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
@@ -457,6 +459,8 @@ export const billingPayments = pgTable("billing_payments", {
   billingName: text("billing_name"),
   billingGstin: text("billing_gstin"),
   billingAddress: text("billing_address"),
+  /** Frozen with the invoice: the GST state code the tax split used (null = unknown). */
+  billingState: text("billing_state"),
   failureReason: text("failure_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [

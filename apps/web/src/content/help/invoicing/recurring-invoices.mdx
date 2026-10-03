@@ -164,19 +164,14 @@ Deleting a template stops all future runs. Invoices it already created are kept.
 ## Monthly run limits
 
 <ForDesktop>
-The **Automated Runs This Month** bar at the top of the page shows how many invoices your templates have generated this calendar month, against your plan's limit, and how many templates are configured.
+The **Automated Runs This Month** bar at the top of the page shows how many invoices your templates have generated this calendar month, and how many templates are configured. No plan caps recurring runs.
 </ForDesktop>
 
 <ForMobile>
 The summary card at the top shows **Templates** and **Runs This Month**.
 </ForMobile>
 
-| Plan | Scheduled runs per business per month |
-|---|---|
-| Starter, Growth, Business | Unlimited, unless the platform team has set a cap |
-| Self-hosted installation | Unlimited, unless a cap is set |
-
-When the limit is reached, the scheduler records a **skipped_limit** run with the message "Monthly limit of N runs reached" and moves the template to its next date. Skipped periods aren't retried. **Run Now** isn't blocked by the limit, but its runs count towards it.
+No plan limits how many invoices your recurring templates generate. **Run Now** and scheduled runs both count towards the monthly usage figure, which is shown for information only.
 
 ## If a run fails
 
@@ -198,7 +193,7 @@ Back-dated start dates don't generate catch-up invoices. The first run is schedu
 Yes. Set **Type** to **Purchase**. The generated bill uses the same invoice number series as your sales invoices.
 
 **Why did a month get skipped?**
-Either the template was paused, or your plan's monthly run limit was reached. The **Execution History** shows a **skipped_limit** entry in that case.
+The template was paused, or the organization was read-only when the run was due. Check the **Execution History** for the template.
 
 **What happens to invoices if I delete the template?**
 They stay. Only future runs stop.

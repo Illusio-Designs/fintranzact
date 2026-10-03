@@ -39,6 +39,8 @@ export interface EwayBillPDFData {
   partB: Array<{ mode?: string; vehicle: string; from?: string; enteredDate?: string; enteredBy?: string }>;
   qrDataUrl?: string;
   isPaidPlan?: boolean;
+  /** Link for the "Powered by Fintranzact" line (see invoice-pdf.ts). */
+  brandingUrl?: string;
 }
 
 const W = 595.28;
@@ -142,7 +144,7 @@ export function generateEwayBillPDF(d: EwayBillPDFData): Doc {
   y += 14;
   line(doc, M, y, M + CW, y, "#cccccc", 0.5);
   text(doc, "Printed from Fintranzact. Verify this e-way bill on ewaybillgst.gov.in with the EWB number above.", M, y + 5, { w: CW, size: 6.8, color: "#777777", align: "center" });
-  if (!d.isPaidPlan) text(doc, "Powered by Fintranzact", 0, H - 14, { w: W, size: 5.5, color: "#a0a0a8", align: "center" });
+  if (!d.isPaidPlan) text(doc, "Powered by Fintranzact", 0, H - 14, { w: W, size: 5.5, color: "#a0a0a8", align: "center", link: d.brandingUrl });
 
   if (d.status === "cancelled") {
     doc.save();

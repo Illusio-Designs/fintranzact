@@ -9,7 +9,7 @@ describe("planPriceDisplay", () => {
   });
 
   it("shows the yearly price with the two-months-free note", () => {
-    expect(planPriceDisplay(growth, "yearly")).toEqual({ amount: "₹6,999", unit: "/year", saving: "2 months free", gst: "+ 18% GST" });
+    expect(planPriceDisplay(growth, "yearly")).toEqual({ amount: "₹6,990", unit: "/year", saving: "2 months free", gst: "+ 18% GST" });
   });
 
   it("shows Custom, with no GST note, for a plan priced on request", () => {
