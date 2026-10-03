@@ -283,7 +283,6 @@ export const PLANS: PlanInfo[] = [
       "Unlimited businesses and users",
       "Everything in Growth",
       "Manufacturing and bill of materials",
-      "Approvals",
       "Full audit history",
       "Priority support and onboarding help",
     ],

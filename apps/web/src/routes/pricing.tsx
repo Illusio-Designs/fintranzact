@@ -119,7 +119,6 @@ function buildComparison(plans: PlanOption[]): Array<{ group: string; rows: Arra
         row("Devices signed in at once", (l) => formatPlanLimit(l.maxConcurrentSessions)),
         row("API access", (l) => (l.maxApiKeys === 0 ? false : l.maxApiKeys === Infinity ? "Unlimited keys" : `${l.maxApiKeys} keys`)),
         row("Audit log history", (l) => formatPlanLimit(l.auditRetentionDays, "days")),
-        row("Approvals", (l) => l.approvals),
       ],
     },
     {
