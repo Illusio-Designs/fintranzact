@@ -38,7 +38,7 @@ export function registerApiKeyTools(server: McpServer, client: FintranzactClient
     [
       "Create a new API key for programmatic access to the Fintranzact API.",
       "The full key is returned exactly once in this response — it is never stored in plain text and cannot be retrieved again.",
-      "Save the key immediately after creation. API keys are available on paid plans only.",
+      "Save the key immediately after creation. API access needs a plan that includes it (see the pricing page).",
       "Optionally set an expiry date (ISO 8601) to create a time-limited key.",
     ].join(" "),
     {

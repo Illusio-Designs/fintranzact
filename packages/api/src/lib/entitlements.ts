@@ -25,10 +25,12 @@ import {
   type AccessAddon,
   type AccessPlanSubscription,
   type AddonId,
+  type PlanFeatures,
   type PlanLimits,
   type SubscriptionStatus,
 } from "@fintranzact/shared";
 import { getPlanLimits } from "./plan-catalog.js";
+import { resolveFeatures } from "./plan-features.js";
 import { applyLazyTransitions } from "./billing/service.js";
 import { cacheGet, cacheSet } from "./entitlements-cache.js";
 import { entitlementError } from "./entitlement-error.js";
@@ -41,6 +43,12 @@ export interface Entitlements extends Access {
   accessGrandfathered: boolean;
   tenantStatus: string;
   limits: PlanLimits;
+  /**
+   * The feature flags in force right now: the plan's stored flags, all on for a
+   * grandfathered organisation, and Business-level during an active trial
+   * (lib/plan-features.ts). Feature gates read this, never the plan name.
+   */
+  features: PlanFeatures;
 }
 
 /** What is cached: the subscription-derived data. The tenant row (plan, status, trial) is read fresh. */
@@ -146,7 +154,19 @@ export async function getEntitlements(tenantId: string, now: Date = new Date()):
     addons: snap.addons,
     now,
   });
-  return { ...access, plan: tenant.plan, accessGrandfathered: tenant.accessGrandfathered, tenantStatus: tenant.tenantStatus, limits: await getPlanLimits(tenant.plan) };
+  const planLimits = await getPlanLimits(tenant.plan);
+  const features = await resolveFeatures(access.state, planLimits);
+  // The feature flags inside `limits` follow the same rules (trial = Business-level, grandfathered = all), so
+  // every existing read of limits.dataExport / limits.onlineStore sees them. Counts stay the plan's own.
+  const limits: PlanLimits = { ...planLimits, ...features };
+  return {
+    ...access,
+    plan: tenant.plan,
+    accessGrandfathered: tenant.accessGrandfathered,
+    tenantStatus: tenant.tenantStatus,
+    limits,
+    features,
+  };
 }
 
 /**

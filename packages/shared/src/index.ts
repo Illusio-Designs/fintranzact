@@ -8,6 +8,7 @@ export type { LineItemInput, LineItemResult, InvoiceTotalsInput, InvoiceTotals, 
 export { calculateGatewayCharge } from "./gateway.js";
 export type { GatewayChargeConfig, GatewayChargeRate, GatewayChargeResult } from "./gateway.js";
 export * from "./plans.js";
+export * from "./feature-gates.js";
 export * from "./plan-migration.js";
 export * from "./indian-states.js";
 export * from "./billing.js";

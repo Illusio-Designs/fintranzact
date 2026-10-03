@@ -20,6 +20,7 @@ import {
   type RoadmapBilling,
 } from "@fintranzact/shared";
 import { getPlanCatalog, invalidatePlanCatalog } from "../lib/plan-catalog.js";
+import { supportBadges } from "../lib/support-badges.js";
 import { router, protectedProcedure } from "../trpc.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { ensureRoadmapSeeded } from "../lib/roadmap.js";
@@ -151,8 +152,11 @@ export const platformRouter = router({
       const ownerOf = new Map<string, { name: string | null; email: string }>();
       for (const o of owners) if (!ownerOf.has(o.tenantId)) ownerOf.set(o.tenantId, { name: o.name, email: o.email });
 
+      // Support badges from the plan's operational flags (priority support, onboarding help).
+      const supportOf = new Map(await Promise.all(rows.map(async (r) => [r.id, await supportBadges(r.id)] as const)));
+
       return {
-        data: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), owner: ownerOf.get(r.id) ?? null })),
+        data: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), owner: ownerOf.get(r.id) ?? null, support: supportOf.get(r.id)! })),
         total: total?.n ?? 0,
         page: input.page,
         limit: input.limit,
@@ -225,6 +229,7 @@ export const platformRouter = router({
       return {
         ...tenant,
         referredBy: referredBy ?? null,
+        support: await supportBadges(input.id),
         createdAt: tenant.createdAt.toISOString(),
         members: members.map((m) => ({ ...m, joinedAt: m.joinedAt.toISOString() })),
         businesses: businessRows.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() })),

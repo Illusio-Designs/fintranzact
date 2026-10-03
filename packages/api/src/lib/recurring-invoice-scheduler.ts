@@ -31,7 +31,11 @@ async function tick() {
       for (const tenant of activeTenants) {
         try {
           await tickTenant(tenant.id, {
-            readOnly: async (id) => (await getEntitlements(id)).readOnly,
+            // Read-only organisations, and plans without the recurringInvoices flag, generate nothing.
+            readOnly: async (id) => {
+              const ent = await getEntitlements(id);
+              return ent.readOnly || !ent.features.recurringInvoices;
+            },
             getDb: getTenantDb,
             process: processDueTemplates,
             skip: skipDueTemplates,

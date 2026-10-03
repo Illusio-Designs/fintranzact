@@ -18,6 +18,7 @@ import { router, publicProcedure } from "../trpc.js";
 import { emailService } from "../lib/email.js";
 import { verifyTurnstile } from "../lib/turnstile.js";
 import { createFixedWindowLimiter } from "../lib/fixed-window-limiter.js";
+import { supportBadges } from "../lib/support-badges.js";
 
 export const ENQUIRY_LIMIT = 5;
 export const ENQUIRY_WINDOW_MS = 15 * 60 * 1000;
@@ -100,15 +101,20 @@ export const contactRouter = router({
 
     const to = process.env.CONTACT_INBOX || DEFAULT_INBOX;
 
+    // A signed-in customer writing in: tell the team which plan support they have
+    // (Priority support / Onboarding help included come from the plan flags). Anonymous visitors have none.
+    const badges = input.kind === "contact" && ctx.tenantId && ctx.user ? await supportBadges(ctx.tenantId) : null;
+
     try {
       if (input.kind === "contact") {
         await emailService.sendEnquiry({
           to,
           replyTo: input.email,
-          subject: `Website enquiry from ${input.name}`,
+          subject: `${badges?.priority ? "[Priority] " : ""}Website enquiry from ${input.name}`,
           fields: [
             ["Name", input.name],
             ["Email", input.email],
+            ...(badges && badges.labels.length ? [["Plan support", badges.labels.join(", ")] as [string, string]] : []),
             ["IP", ip ?? ""],
           ],
           message: input.message,
