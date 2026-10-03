@@ -2239,6 +2239,28 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
     ],
   },
   {
+    key: "2026-10-03-ticks-after-merge",
+    updates: [
+      {
+        // The enforcement integration tests (28 Postgres tests for the plan matrix,
+        // trial, grandfathered, read-only and downgrade cases) and the full suite
+        // are green in CI on main, so the tests line is ticked.
+        title: "P4. Plan & add-on access enforcement",
+        status: "in_progress",
+        done: ["Tests for each plan, add-on and read-only case"],
+      },
+      {
+        // The GSTR-1 and GSTR-3B filing wizards (web and mobile) are built on the
+        // official Sandbox recipes and tested against mocked Sandbox responses.
+        // Left unticked: GSTR-2B pull (no recipe yet), the quote, the test account
+        // and keys, and the test run / go-live, none of which have happened.
+        title: "Connect e-invoice, e-way bill and GST returns through Sandbox.co.in",
+        status: "in_progress",
+        done: ["GSTR-1 save and file with EVC OTP", "GSTR-3B prepare and file"],
+      },
+    ],
+  },
+  {
     key: "2026-10-03-plans-p1-p5",
     updates: [
       {
