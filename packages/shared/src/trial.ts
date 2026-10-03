@@ -9,6 +9,7 @@
  * Nothing here touches a database or the clock: callers pass `now`.
  */
 
+import { gstinCheckChar } from "./gstin.js";
 import { z } from "zod";
 import { TRIAL_DAYS } from "./plans.js";
 
@@ -250,18 +251,6 @@ export function normalisePhoneForClaim(raw: string | null | undefined): string |
 }
 
 const GSTIN_FORMAT = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-const GSTIN_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-/** The GSTIN check digit (the 15th character), per the GST numbering scheme. */
-export function gstinCheckChar(first14: string): string {
-  let sum = 0;
-  for (let i = 0; i < 14; i++) {
-    const code = GSTIN_CHARS.indexOf(first14[i]!);
-    const product = code * (i % 2 === 0 ? 1 : 2);
-    sum += Math.floor(product / 36) + (product % 36);
-  }
-  return GSTIN_CHARS[(36 - (sum % 36)) % 36]!;
-}
 
 /**
  * A GSTIN in the form claims compare on: uppercase, and only when it is a
