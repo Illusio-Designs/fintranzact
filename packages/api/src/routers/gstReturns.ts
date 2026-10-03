@@ -32,6 +32,15 @@ import { withAudit } from "../lib/audit.js";
 import { importGstr2b } from "./gstr2b.js";
 import { GstFiling, FilingRefusal } from "../lib/gst-filing.js";
 import {
+  GstTrackResolver,
+  RefreshLimiter,
+  financialYearLabel,
+  fyPeriods,
+  fyStartYear,
+  periodLabel as trackPeriodLabel,
+  findFiled,
+} from "../lib/gst-track.js";
+import {
   FlowError,
   GSTR1_PREREQUISITE,
   GSTR3B_PREREQUISITE,
@@ -40,6 +49,10 @@ import {
   resolvePan,
   saveAttempt,
 } from "../lib/gst-return-flow.js";
+
+/** Shared by every request: 5-minute display cache; pre-filing checks always go fresh. */
+const tracker = new GstTrackResolver({ sandbox: () => (useSandboxProvider() ? getSandboxClient() : null) });
+const refreshLimiter = new RefreshLimiter(6, 60_000);
 
 const periodInput = z.object({
   year: z.number().int().min(2020).max(2099),
@@ -69,18 +82,18 @@ async function returnsClient(db: TenantDatabase, businessId: string, username = 
       message: "GST return filing needs the Sandbox.co.in integration, which is not enabled on this server.",
     });
   }
-  const [biz] = await db.select({ gstin: businesses.gstin, pan: businesses.pan }).from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  const [biz] = await db.select({ gstin: businesses.gstin, pan: businesses.pan, registration: businesses.gstRegistrationType }).from(businesses).where(eq(businesses.id, businessId)).limit(1);
   if (!biz?.gstin) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Add the business GSTIN in Settings before filing returns." });
   }
-  return { gstin: biz.gstin, businessPan: biz.pan, client: new SandboxGstReturnsClient(sandbox, { gstin: biz.gstin, username }) };
+  return { gstin: biz.gstin, businessPan: biz.pan, composition: biz.registration === "composition", client: new SandboxGstReturnsClient(sandbox, { gstin: biz.gstin, username }) };
 }
 
 type FilingCtx = { db: TenantDatabase; businessId: string; user: { id: string } | null };
 
 /** The filing orchestrator for one period, wired to this business's data and journal. */
 async function filingFor(ctx: FilingCtx, input: { year: number; month: number }) {
-  const { gstin, businessPan, client } = await returnsClient(ctx.db, ctx.businessId);
+  const { gstin, businessPan, composition, client } = await returnsClient(ctx.db, ctx.businessId);
   const userId = ctx.user!.id;
   const filing = new GstFiling({
     gstin,
@@ -93,6 +106,8 @@ async function filingFor(ctx: FilingCtx, input: { year: number; month: number })
     gstr3bReport: () => generateGSTR3B(ctx.businessId, input.year, input.month, ctx.db),
     pan: (explicit) => resolvePan({ input: explicit, business: businessPan, gstin }),
     periodLabel: label(input),
+    // Filing frequency is not recorded by the app: monthly is assumed (the result says so).
+    prerequisite: (kind, period) => tracker.prerequisite({ gstin, kind, period, composition }),
   });
   return { gstin, filing, fp: gstnPeriod(input) };
 }
@@ -133,6 +148,23 @@ async function guarded<T>(fn: () => Promise<T>): Promise<T> {
     return toTrpc(err);
   }
 }
+
+/** After an in-app filing: confirm it on the portal and read the ARN (best effort, never throws). */
+async function confirmFiled(gstin: string, kind: "gstr1" | "gstr3b", period: string) {
+  const r = await tracker.track(gstin, fyStartYear(period), { fresh: true });
+  if (r.status !== "ok") return null;
+  const f = findFiled(r.filings, kind, period);
+  return f ? { arn: f.arn, filedOn: f.filedOn, valid: f.valid } : null;
+}
+
+const lite = (f: { arn: string | null; filedOn: string | null; mode: string | null; valid: boolean | null; status: string; rawType: string }) => ({
+  arn: f.arn,
+  filedOn: f.filedOn,
+  mode: f.mode,
+  valid: f.valid,
+  status: f.status,
+  rawType: f.rawType,
+});
 
 const audit = (action: string) => (_r: unknown, input: { year: number; month: number }) => ({
   action,
@@ -177,6 +209,44 @@ export const gstReturnsRouter = router({
       nilBlockers: nilBlockers ?? [],
     };
   }),
+
+  /**
+   * Return status from the GST portal via Sandbox ("Track GST Returns"): what
+   * is filed for a financial year, by month. Read-only. `refresh` skips our
+   * 5-minute cache and Sandbox's (at most 6 per minute per business).
+   */
+  filingStatus: adminProcedure
+    .input(z.object({ fyStartYear: z.number().int().min(2017).max(2099), refresh: z.boolean().default(false) }))
+    .query(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "read", "GstReport");
+      const [biz] = await ctx.db
+        .select({ gstin: businesses.gstin, registration: businesses.gstRegistrationType })
+        .from(businesses)
+        .where(eq(businesses.id, ctx.businessId))
+        .limit(1);
+      const base = { financialYear: financialYearLabel(input.fyStartYear), composition: biz?.registration === "composition" };
+      if (!biz?.gstin) {
+        return { ...base, status: "unavailable" as const, reason: "Add the business GSTIN in Settings to see its return status.", months: [], fetchedAt: null, cached: false };
+      }
+      if (input.refresh && !refreshLimiter.take(ctx.businessId)) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Refreshing too often. Wait a minute and try again." });
+      }
+      const r = await tracker.track(biz.gstin, input.fyStartYear, { fresh: input.refresh });
+      if (r.status !== "ok") return { ...base, status: "unavailable" as const, reason: r.reason, months: [], fetchedAt: null, cached: false };
+      const months = fyPeriods(input.fyStartYear).map((period) => {
+        const here = r.filings.filter((f) => f.period === period);
+        const g1 = findFiled(here, "gstr1", period);
+        const g3 = findFiled(here, "gstr3b", period);
+        return {
+          period,
+          label: trackPeriodLabel(period),
+          gstr1: g1 ? lite(g1) : null,
+          gstr3b: g3 ? lite(g3) : null,
+          others: here.filter((f) => f.returnType !== "gstr1" && f.returnType !== "gstr3b").map(lite),
+        };
+      });
+      return { ...base, status: "ok" as const, reason: null, months, fetchedAt: r.fetchedAt, cached: r.cached };
+    }),
 
   // ── GSTR-1 ───────────────────────────────────────────────────
 
@@ -241,7 +311,8 @@ export const gstReturnsRouter = router({
       if (ctx.tenantId) {
         await recordGovUsage({ tenantId: ctx.tenantId, businessId: ctx.businessId, gstin, kind: "gstr1_filed", reference: fp });
       }
-      return { filed: true, period: fp, referenceId: res.referenceId, nil: res.nil };
+      const tracked = await confirmFiled(gstin, "gstr1", fp);
+      return { filed: true, period: fp, referenceId: res.referenceId, nil: res.nil, tracked };
     }, (r) => ({ action: "gstReturns.fileGstr1", entityType: "gst_return", metadata: { period: r.period, referenceId: r.referenceId, nil: r.nil } }))),
 
   // ── GSTR-3B ──────────────────────────────────────────────────
@@ -291,7 +362,8 @@ export const gstReturnsRouter = router({
       if (ctx.tenantId) {
         await recordGovUsage({ tenantId: ctx.tenantId, businessId: ctx.businessId, gstin, kind: "gstr3b_filed", reference: fp });
       }
-      return { filed: true, period: fp, referenceId: res.referenceId, nil: res.nil };
+      const tracked = await confirmFiled(gstin, "gstr3b", fp);
+      return { filed: true, period: fp, referenceId: res.referenceId, nil: res.nil, tracked };
     }, (r) => ({ action: "gstReturns.fileGstr3b", entityType: "gst_return", metadata: { period: r.period, referenceId: r.referenceId, nil: r.nil } }))),
 
   /** Download GSTR-2B from the portal and run it through the existing import + reconciliation. */

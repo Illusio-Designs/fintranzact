@@ -191,6 +191,7 @@
 | gstReturns.fileGstr1 | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstReturns.fileGstr3b | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstReturns.filingAttempt | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ |
+| gstReturns.filingStatus | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ |
 | gstReturns.pollReturnStatus | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstReturns.postOffsetGstr3b | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstReturns.proceedGstr1 | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |

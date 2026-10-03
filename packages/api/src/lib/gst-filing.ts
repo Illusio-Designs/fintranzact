@@ -34,6 +34,7 @@ import {
   type PanSource,
   type ReturnKind,
 } from "./gst-return-flow.js";
+import { missingMessage, type PrereqResult } from "./gst-track.js";
 import { offsetBody, parseLedgerBalances, proposalKey, proposeOffset } from "./gst-3b-offset.js";
 
 export interface AttemptStore {
@@ -52,6 +53,8 @@ export interface FilingDeps {
   pan: (input?: string) => { pan: string; source: PanSource } | null;
   /** Display period for messages, e.g. "Aug 2026". */
   periodLabel: string;
+  /** Return-status prerequisite check (Track GST Returns); never throws. Omitted = no check. */
+  prerequisite?: (kind: ReturnKind, period: string) => Promise<PrereqResult>;
 }
 
 /** A refusal the user can act on (mapped to PRECONDITION_FAILED / BAD_REQUEST by the router). */
@@ -93,14 +96,37 @@ export class GstFiling {
     return gstr3bNilBlockers(await this.d.gstr3bReport());
   }
 
-  /** GSTR-3B prerequisite: refuse when we know GSTR-1 for the period is in progress but not filed. */
-  private async assertGstr1Done(period: string): Promise<void> {
-    const g1 = await this.load("gstr1", period);
-    if (g1 && g1.state !== "filed") {
-      throw new FilingRefusal(
-        `GSTR-1 for ${this.d.periodLabel} is not filed yet (step: ${g1.state}). File GSTR-1 first, then GSTR-3B.`,
-      );
+  /**
+   * Prerequisite check before a return is started. Blocks only when the GST
+   * portal shows earlier returns (or, for 3B, GSTR-1 of the same period) as
+   * not filed, or the return itself as already filed. "Could not verify" warns
+   * and allows; for 3B it then falls back to our own record of GSTR-1.
+   */
+  private async checkPrereq(kind: ReturnKind, period: string): Promise<string[]> {
+    const name = kind === "gstr1" ? "GSTR-1" : "GSTR-3B";
+    let verdict: PrereqResult["verdict"] = "unknown";
+    const warnings: string[] = [];
+    if (this.d.prerequisite) {
+      const r = await this.d.prerequisite(kind, period);
+      verdict = r.verdict;
+      if (r.alreadyFiled) {
+        const arn = r.alreadyFiled.arn ? ` (ARN ${r.alreadyFiled.arn})` : "";
+        throw new FilingRefusal(`${name} for ${this.d.periodLabel} is already filed on the GST portal${arn}.`);
+      }
+      if (r.verdict === "missing") throw new FilingRefusal(`${missingMessage(r)} Earlier returns must be filed before ${name} for ${this.d.periodLabel}.`);
+      if (r.verdict === "unknown") warnings.push("Could not verify earlier returns on the GST portal. Make sure they are filed before you continue.");
+      warnings.push(...r.notes.filter((n) => !warnings.includes(n)));
     }
+    if (kind === "gstr3b" && verdict !== "ok" && verdict !== "skipped") {
+      // The portal could not confirm GSTR-1: fall back to what we know from our own filings.
+      const g1 = await this.load("gstr1", period);
+      if (g1 && g1.state !== "filed") {
+        throw new FilingRefusal(
+          `GSTR-1 for ${this.d.periodLabel} is not filed yet (step: ${g1.state}). File GSTR-1 first, then GSTR-3B.`,
+        );
+      }
+    }
+    return warnings;
   }
 
   prerequisite(kind: ReturnKind): string {
@@ -113,12 +139,13 @@ export class GstFiling {
   async saveGstr1(period: string, turnover: { gt: number; curGt: number }) {
     const attempt = await this.load("gstr1", period);
     assertCanRun("gstr1", "save", attempt, false);
+    const warnings = await this.checkPrereq("gstr1", period);
     const report = await this.d.gstr1Report();
     const body = gstr1SaveBody(report, this.d.gstin, period, turnover);
     const referenceId = await this.d.client.saveGstr1(period, body);
     const next = this.startPolling({ ...newAttempt("gstr1", period, false, "saved", this.now()), saveRef: referenceId });
     await this.put(next);
-    return { state: next.state, referenceId };
+    return { state: next.state, referenceId, warnings };
   }
 
   /** Step 3 (normal) or the first step of a nil return. */
@@ -126,7 +153,7 @@ export class GstFiling {
     const attempt = await this.load("gstr1", period);
     assertCanRun("gstr1", "proceed", attempt, opts.nil);
     if (attempt?.state === "proceeding" && attempt.nil === opts.nil) {
-      return { state: attempt.state, referenceId: attempt.proceedRef ?? null, resumed: true };
+      return { state: attempt.state, referenceId: attempt.proceedRef ?? null, resumed: true, warnings: [] as string[] };
     }
     if (opts.nil) {
       if (!opts.confirmNil) {
@@ -135,11 +162,13 @@ export class GstFiling {
       const blockers = await this.gstr1NilBlockers();
       if (blockers.length) throw new FilingRefusal(nilRefusal("GSTR-1", this.d.periodLabel, blockers));
     }
+    // A nil return starts here: check what must be filed before it. (A normal return was checked at save.)
+    const warnings = opts.nil && !attempt ? await this.checkPrereq("gstr1", period) : [];
     const referenceId = await this.d.client.proceedGstr1(period, opts.nil);
     const base = opts.nil ? newAttempt("gstr1", period, true, "proceeding", this.now()) : { ...attempt!, state: "proceeding" as AttemptState };
     const next = this.startPolling({ ...base, proceedRef: referenceId });
     await this.put(next);
-    return { state: next.state, referenceId, resumed: false };
+    return { state: next.state, referenceId, resumed: false, warnings };
   }
 
   /** Step 4. Idempotent once the summary is stored. */
@@ -196,15 +225,18 @@ export class GstFiling {
     // GSTR-1 nil is decided by the attempt (started via proceed); a 3B nil has no earlier step, so it is asked for here.
     const nil = kind === "gstr1" ? attempt?.nil ?? false : !!opts.nil || (attempt?.nil ?? false);
     assertCanRun(kind, "otp", attempt, nil);
-    if (kind === "gstr3b") await this.assertGstr1Done(period);
-    if (nil) await this.assertNilAllowed(kind, !!opts.confirmNil || !!attempt?.nil);
+    let warnings: string[] = [];
+    if (nil) {
+      await this.assertNilAllowed(kind, !!opts.confirmNil || !!attempt?.nil);
+      if (kind === "gstr3b" && attempt?.state !== "otp_requested") warnings = await this.checkPrereq("gstr3b", period);
+    }
     if (!nil && kind === "gstr1" && !attempt?.chksum) throw new FilingRefusal("Fetch the GSTR-1 summary first.");
     if (!nil && kind === "gstr3b" && !attempt?.details) throw new FilingRefusal("Fetch the updated GSTR-3B details (tax payment) first.");
     const p = this.requirePan(opts.pan);
     await this.d.client.requestEvcOtp(kind === "gstr1" ? "gstr-1" : "gstr-3b", p.pan);
     const base = attempt && attempt.nil === nil ? attempt : newAttempt(kind, period, nil, "otp_requested", this.now());
     await this.put({ ...base, state: "otp_requested", otpRequestedAt: this.now(), lastError: undefined });
-    return { sent: true, panMasked: mask(p.pan), panSource: p.source, nil };
+    return { sent: true, panMasked: mask(p.pan), panSource: p.source, nil, warnings };
   }
 
   // ── File ─────────────────────────────────────────────────────
@@ -252,7 +284,7 @@ export class GstFiling {
   async saveGstr3b(period: string) {
     const attempt = await this.load("gstr3b", period);
     assertCanRun("gstr3b", "save", attempt, false);
-    await this.assertGstr1Done(period);
+    const warnings = await this.checkPrereq("gstr3b", period);
     const [report, r1] = await Promise.all([this.d.gstr3bReport(), this.d.gstr1Report()]);
     let portalHasData = false;
     try {
@@ -265,7 +297,7 @@ export class GstFiling {
     const referenceId = await this.d.client.saveGstr3b(period, gstr3bToGstn(report, this.d.gstin, period));
     const next = this.startPolling({ ...newAttempt("gstr3b", period, false, "saved", this.now()), saveRef: referenceId });
     await this.put(next);
-    return { state: next.state, referenceId, portalHadData: portalHasData, reconciliation: reconcileHint(r1, report), prerequisite: GSTR3B_PREREQUISITE };
+    return { state: next.state, referenceId, portalHadData: portalHasData, reconciliation: reconcileHint(r1, report), prerequisite: GSTR3B_PREREQUISITE, warnings };
   }
 
   /** Step 4: ledger balances and the PROPOSED set-off. Nothing is posted. */

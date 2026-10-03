@@ -23,7 +23,7 @@ E-invoice, e-way bill, GSTIN lookup, TDS/TCS and GST returns go through Sandbox.
 
 Code: `lib/sandbox/gst-returns.ts` (HTTP calls), `lib/gst-return-flow.ts` (state machine, polling schedule, guards), `lib/gst-filing.ts` (orchestration), `lib/gst-3b-offset.ts` (set-off proposal), `routers/gstReturns.ts` (procedures). Base URL `https://api.sandbox.co.in` (test: `https://test-api.sandbox.co.in`). Every taxpayer call sends `authorization: <taxpayer token>` (the token itself, no "Bearer"), `x-api-key`, `x-api-version: 1.0.0` and `Content-Type: application/json`.
 
-Prerequisites: all earlier period returns are filed; for GSTR-3B, GSTR-1 of the same period is filed and 3B agrees with GSTR-1, and the cash and credit ledgers cover the tax. The taxpayer token is valid 6 hours and must stay valid through the whole filing. The app shows this text with the filing steps. It checks one prerequisite itself: GSTR-3B is refused while our own record shows GSTR-1 of the same period started but not filed. A return filed outside the app is not visible to us, so no record means a warning, not a block.
+Prerequisites: all earlier period returns are filed; for GSTR-3B, GSTR-1 of the same period is filed and 3B agrees with GSTR-1, and the cash and credit ledgers cover the tax. The taxpayer token is valid 6 hours and must stay valid through the whole filing. The app shows this text with the filing steps. It checks the prerequisites itself with "Track GST Returns" (below) before a return is started. A return filed outside the app is visible there too.
 
 ### GSTR-1 (6 steps)
 
@@ -94,6 +94,18 @@ The token is cached in memory per GSTIN with a 10-minute margin inside the 6 hou
 - Whether the EVC PAN is the registration PAN or the authorised signatory's (default: explicit input, business PAN, then GSTIN characters 3-12).
 - Whether a nil 3B needs a status check after filing (the recipe shows none), and the success response shape.
 - Per-call charges of these APIs. None of this has been run against a live Sandbox test account.
+
+## Track GST Returns (return filing status)
+
+Code: `lib/sandbox/gst-track.ts` (adapter), `lib/gst-track.ts` (financial-year helpers, prerequisite verdict, cached resolver), query `gstReturns.filingStatus`, web panel `components/gst/ReturnStatusPanel.tsx` (GSTR-1 and GSTR-3B tabs of the GST Returns page; the mobile GST screen is still "coming soon").
+
+`POST /gst/compliance/public/gstrs/track?financial_year=FY 2025-26[&gstr=gstr-1]`, body `{"gstin": "..."}`. A PUBLIC endpoint: it needs only the platform's Sandbox access token (the deployment's API token), not the 6-hour taxpayer session. Headers: `authorization`, `x-api-key`, `x-api-version: 1.0.0` and, for display lookups only, `x-accept-cache: true`. `financial_year` is required with the literal `FY ` prefix (the gateway client now writes spaces in query strings as `%20`, as in the docs). The success body is `data.data.EFiledlist[]` with `arn`, `dof` (DD-MM-YYYY), `mof`, `ret_prd` (MMYYYY), `rtntype`, `status` and `valid` (Y/N); the list is unordered and is sorted by period. Errors arrive as HTTP 200 with `data.error` and `status_cd` "0": `RET13510` ("No Record found") means nothing filed yet, `RTN_22` is an invalid financial year (a failure); HTTP 422 is an invalid GSTIN pattern.
+
+Prerequisite verdict (`derivePrerequisite`, pure and table-tested) for a return type and period: `ok`, `missing` (with the periods), `unknown` (could not verify) or `skipped` (composition dealers, who file CMP-08 and GSTR-4). Every earlier period of the financial year, plus March of the previous one for April, must be filed for the same return type; GSTR-3B also needs GSTR-1 of the same period. Periods before the first filing the tracker shows are not demanded (the registration date is unknown), and a GSTIN with no filing at all is allowed with a note. The filing frequency is not stored by the app, so monthly filing is assumed and the result says so; the quarterly logic (quarter-end months) is in place for when a setting exists. A return the portal already shows as filed is refused with its ARN.
+
+Where it is used: before `saveGstr1`, before a nil GSTR-1 starts (`proceedGstr1`), before `saveGstr3b` and before a nil GSTR-3B's OTP request. It blocks only on `missing` (the message lists the returns to file first) or an already-filed return. `unknown` warns and allows (`warnings` in the response); for GSTR-3B it then falls back to our own record of GSTR-1. The pre-filing check always goes to the origin (no `x-accept-cache`, no local cache). The display lookup behind `filingStatus` is cached for 5 minutes in the server process and accepts Sandbox's cache; `refresh: true` skips both and is limited to 6 per minute per business. The resolver never throws. After an in-app filing, `fileGstr1` / `fileGstr3b` look the return up once (fresh) and return `tracked` (`arn`, `filedOn`, `valid`), or `null` when the tracker has not caught up.
+
+Still unverified: accepted `gstr` filter values, the exact `rtntype` strings (the code lowercases and strips punctuation, so `GSTR1`, `GSTR-1`, `GSTR3B` all work), how quarterly (QRMP) filings appear in `ret_prd`, whether `valid: "N"` means the record should not count (it is shown but does not block), and the charge per call (every call counts against the plan through the client meter).
 
 CA checklist for TDS/TCS rules: [`TDS-CA-VERIFICATION.md`](TDS-CA-VERIFICATION.md).
 

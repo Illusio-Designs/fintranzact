@@ -278,6 +278,9 @@ export class SandboxClient {
       if (v !== undefined) url.searchParams.set(k, String(v));
     }
 
+    // URLSearchParams writes a space as "+"; the gateway's docs show %20 (e.g. financial_year=FY 2025-26).
+    url.search = url.search.replace(/\+/g, "%20");
+
     const headers: Record<string, string> = {
       "x-api-key": this.config.apiKey,
       accept: "application/json",

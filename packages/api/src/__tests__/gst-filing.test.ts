@@ -10,6 +10,7 @@ import { GstFiling, FilingRefusal, type AttemptStore } from "../lib/gst-filing.j
 import { resolvePan, pollDecision, POLL_FLOOR_MS, POLL_MAX_MS, FlowError, type Attempt } from "../lib/gst-return-flow.js";
 import { logger } from "../lib/logger.js";
 import type { GSTR1Report, GSTR3BReport } from "../lib/gst-reports.js";
+import type { PrereqResult } from "../lib/gst-track.js";
 
 const CFG = { apiKey: "key_test_abc", apiSecret: "s", baseUrl: SANDBOX_TEST_URL };
 const GSTIN = "27AAAPL1234C1ZV";
@@ -24,7 +25,7 @@ const ok = (data: object = {}) => json({ code: 200, data: { status_cd: "1", ...d
 
 interface Rec { method: string; path: string; query: URLSearchParams; body: any; headers: Record<string, string> }
 
-function makeWorld(over: { gstr1?: Partial<GSTR1Report>; gstr3b?: Partial<GSTR3BReport> } = {}) {
+function makeWorld(over: { gstr1?: Partial<GSTR1Report>; gstr3b?: Partial<GSTR3BReport>; prereq?: PrereqResult } = {}) {
   const calls: Rec[] = [];
   const state = { status: "P" as string, statusErrors: undefined as unknown, failFile: null as null | Response, ledger: undefined as unknown, details: undefined as unknown, saveFailsOnce: false };
   const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
@@ -78,6 +79,7 @@ function makeWorld(over: { gstr1?: Partial<GSTR1Report>; gstr3b?: Partial<GSTR3B
     gstr1Report: async () => gstr1, gstr3bReport: async () => gstr3b,
     pan: (i) => resolvePan({ input: i, business: null, gstin: GSTIN }),
     periodLabel: "Aug 2026",
+    ...(over.prereq ? { prerequisite: async () => over.prereq! } : {}),
   });
   return { filing, calls, state, journal, store, clock, client };
 }
@@ -484,5 +486,63 @@ describe("PAN", () => {
     await w.filing.saveGstr1(P, { gt: 0, curGt: 0 });
     await expect(w.filing.requestEvcOtp("gstr1", P, { pan: "12345" })).rejects.toBeInstanceOf(FlowError);
     void GstReturnsError;
+  });
+});
+
+describe("return-status prerequisite (Track GST Returns)", () => {
+  const ok: PrereqResult = { verdict: "ok", missing: [], alreadyFiled: null, notes: [] };
+  const missing: PrereqResult = { verdict: "missing", missing: [{ returnType: "gstr1", period: "062026", label: "GSTR-1 Jun 2026" }, { returnType: "gstr1", period: "072026", label: "GSTR-1 Jul 2026" }], alreadyFiled: null, notes: [] };
+  const unknown: PrereqResult = { verdict: "unknown", missing: [], alreadyFiled: null, notes: ["Sandbox is not configured on this server."] };
+
+  it("blocks save with the list of missing returns, before anything is sent to the portal", async () => {
+    const w = makeWorld({ prereq: missing });
+    await signedIn(w);
+    await expect(w.filing.saveGstr1(P, { gt: 0, curGt: 0 })).rejects.toThrow(/File these returns first: GSTR-1 Jun 2026, GSTR-1 Jul 2026/);
+    expect(w.calls.length).toBe(0);
+  });
+
+  it("warns but allows when the status could not be verified", async () => {
+    const w = makeWorld({ prereq: unknown });
+    await signedIn(w);
+    const r = await w.filing.saveGstr1(P, { gt: 0, curGt: 0 });
+    expect(r.state).toBe("saved");
+    expect(r.warnings.join(" ")).toMatch(/Could not verify earlier returns/);
+  });
+
+  it("refuses a return the portal already shows as filed", async () => {
+    const w = makeWorld({ prereq: { ...ok, alreadyFiled: { arn: "AA270826000001Z", filedOn: "2026-09-10", valid: true } } });
+    await signedIn(w);
+    await expect(w.filing.saveGstr1(P, { gt: 0, curGt: 0 })).rejects.toThrow(/already filed on the GST portal \(ARN AA270826000001Z\)/);
+  });
+
+  it("GSTR-3B is blocked while GSTR-1 of the same period is missing; nil 3B too", async () => {
+    const m3: PrereqResult = { verdict: "missing", missing: [{ returnType: "gstr1", period: P, label: "GSTR-1 Aug 2026" }], alreadyFiled: null, notes: [] };
+    const w = makeWorld({ prereq: m3 });
+    await signedIn(w);
+    await expect(w.filing.saveGstr3b(P)).rejects.toThrow(/GSTR-1 Aug 2026/);
+    await expect(w.filing.requestEvcOtp("gstr3b", P, { nil: true, confirmNil: true })).rejects.toThrow(/GSTR-1 Aug 2026/);
+    expect(w.calls.length).toBe(0);
+  });
+
+  it("when the portal cannot confirm GSTR-1, our own record still blocks 3B", async () => {
+    const w = makeWorld({ prereq: unknown });
+    await signedIn(w);
+    await w.filing.saveGstr1(P, { gt: 0, curGt: 0 });
+    await expect(w.filing.saveGstr3b(P)).rejects.toThrow(/GSTR-1 for Aug 2026 is not filed yet/);
+  });
+
+  it("skipped (composition) and ok verdicts pass without warnings", async () => {
+    for (const v of ["ok", "skipped"] as const) {
+      const w = makeWorld({ prereq: { ...ok, verdict: v } });
+      await signedIn(w);
+      expect((await w.filing.saveGstr1(P, { gt: 0, curGt: 0 })).warnings).toEqual([]);
+    }
+  });
+
+  it("a nil GSTR-1 is checked when it starts", async () => {
+    const w = makeWorld({ prereq: missing });
+    await signedIn(w);
+    await expect(w.filing.proceedGstr1(P, { nil: true, confirmNil: true })).rejects.toThrow(/File these returns first/);
+    expect(w.calls.length).toBe(0);
   });
 });
