@@ -508,6 +508,29 @@ export const sandboxCallCounters = pgTable("sandbox_call_counters", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * HSN / SAC codes re-verified with Sandbox by the daily refresh job. The
+ * resolver reads it as a middle layer (live Sandbox, then this table when the
+ * row is under 30 days old, then the bundled CBIC list). Platform-wide, never
+ * per tenant. status "not_found" rows only record that Sandbox did not list
+ * the code, so the job does not retry it first every day.
+ */
+export const hsnSandboxCodes = pgTable("hsn_sandbox_codes", {
+  code: text("code").primaryKey(),
+  kind: text("kind").notNull(),
+  description: text("description").notNull().default(""),
+  rate: numeric("rate", { precision: 6, scale: 2 }),
+  active: boolean("active").default(true).notNull(),
+  inactiveReason: text("inactive_reason"),
+  effectiveFrom: text("effective_from"),
+  effectiveTo: text("effective_to"),
+  status: text("status").default("ok").notNull(),
+  source: text("source").default("sandbox").notNull(),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("hsn_sandbox_codes_checked_idx").on(t.checkedAt),
+]);
+
 // ── Two-factor authentication ──────────────────────────────────
 
 /** One row per user: the TOTP secret and its lockout state. confirmed_at NULL = enrolment pending. */

@@ -69,6 +69,12 @@ Tap **Items** in the bottom tab bar (if visible) or navigate to the Items sectio
 | **Tax Inclusive** | If enabled, the sale price already includes GST. The taxable value is back-calculated. |
 | **HSN Code** | Harmonised System of Nomenclature code (for products) or SAC code (for services). Printed on invoices and used in GSTR-1 HSN summary. |
 
+### How we check HSN/SAC codes
+
+When you type a code, a small card under the field says what it stands for. Where we can, the code is checked live with **Sandbox**, our government data partner, and the card shows Sandbox's description, GST rate and effective dates with a **Verified with Sandbox** label. When Sandbox can't be reached, or isn't set up for your account, the card shows the description from the **official CBIC list** and says so. Fintranzact also re-checks the codes your items use once a day, so a recent Sandbox answer can still be shown during a short outage.
+
+If a code has been withdrawn, or Sandbox doesn't list it, you'll see an amber note when you type it and again after you save. These notes are only a heads-up: your item still saves, and we never change your items for you. A code that isn't a real HSN or SAC code in the official list is still refused.
+
 ### Stock tracking fields
 
 | Field | Notes |

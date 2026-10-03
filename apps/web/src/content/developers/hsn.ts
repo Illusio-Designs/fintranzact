@@ -63,8 +63,15 @@ for item in results:
         { name: "hsn", type: "string", required: true, description: "HSN or SAC code to validate (2–8 characters)" },
       ],
       output: {
-        description: "Validation result, with the code's details when it is valid.",
-        example: { valid: true, details: { code: "61091000", type: "goods", description: "T-shirts, singlets and other vests, knitted or crocheted - of cotton", match: "code" } },
+        description: "Validation result, with the code's details when it is valid, plus where the answer came from. `valid` and `details` always mean the bundled CBIC list; the rest is additive. `source`: `sandbox` (checked live with Sandbox.co.in), `refreshed` (Sandbox's answer from the daily refresh, used while Sandbox is down or not configured and the row is under 30 days old) or `bundled`. `sandboxStatus`: `ok`, `unavailable`, `not_configured`, `not_found` or `skipped`. `sandbox` carries Sandbox's description, rate, effective dates and active flag (`null` for `bundled`). `checkedAt` is set for `refreshed`. `warning` is advisory text (withdrawn on Sandbox, or not listed there).",
+        example: {
+          valid: true,
+          details: { code: "61091000", type: "goods", description: "T-shirts, singlets and other vests, knitted or crocheted - of cotton", match: "code" },
+          source: "sandbox",
+          sandboxStatus: "ok",
+          checkedAt: null,
+          sandbox: { description: "T-shirts, singlets and other vests, of cotton", rate: 12, effectiveFrom: "2017-07-01", effectiveTo: null, active: true, inactiveReason: null },
+        },
       },
       codeExamples: {
         curl: `curl "${API_BASE_URL}/api/trpc/hsn.validate?input=%7B%22json%22%3A%7B%22hsn%22%3A%2261091000%22%7D%7D"`,
@@ -86,6 +93,8 @@ print("Valid:", result["valid"])`,
       gotchas: [
         "This is a public endpoint — no authentication required.",
         "Valid codes are 4 to 8 digits: a listed code (e.g. '61091000') or the heading of listed codes (e.g. '6109', returned with match: 'heading'). 2-digit chapters are not valid.",
+        "Sandbox is consulted only when this deployment uses Sandbox and has its keys; otherwise the response is the bundled answer with `sandboxStatus: \"not_configured\"`. A slow or failing Sandbox falls back to the refreshed table, then the bundled list, so the call stays fast and never fails because of Sandbox.",
+        "`warning` and `sandbox.active: false` are advisory. A code Sandbox calls withdrawn still has `valid: true` while the bundled list has it; the item save accepts it and returns the warning in `hsnCheck`.",
         "The list is the CBIC HSN / SAC list (12,600+ HSN and ~500 SAC codes). It does not check whether the code length is mandatory for your turnover bracket; use hsn.validateForTurnover for that.",
       ],
       relatedEndpoints: ["hsn-search", "hsn-validate-for-turnover"],

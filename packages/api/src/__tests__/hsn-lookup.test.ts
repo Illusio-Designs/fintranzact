@@ -252,3 +252,60 @@ describe("secrets are never logged", () => {
     expect(spies[0].mock.calls.some((c) => JSON.stringify(c).includes("errorKind"))).toBe(true);
   });
 });
+
+describe("resolveHsn: the refreshed layer (live, then refreshed, then bundled)", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const row = (over: Partial<SandboxHsnResult> = {}, ageMs = 2 * DAY) => ({
+    result: sb({ description: "Refreshed penicillins", rate: 12, ...over }),
+    checkedAt: t - ageMs,
+  });
+  const offline: HsnLookupClient["lookupHsn"] = async () => { throw new HsnLookupError("down", "unavailable", 503); };
+
+  it("uses a row under 30 days old when Sandbox is down, as source refreshed", async () => {
+    const { r } = setup(offline, { refreshed: async () => row() });
+    const res = await r.resolveHsn("30041010");
+    expect(res).toMatchObject({ source: "refreshed", sandboxStatus: "unavailable", valid: true, description: "Refreshed penicillins", rate: 12 });
+    expect(res.checkedAt).toBe(new Date(t - 2 * DAY).toISOString());
+    expect(res.warning).toBeUndefined();
+  });
+
+  it("uses a row when Sandbox is not configured", async () => {
+    const r = createHsnResolver({ getClient: () => null, bundled: describeHsn, now: () => t, settings: () => ({ enabled: true, timeoutMs: 2500 }), refreshed: async () => row() });
+    expect(await r.resolveHsn("30041010")).toMatchObject({ source: "refreshed", sandboxStatus: "not_configured" });
+  });
+
+  it("live Sandbox wins over a refreshed row", async () => {
+    const refreshed = vi.fn(async () => row());
+    const { r } = setup(async () => sb({ description: "Live answer" }), { refreshed });
+    expect(await r.resolveHsn("30041010")).toMatchObject({ source: "sandbox", description: "Live answer" });
+    expect(refreshed).not.toHaveBeenCalled();
+  });
+
+  it("ignores a row 30 days old or more and falls to the bundled list", async () => {
+    const { r } = setup(offline, { refreshed: async () => row({}, 30 * DAY) });
+    expect(await r.resolveHsn("30041010")).toMatchObject({ source: "bundled", sandboxStatus: "unavailable" });
+    const { r: r2 } = setup(offline, { refreshed: async () => row({}, 29 * DAY) });
+    expect((await r2.resolveHsn("30041010")).source).toBe("refreshed");
+  });
+
+  it("a refreshed withdrawn code is not valid and carries a warning", async () => {
+    const { r } = setup(offline, { refreshed: async () => row({ active: false, inactiveReason: "Merged" }) });
+    const res = await r.resolveHsn("30041010");
+    expect(res).toMatchObject({ source: "refreshed", valid: false, active: false });
+    expect(res.warning).toContain("Merged");
+  });
+
+  it("does not use the refreshed layer when Sandbox answers not found, or with liveOnly", async () => {
+    const refreshed = vi.fn(async () => row());
+    const { r } = setup(async () => null, { refreshed });
+    expect(await r.resolveHsn("30041010")).toMatchObject({ source: "bundled", sandboxStatus: "not_found" });
+    const { r: r2 } = setup(offline, { refreshed });
+    expect(await r2.resolveHsn("30041010", { liveOnly: true })).toMatchObject({ source: "bundled", sandboxStatus: "unavailable" });
+    expect(refreshed).not.toHaveBeenCalled();
+  });
+
+  it("a throwing refreshed lookup falls back to the bundled list", async () => {
+    const { r } = setup(offline, { refreshed: async () => { throw new Error("db down"); } });
+    expect(await r.resolveHsn("30041010")).toMatchObject({ source: "bundled", valid: true });
+  });
+});

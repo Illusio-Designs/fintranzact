@@ -71,10 +71,13 @@ export default function EditItemScreen() {
   }, [item, initialized]);
 
   const updateItem = trpc.item.update.useMutation({
-    onSuccess: () => {
+    onSuccess: (updated) => {
       utils.item.list.invalidate();
       utils.item.getById.invalidate({ id: id ?? "" });
-      router.back();
+      // The item is saved either way; an HSN / SAC note is advisory only.
+      const note = updated?.hsnCheck?.warning;
+      if (note) Alert.alert("HSN / SAC note", note, [{ text: "OK", onPress: () => router.back() }]);
+      else router.back();
     },
     onError: (error) => {
       Alert.alert("Error", error.message || "Failed to update item");

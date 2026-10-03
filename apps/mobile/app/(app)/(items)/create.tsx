@@ -74,9 +74,12 @@ export default function CreateItemScreen() {
   const lowStockRef = useRef<TextInput>(null);
 
   const createItem = trpc.item.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (created) => {
       utils.item.list.invalidate();
-      router.back();
+      // The item is saved either way; an HSN / SAC note is advisory only.
+      const note = created?.hsnCheck?.warning;
+      if (note) Alert.alert("HSN / SAC note", note, [{ text: "OK", onPress: () => router.back() }]);
+      else router.back();
     },
     onError: (error) => {
       Alert.alert("Error", error.message || "Failed to create item");

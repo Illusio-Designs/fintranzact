@@ -127,6 +127,13 @@
       "when": 1791222500000,
       "tag": "0017_invitation_credit_partner",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791222600000,
+      "tag": "0018_hsn_sandbox_codes",
+      "breakpoints": true
     }
   ]
 }

@@ -20,6 +20,9 @@ export const hsnRouter = router({
       const extra = {
         source: r.source,
         sandboxStatus: r.sandboxStatus,
+        /** When source is "refreshed": when Sandbox last confirmed the code. */
+        checkedAt: r.checkedAt,
+        /** Sandbox's answer, live or (source "refreshed") from the last daily refresh. */
         sandbox: r.sandbox
           ? {
               description: r.sandbox.description,

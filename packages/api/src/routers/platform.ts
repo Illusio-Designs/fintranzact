@@ -25,6 +25,7 @@ import { escapeLike } from "../lib/escape-like.js";
 import { ensureRoadmapSeeded } from "../lib/roadmap.js";
 import { isPlatformAdmin } from "../lib/platform-admin.js";
 import { sandboxQuotaStatus, tenantsWithUnbilledUsage, periodIsClosed } from "../lib/gov-usage.js";
+import { getHsnRefreshState } from "../lib/hsn-refresh.js";
 import { closeGovUsagePeriod } from "../lib/billing/service.js";
 import { invalidateEntitlements } from "../lib/entitlements-cache.js";
 import { setTrial } from "../lib/trial.js";
@@ -519,7 +520,11 @@ export const platformRouter = router({
 
   /** Partner applications, newest first, with a count per status. */
   /** Calls used this month against the Sandbox plan quota. */
-  sandboxQuota: platformAdminProcedure.query(() => sandboxQuotaStatus()),
+  sandboxQuota: platformAdminProcedure.query(async () => ({
+    ...(await sandboxQuotaStatus()),
+    /** Last daily HSN / SAC refresh and any withdrawn codes still used by items; null before the first run. */
+    hsnRefresh: await getHsnRefreshState(),
+  })),
 
   /** Month-end: raise the government API usage statement for every tenant with unbilled usage. */
   closeGovUsageMonth: platformAdminProcedure

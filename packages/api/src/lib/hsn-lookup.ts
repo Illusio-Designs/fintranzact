@@ -14,12 +14,17 @@
  *    in-memory LRU; concurrent lookups of one code share one call; a
  *    per-process guard caps calls per minute.
  *  - Lookups are not billed to customers (see sandbox/hsn.ts).
+ *  - Layers: live Sandbox, then the daily-refreshed table (hsn_sandbox_codes,
+ *    used when Sandbox is down or unconfigured and the row is under 30 days
+ *    old, source "refreshed"), then the bundled CBIC list.
  */
 
 import { logger } from "./logger.js";
 import { describeHsn, type HsnDetails } from "./hsn-data.js";
 import { useSandboxProvider } from "./gov-provider.js";
 import { getSandboxClient } from "./sandbox/client.js";
+import { controlDb, hsnSandboxCodes } from "@fintranzact/db";
+import { eq } from "drizzle-orm";
 import { HSN_CODE_RE, HsnLookupError, SandboxHsnClient, type HsnLookupClient, type SandboxHsnResult } from "./sandbox/hsn.js";
 
 export const HSN_SUCCESS_TTL_MS = 24 * 60 * 60 * 1000;
@@ -28,6 +33,9 @@ export const HSN_CACHE_MAX = 2000;
 export const HSN_DEFAULT_TIMEOUT_MS = 2500;
 /** Cap for the item-save path. */
 export const HSN_SAVE_TIMEOUT_MS = 2500;
+/** A refreshed row older than this is ignored. */
+export const HSN_REFRESHED_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const REFRESHED_READ_TIMEOUT_MS = 800;
 const RATE_GUARD_PER_MINUTE = 60;
 
 export type SandboxStatus = "ok" | "unavailable" | "not_configured" | "not_found" | "skipped";
@@ -35,7 +43,7 @@ export type SandboxStatus = "ok" | "unavailable" | "not_configured" | "not_found
 export interface HsnResolution {
   code: string;
   /** Where the description and validity come from. */
-  source: "sandbox" | "bundled";
+  source: "sandbox" | "refreshed" | "bundled";
   sandboxStatus: SandboxStatus;
   /** Real and usable: Sandbox says active, or (on fallback) the bundled list has it. */
   valid: boolean;
@@ -50,7 +58,16 @@ export interface HsnResolution {
   effectiveFrom: string | null;
   effectiveTo: string | null;
   active: boolean | null;
+  /** ISO time of the last Sandbox check, for source "refreshed". */
+  checkedAt: string | null;
   warning?: string;
+}
+
+/** A row of the refreshed table: Sandbox's answer from the last daily refresh. */
+export interface RefreshedHsn {
+  result: SandboxHsnResult;
+  /** ms since epoch. */
+  checkedAt: number;
 }
 
 type Outcome =
@@ -66,6 +83,8 @@ export interface HsnResolverDeps {
   /** HSN_SANDBOX_LOOKUP and HSN_LOOKUP_TIMEOUT_MS. */
   settings: () => { enabled: boolean; timeoutMs: number };
   maxPerMinute?: number;
+  /** The refreshed table lookup (middle layer). Absent = no such layer. Must not throw. */
+  refreshed?: (code: string) => Promise<RefreshedHsn | null>;
 }
 
 export function hsnSettingsFromEnv(env: NodeJS.ProcessEnv = process.env): { enabled: boolean; timeoutMs: number } {
@@ -73,6 +92,38 @@ export function hsnSettingsFromEnv(env: NodeJS.ProcessEnv = process.env): { enab
   const n = Number(env.HSN_LOOKUP_TIMEOUT_MS);
   const timeoutMs = Number.isFinite(n) && n >= 100 ? Math.min(Math.round(n), 10_000) : HSN_DEFAULT_TIMEOUT_MS;
   return { enabled, timeoutMs };
+}
+
+/** Read one fresh-enough row from hsn_sandbox_codes; null on any miss, error or slow database. */
+async function readRefreshedRow(code: string): Promise<RefreshedHsn | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const query = controlDb.select().from(hsnSandboxCodes).where(eq(hsnSandboxCodes.code, code)).limit(1);
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), REFRESHED_READ_TIMEOUT_MS);
+    });
+    const rows = await Promise.race([query, timeout]);
+    const row = rows?.[0];
+    if (!row || row.status !== "ok") return null;
+    return {
+      checkedAt: row.checkedAt.getTime(),
+      result: {
+        code: row.code,
+        kind: row.kind === "sac" ? "sac" : "hsn",
+        description: row.description,
+        rate: row.rate === null ? null : Number(row.rate),
+        effectiveFrom: row.effectiveFrom,
+        effectiveTo: row.effectiveTo,
+        active: row.active,
+        inactiveReason: row.inactiveReason,
+        source: "sandbox",
+      },
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const defaultDeps: HsnResolverDeps = {
@@ -84,6 +135,7 @@ const defaultDeps: HsnResolverDeps = {
   bundled: describeHsn,
   now: Date.now,
   settings: () => hsnSettingsFromEnv(),
+  refreshed: readRefreshedRow,
 };
 
 export interface ResolveOptions {
@@ -91,6 +143,8 @@ export interface ResolveOptions {
   now?: () => number;
   /** Per-call cap; never above the configured timeout. */
   timeoutMs?: number;
+  /** Skip the refreshed layer (the refresh job needs Sandbox's own answer). */
+  liveOnly?: boolean;
 }
 
 export function createHsnResolver(deps: HsnResolverDeps) {
@@ -192,6 +246,7 @@ export function createHsnResolver(deps: HsnResolverDeps) {
       effectiveFrom: null as string | null,
       effectiveTo: null as string | null,
       active: null as boolean | null,
+      checkedAt: null as string | null,
     };
     const fallback = (sandboxStatus: SandboxStatus, warning?: string): HsnResolution => ({
       ...base,
@@ -207,12 +262,45 @@ export function createHsnResolver(deps: HsnResolverDeps) {
       return fallback("skipped", "HSN / SAC code must be 2 to 8 digits.");
     }
 
+    /** The refreshed layer, for when Sandbox is down or unconfigured. */
+    const fromRefreshed = async (sandboxStatus: SandboxStatus): Promise<HsnResolution | null> => {
+      if (!deps.refreshed || opts.liveOnly) return null;
+      let row: RefreshedHsn | null = null;
+      try {
+        row = await deps.refreshed(code);
+      } catch {
+        row = null;
+      }
+      const t = (opts.now ?? deps.now)();
+      if (!row || t - row.checkedAt >= HSN_REFRESHED_MAX_AGE_MS) return null;
+      const r = row.result;
+      return {
+        ...base,
+        source: "refreshed",
+        sandboxStatus,
+        valid: r.active,
+        kind: r.kind,
+        description: r.description || bundled?.description || null,
+        sandbox: r,
+        rate: r.rate ?? null,
+        effectiveFrom: r.effectiveFrom ?? null,
+        effectiveTo: r.effectiveTo ?? null,
+        active: r.active,
+        checkedAt: new Date(row.checkedAt).toISOString(),
+        ...(r.active ? {} : { warning: `${code} is no longer active on Sandbox${r.inactiveReason ? `: ${r.inactiveReason}` : ""}.` }),
+      };
+    };
+
     try {
       const out = await sandboxOutcome(code, opts);
       if (out === "not_configured") {
+        const refreshed = await fromRefreshed("not_configured");
+        if (refreshed) return refreshed;
         return fallback("not_configured", bundled ? undefined : `${code} is not in the bundled HSN / SAC list.`);
       }
       if (out.kind === "unavailable") {
+        const refreshed = await fromRefreshed("unavailable");
+        if (refreshed) return refreshed;
         return fallback(
           "unavailable",
           bundled ? undefined : `${code} is not in the bundled list and Sandbox could not be reached to check it.`,
@@ -269,7 +357,7 @@ export const resetHsnLookupForTests = shared.clear;
 
 export interface HsnCheck {
   code: string;
-  source: "sandbox" | "bundled";
+  source: "sandbox" | "refreshed" | "bundled";
   sandboxStatus: SandboxStatus;
   valid: boolean;
   description: string | null;
