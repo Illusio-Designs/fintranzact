@@ -53,6 +53,8 @@ import { SubscriptionsView } from "@/components/platform/SubscriptionsView";
 import { ResetTwoFactorDialog, type ResetTarget } from "@/components/platform/ResetTwoFactorDialog";
 import { MemberRow } from "@/components/platform/MemberRow";
 import { SecurityActivitySection } from "@/components/platform/SecurityActivitySection";
+import { TrialSection, trialListLabel } from "@/components/platform/TrialSection";
+import { TrialSettingsCard } from "@/components/platform/TrialSettingsCard";
 
 type View = "overview" | "organisations" | "plans" | "subscriptions" | "partners" | "roadmap";
 const VIEWS: View[] = ["overview", "organisations", "plans", "subscriptions", "partners", "roadmap"];
@@ -377,6 +379,8 @@ function OrganisationsView({ onOpen }: { onOpen: (id: string) => void }) {
         <p className="mt-1 text-sm text-text-tertiary">Open one to see its members and businesses, or to change its plan.</p>
       </div>
 
+      <TrialSettingsCard />
+
       <section className="overflow-hidden rounded-2xl border border-border-light bg-surface-0">
         <div className="flex flex-wrap items-center gap-3 border-b border-border-light px-4 py-3">
           <h2 className="text-[15px] font-bold text-text-primary">
@@ -414,6 +418,7 @@ function OrganisationsView({ onOpen }: { onOpen: (id: string) => void }) {
                   <th>Owner</th>
                   <th>Plan</th>
                   <th>Status</th>
+                  <th>Trial</th>
                   <th className="text-right">Members</th>
                   <th>Signed up</th>
                 </tr>
@@ -442,6 +447,12 @@ function OrganisationsView({ onOpen }: { onOpen: (id: string) => void }) {
                       {t.accessGrandfathered ? <span className="ml-2"><Chip tone="amber">Grandfathered</Chip></span> : null}
                     </td>
                     <td><StatusPill status={t.status} /></td>
+                    <td>
+                      {(() => {
+                        const label = trialListLabel(t);
+                        return <Chip tone={label.tone}>{label.text}</Chip>;
+                      })()}
+                    </td>
                     <td className="text-right tabular-nums">{t.memberCount}</td>
                     <td className="text-text-secondary">{formatDate(t.createdAt)}</td>
                   </tr>
@@ -1354,6 +1365,8 @@ function OrganisationPanel({ id, onClose }: { id: string | null; onClose: () => 
                 : "The new plan's limits apply straight away."}
             </p>
           </section>
+
+          <TrialSection detail={detail} />
 
           <section className="space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wide text-text-tertiary">Members · {detail.members.length}</h3>

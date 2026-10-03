@@ -61,6 +61,15 @@ export const tenants = pgTable("tenants", {
    * (see deriveAccess in @fintranzact/shared). Self sign-up starts a 14-day trial.
    */
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  /** When the Full Access Trial began; NULL for rows from before it existed. */
+  trialStartedAt: timestamp("trial_started_at", { withTimezone: true }),
+  /**
+   * How the trial started: signup, partner (a partner referral: longer trial),
+   * admin (granted or extended in the console) or none (a trial was already
+   * used for this email / phone / GSTIN, so this organisation has none).
+   * Text so the set can grow; the allowed values are TRIAL_SOURCES (@fintranzact/shared).
+   */
+  trialSource: text("trial_source"),
   /**
    * Two-factor policy: "off" | "admins" (owners/admins) | "all" (every member).
    * Text rather than an enum so the set can grow without ALTER TYPE; the allowed
@@ -668,3 +677,41 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   user: one(users, { fields: [apiKeys.userId], references: [users.id] }),
   tenant: one(tenants, { fields: [apiKeys.tenantId], references: [tenants.id] }),
 }));
+
+
+// ── Full Access Trial: one trial per business ──────────────────
+// A row says "a trial was already used for this email / phone / GSTIN". Only a
+// SALTED SHA-256 hash of the normalised value is stored, never the value, so
+// the table cannot be read back into contact details. UNIQUE (kind, value_hash)
+// is what makes the check race-safe: two sign-ups with the same email cannot
+// both claim it. A claim stays after its organisation is deleted (the trial
+// was still used), so tenant_id is nulled rather than the row removed.
+
+export const trialClaims = pgTable("trial_claims", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** email | phone | gstin (TRIAL_CLAIM_KINDS in @fintranzact/shared). */
+  kind: text("kind").notNull(),
+  valueHash: text("value_hash").notNull(),
+  tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("trial_claims_kind_hash_idx").on(t.kind, t.valueHash),
+  index("trial_claims_tenant_idx").on(t.tenantId),
+]);
+
+// ── Full Access Trial: reminder log ────────────────────────────
+// One row per (organisation, reminder) once it has been sent or deliberately
+// skipped, claimed before the email goes out so a restart or a second
+// instance never sends it twice (the same pattern as tds_reminder_log).
+
+export const trialReminders = pgTable("trial_reminders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  /** days_7 | days_2 | days_0 (TRIAL_REMINDER_KINDS). */
+  kind: text("kind").notNull(),
+  /** sent | skipped (a late run passed it by, or the trial was changed). */
+  status: text("status").default("sent").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("trial_reminders_tenant_kind_idx").on(t.tenantId, t.kind),
+]);

@@ -18,15 +18,27 @@ export const billingEndpoints: EndpointGroup = {
       input: [],
       output: {
         description:
-          "`state` is one of `free`, `trialing`, `active`, `past_due_grace`, `halted`, `trial_expired`, `ended`, `suspended`. `reason` and `message` are set only while read-only or suspended. `canManageBilling` is true for owners (and platform superadmins): show a \"Choose a plan\" button to them and \"Ask your organisation owner\" to everyone else.",
+          "`state` is one of `free`, `trialing`, `active`, `past_due_grace`, `halted`, `trial_expired`, `ended`, `suspended`. `reason` and `message` are set only while read-only or suspended. `canManageBilling` is true for owners (and platform superadmins): show a \"Choose a plan\" button to them and \"Ask your organisation owner\" to everyone else. `trial` is the Full Access Trial: `active`, `ended`, `startedAt`, `endsAt`, `daysLeft` (whole days, rounded up, 0 when not active), `source` (`signup`, `partner`, `admin` or `none`), `totalDays` and, while active, `caps` = `{ aiQuestions, payrollEmployees, storePro: true }`. While it runs `effectivePlan` is `business` and `addons` has `ai_assistant`, `payroll` and `store_pro` on. `trialMessage` is set when there is no trial because one was already used.",
         example: {
           state: "trial_expired",
           readOnly: true,
           reason: "read_only_trial_expired",
           message:
-            "Your trial has ended. Choose a plan to keep creating and editing — you can still view, search, download PDFs and export your data.",
+            "Your trial has ended. Choose a plan to continue. You can still view, search, download PDFs and export your data.",
           trialEndsAt: "2026-09-30T18:29:59.000Z",
           trialDaysLeft: 0,
+          trial: {
+            active: false,
+            ended: true,
+            startedAt: "2026-09-16T18:29:59.000Z",
+            endsAt: "2026-09-30T18:29:59.000Z",
+            daysLeft: 0,
+            source: "signup",
+            totalDays: 14,
+            caps: null,
+          },
+          trialMessage: null,
+          effectivePlan: "growth",
           graceUntil: null,
           addons: [],
           upgradePath: "/settings?tab=billing",

@@ -7,7 +7,12 @@
  * What is cached (30s per organisation) is the subscription data, not the
  * verdict: the clock is applied on every call, so a trial or grace period ends
  * on time even inside the cache window. The organisation row (plan, status,
- * trial end) is read fresh on every call. Every billing change calls
+ * trial window and source) is read fresh on every call.
+ *
+ * During a Full Access Trial the limits are the BUSINESS plan's (whatever plan
+ * the organisation picked) and every add-on is on, with the caps from the
+ * trial settings in `trial.caps`. A read-only organisation always keeps data
+ * export, so "download and export your data" is true on every plan. Every billing change calls
  * invalidateEntitlements so the subscription data shows at once on this server.
  *
  * Overdue billing transitions (grace over → halted, cancel at period end,
@@ -27,7 +32,9 @@ import {
   type AddonId,
   type PlanLimits,
   type SubscriptionStatus,
+  type TrialSettings,
 } from "@fintranzact/shared";
+import { getTrialSettings } from "./trial-settings.js";
 import { getPlanLimits } from "./plan-catalog.js";
 import { applyLazyTransitions } from "./billing/service.js";
 import { cacheGet, cacheSet } from "./entitlements-cache.js";
@@ -40,6 +47,8 @@ export interface Entitlements extends Access {
   /** Permanent full access (a former Forever Free organisation): never trial-expired or read-only. */
   accessGrandfathered: boolean;
   tenantStatus: string;
+  /** The plan whose limits apply: Business during a trial, otherwise the organisation's own plan. */
+  effectivePlan: string;
   limits: PlanLimits;
 }
 
@@ -109,12 +118,21 @@ async function loadSnapshot(tenantId: string): Promise<Snapshot> {
  */
 async function loadTenant(
   tenantId: string,
-): Promise<{ plan: string; tenantStatus: string; trialEndsAt: Date | null; accessGrandfathered: boolean }> {
+): Promise<{
+  plan: string;
+  tenantStatus: string;
+  trialEndsAt: Date | null;
+  trialStartedAt: Date | null;
+  trialSource: string | null;
+  accessGrandfathered: boolean;
+}> {
   const [tenant] = await controlDb
     .select({
       plan: tenants.plan,
       status: tenants.status,
       trialEndsAt: tenants.trialEndsAt,
+      trialStartedAt: tenants.trialStartedAt,
+      trialSource: tenants.trialSource,
       accessGrandfathered: tenants.accessGrandfathered,
     })
     .from(tenants)
@@ -124,6 +142,8 @@ async function loadTenant(
     plan: tenant?.plan ?? "starter",
     tenantStatus: tenant?.status ?? "active",
     trialEndsAt: tenant?.trialEndsAt ?? null,
+    trialStartedAt: tenant?.trialStartedAt ?? null,
+    trialSource: tenant?.trialSource ?? null,
     accessGrandfathered: tenant?.accessGrandfathered ?? false,
   };
 }
@@ -136,17 +156,34 @@ export async function getEntitlements(tenantId: string, now: Date = new Date()):
     cacheSet(tenantId, snap);
   }
   const tenant = await loadTenant(tenantId);
+  // The caps are only read while a trial could be running (they ride in trial.caps).
+  const trialCaps: TrialSettings["caps"] | undefined =
+    tenant.trialEndsAt && tenant.trialEndsAt.getTime() > now.getTime() ? (await getTrialSettings()).caps : undefined;
   const access = deriveAccess({
     plan: tenant.plan,
     tenantStatus: tenant.tenantStatus,
     trialEndsAt: tenant.trialEndsAt,
+    trialStartedAt: tenant.trialStartedAt,
+    trialSource: tenant.trialSource,
+    trialCaps,
     accessGrandfathered: tenant.accessGrandfathered,
     planSubscription: snap.planSubscription,
     everHadPlanSubscription: snap.everHadPlanSubscription,
     addons: snap.addons,
     now,
   });
-  return { ...access, plan: tenant.plan, accessGrandfathered: tenant.accessGrandfathered, tenantStatus: tenant.tenantStatus, limits: await getPlanLimits(tenant.plan) };
+  // A running trial is Business-level whatever plan was picked at sign-up.
+  const effectivePlan = access.state === "trialing" ? "business" : tenant.plan;
+  const limits = await getPlanLimits(effectivePlan);
+  return {
+    ...access,
+    plan: tenant.plan,
+    effectivePlan,
+    accessGrandfathered: tenant.accessGrandfathered,
+    tenantStatus: tenant.tenantStatus,
+    // Read-only keeps data export on every plan (the banner promises it).
+    limits: access.readOnly && access.state !== "suspended" ? { ...limits, dataExport: true } : limits,
+  };
 }
 
 /**

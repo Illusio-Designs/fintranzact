@@ -60,18 +60,70 @@ describe("BillingBanner", () => {
     expect(screen.getByRole("link", { name: "Update payment" })).toBeInTheDocument();
   });
 
-  it("trialing: shows days left only in the last 7 days", () => {
-    set({ state: "trialing", trialDaysLeft: 12 });
-    const { container, unmount } = render(<BillingBanner />);
-    expect(container).toBeEmptyDOMElement();
-    unmount();
-    set({ state: "trialing", trialDaysLeft: 5 });
-    render(<BillingBanner />);
-    expect(screen.getByRole("status")).toHaveTextContent("5 days left in your trial.");
+  const trial = (daysLeft: number, over: object = {}) => ({
+    active: true, ended: false, daysLeft, source: "signup", totalDays: 14, startedAt: null, endsAt: null, caps: null, ...over,
   });
 
-  it("trial banner can be dismissed for the day and stays dismissed", () => {
-    set({ state: "trialing", trialDaysLeft: 2 });
+  it("trialing: a calm countdown with a Choose a plan button from the first day", () => {
+    set({ state: "trialing", trialDaysLeft: 9, trial: trial(9) });
+    render(<BillingBanner />);
+    const banner = screen.getByRole("status");
+    expect(banner).toHaveTextContent("9 days left in your Full Access Trial");
+    expect(banner).toHaveTextContent("Choose a plan");
+    expect(banner).toHaveAttribute("data-tone", "calm");
+    expect(screen.getByRole("link", { name: "Choose a plan" })).toHaveAttribute("href", "/settings?tab=billing");
+  });
+
+  it("trialing: amber and not dismissible at 3 days or fewer", () => {
+    set({ state: "trialing", trialDaysLeft: 3, trial: trial(3) });
+    render(<BillingBanner />);
+    expect(screen.getByRole("status")).toHaveAttribute("data-tone", "warning");
+    expect(screen.getByRole("status")).toHaveTextContent("3 days left");
+    expect(screen.queryByRole("button", { name: /dismiss/i })).toBeNull();
+  });
+
+  it("a partner referral sees 'Your 30-day partner trial'", () => {
+    set({ state: "trialing", trialDaysLeft: 30, trial: trial(30, { source: "partner", totalDays: 30 }) });
+    render(<BillingBanner />);
+    expect(screen.getByRole("status")).toHaveTextContent("Your 30-day partner trial: 30 days left");
+  });
+
+  it("a non-owner is told to ask the owner and gets no button", () => {
+    set({ state: "trialing", trialDaysLeft: 9, trial: trial(9), canManageBilling: false });
+    render(<BillingBanner />);
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Ask your organisation owner to choose a plan.");
+  });
+
+  it("ended: red, says Trial ended: read-only, and keeps the Choose a plan button", () => {
+    set({ state: "trial_expired", readOnly: true, reason: "read_only_trial_expired", trial: trial(0, { active: false, ended: true }) });
+    render(<BillingBanner />);
+    expect(screen.getByRole("status")).toHaveAttribute("data-tone", "danger");
+    expect(screen.getByRole("status")).toHaveTextContent("Trial ended: read-only");
+    expect(screen.queryByRole("button", { name: /dismiss/i })).toBeNull();
+  });
+
+  it("a trial that was never granted shows the already-used message", () => {
+    set({
+      state: "trial_expired", readOnly: true, reason: "read_only_trial_expired",
+      trial: trial(0, { active: false, ended: true, source: "none" }),
+      trialMessage: "A free trial was already used for this email, phone or GSTIN. Choose a plan to continue.",
+    });
+    render(<BillingBanner />);
+    expect(screen.getByRole("status")).toHaveTextContent("A free trial was already used for this email, phone or GSTIN. Choose a plan to continue.");
+  });
+
+  it("paid and grandfathered organisations see no trial banner even if a trial block is present", () => {
+    for (const state of ["active", "grandfathered"]) {
+      set({ state, trial: trial(5, { active: false }) });
+      const { container, unmount } = render(<BillingBanner />);
+      expect(container).toBeEmptyDOMElement();
+      unmount();
+    }
+  });
+
+  it("while more than 3 days are left the banner can be dismissed for the day and stays dismissed", () => {
+    set({ state: "trialing", trialDaysLeft: 9, trial: trial(9) });
     const { unmount } = render(<BillingBanner />);
     fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));
     expect(screen.queryByRole("status")).toBeNull();
@@ -80,10 +132,17 @@ describe("BillingBanner", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("a dismissal from an earlier day does not hide today's banner", () => {
+    localStorage.setItem("fintranzact:trial-banner-dismissed", "2020-01-01");
+    set({ state: "trialing", trialDaysLeft: 9, trial: trial(9) });
+    render(<BillingBanner />);
+    expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
   it("dismissal tolerates storage that throws", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("denied"); });
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("denied"); });
-    set({ state: "trialing", trialDaysLeft: 2 });
+    set({ state: "trialing", trialDaysLeft: 9, trial: trial(9) });
     render(<BillingBanner />);
     fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));
     expect(screen.queryByRole("status")).toBeNull();

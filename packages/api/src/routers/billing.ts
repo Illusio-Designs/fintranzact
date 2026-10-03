@@ -15,6 +15,7 @@ import {
   cycleAmount,
   entitlementMessage,
   planCheckoutAmount,
+  TRIAL_ALREADY_USED_MESSAGE,
   type SubscriptionStatus,
 } from "@fintranzact/shared";
 import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
@@ -197,6 +198,11 @@ export const billingRouter = router({
       message: ent.reason ? entitlementMessage(ent.reason) : null,
       trialEndsAt: ent.trialEndsAt,
       trialDaysLeft: ent.trialDaysLeft,
+      /** The Full Access Trial: active, window, source, add-on caps (additive). */
+      trial: ent.trial,
+      /** Why there is no trial, when there is none because one was already used. */
+      trialMessage: ent.trial.source === "none" && ent.readOnly ? TRIAL_ALREADY_USED_MESSAGE : null,
+      effectivePlan: ent.effectivePlan,
       graceUntil: ent.graceUntil,
       addons: ent.addons,
       upgradePath: BILLING_UPGRADE_PATH,

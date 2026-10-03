@@ -12,6 +12,7 @@ export * from "./plan-migration.js";
 export * from "./indian-states.js";
 export * from "./billing.js";
 export * from "./entitlements.js";
+export * from "./trial.js";
 export * from "./partners.js";
 export * from "./gst-uqc.js";
 export * from "./roadmap.js";

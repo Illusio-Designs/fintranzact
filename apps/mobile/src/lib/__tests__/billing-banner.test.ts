@@ -24,7 +24,6 @@ describe("bannerFor", () => {
   });
 
   it.each([
-    ["trial_expired", "read_only_trial_expired", "Your trial has ended."],
     ["halted", "read_only_halted", "Your last payment did not go through."],
     ["ended", "read_only_subscription_ended", "Your plan has ended."],
   ])("read-only (%s) for an owner offers 'Choose a plan'", (state, reason, lead) => {
@@ -48,14 +47,43 @@ describe("bannerFor", () => {
     expect(mk("2026-10-05T10:00:00Z")).toMatchObject({ tone: "warning", cta: "Update payment" });
   });
 
-  it("trial notice only in the last 7 days, dismissible per day", () => {
-    const t = (days: number, dismissedDay: string | null = null) =>
-      bannerFor({ ...base, state: "trialing", trialDaysLeft: days }, { today: TODAY, dismissedDay });
-    expect(t(8)).toBeNull();
-    expect(t(7)).toMatchObject({ kind: "trial", tone: "info", dismissible: true, title: "7 days left in your trial." });
-    expect(t(1)?.title).toBe("1 day left in your trial.");
-    expect(t(0)?.title).toBe("Your trial ends today.");
-    expect(t(3, TODAY)).toBeNull();
-    expect(t(3, "2026-10-01")).not.toBeNull();
+  const trial = (daysLeft: number, over: object = {}) => ({ active: true, daysLeft, source: "signup", totalDays: 14, ...over });
+
+  it("trial countdown from day one: calm, then amber at 3 days or fewer, dismissible per day only while calm", () => {
+    const t = (days: number, dismissedDay: string | null = null, over: object = {}) =>
+      bannerFor({ ...base, state: "trialing", trialDaysLeft: days, trial: trial(days), ...over }, { today: TODAY, dismissedDay });
+    expect(t(14)).toMatchObject({ kind: "trial", tone: "info", dismissible: true, title: "14 days left in your Full Access Trial", cta: "Choose a plan" });
+    expect(t(9)?.title).toBe("9 days left in your Full Access Trial");
+    expect(t(3)).toMatchObject({ tone: "warning", dismissible: false });
+    expect(t(1)?.title).toBe("1 day left in your Full Access Trial");
+    expect(t(9, TODAY)).toBeNull();
+    expect(t(9, "2026-10-01")).not.toBeNull();
+    // too late to dismiss once it is amber
+    expect(t(3, TODAY)).not.toBeNull();
+  });
+
+  it("a partner trial says so", () => {
+    const b = bannerFor({ ...base, state: "trialing", trial: trial(30, { source: "partner", totalDays: 30 }) }, { today: TODAY });
+    expect(b?.title).toBe("Your 30-day partner trial: 30 days left");
+  });
+
+  it("an ended trial is red, says Trial ended: read-only and offers Choose a plan", () => {
+    const b = bannerFor({ ...base, state: "trial_expired", readOnly: true, reason: "read_only_trial_expired", trial: trial(0, { active: false }) });
+    expect(b).toMatchObject({ kind: "read_only", tone: "danger", title: "Trial ended: read-only", cta: "Choose a plan", dismissible: false });
+    expect(b?.text).toContain("Your trial has ended. Choose a plan to continue.");
+  });
+
+  it("a trial that was never granted shows the already-used message", () => {
+    const b = bannerFor({
+      ...base, state: "trial_expired", readOnly: true, reason: "read_only_trial_expired",
+      trial: trial(0, { active: false, source: "none" }),
+      trialMessage: "A free trial was already used for this email, phone or GSTIN. Choose a plan to continue.",
+    });
+    expect(b?.text).toContain("A free trial was already used");
+  });
+
+  it("no trial banner for paid or grandfathered organisations", () => {
+    expect(bannerFor({ ...base, state: "active", trial: trial(5, { active: false }) })).toBeNull();
+    expect(bannerFor({ ...base, state: "grandfathered", trial: trial(5, { active: false }) })).toBeNull();
   });
 });

@@ -407,6 +407,13 @@
       "when": 1791031522331,
       "tag": "0057_billing_state",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791035731383,
+      "tag": "0058_p2_full_access_trial",
+      "breakpoints": true
     }
   ]
 }

@@ -35,6 +35,10 @@ vi.mock("../lib/plan-catalog.js", async () => {
 });
 
 vi.mock("../lib/billing/service.js", () => ({ applyLazyTransitions: h.lazy }));
+vi.mock("../lib/trial-settings.js", async () => {
+  const { DEFAULT_TRIAL_SETTINGS } = await vi.importActual<typeof import("@fintranzact/shared")>("@fintranzact/shared");
+  return { getTrialSettings: async () => DEFAULT_TRIAL_SETTINGS };
+});
 
 import { TRPCError } from "@trpc/server";
 import { PLAN_DEFAULTS } from "@fintranzact/shared";

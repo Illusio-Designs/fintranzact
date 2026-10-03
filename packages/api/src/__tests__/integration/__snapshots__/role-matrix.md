@@ -319,6 +319,9 @@
 | platform.billingSummary | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.closeGovUsageMonth | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.deletePayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.endTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.extendTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.grantTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.me | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | platform.overview | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.partner | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -334,12 +337,14 @@
 | platform.roadmapUpdate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.sandboxQuota | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.saveTrialSettings | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.securityEvents | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.subscriptions | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenant | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenants | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.trialSettings | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.updatePartner | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.updatePayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | pos.catalog | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

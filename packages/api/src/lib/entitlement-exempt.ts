@@ -90,6 +90,10 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   // Not tenant-scoped: platform admin, partner and public contact forms.
   "platform.setPlan",
   "platform.setTrial",
+  "platform.extendTrial",
+  "platform.grantTrial",
+  "platform.endTrial",
+  "platform.saveTrialSettings",
   "platform.resetTwoFactor",
   "platform.savePlan",
   "platform.resetPlan",

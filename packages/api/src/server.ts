@@ -31,6 +31,7 @@ import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
 import { startTdsReminderScheduler, stopTdsReminderScheduler } from "./lib/tds-reminder-scheduler.js";
 import { startHsnRefreshScheduler, stopHsnRefreshScheduler } from "./lib/hsn-refresh.js";
+import { startTrialReminderScheduler, stopTrialReminderScheduler } from "./lib/trial-reminders.js";
 import { seedPlatformAdmin } from "./lib/platform-admin.js";
 import { logger } from "./lib/logger.js";
 import { storeServesTenant } from "./lib/plan-limits.js";
@@ -2462,6 +2463,7 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   startRecurringScheduler();
   startTdsReminderScheduler();
   startHsnRefreshScheduler();
+  startTrialReminderScheduler();
   // Create the platform admin from PLATFORM_ADMIN_EMAIL / _PASSWORD if set.
   seedPlatformAdmin().catch((err) => logger.error({ err }, "Could not create the platform admin account"));
 });
@@ -2472,6 +2474,7 @@ function shutdown(signal: string) {
   stopRecurringScheduler();
   stopTdsReminderScheduler();
   stopHsnRefreshScheduler();
+  stopTrialReminderScheduler();
   server.close(() => {
     logger.info("HTTP server closed");
     process.exit(0);

@@ -18,7 +18,7 @@ type Alert = {
   tone: "danger" | "warning" | "info";
   title: string;
   body: string;
-  to?: "/invoices" | "/items" | "/gst" | "/tds";
+  to?: "/invoices" | "/items" | "/gst" | "/tds" | "/settings";
 };
 
 const SEEN_KEY = "fintranzact:seen-alerts";
@@ -81,6 +81,8 @@ export function NotificationsBell({
     retry: false,
   });
   const { data: maintenance } = trpc.system.maintenanceStatus.useQuery(undefined, { staleTime: 60_000 });
+  // The same query the countdown banner uses (one shared cache entry).
+  const { data: billing } = trpc.billing.status.useQuery(undefined, { staleTime: 60_000, retry: 1 });
 
   const alerts = useMemo<Alert[]>(() => {
     const list: Alert[] = [];
@@ -139,6 +141,28 @@ export function NotificationsBell({
         to: "/tds",
       });
     }
+    // Full Access Trial reminders: the in-app side of the 7 / 2 / 0 days-left emails.
+    // Derived from billing.status like every other alert here (there is no server-side inbox).
+    if (billing?.state === "trialing" && billing.trial?.active && billing.trial.daysLeft <= 7) {
+      const left = billing.trial.daysLeft;
+      list.push({
+        id: `trial:${left <= 2 ? 2 : 7}`,
+        icon: Alert02Icon,
+        tone: left <= 3 ? "warning" : "info",
+        title: `${left} day${left === 1 ? "" : "s"} left in your Full Access Trial`,
+        body: "Choose a plan to keep creating and editing after it ends.",
+        to: "/settings",
+      });
+    } else if (billing?.state === "trial_expired") {
+      list.push({
+        id: "trial:0",
+        icon: Alert02Icon,
+        tone: "danger",
+        title: "Trial ended: read-only",
+        body: "Choose a plan to continue. Your data is safe and you can still view, search and export.",
+        to: "/settings",
+      });
+    }
     if (maintenance?.startsAt && !maintenance.enabled && new Date(maintenance.startsAt) > new Date()) {
       list.push({
         id: `maintenance:${maintenance.startsAt}`,
@@ -149,7 +173,7 @@ export function NotificationsBell({
       });
     }
     return list;
-  }, [status, lowStock, tdsDue, maintenance, isGstRegistered, businessId]);
+  }, [status, lowStock, tdsDue, maintenance, billing, isGstRegistered, businessId]);
 
   const unseen = alerts.filter((a) => !seen.includes(a.id)).length;
 
@@ -232,6 +256,7 @@ export function NotificationsBell({
                     {a.to ? (
                       <Link
                         to={a.to}
+                        search={a.to === "/settings" ? { tab: "billing" } : undefined}
                         onClick={() => setOpen(false)}
                         className="flex gap-3 px-4 py-3 transition-colors hover:bg-surface-1"
                       >
