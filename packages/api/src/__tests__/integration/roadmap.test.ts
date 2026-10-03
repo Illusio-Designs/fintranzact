@@ -58,9 +58,9 @@ describe("starting roadmap", () => {
     expect(ROADMAP_SEED.length).toBe(70);
     expect(new Set(list.data.map((i) => i.title))).toEqual(new Set(ROADMAP_SEED.map((s) => s.title)));
     // Items built since the roadmap was written arrive already moved.
-    expect(list.counts.done).toBe(2);
+    expect(list.counts.done).toBe(3); // + old docs domains redirect (2026-10-03-old-docs-redirect)
     expect(list.counts.in_progress).toBe(13); // + two-factor authentication (2026-10-02-2fa), CA access (2026-10-02-ca-access), HSN / SAC through Sandbox (2026-10-03-hsn-sandbox)
-    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 15);
+    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 16);
     expect(list.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
     expect(list.categories).toEqual(expect.arrayContaining(["Payroll", "Inventory", "GST", "Mobile", "Platform", "Accounting", "Banking"]));
     for (const item of list.data) {
@@ -97,7 +97,7 @@ describe("starting roadmap", () => {
     expect(ai[0]!.description).toContain("never another business's data");
 
     const domains = byTitle("Redirect old docs");
-    expect(domains).toMatchObject({ category: "Platform", status: "planned", billing: "included", priority: "high", launchStage: "before_launch" });
+    expect(domains).toMatchObject({ category: "Platform", status: "done", billing: "included", priority: "high", launchStage: "before_launch" });
     expect(domains.description).toContain("api-docs.fintranzact.com → /developers");
     expect(list.data.filter((i) => i.title.toLowerCase().includes("redirect"))).toHaveLength(1);
   });
@@ -134,7 +134,7 @@ describe("starting roadmap", () => {
     const before = await adminCaller().platform.roadmapList({ launchStage: "before_launch" });
     expect(before.data).toHaveLength(18);
     expect(before.data.every((i) => i.launchStage === "before_launch")).toBe(true);
-    expect(before.counts.planned).toBe(6); // 8 before the CA access item (2026-10-02-ca-access) moved to in_progress, 7 before HSN / SAC through Sandbox (2026-10-03-hsn-sandbox)
+    expect(before.counts.planned).toBe(5); // 8 before CA access (2026-10-02-ca-access) moved to in_progress, then HSN / SAC through Sandbox (2026-10-03-hsn-sandbox) and the old docs redirect (2026-10-03-old-docs-redirect) moved on
     expect(before.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
   });
 
