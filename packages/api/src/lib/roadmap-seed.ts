@@ -2220,6 +2220,24 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-03-old-docs-redirect",
+    updates: [
+      {
+        // Done on the owner's word: the old docs hosts already send visitors to
+        // the app. The 301 rules are also in apps/web/vercel.json (host-based,
+        // path kept), so a project that serves the app answers them itself.
+        title: "Redirect old docs and API docs domains",
+        status: "done",
+        done: [
+          "docs.fintranzact.com → /help (301)",
+          "api-docs.fintranzact.com → /developers (301)",
+          "Update DNS / Vercel project settings",
+          "Check old links from search results land on the right page",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

@@ -7,11 +7,60 @@
   "git": {
     "deploymentEnabled": false
   },
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "docs.fintranzact.com"
+        }
+      ],
+      "destination": "https://fintranzact-web.vercel.app/help",
+      "statusCode": 301
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "docs.fintranzact.com"
+        }
+      ],
+      "destination": "https://fintranzact-web.vercel.app/help/:path*",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "api-docs.fintranzact.com"
+        }
+      ],
+      "destination": "https://fintranzact-web.vercel.app/developers",
+      "statusCode": 301
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "api-docs.fintranzact.com"
+        }
+      ],
+      "destination": "https://fintranzact-web.vercel.app/developers/:path*",
+      "statusCode": 301
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "https://fintranzact-production.up.railway.app/api/:path*"
     },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }
