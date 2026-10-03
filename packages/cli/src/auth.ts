@@ -101,7 +101,63 @@ export async function loginWithToken(apiUrl: string, token: string): Promise<voi
 type AuthUser = { id: string; email: string; name: string | null; role: string };
 type BusinessSummary = { id: string; name: string; gstin?: string | null; gstRegistrationType?: string | null };
 
-export async function login(apiUrl: string, email: string, password: string): Promise<void> {
+export interface LoginOptions {
+  /** A TOTP or backup code supplied up front (--code / FINTRANZACT_2FA_CODE). */
+  code?: string;
+  /** Ask the user for a code interactively. Absent when there is no terminal. */
+  promptCode?: () => Promise<string>;
+}
+
+/** The message to show for a failed second-factor step. */
+function twoFactorMessage(e: FintranzactApiError): string {
+  const err = e.fintranzactError;
+  if (err.code === "validation_failed") return err.fields["_"]?.[0] ?? e.message;
+  if (err.code === "rate_limited" || err.code === "forbidden" || err.code === "api_error") return err.message;
+  return e.message;
+}
+
+/**
+ * Second step of sign-in. A code given up front is tried once; an interactive
+ * prompt gets up to three tries (the server kills the challenge after five
+ * wrong codes). Returns the session token.
+ */
+export async function completeTwoFactor(
+  client: FintranzactClient,
+  challengeToken: string,
+  opts: LoginOptions,
+): Promise<string> {
+  const maxTries = opts.code ? 1 : 3;
+  for (let attempt = 1; attempt <= maxTries; attempt++) {
+    let code = attempt === 1 ? opts.code : undefined;
+    if (!code) {
+      if (!opts.promptCode) {
+        return fatalError(
+          "Two-factor authentication is on for this account. Pass --code <code> or set FINTRANZACT_2FA_CODE (a 6-digit authenticator code or a backup code).",
+          EXIT.AUTH,
+        );
+      }
+      code = (await opts.promptCode()).trim();
+    }
+    if (!code) continue;
+    try {
+      const verified = await client.auth.verifyTwoFactor({ challengeToken, code });
+      return verified.sessionToken;
+    } catch (e) {
+      if (!(e instanceof FintranzactApiError)) throw e;
+      const err = e.fintranzactError;
+      const wrongCode = err.code === "validation_failed" && /not right/i.test(twoFactorMessage(e));
+      if (wrongCode && attempt < maxTries) {
+        console.error("  " + twoFactorMessage(e));
+        continue;
+      }
+      if (err.code === "network_error") fatalError("Cannot reach server: " + err.message, EXIT.NETWORK);
+      return fatalError(twoFactorMessage(e), EXIT.AUTH);
+    }
+  }
+  return fatalError("No code entered.", EXIT.AUTH);
+}
+
+export async function login(apiUrl: string, email: string, password: string, loginOpts: LoginOptions = {}): Promise<void> {
   const base = validateApiUrl(apiUrl);
 
   // Use a temporary client without auth for login
@@ -114,10 +170,14 @@ export async function login(apiUrl: string, email: string, password: string): Pr
 
   try {
     const result = await client.auth.login({ email, password });
+    // The API returns `sessionToken` (this was typed `sessionId` and so undefined before).
+    const sessionToken = result.twoFactorRequired
+      ? await completeTwoFactor(client, result.challengeToken, loginOpts)
+      : result.sessionToken;
     // After login, fetch businesses
     const authedClient = new FintranzactClient({
       apiUrl: base,
-      token: result.sessionId,
+      token: sessionToken,
       tenantId: "",
       businessId: "",
     });
@@ -129,7 +189,7 @@ export async function login(apiUrl: string, email: string, password: string): Pr
 
     setConfig({
       apiUrl: base,
-      token: result.sessionId,
+      token: sessionToken,
     });
 
     // Return businesses for caller to handle selection

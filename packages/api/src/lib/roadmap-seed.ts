@@ -2139,6 +2139,33 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-02-2fa",
+    updates: [
+      {
+        // All eight lines are built in code with unit tests (faked data layer):
+        // TOTP enrolment, sign-in step on web/mobile/desktop/CLI, backup codes,
+        // per-organisation policy with grace period and request-time gate,
+        // platform-admin reset after identity checks, 30-day trusted devices,
+        // the security_events trail with user and admin views, and lockout.
+        // Kept in progress, not done: the integration tests (real Postgres)
+        // and the web, mobile and desktop screens had not been run on a
+        // database or a device when this was written.
+        title: "Two-factor authentication for owners and admins",
+        status: "in_progress",
+        done: [
+          "TOTP setup with QR code and verification",
+          "2FA step at sign-in (web, mobile, desktop)",
+          "Backup codes: generate, download, use once, regenerate",
+          "Enforce 2FA per organisation (all users or owners/admins)",
+          "Platform admin 2FA reset",
+          "Trusted device for 30 days",
+          "Audit log entries for 2FA events",
+          "Rate-limit and lock out repeated wrong codes",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

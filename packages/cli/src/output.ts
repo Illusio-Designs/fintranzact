@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { formatPlanRequired, planRequiredJson, type PlanRequiredError } from "./plan.js";
+import { formatPlanRequired, planRequiredJson, formatTwoFactorRequired, type PlanRequiredError, type TwoFactorRequiredError } from "./plan.js";
 
 // ── Environment detection ──────────────────────────────────────────────────
 
@@ -49,6 +49,7 @@ export const EXIT = {
   CONFLICT: 8,
   RATE_LIMITED: 9,
   PLAN_REQUIRED: 10,
+  TWO_FACTOR_REQUIRED: 11,
 } as const;
 
 // ── Output helpers ────────────────────────────────────────────────────────
@@ -262,4 +263,33 @@ export function handlePlanRequired(
     errOut(prefix + formatPlanRequired(err) + "\n");
   }
   return exit(EXIT.PLAN_REQUIRED);
+}
+
+/**
+ * Report that the organisation requires two-factor authentication and this
+ * session has not set it up, and exit with EXIT.TWO_FACTOR_REQUIRED. JSON mode
+ * prints {error:{code:"two_factor_required",message}} on stdout; human mode
+ * prints the message on stderr. API keys never reach this.
+ */
+export function handleTwoFactorRequired(
+  _err: TwoFactorRequiredError,
+  opts: {
+    json?: boolean;
+    exit?: (code: number) => never;
+    out?: (s: string) => void;
+    errOut?: (s: string) => void;
+  } = {},
+): never {
+  const json = opts.json ?? wantsJson();
+  const out = opts.out ?? ((s: string) => void process.stdout.write(s));
+  const errOut = opts.errOut ?? ((s: string) => void process.stderr.write(s));
+  const exit = opts.exit ?? ((c: number) => process.exit(c));
+  const message = formatTwoFactorRequired();
+  if (json) {
+    out(JSON.stringify({ error: { code: "two_factor_required", message } }, null, 2) + "\n");
+  } else {
+    const prefix = hasColor() ? chalk.red("Error: ") : "Error: ";
+    errOut(prefix + message + "\n");
+  }
+  return exit(EXIT.TWO_FACTOR_REQUIRED);
 }

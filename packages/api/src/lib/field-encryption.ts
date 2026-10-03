@@ -136,3 +136,62 @@ export function decryptCarrierCredentials(
   }
   return decrypted;
 }
+
+// ── Two-factor secrets (FAIL-CLOSED) ────────────────────────────────────────
+
+/** 64-hex key accepted only under NODE_ENV=test when no ENCRYPTION_KEY is configured. */
+const TEST_ONLY_KEY_HEX = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+function configuredKeyHex(): string | undefined {
+  return process.env.ENCRYPTION_KEY || process.env.DB_ENCRYPTION_KEY || undefined;
+}
+
+/**
+ * The key material 2FA (TOTP) secrets are encrypted with. Backup-code hashes do NOT use it. Unlike
+ * encryptField (which silently stores PLAINTEXT when no key is configured),
+ * this throws unless a real key is set; only NODE_ENV=test falls back to a
+ * fixed test key so unit tests need no environment.
+ */
+export function requireTwoFactorKeyHex(): string {
+  const key = configuredKeyHex();
+  if (key) return key;
+  if (process.env.NODE_ENV === "test") return TEST_ONLY_KEY_HEX;
+  throw new Error("ENCRYPTION_KEY is not configured; refusing to handle two-factor secrets without it");
+}
+
+const VERSIONED_CIPHERTEXT_RE = /^v\d+:[0-9a-f]+:[0-9a-f]+:[0-9a-f]*$/i;
+
+/** Encrypt a TOTP secret. Throws when no encryption key is configured (never stores plaintext). */
+export function encryptTotpSecret(secret: string): string {
+  if (!secret) throw new Error("TOTP secret is empty");
+  if (configuredKeyHex()) {
+    const out = encryptField(secret);
+    if (!VERSIONED_CIPHERTEXT_RE.test(out)) throw new Error("TOTP secret was not encrypted");
+    return out;
+  }
+  if (process.env.NODE_ENV === "test") {
+    // Encrypt with the test key by scoping it to this call.
+    process.env.ENCRYPTION_KEY = TEST_ONLY_KEY_HEX;
+    try {
+      return encryptField(secret);
+    } finally {
+      delete process.env.ENCRYPTION_KEY;
+    }
+  }
+  throw new Error("ENCRYPTION_KEY is not configured; refusing to store a two-factor secret in plaintext");
+}
+
+/** Decrypt a stored TOTP secret. Throws on a missing key or a value that is not ciphertext. */
+export function decryptTotpSecret(stored: string): string {
+  if (!VERSIONED_CIPHERTEXT_RE.test(stored)) throw new Error("Stored TOTP secret is not encrypted");
+  if (configuredKeyHex()) return decryptField(stored);
+  if (process.env.NODE_ENV === "test") {
+    process.env.ENCRYPTION_KEY = TEST_ONLY_KEY_HEX;
+    try {
+      return decryptField(stored);
+    } finally {
+      delete process.env.ENCRYPTION_KEY;
+    }
+  }
+  throw new Error("ENCRYPTION_KEY is not configured; cannot decrypt a two-factor secret");
+}

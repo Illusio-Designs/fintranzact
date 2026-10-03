@@ -87,6 +87,7 @@ export function registerAuthCommands(program: Command): void {
     .option("--email <email>", "Email address")
     .option("--password <password>", "Password (visible in shell history — prefer interactive prompt)")
     .option("--token <token>", "API key (visible in shell history — prefer FINTRANZACT_TOKEN env var)")
+    .option("--code <code>", "Two-factor code (authenticator or backup code); or set FINTRANZACT_2FA_CODE")
     .action(async (opts) => {
       let apiUrl = opts.apiUrl;
 
@@ -122,7 +123,20 @@ export function registerAuthCommands(program: Command): void {
         console.log("\n  Tip: Generate an API key at Settings → API Keys for passwordless CLI access.\n");
       }
 
-      await login(apiUrl, email, password);
+      // Two-factor: --code / FINTRANZACT_2FA_CODE for scripts, a prompt otherwise.
+      const code: string | undefined = opts.code ?? process.env.FINTRANZACT_2FA_CODE ?? undefined;
+      const interactive = !!process.stdin.isTTY;
+      await login(apiUrl, email, password, {
+        code: code?.trim() || undefined,
+        promptCode: interactive
+          ? async () => {
+              const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+              const answer = await ask(rl, "  Two-factor code (authenticator or backup code): ");
+              rl.close();
+              return answer;
+            }
+          : undefined,
+      });
     });
 
   // ── logout ────────────────────────────────────────────────────────────────

@@ -21,6 +21,14 @@ import { useAuthStore } from "../../src/stores/auth";
 import { makeStyles } from "../../src/lib/makeStyles";
 import { useColors } from "../../src/contexts/ThemeContext";
 import { Logo } from "../../src/components/ui/Logo";
+import { TwoFactorStep, type VerifyResult } from "../../src/components/auth/TwoFactorStep";
+import {
+  buildLoginInput,
+  clearTrustedDeviceToken,
+  getTrustedDeviceToken,
+  setTrustedDeviceToken,
+} from "../../src/lib/trusted-device";
+import { shouldClearTrustedToken } from "../../src/lib/two-factor-login";
 
 
 function ErrorBanner({ message }: { message: string }) {
@@ -81,11 +89,27 @@ export default function LoginScreen() {
   }, [logoAnim, formAnim]);
 
   /* ── Mutations ─────────────────────────────────────────────────── */
+  // Set once the password is right for a two-factor account.
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+
+  const finishSignIn = useCallback(async (sessionToken: string) => {
+    await useAuthStore.getState().login(sessionToken);
+    router.replace("/(app)/(home)");
+  }, []);
+
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: async (data) => {
+    onSuccess: async (data, variables) => {
+      if (shouldClearTrustedToken(variables.trustedDeviceToken, data.twoFactorRequired)) {
+        // The device token was sent but the server still wants a code: expired or revoked.
+        await clearTrustedDeviceToken();
+      }
+      if (data.twoFactorRequired) {
+        setError("");
+        setChallengeToken(data.challengeToken);
+        return;
+      }
       setError("");
-      await useAuthStore.getState().login(data.sessionToken);
-      router.replace("/(app)/(home)");
+      await finishSignIn(data.sessionToken);
     },
     onError: (err) => setError(err.message),
   });
@@ -93,11 +117,26 @@ export default function LoginScreen() {
   const isPending = loginMutation.isPending;
 
   /* ── Handlers ──────────────────────────────────────────────────── */
-  const handlePasswordLogin = useCallback(() => {
+  const handlePasswordLogin = useCallback(async () => {
     if (!email.includes("@") || !password) return;
     setError("");
-    loginMutation.mutate({ email, password });
+    const trustedDeviceToken = await getTrustedDeviceToken();
+    loginMutation.mutate(buildLoginInput(email, password, trustedDeviceToken));
   }, [email, password, loginMutation]);
+
+  const handleVerified = useCallback(
+    async (data: VerifyResult) => {
+      if (data.trustedDeviceToken) await setTrustedDeviceToken(data.trustedDeviceToken);
+      await finishSignIn(data.sessionToken);
+    },
+    [finishSignIn],
+  );
+
+  const handleBackToPassword = useCallback((message = "") => {
+    setChallengeToken(null);
+    setPassword("");
+    setError(message);
+  }, []);
 
   /* ── Animated style values ─────────────────────────────────────── */
   const logoScale = logoAnim.interpolate({
@@ -140,8 +179,10 @@ export default function LoginScreen() {
               </View>
             </View>
             <View style={styles.heroCopy}>
-              <Text style={styles.heroTitle}>Welcome back</Text>
-              <Text style={styles.heroSub}>Sign in with your email and password.</Text>
+              <Text style={styles.heroTitle}>{challengeToken ? "One more step" : "Welcome back"}</Text>
+              <Text style={styles.heroSub}>
+                {challengeToken ? "Confirm it is you to finish signing in." : "Sign in with your email and password."}
+              </Text>
             </View>
           </Animated.View>
 
@@ -162,6 +203,15 @@ export default function LoginScreen() {
               },
             ]}
           >
+            {challengeToken ? (
+              <TwoFactorStep
+                challengeToken={challengeToken}
+                onVerified={handleVerified}
+                onBack={() => handleBackToPassword()}
+                onExpired={(message) => handleBackToPassword(message)}
+              />
+            ) : (
+            <>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email</Text>
               <TextInput
@@ -236,6 +286,8 @@ export default function LoginScreen() {
             >
               <Text style={styles.secondaryButtonText}>New here? Create an account</Text>
             </TouchableOpacity>
+            </>
+            )}
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>

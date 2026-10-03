@@ -11,6 +11,9 @@ pub fn run() {
             session::save_session_token,
             session::get_session_token,
             session::clear_session_token,
+            session::save_trusted_device_token,
+            session::get_trusted_device_token,
+            session::clear_trusted_device_token,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

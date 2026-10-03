@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, asc, count, desc, eq, gte, ilike, inArray, max, or, sql } from "drizzle-orm";
-import { controlDb, getTenantDb, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts, roadmapItems, billingSubscriptions, billingPayments } from "@fintranzact/db";
+import { controlDb, getTenantDb, securityEvents, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts, roadmapItems, billingSubscriptions, billingPayments } from "@fintranzact/db";
 import { ensureReferralCode, getPartnerStats } from "../lib/partner-program.js";
 import { emailService } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
-import { PLAN_DEFAULTS, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema } from "@fintranzact/shared";
+import { RESET_VERIFICATION_METHODS, SECURITY_EVENT_TYPES, PLAN_DEFAULTS, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema } from "@fintranzact/shared";
 import {
   roadmapStatuses,
   roadmapListSchema,
@@ -28,6 +28,12 @@ import { sandboxQuotaStatus, tenantsWithUnbilledUsage, periodIsClosed } from "..
 import { closeGovUsagePeriod } from "../lib/billing/service.js";
 import { invalidateEntitlements } from "../lib/entitlements-cache.js";
 import { setTrial } from "../lib/trial.js";
+import { resetTwoFactorByAdmin } from "../lib/two-factor-reset.js";
+import { drizzleResetStore } from "../lib/two-factor-store.js";
+import { invalidateTwoFactorGateUser } from "../lib/two-factor-gate-cache.js";
+import { rotateSessionsOnPrivilegeEvent } from "../lib/session-rotation.js";
+import { recordSecurityEvent } from "../lib/security-events.js";
+import { ADMIN_EVENTS_DEFAULT_LIMIT, MAX_ACTIVITY_LIMIT, clampLimit, eventLabel } from "../lib/security-activity.js";
 
 /**
  * Platform admin: every organisation on this server, and the plan each is on.
@@ -160,6 +166,9 @@ export const platformRouter = router({
           status: tenants.status,
           partnerId: tenants.partnerId,
           createdAt: tenants.createdAt,
+          // So the admin can see the organisation's two-factor policy.
+          twoFactorPolicy: tenants.twoFactorPolicy,
+          twoFactorGraceDays: tenants.twoFactorGraceDays,
         })
         .from(tenants)
         .where(eq(tenants.id, input.id))
@@ -172,6 +181,7 @@ export const platformRouter = router({
           name: users.name,
           email: users.email,
           emailVerified: users.emailVerified,
+          twoFactorEnabled: users.twoFactorEnabled,
           role: tenantMembers.role,
           joinedAt: tenantMembers.createdAt,
         })
@@ -239,6 +249,100 @@ export const platformRouter = router({
       const row = await setTrial(input.tenantId, input.endsAt, { actorUserId: ctx.user.id });
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation not found" });
       return row;
+    }),
+
+  /**
+   * Reset a user's two-factor authentication after an identity check
+   * (docs/TWO-FACTOR.md). Revokes every session, forgets trusted devices,
+   * emails the user and records `2fa.reset_by_admin`. Never your own.
+   */
+  resetTwoFactor: platformAdminProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid(),
+        tenantId: z.string().uuid().optional(),
+        confirmEmail: z.string().min(1).max(320),
+        verification: z.object({
+          method: z.enum(RESET_VERIFICATION_METHODS),
+          checks: z.array(z.string().max(60)).max(20),
+          reference: z.string().max(120).optional(),
+          reason: z.string().max(1000),
+        }),
+      }),
+    )
+    .mutation(({ input, ctx }) =>
+      resetTwoFactorByAdmin(
+        {
+          store: drizzleResetStore,
+          revokeAllSessions: (userId) => rotateSessionsOnPrivilegeEvent(userId),
+          invalidateGate: invalidateTwoFactorGateUser,
+          record: recordSecurityEvent,
+          sendNotice: (to, subject, text) => emailService.sendNotice(to, subject, text),
+          log: { error: (msg, meta) => logger.error(meta ?? {}, msg) },
+          now: () => new Date(),
+        },
+        { adminUserId: ctx.user.id, input, ip: ctx.ipAddress ?? null, userAgent: ctx.req.headers.get("user-agent") },
+      ),
+    ),
+
+  /**
+   * The security trail, newest first. With `tenantId`: events recorded for that
+   * organisation plus events about its members. `cursor` is the `nextCursor`
+   * of the previous page.
+   */
+  securityEvents: platformAdminProcedure
+    .input(
+      z
+        .object({
+          userId: z.string().uuid().optional(),
+          tenantId: z.string().uuid().optional(),
+          type: z.enum(SECURITY_EVENT_TYPES).optional(),
+          limit: z.number().int().optional(),
+          cursor: z.string().datetime().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input }) => {
+      const limit = clampLimit(input?.limit, ADMIN_EVENTS_DEFAULT_LIMIT, MAX_ACTIVITY_LIMIT);
+      const conds = [];
+      if (input?.userId) conds.push(eq(securityEvents.userId, input.userId));
+      if (input?.type) conds.push(eq(securityEvents.type, input.type));
+      if (input?.tenantId) {
+        conds.push(
+          or(
+            eq(securityEvents.tenantId, input.tenantId),
+            sql`${securityEvents.userId} IN (SELECT user_id FROM tenant_members WHERE tenant_id = ${input.tenantId})`,
+          )!,
+        );
+      }
+      if (input?.cursor) conds.push(sql`${securityEvents.createdAt} < ${input.cursor}::timestamptz`);
+      const rows = await controlDb
+        .select()
+        .from(securityEvents)
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(securityEvents.createdAt))
+        .limit(limit + 1);
+      const page = rows.slice(0, limit);
+      const ids = [...new Set(page.flatMap((r) => [r.userId, r.actorUserId]).filter((x): x is string => !!x))];
+      const people = ids.length
+        ? await controlDb.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray(users.id, ids))
+        : [];
+      const byId = new Map(people.map((p) => [p.id, p]));
+      return {
+        items: page.map((r) => ({
+          id: r.id,
+          type: r.type,
+          label: eventLabel(r.type),
+          createdAt: r.createdAt.toISOString(),
+          ip: r.ip,
+          userAgent: r.userAgent,
+          tenantId: r.tenantId,
+          metadata: (r.metadata ?? null) as Record<string, unknown> | null,
+          user: r.userId ? (byId.get(r.userId) ?? { id: r.userId, name: null, email: null }) : null,
+          actor: r.actorUserId ? (byId.get(r.actorUserId) ?? { id: r.actorUserId, name: null, email: null }) : null,
+        })),
+        nextCursor: rows.length > limit ? page[page.length - 1]!.createdAt.toISOString() : null,
+      };
     }),
 
   // ── Plans ────────────────────────────────────────────────────

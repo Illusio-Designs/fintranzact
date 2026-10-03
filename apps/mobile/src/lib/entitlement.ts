@@ -33,6 +33,11 @@ export function wasEntitlementHandled(...texts: Array<string | undefined>): bool
   return texts.some((t) => !!t && handled.has(t));
 }
 
+/** Record a refusal message another handler already showed (the two-factor one), so a screen's own Alert stays quiet. */
+export function wasEntitlementHandledMark(message: string) {
+  handled.set(message, Date.now());
+}
+
 let lastShown = { key: "", at: 0 };
 
 /**

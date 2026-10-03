@@ -5,6 +5,7 @@ import { Listbox } from "@/components/ui/Listbox";
 import { toast } from "@/hooks/useToast";
 import { cn, formatDate } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
+import { TwoFactorPolicyCard } from "./TwoFactorPolicyCard";
 
 const roleOptions = [
   { value: "admin", label: formatRole("admin") },
@@ -51,12 +52,15 @@ function TeamSection() {
   const { data: me } = trpc.auth.me.useQuery();
   const callerMember = members?.find((m) => m.userEmail === me?.user?.email);
   const canManage = callerMember?.role === "owner" || callerMember?.role === "superadmin" || callerMember?.role === "admin";
+  // Owners and admins see who has set up two-factor (the API omits it for everyone else).
+  const showTwoFactor = canManage && !!members?.some((m) => m.twoFactorEnabled !== undefined);
 
   if (!session?.tenantId) return null;
 
   return (
     <>
-      <div className="card overflow-visible">
+      <TwoFactorPolicyCard role={callerMember?.role} members={members} />
+      <div className="card overflow-visible mt-4">
         <div className="px-6 py-4 flex items-center justify-between border-b border-border-light">
           <div>
             <h3 className="text-sm font-semibold text-text-primary">Team Members</h3>
@@ -135,6 +139,7 @@ function TeamSection() {
                 <th className="hidden sm:table-cell">Email</th>
                 <th>Role</th>
                 <th className="hidden sm:table-cell">Joined</th>
+                {showTwoFactor && <th>Two-factor</th>}
                 {canManage && <th />}
               </tr>
             </thead>
@@ -168,6 +173,21 @@ function TeamSection() {
                   <td className="hidden sm:table-cell text-text-secondary text-xs">
                     {m.acceptedAt ? formatDate(m.acceptedAt) : "Pending"}
                   </td>
+                  {showTwoFactor && (
+                    <td>
+                      <span
+                        data-testid="two-factor-badge"
+                        className={cn(
+                          "px-2 py-0.5 rounded text-2xs font-medium",
+                          m.twoFactorEnabled
+                            ? "bg-emerald-600/[0.08] text-emerald-700 dark:text-emerald-400"
+                            : "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+                        )}
+                      >
+                        {m.twoFactorEnabled ? "On" : "Not set up"}
+                      </span>
+                    </td>
+                  )}
                   {canManage && (
                     <td className="text-right">
                       {m.role !== "owner" && m.role !== "superadmin" && m.userEmail !== me?.user?.email && (

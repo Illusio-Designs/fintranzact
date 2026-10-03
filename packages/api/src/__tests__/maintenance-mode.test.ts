@@ -82,7 +82,7 @@ function tenantCaller() {
   const headers = new Headers({ "content-type": "application/json" });
   const req = new Request("http://localhost/api/trpc/test", { method: "GET", headers });
   return createCaller({
-    user: { id: "user-1", email: "u@example.in", name: null },
+    user: { id: "00000000-0000-4000-8000-0000000000a1", email: "u@example.in", name: null },
     tenantId: "00000000-0000-4000-8000-000000000001",
     businessId: null,
     req,

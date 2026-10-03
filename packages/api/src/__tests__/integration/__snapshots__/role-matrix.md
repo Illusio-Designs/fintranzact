@@ -15,14 +15,24 @@
 | auth.confirmEmailChange | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.issueAccessToken | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.listSessions | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.listTrustedDevices | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.login | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.logout | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.logoutAll | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.me | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.regenerateBackupCodes | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.register | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.requestEmailChange | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.revokeAllTrustedDevices | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.revokeSession | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.revokeTrustedDevice | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.securityActivity | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.twoFactorBeginSetup | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.twoFactorConfirmSetup | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.twoFactorDisable | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.twoFactorStatus | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | auth.updateName | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| auth.verifyTwoFactor | mutation | public | — | ✓ | ✓ | ✓ | ✓ | ✓ |
 | bankAccount.addTransaction | mutation | authorized | create:BankTransaction | ✓ | ✓ | ✗ | ✗ | ✓ |
 | bankAccount.create | mutation | authorized | create:BankAccount | ✓ | ✓ | ✗ | ✗ | ✓ |
 | bankAccount.delete | mutation | authorized | delete:BankAccount | ✓ | ✓ | ✗ | ✗ | ✓ |
@@ -307,6 +317,7 @@
 | platform.plans | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.recordPayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.resetPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.resetTwoFactor | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapCreate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapDelete | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapList | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -314,6 +325,7 @@
 | platform.roadmapUpdate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.sandboxQuota | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.securityEvents | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.subscriptions | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -479,6 +491,7 @@
 | tenant.removeMember | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ |
 | tenant.revokeInvitation | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ |
 | tenant.select | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| tenant.setSecurityPolicy | mutation | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ |
 | tenant.updateMemberRole | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ |
 | tenant.updatePlan | mutation | protected | — (+ plans are changed by the platform team only) | ✗ | ✗ | ✗ | ✗ | ✗ |
 | warehouse.accessList | query | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ |

@@ -7,6 +7,7 @@ import type { AppRouter } from "@fintranzact/api";
 import { isDesktop } from "./isDesktop";
 import { ensureAccessToken } from "./desktop-session";
 import { handleEntitlementError } from "@/lib/entitlement-handler";
+import { handleTwoFactorError } from "@/lib/two-factor-handler";
 import { isAuthPublicPath, isMarketingPath, isSharePath } from "@/lib/public-paths";
 
 // The explicit `as any` cast avoids TS2742 "inferred type cannot be named" error caused
@@ -167,6 +168,12 @@ function handleAuthError(error: unknown) {
 function handleEntitlement(error: unknown) {
   if (handleEntitlementError(error)) {
     void queryClient.invalidateQueries({ queryKey: [["billing", "status"]] });
+    return;
+  }
+  // The organisation requires two-factor authentication: toast with a "Set up
+  // two-factor" action, and refresh the requirement so the banner is current.
+  if (handleTwoFactorError(error)) {
+    void queryClient.invalidateQueries({ queryKey: [["tenant", "current"]] });
   }
 }
 

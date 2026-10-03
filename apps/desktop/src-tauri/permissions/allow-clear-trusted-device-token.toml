@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "allow-clear-trusted-device-token"
+description = """
+Allows the main window to call clear_trusted_device_token, which removes
+the two-factor trusted-device token from the OS keyring.
+Idempotent: succeeds even when no token is currently stored.
+"""
+commands.allow = ["clear_trusted_device_token"]

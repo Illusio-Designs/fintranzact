@@ -15,6 +15,31 @@ import { invalidateSessionCache, getSessionIdFromRequest, revokeAllUserSessions 
 import { verifyTurnstile } from "../lib/turnstile.js";
 import { getClientKind } from "../lib/client-headers.js";
 import { enforceSessionLimit } from "../lib/plan-limits.js";
+import { createFixedWindowLimiter } from "../lib/fixed-window-limiter.js";
+import { createTwoFactorDeps, createTwoFactorLoginDeps, drizzleActivityStore } from "../lib/two-factor-store.js";
+import { ownSecurityActivity } from "../lib/security-activity.js";
+import {
+  appendSetCookies,
+  canRememberDevice,
+  decideSignIn,
+  issueTrustedDevice,
+  listTrustedDevices,
+  planTrustedDeviceDelivery,
+  presentedTrustedDeviceToken,
+  readTrustedDeviceCookie,
+  resolveClientKind,
+  revokeAllTrustedDevices,
+  revokeTrustedDevice,
+  trustedDeviceClearCookie,
+  verifySignInChallenge,
+} from "../lib/two-factor-login.js";
+import {
+  beginTwoFactorSetup,
+  confirmTwoFactorSetup,
+  disableTwoFactor,
+  getTwoFactorStatus,
+  regenerateBackupCodes,
+} from "../lib/two-factor.js";
 
 // TTL for short-lived access tokens (15 minutes)
 const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -34,6 +59,85 @@ setInterval(() => {
     if (now - entry.firstAttempt > LOGIN_WINDOW_MS) failedLoginAttempts.delete(key);
   }
 }, 5 * 60_000).unref();
+
+// Wrong passwords typed into the two-factor security screens (disable,
+// regenerate codes) are counted per USER, separately from the sign-in limiter
+// above: someone holding a session but not the password must not be able to
+// lock the real user out of signing in. Same policy: 5 failures per 15 minutes.
+const passwordRecheckFailures = new Map<string, { count: number; firstAttempt: number }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of passwordRecheckFailures) {
+    if (now - entry.firstAttempt > LOGIN_WINDOW_MS) passwordRecheckFailures.delete(key);
+  }
+}, 5 * 60_000).unref();
+
+const twoFactorDeps = createTwoFactorDeps({
+  isBlocked(key) {
+    const a = passwordRecheckFailures.get(key);
+    return !!a && a.count >= LOGIN_MAX_ATTEMPTS && Date.now() - a.firstAttempt < LOGIN_WINDOW_MS;
+  },
+  recordFailure(key) {
+    const prev = passwordRecheckFailures.get(key);
+    if (prev && Date.now() - prev.firstAttempt < LOGIN_WINDOW_MS) prev.count++;
+    else passwordRecheckFailures.set(key, { count: 1, firstAttempt: Date.now() });
+  },
+});
+
+// Sign-in challenge: per-IP and per-challenge fixed windows are the first line
+// of defence in front of the per-user lockout and the per-challenge attempt cap.
+const twoFactorLoginDeps = createTwoFactorLoginDeps(twoFactorDeps, {
+  ipLimiter: createFixedWindowLimiter({ limit: 30, windowMs: 15 * 60_000 }),
+  challengeLimiter: createFixedWindowLimiter({ limit: 10, windowMs: 5 * 60_000 }),
+});
+
+const clientInput = z.enum(["web", "mobile", "desktop", "cli"]);
+
+/** The client kind for this request: header first, then the `client` input, else web. */
+function clientKindFor(req: Request, input?: string | null) {
+  return resolveClientKind(getClientKind(req.headers), input);
+}
+
+// Starting setup mints a secret and renders a QR: 10 per hour per user is plenty.
+const setupLimiter = createFixedWindowLimiter({ limit: 10, windowMs: 60 * 60_000 });
+
+/** Two-factor settings need a real session (cookie, session Bearer or access token), never an API key. */
+function requireSession(ctx: { authTokenKind?: "access" | "refresh" | "cookie" | null }): void {
+  if (!ctx.authTokenKind) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Two-factor settings can only be changed from a signed-in session, not with an API key.",
+    });
+  }
+}
+
+/** The caller's own session id, so it survives the rotation. Access tokens map to their parent session. */
+async function currentSessionId(ctx: { req: Request; authTokenKind?: string | null }): Promise<string | null> {
+  const direct = getSessionIdFromRequest(ctx.req);
+  if (direct) return direct;
+  if (ctx.authTokenKind === "access") {
+    const bearer = ctx.req.headers.get("authorization");
+    const token = bearer?.startsWith("Bearer ") ? bearer.slice(7) : null;
+    if (token?.startsWith("at_")) {
+      const [row] = await controlDb
+        .select({ sessionId: accessTokens.sessionId })
+        .from(accessTokens)
+        .where(eq(accessTokens.id, token))
+        .limit(1);
+      return row?.sessionId ?? null;
+    }
+  }
+  return null;
+}
+
+function eventContext(ctx: { req: Request; ipAddress?: string | null }) {
+  return { ip: ctx.ipAddress ?? null, userAgent: ctx.req.headers.get("user-agent") };
+}
+
+const twoFactorCodeInput = z.object({
+  password: z.string().min(1).max(128),
+  code: z.string().min(1).max(64),
+});
 
 function generateSlug(name: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -439,7 +543,14 @@ export const authRouter = router({
   }),
 
   // ── Password login ───────────────────────────────────────────
-  login: publicProcedure.input(loginSchema).mutation(async ({ input, ctx }) => {
+  login: publicProcedure
+    .input(loginSchema.extend({
+      /** Mobile / desktop / CLI hand a remembered-device token back here; the web uses the ftz_td cookie. */
+      trustedDeviceToken: z.string().max(200).optional(),
+      /** Only decides where a trusted-device token is delivered. Never changes session semantics. */
+      client: clientInput.optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
     // Per-email rate limiting: block after too many failed attempts
     const emailKey = input.email.trim().toLowerCase();
     const attempts = failedLoginAttempts.get(emailKey);
@@ -448,7 +559,7 @@ export const authRouter = router({
     }
 
     const [user] = await controlDb
-      .select({ id: users.id, email: users.email, name: users.name, passwordHash: users.passwordHash })
+      .select({ id: users.id, email: users.email, name: users.name, passwordHash: users.passwordHash, twoFactorEnabled: users.twoFactorEnabled })
       .from(users)
       .where(emailMatches(emailKey))
       .limit(1);
@@ -489,9 +600,100 @@ export const authRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Account has no organization membership" });
     }
 
+    // Two-factor is only mentioned AFTER the password has been verified (above).
+    const client = clientKindFor(ctx.req, input.client);
+    const decision = await decideSignIn(twoFactorLoginDeps, {
+      userId: user.id,
+      twoFactorEnabled: user.twoFactorEnabled,
+      trustedDeviceToken: presentedTrustedDeviceToken(client, ctx.req.headers.get("cookie"), input.trustedDeviceToken),
+      client,
+      event: eventContext(ctx),
+    });
+    if (decision.kind === "challenge") {
+      // No session and no Set-Cookie until the second factor is verified.
+      return {
+        twoFactorRequired: true as const,
+        challengeToken: decision.challengeToken,
+        expiresAt: decision.expiresAt,
+        methods: [...decision.methods],
+      };
+    }
+
     const sessionToken = await createSessionForUser(user.id, ctx, isBearerClient(ctx.req) ? "bearer" : "cookie");
 
-    return { user: { id: user.id, email: user.email, name: user.name }, sessionToken };
+    return { twoFactorRequired: false as const, user: { id: user.id, email: user.email, name: user.name }, sessionToken };
+  }),
+
+  // ── Second step of sign-in ───────────────────────────────────
+  // Public: there is no session yet. Errors are BAD_REQUEST / TOO_MANY_REQUESTS,
+  // never UNAUTHORIZED (the web client redirects to /login on that).
+  verifyTwoFactor: publicProcedure
+    .input(z.object({
+      challengeToken: z.string().min(1).max(200),
+      code: z.string().min(1).max(64),
+      rememberDevice: z.boolean().optional(),
+      client: clientInput.optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const client = clientKindFor(ctx.req, input.client);
+      const event = eventContext(ctx);
+      const { userId } = await verifySignInChallenge(twoFactorLoginDeps, {
+        challengeToken: input.challengeToken,
+        code: input.code,
+        ipKey: `2fa-ip:${ctx.ipAddress ?? getClientIpFromRequest(ctx.req) ?? "unknown"}`,
+        event,
+      });
+
+      const [user] = await controlDb
+        .select({ id: users.id, email: users.email, name: users.name })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!user) throw new TRPCError({ code: "BAD_REQUEST", message: "This sign-in has expired. Enter your password again." });
+
+      // Same session path as login: bearer/cookie decision, plan-limit eviction,
+      // previous-session cleanup and the session cookie.
+      const sessionToken = await createSessionForUser(user.id, ctx, isBearerClient(ctx.req) ? "bearer" : "cookie");
+
+      let trustedDeviceToken: string | undefined;
+      if (input.rememberDevice && canRememberDevice(client)) {
+        const device = await issueTrustedDevice(twoFactorLoginDeps, { userId: user.id, client, event });
+        const delivery = planTrustedDeviceDelivery(client, device.token, IS_SECURE);
+        // APPEND: the session cookie was written with .set and must survive.
+        appendSetCookies(ctx.resHeaders, delivery.setCookies);
+        trustedDeviceToken = delivery.bodyToken;
+      }
+
+      return {
+        user: { id: user.id, email: user.email, name: user.name },
+        sessionToken,
+        ...(trustedDeviceToken ? { trustedDeviceToken } : {}),
+      };
+    }),
+
+  // ── Trusted devices ──────────────────────────────────────────
+  // A trusted device only skips the sign-in challenge. Disabling 2FA and
+  // regenerating backup codes never look at it: they need password + fresh code.
+  listTrustedDevices: protectedProcedure
+    .input(z.object({ trustedDeviceToken: z.string().max(200).optional() }).default({}))
+    .query(async ({ input, ctx }) => {
+      requireSession(ctx);
+      const token = readTrustedDeviceCookie(ctx.req.headers.get("cookie")) ?? input.trustedDeviceToken ?? null;
+      return listTrustedDevices(twoFactorLoginDeps, ctx.user.id, token);
+    }),
+
+  revokeTrustedDevice: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      requireSession(ctx);
+      return revokeTrustedDevice(twoFactorLoginDeps, ctx.user.id, input.id, eventContext(ctx));
+    }),
+
+  revokeAllTrustedDevices: protectedProcedure.mutation(async ({ ctx }) => {
+    requireSession(ctx);
+    const r = await revokeAllTrustedDevices(twoFactorLoginDeps, ctx.user.id, eventContext(ctx));
+    appendSetCookies(ctx.resHeaders, [trustedDeviceClearCookie(IS_SECURE)]);
+    return r;
   }),
 
   // ── Complete profile ─────────────────────────────────────────
@@ -628,7 +830,11 @@ export const authRouter = router({
       invalidateSessionCache(s.id);
     }
 
+    // Signing out everywhere also forgets every trusted device.
+    await revokeAllTrustedDevices(twoFactorLoginDeps, ctx.user!.id, eventContext(ctx), "logout_all");
+
     clearSessionCookie(ctx.resHeaders);
+    appendSetCookies(ctx.resHeaders, [trustedDeviceClearCookie(IS_SECURE)]);
     return { success: true };
   }),
 
@@ -753,9 +959,58 @@ export const authRouter = router({
     return { accessToken: accessTokenId, expiresAt };
   }),
 
+  // ── Two-factor authentication (enrolment) ────────────────────
+  // Session-only (never API keys). See docs/TWO-FACTOR.md.
+  twoFactorStatus: protectedProcedure.query(async ({ ctx }) => {
+    requireSession(ctx);
+    return getTwoFactorStatus(twoFactorDeps, ctx.user.id);
+  }),
+
+  twoFactorBeginSetup: protectedProcedure.mutation(async ({ ctx }) => {
+    requireSession(ctx);
+    if (!setupLimiter.hit(ctx.user.id)) {
+      throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many setup attempts. Please try again in an hour." });
+    }
+    return beginTwoFactorSetup(twoFactorDeps, ctx.user, eventContext(ctx));
+  }),
+
+  twoFactorConfirmSetup: protectedProcedure
+    .input(z.object({ code: z.string().min(1).max(32) }))
+    .mutation(async ({ input, ctx }) => {
+      requireSession(ctx);
+      return confirmTwoFactorSetup(twoFactorDeps, ctx.user.id, input.code, {
+        currentSessionId: await currentSessionId(ctx),
+        event: eventContext(ctx),
+      });
+    }),
+
+  twoFactorDisable: protectedProcedure.input(twoFactorCodeInput).mutation(async ({ input, ctx }) => {
+    requireSession(ctx);
+    return disableTwoFactor(twoFactorDeps, ctx.user.id, input, {
+      currentSessionId: await currentSessionId(ctx),
+      event: eventContext(ctx),
+    });
+  }),
+
+  regenerateBackupCodes: protectedProcedure.input(twoFactorCodeInput).mutation(async ({ input, ctx }) => {
+    requireSession(ctx);
+    return regenerateBackupCodes(twoFactorDeps, ctx.user.id, input, { event: eventContext(ctx) });
+  }),
+
+  /** The caller's own recent security events (newest first). Safe fields only. */
+  securityActivity: protectedProcedure
+    .input(z.object({ limit: z.number().int().optional() }).optional())
+    .query(async ({ input, ctx }) => ownSecurityActivity(drizzleActivityStore, ctx.user.id, input?.limit)),
+
   // ── Me ───────────────────────────────────────────────────────
   me: publicProcedure.query(async ({ ctx }) => {
-    if (!ctx.user) return { user: null, tenantId: null, tenantName: null, role: null, needsProfile: false };
+    if (!ctx.user) return { user: null, tenantId: null, tenantName: null, role: null, needsProfile: false, twoFactor: { enabled: false } };
+
+    const [flag] = await controlDb
+      .select({ enabled: users.twoFactorEnabled })
+      .from(users)
+      .where(eq(users.id, ctx.user.id))
+      .limit(1);
 
     let tenantName: string | null = null;
     let role: string | null = null;
@@ -778,7 +1033,7 @@ export const authRouter = router({
       role = membership?.role ?? null;
     }
 
-    return { user: ctx.user, tenantId: ctx.tenantId, tenantName, role, needsProfile: !ctx.user.name };
+    return { user: ctx.user, tenantId: ctx.tenantId, tenantName, role, needsProfile: !ctx.user.name, twoFactor: { enabled: flag?.enabled ?? false } };
   }),
 });
 

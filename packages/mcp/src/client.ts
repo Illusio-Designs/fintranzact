@@ -12,7 +12,7 @@
  */
 
 import superjson from "superjson";
-import { parseEntitlement, buildBillingUrl, formatPlanRequired } from "./lib/plan.js";
+import { parseEntitlement, buildBillingUrl, formatPlanRequired, parseTwoFactorRequired, formatTwoFactorRequired } from "./lib/plan.js";
 
 export interface ClientConfig {
   /** Base API URL, e.g. "http://localhost:3000" or the public API URL. */
@@ -31,6 +31,7 @@ export type FintranzactError =
   | { code: "unauthorized"; message: string }
   | { code: "forbidden"; message: string }
   | { code: "plan_required"; reason: string; message: string; upgradeUrl: string }
+  | { code: "two_factor_required"; message: string }
   | { code: "not_found"; resource: string }
   | { code: "validation_failed"; fields: Record<string, string[]> }
   | { code: "api_error"; message: string };
@@ -50,6 +51,8 @@ export function formatFintranzactError(err: FintranzactError): string {
       return `Permission denied: ${err.message}`;
     case "plan_required":
       return formatPlanRequired(err);
+    case "two_factor_required":
+      return formatTwoFactorRequired();
     case "not_found":
       return `Not found: ${err.resource}`;
     case "validation_failed":
@@ -78,6 +81,8 @@ export function normalizeTrpcError(raw: unknown, apiUrl?: string): FintranzactEr
   // tRPC error codes map to HTTP semantics
   if (code === "UNAUTHORIZED") return { code: "unauthorized", message };
   if (code === "FORBIDDEN") {
+    // The organisation requires 2FA and this session has none: not a permissions problem either.
+    if (parseTwoFactorRequired(raw)) return { code: "two_factor_required", message };
     // An entitlement refusal (read-only, plan limit, add-on, suspended) is not a permissions problem.
     const ent = parseEntitlement(raw);
     if (ent) {

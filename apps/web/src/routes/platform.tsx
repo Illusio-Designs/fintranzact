@@ -42,6 +42,9 @@ import { Pagination } from "@/components/ui/Pagination";
 import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
 import { RoadmapView } from "@/components/platform/RoadmapView";
 import { SubscriptionsView } from "@/components/platform/SubscriptionsView";
+import { ResetTwoFactorDialog, type ResetTarget } from "@/components/platform/ResetTwoFactorDialog";
+import { MemberRow } from "@/components/platform/MemberRow";
+import { SecurityActivitySection } from "@/components/platform/SecurityActivitySection";
 
 type View = "overview" | "organisations" | "plans" | "subscriptions" | "partners" | "roadmap";
 const VIEWS: View[] = ["overview", "organisations", "plans", "subscriptions", "partners", "roadmap"];
@@ -1227,6 +1230,8 @@ function OrganisationPanel({ id, onClose }: { id: string | null; onClose: () => 
   const utils = trpc.useUtils();
   const { data: detail, isLoading } = trpc.platform.tenant.useQuery({ id: id! }, { enabled: !!id });
   const [plan, setPlan] = useState<PlanId | "">("");
+  const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
+  const { data: me } = trpc.auth.me.useQuery();
 
   useEffect(() => {
     setPlan((detail?.plan as PlanId | undefined) ?? "");
@@ -1241,6 +1246,7 @@ function OrganisationPanel({ id, onClose }: { id: string | null; onClose: () => 
   });
 
   return (
+    <>
     <SlideOver
       open={!!id}
       onClose={onClose}
@@ -1289,21 +1295,18 @@ function OrganisationPanel({ id, onClose }: { id: string | null; onClose: () => 
             <h3 className="text-xs font-bold uppercase tracking-wide text-text-tertiary">Members · {detail.members.length}</h3>
             <div className="divide-y divide-border-light overflow-hidden rounded-2xl border border-border-light">
               {detail.members.map((m) => (
-                <div key={m.userId} className="flex items-center gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-text-primary">{m.name ?? "—"}</p>
-                    <p className="truncate text-xs text-text-tertiary">
-                      {m.email}
-                      {!m.emailVerified ? " · email not verified" : ""}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-text-secondary">
-                    {ROLE_LABELS[m.role] ?? m.role}
-                  </span>
-                </div>
+                <MemberRow
+                  key={m.userId}
+                  member={m}
+                  roleLabel={ROLE_LABELS[m.role] ?? m.role}
+                  isSelf={m.userId === me?.user?.id}
+                  onReset={() => setResetTarget({ userId: m.userId, name: m.name, email: m.email })}
+                />
               ))}
             </div>
           </section>
+
+          <SecurityActivitySection tenantId={detail.id} />
 
           <section className="space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wide text-text-tertiary">Businesses · {detail.businesses.length}</h3>
@@ -1325,5 +1328,7 @@ function OrganisationPanel({ id, onClose }: { id: string | null; onClose: () => 
         </div>
       )}
     </SlideOver>
+      {detail ? <ResetTwoFactorDialog target={resetTarget} tenantId={detail.id} onClose={() => setResetTarget(null)} /> : null}
+    </>
   );
 }

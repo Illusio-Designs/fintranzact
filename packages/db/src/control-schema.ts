@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, pgEnum, pgSequence, index, uniqueIndex, boolean, jsonb, integer, numeric, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum, pgSequence, index, uniqueIndex, boolean, jsonb, integer, numeric, bigint, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 // ── Enums ──────────────────────────────────────────────────────
@@ -48,6 +48,15 @@ export const tenants = pgTable("tenants", {
    * (see deriveAccess in @fintranzact/shared). Nothing starts trials yet.
    */
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  /**
+   * Two-factor policy: "off" | "admins" (owners/admins) | "all" (every member).
+   * Text rather than an enum so the set can grow without ALTER TYPE; the allowed
+   * values live in TWO_FACTOR_POLICIES (@fintranzact/shared).
+   */
+  twoFactorPolicy: text("two_factor_policy").default("off").notNull(),
+  /** When the current policy was switched on; the grace period counts from here. */
+  twoFactorEnforcedAt: timestamp("two_factor_enforced_at", { withTimezone: true }),
+  twoFactorGraceDays: integer("two_factor_grace_days").default(7).notNull(),
   // Billing details printed on the GST invoices Finvera issues to this
   // organisation. Separate from the businesses' own profiles: an organisation
   // can hold many businesses but is one paying customer.
@@ -70,6 +79,8 @@ export const users = pgTable("users", {
   referralCode: text("referral_code"),
   passwordHash: text("password_hash"),
   emailVerified: boolean("email_verified").default(false).notNull(),
+  /** True once the user has confirmed an authenticator app (see user_two_factor). */
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
@@ -479,6 +490,87 @@ export const sandboxCallCounters = pgTable("sandbox_call_counters", {
   alertedPercent: integer("alerted_percent").default(0).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ── Two-factor authentication ──────────────────────────────────
+
+/** One row per user: the TOTP secret and its lockout state. confirmed_at NULL = enrolment pending. */
+export const userTwoFactor = pgTable("user_two_factor", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  /** TOTP secret, AES-256-GCM encrypted (fail-closed wrapper in the API's field-encryption). */
+  secretEnc: text("secret_enc").notNull(),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  /** Time step of the last accepted code; steps <= this are rejected (replay guard). */
+  lastUsedStep: bigint("last_used_step", { mode: "number" }),
+  failedCount: integer("failed_count").default(0).notNull(),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  /** Number of lockouts so far; drives the escalating lockout duration. */
+  lockoutCount: integer("lockout_count").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** One-time recovery codes; only a keyed hash is stored. */
+export const twoFactorBackupCodes = pgTable("two_factor_backup_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("two_factor_backup_codes_user_idx").on(t.userId),
+  uniqueIndex("two_factor_backup_codes_user_hash_idx").on(t.userId, t.codeHash),
+]);
+
+/** Short-lived login step between a correct password and a session (token stored as sha256). */
+export const twoFactorChallenges = pgTable("two_factor_challenges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tokenHash: text("token_hash").notNull(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  /** "web" | "mobile" | "desktop" */
+  clientKind: text("client_kind"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("two_factor_challenges_token_idx").on(t.tokenHash),
+  index("two_factor_challenges_user_idx").on(t.userId),
+]);
+
+/** "Trust this device" records that skip the second step until expires_at. */
+export const trustedDevices = pgTable("trusted_devices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  label: text("label"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (t) => [
+  uniqueIndex("trusted_devices_token_idx").on(t.tokenHash),
+  index("trusted_devices_user_idx").on(t.userId),
+]);
+
+/** Append-only security trail (2FA setup, use, failures, resets). Subject and actor survive as NULL if deleted. */
+export const securityEvents = pgTable("security_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+  tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+  type: text("type").notNull(),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("security_events_user_idx").on(t.userId, t.createdAt),
+  index("security_events_tenant_idx").on(t.tenantId, t.createdAt),
+]);
 
 // ── Relations ──────────────────────────────────────────────────
 

@@ -11,6 +11,9 @@ import { queryClient } from "../../src/lib/query-client";
 import { BusinessSwitcherProvider } from "../../src/contexts/BusinessSwitcherContext";
 import { MaintenanceBanner } from "../../src/components/MaintenanceBanner";
 import { BillingBanner } from "../../src/components/BillingBanner";
+import { TwoFactorBanner } from "../../src/components/TwoFactorBanner";
+import { useTwoFactorRequirement } from "../../src/hooks/useTwoFactorRequirement";
+import { openTwoFactorSetup } from "../../src/lib/two-factor-enforcement";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fontFamilies } from "../../src/lib/theme";
 
@@ -47,6 +50,18 @@ export default function AppLayout() {
   const { data: businesses } = trpc.business.list.useQuery(undefined, {
     enabled: !!session?.user && !!session?.tenantId,
   });
+
+  // A member blocked by the organisation's two-factor policy cannot load the
+  // business list; they are sent to the Security screen instead of waiting on it.
+  const { blocked: twoFactorBlocked } = useTwoFactorRequirement();
+  const sentToSetupRef = useRef(false);
+  useEffect(() => {
+    if (twoFactorBlocked && !sentToSetupRef.current) {
+      sentToSetupRef.current = true;
+      openTwoFactorSetup();
+    }
+    if (!twoFactorBlocked) sentToSetupRef.current = false;
+  }, [twoFactorBlocked]);
 
   const setBusiness = useBusinessStore((s) => s.setBusiness);
   const businessId = useBusinessStore((s) => s.businessId);
@@ -116,7 +131,7 @@ export default function AppLayout() {
   // deleted business). We must wait for business.list to confirm validity,
   // otherwise child screens fire queries with a stale x-business-id header
   // and get "Business not found" errors from the server.
-  if (!businessValidated) {
+  if (!businessValidated && !twoFactorBlocked) {
     // If tenant is ready and businesses list loaded but empty — prompt to create one
     const bizListReady = !!session?.tenantId && businesses !== undefined;
     const noBusiness = bizListReady && businesses.length === 0;
@@ -159,6 +174,7 @@ export default function AppLayout() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <MaintenanceBanner />
       <BillingBanner />
+      <TwoFactorBanner />
       <BusinessSwitcherProvider
         businesses={businesses ?? []}
         activeBusinessId={businessId ?? ""}

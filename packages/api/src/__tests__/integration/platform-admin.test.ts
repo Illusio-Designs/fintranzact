@@ -372,6 +372,7 @@ describe("signing in as a platform admin", () => {
       email: "signin.admin@fintranzact.com",
       password: "a-long-test-password",
     });
+    if (result.twoFactorRequired) throw new Error("expected a session, got a two-factor challenge");
     expect(result.user.email).toBe("signin.admin@fintranzact.com");
     expect(result.sessionToken.length).toBeGreaterThan(30);
   });

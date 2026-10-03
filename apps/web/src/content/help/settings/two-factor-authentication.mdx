@@ -1,0 +1,81 @@
+---
+title: "Two-factor authentication: set up, backup codes, trusted devices"
+description: How to turn on two-factor authentication with an authenticator app, keep your backup codes safe, trust a device for 30 days, and get back in if you lose your phone.
+sidebar:
+  order: 4
+---
+
+Two-factor authentication (2FA) adds a second check when you sign in. After your password, Fintranzact asks for a 6-digit code from an app on your phone. Someone who learns your password still cannot get into your account without your phone.
+
+## Set it up
+
+1. Go to **Settings → Account → Security** and choose **Turn on**.
+2. Open an authenticator app on your phone and add a new account by scanning the QR code. These apps work:
+   - Google Authenticator
+   - Microsoft Authenticator
+   - Authy
+   - any other app that supports time-based one-time passwords (TOTP)
+3. If you cannot scan the code, choose the setup key shown under it and type it into the app by hand.
+4. Enter the 6-digit code the app shows now, then choose **Verify and turn on**.
+5. Save your **backup codes** (see below) and tick **I have saved these codes**.
+
+When you turn 2FA on, your other signed-in devices are signed out. You stay signed in here.
+
+## Backup codes
+
+You get ten backup codes. Each one works **once**, in place of the app's 6-digit code, and looks like `K7P2MQ-9XD4HW`.
+
+- They are shown **only once**. Copy them, download the `.txt` file or print them, and keep them somewhere private, such as a password manager. Do not keep them only on the phone that holds the authenticator app.
+- At sign-in, choose **Use a backup code instead** and type the code. Dashes and capital letters are filled in for you.
+- When few are left, go to **Settings → Account → Security → New backup codes**. You will need your password and a current code from your app. The old codes stop working at once.
+
+## On the mobile app
+
+The Fintranzact mobile app asks for the code after your password, the same way. Turn two-factor on, create new backup codes, turn it off and manage trusted devices from **Settings → Two-factor authentication**. The app keeps its trusted-device token in the phone's secure storage; "Trust this device for 30 days" works there too, and revoking this device or turning 2FA off clears it.
+
+## Trust this device for 30 days
+
+On the code screen you can tick **Trust this device for 30 days**. That browser or app then skips the code at sign-in for 30 days. Your password is still always required, and the 30 days are not extended by using the device.
+
+Trust only your own devices. To remove a device, or all of them, go to **Settings → Account → Security → Trusted devices** and choose **Revoke** or **Revoke all**. Turning 2FA off, or choosing "sign out everywhere", also removes every trusted device.
+
+## If you lose your phone
+
+1. **Use a backup code.** Sign in with your password, then choose **Use a backup code instead**. After you are in, go to **Settings → Account → Security**, turn 2FA off, and turn it on again with your new phone. This gives you new backup codes too.
+2. **No backup codes either?** Contact Fintranzact support, or ask your organisation owner to. We will not reset two-factor on a message alone: we check that you are you first, for example on a video call, by matching a government ID, by calling you back on the phone number we have, or with your organisation owner vouching for you. We also ask for details only you would know, such as your name on the account, a recent invoice or GSTIN detail, or when you last signed in. This can take a little time.
+3. **After the reset.** We sign you out everywhere, forget your trusted devices and email you to say it was done. Sign in with your password and set up two-factor again in **Settings → Account → Security**. If you get that email and did not ask for a reset, contact support straight away and change your password.
+
+## See what happened on your account
+
+**Settings → Account → Security → Recent security activity** lists your latest two-factor events: setup, sign-ins with a code, wrong codes, backup code use, devices trusted or removed, and resets by Fintranzact support. If something there is not you, change your password and turn two-factor on.
+
+## Too many wrong codes
+
+After five wrong codes in a row, code checks pause for 15 minutes. Repeated lockouts last longer (1 hour, then 24 hours). The sign-in screen shows the time you can try again. After five wrong codes on one sign-in attempt you will be asked to enter your password again.
+
+## Turn it off
+
+Go to **Settings → Account → Security → Turn off**. You need your password and a code from your app (or a backup code). If your organisation requires two-factor authentication, you cannot turn it off; ask your organisation owner.
+
+## Require two-factor authentication for your team
+
+Organisation owners can make two-factor authentication compulsory. Go to **Settings → Team → Two-factor authentication** and choose who must use it:
+
+- **Off**: it stays optional.
+- **Owners and admins**: owners, superadmins and admins must use it.
+- **Everyone**: every member must use it.
+
+You also choose a **grace period** (0 to 30 days, 7 by default). Members who have not set it up see a banner with the deadline. After the deadline they are blocked from the organisation, and can only open **Settings → Account → Security** to set it up. As soon as they finish they are back in. Choosing 0 days blocks them straight away.
+
+- You must turn on two-factor for your own account first, so you cannot lock yourself out.
+- The **Team** list shows who has set it up (**On** or **Not set up**) and how many members still need to. Owners and admins can see this; other members cannot.
+- Raising the policy (or changing the grace period) starts a new grace period for everyone. Lowering it keeps the existing one. Turning it **Off** blocks nobody.
+- Only the owner can change the policy. Admins can see it.
+- Members cannot turn two-factor off while it is required of them.
+- **API keys are not affected.** The command line and AI assistants that sign in with a password are, so they should use an API key instead.
+- A blocked member who lost their phone can use a backup code to sign in and finish setup, or contact support for a reset (see above).
+
+## Related
+
+- [Settings](/help/settings)
+- [Team & Roles](/help/team)

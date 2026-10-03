@@ -39,6 +39,9 @@ import {
   saveDesktopToken,
   clearDesktopToken,
   ensureAccessToken,
+  saveTrustedDeviceToken,
+  getTrustedDeviceToken,
+  clearTrustedDeviceToken,
   _resetForTests,
 } from "../desktop-session";
 
@@ -484,5 +487,37 @@ describe("desktop-session — getTokenSync returns access token on desktop", () 
     expect(getTokenSync()).toBeNull();
 
     fetchSpy.mockRestore();
+  });
+});
+
+describe("trusted device token wrappers", () => {
+  it("are no-ops on the web and never touch the keychain", async () => {
+    isDesktopMock.mockReturnValue(false);
+    invokeMock.mockClear();
+    await saveTrustedDeviceToken("td");
+    expect(await getTrustedDeviceToken()).toBeNull();
+    await clearTrustedDeviceToken();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("use the dedicated keychain commands on desktop", async () => {
+    isDesktopMock.mockReturnValue(true);
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
+    await saveTrustedDeviceToken("td");
+    expect(invokeMock).toHaveBeenCalledWith("save_trusted_device_token", { token: "td" });
+    invokeMock.mockResolvedValueOnce("td");
+    expect(await getTrustedDeviceToken()).toBe("td");
+    await clearTrustedDeviceToken();
+    expect(invokeMock).toHaveBeenCalledWith("clear_trusted_device_token");
+  });
+
+  it("treat a keychain failure as no token", async () => {
+    isDesktopMock.mockReturnValue(true);
+    invokeMock.mockReset();
+    invokeMock.mockRejectedValue(new Error("locked"));
+    expect(await getTrustedDeviceToken()).toBeNull();
+    await expect(saveTrustedDeviceToken("td")).resolves.toBeUndefined();
+    await expect(clearTrustedDeviceToken()).resolves.toBeUndefined();
   });
 });

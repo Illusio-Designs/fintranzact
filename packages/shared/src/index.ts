@@ -18,3 +18,5 @@ export * from "./gst.js";
 export * from "./composition.js";
 export * from "./bank-statement-formats.js";
 export * from "./invoice-templates.js";
+export * from "./two-factor.js";
+export * from "./two-factor-format.js";

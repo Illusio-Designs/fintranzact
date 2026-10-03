@@ -16,6 +16,7 @@ import { StoreTab } from "@/components/settings/StoreTab";
 import { POSTab } from "@/components/settings/POSTab";
 import { BarcodesTab } from "@/components/settings/BarcodesTab";
 import { ShippingTab } from "@/components/settings/ShippingTab";
+import { useTwoFactorRequirement } from "@/hooks/useTwoFactorRequirement";
 import { WhatsNextModal } from "@/components/settings/WhatsNextModal";
 import { ImportWizard } from "@/components/ImportWizard";
 import { RestoreOnboarding } from "@/components/settings/RestoreOnboarding";
@@ -24,20 +25,23 @@ import { Add01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
 
 export const Route = createFileRoute("/settings")({
   // ?tab=pos opens a section directly, e.g. from the POS "turned off" screen.
-  validateSearch: z.object({ tab: z.string().optional() }),
+  validateSearch: z.object({ tab: z.string().optional(), pane: z.string().optional() }),
   component: SettingsPage,
 });
 
 function SettingsPage() {
   const navigate = useNavigate();
-  const { tab: linkedTab } = Route.useSearch();
+  const { tab: linkedTab, pane: linkedPane } = Route.useSearch();
+  // A member blocked by the organisation's two-factor policy can only use the
+  // Account tab (Security pane), where they set it up.
+  const { requirement: twoFactor } = useTwoFactorRequirement();
   const [tab, setTab] = useState(() => linkedTab || sessionStorage.getItem("settings-tab") || "business");
   // A link to ?tab=billing while Settings is already open (banner, toast action).
   useEffect(() => { if (linkedTab) setTab(linkedTab); }, [linkedTab]);
   const handleTabChange = (t: string) => { setTab(t); sessionStorage.setItem("settings-tab", t); };
   // Always refetched on opening Settings: the document counters ("Next #")
   // move with every invoice, payment or order saved elsewhere in the app.
-  const { data: businesses, isLoading } = trpc.business.list.useQuery(undefined, { refetchOnMount: "always" });
+  const { data: businesses, isLoading, isError: businessesFailed } = trpc.business.list.useQuery(undefined, { refetchOnMount: "always" });
   const { data: session } = trpc.auth.me.useQuery();
   const [showWhatsNext, setShowWhatsNext] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -71,8 +75,8 @@ function SettingsPage() {
     );
   }
 
-  // First-run: no business yet
-  if (!biz && !showWhatsNext) {
+  // First-run: no business yet. A failed list (e.g. a blocked member) is not "no business".
+  if (!biz && !businessesFailed && !showWhatsNext) {
     if (!canCreateBusiness) {
       // Invited user (seller, accountant, etc.) — they can't create businesses.
       // Show a waiting message instead of the creation form.
@@ -252,24 +256,25 @@ function SettingsPage() {
     return <ImportWizard open onClose={() => setShowImport(false)} />;
   }
 
+  const shownTab = twoFactor.blocked ? "account" : tab;
   return (
     <div>
       <PageHeader title="Settings" description="Manage your business and preferences" />
       <div className="flex flex-col gap-2 mt-2 md:flex-row md:gap-8">
-        <SettingsNav value={tab} onChange={handleTabChange} role={session?.role} />
+        <SettingsNav value={shownTab} onChange={(t) => handleTabChange(twoFactor.blocked ? "account" : t)} role={session?.role} />
         <div className="flex-1 min-w-0">
-          {tab === "business" && <BusinessTab biz={biz} />}
-          {tab === "documents" && <DocumentsTab biz={biz} />}
-          {tab === "shipping" && biz && <ShippingTab biz={biz} />}
-          {tab === "team" && <TeamTab />}
-          {tab === "targets" && <SalesTargetsTab />}
-          {tab === "locks" && <PeriodLocksTab />}
-          {tab === "data" && <DataTab />}
-          {tab === "account" && <AccountTab />}
-          {tab === "billing" && isOwner && <BillingTab />}
-          {tab === "store" && <StoreTab />}
-          {tab === "pos" && biz && <POSTab biz={biz} />}
-          {tab === "barcodes" && <BarcodesTab />}
+          {shownTab === "business" && <BusinessTab biz={biz} />}
+          {shownTab === "documents" && <DocumentsTab biz={biz} />}
+          {shownTab === "shipping" && biz && <ShippingTab biz={biz} />}
+          {shownTab === "team" && <TeamTab />}
+          {shownTab === "targets" && <SalesTargetsTab />}
+          {shownTab === "locks" && <PeriodLocksTab />}
+          {shownTab === "data" && <DataTab />}
+          {shownTab === "account" && <AccountTab initialPane={twoFactor.blocked ? "security" : linkedPane} />}
+          {shownTab === "billing" && isOwner && <BillingTab />}
+          {shownTab === "store" && <StoreTab />}
+          {shownTab === "pos" && biz && <POSTab biz={biz} />}
+          {shownTab === "barcodes" && <BarcodesTab />}
         </div>
       </div>
     </div>

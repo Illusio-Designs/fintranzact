@@ -79,6 +79,9 @@ import { formatRole } from "@/lib/roles";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { BillingBanner } from "@/components/BillingBanner";
+import { TwoFactorBanner } from "@/components/TwoFactorBanner";
+import { useTwoFactorRequirement } from "@/hooks/useTwoFactorRequirement";
+import { shouldRedirectToTwoFactorSetup, setupSearch } from "@/lib/two-factor-enforcement";
 import { LandingPage } from "@/components/LandingPage";
 import { AUTH_PUBLIC_PATHS, isMarketingPath, isSharePath } from "@/lib/public-paths";
 import { isDesktop } from "@/lib/isDesktop";
@@ -658,6 +661,10 @@ function RootLayout() {
     enabled: !!session?.user && !!session?.tenantId,
   });
 
+  const { requirement: twoFactorRequirement } = useTwoFactorRequirement();
+  const twoFactorBlocked = !!session?.tenantId && twoFactorRequirement.blocked;
+  const twoFactorSetupPath = twoFactorRequirement.setupPath;
+
   const { data: canCreateOrg } = trpc.tenant.canCreateOrg.useQuery(undefined, {
     enabled: !!session?.user,
   });
@@ -1055,6 +1062,14 @@ function RootLayout() {
       return;
     }
 
+    // Priority 2b: the organisation requires two-factor authentication and the
+    // grace period is over -> the Security tab (Settings, auth and public pages
+    // stay reachable so the user can set it up).
+    if (shouldRedirectToTwoFactorSetup(twoFactorBlocked, pathname)) {
+      navigate({ to: "/settings", search: setupSearch(twoFactorSetupPath), replace: true });
+      return;
+    }
+
     // Opened the partner portal (or admin console) while signed out: go back
     // there. The destination is kept until they arrive, so another redirect
     // racing with this one (e.g. the profile page's) cannot lose it.
@@ -1211,6 +1226,8 @@ function RootLayout() {
     isPlatformAdmin,
     partnerStatus,
     partnerMeLoading,
+    twoFactorBlocked,
+    twoFactorSetupPath,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select single tenant
@@ -1442,6 +1459,7 @@ function RootLayout() {
     <div className="flex flex-col h-screen overflow-hidden bg-surface-0">
       <MaintenanceBanner />
       <BillingBanner />
+      <TwoFactorBanner />
       <div className="flex flex-1 overflow-hidden">
         {/* Mobile sidebar backdrop */}
         {!isOnboarding && sidebarOpen && (

@@ -229,6 +229,8 @@ exceptions:
       - tenant.myInvitations
       - tenant.acceptById
       - tenant.peekInvitation
+      # Organisation security policy is an owner task on the web (Settings -> Team).
+      - tenant.setSecurityPolicy
       # Plan choice is a step of the web signup flow (/auth/plan-selection);
       # mobile users pick a plan on the web.
       - tenant.updatePlan
@@ -240,6 +242,8 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.resetTwoFactor
+      - platform.securityEvents
       - platform.plans
       - platform.savePlan
       - platform.resetPlan
@@ -584,6 +588,20 @@ exceptions:
       # --- Auth ---
       # Browser-only flows requiring email verification links / callbacks.
       - auth.requestEmailChange
+      # Two-factor enrolment needs a real signed-in session (API keys are
+      # refused by the API) and an authenticator app: an interactive account
+      # flow, not something an API-key client does.
+      - auth.regenerateBackupCodes
+      - auth.twoFactorBeginSetup
+      - auth.twoFactorConfirmSetup
+      - auth.twoFactorDisable
+      - auth.twoFactorStatus
+      - auth.securityActivity
+      # Trusted-device management is an account-security screen. (The CLI does
+      # call auth.verifyTwoFactor at sign-in, so that one is not excepted.)
+      - auth.listTrustedDevices
+      - auth.revokeAllTrustedDevices
+      - auth.revokeTrustedDevice
 
       # --- Tenant ---
       # Invite acceptance and org management are browser/mobile flows.
@@ -594,6 +612,11 @@ exceptions:
       - tenant.create
       - tenant.myInvitations
       - tenant.peekInvitation
+      # Organisation security policy is an owner task on the web; sessions that
+      # lack 2FA get a clear two_factor_required error instead.
+      - tenant.setSecurityPolicy
+      # The two-factor banner is a UI concern; scripts see the two_factor_required error.
+      - tenant.current
       # Plan choice is part of web signup; scripts must not change billing plans.
       - tenant.updatePlan
       # Platform admin (operators only, set by PLATFORM_ADMIN_EMAIL) is a
@@ -604,6 +627,8 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.resetTwoFactor
+      - platform.securityEvents
       - platform.plans
       - platform.savePlan
       - platform.resetPlan
@@ -866,7 +891,21 @@ exceptions:
       - auth.me
       - auth.register
       - auth.requestEmailChange
+      # Two-factor enrolment needs a real signed-in session (API keys are
+      # refused by the API) and an authenticator app: an interactive account
+      # flow, not something an API-key client does.
+      - auth.listTrustedDevices
+      - auth.regenerateBackupCodes
+      - auth.revokeAllTrustedDevices
+      - auth.revokeTrustedDevice
+      - auth.twoFactorBeginSetup
+      - auth.twoFactorConfirmSetup
+      - auth.twoFactorDisable
+      - auth.twoFactorStatus
+      - auth.securityActivity
       - auth.updateName
+      # MCP signs in with API keys only, so it never meets the sign-in challenge.
+      - auth.verifyTwoFactor
 
       # --- Tenant ---
       # Invite acceptance and org management are browser/mobile flows.
@@ -877,6 +916,11 @@ exceptions:
       - tenant.create
       - tenant.myInvitations
       - tenant.peekInvitation
+      # Organisation security policy is an owner task on the web; agents must not
+      # change it. Sessions that lack 2FA get a clear two_factor_required error.
+      - tenant.setSecurityPolicy
+      # The two-factor banner is a UI concern; agents see the two_factor_required error.
+      - tenant.current
       # Plan choice is part of web signup; agents must not change billing plans.
       - tenant.updatePlan
       # Platform admin (operators only, set by PLATFORM_ADMIN_EMAIL) is a
@@ -887,6 +931,8 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.resetTwoFactor
+      - platform.securityEvents
       - platform.plans
       - platform.savePlan
       - platform.resetPlan

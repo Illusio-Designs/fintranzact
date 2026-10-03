@@ -39,6 +39,15 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   "auth.logoutAll",
   "auth.revokeSession",
   "auth.issueAccessToken",
+  // Account security (two-factor enrolment) never depends on the plan.
+  "auth.twoFactorBeginSetup",
+  "auth.twoFactorConfirmSetup",
+  "auth.twoFactorDisable",
+  "auth.regenerateBackupCodes",
+  // Second step of sign-in and trusted-device management: same reasoning.
+  "auth.verifyTwoFactor",
+  "auth.revokeTrustedDevice",
+  "auth.revokeAllTrustedDevices",
 
   // Billing: the way out of read-only. A halted organisation must be able to
   // buy a plan, change plan, fix billing details and cancel.
@@ -59,6 +68,8 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   "tenant.acceptById",
   "tenant.removeMember",
   "tenant.revokeInvitation",
+  // Tightening security is never refused for plan reasons (owner only, see tenant.ts).
+  "tenant.setSecurityPolicy",
 
   // Revoking credentials and links is a safety action, never refused.
   "apiKey.revoke",
@@ -76,6 +87,7 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   // Not tenant-scoped: platform admin, partner and public contact forms.
   "platform.setPlan",
   "platform.setTrial",
+  "platform.resetTwoFactor",
   "platform.savePlan",
   "platform.resetPlan",
   "platform.closeGovUsageMonth",
