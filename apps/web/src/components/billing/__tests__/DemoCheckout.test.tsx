@@ -19,7 +19,7 @@ vi.mock("@/lib/trpc", () => ({
 
 import { DemoCheckout } from "../DemoCheckout";
 
-const PRO = { id: "pro" as const, name: "Pro", monthlyPriceInr: 999 };
+const PRO = { id: "growth" as const, name: "Growth", monthlyPriceInr: 999 };
 
 function renderCheckout(onContinue = vi.fn()) {
   render(<DemoCheckout open plan={PRO} cycle="monthly" onClose={vi.fn()} onContinue={onContinue} processingDelayMs={0} />);
@@ -68,7 +68,7 @@ describe("DemoCheckout", () => {
 
   it("shows test mode and the total with 18% GST in rupees", () => {
     renderCheckout();
-    expect(screen.getByRole("dialog", { name: "Pay for Pro" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Pay for Growth" })).toBeInTheDocument();
     expect(screen.getByText("Test mode — no money is taken")).toBeInTheDocument();
     expect(screen.getByText("₹999.00")).toBeInTheDocument();
     expect(screen.getByText("₹179.82")).toBeInTheDocument();
@@ -120,13 +120,13 @@ describe("DemoCheckout", () => {
   });
 
   it("pays, shows the payment id and continues", async () => {
-    mutateAsync.mockResolvedValue({ paymentId: "pay_demo_AbCdEfGhIjKlMn", plan: "pro", amountPaise: 117_882, cycle: "monthly" });
+    mutateAsync.mockResolvedValue({ paymentId: "pay_demo_AbCdEfGhIjKlMn", plan: "growth", amountPaise: 117_882, cycle: "monthly" });
     const { onContinue } = renderCheckout();
     fireEvent.change(screen.getByLabelText("UPI ID"), { target: { value: "anjali@okhdfcbank" } });
     fireEvent.click(payButton());
 
     expect(await screen.findByText("Payment successful")).toBeInTheDocument();
-    expect(mutateAsync).toHaveBeenCalledWith({ plan: "pro", cycle: "monthly", method: "upi" });
+    expect(mutateAsync).toHaveBeenCalledWith({ plan: "growth", cycle: "monthly", method: "upi" });
     expect(screen.getByTestId("payment-id")).toHaveTextContent("pay_demo_AbCdEfGhIjKlMn");
 
     fireEvent.click(screen.getByRole("button", { name: "Create your company" }));

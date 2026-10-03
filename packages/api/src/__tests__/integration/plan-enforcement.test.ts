@@ -18,8 +18,8 @@ import { describe, it, expect, afterAll } from "vitest";
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import type { PlanId } from "@fintranzact/shared";
-import { apiKeys, auditLog, getTenantDb, invoices, recurringInvoiceRuns, recurringInvoiceTemplates } from "@fintranzact/db";
+import { PLAN_DEFAULTS, limitsToStored, type PlanId } from "@fintranzact/shared";
+import { apiKeys, auditLog, getTenantDb, invoices, planSettings, recurringInvoiceRuns, recurringInvoiceTemplates } from "@fintranzact/db";
 import { getControlDb, getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createUser, createTenant, addMember, createBusiness, createParty } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
@@ -30,6 +30,7 @@ import { getEntitlements } from "../../lib/entitlements.js";
 import { storeServesTenant } from "../../lib/plan-limits.js";
 import { tickTenant, processDueTemplates, skipDueTemplates } from "../../lib/recurring-invoice-scheduler.js";
 import { clearEntitlementsCache } from "../../lib/entitlements.js";
+import { invalidatePlanCatalog } from "../../lib/plan-catalog.js";
 
 const DAY = 86_400_000;
 const past = () => new Date(Date.now() - 2 * DAY);
@@ -49,14 +50,35 @@ async function org(opts: { plan: PlanId; readOnly?: boolean; status?: "active" |
   return { owner, tenant, biz, caller };
 }
 
+/** An admin edit to Starter: recurringRunsPerMonth capped (plan_settings), catalogue refreshed. */
+async function capStarterRuns(runs: number) {
+  const base = PLAN_DEFAULTS.starter;
+  await getControlDb().insert(planSettings).values({
+    plan: "starter",
+    name: base.name,
+    tagline: base.tagline,
+    monthlyPriceInr: base.monthlyPriceInr,
+    yearlyPriceInr: base.yearlyPriceInr,
+    features: base.features,
+    highlight: false,
+    visible: true,
+    limits: { ...limitsToStored(base.limits), recurringRunsPerMonth: runs },
+  }).onConflictDoUpdate({ target: planSettings.plan, set: { limits: { ...limitsToStored(base.limits), recurringRunsPerMonth: runs } } });
+  invalidatePlanCatalog();
+}
+
 afterAll(async () => {
+  await getControlDb().delete(planSettings);
+  invalidatePlanCatalog();
   await truncateAllTables();
   await closeTestDb();
 });
 
 describe("recurringInvoice.runNow and the monthly allowance", () => {
   it("is refused once the plan's runs this month are used, and counts the scheduler's counter", async () => {
-    const { biz, caller, tenant } = await org({ plan: "free" }); // free: 5 runs a month
+    // Starter has no recurring cap built in; an admin may set one (here 5 a month).
+    await capStarterRuns(5);
+    const { biz, caller, tenant } = await org({ plan: "starter" });
     const db = getTenantTestDb();
     const party = await createParty(db, biz.id);
     const [tpl] = await db.insert(recurringInvoiceTemplates).values({
@@ -92,7 +114,7 @@ describe("data export", () => {
   const download = (tenantId: string, token: string) => app.request(`/api/export/${tenantId}?token=${encodeURIComponent(token)}`);
 
   it("is refused by selfExport.request and the export route when the plan's dataExport is false", async () => {
-    const { owner, tenant, caller } = await org({ plan: "free" });
+    const { owner, tenant, caller } = await org({ plan: "starter" });
     await expect(caller().selfExport.request({ tenantId: tenant.id })).rejects.toThrow(/Data export is available on paid plans/);
     // A token that predates a downgrade is refused by the route too.
     const { token } = signExportToken(tenant.id, owner.id);
@@ -140,7 +162,7 @@ describe("writes outside the gated bases are refused while read-only", () => {
 describe("online store availability", () => {
   it("is off for a plan without onlineStore (neutral 404 for buyers), on for paid plans", async () => {
     clearEntitlementsCache();
-    expect(await storeServesTenant((await org({ plan: "free" })).tenant.id)).toBe(false);
+    expect(await storeServesTenant((await org({ plan: "starter" })).tenant.id)).toBe(false);
     expect(await storeServesTenant((await org({ plan: "business" })).tenant.id)).toBe(true);
   });
 
@@ -150,7 +172,7 @@ describe("online store availability", () => {
   });
 
   it("store.updateSettings refuses enabling the store on a plan without it, but allows turning it off", async () => {
-    const { caller } = await org({ plan: "free" });
+    const { caller } = await org({ plan: "starter" });
     await expect(caller().store.updateSettings({ storeEnabled: true })).rejects.toThrow(/online store is available on paid plans/);
     await expect(caller().store.updateSettings({ storeEnabled: false })).resolves.toBeTruthy();
   });
@@ -176,8 +198,8 @@ describe("API keys after a downgrade", () => {
     expect((await ctxFor(await keyFor(tenant.id, owner.id))).user?.id).toBe(owner.id);
   });
 
-  it("stop authenticating for a plan with no keys (legacy free) and for a suspended organisation", async () => {
-    const a = await org({ plan: "free" });
+  it("stop authenticating for a plan with no keys (Starter) and for a suspended organisation", async () => {
+    const a = await org({ plan: "starter" });
     expect((await ctxFor(await keyFor(a.tenant.id, a.owner.id))).user).toBeNull();
     const b = await org({ plan: "business", status: "suspended" });
     expect((await ctxFor(await keyFor(b.tenant.id, b.owner.id))).user).toBeNull();
@@ -185,8 +207,8 @@ describe("API keys after a downgrade", () => {
 });
 
 describe("audit trail window", () => {
-  it("hides entries older than auditRetentionDays (free: 30 days) and keeps recent ones", async () => {
-    const { owner, biz, caller } = await org({ plan: "free" });
+  it("hides entries older than auditRetentionDays (Starter: 30 days) and keeps recent ones", async () => {
+    const { owner, biz, caller } = await org({ plan: "starter" });
     const db = getTenantTestDb();
     await db.insert(auditLog).values([
       { businessId: biz.id, userId: owner.id, action: "x.old", entityType: "x", createdAt: new Date(Date.now() - 90 * DAY) },

@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { controlDb, partners, partnerPayouts, tenants, tenantMembers, userTenantPrefs, users } from "@fintranzact/db";
 import { partnerApplicationSchema } from "@fintranzact/shared";
-import { getPartnerStats } from "../lib/partner-program.js";
+import { getPartnerStats, payingTenantIds } from "../lib/partner-program.js";
 import { CA_ROLES } from "@fintranzact/shared";
 import { MANAGED_CLIENTS_LIMIT, toManagedClients } from "../lib/partner-ca.js";
 import { getPlanCatalog } from "../lib/plan-catalog.js";
@@ -109,7 +109,7 @@ export const partnerRouter = router({
     const [stats, referred, payouts, catalog] = await Promise.all([
       getPartnerStats([partner]),
       controlDb
-        .select({ name: tenants.name, plan: tenants.plan, status: tenants.status, createdAt: tenants.createdAt })
+        .select({ id: tenants.id, name: tenants.name, plan: tenants.plan, accessGrandfathered: tenants.accessGrandfathered, status: tenants.status, createdAt: tenants.createdAt })
         .from(tenants)
         .where(eq(tenants.partnerId, partner.id))
         .orderBy(desc(tenants.createdAt)),
@@ -127,6 +127,7 @@ export const partnerRouter = router({
       getPlanCatalog(),
     ]);
     const plans = new Map<string, (typeof catalog)[number]>(catalog.map((p) => [p.id, p]));
+    const paying = await payingTenantIds(referred.map((t) => t.id));
     const st = stats.get(partner.id)!;
 
     // Clients you manage (accountant partners): organisations where THIS login holds a CA role.
@@ -188,7 +189,7 @@ export const partnerRouter = router({
       referred: referred.map((t) => ({
         name: t.name,
         planName: plans.get(t.plan)?.name ?? t.plan,
-        paid: (plans.get(t.plan)?.monthlyPriceInr ?? 0) !== 0,
+        paid: !t.accessGrandfathered && paying.has(t.id) && (plans.get(t.plan)?.monthlyPriceInr ?? 0) !== 0,
         active: t.status === "active",
         joinedAt: t.createdAt.toISOString(),
       })),

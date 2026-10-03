@@ -8,7 +8,8 @@ import {
   ADDON_IDS,
   BILLING_UPGRADE_PATH,
   BILLING_CYCLES,
-  PLAN_IDS,
+  planIdSchema,
+  effectiveYearlyPriceInr,
   SUBSCRIPTION_STATUS_LABELS,
   cycleAmount,
   entitlementMessage,
@@ -78,7 +79,7 @@ export const billingRouter = router({
    */
   demoCheckout: protectedProcedure
     .input(z.object({
-      plan: z.enum(PLAN_IDS),
+      plan: planIdSchema,
       cycle: z.enum(BILLING_CYCLES),
       method: z.enum(["upi", "card", "netbanking"]),
     }))
@@ -104,7 +105,7 @@ export const billingRouter = router({
    * already has a plan subscription changes it with changePlan instead.
    */
   subscribePlan: protectedProcedure
-    .input(z.object({ plan: z.enum(PLAN_IDS), cycle: z.enum(BILLING_CYCLES) }))
+    .input(z.object({ plan: planIdSchema, cycle: z.enum(BILLING_CYCLES) }))
     .mutation(async ({ input, ctx }) => {
       if (!razorpayConfigured() && !demoPaymentsEnabled()) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Online payments are not available yet. Contact us to upgrade." });
@@ -276,8 +277,9 @@ export const billingRouter = router({
           monthlyPriceInr: p.monthlyPriceInr!,
           features: p.features,
           highlight: !!p.highlight,
+          yearlyPriceInr: effectiveYearlyPriceInr(p),
           monthly: planCheckoutAmount(p.monthlyPriceInr!, "monthly"),
-          yearly: planCheckoutAmount(p.monthlyPriceInr!, "yearly"),
+          yearly: planCheckoutAmount(p.monthlyPriceInr!, "yearly", p.yearlyPriceInr),
         })),
       billingDetails: {
         name: tenant.billingName ?? tenant.name,
@@ -328,7 +330,7 @@ export const billingRouter = router({
 
   /** Upgrade now (prorated) or schedule a downgrade for the period end. */
   changePlan: protectedProcedure
-    .input(z.object({ plan: z.enum(PLAN_IDS), cycle: z.enum(BILLING_CYCLES) }))
+    .input(z.object({ plan: planIdSchema, cycle: z.enum(BILLING_CYCLES) }))
     .mutation(async ({ input, ctx }) => {
       if (!razorpayConfigured() && !demoPaymentsEnabled()) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Online payments are not available yet. Contact us to upgrade." });

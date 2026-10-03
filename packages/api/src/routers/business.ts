@@ -383,7 +383,7 @@ export const businessRouter = router({
   // Check if more businesses can be created in this tenant (plan limit).
   canCreate: tenantProcedure.query(async ({ ctx }) => {
     const [row] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
-    const limits = await getLimits(row?.plan ?? "free");
+    const limits = await getLimits(row?.plan ?? "starter");
     if (limits.maxBusinesses === Infinity) return true;
     const [{ count: bizCount }] = await ctx.db.select({ count: count() }).from(businesses);
     return bizCount < limits.maxBusinesses;

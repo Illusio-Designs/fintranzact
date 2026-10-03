@@ -29,9 +29,19 @@ describe("plan.list — public plan catalogue", () => {
 describe("GET /api/plans payload", () => {
   it("sends unlimited limits as null so the JSON is valid", async () => {
     const json = JSON.parse(JSON.stringify(await listPublicPlansJson()));
-    const free = json.find((p: { id: string }) => p.id === "forever_free");
-    expect(free.limits.maxBusinesses).toBeNull();
-    const pro = json.find((p: { id: string }) => p.id === "pro");
-    expect(pro.limits.maxBusinesses).toBe(PLAN_LIMITS.pro.maxBusinesses);
+    const business = json.find((p: { id: string }) => p.id === "business");
+    expect(business.limits.maxBusinesses).toBeNull();
+    const growth = json.find((p: { id: string }) => p.id === "growth");
+    expect(growth.limits.maxBusinesses).toBe(PLAN_LIMITS.growth.maxBusinesses);
+  });
+
+  it("lists exactly Starter, Growth and Business with monthly and yearly prices, Growth highlighted", async () => {
+    const json = JSON.parse(JSON.stringify(await listPublicPlansJson()));
+    expect(json.map((p: { id: string }) => p.id)).toEqual(["starter", "growth", "business"]);
+    expect(json.map((p: { monthlyPriceInr: number }) => p.monthlyPriceInr)).toEqual([299, 699, 1499]);
+    expect(json.map((p: { yearlyPriceInr: number }) => p.yearlyPriceInr)).toEqual([2999, 6999, 14999]);
+    expect(json.map((p: { yearlyPrice: string }) => p.yearlyPrice)).toEqual(["₹2,999", "₹6,999", "₹14,999"]);
+    expect(json.filter((p: { highlight: boolean }) => p.highlight).map((p: { id: string }) => p.id)).toEqual(["growth"]);
+    expect(json.some((p: { id: string }) => ["free", "forever_free", "pro", "enterprise"].includes(p.id))).toBe(false);
   });
 });

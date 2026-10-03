@@ -77,8 +77,8 @@ export type CycleAmount = PlanCheckoutAmount;
  * What a monthly price costs for one billing cycle, in paise, with 18% GST on
  * top. Same math as plan checkout (plans.ts): yearly gives 2 months free.
  */
-export function cycleAmount(monthlyPriceInr: number, cycle: BillingCycle): CycleAmount {
-  return planCheckoutAmount(monthlyPriceInr, cycle);
+export function cycleAmount(monthlyPriceInr: number, cycle: BillingCycle, yearlyPriceInr?: number | null): CycleAmount {
+  return planCheckoutAmount(monthlyPriceInr, cycle, yearlyPriceInr);
 }
 
 /** GST on a base amount already expressed in paise. */

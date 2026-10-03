@@ -4,7 +4,7 @@ import { relations, sql } from "drizzle-orm";
 // ── Enums ──────────────────────────────────────────────────────
 
 export const tenantStatusEnum = pgEnum("tenant_status", ["active", "suspended", "deleted"]);
-export const tenantPlanEnum = pgEnum("tenant_plan", ["forever_free", "free", "pro", "business", "enterprise"]);
+export const tenantPlanEnum = pgEnum("tenant_plan", ["starter", "growth", "business"]);
 export const billingSubscriptionKindEnum = pgEnum("billing_subscription_kind", ["plan", "addon"]);
 export const billingSubscriptionStatusEnum = pgEnum("billing_subscription_status", [
   "created", "active", "past_due", "halted", "cancelled",
@@ -36,10 +36,21 @@ export const tenants = pgTable("tenants", {
   referralCode: text("referral_code"),
   /** The partner whose referral code this organisation signed up with. */
   partnerId: uuid("partner_id").references((): AnyPgColumn => partners.id, { onDelete: "set null" }),
-  plan: tenantPlanEnum("plan").default("free").notNull(),
+  // Three paid plans; there is no free plan. New sign-ups set the plan they
+  // chose (default growth) and start a trial (trial_ends_at). The column
+  // default only serves rows inserted without one (admin-created
+  // organisations, test fixtures).
+  plan: tenantPlanEnum("plan").default("starter").notNull(),
+  /**
+   * Permanent full access: no trial, no payment, never read-only. True only
+   * for the organisations that were on the removed Forever Free plan when the
+   * three-plan model shipped (migration 0055 / control 0018). Never set for a
+   * new organisation; shown as "Grandfathered" in the admin console.
+   */
+  accessGrandfathered: boolean("access_grandfathered").default(false).notNull(),
   status: tenantStatusEnum("status").default("active").notNull(),
   /**
-   * When the owner chose a plan (free or paid). NULL means "not chosen yet"
+   * When the owner chose a plan. NULL means "not chosen yet"
    * and sends the owner to the plan page. Defaults to now() so existing rows,
    * seeds and admin-created orgs count as chosen; only self sign-up inserts NULL.
    */
@@ -47,7 +58,7 @@ export const tenants = pgTable("tenants", {
   /**
    * End of the free trial, or NULL when the organisation has none. Past this
    * instant with no live plan subscription the organisation is read-only
-   * (see deriveAccess in @fintranzact/shared). Nothing starts trials yet.
+   * (see deriveAccess in @fintranzact/shared). Self sign-up starts a 14-day trial.
    */
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   /**
@@ -269,6 +280,8 @@ export const planSettings = pgTable("plan_settings", {
   tagline: text("tagline").notNull(),
   /** Monthly price in rupees; null = priced on request. */
   monthlyPriceInr: integer("monthly_price_inr"),
+  /** Yearly price in rupees, before GST; null = ten times the monthly price (2 months free). */
+  yearlyPriceInr: integer("yearly_price_inr"),
   features: jsonb("features").$type<string[]>().notNull(),
   highlight: boolean("highlight").default(false).notNull(),
   /** Shown on the pricing page and sign-up plan picker. */

@@ -158,9 +158,9 @@ describe("badge", () => {
 describe("clients you manage", () => {
   it("lists organisations where the partner holds a CA role, and nothing else", async () => {
     const ca = await makePartner();
-    const client = await createTenant({ name: "Client One", plan: "free" });
-    const own = await createTenant({ name: "Own Firm", plan: "free" });
-    const staffOrg = await createTenant({ name: "Bookkeeping Org", plan: "free" });
+    const client = await createTenant({ name: "Client One", plan: "starter" });
+    const own = await createTenant({ name: "Own Firm", plan: "starter" });
+    const staffOrg = await createTenant({ name: "Bookkeeping Org", plan: "starter" });
     await addMember(client.id, ca.user.id, "ca_filing");
     await addMember(own.id, ca.user.id, "owner");
     await addMember(staffOrg.id, ca.user.id, "accountant");

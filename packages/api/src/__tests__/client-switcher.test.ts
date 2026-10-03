@@ -8,7 +8,7 @@ import {
 let n = 0;
 const row = (name: string, over: Partial<ClientRow> = {}): ClientRow => ({
   tenantId: `00000000-0000-0000-0000-${String(++n).padStart(12, "0")}`,
-  name, slug: name.toLowerCase().replace(/\W+/g, "-"), role: "auditor", plan: "pro", pinnedAt: null, lastOpenedAt: null, ...over,
+  name, slug: name.toLowerCase().replace(/\W+/g, "-"), role: "auditor", plan: "growth", pinnedAt: null, lastOpenedAt: null, ...over,
 });
 const d = (iso: string) => new Date(iso);
 const names = (rows: ClientRow[], q = {}) => orderAndPageClients(rows, q).items.map((i) => i.name);

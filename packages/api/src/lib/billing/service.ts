@@ -243,6 +243,7 @@ export async function startCheckout(opts: {
   let itemKey: string;
   let itemName: string;
   let monthlyPriceInr: number;
+  let yearlyPriceInr: number | null = null;
 
   if (opts.kind === "plan") {
     const plan = (await getPlanCatalog()).find((p) => p.id === opts.plan);
@@ -252,6 +253,7 @@ export async function startCheckout(opts: {
     itemKey = `plan:${plan.id}`;
     itemName = plan.name;
     monthlyPriceInr = plan.monthlyPriceInr;
+    yearlyPriceInr = plan.yearlyPriceInr;
   } else {
     const addon = addonById(opts.addon ?? "");
     if (!addon) throw new TRPCError({ code: "BAD_REQUEST", message: "Unknown add-on." });
@@ -315,7 +317,7 @@ export async function startCheckout(opts: {
     haltedPlanSubs = existing;
   }
 
-  const amount = cycleAmount(monthlyPriceInr, opts.cycle);
+  const amount = cycleAmount(monthlyPriceInr, opts.cycle, yearlyPriceInr);
   const gateway = getGateway();
   const created = await gateway.createSubscription({
     itemKey,

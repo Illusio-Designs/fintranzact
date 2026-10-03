@@ -202,8 +202,13 @@ export function gen(schema: ZodTypeAny, opts: GenOptions, key = "", path: string
       return new Date(`${isoDay}T00:00:00.000Z`);
     case "ZodLiteral":
       return d.value;
-    case "ZodEnum":
-      return (d.values as string[])[0];
+    case "ZodEnum": {
+      const values = d.values as string[];
+      // A plan id: the sweep world's own plan (Business), so choosing it is a no-op
+      // and never moves the world to a plan with tighter limits (Starter is first).
+      if (key === "plan" && values.includes("business")) return "business";
+      return values[0];
+    }
     case "ZodNativeEnum":
       return Object.values(d.values as Record<string, unknown>)[0];
     case "ZodNull":

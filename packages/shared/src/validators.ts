@@ -44,6 +44,8 @@ export const registerSchema = z.object({
   password: z.string().min(8).max(128),
   confirmPassword: z.string(),
   referralCode: z.string().trim().max(50).optional().or(z.literal("")),
+  /** The plan chosen at sign-up (starter, growth or business); Growth when left out. Removed plan ids are refused by the API. */
+  plan: z.string().trim().max(40).optional(),
   turnstileToken: z.string().optional(),
 }).superRefine((data, ctx) => {
   const username = (data.username ?? data.name)?.trim();

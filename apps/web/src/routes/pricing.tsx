@@ -110,15 +110,15 @@ function buildComparison(plans: PlanOption[]): Array<{ group: string; rows: Arra
     {
       group: "Plan extras",
       rows: [
-        from("Advanced automation and workflows", "pro"),
-        from("Expanded collaboration", "pro"),
+        from("Advanced automation and workflows", "growth"),
+        from("Expanded collaboration", "growth"),
         from("Multi-tenant controls", "business"),
         from("Premium reporting", "business"),
       ],
     },
     {
       group: "Support",
-      rows: [all("Help centre and email support"), from("Priority support", "pro"), from("Dedicated onboarding", "business")],
+      rows: [all("Help centre and email support"), from("Priority support", "growth"), from("Dedicated onboarding", "business")],
     },
   ];
 }

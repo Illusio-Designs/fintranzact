@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { controlDb, partners, partnerPayouts, tenants } from "@fintranzact/db";
+import { billingSubscriptions, controlDb, partners, partnerPayouts, tenants } from "@fintranzact/db";
 import {
   money,
   nextPartnerBadge,
@@ -76,8 +76,27 @@ export interface PartnerStats {
 }
 
 /**
+ * The organisations (of those given) that pay: a live plan subscription
+ * (active, or past_due while renewal is retried). Every organisation is on a
+ * priced plan, so the plan alone no longer says who pays.
+ */
+export async function payingTenantIds(tenantIds: string[]): Promise<Set<string>> {
+  if (tenantIds.length === 0) return new Set();
+  const rows = await controlDb
+    .select({ tenantId: billingSubscriptions.tenantId })
+    .from(billingSubscriptions)
+    .where(and(
+      inArray(billingSubscriptions.tenantId, tenantIds),
+      eq(billingSubscriptions.kind, "plan"),
+      inArray(billingSubscriptions.status, ["active", "past_due"]),
+    ));
+  return new Set(rows.map((r) => r.tenantId));
+}
+
+/**
  * Referrals, badge and money for each partner. Only active organisations
- * count; an organisation is "paid" when its plan is not free.
+ * count; an organisation is "paid" when it has a live plan subscription (a trial
+ * or a grandfathered organisation is not, whatever plan it is on).
  */
 export async function getPartnerStats(
   rows: Array<{ id: string; commissionPercent: number | null }>,
@@ -89,7 +108,7 @@ export async function getPartnerStats(
   const [catalog, referred, payouts] = await Promise.all([
     getPlanCatalog(),
     controlDb
-      .select({ partnerId: tenants.partnerId, plan: tenants.plan })
+      .select({ id: tenants.id, partnerId: tenants.partnerId, plan: tenants.plan, accessGrandfathered: tenants.accessGrandfathered })
       .from(tenants)
       .where(and(inArray(tenants.partnerId, ids), eq(tenants.status, "active"))),
     controlDb
@@ -98,6 +117,7 @@ export async function getPartnerStats(
       .where(inArray(partnerPayouts.partnerId, ids)),
   ]);
   const price = new Map(catalog.map((p) => [p.id, p.monthlyPriceInr]));
+  const paying = await payingTenantIds(referred.map((t) => t.id));
 
   for (const row of rows) {
     let referredCount = 0;
@@ -107,7 +127,8 @@ export async function getPartnerStats(
     for (const t of referred) {
       if (t.partnerId !== row.id) continue;
       referredCount++;
-      const p = price.get(t.plan);
+      // Trials and grandfathered organisations (former Forever Free) pay nothing: never a paid referral.
+      const p = t.accessGrandfathered || !paying.has(t.id) ? 0 : price.get(t.plan);
       if (p === 0 || p === undefined) continue;
       paid++;
       if (p === null) custom++;

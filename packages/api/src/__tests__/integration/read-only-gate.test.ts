@@ -3,7 +3,7 @@
  * a read-only or suspended organisation is refused writes (and, when
  * suspended, ordinary reads) with 403 + data.entitlement, while reads, PDF and
  * export procedures, auth and the billing recovery path keep working.
- * Never-subscribed organisations (forever_free, plan "business" fixtures) are
+ * Never-subscribed organisations (fixtures) and grandfathered ones (former Forever Free) are
  * never refused.
  *
  * Needs the test Postgres (docker compose -f docker-compose.test.yml up -d).
@@ -52,10 +52,10 @@ async function planSub(tenantId: string) {
   return row!;
 }
 
-/** Buy Pro (demo), fail a renewal; the caller decides whether grace is over. */
+/** Buy Growth (demo), fail a renewal; the caller decides whether grace is over. */
 async function pastDueOrg(graceOver: boolean): Promise<Org> {
   const o = await org();
-  await o.c.billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+  await o.c.billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
   const sub = await planSub(o.tenant.id);
   await recordRenewalFailure(sub, "Card declined");
   await getControlDb()
@@ -93,7 +93,7 @@ async function expectRefused(p: Promise<unknown>, reason: string) {
 
 beforeAll(async () => {
   const db = getControlDb();
-  for (const [plan, price] of [["pro", 699], ["business", 1499]] as const) {
+  for (const [plan, price] of [["growth", 699], ["business", 1499]] as const) {
     const base = PLAN_DEFAULTS[plan];
     await db.insert(planSettings).values({
       plan, name: base.name, tagline: base.tagline, monthlyPriceInr: price, features: base.features,
@@ -190,7 +190,7 @@ describe("trials", () => {
   it("a live subscription beats an expired trial", async () => {
     const { c, tenant } = await org();
     await setTrial(tenant.id, new Date(Date.now() - DAY));
-    await c.billing.subscribePlan({ plan: "pro", cycle: "monthly" });
+    await c.billing.subscribePlan({ plan: "growth", cycle: "monthly" });
     await expect(c.party.create(newParty())).resolves.toBeDefined();
   });
 });
@@ -198,7 +198,7 @@ describe("trials", () => {
 describe("subscriptions", () => {
   it("an ended subscription is refused, with read_only_subscription_ended", async () => {
     const { c, tenant } = await org();
-    await c.billing.subscribePlan({ plan: "pro", cycle: "monthly" });
+    await c.billing.subscribePlan({ plan: "growth", cycle: "monthly" });
     await getControlDb().update(billingSubscriptions).set({ status: "cancelled", endedAt: new Date() }).where(eq(billingSubscriptions.tenantId, tenant.id));
     invalidateEntitlements(tenant.id);
     await expectRefused(c.party.create(newParty()), "read_only_subscription_ended");
@@ -206,7 +206,7 @@ describe("subscriptions", () => {
 
   it("a live active subscription is writable", async () => {
     const { c } = await org();
-    await c.billing.subscribePlan({ plan: "pro", cycle: "monthly" });
+    await c.billing.subscribePlan({ plan: "growth", cycle: "monthly" });
     await expect(c.party.create(newParty())).resolves.toBeDefined();
   });
 
@@ -223,12 +223,30 @@ describe("subscriptions", () => {
 });
 
 describe("never-subscribed organisations", () => {
-  it("forever_free and a plan 'business' fixture stay writable", async () => {
-    for (const plan of ["forever_free", "business"] as const) {
+  it("a plan fixture with no trial and no subscription stays writable", async () => {
+    for (const plan of ["starter", "growth", "business"] as const) {
       const { c } = await org({ plan });
-      await expect(c.party.create(newParty(`Free ${plan}`))).resolves.toBeDefined();
+      await expect(c.party.create(newParty(`Untracked ${plan}`))).resolves.toBeDefined();
       expect(await c.billing.status()).toMatchObject({ state: "free", readOnly: false, reason: null });
     }
+  });
+
+  it("a grandfathered organisation stays writable with a long-expired trial and a halted subscription", async () => {
+    const { c, tenant } = await org({ plan: "business", accessGrandfathered: true, trialEndsAt: new Date(Date.now() - 400 * 86_400_000) });
+    await expect(c.party.create(newParty("Grandfathered A"))).resolves.toBeDefined();
+    expect(await c.billing.status()).toMatchObject({ state: "grandfathered", readOnly: false, reason: null });
+
+    await getControlDb().insert(billingSubscriptions).values({
+      tenantId: tenant.id, kind: "plan", plan: "business", cycle: "monthly", status: "halted", basePaise: 149_900,
+    });
+    invalidateEntitlements(tenant.id);
+    await expect(c.party.create(newParty("Grandfathered B"))).resolves.toBeDefined();
+    expect(await c.billing.status()).toMatchObject({ state: "grandfathered", readOnly: false, reason: null });
+  });
+
+  it("the same organisation without the flag is read-only (trial over)", async () => {
+    const { c } = await org({ plan: "business", trialEndsAt: new Date(Date.now() - 400 * 86_400_000) });
+    await expectRefused(c.party.create(newParty("Not grandfathered")), "read_only_trial_expired");
   });
 });
 

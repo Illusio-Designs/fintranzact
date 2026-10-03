@@ -9,7 +9,7 @@ import { getTenantDb, controlDb, tenants, recurringInvoiceTemplates, recurringIn
 import { generateInvoiceFromTemplate, nextRunDateAfter } from "./recurring-invoice-generator.js";
 import { getEntitlements } from "./entitlements.js";
 import { logger } from "./logger.js";
-import { RECURRING_RUNS_PER_MONTH_FREE, getLimits } from "./plan-limits.js";
+import { RECURRING_RUNS_PER_MONTH_SELF_HOSTED, getLimits } from "./plan-limits.js";
 
 const TICK_MS = 60_000; // 60 seconds
 const MAX_CATCHUP = 12; // Max invoices per template per tick to prevent runaway loops
@@ -33,7 +33,7 @@ async function tick() {
         try {
           await tickTenant(tenant.id, {
             readOnly: async (id) => (await getEntitlements(id)).readOnly,
-            runsPerMonth: async () => (await getLimits(tenant.plan ?? "free")).recurringRunsPerMonth,
+            runsPerMonth: async () => (await getLimits(tenant.plan ?? "starter")).recurringRunsPerMonth,
             getDb: getTenantDb,
             process: processDueTemplates,
             skip: skipDueTemplates,
@@ -114,7 +114,7 @@ export async function skipDueTemplates(db: TenantDb): Promise<void> {
  */
 export async function processDueTemplates(
   db: Awaited<ReturnType<typeof getTenantDb>>,
-  runsPerMonth: number = RECURRING_RUNS_PER_MONTH_FREE,
+  runsPerMonth: number = RECURRING_RUNS_PER_MONTH_SELF_HOSTED,
 ) {
   // Find active templates that are due, using FOR UPDATE SKIP LOCKED
   // to prevent duplicate processing in multi-instance deployments.

@@ -1,10 +1,10 @@
 /**
  * Plan limits configuration.
  *
- * Free tier is generous enough to get hooked (unlimited invoices, parties, payments)
- * but gates features that matter at scale (team size, multi-business, integrations).
+ * Three paid plans (Starter, Growth, Business; see @fintranzact/shared plans.ts). Every plan
+ * has unlimited invoices, parties and payments; the plans differ in businesses, users, API and more.
  *
- * Self-hosted defaults to "free" plan — same limits apply including PDF branding.
+ * A self-hosted install uses the same plans and limits.
  */
 
 import { eq, and, gt, gte, isNull, count, sql, inArray, notInArray } from "drizzle-orm";
@@ -30,7 +30,7 @@ export function getLimits(plan: string): Promise<PlanLimits> {
 }
 
 /** Backwards-compat export used by recurring invoice scheduler. */
-export const RECURRING_RUNS_PER_MONTH_FREE = PLAN_LIMITS.free.recurringRunsPerMonth;
+export const RECURRING_RUNS_PER_MONTH_SELF_HOSTED = PLAN_LIMITS.starter.recurringRunsPerMonth;
 
 // ── Enforcement helpers ───────────────────────────────────────────────────────
 
@@ -42,24 +42,23 @@ async function getTenantLimits(tenantId: string): Promise<PlanLimits> {
 /**
  * Recurring-invoice runs a tenant may make per month, per business. Hosted
  * (multi-tenant) deployments use the organization's plan; a self-hosted
- * single-tenant install keeps the original free-plan allowance.
+ * single-tenant install keeps the Starter allowance.
  */
 export async function recurringRunLimit(tenantId: string | null): Promise<number> {
-  if (!tenantId || process.env.MULTI_TENANT !== "true") return RECURRING_RUNS_PER_MONTH_FREE;
+  if (!tenantId || process.env.MULTI_TENANT !== "true") return RECURRING_RUNS_PER_MONTH_SELF_HOSTED;
   return (await getTenantLimits(tenantId)).recurringRunsPerMonth;
 }
 
 /**
  * A user's effective plan is the best plan across the orgs they own, or null
  * when they own none. It starts from the plans actually owned (not an assumed
- * default), so owning only legacy "free" orgs keeps the free limits.
- * forever_free outranks free because it is the unlimited successor plan.
+ * default). A grandfathered organisation sits on Business, the top plan.
  */
 export function effectiveOwnerPlan(ownedOrgs: Array<{ plan: string | null }>): string | null {
-  const planRank: Record<string, number> = { free: 0, forever_free: 1, pro: 2, business: 3, enterprise: 4 };
+  const planRank: Record<string, number> = { starter: 0, growth: 1, business: 2 };
   let bestPlan: string | null = null;
   for (const org of ownedOrgs) {
-    const plan = org.plan ?? "free";
+    const plan = org.plan ?? "starter";
     if (bestPlan === null || (planRank[plan] ?? 0) > (planRank[bestPlan] ?? 0)) {
       bestPlan = plan;
     }
@@ -102,7 +101,7 @@ export async function enforceOrgCreationLimit(userId: string): Promise<void> {
  * suspended: otherwise a lapsed owner could start a fresh trial in a new
  * organisation instead of paying. The refusal carries that organisation's
  * entitlement reason. Users who own none, or only organisations in good
- * standing (including forever_free and legacy free), are unaffected.
+ * standing (including grandfathered organisations), are unaffected.
  */
 export async function assertOwnedOrgsWritable(userId: string): Promise<void> {
   const owned = await controlDb.select({ tenantId: tenantMembers.tenantId })
@@ -186,7 +185,7 @@ export async function enforceApiKeyLimit(tenantId: string): Promise<void> {
   const limits = await getTenantLimits(tenantId);
   if (limits.maxApiKeys === 0) {
     throw limitError(
-      "API keys are available on paid plans. Upgrade to Pro to use the CLI and MCP server.",
+      "API keys are available on paid plans. Upgrade to Growth to use the CLI and MCP server.",
     );
   }
   if (limits.maxApiKeys === Infinity) return;
@@ -229,7 +228,7 @@ export async function enforceSessionLimit(userId: string, parentTx?: ControlTxLi
     .where(eq(tenantMembers.userId, userId))
     .limit(1);
 
-  const limits = membership ? await getTenantLimits(membership.tenantId) : await getLimits("free");
+  const limits = membership ? await getTenantLimits(membership.tenantId) : await getLimits("starter");
   if (limits.maxConcurrentSessions === Infinity) return;
 
   const activeSessions = await db
@@ -318,7 +317,7 @@ export async function enforceRecurringRunLimit(
 ): Promise<void> {
   // The organisation's own plan (a real tenant row exists in hosted AND
   // self-hosted mode here), not the scheduler's self-hosted free allowance.
-  const limit = tenantId ? await getTenantLimits(tenantId).then((l) => l.recurringRunsPerMonth) : RECURRING_RUNS_PER_MONTH_FREE;
+  const limit = tenantId ? await getTenantLimits(tenantId).then((l) => l.recurringRunsPerMonth) : RECURRING_RUNS_PER_MONTH_SELF_HOSTED;
   if (!Number.isFinite(limit)) return;
   const used = await countRecurringRunsThisMonth(db, businessId);
   if (!recurringRunAllowed(used, limit)) {
@@ -331,8 +330,8 @@ export async function enforceRecurringRunLimit(
 /**
  * Whether a PDF is printed WITHOUT the "Powered by Fintranzact" footer. The
  * plan's `pdfBranding` limit decides (so a platform admin's edit in
- * plan_settings takes effect). Defaults match the old `plan !== "free"` rule:
- * only the legacy free plan is branded. The PDF data field is still called
+ * plan_settings takes effect). No built-in plan shows branding (all three set
+ * pdfBranding false). The PDF data field is still called
  * isPaidPlan for historical reasons.
  */
 export async function pdfBrandingHidden(plan: string): Promise<boolean> {
@@ -343,7 +342,7 @@ export async function pdfBrandingHidden(plan: string): Promise<boolean> {
  * Whether an API key may authenticate. Existing keys keep working after a
  * downgrade, with two exceptions: a suspended organisation is shut (the same
  * as for a signed-in user), and a plan with no API keys at all
- * (maxApiKeys === 0, e.g. legacy free) stops honouring keys it once issued.
+ * (maxApiKeys === 0, e.g. Starter) stops honouring keys it once issued.
  * Writes by a key in a read-only organisation are refused by the entitlement
  * gate like any other caller's (a key sets ctx.tenantId, so it passes through
  * the same tenant-scoped bases). Keys beyond a reduced maxApiKeys above zero

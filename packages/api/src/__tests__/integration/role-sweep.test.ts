@@ -91,7 +91,7 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   "tenant.updateMemberRole": { allow: ADMINS, why: "tenant owner/admin only" },
   // The access log (control security_events) is for owners and admins; inline tenant-role gate, FORBIDDEN otherwise.
   "tenant.accessLog": { allow: ADMINS, why: "tenant owner/admin only" },
-  "tenant.updatePlan": { allow: [], why: "plans are changed by the platform team only" },
+  "tenant.updatePlan": { allow: ["owner"], why: "org owner only" },
   "billing.demoCheckout": { allow: ["owner"], why: "org owner only" },
   "billing.subscribePlan": { allow: ["owner"], why: "org owner only" },
   "billing.subscribeAddon": { allow: ["owner"], why: "org owner only" },

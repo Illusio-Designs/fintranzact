@@ -52,8 +52,8 @@ describe("auditWindowStart", () => {
 });
 
 describe("PDF branding defaults", () => {
-  it("match the old `plan !== free` rule for every plan", () => {
-    for (const id of PLAN_IDS) expect(!PLAN_LIMITS[id].pdfBranding, id).toBe(id !== "free");
+  it("show no Fintranzact branding on any of the three plans", () => {
+    for (const id of PLAN_IDS) expect(PLAN_LIMITS[id].pdfBranding, id).toBe(false);
   });
 });
 

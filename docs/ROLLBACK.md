@@ -963,7 +963,7 @@ How to read the tables:
 | `0018_silly_quicksilver.sql` | New tables `inventory_settings`, `warehouse_permissions`. | `DROP TABLE warehouse_permissions, inventory_settings;` |
 | `0019_empty_jane_foster.sql` | Replaces `stock_balances_unique_idx` with four partial unique indexes (`stock_balances_base_unique_idx`, `_location_unique_idx`, `_variant_unique_idx`, `_location_variant_unique_idx`). | Drop the four indexes, then `CREATE UNIQUE INDEX stock_balances_unique_idx ON stock_balances (business_id, warehouse_id, location_id, item_id, variant_id);` |
 | `0020_add_user_referral_code.sql` | `users.referral_code` (`IF EXISTS` / `IF NOT EXISTS`). See [known issues](#7-known-issues-in-the-migration-sets). | `ALTER TABLE users DROP COLUMN IF EXISTS referral_code;` |
-| `0021_stiff_shooting_star.sql` | Enum value `tenant_plan` + `forever_free`; `tenants.referral_code`; `businesses`: `business_type`, `tan`, `cin`, `llpin`, `udyam_number`, `iec_code`, `lut_arn`, `e_invoice_enabled`, `e_way_bill_enabled`, `address_line_1`, `address_line_2`, `landmark`, `country_of_operations`, `financial_year_start_date`. | `DROP COLUMN` each new column. Enum value: type-swap only if no tenant uses `forever_free`. |
+| `0021_stiff_shooting_star.sql` | Adds an early plan id to enum `tenant_plan` (the type is rebuilt by 0055); `tenants.referral_code`; `businesses`: `business_type`, `tan`, `cin`, `llpin`, `udyam_number`, `iec_code`, `lut_arn`, `e_invoice_enabled`, `e_way_bill_enabled`, `address_line_1`, `address_line_2`, `landmark`, `country_of_operations`, `financial_year_start_date`. | `DROP COLUMN` each new column. The enum value cannot be dropped; see 0055. |
 | `0022_add_session_auth_fields.sql` | Enum type `session_auth_method`; `sessions.auth_method`, `sessions.max_expires_at`. | `ALTER TABLE sessions DROP COLUMN auth_method, DROP COLUMN max_expires_at; DROP TYPE session_auth_method;` |
 | `0023_loose_miracleman.sql` | `businesses`: `assessee_of_other_territory`, `gst_return_periodicity`, `e_way_bill_threshold`. | `DROP COLUMN` each. |
 | `0024_omniscient_ultron.sql` | `businesses`: `deductor_type`, `responsible_person_name`, `responsible_person_pan`, `responsible_person_designation`. | `DROP COLUMN` each. |
@@ -979,6 +979,7 @@ How to read the tables:
 | `0034_free_qty_rejections.sql` | `invoice_items`: `free_quantity`, `rejected_quantity`, `rejection_reason`. | `DROP COLUMN` each. |
 | `0035_item_batches.sql` | New table `item_batches`; `invoice_items.batch_id`; `items.track_batches`, `items.track_expiry`; FK `stock_movements_batch_id_item_batches_id_fk`. **Data change**: sets every existing `stock_movements.batch_id` to `NULL`. | `ALTER TABLE stock_movements DROP CONSTRAINT stock_movements_batch_id_item_batches_id_fk; ALTER TABLE invoice_items DROP COLUMN batch_id; ALTER TABLE items DROP COLUMN track_batches, DROP COLUMN track_expiry; DROP TABLE item_batches;` Old `batch_id` values: restore from backup. |
 | `0036_roadmap_items.sql` | New table `roadmap_items`. | `DROP TABLE roadmap_items;` |
+| `0055_plans_three_paid.sql` | Rebuilds enum `tenant_plan` as `starter`, `growth`, `business`; converts `tenants.plan`, `plan_settings.plan`, `billing_subscriptions.plan` / `scheduled_plan`; adds `tenants.access_grandfathered` and `plan_settings.yearly_price_inr`. Lossy: see [Rolling back the plan model](#rolling-back-the-plan-model-0055--0018). | [Reverse SQL below](#rolling-back-the-plan-model-0055--0018), or restore a backup taken before the deploy. |
 
 ### 4.2 Control set (`packages/db/drizzle-control/`, multi-tenant mode, control DB)
 
@@ -989,10 +990,11 @@ How to read the tables:
 | `0002_exotic_owl.sql` | Enum type `session_auth_method`; `sessions.auth_method`, `sessions.max_expires_at`. | `ALTER TABLE sessions DROP COLUMN auth_method, DROP COLUMN max_expires_at; DROP TYPE session_auth_method;` |
 | `0003_woozy_psylocke.sql` | New table `access_tokens` (short-lived `at_` tokens, FK to `sessions`). | `DROP TABLE access_tokens;` (signs out clients using access tokens) |
 | `0000_add_tenant_referral_code` (journal entry 4) | **No SQL file exists.** See [known issues](#7-known-issues-in-the-migration-sets). | Nothing to reverse. |
-| `0005_useful_darkhawk.sql` | Enum value `tenant_plan` + `forever_free`; `tenants.referral_code`; `users.referral_code`. | `ALTER TABLE tenants DROP COLUMN referral_code; ALTER TABLE users DROP COLUMN referral_code;` Enum value: type-swap only if no tenant uses it. |
+| `0005_useful_darkhawk.sql` | Adds an early plan id to enum `tenant_plan` (the type is rebuilt by 0018); `tenants.referral_code`; `users.referral_code`. | `ALTER TABLE tenants DROP COLUMN referral_code; ALTER TABLE users DROP COLUMN referral_code;` The enum value cannot be dropped; see 0018. |
 | `0006_share_links.sql` | New table `share_links`. | `DROP TABLE share_links;` |
 | `0007_plans_and_partners.sql` | New tables `partners`, `partner_payouts`, `plan_settings`; `magic_link_tokens.referral_code`; `tenants.partner_id`. | Same as unified 0032. |
 | `0008_roadmap_items.sql` | New table `roadmap_items`. | `DROP TABLE roadmap_items;` |
+| `0018_plans_three_paid.sql` | Same SQL as unified `0055_plans_three_paid.sql` (plan model: Starter / Growth / Business). | Same as unified 0055: [Rolling back the plan model](#rolling-back-the-plan-model-0055--0018). |
 
 ### 4.3 Tenant set (`packages/db/drizzle-tenant/`, multi-tenant mode, every tenant DB)
 
@@ -1026,6 +1028,51 @@ Run the reverse SQL in each tenant database you are rolling back, or restore jus
 | `0023_price_levels.sql` | Tables `price_levels`, `price_list_entries`; `items.mrp`, `item_variants.mrp`, `parties.price_level_id`. | `ALTER TABLE parties DROP COLUMN price_level_id; DROP TABLE price_list_entries, price_levels;` then `DROP COLUMN mrp` on `items` and `item_variants`. |
 | `0024_free_qty_rejections.sql` | Same as unified 0034. | Same as unified 0034. |
 | `0025_item_batches.sql` | Same as unified 0035, including clearing `stock_movements.batch_id`. | Same as unified 0035. |
+
+### Rolling back the plan model (0055 / 0018)
+
+What the migration did (one transaction, skipped when `tenant_plan` is already `starter`/`growth`/`business`):
+
+| Before | After | Notes |
+|---|---|---|
+| `forever_free` | `business` + `tenants.access_grandfathered = true` | permanent full access; the plan was for testing and is removed |
+| `free` | `starter` | |
+| `pro` | `growth` | |
+| `business` | `business` | |
+| `enterprise` | `business` | indistinguishable from `business` afterwards |
+
+The same mapping applies to `billing_subscriptions.plan` and `scheduled_plan`. `plan_settings` rows are converted (free to starter, pro to growth, business to business; the forever_free and enterprise rows are dropped); an admin's edited name, tagline, price, visibility and limits are kept, anything still equal to the old built-in value becomes the new built-in value, features text is reset unless an admin rewrote it. `plan_settings.yearly_price_inr` is added (null = ten times the monthly price). Past `billing_payments.description` text ("Pro plan — monthly") is history and is not rewritten.
+
+Preferred rollback: restore the backup taken before the deploy. The app of the previous release can also run against the converted data only if you reverse the migration first, because it reads `tenant_plan` values that no longer exist.
+
+Reverse SQL (run in the control database in multi-tenant mode, the single database otherwise; tested against a migrated copy). Not recoverable: which `business` organisations were `enterprise`, and anything an admin changed in `plan_settings` after the deploy. Then delete the `0055` row (unified) or `0018` row (control) from the tracking table, or the runner will not re-apply it later:
+
+```sql
+BEGIN;
+ALTER TABLE tenants ALTER COLUMN plan DROP DEFAULT;
+ALTER TABLE tenants ALTER COLUMN plan SET DATA TYPE text;
+ALTER TABLE plan_settings ALTER COLUMN plan SET DATA TYPE text;
+UPDATE tenants SET plan = CASE
+  WHEN access_grandfathered THEN 'forever_free'
+  WHEN plan = 'starter' THEN 'free'
+  WHEN plan = 'growth' THEN 'pro'
+  ELSE plan END;
+UPDATE billing_subscriptions SET
+  plan = CASE plan WHEN 'starter' THEN 'free' WHEN 'growth' THEN 'pro' ELSE plan END,
+  scheduled_plan = CASE scheduled_plan WHEN 'starter' THEN 'free' WHEN 'growth' THEN 'pro' ELSE scheduled_plan END;
+UPDATE plan_settings SET plan = CASE plan WHEN 'starter' THEN 'free' WHEN 'growth' THEN 'pro' ELSE plan END;
+ALTER TYPE tenant_plan RENAME TO tenant_plan_new;
+CREATE TYPE tenant_plan AS ENUM ('forever_free', 'free', 'pro', 'business', 'enterprise');
+ALTER TABLE plan_settings ALTER COLUMN plan SET DATA TYPE tenant_plan USING plan::tenant_plan;
+ALTER TABLE tenants ALTER COLUMN plan SET DATA TYPE tenant_plan USING plan::tenant_plan;
+ALTER TABLE tenants ALTER COLUMN plan SET DEFAULT 'free';
+DROP TYPE tenant_plan_new;
+ALTER TABLE plan_settings DROP COLUMN yearly_price_inr;
+ALTER TABLE tenants DROP COLUMN access_grandfathered;
+COMMIT;
+```
+
+The mapping is mirrored by `oldPlanToNew` in `packages/shared/src/plan-migration.ts`, covered by a unit test and by the integration test `plan-migration.test.ts`.
 
 ---
 

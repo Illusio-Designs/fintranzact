@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { tenants, tenantMembers, users } from "@fintranzact/db";
+import { billingSubscriptions, tenants, tenantMembers, users } from "@fintranzact/db";
 import { PLAN_DEFAULTS, limitsToStored } from "@fintranzact/shared";
 import { getControlDb, getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createUser, createTenant, addMember, createBusiness, type TestUser, type TestTenant, type TestBusiness } from "../helpers/fixtures.js";
@@ -138,21 +138,26 @@ describe("referral codes", () => {
 });
 
 describe("badges, commission and payouts", () => {
-  it("count only referred organisations on a paid plan", async () => {
+  it("count only referred organisations with a paid plan subscription", async () => {
     await adminCaller().platform.savePlan({
-      plan: "pro",
+      plan: "growth",
       settings: {
-        name: "Pro",
+        name: "Growth",
         tagline: "",
         monthlyPriceInr: 1499,
+        yearlyPriceInr: null,
         features: [],
         highlight: false,
         visible: true,
-        limits: limitsToStored(PLAN_DEFAULTS.pro.limits),
+        limits: limitsToStored(PLAN_DEFAULTS.growth.limits),
       },
     });
     const meena = await tenantOf("meena@shahtraders.in");
-    await adminCaller().platform.setPlan({ tenantId: meena.id, plan: "pro" });
+    await adminCaller().platform.setPlan({ tenantId: meena.id, plan: "growth" });
+    // Only an organisation with a live plan subscription pays: the other referral is a trial on Growth.
+    await getControlDb().insert(billingSubscriptions).values({
+      tenantId: meena.id, kind: "plan", plan: "growth", cycle: "monthly", status: "active", basePaise: 149_900,
+    });
 
     const detail = await adminCaller().platform.partner({ id: partnerId });
     expect(detail.referralCode).toBe(referralCode);

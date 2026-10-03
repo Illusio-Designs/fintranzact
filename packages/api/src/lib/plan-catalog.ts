@@ -47,6 +47,7 @@ async function load(): Promise<Map<PlanId, CatalogPlan>> {
             name: row.name,
             tagline: row.tagline,
             monthlyPriceInr: row.monthlyPriceInr,
+            yearlyPriceInr: row.yearlyPriceInr,
             features: [...row.features],
             highlight: row.highlight,
             visible: row.visible,
@@ -73,24 +74,24 @@ export async function getPlanCatalog(): Promise<CatalogPlan[]> {
   return PLAN_IDS.map((id) => plans.get(id)!);
 }
 
-/** The limits enforced for a plan. Unknown plans get the legacy free plan's limits. */
+
+/** The limits enforced for a plan. An id the catalogue does not know gets Starter's limits (the tightest). */
 export async function getPlanLimits(plan: string): Promise<PlanLimits> {
   const plans = await catalog();
-  return (plans.get(plan as PlanId) ?? plans.get("free")!).limits;
+  return (plans.get(plan as PlanId) ?? plans.get("starter")!).limits;
 }
 
-/** Whether an owner may pick this plan themselves: it must be free and offered. */
-export async function isSelfServePlan(plan: string): Promise<boolean> {
-  const found = (await catalog()).get(plan as PlanId);
-  return !!found && found.visible && found.monthlyPriceInr === 0;
+/** The plan as it is now (admin edits applied), or undefined for an id that is not a plan. */
+export async function getCatalogPlan(plan: string): Promise<CatalogPlan | undefined> {
+  return (await catalog()).get(plan as PlanId);
 }
 
 /**
- * Whether a plan is paid: it has a price, or a custom one set up by the
- * Fintranzact team. Hidden ₹0 plans (legacy Free) are not paid. Unknown plans
- * count as paid so a self-serve choice never overwrites them.
+ * Whether a plan can be bought online: it is offered on the pricing page and
+ * carries a price. A plan with no price ("priced on request") is set up by
+ * the Fintranzact team instead.
  */
-export async function isPaidPlan(plan: string): Promise<boolean> {
+export async function isPurchasablePlan(plan: string): Promise<boolean> {
   const found = (await catalog()).get(plan as PlanId);
-  return !found || found.monthlyPriceInr !== 0;
+  return !!found && found.visible && found.monthlyPriceInr !== null && found.monthlyPriceInr > 0;
 }

@@ -265,7 +265,6 @@ function OverviewView({ onOpen }: { onOpen: (id: string) => void }) {
   const { data: newest, isLoading } = trpc.platform.tenants.useQuery({ page: 1, limit: 5 });
 
   const paidPlans = (overview?.byPlan ?? [])
-    .filter((p) => p.plan !== "free" && p.plan !== "forever_free")
     .reduce((sum, p) => sum + p.count, 0);
   const suspended = (overview?.byStatus ?? [])
     .filter((s) => s.status !== "active")
@@ -581,6 +580,7 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
       name: plan.name,
       tagline: plan.tagline,
       monthlyPriceInr: plan.monthlyPriceInr,
+      yearlyPriceInr: plan.yearlyPriceInr,
       features: plan.features,
       highlight: plan.highlight,
       visible: plan.visible,

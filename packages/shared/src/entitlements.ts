@@ -9,6 +9,9 @@
  *
  * Rules, in order:
  *  - a suspended or deleted organisation is blocked outright;
+ *  - a grandfathered organisation (tenants.access_grandfathered: the former
+ *    Forever Free organisations) always has full access: no trial, no payment,
+ *    never read-only. It is never offered to anyone new;
  *  - a live plan subscription (active, or past_due inside its grace period)
  *    is writable, and always beats an expired trial;
  *  - a halted subscription (or past_due past grace) is read-only;
@@ -16,9 +19,8 @@
  *    organisation that once had a plan subscription is read-only
  *    (subscription_ended), a trial that has run out is read-only
  *    (trial_expired);
- *  - an organisation that never had a plan subscription and has no trial
- *    (self sign-up forever_free, legacy free, admin-set plans, test fixtures)
- *    stays fully writable.
+ *  - an organisation with no billing state at all (never subscribed, no trial:
+ *    admin-created organisations, test fixtures) stays fully writable.
  * Read-only means reads, search, PDF downloads and exports still work; only
  * creating and editing is refused.
  */
@@ -35,6 +37,7 @@ export type EntitlementReason =
 
 export type AccessState =
   | "free"
+  | "grandfathered"
   | "trialing"
   | "active"
   | "past_due_grace"
@@ -161,6 +164,8 @@ export interface AccessInput {
   plan: string;
   tenantStatus: "active" | "suspended" | "deleted" | string;
   trialEndsAt: Date | null;
+  /** Permanent full access (tenants.access_grandfathered); beats trial, payment and read-only. */
+  accessGrandfathered?: boolean;
   planSubscription: AccessPlanSubscription | null;
   /** True when the organisation has ever had a plan subscription row (any status but "created"). */
   everHadPlanSubscription: boolean;
@@ -231,7 +236,9 @@ export function deriveAccess(input: AccessInput): Access {
   let reason: EntitlementReason | null = null;
   let trialDaysLeft: number | null = null;
 
-  if (sub && sub.status === "active") {
+  if (input.accessGrandfathered) {
+    state = "grandfathered";
+  } else if (sub && sub.status === "active") {
     state = "active";
   } else if (sub && sub.status === "past_due" && !graceOver(sub.graceUntil, now)) {
     state = "past_due_grace";

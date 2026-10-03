@@ -115,7 +115,7 @@ describe("attributePartnerOnAccept", () => {
 describe("toManagedClients", () => {
   const row = (over: Record<string, unknown> = {}) => ({
     tenantId: "t1", name: "Sharma Traders", role: "auditor", since: new Date("2026-03-01T00:00:00Z"),
-    lastOpenedAt: null as Date | null, plan: "pro", ...over,
+    lastOpenedAt: null as Date | null, plan: "growth", ...over,
   });
   it("keeps CA roles only and maps role label, dates and plan name", () => {
     const out = toManagedClients([
@@ -127,7 +127,7 @@ describe("toManagedClients", () => {
     expect(out.map((c) => c.tenantId)).toEqual(["t4", "t1"]);
     expect(out[0]).toEqual({
       tenantId: "t4", name: "Gupta", role: "ca_filing", roleLabel: "Accountant (filing)",
-      since: "2026-05-01T00:00:00.000Z", lastOpenedAt: "2026-06-01T00:00:00.000Z", planName: "PRO",
+      since: "2026-05-01T00:00:00.000Z", lastOpenedAt: "2026-06-01T00:00:00.000Z", planName: "GROWTH",
     });
     expect(out[1]!.lastOpenedAt).toBeNull();
   });

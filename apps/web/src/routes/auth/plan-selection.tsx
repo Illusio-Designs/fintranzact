@@ -16,7 +16,7 @@ export const Route = createFileRoute("/auth/plan-selection")({
 function PlanSelectionPage() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>("forever_free");
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>("growth");
   const { plans } = usePlans();
 
   const selectedLabel = useMemo(
@@ -43,7 +43,7 @@ function PlanSelectionPage() {
   // demo checkout before that; otherwise paid plans are set up by the
   // Fintranzact team and the owner starts free.
   const selectedOption = plans.find((plan) => plan.id === selectedPlan);
-  const selectedIsFree = selectedPlan === "forever_free" || selectedPlan === "free";
+  const selectedIsFree = false; // no free plan exists
   const { data: billingConfig } = trpc.billing.config.useQuery(undefined, { staleTime: 5 * 60_000 });
   const selectedPrice = selectedOption?.monthlyPriceInr ?? null;
   const paymentsOn = !!billingConfig?.demoPayments || billingConfig?.provider === "razorpay";
@@ -103,7 +103,7 @@ function PlanSelectionPage() {
       }
       return;
     }
-    updatePlanMutation.mutate({ plan: selectedIsFree ? selectedPlan : "forever_free" });
+    updatePlanMutation.mutate({ plan: selectedPlan });
   }
 
   const paying = subscribePlan.isPending || verifyCheckout.isPending;

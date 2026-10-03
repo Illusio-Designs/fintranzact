@@ -276,12 +276,12 @@ describe("recurringInvoice.executionHistory / planUsage", () => {
     await expectCode(caller().recurringInvoice.executionHistory({ templateId: "x", page: 1, limit: 10 }), "BAD_REQUEST");
   });
 
-  it("planUsage counts this month's successful runs and templates; self-hosted uses the free allowance", async () => {
+  it("planUsage counts this month's successful runs and templates; self-hosted uses the Starter allowance (unlimited)", async () => {
     const usage = await caller().recurringInvoice.planUsage();
     expect(usage.runsThisMonth).toBeGreaterThanOrEqual(3);
     const n = (await caller().recurringInvoice.list({ page: 1, limit: 100 })).total;
     expect(usage.totalTemplates).toBe(n);
-    expect(usage.limit).toBe(5);
+    expect(usage.limit).toBeNull(); // Starter has no recurring cap
     const theirs = await other().recurringInvoice.planUsage();
     expect(theirs).toMatchObject({ runsThisMonth: 0, totalTemplates: 0 });
   });
