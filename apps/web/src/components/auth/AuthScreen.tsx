@@ -16,6 +16,7 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { TurnstileModal } from "@/components/ui/TurnstileModal";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
+import { isPlanId, TRIAL_DAYS, type PlanId } from "@fintranzact/shared";
 
 type AuthFieldName = "email" | "password" | "username" | "confirm";
 const FIELD_ID: Record<AuthFieldName, string> = {
@@ -30,7 +31,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export type AuthMode = "login" | "register";
 
 /** Search params shared by /login and /register (the invite flow sets them). */
-export type AuthSearch = { invite?: string; error?: string; ref?: string };
+export type AuthSearch = { invite?: string; error?: string; ref?: string; plan?: string };
 
 export function validateAuthSearch(search: Record<string, unknown>): AuthSearch {
   return {
@@ -38,6 +39,8 @@ export function validateAuthSearch(search: Record<string, unknown>): AuthSearch 
     ...(typeof search.error === "string" ? { error: search.error } : {}),
     // Partner referral links: /register?ref=FTZ-7K2M9Q
     ...(typeof search.ref === "string" && search.ref.length <= 50 ? { ref: search.ref } : {}),
+    // A plan picked on the pricing page: /register?plan=growth (starter, growth or business only).
+    ...(isPlanId(search.plan) ? { plan: search.plan } : {}),
   };
 }
 
@@ -45,12 +48,12 @@ const PANEL: Record<AuthMode, { title: string; accent: string; points: string[] 
   login: {
     title: "Your business, your books.",
     accent: "Always clear.",
-    points: ["Unlimited GST invoices, free forever", "e-Invoicing, e-Way Bills and GSTR returns", "Works on web, desktop and mobile"],
+    points: ["Unlimited GST invoices on every plan", "e-Invoicing, e-Way Bills and GSTR returns", "Works on web, desktop and mobile"],
   },
   register: {
     title: "Start billing in minutes.",
-    accent: "Free forever.",
-    points: ["Unlimited invoices, parties and team members", "GST, e-Invoicing and e-Way Bills built in", "No branding on your documents"],
+    accent: `${TRIAL_DAYS}-day free trial.`,
+    points: ["Unlimited invoices, parties and payments", "GST reports and e-Way Bills built in", "No branding on your documents"],
   },
 };
 
@@ -190,6 +193,16 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
       return search.ref ?? sessionStorage.getItem("referralCode") ?? "";
     } catch {
       return search.ref ?? "";
+    }
+  });
+  // The plan picked on the pricing page (?plan=), remembered for this visit and sent with the sign-up.
+  const [signupPlan] = useState<PlanId | undefined>(() => {
+    try {
+      if (isPlanId(search.plan)) sessionStorage.setItem("signupPlan", search.plan);
+      const stored = sessionStorage.getItem("signupPlan");
+      return isPlanId(search.plan) ? search.plan : isPlanId(stored) ? stored : undefined;
+    } catch {
+      return isPlanId(search.plan) ? search.plan : undefined;
     }
   });
   // Fields that failed the last check: red outline + aria-invalid. Messages
@@ -357,6 +370,7 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
         password,
         confirmPassword,
         referralCode: referralCode.trim() || undefined,
+        plan: signupPlan,
         turnstileToken: token,
       }),
     );
@@ -411,7 +425,7 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                 {mode === "login" ? "Welcome back" : "Create your account"}
               </h1>
               <p className="mt-2 text-[15px] text-text-tertiary">
-                {mode === "login" ? "Log in with your email and password." : "Free forever. No credit card needed."}
+                {mode === "login" ? "Log in with your email and password." : `${TRIAL_DAYS}-day free trial. No credit card needed.`}
               </p>
 
               <div className="mt-6">
@@ -467,7 +481,7 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                   <p className="mt-2 text-center text-sm text-text-tertiary">
                     New to Fintranzact?{" "}
                     <Link to="/register" search={search} className="font-bold text-brand-700 hover:underline dark:text-brand-300">
-                      Create a free account
+                      Start your free trial
                     </Link>
                   </p>
                 </form>
@@ -545,7 +559,7 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                     />
                   </Field>
                   <button type="submit" disabled={isPending} className={cn(PRIMARY, "mt-1.5")}>
-                    {registerMutation.isPending || signedIn ? "Creating your account…" : "Create free account"}
+                    {registerMutation.isPending || signedIn ? "Creating your account…" : "Start free trial"}
                   </button>
                   <p className="text-center text-xs leading-relaxed text-text-tertiary">
                     By creating an account you agree to our{" "}

@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { planSettings, tenantMembers, tenants, users } from "@fintranzact/db";
-import { limitsToStored, PLAN_DEFAULTS, TRIAL_DAYS, planCheckoutAmount } from "@fintranzact/shared";
+import { limitsToStored, PLAN_DEFAULTS, REMOVED_PLAN_IDS, TRIAL_DAYS, planCheckoutAmount } from "@fintranzact/shared";
 import { getControlDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createUser, createTenant, addMember, type TestUser, type TestTenant } from "../helpers/fixtures.js";
 import { createTestCaller, createUnauthenticatedCaller } from "../helpers/create-test-caller.js";
@@ -119,7 +119,7 @@ describe("plan choice after sign-up", () => {
   });
 
   it("a sign-up that names a removed plan is refused, and nothing is created", async () => {
-    for (const plan of ["free", "forever_free", "pro", "enterprise"]) {
+    for (const plan of REMOVED_PLAN_IDS) {
       const email = `anjali.${plan}@mehtatraders.in`;
       await expect(
         createUnauthenticatedCaller().auth.register({ email, name: "Anjali Mehta", password: "SecurePass1!", confirmPassword: "SecurePass1!", plan }),
@@ -220,7 +220,7 @@ describe("billing.demoCheckout", () => {
   });
 
   it("is a BAD_REQUEST for a removed plan id", async () => {
-    for (const plan of ["free", "forever_free", "pro", "enterprise"]) {
+    for (const plan of REMOVED_PLAN_IDS) {
       await expect(caller(owner, tenant.id).billing.demoCheckout({ plan: plan as never, cycle: "monthly", method: "upi" }))
         .rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/has been removed/) });
     }

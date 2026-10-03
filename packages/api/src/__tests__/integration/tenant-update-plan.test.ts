@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
 import { billingSubscriptions, tenants } from "@fintranzact/db";
+import { REMOVED_PLAN_IDS } from "@fintranzact/shared";
 import { getControlDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createUser, createTenant, addMember, type TestUser, type TestTenant } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
@@ -81,7 +82,7 @@ describe("tenant.updatePlan — who may change the plan", () => {
 });
 
 describe("tenant.updatePlan — removed plans", () => {
-  for (const removed of ["free", "forever_free", "pro", "enterprise"]) {
+  for (const removed of REMOVED_PLAN_IDS) {
     it(`refuses ${removed} with a message that says it was removed`, async () => {
       await expect(callerFor(owner).tenant.updatePlan({ plan: removed as never })).rejects.toThrow(
         new RegExp(`The ${removed} plan has been removed. Choose Starter, Growth or Business`),

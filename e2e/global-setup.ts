@@ -5,7 +5,7 @@
  * then saves the browser storage state (cookies) so all test projects
  * can reuse the session without logging in again.
  *
- * Sign-up flow: /register (username, email, password) → Create free account
+ * Sign-up flow: /register (username, email, password) → Start free trial (14-day trial, no free plan)
  * Business creation: done via API (more reliable than filling the complex form)
  */
 import { test as setup, expect } from "@playwright/test";
@@ -35,10 +35,10 @@ setup("authenticate", async ({ page, request }) => {
   const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
   const apiUrl = process.env.API_URL ?? "http://localhost:3000";
 
-  // A new organisation's owner chooses a plan first (J1 covers that page).
+  // A new organisation starts a trial on Growth; give the shared test org Business (J1 covers the plan page).
   const planRes = await request.post(`${apiUrl}/api/trpc/tenant.updatePlan`, {
     headers: { "Content-Type": "application/json", "X-Requested-With": "fintranzact", Cookie: cookieHeader },
-    data: { json: { plan: "forever_free" } },
+    data: { json: { plan: "business" } },
   });
   expect(planRes.ok(), `tenant.updatePlan failed: ${await planRes.text()}`).toBeTruthy();
 

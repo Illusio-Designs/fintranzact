@@ -56,7 +56,7 @@ const TESTING_RULES = [
 const FAQS = [
   {
     q: "Can I test on my own Fintranzact account?",
-    a: "Yes. Create a free account and your own test businesses, and test against those. Use the email of that account when you report, so we can match your activity in our logs.",
+    a: "Yes. Create an account and your own test businesses, and test against those. Use the email of that account when you report, so we can match your activity in our logs.",
   },
   {
     q: "What if I see another customer's data by accident?",

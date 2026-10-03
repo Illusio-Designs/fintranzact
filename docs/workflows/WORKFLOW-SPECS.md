@@ -1016,7 +1016,7 @@ processDueTemplates:
   FOR EACH template:
     STEP 2: Plan limit check
       COUNT successful runs this month for this business
-      BRANCH: >= RECURRING_RUNS_PER_MONTH (5 for free plan)
+      BRANCH: >= the plan's recurringRunsPerMonth (unlimited on the built-in plans)
         INSERT recurringInvoiceRun (status="skipped_limit", errorMessage)
         Advance nextRunDate (so we don't retry every tick)
         CONTINUE
@@ -1510,7 +1510,7 @@ Every branch in the workflow trees above maps to a BDD test case. Below is the c
 |----|----------|--------|-----------------|
 | TEAM-01 | 2A | Happy path | Admin invites member -> invitation created, email sent |
 | TEAM-02 | 2A | Non-admin caller | Seller tries to invite -> FORBIDDEN |
-| TEAM-03 | 2A | Plan limit | Free plan, 3 members -> invite fails with upgrade message |
+| TEAM-03 | 2A | Plan limit | Starter plan, 3 members -> invite fails with upgrade message |
 | TEAM-04 | 2A | Already a member | Invite existing member -> CONFLICT |
 | TEAM-05 | 2A | Duplicate pending invite | Invite same email twice -> CONFLICT |
 | TEAM-06 | 2B | Happy path | Accept invite -> membership created, tenant auto-selected |

@@ -5,7 +5,8 @@ import {
   PageHero,
 } from "@/components/marketing/MarketingLayout";
 import { useMemo } from "react";
-import { formatPlanLimit, usePlans, type PlanId, type PlanOption } from "@/lib/plans";
+import { formatPlanLimit, usePlans, type PlanOption } from "@/lib/plans";
+import { PLAN_GST_RATE_PERCENT, TRIAL_DAYS, YEARLY_SAVING_MONTHS } from "@fintranzact/shared";
 import { cn } from "@/lib/utils";
 import { EYEBROW, FaqAccordion, HEADING, PricingCards } from "@/components/marketing/sections";
 
@@ -27,31 +28,35 @@ export const Route = createFileRoute("/pricing")({
 
 const FAQS: Array<{ q: string; a: string }> = [
   {
-    q: "Is the free plan really free forever?",
-    a: "Yes. The Forever Free plan has no time limit, no invoice cap and no Fintranzact branding on your documents.",
+    q: "Is there a free plan?",
+    a: `No. There are three paid plans, and every new organization starts with a ${TRIAL_DAYS}-day free trial on the plan it picks. Your documents carry no Fintranzact branding on any plan.`,
   },
   {
-    q: "Do I need a credit card to sign up?",
-    a: "No. Create an account with your email or phone number and start billing straight away.",
+    q: "Do I need a credit card to start the trial?",
+    a: "No. Create an account with your email or phone number and start billing straight away. You choose a plan and pay when the trial ends.",
+  },
+  {
+    q: "What happens when the trial ends?",
+    a: "Your account becomes read-only until you choose a plan: you can still view, search, download PDFs and export your data. Nothing is deleted, and choosing a plan unlocks it at once.",
+  },
+  {
+    q: "Are the prices with GST?",
+    a: `Prices are before ${PLAN_GST_RATE_PERCENT}% GST, which is added at checkout and shown on your invoice. Yearly billing gives you ${YEARLY_SAVING_MONTHS} months free.`,
   },
   {
     q: "Can I switch plans later?",
-    a: "Yes. Get in touch and we'll move your organization to a different plan; your data stays exactly where it is.",
-  },
-  {
-    q: "How is Pro and Business pricing decided?",
-    a: "Paid plans are priced to your team size and needs. Contact us and we'll send a quote.",
+    a: "Yes. Upgrade or downgrade from Settings → Billing; your data stays exactly where it is.",
   },
 ];
 
 const INCLUDED: Array<[IconSvgElement, string, string]> = [
   [Invoice01Icon, "GST invoicing", "Invoices, quotations, challans, credit notes and POS."],
-  [QrCodeIcon, "e-Invoice & e-Way Bill", "IRN, signed QR codes and e-way bills from your invoices."],
+  [QrCodeIcon, "GST documents", "Invoices, quotations, e-way bills and GST reports on every plan."],
   [TaxesIcon, "GST returns", "File-ready GSTR-1, GSTR-3B and GSTR-2B reconciliation."],
   [PackageIcon, "Inventory", "Items, variants, stock tracking and shipments."],
   [BankIcon, "Payments & banking", "Receipts, expenses, cash & bank and reconciliation."],
   [ChartBarLineIcon, "Reports", "P&L, balance sheet, day book, ledgers and tax reports."],
-  [UserGroupIcon, "Team access", "Unlimited businesses and team members with roles."],
+  [UserGroupIcon, "Team access", "Team members with roles, on every plan."],
   [ComputerIcon, "Web, desktop & mobile", "Use it in the browser, on the desktop or your phone."],
 ];
 
@@ -69,30 +74,30 @@ function buildComparison(plans: PlanOption[]): Array<{ group: string; rows: Arra
     ...limits.map(pick),
   ];
   const all = (label: string): [string, ...Cell[]] => [label, ...limits.map(() => true)];
-  // Paid-plan extras: included in the named plan and every plan listed after it.
-  const from = (label: string, planId: PlanId): [string, ...Cell[]] => {
-    const start = plans.findIndex((p) => p.id === planId);
-    return [label, ...plans.map((_, i) => start >= 0 && i >= start)];
-  };
   return [
     {
       group: "Billing & GST",
       rows: [
         row("Invoices, parties and payments", () => "Unlimited"),
         all("Quotations, challans and credit notes"),
-        all("e-Invoicing and e-Way Bills"),
-        all("GSTR-1, GSTR-3B and GSTR-2B"),
+        row("GST reports", (l) => l.gstReports),
+        row("e-way bills", (l) => l.eWayBills),
+        row("e-invoicing", (l) => l.eInvoicing),
+        row("Recurring invoices", (l) => l.recurringInvoices),
         row("No Fintranzact branding on documents", (l) => !l.pdfBranding),
       ],
     },
     {
       group: "Books & inventory",
       rows: [
-        all("Inventory, variants and shipments"),
-        all("Cash, bank and reconciliation"),
-        all("Financial and tax reports"),
-        row("Online store", (l) => l.onlineStore),
-        row("Full data export", (l) => l.dataExport),
+        all("Basic inventory"),
+        row("POS", (l) => l.pos),
+        row("Multiple warehouses", (l) => l.multiWarehouse),
+        row("Batches and expiry", (l) => l.batchesExpiry),
+        row("Manufacturing and bill of materials", (l) => l.manufacturing),
+        row("Bank reconciliation", (l) => l.bankReconciliation),
+        row("Basic online store", (l) => l.onlineStore),
+        row("Data export", (l) => l.dataExport),
       ],
     },
     {
@@ -102,23 +107,18 @@ function buildComparison(plans: PlanOption[]): Array<{ group: string; rows: Arra
         row("Businesses per organization", (l) => formatPlanLimit(l.maxBusinesses)),
         row("Team members", (l) => formatPlanLimit(l.maxTeamMembers)),
         row("Devices signed in at once", (l) => formatPlanLimit(l.maxConcurrentSessions)),
-        row("API keys", (l) => formatPlanLimit(l.maxApiKeys)),
-        row("Recurring invoice runs a month", (l) => formatPlanLimit(l.recurringRunsPerMonth)),
+        row("API access", (l) => (l.maxApiKeys === 0 ? false : l.maxApiKeys === Infinity ? "Unlimited keys" : `${l.maxApiKeys} keys`)),
         row("Audit log history", (l) => formatPlanLimit(l.auditRetentionDays, "days")),
-      ],
-    },
-    {
-      group: "Plan extras",
-      rows: [
-        from("Advanced automation and workflows", "growth"),
-        from("Expanded collaboration", "growth"),
-        from("Multi-tenant controls", "business"),
-        from("Premium reporting", "business"),
+        row("Approvals", (l) => l.approvals),
       ],
     },
     {
       group: "Support",
-      rows: [all("Help centre and email support"), from("Priority support", "growth"), from("Dedicated onboarding", "business")],
+      rows: [
+        all("Help centre and email support"),
+        row("Priority support", (l) => l.prioritySupport),
+        row("Onboarding help", (l) => l.onboardingHelp),
+      ],
     },
   ];
 }
@@ -150,20 +150,17 @@ function PricingPage() {
   return (
     <MarketingLayout
       title="Pricing"
-      description="Simple plans for GST billing and accounting, starting free. Compare Fintranzact plans, limits and features."
+      description="Three simple plans for GST billing and accounting, with a 14-day free trial. Compare Fintranzact plans, limits and features."
     >
       <PageHero
         eyebrow="Pricing"
-        title="Simple pricing. Start free."
-        subtitle="Everything you need to run your business is free, forever. Upgrade when your team needs more."
+        title="Simple pricing. Try it free."
+        subtitle={`Start a ${TRIAL_DAYS}-day free trial on any plan. Pick Starter, Growth or Business, and pay yearly to get ${YEARLY_SAVING_MONTHS} months free.`}
       />
 
       <section className="bg-surface-1">
         <div className="mx-auto max-w-6xl px-4 py-20 md:px-6">
           <PricingCards />
-          <p className="mt-6 text-center text-sm text-text-tertiary">
-            No credit card needed · Switch plans any time · Your data stays where it is
-          </p>
         </div>
       </section>
 
@@ -171,7 +168,7 @@ function PricingPage() {
         <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
           <p className={cn(EYEBROW, "text-center")}>Included in every plan</p>
           <h2 className={cn(HEADING, "mt-3 text-center text-3xl md:text-[40px]")}>
-            The full product, even on the free plan
+            The full product on every plan
           </h2>
           <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {INCLUDED.map(([icon, name, body]) => (
@@ -200,7 +197,9 @@ function PricingPage() {
                   {plans.map((plan) => (
                     <th key={plan.id} scope="col" className="px-6 py-5 text-center">
                       <span className="block font-display text-lg font-extrabold text-[#0f1b3d] dark:text-white">{plan.name}</span>
-                      <span className="mt-0.5 block text-sm font-medium text-text-tertiary">{plan.price}</span>
+                      <span className="mt-0.5 block text-sm font-medium text-text-tertiary">
+                        {plan.price} /month · {plan.yearlyPrice} /year
+                      </span>
                     </th>
                   ))}
                 </tr>
@@ -237,7 +236,7 @@ function PricingPage() {
             <p className={EYEBROW}>FAQ</p>
             <h2 className={cn(HEADING, "mt-3 text-3xl leading-tight md:text-[38px]")}>Pricing questions</h2>
             <p className="mt-3.5 text-[15px] leading-relaxed text-text-tertiary">
-              Need a quote for Pro or Business?{" "}
+              Questions about which plan fits?{" "}
               <Link to="/contact" className="font-semibold text-brand-600 hover:underline dark:text-brand-300">
                 Talk to us
               </Link>

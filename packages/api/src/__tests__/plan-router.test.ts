@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PLAN_LIMITS, PLANS } from "@fintranzact/shared";
+import { PLAN_LIMITS, PLANS, REMOVED_PLAN_IDS } from "@fintranzact/shared";
 import { createCallerFactory, router } from "../trpc.js";
 import { planRouter } from "../routers/plan.js";
 import { listPublicPlansJson } from "../lib/public-plans.js";
@@ -42,6 +42,6 @@ describe("GET /api/plans payload", () => {
     expect(json.map((p: { yearlyPriceInr: number }) => p.yearlyPriceInr)).toEqual([2999, 6999, 14999]);
     expect(json.map((p: { yearlyPrice: string }) => p.yearlyPrice)).toEqual(["₹2,999", "₹6,999", "₹14,999"]);
     expect(json.filter((p: { highlight: boolean }) => p.highlight).map((p: { id: string }) => p.id)).toEqual(["growth"]);
-    expect(json.some((p: { id: string }) => ["free", "forever_free", "pro", "enterprise"].includes(p.id))).toBe(false);
+    expect(json.some((p: { id: string }) => (REMOVED_PLAN_IDS as readonly string[]).includes(p.id))).toBe(false);
   });
 });

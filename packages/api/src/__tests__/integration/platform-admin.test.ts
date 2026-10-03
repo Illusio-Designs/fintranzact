@@ -12,7 +12,7 @@ import { createTestCaller, createUnauthenticatedCaller } from "../helpers/create
 import { platformAdminEmails, seedPlatformAdmin } from "../../lib/platform-admin.js";
 import { getLimits } from "../../lib/plan-limits.js";
 import { listPublicPlans } from "../../lib/public-plans.js";
-import { PLAN_DEFAULTS, limitsToStored, type PlanSettings } from "@fintranzact/shared";
+import { PLAN_DEFAULTS, REMOVED_PLAN_IDS, limitsToStored, type PlanSettings } from "@fintranzact/shared";
 
 const ADMIN_EMAIL = "rishi.platform@fintranzact.com";
 
@@ -150,7 +150,7 @@ describe("plan setup", () => {
   });
 
   it("refuses a removed plan id, with a message that says so", async () => {
-    for (const plan of ["free", "forever_free", "pro", "enterprise"]) {
+    for (const plan of REMOVED_PLAN_IDS) {
       await expect(callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: plan as never }))
         .rejects.toThrow(/plan has been removed\. Choose Starter, Growth or Business/);
     }

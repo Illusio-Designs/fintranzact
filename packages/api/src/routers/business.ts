@@ -26,7 +26,7 @@ import { router, tenantProcedure, viewerProcedure, adminProcedure, type TenantDa
 import { requireCan, caRoleMutationAllowed, caRoleRefusalMessage, mapDbRole } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { validateLogoDataUrl } from "../lib/validate-logo.js";
-import { enforceBusinessLimit, enforceDataExport, getLimits, auditWindowStart } from "../lib/plan-limits.js";
+import { countOrganisationBusinesses, enforceBusinessLimit, enforceDataExport, getLimits, auditWindowStart } from "../lib/plan-limits.js";
 import { getEntitlements } from "../lib/entitlements.js";
 import { seedChartOfAccounts } from "../lib/coa-seed.js";
 import {
@@ -385,7 +385,7 @@ export const businessRouter = router({
     const [row] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
     const limits = await getLimits(row?.plan ?? "starter");
     if (limits.maxBusinesses === Infinity) return true;
-    const [{ count: bizCount }] = await ctx.db.select({ count: count() }).from(businesses);
+    const bizCount = await countOrganisationBusinesses(ctx.tenantId, ctx.db);
     return bizCount < limits.maxBusinesses;
   }),
 

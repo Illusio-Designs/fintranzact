@@ -17,6 +17,14 @@ import {
 } from "@hugeicons/core-free-icons";
 import {
   formatPlanPrice,
+  formatYearlyPlanPrice,
+  PLAN_FLAG_GROUPS,
+  PLAN_IDS,
+  PLAN_FLAGS_ENFORCED,
+  planSettingsWarnings,
+  PLAN_NAMES,
+  YEARLY_SAVING_MONTHS,
+  yearlyPrice,
   partnerBadges,
   partnerTypeInfo,
   planSettingsSchema,
@@ -65,18 +73,12 @@ const NAV: { view: View; label: string; icon: typeof Building03Icon }[] = [
   { view: "roadmap", label: "Upcoming features", icon: Rocket01Icon },
 ];
 
-const PLAN_ORDER = ["forever_free", "free", "pro", "business", "enterprise"] as const;
+const PLAN_ORDER = PLAN_IDS;
 type PlanId = (typeof PLAN_ORDER)[number];
 
 const PAGE_SIZE = 25;
 
-const PLAN_LABELS: Record<string, string> = {
-  forever_free: "Forever free",
-  free: "Free",
-  pro: "Pro",
-  business: "Business",
-  enterprise: "Enterprise",
-};
+const PLAN_LABELS: Record<string, string> = PLAN_NAMES;
 
 const ROLE_LABELS: Record<string, string> = {
   owner: "Owner",
@@ -336,7 +338,10 @@ function OverviewView({ onOpen }: { onOpen: (id: string) => void }) {
                   <p className="truncate text-sm font-semibold text-text-primary">{t.name}</p>
                   <p className="truncate text-xs text-text-tertiary">{t.owner?.email ?? "No owner"}</p>
                 </div>
-                <span className="hidden text-sm text-text-secondary sm:block">{PLAN_LABELS[t.plan] ?? t.plan}</span>
+                <span className="hidden text-sm text-text-secondary sm:block">
+                  {PLAN_LABELS[t.plan] ?? t.plan}
+                  {t.accessGrandfathered ? " · Grandfathered" : ""}
+                </span>
                 <span className="w-28 text-right text-sm text-text-tertiary">{formatDate(t.createdAt)}</span>
               </button>
             ))}
@@ -432,7 +437,10 @@ function OrganisationsView({ onOpen }: { onOpen: (id: string) => void }) {
                         <span className="text-text-tertiary">No owner</span>
                       )}
                     </td>
-                    <td>{PLAN_LABELS[t.plan] ?? t.plan}</td>
+                    <td>
+                      {PLAN_LABELS[t.plan] ?? t.plan}
+                      {t.accessGrandfathered ? <span className="ml-2"><Chip tone="amber">Grandfathered</Chip></span> : null}
+                    </td>
                     <td><StatusPill status={t.status} /></td>
                     <td className="text-right tabular-nums">{t.memberCount}</td>
                     <td className="text-text-secondary">{formatDate(t.createdAt)}</td>
@@ -471,11 +479,8 @@ const LIMIT_FIELDS: { key: keyof StoredPlanLimits; label: string; unit?: string 
   { key: "recurringRunsPerMonth", label: "Recurring invoices per month" },
   { key: "auditRetentionDays", label: "Audit log kept for", unit: "days" },
 ];
-const FEATURE_FLAGS: { key: "dataExport" | "onlineStore" | "pdfBranding"; label: string }[] = [
-  { key: "dataExport", label: "Data export" },
-  { key: "onlineStore", label: "Online store" },
-  { key: "pdfBranding", label: "“Powered by Fintranzact” on PDFs" },
-];
+/** The flags the API enforces today; the rest only describe the plan. */
+const ENFORCED_FLAGS: ReadonlySet<string> = new Set(PLAN_FLAGS_ENFORCED);
 
 /** Every plan: what it costs, what it includes, and its limits. Each can be edited. */
 function PlansView() {
@@ -487,8 +492,9 @@ function PlansView() {
       <div>
         <h1 className={PAGE_TITLE_CLASS}>Plans</h1>
         <p className="mt-1 max-w-2xl text-sm text-text-tertiary">
-          Edit what each plan costs, what it includes and its limits. Changes show on the pricing page and apply to every
-          organisation on the plan straight away. Owners can pick a plan themselves only when it is free and shown.
+          Edit what each plan costs (monthly and yearly, before 18% GST), what it includes and its limits. Changes show on
+          the pricing page and apply to every organisation on the plan straight away. There is no free plan: new organisations
+          start a trial on the plan they pick.
         </p>
       </div>
 
@@ -511,9 +517,17 @@ function PlansView() {
                 {formatPlanPrice(plan)}
                 {plan.monthlyPriceInr ? <span className="text-sm font-semibold text-text-tertiary"> /month</span> : null}
               </p>
+              <p className="text-sm text-text-tertiary">
+                {formatYearlyPlanPrice(plan)} /year{plan.yearlyPriceInr === null && plan.monthlyPriceInr !== null ? " (10 months)" : ""} · ex-GST
+              </p>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <Chip tone={plan.visible ? "green" : "grey"}>{plan.visible ? "On pricing page" : "Hidden"}</Chip>
-                {plan.highlight ? <Chip tone="blue">Recommended</Chip> : null}
+                {plan.highlight ? <Chip tone="blue">Highlighted</Chip> : null}
+                {plan.grandfatheredCount > 0 ? (
+                  <Chip tone="amber">
+                    {plan.grandfatheredCount} grandfathered
+                  </Chip>
+                ) : null}
                 {plan.edited ? <Chip tone="amber">Edited</Chip> : null}
               </div>
               <dl className="mt-4 space-y-1.5 text-sm">
@@ -525,7 +539,7 @@ function PlansView() {
               </dl>
               <div className="mt-4 flex items-center justify-between border-t border-border-light pt-3">
                 <p className="text-xs text-text-tertiary">
-                  {plan.monthlyPriceInr === 0 && plan.visible ? "Owners can pick this themselves" : "Set up by a platform admin"}
+                  {plan.visible ? "Offered at sign-up" : "Not offered at sign-up"}
                 </p>
                 <button type="button" className="btn-secondary" onClick={() => setEditing(plan)} aria-label={`Edit plan ${plan.name}`}>
                   Edit plan
@@ -592,8 +606,10 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
 
   const refresh = () => Promise.all([utils.platform.plans.invalidate(), utils.plan.list.invalidate(), utils.platform.overview.invalidate()]);
   const save = trpc.platform.savePlan.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (saved) => {
       toast.success("Plan saved", `${form?.name} is updated everywhere.`);
+      // Non-blocking notes (e.g. a yearly price above 12 months) show after saving.
+      if (saved.warnings.length > 0) toast.warning("Check the prices", saved.warnings.join(" "));
       await refresh();
       onClose();
     },
@@ -629,6 +645,7 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
   }
 
   const priceOnRequest = form.monthlyPriceInr === null;
+  const yearlyWarning = planSettingsWarnings(form)[0] ?? null;
 
   return (
     <>
@@ -673,6 +690,29 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
                 onChange={(v) => set("monthlyPriceInr", v ? null : 0)}
               />
             </div>
+            <div>
+              <InputField
+                label="Yearly price (₹)"
+                type="number"
+                min={0}
+                disabled={priceOnRequest}
+                value={form.yearlyPriceInr === null ? "" : String(form.yearlyPriceInr)}
+                onChange={(e) => set("yearlyPriceInr", e.target.value === "" ? null : Math.max(0, Math.round(Number(e.target.value))))}
+                placeholder={form.monthlyPriceInr === null ? "Custom" : String(yearlyPrice(form.monthlyPriceInr))}
+              />
+              <p className="mt-1 text-xs text-text-tertiary">
+                {form.monthlyPriceInr === null
+                  ? "Set a monthly price first."
+                  : form.yearlyPriceInr === null
+                    ? `Blank: ₹${yearlyPrice(form.monthlyPriceInr).toLocaleString("en-IN")} a year, ${YEARLY_SAVING_MONTHS} months free (10 × monthly).`
+                    : `${YEARLY_SAVING_MONTHS} months free would be ₹${yearlyPrice(form.monthlyPriceInr).toLocaleString("en-IN")}. All prices are before 18% GST.`}
+              </p>
+              {yearlyWarning ? (
+                <p role="status" className="mt-1 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                  {yearlyWarning}
+                </p>
+              ) : null}
+            </div>
             <TextareaField
               label="Features (one per line)"
               className="min-h-28"
@@ -680,7 +720,7 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
               onChange={(e) => setFeaturesText(e.target.value)}
             />
             <Check label="Show on the pricing page and sign-up plan picker" checked={form.visible} onChange={(v) => set("visible", v)} />
-            <Check label="Mark as recommended" checked={form.highlight} onChange={(v) => set("highlight", v)} />
+            <Check label="Highlight this plan (shown as the most popular)" checked={form.highlight} onChange={(v) => set("highlight", v)} />
           </section>
 
           <section className="space-y-3">
@@ -717,11 +757,28 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
                 </div>
               );
             })}
-            <div className="space-y-1 rounded-xl border border-border-light px-3 py-2">
-              {FEATURE_FLAGS.map((flag) => (
-                <Check key={flag.key} label={flag.label} checked={form.limits[flag.key] as boolean} onChange={(v) => setLimit(flag.key, v)} />
-              ))}
-            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-text-tertiary">Features</h3>
+            <p className="text-xs text-text-tertiary">
+              Data export, Online store and the PDF branding switch are enforced. Every other feature below is{" "}
+              <strong>shown on the plan; not enforced yet</strong>: switching it off does not stop anyone using it.
+            </p>
+            {PLAN_FLAG_GROUPS.map((group) => (
+              <div key={group.group} className="space-y-1 rounded-xl border border-border-light px-3 py-2">
+                <p className="text-xs font-semibold text-text-secondary">{group.group}</p>
+                {group.flags.map((flag) => (
+                  <Check
+                    key={flag.key}
+                    label={flag.label}
+                    hint={ENFORCED_FLAGS.has(flag.key) ? undefined : "Shown on the plan; not enforced yet"}
+                    checked={form.limits[flag.key] as boolean}
+                    onChange={(v) => setLimit(flag.key, v)}
+                  />
+                ))}
+              </div>
+            ))}
           </section>
         </div>
       </SlideOver>
@@ -738,11 +795,14 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
   );
 }
 
-function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Check({ label, checked, onChange, hint }: { label: string; checked: boolean; onChange: (v: boolean) => void; hint?: string }) {
   return (
     <label className="flex items-center gap-2.5 py-1.5 text-sm text-text-secondary">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-brand-600" />
-      {label}
+      <span>
+        {label}
+        {hint ? <span className="block text-xs text-text-tertiary">{hint}</span> : null}
+      </span>
     </label>
   );
 }
@@ -1259,6 +1319,7 @@ function OrganisationPanel({ id, onClose }: { id: string | null; onClose: () => 
         <div className="space-y-6">
           <div className="flex items-center gap-2">
             <StatusPill status={detail.status} />
+            {detail.accessGrandfathered ? <Chip tone="amber">Grandfathered</Chip> : null}
             <span className="font-mono text-xs text-text-tertiary">{detail.slug}</span>
           </div>
 
@@ -1288,7 +1349,11 @@ function OrganisationPanel({ id, onClose }: { id: string | null; onClose: () => 
                 {setPlanMutation.isPending ? "Saving…" : "Save plan"}
               </button>
             </div>
-            <p className="text-xs text-text-tertiary">The new plan's limits apply straight away.</p>
+            <p className="text-xs text-text-tertiary">
+              {detail.accessGrandfathered
+                ? "Grandfathered: permanent full access, no trial or payment. Never offered to new organisations."
+                : "The new plan's limits apply straight away."}
+            </p>
           </section>
 
           <section className="space-y-2">

@@ -23,8 +23,8 @@ import {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * The plan a sign-up gets. A current plan id is kept; a removed one (the old
- * free, pro, forever_free, enterprise ids) is refused with a clear message;
+ * The plan a sign-up gets. A current plan id is kept; a removed one (the
+ * old free, pro and enterprise ids and the unlimited test plan) is refused with a clear message;
  * nothing, or anything unrecognised, becomes the default (Growth).
  */
 export function resolveSignupPlan(requested: string | null | undefined): PlanId {

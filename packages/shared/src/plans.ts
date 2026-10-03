@@ -100,6 +100,53 @@ export type PlanCountKey = (typeof PLAN_COUNT_KEYS)[number];
  */
 export const PLAN_FLAGS_ENFORCED: readonly PlanFlagKey[] = ["dataExport", "onlineStore", "pdfBranding"];
 
+/** Plan names for places that only have an id (admin lists, subscriptions). */
+export const PLAN_NAMES: Record<PlanId, string> = { starter: "Starter", growth: "Growth", business: "Business" };
+
+/** A plan's name from its id; an unknown id is shown as it is. */
+export function planName(id: string): string {
+  return (PLAN_NAMES as Record<string, string>)[id] ?? id;
+}
+
+/** The feature flags as the admin console groups and labels them. */
+export const PLAN_FLAG_GROUPS: ReadonlyArray<{ group: string; flags: ReadonlyArray<{ key: PlanFlagKey; label: string }> }> = [
+  {
+    group: "Documents and compliance",
+    flags: [
+      { key: "gstReports", label: "GST reports" },
+      { key: "eWayBills", label: "e-way bills" },
+      { key: "eInvoicing", label: "e-invoicing" },
+      { key: "recurringInvoices", label: "Recurring invoices" },
+      { key: "pdfBranding", label: "“Powered by Fintranzact” on PDFs" },
+    ],
+  },
+  {
+    group: "Sales and inventory",
+    flags: [
+      { key: "pos", label: "POS" },
+      { key: "multiWarehouse", label: "Multiple warehouses" },
+      { key: "batchesExpiry", label: "Batches and expiry" },
+      { key: "manufacturing", label: "Manufacturing and bill of materials" },
+      { key: "onlineStore", label: "Online store" },
+    ],
+  },
+  {
+    group: "Money and control",
+    flags: [
+      { key: "bankReconciliation", label: "Bank reconciliation" },
+      { key: "approvals", label: "Approvals" },
+      { key: "dataExport", label: "Data export" },
+    ],
+  },
+  {
+    group: "Support",
+    flags: [
+      { key: "prioritySupport", label: "Priority support" },
+      { key: "onboardingHelp", label: "Onboarding help" },
+    ],
+  },
+];
+
 const STARTER_LIMITS: PlanLimits = {
   maxOwnedOrgs: 1,
   maxBusinesses: 1,

@@ -187,7 +187,7 @@ function PartnersPage() {
         </div>
       </section>
 
-      <CtaBand title="Want to try it first?" body="Create a free account and see how Fintranzact works for your clients." />
+      <CtaBand title="Want to try it first?" body="Start a free trial and see how Fintranzact works for your clients." />
     </MarketingLayout>
   );
 }

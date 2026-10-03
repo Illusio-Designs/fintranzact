@@ -285,7 +285,7 @@ export function CtaBand({
             to="/register"
             className="inline-flex h-[52px] shrink-0 items-center rounded-xl bg-white px-6 text-base font-bold text-brand-900 transition hover:bg-brand-50"
           >
-            Get started free
+            Start free trial
           </Link>
         </div>
       </div>

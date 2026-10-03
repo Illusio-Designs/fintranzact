@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from "vitest";
 import { TRPCError } from "@trpc/server";
-import { DEFAULT_SIGNUP_PLAN, TRIAL_DAYS, deriveAccess } from "@fintranzact/shared";
+import { DEFAULT_SIGNUP_PLAN, REMOVED_PLAN_IDS, TRIAL_DAYS, deriveAccess } from "@fintranzact/shared";
 import { newOrganisationPlanFields, resolveSignupPlan, trialEndsAtFrom } from "../lib/signup-plan.js";
 
 const now = new Date("2026-10-03T09:00:00Z");
@@ -31,7 +31,7 @@ describe("resolveSignupPlan", () => {
   });
 
   it("refuses every removed plan id with a clear BAD_REQUEST", () => {
-    for (const removed of ["free", "forever_free", "pro", "enterprise"]) {
+    for (const removed of REMOVED_PLAN_IDS) {
       let err: unknown;
       try {
         resolveSignupPlan(removed);

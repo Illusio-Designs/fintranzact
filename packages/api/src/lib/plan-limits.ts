@@ -113,6 +113,25 @@ export async function assertOwnedOrgsWritable(userId: string): Promise<void> {
 }
 
 /**
+ * Businesses an organisation has. A hosted organisation has its own database,
+ * so every business in it is its own. A single-database install keeps every
+ * organisation's businesses in one table, so only those created by the
+ * organisation's members count: otherwise one organisation's businesses would
+ * use up another's plan limit.
+ */
+export async function countOrganisationBusinesses(tenantId: string, tenantDb: TenantDatabase): Promise<number> {
+  if (process.env.MULTI_TENANT === "true") {
+    const [{ count: n }] = await tenantDb.select({ count: count() }).from(businesses);
+    return n;
+  }
+  const [{ count: n }] = await tenantDb
+    .select({ count: count() })
+    .from(businesses)
+    .where(sql`${businesses.createdByUserId} IN (SELECT ${tenantMembers.userId} FROM ${tenantMembers} WHERE ${tenantMembers.tenantId} = ${tenantId})`);
+  return n;
+}
+
+/**
  * Enforce business creation limit.
  * Counts existing businesses in the tenant DB and compares against the plan limit.
  */
@@ -120,9 +139,7 @@ export async function enforceBusinessLimit(tenantId: string, tenantDb: TenantDat
   const limits = await getTenantLimits(tenantId);
   if (limits.maxBusinesses === Infinity) return;
 
-  const [{ count: bizCount }] = await tenantDb
-    .select({ count: count() })
-    .from(businesses);
+  const bizCount = await countOrganisationBusinesses(tenantId, tenantDb);
 
   if (bizCount >= limits.maxBusinesses) {
     throw limitError(

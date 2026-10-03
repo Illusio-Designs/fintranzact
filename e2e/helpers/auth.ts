@@ -4,7 +4,7 @@
  * Sign-up lives at /register and sign-in at /login; both pages show
  * "Register" / "Log in" tabs (links with role="tab"). Register asks for a
  * username, optional referral code, email, password and a retyped password,
- * and submits with "Create free account"; Log in asks for email + password
+ * and submits with "Start free trial"; Log in asks for email + password
  * and submits with "Log in".
  *
  * Both submit through a Cloudflare Turnstile check. The script is replaced with
@@ -46,7 +46,7 @@ export async function fillRegisterForm(
   await page.getByPlaceholder("you@yourcompany.com").fill(user.email);
   await page.getByPlaceholder("Min 8 characters").fill(user.password);
   await page.getByPlaceholder("Retype password").fill(user.confirmPassword ?? user.password);
-  await page.locator("form").getByRole("button", { name: "Create free account" }).click();
+  await page.locator("form").getByRole("button", { name: "Start free trial" }).click();
 }
 
 /** Registers a new user through the UI and waits until the app leaves the auth pages. */

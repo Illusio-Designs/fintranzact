@@ -60,7 +60,7 @@ function FeaturePageView({ page }: { page: FeaturePage }) {
           <p className="mt-5 max-w-2xl text-lg leading-relaxed text-slate-600 dark:text-slate-300">{page.tagline}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link to="/register" className={PRIMARY_BUTTON}>
-              Start free — no card needed
+              Start free trial — no card needed
               <Icon icon={ArrowRight01Icon} size={18} strokeWidth={2} />
             </Link>
             <Link to="/pricing" className={SECONDARY_BUTTON}>

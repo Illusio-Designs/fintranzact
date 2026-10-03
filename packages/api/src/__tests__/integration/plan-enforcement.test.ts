@@ -27,7 +27,7 @@ import { createContext } from "../../context.js";
 import { registerExportRoute } from "../../http/exportStream.js";
 import { signExportToken } from "../../lib/exportToken.js";
 import { getEntitlements } from "../../lib/entitlements.js";
-import { storeServesTenant } from "../../lib/plan-limits.js";
+import { enforceBusinessLimit, storeServesTenant } from "../../lib/plan-limits.js";
 import { tickTenant, processDueTemplates, skipDueTemplates } from "../../lib/recurring-invoice-scheduler.js";
 import { clearEntitlementsCache } from "../../lib/entitlements.js";
 import { invalidatePlanCatalog } from "../../lib/plan-catalog.js";
@@ -105,6 +105,23 @@ describe("recurringInvoice.runNow and the monthly allowance", () => {
       additionalCharges: "0",
     }).returning();
     await expect(caller().recurringInvoice.runNow({ id: tpl!.id })).resolves.toBeTruthy();
+  });
+});
+
+describe("the business limit counts one organisation's own businesses", () => {
+  it("in a single-database install, another organisation's businesses do not use up the limit", async () => {
+    // Starter: 1 business. org() already creates each organisation's first business.
+    const a = await org({ plan: "starter" });
+    const b = await org({ plan: "starter" });
+    await expect(enforceBusinessLimit(a.tenant.id, await getTenantDb(a.tenant.id))).rejects.toThrow(/up to 1 business/);
+    await expect(enforceBusinessLimit(b.tenant.id, await getTenantDb(b.tenant.id))).rejects.toThrow(/up to 1 business/);
+    // A third organisation with no business of its own may still create its first.
+    const owner = await createUser({ name: "Third Owner" });
+    const c = await createTenant({ plan: "starter" });
+    await addMember(c.id, owner.id, "owner");
+    await expect(enforceBusinessLimit(c.id, await getTenantDb(c.id))).resolves.toBeUndefined();
+    const caller = createTestCaller({ userId: owner.id, email: owner.email, name: owner.name ?? null, tenantId: c.id, businessId: a.biz.id });
+    await expect(caller.business.canCreate()).resolves.toBe(true);
   });
 });
 

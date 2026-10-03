@@ -612,7 +612,7 @@ export function SiteHeader() {
             to="/register"
             className="inline-flex h-11 items-center whitespace-nowrap rounded-[10px] bg-brand-600 px-3.5 text-[15px] sm:px-5 font-semibold text-white shadow-[0_6px_16px_-6px_rgba(59,94,170,.6)] transition hover:bg-brand-700"
           >
-            Start free
+            Start free trial
           </Link>
           <button
             type="button"

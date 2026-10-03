@@ -163,8 +163,8 @@ const TILE_TONES = [
 
 const FAQS = [
   {
-    q: "Is the free plan really free forever?",
-    a: "Yes. The Forever Free plan has no time limit, no invoice cap and no Fintranzact branding on your documents.",
+    q: "Is there a free trial?",
+    a: "Yes. Every new organization gets a 14-day free trial on the plan it picks, with no card needed. There is no free plan after the trial, and no plan puts Fintranzact branding on your documents.",
   },
   {
     q: "Do I need a credit card to sign up?",
@@ -240,7 +240,7 @@ function Hero() {
               to="/register"
               className="inline-flex h-[54px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
             >
-              Start free — no card needed
+              Start free trial — no card needed
               <Icon icon={ArrowRight01Icon} size={18} strokeWidth={2} />
             </Link>
             <Link
@@ -251,7 +251,7 @@ function Hero() {
             </Link>
           </div>
           <ul className="mt-7 flex flex-wrap gap-x-6 gap-y-2.5 text-sm text-slate-600 dark:text-slate-300">
-            {["Forever-free plan", "Unlimited invoices", "Web, desktop & mobile"].map((t) => (
+            {["14-day free trial", "Unlimited invoices", "Web, desktop & mobile"].map((t) => (
               <li key={t} className="flex items-center gap-2">
                 <Icon icon={CheckmarkCircle02Icon} size={18} className="text-brand-600 dark:text-brand-300" />
                 {t}
@@ -734,7 +734,7 @@ function FeatureGrid() {
 
 function Steps() {
   const steps = [
-    ["Create your free account", "Sign up with your email or phone number. No credit card, no trial clock."],
+    ["Start your free trial", "Sign up with your email or phone number. 14 days free, no credit card."],
     ["Add your business", "Enter your GSTIN and we fill in your PAN and state. Import parties and items from a spreadsheet."],
     ["Send your first invoice", "Pick a party, add items and share a GST-ready invoice — tax is worked out for you."],
   ];
@@ -832,7 +832,7 @@ function Pricing() {
       <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
         <p className={cn(EYEBROW, "text-center")}>Pricing</p>
         <h2 className={cn(HEADING, "mt-3 text-center text-3xl md:text-[40px]")}>
-          Start free. Upgrade when your team grows.
+          Three simple plans. Try any of them free for 14 days.
         </h2>
         <PricingCards className="mt-12" />
       </div>
@@ -873,7 +873,7 @@ function FinalCta() {
       <div className="mx-auto max-w-6xl px-4 pb-24 md:px-6">
         <div className="landing-dots-dark flex flex-col items-center rounded-[28px] bg-brand-600 px-6 py-16 text-center text-white sm:px-14 sm:py-[72px]">
           <h2 className="max-w-3xl font-display text-3xl font-extrabold leading-tight tracking-[-0.025em] md:text-[44px]">
-            Run your business on Fintranzact — free, forever.
+            Run your business on Fintranzact — try it free for 14 days.
           </h2>
           <p className="mt-4 max-w-xl text-[17px] leading-relaxed text-[#dbe4f5]">
             Set up in minutes. Unlimited invoices, parties and team members from day one.
@@ -883,7 +883,7 @@ function FinalCta() {
               to="/register"
               className="inline-flex h-[54px] items-center rounded-xl bg-white px-7 text-base font-bold text-brand-900 transition hover:bg-brand-50"
             >
-              Create free account
+              Start free trial
             </Link>
             <Link
               to="/contact"

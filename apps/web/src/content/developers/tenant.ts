@@ -94,14 +94,14 @@ can_create = resp.json()["result"]["data"]["json"]`,
             role: "owner",
             tenantName: "Gupta Trading Co.",
             tenantSlug: "gupta-trading-co-abc123",
-            tenantPlan: "pro",
+            tenantPlan: "growth",
           },
           {
             tenantId: "01957a2b-4d5e-6f78-9012-abcdef543210",
             role: "member",
             tenantName: "Sharma Enterprises",
             tenantSlug: "sharma-enterprises-xyz789",
-            tenantPlan: "free",
+            tenantPlan: "starter",
           },
         ],
       },
@@ -393,7 +393,7 @@ httpx.post(
           id: "01957a2b-3c4d-7e8f-9012-abcdef012345",
           name: "Gupta Trading Co.",
           slug: "gupta-trading-co-abc123",
-          plan: "pro",
+          plan: "growth",
           status: "active",
           createdAt: "2026-01-15T05:30:00.000Z",
           twoFactorPolicy: "admins",
@@ -886,34 +886,35 @@ httpx.post(
       method: "mutation",
       path: "tenant.updatePlan",
       title: "Change Organization Plan",
-      description: "Switch an organization to a self-serve plan. Only the free plans (`forever_free`, `free`) can be chosen this way; paid plans (`pro`, `business`, `enterprise`) are arranged with the Fintranzact team and applied by a platform admin. Targets the organization selected in the session; if none is selected it falls back to an organization the caller owns (useful during onboarding, before `tenant.select`).",
+      description: "Switch the plan an organization is trying (`starter`, `growth` or `business`) while it has no live plan subscription, i.e. during the trial. Once a plan is bought, plans change through `billing.changePlan`. Owner (or superadmin) only. Targets the organization selected in the session; if none is selected it falls back to an organization the caller owns (useful during onboarding, before `tenant.select`).",
       auth: "protected",
       input: [
-        { name: "plan", type: "enum", required: true, description: "Target plan. Paid plans are only accepted if they equal the organization's current plan (a no-op).", enumValues: ["forever_free", "free", "pro", "business", "enterprise"] },
+        { name: "plan", type: "enum", required: true, description: "Target plan. The removed ids (`free`, `pro`, `enterprise` and the earlier unlimited test plan) are refused with a message that says so.", enumValues: ["starter", "growth", "business"] },
       ],
       output: {
         description: "The plan that was saved.",
-        example: { plan: "free" },
+        example: { plan: "starter" },
       },
       codeExamples: {
         curl: `curl -X POST ${API_BASE_URL}/api/trpc/tenant.updatePlan \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
-  -d '{"json":{"plan":"free"}}'`,
-        javascript: `const { plan } = await trpc.tenant.updatePlan.mutate({ plan: "free" });
+  -d '{"json":{"plan":"starter"}}'`,
+        javascript: `const { plan } = await trpc.tenant.updatePlan.mutate({ plan: "starter" });
 console.log("Organization is now on", plan);`,
         python: `import httpx
 
 resp = httpx.post(
     "${API_BASE_URL}/api/trpc/tenant.updatePlan",
     headers={"Authorization": f"Bearer {session_token}"},
-    json={"json": {"plan": "free"}},
+    json={"json": {"plan": "starter"}},
 )`,
       },
       gotchas: [
-        "Returns FORBIDDEN \"Paid plans are set up by the Fintranzact team. Contact us to upgrade.\" for `pro`, `business` or `enterprise` unless the organization is already on that plan.",
+        "Returns FORBIDDEN \"Only the organization owner can change the plan.\" for anyone but the owner or a superadmin.",
+        "Returns FORBIDDEN \"Your plan is already subscribed. Change it from Settings → Billing.\" once the organization has a live plan subscription, and FORBIDDEN \"permanent full access\" for a grandfathered organization (the organizations from the earlier unlimited test plan, now on Business with no trial or payment; `accessGrandfathered` is true).",
+        "Returns BAD_REQUEST for a removed plan id (\"The free plan has been removed. Choose Starter, Growth or Business.\") and for a plan the platform team has hidden.",
         "Returns NOT_FOUND \"No organization selected to update.\" when the session has no selected organization and the caller owns none.",
-        "No organization role is checked when an organization is selected in the session: any member (seller, accountant, …) can switch it to a free plan — including downgrading a paid organization to `free`.",
         "Not audit-logged. Plan limits (businesses, members, exports) change immediately on the next request.",
       ],
       relatedEndpoints: ["tenant-current", "tenant-list"],

@@ -54,7 +54,7 @@ export type SeededOwner = {
   api: Trpc;
 };
 
-/** A signed-up owner (Forever Free) with one GST-registered business in Maharashtra. */
+/** A signed-up owner (Business plan, 14-day trial running: full access) with one GST-registered business in Maharashtra. */
 export async function seedOwner(context: BrowserContext, label: string): Promise<SeededOwner> {
   const id = uid();
   const email = `${label}-owner-${id}@test.fintranzact.com`;
@@ -67,8 +67,9 @@ export async function seedOwner(context: BrowserContext, label: string): Promise
     email,
     password,
     confirmPassword: password,
+    // No free plan: sign up on Business, so the organisation has no limits for the journeys.
+    plan: "business",
   });
-  await api.mutate("tenant.updatePlan", { plan: "forever_free" });
   const me = await api.query<{ tenantId: string }>("auth.me");
   const businessName = `${label.toUpperCase()} Enterprises ${id}`;
   const biz = await api.mutate<{ id: string }>("business.create", {
