@@ -2,7 +2,7 @@
  * J3 — Masters: the parties and items a business keeps, set up in the UI.
  *
  *   Parties: a GST-registered customer in another state (GSTIN fills PAN and
- *   state; "Fetch details" without e-invoicing set up only derives them — no
+ *   state; "Search GST" without Sandbox or e-invoicing set up only derives them, no
  *   GST portal call), with billing + default shipping + two extra shipping
  *   addresses, credit period/limit and an opening balance; a supplier; a
  *   duplicate of the customer that already has an invoice and a recurring
@@ -113,10 +113,10 @@ test.describe("J3 masters", () => {
     await panel.getByLabel("Opening Balance").fill("5000");
     await panel.getByLabel("GSTIN").fill("29AABCT1332L1ZT");
     await expect(panel.getByText("PAN detected: AABCT1332L")).toBeVisible();
-    // No e-invoice login configured: the lookup only derives what the GSTIN
-    // itself says, and tells the user so. Nothing is sent to the GST portal.
-    await panel.getByRole("button", { name: "Fetch details" }).click();
-    await expect(toast(page, /GSTIN lookup uses your e-invoice \(IRP\) login/)).toBeVisible();
+    // No Sandbox keys and no e-invoice login: the search only derives what the
+    // GSTIN itself says, and tells the user so without raising an error.
+    await panel.getByRole("button", { name: "Search GST" }).click();
+    await expect(panel.getByRole("status").filter({ hasText: /GST search is not set up here/ })).toBeVisible();
 
     await openSection(panel, "Address");
     await panel.getByLabel("Billing Address").fill("12 BH Road, Tumakuru");

@@ -132,7 +132,7 @@ resp = httpx.get(
       method: "mutation",
       path: "party.create",
       title: "Create Party",
-      description: "Create a new customer or supplier. GSTIN is validated with the official 15-character format regex; when `pan` or `stateCode` is left blank they are filled from the GSTIN. Opening balance represents the amount already owed before using Fintranzact. Optionally assign a price level so sales to this party pick up its prices.",
+      description: "Create a new customer or supplier. GSTIN is validated with the official 15-character format regex; when `pan` or `stateCode` is left blank they are filled from the GSTIN. When a GSTIN is given, the result also carries `gstinCheck` (`{ status, warning? }`), an advisory check against the GST portal made after the save (2.5 s cap, never blocks): `status` is the portal status (`active`, `cancelled`, `suspended`, `provisional`, `other`) or `not_found`, `invalid`, `unavailable`, `not_configured`; `warning` flags a cancelled or suspended GSTIN, a name that does not match the GST record, or a different state. `party.update` returns the same field when the GSTIN is new or changed (null otherwise). Opening balance represents the amount already owed before using Fintranzact. Optionally assign a price level so sales to this party pick up its prices.",
       auth: "business",
       requiredRole: "member",
       input: [
@@ -645,14 +645,15 @@ resp = httpx.get(
       method: "mutation",
       path: "party.lookupGstin",
       title: "Look Up GSTIN",
-      description: "Fetch a taxpayer's registered details (legal and trade name, address, state, registration type and status) for a GSTIN from the GST system, using the business's e-invoice (IRP) credentials, so the party form can be pre-filled. When e-invoicing is not configured or is disabled, it returns `available: false` with only the values that can be derived from the GSTIN itself (PAN, state code, constitution). Nothing is saved — pass the returned fields (and `verifiedAt` as `gstinVerifiedAt`) to `party.create` / `party.update`.",
+      description: "Search a GSTIN on the GST portal (legal and trade name, address, state, registration type, status, e-invoicing, additional places of business) so the party form can be pre-filled. It uses Sandbox's public Search GSTIN API when Sandbox is configured on the server, then the business's e-invoice (IRP) credentials when e-invoicing is set up, and otherwise returns `available: false` with only the values that can be derived from the GSTIN itself (PAN, state code, constitution). It never fails because the portal is down. Nothing is saved — pass the returned fields (and `verifiedAt` as `gstinVerifiedAt`) to `party.create` / `party.update`.",
       auth: "business",
       requiredRole: "member",
       input: [
         { name: "gstin", type: "string", required: true, description: "15-character GSTIN. Trimmed and upper-cased before validation against the GSTIN format." },
+        { name: "refresh", type: "boolean", required: false, description: "Skip the 6-hour server cache and ask the portal again" },
       ],
       output: {
-        description: "Either `{ available: true, details, verifiedAt }` or `{ available: false, reason, derived }`. In `details`, `gstRegistrationType` is one of `regular`, `composition`, `sez`, `uin`, `overseas` (or null), `gstinStatus` one of `active`, `cancelled`, `suspended`, `inactive` (or null), `blocked` is true when the GSTIN is blocked for e-invoicing, and `registeredOn` / `cancelledOn` are passed through from the portal. `constitution` is derived from the PAN's 4th character.",
+        description: "Either `{ available: true, details, verifiedAt, ... }` or `{ available: false, reason, derived, ... }`. Both also carry `valid` (false for a malformed or unknown GSTIN, or a cancelled registration), `source` (`sandbox`, `irp` or `local`), `sandboxStatus` (`ok`, `not_found`, `invalid`, `unavailable`, `not_configured`), `profile` (the normalised GST record, or null: `legalName`, `tradeName`, `status`, `statusRaw`, `taxpayerType`, `constitution`, `registeredOn`, `cancelledOn`, `eInvoiceEnabled`, `natureOfBusiness`, `principalAddress`, `additionalAddresses`), `warnings` (advisory messages such as a cancelled GSTIN) and `checkedAt`. In `details`, `gstRegistrationType` is one of `regular`, `composition`, `sez`, `uin`, `overseas` (or null), `gstinStatus` one of `active`, `cancelled`, `suspended`, `inactive` (or null), `blocked` is true when the GSTIN is blocked for e-invoicing, and `registeredOn` / `cancelledOn` are passed through from the portal. `constitution` is derived from the PAN's 4th character.",
         example: {
           available: true,
           details: {
@@ -697,8 +698,9 @@ resp = httpx.post(
 result = resp.json()["result"]["data"]["json"]`,
       },
       gotchas: [
-        "Requires `Party:create` permission. It is a mutation (POST) even though it only reads, because it calls the external IRP API.",
-        "Needs an enabled e-invoice configuration with IRP credentials (`business.update` with `eInvoiceEnabled` and the e-invoice username/password). Without it you get `available: false` and a human-readable `reason`, not an error.",
+        "Requires `Party:create` permission. It is a mutation (POST) even though it only reads, because it calls an external API and spends Sandbox quota. Limited to 20 searches a minute per user (TOO_MANY_REQUESTS beyond that).",
+        "The Sandbox search needs no taxpayer login. Without Sandbox on the server, an enabled e-invoice configuration with IRP credentials is used instead. Without either you get `available: false` and a human-readable `reason`, not an error. When the portal cannot be reached `reason` says so and `sandboxStatus` is `unavailable`; saving the party still works.",
+        "Answers are cached on the server for 6 hours (60 seconds for not found or failed). A cancelled GSTIN returns `available: true` with `valid: false` and a warning.",
         "IRP failures surface as BAD_REQUEST \"GSTIN lookup failed: …\" (e.g. invalid or unregistered GSTIN) or INTERNAL_SERVER_ERROR for retryable portal/network errors.",
         "Invalid GSTIN format fails input validation before any portal call.",
       ],

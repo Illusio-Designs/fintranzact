@@ -707,7 +707,7 @@ exceptions:
       # --- Parties ---
       # Tally accounting integration — desktop-specific export format.
       - party.tallyExport
-      # GSTIN lookup auto-fills the interactive party form; scripts pass fields directly.
+      # GSTIN search (Sandbox, then e-invoice login) pre-fills the interactive party form and spends Sandbox quota; scripts pass fields directly and read gstinCheck from party.create / party.update.
       - party.lookupGstin
       # MSME payables is a web report view built on reports.outstanding data.
       - reports.msmePayables
@@ -1034,7 +1034,7 @@ exceptions:
       # --- Parties ---
       # Tally accounting integration — desktop-specific export format.
       - party.tallyExport
-      # GSTIN lookup auto-fills the interactive party form; agents pass fields directly.
+      # GSTIN search (Sandbox, then e-invoice login) pre-fills the interactive party form and spends Sandbox quota; agents pass fields directly and read gstinCheck from party.create / party.update.
       - party.lookupGstin
       # MSME payables is a web report view built on reports.outstanding data.
       - reports.msmePayables

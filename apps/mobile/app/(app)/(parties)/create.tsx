@@ -37,6 +37,9 @@ import {
   type PartyConstitution,
   type MsmeCategory,
   type GstinStatus,
+  planGstinFill,
+  type GstinFormValues,
+  type GstinDetails,
 } from "@fintranzact/shared";
 
 interface ShippingDraft {
@@ -119,34 +122,96 @@ export default function CreatePartyScreen() {
     const detectedState = stateCodeFromGstin(value);
     if (detectedState) setStateCode(detectedState);
     const detectedConstitution = constitutionFromPan(detectedPan);
-    if (detectedConstitution && !constitution) setConstitution(detectedConstitution);
-    if (detectedState && !gstType) setGstType("regular");
+    if (detectedConstitution && !constitution) {
+      setConstitution(detectedConstitution);
+      autoConstitution.current = detectedConstitution;
+    }
+    if (detectedState && !gstType) {
+      setGstType("regular");
+      autoGstType.current = "regular";
+    }
   };
 
+  // Values the form derived itself from the GSTIN; a GST search may replace them without asking.
+  const autoGstType = useRef<PartyGstType | "">("");
+  const autoConstitution = useRef<PartyConstitution | "">("");
+  const lastSearched = useRef("");
+  const manualSearch = useRef(true);
+  const [lookupNote, setLookupNote] = useState<{ text: string; tone: "ok" | "warn" | "muted" } | null>(null);
+
+  const applyGstinFill = (patch: Partial<GstinFormValues>) => {
+    if (patch.name !== undefined) setName(patch.name);
+    if (patch.legalName !== undefined) setLegalName(patch.legalName);
+    if (patch.tradeName !== undefined) setTradeName(patch.tradeName);
+    if (patch.billingAddress !== undefined) setBillingAddress(patch.billingAddress);
+    if (patch.city !== undefined) setCity(patch.city);
+    if (patch.state !== undefined) setState(patch.state);
+    if (patch.stateCode !== undefined) setStateCode(patch.stateCode);
+    if (patch.gstType !== undefined) {
+      setGstType(patch.gstType);
+      autoGstType.current = "";
+    }
+    if (patch.constitution !== undefined) {
+      setConstitution(patch.constitution);
+      autoConstitution.current = "";
+    }
+  };
+
+  // `manual` is false for the search that runs by itself when the field loses focus.
   const lookup = trpc.party.lookupGstin.useMutation({
     onSuccess: (result) => {
+      const manual = manualSearch.current;
       if (!result.available) {
         applyGstinDerived(result.derived.gstin, pan);
-        Alert.alert("GST lookup not set up", result.reason);
+        if (result.sandboxStatus === "not_configured") {
+          // Searching is not set up: no error, just the local checks.
+          if (manual) setLookupNote({ text: "GST search is not set up here, so only the PAN and state from the GSTIN were filled in.", tone: "muted" });
+        } else if (result.sandboxStatus === "unavailable") {
+          setLookupNote({ text: "Could not reach the GST portal; you can still save.", tone: "warn" });
+        } else {
+          setLookupNote({ text: `${result.reason} You can still save.`, tone: "warn" });
+        }
         return;
       }
-      const d = result.details;
+      const d = result.details as GstinDetails;
       applyGstinDerived(d.gstin, pan);
-      if (d.legalName) setLegalName(d.legalName);
-      if (d.tradeName) setTradeName(d.tradeName);
-      if (!name.trim()) setName(d.tradeName || d.legalName || "");
-      if (d.billingAddress && !billingAddress) setBillingAddress(d.billingAddress);
-      if (d.city && !city) setCity(d.city);
-      if (d.gstRegistrationType) setGstType(d.gstRegistrationType);
-      if (d.constitution) setConstitution(d.constitution);
+      // Empty fields are filled; fields with a different value are only replaced when confirmed.
+      const plan = planGstinFill(
+        d,
+        { name, legalName, tradeName, billingAddress, city, state, stateCode, pincode: "", gstType, constitution },
+        { gstType: autoGstType.current, constitution: autoConstitution.current },
+      );
+      if (Object.keys(plan.fills).length) applyGstinFill(plan.fills);
       setGstinStatus(d.gstinStatus);
       setGstinVerifiedAt(result.verifiedAt);
-      if (d.gstinStatus && d.gstinStatus !== "active") {
-        Alert.alert("Check this GSTIN", `The GSTIN is ${d.gstinStatus}.`);
+      const label = result.profile?.statusRaw || d.gstinStatus || "";
+      setLookupNote({
+        text: `GST record found${d.legalName ? `: ${d.legalName}` : ""}${label ? ` (${label})` : ""}.${result.warnings.length ? ` ${result.warnings.join(" ")}` : ""}`,
+        tone: result.warnings.length || (d.gstinStatus && d.gstinStatus !== "active") ? "warn" : "ok",
+      });
+      if (plan.conflicts.length && manual) {
+        const patch = plan.conflicts.reduce<Partial<GstinFormValues>>((acc, c) => ({ ...acc, ...c.patch }), {});
+        Alert.alert(
+          "Use the GST record?",
+          plan.conflicts.map((c) => `${c.label}: yours "${c.current}", GST record "${c.incoming}"`).join("\n"),
+          [
+            { text: "Keep mine", style: "cancel" },
+            { text: "Use GST record", onPress: () => applyGstinFill(patch) },
+          ],
+        );
       }
     },
-    onError: (error) => Alert.alert("GST lookup failed", error.message),
+    onError: (error) => {
+      setLookupNote({ text: error.data?.code === "TOO_MANY_REQUESTS" ? error.message : "Could not reach the GST portal; you can still save.", tone: "warn" });
+    },
   });
+  const searchGst = (manual: boolean) => {
+    if (!GSTIN_REGEX.test(gstin)) return;
+    lastSearched.current = gstin;
+    setLookupNote(null);
+    manualSearch.current = manual;
+    lookup.mutate({ gstin });
+  };
 
   const warnings = partyComplianceWarnings({
     type, gstin, pan, stateCode, gstRegistrationType: gstType, gstinStatus, isMsme, udyamNumber, tdsSection,
@@ -162,9 +227,12 @@ export default function CreatePartyScreen() {
   const stateRef = useRef<TextInput>(null);
 
   const createParty = trpc.party.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (created) => {
       utils.party.list.invalidate();
-      router.back();
+      // The party is saved either way; a GSTIN note is advisory only.
+      const note = created?.gstinCheck?.warning;
+      if (note && created.gstinCheck?.status !== "not_configured") Alert.alert("GSTIN note", note, [{ text: "OK", onPress: () => router.back() }]);
+      else router.back();
     },
     onError: (error) => {
       Alert.alert("Error", error.message || "Failed to create party");
@@ -427,7 +495,11 @@ export default function CreatePartyScreen() {
                       setGstinVerifiedAt(null);
                     }
                     setGstin(next);
+                    setLookupNote(null);
                     if (errors.gstin) setErrors((e) => ({ ...e, gstin: "" }));
+                  }}
+                  onBlur={() => {
+                    if (GSTIN_REGEX.test(gstin) && gstin !== lastSearched.current && !lookup.isPending) searchGst(false);
                   }}
                   autoCapitalize="characters"
                   maxLength={15}
@@ -440,17 +512,25 @@ export default function CreatePartyScreen() {
                 )}
                 <TouchableOpacity
                   style={[styles.linkButton, (!GSTIN_REGEX.test(gstin) || lookup.isPending) && styles.saveButtonDisabled]}
-                  onPress={() => lookup.mutate({ gstin })}
+                  onPress={() => searchGst(true)}
                   disabled={!GSTIN_REGEX.test(gstin) || lookup.isPending}
                   accessibilityRole="button"
                 >
                   {lookup.isPending
                     ? <ActivityIndicator size="small" color={colors.brand} />
-                    : <Text style={styles.linkButtonText}>Fetch details from GST</Text>}
+                    : <Text style={styles.linkButtonText}>Search GST</Text>}
                 </TouchableOpacity>
                 {gstinStatus && (
                   <Text style={[styles.hint, { color: gstinStatus === "active" ? colors.success : colors.danger }]}>
                     GSTIN status: {gstinStatus}
+                  </Text>
+                )}
+                {lookupNote && (
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    style={[styles.hint, { color: lookupNote.tone === "warn" ? colors.danger : lookupNote.tone === "ok" ? colors.success : colors.textMuted }]}
+                  >
+                    {lookupNote.text}
                   </Text>
                 )}
               </View>

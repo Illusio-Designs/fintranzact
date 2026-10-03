@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { trpc } from "../../../src/lib/trpc";
 import { makeStyles } from "../../../src/lib/makeStyles";
 import { useColors } from "../../../src/contexts/ThemeContext";
 import { haptic } from "../../../src/lib/haptics";
-import { GSTIN_REGEX, PAN_REGEX, panFromGstin } from "@fintranzact/shared";
+import { GSTIN_REGEX, PAN_REGEX, panFromGstin, planGstinFill, type GstinDetails } from "@fintranzact/shared";
 import { QueryError } from "../../../src/components/ui";
 
 type PartyType = "customer" | "supplier";
@@ -61,11 +61,72 @@ export default function EditPartyScreen() {
     }
   }, [party, initialized]);
 
+  // Search the GST portal: empty fields are filled; a field that already differs is only replaced when confirmed.
+  const [lookupNote, setLookupNote] = useState<{ text: string; tone: "ok" | "warn" | "muted" } | null>(null);
+  const lastSearched = useRef("");
+  const manualSearch = useRef(true);
+  const lookup = trpc.party.lookupGstin.useMutation({
+    onSuccess: (result) => {
+      const manual = manualSearch.current;
+      if (!result.available) {
+        if (result.sandboxStatus === "not_configured") {
+          if (manual) setLookupNote({ text: "GST search is not set up here, so nothing was fetched.", tone: "muted" });
+        } else if (result.sandboxStatus === "unavailable") {
+          setLookupNote({ text: "Could not reach the GST portal; you can still save.", tone: "warn" });
+        } else {
+          setLookupNote({ text: `${result.reason} You can still save.`, tone: "warn" });
+        }
+        return;
+      }
+      const d = result.details as GstinDetails;
+      const plan = planGstinFill(d, { name, legalName: "", tradeName: "", billingAddress, city, state, stateCode: "", pincode: "", gstType: "", constitution: "" });
+      // This screen edits only the name, address, city and state.
+      const mine = new Set(["name", "billingAddress", "city", "state"]);
+      const apply = (patch: Record<string, string | undefined>) => {
+        if (patch.name !== undefined) setName(patch.name);
+        if (patch.billingAddress !== undefined) setBillingAddress(patch.billingAddress);
+        if (patch.city !== undefined) setCity(patch.city);
+        if (patch.state !== undefined) setState(patch.state);
+      };
+      apply(Object.fromEntries(Object.entries(plan.fills).filter(([k]) => mine.has(k))));
+      const label = result.profile?.statusRaw || d.gstinStatus || "";
+      setLookupNote({
+        text: `GST record found${d.legalName ? `: ${d.legalName}` : ""}${label ? ` (${label})` : ""}.${result.warnings.length ? ` ${result.warnings.join(" ")}` : ""}`,
+        tone: result.warnings.length || (d.gstinStatus && d.gstinStatus !== "active") ? "warn" : "ok",
+      });
+      const conflicts = plan.conflicts.filter((c) => mine.has(c.key));
+      if (conflicts.length && manual) {
+        const patch = conflicts.reduce<Record<string, string | undefined>>((acc, c) => ({ ...acc, ...c.patch }), {});
+        Alert.alert(
+          "Use the GST record?",
+          conflicts.map((c) => `${c.label}: yours "${c.current}", GST record "${c.incoming}"`).join("\n"),
+          [
+            { text: "Keep mine", style: "cancel" },
+            { text: "Use GST record", onPress: () => apply(patch) },
+          ],
+        );
+      }
+    },
+    onError: (error) => {
+      setLookupNote({ text: error.data?.code === "TOO_MANY_REQUESTS" ? error.message : "Could not reach the GST portal; you can still save.", tone: "warn" });
+    },
+  });
+  const searchGst = (manual: boolean) => {
+    if (!GSTIN_REGEX.test(gstin)) return;
+    lastSearched.current = gstin;
+    manualSearch.current = manual;
+    setLookupNote(null);
+    lookup.mutate({ gstin });
+  };
+
   const updateParty = trpc.party.update.useMutation({
-    onSuccess: () => {
+    onSuccess: (updated) => {
       utils.party.list.invalidate();
       utils.party.getById.invalidate({ id: id ?? "" });
-      router.back();
+      // The party is saved either way; a GSTIN note is advisory only.
+      const note = updated?.gstinCheck?.warning;
+      if (note && updated.gstinCheck?.status !== "not_configured") Alert.alert("GSTIN note", note, [{ text: "OK", onPress: () => router.back() }]);
+      else router.back();
     },
     onError: (error) => {
       Alert.alert("Error", error.message || "Failed to update party");
@@ -305,13 +366,36 @@ export default function EditPartyScreen() {
                       setPan(detected);
                     }
                     setGstin(next);
+                    setLookupNote(null);
                     if (errors.gstin) setErrors((e) => ({ ...e, gstin: "" }));
+                  }}
+                  onBlur={() => {
+                    // A GSTIN already on the saved party is not searched again on open.
+                    if (GSTIN_REGEX.test(gstin) && gstin !== (party?.gstin ?? "") && gstin !== lastSearched.current && !lookup.isPending) searchGst(false);
                   }}
                   autoCapitalize="characters"
                   maxLength={15}
                 />
                 {errors.gstin && (
                   <Text style={styles.errorText}>{errors.gstin}</Text>
+                )}
+                <TouchableOpacity
+                  style={[styles.linkButton, (!GSTIN_REGEX.test(gstin) || lookup.isPending) && { opacity: 0.5 }]}
+                  onPress={() => searchGst(true)}
+                  disabled={!GSTIN_REGEX.test(gstin) || lookup.isPending}
+                  accessibilityRole="button"
+                >
+                  {lookup.isPending
+                    ? <ActivityIndicator size="small" color={colors.brand} />
+                    : <Text style={styles.linkButtonText}>Search GST</Text>}
+                </TouchableOpacity>
+                {lookupNote && (
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    style={[styles.hint, { color: lookupNote.tone === "warn" ? colors.danger : lookupNote.tone === "ok" ? colors.success : colors.textMuted }]}
+                  >
+                    {lookupNote.text}
+                  </Text>
                 )}
               </View>
 
@@ -519,6 +603,21 @@ const useStyles = makeStyles((colors) => ({
     fontSize: 12,
     color: colors.danger,
     marginTop: 4,
+  },
+  linkButton: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+  },
+  linkButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.brand,
+  },
+  hint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 8,
   },
   fieldDivider: {
     height: 1,

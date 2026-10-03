@@ -34,6 +34,7 @@ import {
   type MsmeCategory,
   type GstinStatus,
 } from "@fintranzact/shared";
+import type { GstinFormValues } from "@fintranzact/shared";
 import { PartyPriceLevel, PriceLevelSelect } from "@/components/pricing/PriceLevelSelect";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
@@ -56,6 +57,7 @@ import { Alert02Icon, ArrowRight01Icon, ArrowRight02Icon, Cancel01Icon, Download
 import { Spinner } from "@/components/ui/Spinner";
 import { PhoneInput } from "@/components/ui/PhoneInput";
 import { GstinInput } from "@/components/settings/GstinInput";
+import { GstinSearch } from "@/components/parties/GstinSearch";
 import { Select } from "@/components/ui/Select";
 import { INDIAN_STATES } from "@/lib/indian-states";
 import {
@@ -1328,6 +1330,11 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
   const [constitution, setConstitution] = useState<PartyConstitution | "">((e0?.constitution as PartyConstitution) ?? "");
   const [gstinStatus, setGstinStatus] = useState<GstinStatus | null>(null);
   const [gstinVerifiedAt, setGstinVerifiedAt] = useState<string | null>(null);
+  // Values the form filled in by itself from the GSTIN, so a GST search can
+  // replace them without asking (the user never typed them).
+  const [autoGstType, setAutoGstType] = useState<PartyGstType | "">("");
+  const [autoConstitution, setAutoConstitution] = useState<PartyConstitution | "">("");
+  const [gstinBlur, setGstinBlur] = useState(0);
   const [isMsme, setIsMsme] = useState(e0?.isMsme ?? false);
   const [udyamNumber, setUdyamNumber] = useState(e0?.udyamNumber ?? "");
   const [msmeCategory, setMsmeCategory] = useState<MsmeCategory | "">((e0?.msmeCategory as MsmeCategory) ?? "");
@@ -1362,44 +1369,44 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
       if (stateName) setState(stateName);
     }
     const derivedConstitution = constitutionFromPan(derivedPan);
-    if (derivedConstitution && !constitution) setConstitution(derivedConstitution);
-    if (derivedState && !gstType) setGstType("regular");
+    if (derivedConstitution && !constitution) {
+      setConstitution(derivedConstitution);
+      setAutoConstitution(derivedConstitution);
+    }
+    if (derivedState && !gstType) {
+      setGstType("regular");
+      setAutoGstType("regular");
+    }
   }
 
-  const lookupMutation = trpc.party.lookupGstin.useMutation({
-    onSuccess: (result) => {
-      if (!result.available) {
-        applyGstinDerived(result.derived.gstin);
-        toast.info(result.reason);
-        return;
-      }
-      const d = result.details;
-      applyGstinDerived(d.gstin);
-      if (d.legalName) setLegalName(d.legalName);
-      if (d.tradeName) setTradeName(d.tradeName);
-      if (!name.trim()) setName(d.tradeName || d.legalName || "");
-      if (d.billingAddress && !billingAddress) setBillingAddress(d.billingAddress);
-      if (d.city && !city) setCity(d.city);
-      if (d.pincode && !pincode) setPincode(d.pincode);
-      if (d.gstRegistrationType) setGstType(d.gstRegistrationType);
-      if (d.constitution) setConstitution(d.constitution);
-      setGstinStatus(d.gstinStatus);
-      setGstinVerifiedAt(result.verifiedAt);
-      if (d.gstinStatus && d.gstinStatus !== "active") {
-        toast.error(`This GSTIN is ${d.gstinStatus}`);
-      } else {
-        toast.success("GST details fetched");
-      }
-    },
-    onError: (err) => toast.error(err.message),
-  });
+  // A GST search fills empty fields; the ones that already hold a value come
+  // back through its "Use these details" panel and are applied when confirmed.
+  function applyGstinFill(patch: Partial<GstinFormValues>) {
+    if (patch.name !== undefined) setName(patch.name);
+    if (patch.legalName !== undefined) setLegalName(patch.legalName);
+    if (patch.tradeName !== undefined) setTradeName(patch.tradeName);
+    if (patch.billingAddress !== undefined) setBillingAddress(patch.billingAddress);
+    if (patch.city !== undefined) setCity(patch.city);
+    if (patch.state !== undefined) setState(patch.state);
+    if (patch.stateCode !== undefined) setStateCode(patch.stateCode);
+    if (patch.pincode !== undefined) setPincode(patch.pincode);
+    if (patch.gstType !== undefined) {
+      setGstType(patch.gstType);
+      setAutoGstType("");
+    }
+    if (patch.constitution !== undefined) {
+      setConstitution(patch.constitution);
+      setAutoConstitution("");
+    }
+  }
 
   // The save button shows a tick before the panel closes.
   const tick = useSaveTick();
   const createMutation = trpc.party.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (created) => {
       utils.party.list.invalidate();
       toast.success("Party created");
+      if (created.gstinCheck?.warning && created.gstinCheck.status !== "not_configured") toast.warning("GSTIN note", created.gstinCheck.warning);
       // The panel stays mounted: start the next party from a blank form, not
       // with this one's phone, addresses and credit terms.
       tick.finish(() => {
@@ -1413,10 +1420,11 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
   });
 
   const updateMutation = trpc.party.update.useMutation({
-    onSuccess: () => {
+    onSuccess: (updated) => {
       utils.party.list.invalidate();
       if (existing) utils.party.getById.invalidate({ id: existing.id });
       toast.success("Party updated");
+      if (updated.gstinCheck?.warning && updated.gstinCheck.status !== "not_configured") toast.warning("GSTIN note", updated.gstinCheck.warning);
       tick.finish(onClose);
     },
     onError: (err) => {
@@ -1455,6 +1463,9 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
     setConstitution("");
     setGstinStatus(null);
     setGstinVerifiedAt(null);
+    setAutoGstType("");
+    setAutoConstitution("");
+    setGstinBlur(0);
     setIsMsme(false);
     setUdyamNumber("");
     setMsmeCategory("");
@@ -1629,10 +1640,23 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
             placeholder="0.00"
           />
         </div>
-        <div className="flex items-start gap-2">
-          <div className="flex-1">
+        <GstinSearch
+          gstin={gstin}
+          initialGstin={e0?.gstin ?? ""}
+          values={{ name, legalName, tradeName, billingAddress, city, state, stateCode, pincode, gstType, constitution }}
+          auto={{ gstType: autoGstType, constitution: autoConstitution }}
+          blurSignal={gstinBlur}
+          shippingCount={extraShipping.length}
+          onFill={applyGstinFill}
+          onMeta={(m) => {
+            setGstinStatus(m.gstinStatus);
+            setGstinVerifiedAt(m.verifiedAt);
+          }}
+          onUseAsShipping={(entry) => setExtraShipping((list) => [...list, entry])}
+          input={
             <GstinInput
               value={gstin}
+              onBlur={() => setGstinBlur((n) => n + 1)}
               onChange={(value) => {
                 setGstin(value);
                 if (gstinStatus) {
@@ -1642,22 +1666,8 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
                 if (GSTIN_REGEX.test(value)) applyGstinDerived(value);
               }}
             />
-          </div>
-          <button
-            type="button"
-            className="btn-secondary mt-6"
-            onClick={() => lookupMutation.mutate({ gstin })}
-            disabled={!GSTIN_REGEX.test(gstin) || lookupMutation.isPending}
-            title="Fetch legal name, trade name, address and status from the GST system"
-          >
-            {lookupMutation.isPending ? <Spinner size="sm" /> : "Fetch details"}
-          </button>
-        </div>
-        {gstinStatus && (
-          <p className={cn("text-xs -mt-2", gstinStatus === "active" ? "text-green-600" : "text-red-600")}>
-            GSTIN status: {gstinStatus}
-          </p>
-        )}
+          }
+        />
 
         {warnings.length > 0 && (
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200" role="status">
