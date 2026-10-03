@@ -129,6 +129,8 @@ async function enterDocument(page: Page, m: GstMasters, doc: GstDoc, booked: Rec
   await expect(form.getByTestId("document-tax")).toHaveText(inr(doc.tax));
   await expect(form.getByTestId("document-total")).toHaveText(inr(doc.total));
   await expectNoHorizontalScroll(page, `new ${doc.kind} invoice`);
+  // The last document's toast must be gone, or the number below would be read from it.
+  await expect(toast(page, /^Invoice INV-\d+ created$/)).toHaveCount(0);
   await form.getByRole("button", { name: "Create Invoice" }).click();
   const created = toast(page, /^Invoice INV-\d+ created$/);
   await expect(created).toBeVisible();

@@ -2239,6 +2239,51 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
     ],
   },
   {
+    key: "2026-10-03-plans-p1-p5",
+    updates: [
+      {
+        // Built with unit and integration tests (real Postgres): the three paid
+        // plans, the migration of old ids with Forever Free organisations
+        // grandfathered, monthly and yearly prices, the admin Plans editor, the
+        // pricing page and sign-up picker without a free plan, and server and
+        // client enforcement of every flag that has a feature behind it
+        // (packages/shared/src/feature-gates.ts). Kept in progress with the
+        // Business line unticked: "approvals" is on the plan but no approval
+        // workflow exists yet. Not run on a device or against live Razorpay.
+        title: "P1. Plans & pricing: paid plans only",
+        status: "in_progress",
+        done: [
+          "Grandfather existing Forever Free organisations (decided: keep unlimited)",
+          "New plan ids: starter, growth, business (enum + migration)",
+          "Migrate tenants and plan_settings from forever_free/free/pro/business/enterprise",
+          "Starter limits and features (1 business, 3 users, no PDF branding)",
+          "Growth limits and features (3 businesses, 10 users, e-invoicing, warehouses, batches, bank rec, store, API, export)",
+          "Monthly and yearly prices (2 months free) in plan settings",
+          "All prices/limits editable in admin Plans",
+          "Remove free plan from pricing page and sign-up plan picker",
+          "Mark Growth as highlighted",
+          "Update plan-limit tests and docs",
+        ],
+      },
+      {
+        // The pricing page reads the admin plan catalogue; toggle, add-ons,
+        // trial call to action, FAQ and GST note are all on /pricing. Not yet
+        // looked at in a browser against the deployed site.
+        title: "P5. Pricing page update",
+        status: "in_progress",
+        done: [
+          "Plan cards from the admin plan catalogue",
+          "Monthly/yearly toggle",
+          "Add-ons section with prices",
+          "Trial call to action",
+          "FAQ (trial end, GST, cancel, add-ons)",
+          "GST note",
+          "Remove free-plan wording across the site and help centre",
+        ],
+      },
+    ],
+  },
+  {
     key: "2026-10-03-p2-trial",
     updates: [
       {

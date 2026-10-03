@@ -59,8 +59,8 @@ describe("starting roadmap", () => {
     expect(new Set(list.data.map((i) => i.title))).toEqual(new Set(ROADMAP_SEED.map((s) => s.title)));
     // Items built since the roadmap was written arrive already moved.
     expect(list.counts.done).toBe(3); // + old docs domains redirect (2026-10-03-old-docs-redirect)
-    expect(list.counts.in_progress).toBe(14); // + two-factor authentication (2026-10-02-2fa), CA access (2026-10-02-ca-access), HSN / SAC through Sandbox (2026-10-03-hsn-sandbox), Full Access Trial (2026-10-03-p2-trial)
-    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 17);
+    expect(list.counts.in_progress).toBe(16); // + plans P1 and pricing P5 (2026-10-03-plans-p1-p5), two-factor authentication (2026-10-02-2fa), CA access (2026-10-02-ca-access), HSN / SAC through Sandbox (2026-10-03-hsn-sandbox), Full Access Trial (2026-10-03-p2-trial)
+    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 19);
     expect(list.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
     expect(list.categories).toEqual(expect.arrayContaining(["Payroll", "Inventory", "GST", "Mobile", "Platform", "Accounting", "Banking"]));
     for (const item of list.data) {
@@ -134,7 +134,7 @@ describe("starting roadmap", () => {
     const before = await adminCaller().platform.roadmapList({ launchStage: "before_launch" });
     expect(before.data).toHaveLength(18);
     expect(before.data.every((i) => i.launchStage === "before_launch")).toBe(true);
-    expect(before.counts.planned).toBe(4); // 8 before CA access (2026-10-02-ca-access) moved to in_progress, then HSN / SAC through Sandbox (2026-10-03-hsn-sandbox) the old docs redirect (2026-10-03-old-docs-redirect) and the Full Access Trial (2026-10-03-p2-trial) moved on
+    expect(before.counts.planned).toBe(2); // 8 before CA access (2026-10-02-ca-access) moved to in_progress, then HSN / SAC through Sandbox (2026-10-03-hsn-sandbox) the old docs redirect (2026-10-03-old-docs-redirect) the Full Access Trial (2026-10-03-p2-trial), and plans P1 and pricing P5 (2026-10-03-plans-p1-p5) moved on
     expect(before.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
   });
 
