@@ -238,6 +238,7 @@ export async function truncateAllTables(): Promise<void> {
       businesses,
       -- Control schema
       billing_events,
+      hsn_sandbox_codes,
       billing_payments,
       billing_subscriptions,
       roadmap_items,

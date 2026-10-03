@@ -681,9 +681,11 @@ function AddItemModal({ open, onClose }: { open: boolean; onClose: () => void })
   // The save button shows a tick before the panel closes.
   const tick = useSaveTick();
   const createMutation = trpc.item.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (created) => {
       utils.item.list.invalidate();
       toast.success("Item created");
+      // Advisory only: the item is saved either way.
+      if (created?.hsnCheck?.warning) toast.warning("HSN / SAC note", created.hsnCheck.warning);
       // The panel stays mounted: the next item starts blank instead of
       // inheriting this one's barcode, stock, batches and variants.
       resetForm();
@@ -1250,10 +1252,12 @@ function EditItemModal({ itemId, onClose }: { itemId: string; onClose: () => voi
   // The save button shows a tick before the panel closes.
   const tick = useSaveTick();
   const updateMutation = trpc.item.update.useMutation({
-    onSuccess: () => {
+    onSuccess: (updated) => {
       utils.item.list.invalidate();
       utils.item.getById.invalidate({ id: itemId });
       toast.success("Item updated");
+      // Advisory only: the item is saved either way.
+      if (updated?.hsnCheck?.warning) toast.warning("HSN / SAC note", updated.hsnCheck.warning);
       tick.finish(onClose);
     },
     onError: (err) => {

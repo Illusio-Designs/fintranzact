@@ -4,7 +4,7 @@ E-invoice, e-way bill, GSTIN lookup, TDS/TCS and GST returns go through Sandbox.
 
 ## Architecture
 
-- `packages/api/src/lib/sandbox/` holds the gateway client (`client.ts`) and the adapters `e-invoice.ts`, `e-way-bill.ts` and `gst-returns.ts`, plus `tds.ts` (PAN and TAN lookups only).
+- `packages/api/src/lib/sandbox/` holds the gateway client (`client.ts`) and the adapters `e-invoice.ts`, `e-way-bill.ts` and `gst-returns.ts`, plus `tds.ts` (PAN and TAN lookups only) and `hsn.ts` (HSN / SAC lookup).
 - `lib/gov-provider.ts` is the provider switch. With `SANDBOX_API_KEY` / `SANDBOX_API_SECRET` set, `createIRPClient` and `createEWBClient` return Sandbox-backed clients that match the direct NIC client interface (`IRPClientLike`, `EWBClientLike`), so routers do not care which is active. Without keys the direct NIC client is used. `GOV_API_PROVIDER=direct` forces direct (rollback), `sandbox` forces Sandbox. Under `NODE_ENV=test` keys alone never select Sandbox; tests set `GOV_API_PROVIDER=sandbox`.
 - Each business still stores its own portal API login (username, password, GSTIN), encrypted. GST returns use a per-GSTIN session obtained with an OTP from the GST portal, cached in memory only.
 
@@ -31,6 +31,43 @@ CA checklist for TDS/TCS rules: [`TDS-CA-VERIFICATION.md`](TDS-CA-VERIFICATION.m
 - GST returns endpoint paths in `packages/api/src/lib/sandbox/gst-returns.ts` are from memory. Verify paths and request/response shapes on the test environment (`test-api.sandbox.co.in`) before use.
 - PAN and TAN lookup paths and response fields in `packages/api/src/lib/sandbox/tds.ts` (`TDS_API_PATHS`, `unwrapPan`, `unwrapTan`) are from memory; verify on the test environment. These calls are counted by the client meter against the plan and are not billed to customers.
 - Whether PAN verification needs consent/reason fields and whether name and date-of-birth matching are charged separately.
+- HSN / SAC lookup (`packages/api/src/lib/sandbox/hsn.ts`) is from memory; verify on the test environment. Every assumed item is marked `// VERIFY against Sandbox docs`:
+  - Path: `GET /gst/hsn-sac/{code}` (`HSN_API_PATHS.lookup`), API-token auth only.
+  - 404 means "code not found"; other 4xx are treated as a failed lookup.
+  - Response `data` as one object, a list of matches, or wrapped under `hsn` / `sac` / `result` / `details`.
+  - Code: `hsn_code` / `sac_code` / `code` / `hsn` / `sac` / `hsn_sac`. Description: `description` / `desc` / `description_of_goods` / `description_of_service` / `name`.
+  - Type: `type` / `kind` / `category` ("HSN", "SAC", "goods", "services"); without it, codes starting 99 are SAC.
+  - Rate: `gst_rate` / `rate` / `igst_rate` / `igst` / `tax_rate` (number or "18%").
+  - Dates: `effective_from` / `effective_date` / `from_date` / `start_date` and `effective_to` / `valid_till` / `to_date` / `end_date` (ISO or DD/MM/YYYY).
+  - Inactive: `active` / `is_active` boolean, `status` text (withdrawn, inactive, expired...), `withdrawn: true`, or an `effective_to` in the past; reason from `reason` / `remarks` / `withdrawn_reason` / `inactive_reason`.
+  - Whether HSN lookups are charged to the wallet or only count against the plan.
+
+## HSN / SAC verification
+
+When an item is saved with an HSN / SAC code (new, or changed), `lib/hsn-lookup.ts` looks the code up on Sandbox, only when Sandbox is the provider and its keys are in the environment. It never blocks the save: on a timeout (2.5 s), outage, 5xx or missing keys it uses the bundled CBIC list and reports `source: "bundled"` with `sandboxStatus` `unavailable` or `not_configured`. A code Sandbox does not list but the bundled list has returns the bundled answer with a warning (`sandboxStatus: "not_found"`). Codes the bundled list rejects are still refused as before; Sandbox adds information only (`hsnCheck` on `item.create` and `item.update`, plus extra fields on `hsn.validate`). Results are cached in memory (24 h found, 60 s not found or failed), concurrent lookups share one call, and a per-process guard caps calls at 60 a minute. Lookups are not billed to customers; they count against the plan through the client meter. Keys stay in the environment.
+
+### Resolver layers
+
+`resolveHsn` answers from three layers, in order:
+
+1. **Live Sandbox** (`source: "sandbox"`): the lookup above.
+2. **Refreshed table** (`source: "refreshed"`): the control-DB table `hsn_sandbox_codes`, filled by the daily refresh. Used only when Sandbox is down, timed out, rate-guarded or not configured, and only when the row is under 30 days old (`HSN_REFRESHED_MAX_AGE_MS`). A Sandbox "not found" never falls through to it. `sandboxStatus` still says why the live check did not answer (`unavailable` or `not_configured`).
+3. **Bundled CBIC list** (`source: "bundled"`): always available; also the only list that decides whether a code is accepted on an item save.
+
+The details card in the web item form shows the source (Sandbox description, rate and dates with a "Verified with Sandbox" label, or "From the official CBIC list" with a muted "Live check unavailable" line) and the advisory `warning` in amber. After a save, `hsnCheck.warning` is shown as a toast on web and an alert on mobile. Nothing here blocks a save.
+
+### Daily refresh
+
+Sandbox is assumed to have no bulk HSN list endpoint, so `lib/hsn-refresh.ts` (`refreshHsnCodes`, started from `server.ts`, checked hourly, runs when the last run is 23 h old) re-verifies the codes items actually use:
+
+- Collects the distinct codes on items across active tenants, takes up to `HSN_REFRESH_BATCH` of them (never checked first, then oldest check first; a code checked in the last 20 h is skipped), looks each up live through the same resolver and adapter (`liveOnly`, so the refreshed layer is not consulted) paced at about 45 a minute inside the resolver's 60 a minute guard, and upserts the answer into `hsn_sandbox_codes` (code, kind, description, rate, active, inactive_reason, effective_from/to, status `ok` or `not_found`, source, checked_at).
+- Stops early after 3 failures in a row. Never throws out of the job; idempotent; logs counts only (never codes, keys or answers).
+- Skipped silently when Sandbox is not the provider or has no keys, `HSN_SANDBOX_LOOKUP=off`, or `HSN_REFRESH=off`.
+- When a code Sandbox calls withdrawn or inactive is still on items, one platform notice is written as a `billing_events` row of type `sandbox.hsn_withdrawn_in_use` (only when the set of codes changes), and the counts and first codes are kept in `system_config` key `hsn_refresh`, returned as `hsnRefresh` by `platform.sandboxQuota` (platform admins). Customers' items are never edited; they see the advisory warning when they save.
+
+Knobs: `HSN_SANDBOX_LOOKUP` (on|off), `HSN_LOOKUP_TIMEOUT_MS`, `HSN_REFRESH` (on|off, default on, effective only with Sandbox configured), `HSN_REFRESH_BATCH` (default 200, max 1000). The migration is `0055_hsn_sandbox_codes` (unified) and `0018_hsn_sandbox_codes` (control).
+
+The VERIFY list above is unchanged: the refresh reuses the same unverified endpoint and field names, so it must be re-checked together with them.
 
 ## TDS filing and certificates (not built)
 

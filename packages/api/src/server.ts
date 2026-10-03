@@ -30,6 +30,7 @@ import { calcLineItem, calcInvoiceTotals, money, parseCopies, isIntraStateSupply
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
 import { startTdsReminderScheduler, stopTdsReminderScheduler } from "./lib/tds-reminder-scheduler.js";
+import { startHsnRefreshScheduler, stopHsnRefreshScheduler } from "./lib/hsn-refresh.js";
 import { seedPlatformAdmin } from "./lib/platform-admin.js";
 import { logger } from "./lib/logger.js";
 import { pdfBrandingHidden, storeServesTenant } from "./lib/plan-limits.js";
@@ -2454,6 +2455,7 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   logger.info({ port: info.port }, `  tRPC endpoint: http://localhost:${info.port}/api/trpc`);
   startRecurringScheduler();
   startTdsReminderScheduler();
+  startHsnRefreshScheduler();
   // Create the platform admin from PLATFORM_ADMIN_EMAIL / _PASSWORD if set.
   seedPlatformAdmin().catch((err) => logger.error({ err }, "Could not create the platform admin account"));
 });
@@ -2463,6 +2465,7 @@ function shutdown(signal: string) {
   logger.info({ signal }, `Shutting down (${signal})...`);
   stopRecurringScheduler();
   stopTdsReminderScheduler();
+  stopHsnRefreshScheduler();
   server.close(() => {
     logger.info("HTTP server closed");
     process.exit(0);

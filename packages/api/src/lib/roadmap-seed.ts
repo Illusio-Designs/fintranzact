@@ -2192,6 +2192,34 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-03-hsn-sandbox",
+    updates: [
+      {
+        // All five lines are built in code with unit tests (mocked Sandbox
+        // response, faked data layer): the Sandbox lookup adapter, the
+        // fallback to the bundled CBIC list, the details card (Sandbox
+        // description, rate, dates, "Verified with Sandbox", amber warnings,
+        // save-time warning toast / alert), and a daily refresh of the codes
+        // items use into a control-DB table that the resolver reads as a
+        // middle layer. Sandbox has no known bulk list, so "refresh the
+        // bundled list" is done as a re-check of codes in use. Kept in
+        // progress, not done: the Sandbox endpoint and response fields are
+        // unverified (see docs/SANDBOX-INTEGRATION.md), and the integration
+        // tests (real Postgres) and the web and mobile screens had not been run
+        // on a database or a device when this was written.
+        title: "HSN / SAC verification through Sandbox.co.in",
+        status: "in_progress",
+        done: [
+          "HSN lookup through the Sandbox provider adapter",
+          "Fall back to the bundled CBIC list when Sandbox is unavailable",
+          "Sandbox description in the HSN details card",
+          "Periodic refresh of the bundled list",
+          "Tests with a mocked Sandbox response",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

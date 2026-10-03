@@ -162,7 +162,7 @@ resp = httpx.get(
         { name: "unitVariants", type: "array", required: false, description: "Alt units for `alt_units` mode. Each: `{unit, conversionFactor, salePrice, purchasePrice?}`" },
       ],
       output: {
-        description: "Created item object plus a `variants` array (empty unless `itemMode` is `variants`).",
+        description: "Created item object plus a `variants` array (empty unless `itemMode` is `variants`) and `hsnCheck`: the advisory HSN / SAC check, or `null` when no `hsn` was given. `hsnCheck` is `{ code, source, sandboxStatus, valid, description, warning? }` with `source` `sandbox`, `refreshed` or `bundled`.",
         example: {
           id: "item-uuid",
           businessId: "biz-uuid",
@@ -179,6 +179,7 @@ resp = httpx.get(
           stockGroupId: "group-uuid-electronics",
           category: "Electronics",
           variants: [],
+          hsnCheck: { code: "84159000", source: "bundled", sandboxStatus: "not_configured", valid: true, description: "Parts of air conditioning machines" },
           createdAt: "2024-03-16T10:30:00.000Z",
         },
       },
@@ -244,6 +245,7 @@ resp = httpx.post(
         "Variant stock lives on the variant row, not the parent item. The parent item's `stockQuantity` is unused for `variants` mode items.",
         "Opening `stockQuantity` is recorded as an opening-stock movement in the default warehouse rather than written directly.",
         "BAD_REQUEST \"The same barcode is used twice on this item\" when the item and its variants repeat a barcode; a barcode already used elsewhere in the business is also rejected.",
+        "`hsnCheck` is additive and advisory: it never blocks the save and the call never waits more than about 2.5 s for it. `warning` appears when Sandbox says the code is withdrawn or does not list it; show it, do not treat it as an error. A code the bundled CBIC list rejects is still refused with BAD_REQUEST, as before.",
         "Requires `Item:create` permission. An audit log entry (`item.create`) is written.",
       ],
       relatedEndpoints: ["item-lookup-by-code", "item-update"],
@@ -324,7 +326,7 @@ resp = httpx.post(
         { name: "data.*", type: "various", required: false, description: "Any other create field (`unit`, `itemType`, `itemMode`, `taxInclusive`, `description`, `unitVariants`, `variantAttributes`, …)." },
       ],
       output: {
-        description: "Updated item object.",
+        description: "Updated item object plus `hsnCheck` (same shape as in `item.create`), `null` unless `data.hsn` was given and changed.",
         example: { id: "item-uuid", name: "Premium Widget B", salePrice: "1499.00" },
       },
       codeExamples: {
@@ -347,6 +349,7 @@ resp = httpx.post(
       },
       gotchas: [
         "Requires `Item:update` permission. NOT_FOUND \"Item not found\" for unknown or soft-deleted items.",
+        "`hsnCheck` is only computed when `data.hsn` changes the stored code; it is advisory and never blocks the update.",
         "Changing `stockQuantity` here creates an adjustment movement for the difference; prefer `item.adjustStock` when you want a reason recorded.",
         "Variant rows are not touched — use `item.updateVariant` for variant prices, barcodes and MRP.",
         "An audit log entry (`item.update`) is written.",
