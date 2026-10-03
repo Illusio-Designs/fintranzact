@@ -27,3 +27,4 @@ export * from "./access-log.js";
 export * from "./client-switcher.js";
 export * from "./gstin.js";
 export * from "./gstin-fill.js";
+export * from "./gst-filing-wizard.js";

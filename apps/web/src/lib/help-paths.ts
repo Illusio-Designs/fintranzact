@@ -98,6 +98,7 @@ export const HELP_NAV: HelpNavSection[] = [
       { label: "Business Reports", slug: "reports" },
       { label: "GST Compliance", slug: "gst" },
       { label: "GSTR-1 Filing", slug: "gst/gstr1" },
+      { label: "File GSTR-1 and GSTR-3B from Fintranzact", slug: "gst/file-gstr1-and-gstr3b" },
       { label: "E-Invoicing", slug: "gst/e-invoicing" },
       { label: "E-Way Bills", slug: "gst/eway-bills" },
       { label: "GSTR-2B Reconciliation", slug: "gst/gstr2b" },
