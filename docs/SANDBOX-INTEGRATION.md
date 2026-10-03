@@ -4,7 +4,7 @@ E-invoice, e-way bill, GSTIN lookup, TDS/TCS and GST returns go through Sandbox.
 
 ## Architecture
 
-- `packages/api/src/lib/sandbox/` holds the gateway client (`client.ts`) and the adapters `e-invoice.ts`, `e-way-bill.ts` and `gst-returns.ts`, plus `tds.ts` (PAN and TAN lookups only).
+- `packages/api/src/lib/sandbox/` holds the gateway client (`client.ts`) and the adapters `e-invoice.ts`, `e-way-bill.ts` and `gst-returns.ts`, plus `tds.ts` (PAN and TAN lookups only) and `hsn.ts` (HSN / SAC lookup).
 - `lib/gov-provider.ts` is the provider switch. With `SANDBOX_API_KEY` / `SANDBOX_API_SECRET` set, `createIRPClient` and `createEWBClient` return Sandbox-backed clients that match the direct NIC client interface (`IRPClientLike`, `EWBClientLike`), so routers do not care which is active. Without keys the direct NIC client is used. `GOV_API_PROVIDER=direct` forces direct (rollback), `sandbox` forces Sandbox. Under `NODE_ENV=test` keys alone never select Sandbox; tests set `GOV_API_PROVIDER=sandbox`.
 - Each business still stores its own portal API login (username, password, GSTIN), encrypted. GST returns use a per-GSTIN session obtained with an OTP from the GST portal, cached in memory only.
 
@@ -31,6 +31,20 @@ CA checklist for TDS/TCS rules: [`TDS-CA-VERIFICATION.md`](TDS-CA-VERIFICATION.m
 - GST returns endpoint paths in `packages/api/src/lib/sandbox/gst-returns.ts` are from memory. Verify paths and request/response shapes on the test environment (`test-api.sandbox.co.in`) before use.
 - PAN and TAN lookup paths and response fields in `packages/api/src/lib/sandbox/tds.ts` (`TDS_API_PATHS`, `unwrapPan`, `unwrapTan`) are from memory; verify on the test environment. These calls are counted by the client meter against the plan and are not billed to customers.
 - Whether PAN verification needs consent/reason fields and whether name and date-of-birth matching are charged separately.
+- HSN / SAC lookup (`packages/api/src/lib/sandbox/hsn.ts`) is from memory; verify on the test environment. Every assumed item is marked `// VERIFY against Sandbox docs`:
+  - Path: `GET /gst/hsn-sac/{code}` (`HSN_API_PATHS.lookup`), API-token auth only.
+  - 404 means "code not found"; other 4xx are treated as a failed lookup.
+  - Response `data` as one object, a list of matches, or wrapped under `hsn` / `sac` / `result` / `details`.
+  - Code: `hsn_code` / `sac_code` / `code` / `hsn` / `sac` / `hsn_sac`. Description: `description` / `desc` / `description_of_goods` / `description_of_service` / `name`.
+  - Type: `type` / `kind` / `category` ("HSN", "SAC", "goods", "services"); without it, codes starting 99 are SAC.
+  - Rate: `gst_rate` / `rate` / `igst_rate` / `igst` / `tax_rate` (number or "18%").
+  - Dates: `effective_from` / `effective_date` / `from_date` / `start_date` and `effective_to` / `valid_till` / `to_date` / `end_date` (ISO or DD/MM/YYYY).
+  - Inactive: `active` / `is_active` boolean, `status` text (withdrawn, inactive, expired...), `withdrawn: true`, or an `effective_to` in the past; reason from `reason` / `remarks` / `withdrawn_reason` / `inactive_reason`.
+  - Whether HSN lookups are charged to the wallet or only count against the plan.
+
+## HSN / SAC verification
+
+When an item is saved with an HSN / SAC code (new, or changed), `lib/hsn-lookup.ts` looks the code up on Sandbox, only when Sandbox is the provider and its keys are in the environment. It never blocks the save: on a timeout (2.5 s), outage, 5xx or missing keys it uses the bundled CBIC list and reports `source: "bundled"` with `sandboxStatus` `unavailable` or `not_configured`. A code Sandbox does not list but the bundled list has returns the bundled answer with a warning (`sandboxStatus: "not_found"`). Codes the bundled list rejects are still refused as before; Sandbox adds information only (`hsnCheck` on `item.create` and `item.update`, plus extra fields on `hsn.validate`). Results are cached in memory (24 h found, 60 s not found or failed), concurrent lookups share one call, and a per-process guard caps calls at 60 a minute. Lookups are not billed to customers; they count against the plan through the client meter. `HSN_SANDBOX_LOOKUP=off` and `HSN_LOOKUP_TIMEOUT_MS` are the only knobs; keys stay in the environment.
 
 ## TDS filing and certificates (not built)
 

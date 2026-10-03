@@ -13,6 +13,7 @@ import { applyStockAdjustment } from "./stock.js";
 import { findOrCreateBatch } from "../lib/batches.js";
 import { groupSubtreeSql, resolveItemGroup } from "../lib/stock-groups.js";
 import { hsnProblem } from "../lib/hsn-data.js";
+import { checkItemHsn } from "../lib/hsn-lookup.js";
 import { itemListOrder, itemSortSchema } from "../lib/item-list-order.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -240,7 +241,7 @@ export const itemRouter = router({
     itemData.trackExpiry = !!itemData.trackBatches && !!itemData.trackExpiry;
     assertHsn(itemData.hsn);
 
-    return ctx.db.transaction(async (tx) => {
+    const created = await ctx.db.transaction(async (tx) => {
       const group = await resolveItemGroup(tx, ctx.businessId, { stockGroupId, category });
       // A code scans to exactly one item, variant or extra code.
       const newCodes = [itemData.barcode, ...(initialVariants ?? []).map((v) => v.barcode)]
@@ -322,6 +323,10 @@ export const itemRouter = router({
 
       return { ...item, variants: [] as typeof itemVariants.$inferSelect[] };
     });
+    // Advisory Sandbox check after the commit, so a slow or down Sandbox can
+    // never hold the transaction or fail the save (2.5 s cap, never throws).
+    const hsnCheck = await checkItemHsn(itemData.hsn);
+    return { ...created, hsnCheck };
   }),
 
   // Switch the base unit of an item — converts stock, moves old base to variants
@@ -445,6 +450,7 @@ export const itemRouter = router({
       // endpoint, which is deferred per FIXES.md.
       const { stockQuantity, stockGroupId, category, openingBatch: _openingBatch, ...data } = input.data;
       const adjustmentIds: string[] = [];
+      let hsnToCheck: string | null = null;
       const item = await ctx.db.transaction(async (tx) => {
         const [before] = await tx.select({ stockQuantity: items.stockQuantity, trackBatches: items.trackBatches, hsn: items.hsn })
           .from(items)
@@ -460,7 +466,10 @@ export const itemRouter = router({
         }
         // Only a changed code is checked, so items saved before HSN checks
         // existed stay editable.
-        if (data.hsn !== undefined && data.hsn.trim() !== (before.hsn ?? "").trim()) assertHsn(data.hsn);
+        if (data.hsn !== undefined && data.hsn.trim() !== (before.hsn ?? "").trim()) {
+          assertHsn(data.hsn);
+          hsnToCheck = data.hsn.trim();
+        }
 
         if (stockQuantity !== undefined) {
           await setStockTotal(tx, {
@@ -503,7 +512,9 @@ export const itemRouter = router({
         ipAddress: ctx.ipAddress,
       });
 
-      return item;
+      // Advisory Sandbox check for a changed code, after the commit.
+      const hsnCheck = await checkItemHsn(hsnToCheck);
+      return { ...item, hsnCheck };
     }),
 
   renameUnit: adminProcedure

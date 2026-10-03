@@ -76,6 +76,8 @@ The web and store frontends are deployed by Vercel's Git integration (see `apps/
 | `SANDBOX_API_SECRET` | No | Sandbox.co.in API secret that pairs with the key (server-side only) | |
 | `SANDBOX_MONTHLY_QUOTA` | No | Calls per month included in your Sandbox plan. A deployment-wide counter alerts at 80% and 100%. Unset = no quota alerts | `10000` |
 | `GOV_API_PROVIDER` | No | `direct` forces the direct NIC client even when Sandbox keys are set (rollback switch); `sandbox` forces Sandbox. Unset = Sandbox when `SANDBOX_API_KEY` is set | `direct` |
+| `HSN_SANDBOX_LOOKUP` | No | `off` stops HSN / SAC lookups on Sandbox (the bundled CBIC list is used alone). Default `on`; lookups only run when Sandbox is the provider and its keys are set | `on` |
+| `HSN_LOOKUP_TIMEOUT_MS` | No | Longest an HSN lookup waits for Sandbox before using the bundled list. Default `2500`, at most `10000` (item saves are always capped at 2500) | `2500` |
 | `GOV_RATE_E_INVOICE_PAISE` | No | Price per successfully generated e-invoice, in paise, before GST. Default `200` (₹2) | `200` |
 | `GOV_RATE_E_WAY_BILL_PAISE` | No | Price per e-way bill, in paise, before GST. Default `200` | `200` |
 | `GOV_RATE_GSTR1_PAISE` | No | Price per GSTR-1 filing, in paise, before GST. Default `0` | `0` |

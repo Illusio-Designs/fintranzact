@@ -110,6 +110,8 @@ export interface SandboxRequestOptions {
   headers?: Record<string, string>;
   /** Overrides `authorization` — used for portal-session calls. */
   authToken?: string;
+  /** Per-call timeout; defaults to the client's configured timeout. */
+  timeoutMs?: number;
 }
 
 export interface SandboxEnvelope<T> {
@@ -291,7 +293,7 @@ export class SandboxClient {
         method,
         headers,
         body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-        signal: AbortSignal.timeout(this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+        signal: AbortSignal.timeout(opts.timeoutMs ?? this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS),
       });
     } catch (err) {
       const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
