@@ -242,6 +242,11 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.extendTrial
+      - platform.grantTrial
+      - platform.endTrial
+      - platform.saveTrialSettings
+      - platform.trialSettings
       - platform.resetTwoFactor
       - platform.securityEvents
       - platform.plans
@@ -632,6 +637,11 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.extendTrial
+      - platform.grantTrial
+      - platform.endTrial
+      - platform.saveTrialSettings
+      - platform.trialSettings
       - platform.resetTwoFactor
       - platform.securityEvents
       - platform.plans
@@ -941,6 +951,11 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.extendTrial
+      - platform.grantTrial
+      - platform.endTrial
+      - platform.saveTrialSettings
+      - platform.trialSettings
       - platform.resetTwoFactor
       - platform.securityEvents
       - platform.plans

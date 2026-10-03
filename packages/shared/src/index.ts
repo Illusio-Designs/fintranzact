@@ -11,6 +11,7 @@ export * from "./plans.js";
 export * from "./plan-migration.js";
 export * from "./billing.js";
 export * from "./entitlements.js";
+export * from "./trial.js";
 export * from "./partners.js";
 export * from "./gst-uqc.js";
 export * from "./roadmap.js";

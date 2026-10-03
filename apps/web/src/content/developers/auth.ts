@@ -57,7 +57,8 @@ data = resp.json()["result"]["data"]["json"]
 session_token = data["sessionToken"]`,
       },
       gotchas: [
-        "A new organization starts a 14-day free trial on the chosen plan (`tenants.trial_ends_at` is now + 14 days): full access until it ends, then read-only until a plan is bought. There is no free plan.",
+        "A new organization starts a Full Access Trial on the chosen plan, in the same transaction as the organization (`tenants.trial_started_at`, `trial_ends_at`, `trial_source`): Business-level access plus every add-on (with caps) until it ends, then read-only until a plan is bought. It is 14 days by default (editable by a platform admin) and 30 days when `referralCode` belongs to an approved partner. There is no free plan and no card is needed.",
+        "One trial per business: when a trial was already used for the same email (case, `+tag` and Gmail dots ignored), the account is still created but gets no trial: it is read-only until a plan is bought, and `billing.status.trialMessage` says so without naming anyone. Only salted hashes of the checked values are stored.",
         "Returns BAD_REQUEST \"The free plan has been removed. Choose Starter, Growth or Business.\" when `plan` is a removed plan id.",
         "Returns CONFLICT (409) if the email is already registered.",
         "Returns BAD_REQUEST \"Turnstile verification required\" when Turnstile is enabled and no token is sent, and FORBIDDEN when the token fails verification.",

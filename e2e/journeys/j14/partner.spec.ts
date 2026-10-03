@@ -147,6 +147,10 @@ test.describe("J14 partner", () => {
     const owner = await userByEmail(ownerEmail);
     const [membership] = await membershipsOf(owner!.id);
     expect(membership).toMatchObject({ role: "owner", plan: "growth" });
+    // A partner referral gets the 30-day partner trial (P2), not the standard 14 days.
+    const partnerTrialDays = (membership.trial_ends_at!.getTime() - Date.now()) / 86_400_000;
+    expect(partnerTrialDays).toBeGreaterThan(29.9);
+    expect(partnerTrialDays).toBeLessThanOrEqual(30);
     expect(await tenantsReferredBy(approved!.id)).toEqual([{ id: membership.tenant_id, name: membership.tenant_name, plan: "growth" }]);
     await newcomer.close();
 

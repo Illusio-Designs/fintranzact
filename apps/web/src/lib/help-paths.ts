@@ -112,6 +112,7 @@ export const HELP_NAV: HelpNavSection[] = [
       { label: "Settings", slug: "settings" },
       { label: "Backup & Restore", slug: "settings/backup-restore" },
       { label: "Plans & Billing", slug: "settings/plans" },
+      { label: "Your free trial: what you get, reminders and what happens at the end", slug: "settings/free-trial" },
       { label: "Two-factor authentication: set up, backup codes, trusted devices", slug: "settings/two-factor-authentication" },
       { label: "Team & Roles", slug: "team" },
       { label: "Invitations", slug: "team/invitations" },

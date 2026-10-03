@@ -5,7 +5,7 @@ ungated-exempt = public/protected base AND allowlisted (auth, billing, platform 
 inline-guarded = public/protected base, but the router calls assertWritable itself (INLINE_WRITE_GUARDED);
 ungated = public/protected base with no check at all: must be empty of business-data writes.
 
-mutations: 266 (gated 208, exempt 7, ungated-exempt 48, inline-guarded 3, ungated 0)
+mutations: 270 (gated 208, exempt 7, ungated-exempt 52, inline-guarded 3, ungated 0)
 
 | procedure | base | status |
 |---|---|---|
@@ -174,6 +174,9 @@ mutations: 266 (gated 208, exempt 7, ungated-exempt 48, inline-guarded 3, ungate
 | period.unlockGstMonth | authorized | gated |
 | platform.closeGovUsageMonth | protected | ungated-exempt |
 | platform.deletePayout | protected | ungated-exempt |
+| platform.endTrial | protected | ungated-exempt |
+| platform.extendTrial | protected | ungated-exempt |
+| platform.grantTrial | protected | ungated-exempt |
 | platform.recordPayout | protected | ungated-exempt |
 | platform.resetPlan | protected | ungated-exempt |
 | platform.resetTwoFactor | protected | ungated-exempt |
@@ -182,6 +185,7 @@ mutations: 266 (gated 208, exempt 7, ungated-exempt 48, inline-guarded 3, ungate
 | platform.roadmapReorder | protected | ungated-exempt |
 | platform.roadmapUpdate | protected | ungated-exempt |
 | platform.savePlan | protected | ungated-exempt |
+| platform.saveTrialSettings | protected | ungated-exempt |
 | platform.setPlan | protected | ungated-exempt |
 | platform.setTrial | protected | ungated-exempt |
 | platform.updatePartner | protected | ungated-exempt |

@@ -1103,6 +1103,19 @@ export interface BillingStatus {
   message: string | null;
   trialEndsAt: string | null;
   trialDaysLeft: number | null;
+  /** The Full Access Trial: window, source and the add-on caps while it runs (additive). */
+  trial?: {
+    active: boolean;
+    ended: boolean;
+    startedAt: string | null;
+    endsAt: string | null;
+    daysLeft: number;
+    source: "signup" | "partner" | "admin" | "none" | null;
+    totalDays: number | null;
+    caps: { aiQuestions: number; payrollEmployees: number; storePro: true } | null;
+  };
+  trialMessage?: string | null;
+  effectivePlan?: string;
   graceUntil: string | null;
   addons: string[];
   upgradePath: string;

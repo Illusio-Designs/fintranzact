@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import { trialBannerFor } from "@fintranzact/shared";
 
 export interface BillingStatusLike {
   state: string;
@@ -6,6 +7,9 @@ export interface BillingStatusLike {
   reason: string | null;
   message: string | null;
   trialDaysLeft: number | null;
+  /** The Full Access Trial block from billing.status. */
+  trial?: { active: boolean; daysLeft: number; source: string | null; totalDays: number | null } | null;
+  trialMessage?: string | null;
   graceUntil: Date | string | null;
   canManageBilling: boolean;
 }
@@ -22,9 +26,6 @@ export interface BannerSpec {
   cta: string | null;
   dismissible: boolean;
 }
-
-/** A trial notice only appears in the last week. */
-export const TRIAL_BANNER_DAYS = 7;
 
 const READ_ONLY_LEAD: Record<string, string> = {
   read_only_trial_expired: "Your trial has ended.",
@@ -55,6 +56,23 @@ export function bannerFor(
     };
   }
 
+  // Full Access Trial: countdown while it runs, "Trial ended: read-only" after.
+  if (status.state === "trialing" || status.state === "trial_expired") {
+    const spec = trialBannerFor(
+      { state: status.state, readOnly: status.readOnly, trial: status.trial, trialMessage: status.trialMessage, canManageBilling: owner },
+      { today, dismissedDay: opts.dismissedDay },
+    );
+    if (!spec) return null;
+    return {
+      kind: spec.kind === "trial" ? "trial" : "read_only",
+      tone: spec.tone === "calm" ? "info" : spec.tone,
+      title: spec.title,
+      text: spec.text,
+      cta: spec.cta,
+      dismissible: spec.dismissible,
+    };
+  }
+
   if (status.readOnly) {
     return {
       kind: "read_only",
@@ -80,19 +98,6 @@ export function bannerFor(
       text: `Your account becomes read-only ${when} unless the payment goes through.${owner ? "" : " Ask your organisation owner to update the payment."}`,
       cta: owner ? "Update payment" : null,
       dismissible: false,
-    };
-  }
-
-  if (status.state === "trialing" && status.trialDaysLeft !== null && status.trialDaysLeft <= TRIAL_BANNER_DAYS) {
-    if (opts.dismissedDay === today) return null;
-    const left = status.trialDaysLeft;
-    return {
-      kind: "trial",
-      tone: "info",
-      title: left <= 0 ? "Your trial ends today." : `${left} day${left === 1 ? "" : "s"} left in your trial.`,
-      text: `Choose a plan to keep creating and editing.${owner ? "" : " Ask your organisation owner."}`,
-      cta: owner ? "Choose a plan" : null,
-      dismissible: true,
     };
   }
 

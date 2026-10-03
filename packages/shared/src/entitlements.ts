@@ -26,6 +26,13 @@
  */
 
 import { ADDON_IDS, addonById, type AddonId, type SubscriptionStatus } from "./billing.js";
+import {
+  DEFAULT_TRIAL_SETTINGS,
+  isTrialSource,
+  trialDaysLeftAt,
+  type TrialCaps,
+  type TrialInfo,
+} from "./trial.js";
 
 export type EntitlementReason =
   | "read_only_halted"
@@ -63,7 +70,7 @@ export const READ_ONLY_REASON_MESSAGES: Record<EntitlementReason, string> = {
   read_only_halted:
     "Your last payment did not go through. Choose a plan to keep creating and editing — you can still view, search, download PDFs and export your data.",
   read_only_trial_expired:
-    "Your trial has ended. Choose a plan to keep creating and editing — you can still view, search, download PDFs and export your data.",
+    "Your trial has ended. Choose a plan to continue. You can still view, search, download PDFs and export your data.",
   read_only_subscription_ended:
     "Your plan has ended. Choose a plan to keep creating and editing — you can still view, search, download PDFs and export your data.",
   plan_limit: "You have reached a limit on your plan. Upgrade to continue.",
@@ -164,6 +171,12 @@ export interface AccessInput {
   plan: string;
   tenantStatus: "active" | "suspended" | "deleted" | string;
   trialEndsAt: Date | null;
+  /** When the trial began (tenants.trial_started_at); null for rows from before P2. */
+  trialStartedAt?: Date | null;
+  /** How the trial started (tenants.trial_source): signup, partner, admin or none. */
+  trialSource?: string | null;
+  /** The add-on caps in force during a trial (system_config trial.caps); defaults when omitted. */
+  trialCaps?: TrialCaps;
   /** Permanent full access (tenants.access_grandfathered); beats trial, payment and read-only. */
   accessGrandfathered?: boolean;
   planSubscription: AccessPlanSubscription | null;
@@ -199,6 +212,8 @@ export interface Access {
   trialEndsAt: Date | null;
   /** Whole days left, rounded up; null unless trialing. */
   trialDaysLeft: number | null;
+  /** The Full Access Trial: window, source, caps. Additive; see TrialInfo. */
+  trial: TrialInfo;
   graceUntil: Date | null;
   /** Add-ons the organisation may use right now (AI Plus also grants AI Assistant). */
   addons: Record<AddonId, boolean>;
@@ -221,11 +236,26 @@ export function deriveAccess(input: AccessInput): Access {
   const trialEndsAt = input.trialEndsAt;
   const base = { trialEndsAt, trialDaysLeft: null as number | null, graceUntil: sub?.graceUntil ?? null };
 
+  const startedAt = input.trialStartedAt ?? null;
+  const source = isTrialSource(input.trialSource) ? input.trialSource : null;
+  const trialInfo = (active: boolean, ended: boolean): TrialInfo => ({
+    active,
+    ended,
+    startedAt,
+    endsAt: trialEndsAt,
+    daysLeft: active ? trialDaysLeftAt(trialEndsAt, now) : 0,
+    source,
+    caps: active ? { ...(input.trialCaps ?? DEFAULT_TRIAL_SETTINGS.caps), storePro: true } : null,
+    totalDays:
+      startedAt && trialEndsAt ? Math.max(0, Math.round((trialEndsAt.getTime() - startedAt.getTime()) / DAY_MS)) : null,
+  });
+
   const blocked = (state: AccessState, reason: EntitlementReason): Access => ({
     state,
     readOnly: true,
     reason,
     ...base,
+    trial: trialInfo(false, false),
     addons: emptyAddons(),
   });
 
@@ -266,6 +296,13 @@ export function deriveAccess(input: AccessInput): Access {
   }
 
   const addons = emptyAddons();
+  if (state === "trialing") {
+    // A Full Access Trial unlocks every add-on (AI Plus is the bigger tier of
+    // the same add-on, so the trial grants AI Assistant) with caps in trial.caps.
+    addons.ai_assistant = true;
+    addons.payroll = true;
+    addons.store_pro = true;
+  }
   if (!readOnly) {
     for (const a of input.addons) {
       if (!(ADDON_IDS as readonly string[]).includes(a.addon)) continue;
@@ -275,5 +312,6 @@ export function deriveAccess(input: AccessInput): Access {
     if (addons.ai_plus) addons.ai_assistant = true;
   }
 
-  return { state, readOnly, reason, ...base, trialDaysLeft, addons };
+  const trial = trialInfo(state === "trialing", state === "trial_expired");
+  return { state, readOnly, reason, ...base, trialDaysLeft, trial, addons };
 }

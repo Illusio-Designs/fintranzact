@@ -1,3 +1,4 @@
+import { claimGstinForTenant } from "../lib/trial-claims.js";
 import { eq, and, sql, desc, gte, lte, inArray, count, getTableColumns } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -508,6 +509,10 @@ export const businessRouter = router({
       return biz;
     });
 
+    // One trial per business: the first organisation to save a GSTIN claims it
+    // (lib/trial-claims.ts). Never fails the save.
+    if (input.gstin) await claimGstinForTenant(ctx.tenantId!, input.gstin);
+
     logAudit(ctx.db, {
       businessId: biz.id,
       userId: ctx.user.id,
@@ -574,6 +579,8 @@ export const businessRouter = router({
         eWayBillUsername,
         eWayBillPassword,
       });
+
+      if (input.data.gstin) await claimGstinForTenant(ctx.tenantId!, input.data.gstin);
 
       logAudit(ctx.db, {
         businessId: biz.id,

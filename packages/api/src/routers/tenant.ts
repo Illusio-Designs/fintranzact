@@ -15,6 +15,7 @@ import { planIdSchema, TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS, ACCES
 import { emailService } from "../lib/email.js";
 import { getCatalogPlan } from "../lib/plan-catalog.js";
 import { newOrganisationPlanFields } from "../lib/signup-plan.js";
+import { decideNewOrgTrial, finishNewOrgTrial } from "../lib/trial.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
 import { effectiveOwnerPlan, enforceTeamMemberLimit, countCaSlots, enforceOrgCreationLimit, assertOwnedOrgsWritable, getLimits } from "../lib/plan-limits.js";
 import { checkInviteRules, checkRoleChangeRules, countsTowardTeamLimit, normalizeInviteEmail } from "../lib/invite-rules.js";
@@ -222,6 +223,8 @@ export const tenantRouter = router({
       let tenantId: string;
       try {
         tenantId = await controlDb.transaction(async (tx) => {
+          // Full Access Trial, unless one was already used for this email (lib/trial.ts).
+          const trial = await decideNewOrgTrial(tx, { email: ctx.user.email });
           const [tenant] = await tx.insert(tenants).values({
             name: tenantName,
             slug,
@@ -230,9 +233,10 @@ export const tenantRouter = router({
             dbPort: dbConfig.dbPort,
             dbUser: dbConfig.dbUser,
             dbPassword: dbConfig.dbPassword,
-            // Growth with a trial running (lib/signup-plan.ts); the owner confirms the plan next.
-            ...newOrganisationPlanFields(null),
+            // Growth with the trial (lib/signup-plan.ts); the owner confirms the plan next.
+            ...newOrganisationPlanFields(null, new Date(), trial),
           }).returning({ id: tenants.id });
+          await finishNewOrgTrial(tx, tenant.id, trial);
 
           await tx.insert(tenantMembers).values({
             tenantId: tenant.id,
@@ -260,12 +264,17 @@ export const tenantRouter = router({
       const tenantName = `${displayName}'s Organization`;
       const slug = generateSlug(tenantName);
 
-      const [tenant] = await controlDb.insert(tenants).values({
-        name: tenantName,
-        slug,
-        // Growth with a trial running (lib/signup-plan.ts); the owner confirms the plan next.
-        ...newOrganisationPlanFields(null),
-      }).returning({ id: tenants.id });
+      const tenant = await controlDb.transaction(async (tx) => {
+        const trial = await decideNewOrgTrial(tx, { email: ctx.user.email });
+        const [row] = await tx.insert(tenants).values({
+          name: tenantName,
+          slug,
+          // Growth with the trial (lib/signup-plan.ts); the owner confirms the plan next.
+          ...newOrganisationPlanFields(null, new Date(), trial),
+        }).returning({ id: tenants.id });
+        await finishNewOrgTrial(tx, row.id, trial);
+        return row;
+      });
 
       await controlDb.insert(tenantMembers).values({
         tenantId: tenant.id,

@@ -400,6 +400,13 @@
       "when": 1791023500000,
       "tag": "0056_plans_three_paid",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791033441909,
+      "tag": "0058_p2_full_access_trial",
+      "breakpoints": true
     }
   ]
 }

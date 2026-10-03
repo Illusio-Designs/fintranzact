@@ -5,7 +5,7 @@ import { controlDb, getTenantDb, securityEvents, tenants, tenantMembers, users, 
 import { ensureReferralCode, getPartnerStats, payingTenantIds } from "../lib/partner-program.js";
 import { emailService } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
-import { RESET_VERIFICATION_METHODS, SECURITY_EVENT_TYPES, PLAN_DEFAULTS, planIdSchema, planSettingsWarnings, effectiveYearlyPriceInr, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema } from "@fintranzact/shared";
+import { RESET_VERIFICATION_METHODS, SECURITY_EVENT_TYPES, PLAN_DEFAULTS, planIdSchema, planSettingsWarnings, effectiveYearlyPriceInr, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema, trialSettingsSchema, trialDaysLeftAt, TRIAL_ADMIN_MAX_DAYS } from "@fintranzact/shared";
 import {
   roadmapStatuses,
   roadmapListSchema,
@@ -28,7 +28,10 @@ import { sandboxQuotaStatus, tenantsWithUnbilledUsage, periodIsClosed } from "..
 import { getHsnRefreshState } from "../lib/hsn-refresh.js";
 import { closeGovUsagePeriod } from "../lib/billing/service.js";
 import { invalidateEntitlements } from "../lib/entitlements-cache.js";
-import { setTrial } from "../lib/trial.js";
+import { endTrialNow, extendTrial, grantCustomTrial, setTrial } from "../lib/trial.js";
+import { getTrialSettings, saveTrialSettings } from "../lib/trial-settings.js";
+import { recordBillingEvent } from "../lib/billing/service.js";
+import { getEntitlements } from "../lib/entitlements.js";
 import { resetTwoFactorByAdmin } from "../lib/two-factor-reset.js";
 import { drizzleResetStore } from "../lib/two-factor-store.js";
 import { invalidateTwoFactorGateUser } from "../lib/two-factor-gate-cache.js";
@@ -129,6 +132,9 @@ export const platformRouter = router({
             accessGrandfathered: tenants.accessGrandfathered,
             status: tenants.status,
             createdAt: tenants.createdAt,
+            trialStartedAt: tenants.trialStartedAt,
+            trialEndsAt: tenants.trialEndsAt,
+            trialSource: tenants.trialSource,
             memberCount: sql<number>`(SELECT COUNT(*)::int FROM tenant_members tm WHERE tm.tenant_id = "tenants"."id")`,
           })
           .from(tenants)
@@ -151,8 +157,16 @@ export const platformRouter = router({
       const ownerOf = new Map<string, { name: string | null; email: string }>();
       for (const o of owners) if (!ownerOf.has(o.tenantId)) ownerOf.set(o.tenantId, { name: o.name, email: o.email });
 
+      const now = new Date();
       return {
-        data: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), owner: ownerOf.get(r.id) ?? null })),
+        data: rows.map((r) => ({
+          ...r,
+          createdAt: r.createdAt.toISOString(),
+          trialStartedAt: r.trialStartedAt?.toISOString() ?? null,
+          trialEndsAt: r.trialEndsAt?.toISOString() ?? null,
+          trialDaysLeft: trialDaysLeftAt(r.trialEndsAt, now),
+          owner: ownerOf.get(r.id) ?? null,
+        })),
         total: total?.n ?? 0,
         page: input.page,
         limit: input.limit,
@@ -173,6 +187,9 @@ export const platformRouter = router({
           status: tenants.status,
           partnerId: tenants.partnerId,
           createdAt: tenants.createdAt,
+          trialStartedAt: tenants.trialStartedAt,
+          trialEndsAt: tenants.trialEndsAt,
+          trialSource: tenants.trialSource,
           // So the admin can see the organisation's two-factor policy.
           twoFactorPolicy: tenants.twoFactorPolicy,
           twoFactorGraceDays: tenants.twoFactorGraceDays,
@@ -222,10 +239,22 @@ export const platformRouter = router({
             .limit(1)
         : [];
 
+      const ent = await getEntitlements(input.id);
       return {
         ...tenant,
         referredBy: referredBy ?? null,
         createdAt: tenant.createdAt.toISOString(),
+        trialStartedAt: tenant.trialStartedAt?.toISOString() ?? null,
+        trialEndsAt: tenant.trialEndsAt?.toISOString() ?? null,
+        /** The live access state (trialing, trial_expired, active, ...) and trial block, as the organisation sees it. */
+        accessState: ent.state,
+        trial: {
+          active: ent.trial.active,
+          ended: ent.trial.ended,
+          daysLeft: ent.trial.daysLeft,
+          source: ent.trial.source,
+          totalDays: ent.trial.totalDays,
+        },
         members: members.map((m) => ({ ...m, joinedAt: m.joinedAt.toISOString() })),
         businesses: businessRows.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() })),
       };
@@ -257,6 +286,40 @@ export const platformRouter = router({
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation not found" });
       return row;
     }),
+
+  /** The trial settings: days, partner days and the add-on caps (system_config trial.*). */
+  trialSettings: platformAdminProcedure.query(() => getTrialSettings()),
+
+  /**
+   * Save the trial settings. Days are 1 to 90; caps are whole numbers.
+   * Applies to organisations that sign up from now on; running trials keep
+   * their dates. Recorded in the billing event log with the acting admin.
+   */
+  saveTrialSettings: platformAdminProcedure.input(trialSettingsSchema).mutation(async ({ input, ctx }) => {
+    const before = await getTrialSettings();
+    await saveTrialSettings(input);
+    await recordBillingEvent({
+      provider: "local",
+      type: "platform.trial_settings_changed",
+      payload: { from: before, to: input, actorUserId: ctx.user.id },
+    });
+    return input;
+  }),
+
+  /** Add days to an organisation trial (from its end when running, from now when over). */
+  extendTrial: platformAdminProcedure
+    .input(z.object({ tenantId: z.string().uuid(), days: z.number().int().min(1).max(TRIAL_ADMIN_MAX_DAYS), reason: z.string().trim().min(3).max(500) }))
+    .mutation(({ input, ctx }) => extendTrial(input.tenantId, input.days, { actorUserId: ctx.user.id, reason: input.reason })),
+
+  /** Give an organisation a custom trial of N days from now (allowed even if a trial was already used). */
+  grantTrial: platformAdminProcedure
+    .input(z.object({ tenantId: z.string().uuid(), days: z.number().int().min(1).max(TRIAL_ADMIN_MAX_DAYS), reason: z.string().trim().min(3).max(500) }))
+    .mutation(({ input, ctx }) => grantCustomTrial(input.tenantId, input.days, { actorUserId: ctx.user.id, reason: input.reason })),
+
+  /** End a running trial now; the organisation is read-only until it buys a plan. */
+  endTrial: platformAdminProcedure
+    .input(z.object({ tenantId: z.string().uuid(), reason: z.string().trim().min(3).max(500) }))
+    .mutation(({ input, ctx }) => endTrialNow(input.tenantId, { actorUserId: ctx.user.id, reason: input.reason })),
 
   /**
    * Reset a user's two-factor authentication after an identity check

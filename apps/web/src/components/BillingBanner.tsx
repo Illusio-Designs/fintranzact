@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { trialBannerFor } from "@fintranzact/shared";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { registerBillingNavigator } from "@/lib/entitlement";
 
-/** A trial notice only appears in the last week. */
-const TRIAL_BANNER_DAYS = 7;
+/** Calm while there is time, amber at 3 days or fewer, red once ended; the text says the same. */
+const TRIAL_TONES = {
+  calm: "bg-brand-600/10 text-text-primary border-border-light",
+  warning: "bg-amber-50 text-amber-950 border-amber-200 dark:bg-amber-950 dark:text-amber-100 dark:border-amber-900",
+  danger: "bg-red-50 text-red-900 border-red-200 dark:bg-red-950 dark:text-red-100 dark:border-red-900",
+} as const;
 const DISMISS_KEY = "fintranzact:trial-banner-dismissed";
 
 function readDismissedDay(): string | null {
@@ -70,6 +75,54 @@ export function BillingBanner() {
     );
   }
 
+  // Full Access Trial: countdown while it runs, "Trial ended: read-only" after.
+  const trialSpec = trialBannerFor(
+    {
+      state: status.state,
+      readOnly: status.readOnly,
+      trial: status.trial,
+      trialMessage: status.trialMessage,
+      canManageBilling: canManageBilling,
+    },
+    { today, dismissedDay },
+  );
+  if (status.state === "trialing" || status.state === "trial_expired") {
+    if (!trialSpec) return null;
+    const tone = TRIAL_TONES[trialSpec.tone];
+    return (
+      <div
+        role="status"
+        data-testid="billing-banner"
+        data-tone={trialSpec.tone}
+        className={`${box} relative border-b ${tone}`}
+      >
+        <span className="font-semibold">{trialSpec.title}.</span> {trialSpec.text}
+        {trialSpec.cta ? (
+          <Link
+            to="/settings"
+            search={{ tab: "billing" }}
+            className="ml-2 inline-block rounded-md border border-current px-2.5 py-0.5 font-semibold whitespace-nowrap"
+          >
+            {trialSpec.cta}
+          </Link>
+        ) : null}
+        {trialSpec.dismissible ? (
+          <button
+            type="button"
+            aria-label="Dismiss trial reminder for today"
+            className="ml-3 inline-flex h-8 w-8 items-center justify-center align-middle opacity-70 hover:opacity-100"
+            onClick={() => {
+              writeDismissedDay(today);
+              setDismissedDay(today);
+            }}
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   if (status.readOnly) {
     const lead = (status.reason && READ_ONLY_COPY[status.reason]) || "Your account is read-only.";
     return (
@@ -90,30 +143,6 @@ export function BillingBanner() {
         <span className="font-semibold">Payment failed.</span> Your account becomes read-only {when} unless the payment goes through.
         {cta("Update payment")}
         {askOwner("update the payment")}
-      </div>
-    );
-  }
-
-  if (status.state === "trialing" && status.trialDaysLeft !== null && status.trialDaysLeft <= TRIAL_BANNER_DAYS) {
-    if (dismissedDay === today) return null;
-    const left = status.trialDaysLeft;
-    const text = left <= 0 ? "Your trial ends today." : `${left} day${left === 1 ? "" : "s"} left in your trial.`;
-    return (
-      <div role="status" data-testid="billing-banner" className={`${box} relative bg-brand-600/10 text-text-primary border-b border-border-light`}>
-        <span className="font-semibold">{text}</span> Choose a plan to keep creating and editing.
-        {cta("Choose a plan")}
-        {askOwner("choose a plan")}
-        <button
-          type="button"
-          aria-label="Dismiss trial reminder for today"
-          className="ml-3 align-middle text-text-tertiary hover:text-text-primary"
-          onClick={() => {
-            writeDismissedDay(today);
-            setDismissedDay(today);
-          }}
-        >
-          <span aria-hidden="true">×</span>
-        </button>
       </div>
     );
   }

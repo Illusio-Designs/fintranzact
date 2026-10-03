@@ -4,7 +4,7 @@ What an organisation (tenant) may do right now is decided on the server, in one 
 
 ## States
 
-`deriveAccess` (`packages/shared/src/entitlements.ts`) is a pure function of: tenant status, `tenants.trial_ends_at`, the plan subscription row, whether the tenant ever had one, and add-on subscriptions. Rules, in order:
+`deriveAccess` (`packages/shared/src/entitlements.ts`) is a pure function of: tenant status, `tenants.trial_ends_at` (plus `trial_started_at`, `trial_source` and the trial caps, for the `trial` block), the plan subscription row, whether the tenant ever had one, and add-on subscriptions. Rules, in order:
 
 | State | When | Writable |
 |---|---|---|
@@ -21,6 +21,18 @@ What an organisation (tenant) may do right now is decided on the server, in one 
 A grandfathered organisation (`accessGrandfathered`) is checked right after the suspended test and beats everything below it, a halted subscription included; the flag is read fresh with the organisation row, like the plan. It is never set for a new organisation and never offered. A live subscription always beats an expired trial. Read-only means reads, search, PDF downloads and exports still work; creating and editing is refused with the "Choose a plan" message. Add-ons are all off while read-only or suspended; AI Plus also grants AI Assistant.
 
 `getEntitlements(tenantId)` (`lib/entitlements.ts`) loads the snapshot (cached, `invalidateEntitlements` on every billing change, lazy past-due to halted transition) and adds the plan limits. `assertWritable(tenantId)` throws the entitlement error for read-only/suspended; `requireAddon(tenantId, addon)` for add-on features.
+
+## The Full Access Trial (P2)
+
+Operations note: [`TRIAL.md`](TRIAL.md). In short:
+
+- Every new organisation (`auth.register`, `tenant.create`) starts a trial: `trial_started_at`, `trial_ends_at`, `trial_source` (`signup`, `partner`, `admin`, `none`) are written in the same transaction as the tenant (`lib/trial.ts` `decideNewOrgTrial` / `finishNewOrgTrial`). Length: `trial.days` (default 14), `trial.partnerDays` (default 30, for an approved partner code), both 1-90 in `system_config`.
+- While `state` is `trialing`, `getEntitlements` returns **the Business plan's limits** whatever plan the organisation picked (`effectivePlan: "business"`), and `addons` has `ai_assistant`, `payroll` and `store_pro` on (AI Plus is the bigger tier of AI Assistant, so the trial grants Assistant). The caps ride in the payload: `trial.caps = { aiQuestions, payrollEmployees, storePro: true }` (from `trial.caps` in `system_config`, default 50 and 10).
+- The payload is additive: `trial = { active, ended, startedAt, endsAt, daysLeft, source, caps, totalDays }`. `trialEndsAt` and `trialDaysLeft` are unchanged. `billing.status` adds `trial`, `effectivePlan` and `trialMessage`.
+- After `trial_ends_at` with no live plan subscription the organisation is `trial_expired` (read-only): "Your trial has ended. Choose a plan to continue. You can still view, search, download PDFs and export your data." A read-only organisation keeps **data export on every plan** (`limits.dataExport` is forced on while read-only; a Starter organisation could otherwise not export what the banner promises). Buying any plan makes a live subscription, which beats an expired trial; every billing change calls `invalidateEntitlements`, and the organisation row (trial dates and source included) is read fresh on every call, so the unlock is immediate.
+- `source = "none"`: no trial was granted (a trial was already used for this email, phone or GSTIN). Stored as started and ended at the same instant, so it derives `trial_expired`; `billing.status.trialMessage` carries the clear message.
+- A grandfathered organisation never has a trial (`trial.active` false).
+- Caps are **enforced where a hook exists, otherwise exposed only**: no AI, payroll or Store Pro feature exists yet (see `ADDON_FEATURES[...].implemented`), so nothing consumes `trial.caps` today. The future features must read `getEntitlements(tenantId).trial.caps` (AI question counter against `aiQuestions`, employee creation against `payrollEmployees`) while `trial.active`, and `requireAddon` already passes during a trial because the add-ons are on. Plan limits during the trial are enforced (they all read `getEntitlements().limits`).
 
 ## Error shape
 
@@ -68,7 +80,8 @@ Notes: `POST /api/items/labels` generates a label PDF, so it is a download and s
 
 ## Not built yet
 
-- The rest of the trial (P2). Sign-up (`auth.register`, `tenant.create`) now sets the chosen plan (Growth when none) and `trial_ends_at` = now + 14 days (`TRIAL_DAYS`, `lib/signup-plan.ts`), so `deriveAccess` grants full access and then read-only. Not built: Business-level access and add-on caps during the trial, countdown banner, reminders, one trial per business, admin-editable length.
+- Enforcement of the trial caps (AI questions, payroll employees): exposed in `trial.caps`, consumed by nothing until those features exist.
+- WhatsApp trial reminders (email and in-app only for now).
 - AI assistant, payroll and Store Pro features: the add-ons can be bought and are enforced as flags (`ADDON_FEATURES[...].implemented` is false), but the features behind them do not exist.
 
 ## Tests
