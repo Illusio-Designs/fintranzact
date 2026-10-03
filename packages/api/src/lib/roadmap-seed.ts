@@ -2238,6 +2238,38 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-03-p2-trial",
+    updates: [
+      {
+        // Built with unit and integration tests (real Postgres): trial fields
+        // and settings, start at sign-up (14 days, 30 for a partner code), the
+        // Business-level access during the trial, the countdown banner (web and
+        // mobile), the 7 / 2 / 0 days-left reminders (email; in-app through the
+        // banner and the bell), read-only at the end with exports still open,
+        // email and GSTIN claims, and the admin controls. Kept in progress, with
+        // two lines left unticked on purpose: (1) the add-on caps (AI 50 questions,
+        // Payroll 10 employees) are in the entitlements payload but nothing can
+        // enforce them until the AI assistant and Payroll exist; (2) the phone
+        // check is not wired because sign-up does not collect a phone number.
+        // Not run on a device, in a browser against the real API, or with a live
+        // mail provider when this was written.
+        title: "P2. Full Access Trial",
+        status: "in_progress",
+        done: [
+          "Trial length 14 days (decided), editable in admin",
+          "30-day trial for partner referral sign-ups (decided)",
+          "Trial fields on organisations (start, end, source)",
+          "Start trial on sign-up; trial length setting in admin",
+          "Countdown banner",
+          "Reminders day 7 / 12 / 14 (email + in-app)",
+          "Read-only mode at expiry (view, search, download, export only)",
+          "Admin: extend trial or grant custom trial",
+          "Partner referral trial length",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */
