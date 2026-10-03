@@ -591,7 +591,8 @@ function RootLayout() {
 
   const { requirement: twoFactorRequirement } = useTwoFactorRequirement();
   // The plan's features, for the "Growth" badge on nav items the plan lacks (a mirror; the server enforces).
-  const { status: planStatus } = useEntitlements();
+  // Only with an organisation: signed-out visitors and platform admins (no organisation) have no plan to ask about.
+  const { status: planStatus } = useEntitlements({ enabled: !!session?.user && !!session?.tenantId });
   const twoFactorBlocked = !!session?.tenantId && twoFactorRequirement.blocked;
   const twoFactorSetupPath = twoFactorRequirement.setupPath;
 

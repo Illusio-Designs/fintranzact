@@ -8,8 +8,9 @@ import { setCanManageBilling } from "@/lib/entitlement";
  * Cached for a minute, refetched on window focus, and refreshed by the central
  * handler after any entitlement refusal.
  */
-export function useEntitlements() {
+export function useEntitlements(options: { enabled?: boolean } = {}) {
   const query = trpc.billing.status.useQuery(undefined, {
+    enabled: options.enabled ?? true,
     staleTime: 60_000,
     refetchOnWindowFocus: true,
     retry: 1,
