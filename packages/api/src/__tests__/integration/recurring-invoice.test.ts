@@ -490,7 +490,7 @@ describe("recurring scheduler catch-up for missed runs", () => {
 
     // Insert a daily template with nextRunDate = 30 days ago.
     // Without a cap the scheduler would generate 30 invoices; with either
-    // MAX_CATCHUP=12 or the plan limit of RECURRING_RUNS_PER_MONTH_FREE runs,
+    // MAX_CATCHUP=12 or the plan limit of RECURRING_RUNS_PER_MONTH_SELF_HOSTED runs,
     // it must stop well short of 30.
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

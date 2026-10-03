@@ -29,8 +29,8 @@ function geometry(width: ThermalWidth): Geo {
 function draw(doc: Doc, m: InvoiceModel, g: Geo, y: number): number {
   const d = m.data;
   const { x0, x1, cw } = g;
-  const C = (s: string, o: { size?: number; bold?: boolean } = {}) => {
-    y += text(doc, s, x0, y, { w: cw, size: o.size ?? g.size, bold: o.bold, align: "center", color: "#000000" });
+  const C = (s: string, o: { size?: number; bold?: boolean; link?: string } = {}) => {
+    y += text(doc, s, x0, y, { w: cw, size: o.size ?? g.size, bold: o.bold, align: "center", color: "#000000", link: o.link });
   };
   const LR = (l: string, r: string, o: { size?: number; bold?: boolean; indent?: number } = {}) => {
     const size = o.size ?? g.size;
@@ -147,7 +147,7 @@ function draw(doc: Doc, m: InvoiceModel, g: Geo, y: number): number {
   for (const s of [d.notes, d.termsAndConditions].filter(Boolean) as string[]) C(s, { size: g.small - 0.5 });
   C("Thank you! Visit again.", { size: g.small });
   C("Computer generated invoice", { size: g.small - 1.5 });
-  if (!d.isPaidPlan) C("Fintranzact", { size: g.small - 1.5 });
+  if (!d.isPaidPlan) C("Fintranzact", { size: g.small - 1.5, link: d.brandingUrl });
   return y;
 }
 

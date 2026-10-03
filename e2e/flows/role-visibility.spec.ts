@@ -11,7 +11,7 @@
  *   5. Verifies which routes are accessible vs. redirected
  *
  * Only tests seller + accountant (the two most different permission sets)
- * because the free plan limits to 3 team members total.
+ * to keep the run short (every role is covered by the API role sweep).
  */
 import { test, expect, ApiHelper } from "../helpers/fixtures";
 import { openRegisterForm, fillRegisterForm } from "../helpers/auth";

@@ -1,0 +1,102 @@
+---
+title: File GSTR-1 and GSTR-3B from Fintranzact
+description: "Step by step filing of GSTR-1, GSTR-3B and nil returns from the GST page: sign in to the GST portal with an OTP, save and check the return, review it, and file with the EVC OTP. Includes what saved on the portal means, how set-off works and what to do when the session expires."
+sidebar:
+  order: 9
+---
+
+import { ForCA } from "@/components/help/mdx";
+
+You can file your monthly **GSTR-1** and **GSTR-3B** (and nil returns) without leaving Fintranzact. A guided window walks you through every step, and **nothing is filed until you confirm at the very end**. You can close the window at any point and come back later, even days later: Fintranzact remembers where you stopped.
+
+:::note
+Filing needs the GST portal connection (Sandbox) to be switched on for your account, the business GSTIN in **Settings**, and a role that may file: the owner, an admin or a filing accountant. A read-only accountant or auditor sees the **Return status** panel but no **File return** button.
+:::
+
+## Start
+
+1. Click **GST** in the left navigation and open the **GSTR-1** or **GSTR-3B** tab.
+2. Choose the **Month** and **Year** you want to file.
+3. Click **File return**. If you started before, the button says **Resume filing**.
+
+On a phone, the **GST returns** screen under **More** works the same way, one step per screen.
+
+## The steps
+
+### 1. Check
+
+Fintranzact checks the GST portal for earlier returns. If an earlier month is not filed, or (for GSTR-3B) GSTR-1 of the same month is not filed, you are asked to **file those first** and a link takes you to them. If the portal cannot be reached you get a warning only, so make sure earlier returns are filed yourself. Fintranzact assumes you file monthly, because it does not record whether you file monthly or quarterly.
+
+You also see a short summary of your books for the month (invoice count, taxable value, tax). For GSTR-3B, a note appears if its outward supplies differ from GSTR-1.
+
+### 2. Sign in to the GST portal
+
+Type your **GST portal username** and click **Send OTP**. The GST portal sends a one-time password to the mobile number registered for that login. Type it in and click **Verify and continue**. The session lasts about **6 hours**, and the window shows the time left. The OTP is never stored.
+
+### 3. Prepare and save
+
+For **GSTR-1** you choose a **Normal** or **Nil** return, and type two turnover figures. Fintranzact does not work these out for you:
+
+- **Aggregate turnover of the previous financial year**: the total turnover of your whole last financial year (April to March). Your CA has this number. Enter 0 if you were not registered.
+- **Aggregate turnover of the current financial year up to this period**: the total from 1 April up to the end of the month you are filing, including that month.
+
+Click **Save to GST portal**. For **GSTR-3B**, you review the figures from your books and click **Save to GST portal**.
+
+Then you see **Checking with the GST portal...**. The portal validates what you saved. This usually takes **1 to 2 minutes**, and Fintranzact checks every 12 seconds. If it takes longer than about three minutes, it stops and offers **Check again**. Nothing is lost.
+
+### What "saved on the portal" means
+
+After a successful save, your figures are **stored on the GST portal as a draft**. The return is **not filed**. You can still change it. Only the last step, with the filing OTP, files it.
+
+### If the portal finds problems
+
+The GST portal's own messages are listed by section (for example **B2B invoices** or **HSN summary**), with a **Fix in your books** link where the cause is usually found. Correct the books, then click **Save again**. You cannot go on until the portal accepts the save.
+
+### 4. Review
+
+- **GSTR-1**: click **Prepare for filing**, wait for the check, then **Load summary**. You see the portal's totals section by section. Check them against your books and click **The summary is correct: continue**.
+- **GSTR-3B**: see the next section on set-off.
+
+### 5. Send the OTP and file
+
+Click **Send OTP**. The GST portal sends an EVC OTP to the mobile number and email registered for the **PAN holder** of the registration. If your PAN is different (for example a company's authorised signatory), use **Use a different PAN**. Type the 6 digits (pasting works). **Resend OTP** is available after 30 seconds.
+
+Then comes the **final confirmation**: *File GSTR-1 for August 2026 for GSTIN ...*. Tick **I understand this files the return with the government and cannot be undone**. Only then does the **File** button work. If you spot a mistake after filing, you can only correct it with an amendment.
+
+### 6. Done
+
+You see the **ARN** (acknowledgement number) and the filing date. If the portal has not shown the ARN yet, click **Check again** after a few minutes. **Return status** on the GST page keeps showing it. To download the filed return, use your GST portal login.
+
+## Nil returns
+
+A nil return is offered only when **your books show nothing for that month**: no sales, credit notes or debit notes (GSTR-1), and no outward supplies, reverse charge, credit or tax (GSTR-3B). If your books have anything, the window tells you what and you file the normal return instead. A nil return needs an explicit tick: *I confirm there were no outward supplies in August 2026* (GSTR-1) or *no transactions* (GSTR-3B). Exports, advances and interest are not visible to Fintranzact, so check that none apply.
+
+## GSTR-3B and set-off, in plain words
+
+Your tax for the month is paid in two ways: from your **input tax credit** (the GST you paid on purchases) and, for the rest, in **cash**. Fintranzact reads both balances from the GST portal and **proposes** a split. It shows:
+
+- the balances in your **credit ledger** and **cash ledger**;
+- which credit pays which tax: IGST credit pays IGST, then CGST, then SGST; CGST credit pays CGST, then IGST (never SGST); SGST credit pays SGST, then IGST (never CGST);
+- the **cash payable** for each tax. Cash of one tax cannot pay another. Tax on reverse charge is always paid in cash.
+
+Nothing is paid yet. Read it, tick **I have reviewed this set-off**, and click **Confirm set-off**. If the proposal changed in the meantime, Fintranzact asks you to check the balances again and confirm the new one.
+
+If your **cash ledger is short**, the window shows how much to add for each tax. **Depositing cash (a challan) is done on the GST portal: Fintranzact cannot make the payment.** After you deposit it, click **Check balances again**.
+
+<ForCA>
+The proposal covers IGST, CGST and SGST only. Cess, interest, late fee, blocked credit and ITC reversals are not modelled: add interest and late fee on the portal if they apply. The utilisation order and the 3B mapping are listed for CA sign-off in the repository's GST returns verification checklist.
+</ForCA>
+
+## If your session expires
+
+The GST portal session lasts about 6 hours. If it ends while you work, the window takes you back to **Sign in to the GST portal** with a message. Request a new OTP, and you continue exactly where you stopped. Your progress is kept on the server, so closing the browser or coming back the next day works the same way.
+
+## Common questions
+
+**Did it file? I am not sure.** Open **Return status** on the GST page and click **Refresh**. If the portal shows an ARN, it is filed. If a filing attempt had a network error, check there before you try again.
+
+**The OTP was rejected.** Nothing was filed. Click **Send a new OTP** and enter the new code.
+
+**The portal says an earlier return is missing.** File that month first. The check window links to it.
+
+**Can I file for a composition business?** Composition dealers file CMP-08 and GSTR-4. See [GSTR-4 and CMP-08 for composition dealers](/help/gst/gstr4-and-cmp08).

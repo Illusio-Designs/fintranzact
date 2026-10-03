@@ -196,7 +196,7 @@ export default function ApiKeysScreen() {
         }
       >
         {isFree ? (
-          /* Free plan paywall */
+          /* Plan without API access (Starter) paywall */
           <Card>
             <View style={styles.paywallCard}>
               <View style={styles.paywallIconWrapper}>
@@ -204,7 +204,7 @@ export default function ApiKeysScreen() {
               </View>
               <Text style={styles.paywallTitle}>Paid Feature</Text>
               <Text style={styles.paywallDescription}>
-                API keys are available on paid plans. Upgrade to create programmatic access tokens
+                API access is not included in your plan. Upgrade to create programmatic access tokens
                 for the CLI and MCP server.
               </Text>
               {billing?.canManageBilling ? (

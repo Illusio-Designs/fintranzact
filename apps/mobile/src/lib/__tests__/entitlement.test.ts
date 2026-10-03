@@ -67,6 +67,38 @@ describe("handleEntitlementError", () => {
     }
   });
 
+  describe("feature_not_in_plan", () => {
+    const featureErr = () => ({
+      message: "E-invoicing is available on the Growth plan and above.",
+      data: {
+        code: "FORBIDDEN",
+        entitlement: {
+          reason: "feature_not_in_plan", code: "feature_not_in_plan", upgradePath: "/settings?tab=billing",
+          feature: "eInvoicing", featureName: "E-invoicing", requiredPlan: "Growth", currentPlan: "Starter",
+        },
+      },
+    });
+
+    it("owner: a plan prompt with See plans that opens the web billing page", () => {
+      setCanManageBilling(true);
+      expect(handleEntitlementError(featureErr())).toBe(true);
+      const [title, text, buttons] = alertSpy.mock.calls[0];
+      expect(title).toBe("E-invoicing: not on your plan");
+      expect(text).toBe("E-invoicing is available on the Growth plan and above.");
+      buttons.find((b: { text: string }) => b.text === "See plans").onPress();
+      expect(openSpy).toHaveBeenCalledWith(expect.stringMatching(/\/settings\?tab=billing$/));
+    });
+
+    it("non-owner: still See plans, opening the public pricing page, and told to ask the owner", () => {
+      setCanManageBilling(false);
+      handleEntitlementError(featureErr());
+      const [, text, buttons] = alertSpy.mock.calls[0];
+      expect(text).toContain("Ask your organisation owner to upgrade");
+      buttons.find((b: { text: string }) => b.text === "See plans").onPress();
+      expect(openSpy).toHaveBeenCalledWith(expect.stringMatching(/\/pricing$/));
+    });
+  });
+
   it("suspended is a blocking message with no action, even for owners", () => {
     setCanManageBilling(true);
     handleEntitlementError(err("tenant_suspended", "Suspended."));

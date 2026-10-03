@@ -195,9 +195,9 @@ export async function storeOrdersOf(businessId: string) {
 /** A plan's saved overrides (null = the built-in settings). */
 export async function planOverride(plan: string) {
   const [row] = await db()`
-    select name, tagline, monthly_price_inr, visible, highlight, limits, features from plan_settings where plan = ${plan}`;
+    select name, tagline, monthly_price_inr, yearly_price_inr, visible, highlight, limits, features from plan_settings where plan = ${plan}`;
   return row as
-    | { name: string; tagline: string; monthly_price_inr: number | null; visible: boolean; highlight: boolean; limits: Record<string, unknown>; features: string[] }
+    | { name: string; tagline: string; monthly_price_inr: number | null; yearly_price_inr: number | null; visible: boolean; highlight: boolean; limits: Record<string, unknown>; features: string[] }
     | undefined;
 }
 

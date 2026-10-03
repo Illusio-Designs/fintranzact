@@ -208,7 +208,7 @@ function FeaturesPage() {
             to="/register"
             className="inline-flex h-[52px] items-center gap-2 rounded-xl bg-brand-600 px-6 text-base font-bold text-white shadow-[0_12px_28px_-10px_rgba(59,94,170,.7)] transition hover:bg-brand-700"
           >
-            Start free — no card needed
+            Start free trial — no card needed
             <Icon icon={ArrowRight01Icon} size={18} strokeWidth={2} />
           </Link>
           <Link

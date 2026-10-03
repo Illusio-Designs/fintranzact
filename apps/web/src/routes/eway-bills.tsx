@@ -7,6 +7,8 @@ import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
 import { Badge } from "@/components/ui/Badge";
 import { toast } from "@/hooks/useToast";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FeatureNotice } from "@/components/billing/FeatureNotice";
+import { useFeature } from "@/hooks/useFeature";
 import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
@@ -190,6 +192,7 @@ const EMPTY_UPDATE_FORM: UpdateVehicleFormState = {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function EWayBillsPage() {
+  const feature = useFeature("eWayBills");
   const [activeTab, setActiveTab] = useState<EWBTab>("dashboard");
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -362,11 +365,13 @@ export function EWayBillsPage() {
               setGenerateErrors({});
               setShowGenerateModal(true);
             }}
+            {...feature.lockedProps}
           >
             + Generate EWB
           </button>
         }
       />
+      <FeatureNotice flag="eWayBills">E-way bills you already generated stay readable and printable.</FeatureNotice>
 
       {/* Status summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">

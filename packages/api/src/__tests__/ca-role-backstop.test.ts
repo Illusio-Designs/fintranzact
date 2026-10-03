@@ -28,12 +28,12 @@ describe("CA_FILING_MUTATIONS (typo guard)", () => {
 
   it("covers every gstReturns mutation and the gstr2b filing writes", () => {
     const gstReturns = mutations.filter((p) => p.router === "gstReturns").map((p) => p.path).sort();
-    expect(gstReturns.length).toBe(7);
+    expect(gstReturns.length).toBe(14);
     for (const path of gstReturns) expect(CA_FILING_MUTATIONS, path).toContain(path);
     for (const path of ["gstr2b.upload", "gstr2b.linkInvoice", "gstr2b.ignoreRecord", "period.lockGstMonth"]) {
       expect(CA_FILING_MUTATIONS).toContain(path);
     }
-    expect(CA_FILING_MUTATIONS.length).toBe(11);
+    expect(CA_FILING_MUTATIONS.length).toBe(18);
   });
 
   it("never allowlists books, year close, unlocking, sharing or stock", () => {

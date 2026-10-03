@@ -129,6 +129,8 @@ async function enterDocument(page: Page, m: GstMasters, doc: GstDoc, booked: Rec
   await expect(form.getByTestId("document-tax")).toHaveText(inr(doc.tax));
   await expect(form.getByTestId("document-total")).toHaveText(inr(doc.total));
   await expectNoHorizontalScroll(page, `new ${doc.kind} invoice`);
+  // The last document's toast must be gone, or the number below would be read from it.
+  await expect(toast(page, /^Invoice INV-\d+ created$/)).toHaveCount(0);
   await form.getByRole("button", { name: "Create Invoice" }).click();
   const created = toast(page, /^Invoice INV-\d+ created$/);
   await expect(created).toBeVisible();
@@ -251,8 +253,8 @@ test.describe("J9 GST filing", () => {
     await openPage(page, "GST Returns");
     const tabs = page.getByTestId("gst-report-tabs");
     await tabs.getByRole("button", { name: "GSTR-1", exact: true }).click();
-    await choose(page, page.getByRole("combobox", { name: "Month" }), p.monthName);
-    await choose(page, page.getByRole("combobox", { name: "Year" }), String(p.year));
+    await choose(page, page.getByRole("combobox", { name: "Month", exact: true }), p.monthName);
+    await choose(page, page.getByRole("combobox", { name: "Year", exact: true }), String(p.year));
     const g1 = GST_MONTH.gstr1;
     await expect(statCard(page, "Invoice Count")).toHaveText(String(g1.invoiceCount));
     await expect(statCard(page, "Taxable Value")).toHaveText(inr(g1.taxable));

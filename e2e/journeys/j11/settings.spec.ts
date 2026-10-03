@@ -511,13 +511,16 @@ test.describe("J11 settings", () => {
     await page.goto("/auth/plan-selection");
     await expect(page.getByRole("heading", { name: "Select the plan that fits your business" })).toBeVisible();
     await expectNoHorizontalScroll(page, "plan selection");
-    await page.getByRole("button", { name: /^Pro / }).click();
-    await expect(page.getByText(/Pro is set up by the Fintranzact team/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start free and create your company" })).toBeVisible();
-    await page.getByRole("button", { name: /^Recommended Forever Free/ }).click();
-    await page.getByRole("button", { name: "Create your company" }).click();
+    // Three paid plans, no free one; the owner is on Business (seeded) and may try another.
+    await expect(page.getByRole("button", { name: /^Most popular Growth/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Forever Free/i })).toHaveCount(0);
+    await page.getByRole("button", { name: /^Starter/ }).click();
+    await expect(page.getByText(/14-day free trial, then ₹299/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start 14-day free trial" })).toBeVisible();
+    await page.getByRole("button", { name: /^Business/ }).click();
+    await page.getByRole("button", { name: "Start 14-day free trial" }).click();
     await expect(page).toHaveURL(/\/$/);
-    expect(await tenantPlan(owner.tenantId)).toBe("forever_free");
+    expect(await tenantPlan(owner.tenantId)).toBe("business");
 
     // ── The same settings at night ──────────────────────────────
     const night = await newJourneyContext(browser, guard, {

@@ -15,6 +15,8 @@ import { Select } from "@/components/ui/Select";
 
 import { Spinner } from "@/components/ui/Spinner";
 import { CompositionSettingsCard } from "@/components/gst/CompositionSettingsCard";
+import { ReturnStatusPanel } from "@/components/gst/ReturnStatusPanel";
+import { FileReturnButton } from "@/components/gst/filing/FileReturnButton";
 import { fmt, fmtN, fmtStr, fyLabel, ReportSkeleton } from "@/components/reports/report-format";
 export const Route = createFileRoute("/gst")({
   component: GSTReportsPage,
@@ -143,6 +145,21 @@ export function GSTReportsPage() {
             />
           </div>}
         </div>
+      )}
+
+      {(activeTab === "gstr1" || activeTab === "gstr3b") && isGstRegistered && !!biz?.gstin && <ReturnStatusPanel />}
+      {(activeTab === "gstr1" || activeTab === "gstr3b") && isGstRegistered && !isComposition && !embedded && !!biz?.gstin && (
+        <FileReturnButton
+          kind={activeTab}
+          year={year}
+          month={month}
+          gstin={biz.gstin}
+          onSwitch={(k, y, m) => {
+            setActiveTab(k);
+            setYear(y);
+            setMonth(m);
+          }}
+        />
       )}
 
       {activeTab === "gstr1" && <GSTR1View year={year} month={month} />}

@@ -46,7 +46,7 @@ afterAll(async () => {
   await closeTestDb();
 });
 
-async function makeOrg(plan: "free" | "business") {
+async function makeOrg(plan: "starter" | "business") {
   const owner = await createUser({ email: `owner.${randomUUID().slice(0, 8)}@biz.in`, name: "Rohit Sharma" });
   const admin = await createUser({ email: `admin.${randomUUID().slice(0, 8)}@biz.in`, name: "Asha Admin" });
   const tenant = await createTenant({ name: "Sharma Traders", plan });
@@ -145,7 +145,7 @@ describe("CA invite rules", () => {
   });
 
   it("CA members and CA invites do not count towards the free plan's team limit", async () => {
-    const org = await makeOrg("free"); // free: 3 members incl. pending invites; owner + admin = 2
+    const org = await makeOrg("starter"); // free: 3 members incl. pending invites; owner + admin = 2
     const ca = await createUser({ email: `ca.free.${randomUUID().slice(0, 6)}@firm.in` });
     await addMember(org.tenant.id, ca.id, "ca_filing");
     await org.asOwner.tenant.inviteMember({ email: "ca-x@firm.in", role: "auditor" });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PLAN_LIMITS, PLANS } from "@fintranzact/shared";
+import { PLAN_LIMITS, PLANS, REMOVED_PLAN_IDS } from "@fintranzact/shared";
 import { createCallerFactory, router } from "../trpc.js";
 import { planRouter } from "../routers/plan.js";
 import { listPublicPlansJson } from "../lib/public-plans.js";
@@ -29,9 +29,19 @@ describe("plan.list — public plan catalogue", () => {
 describe("GET /api/plans payload", () => {
   it("sends unlimited limits as null so the JSON is valid", async () => {
     const json = JSON.parse(JSON.stringify(await listPublicPlansJson()));
-    const free = json.find((p: { id: string }) => p.id === "forever_free");
-    expect(free.limits.maxBusinesses).toBeNull();
-    const pro = json.find((p: { id: string }) => p.id === "pro");
-    expect(pro.limits.maxBusinesses).toBe(PLAN_LIMITS.pro.maxBusinesses);
+    const business = json.find((p: { id: string }) => p.id === "business");
+    expect(business.limits.maxBusinesses).toBeNull();
+    const growth = json.find((p: { id: string }) => p.id === "growth");
+    expect(growth.limits.maxBusinesses).toBe(PLAN_LIMITS.growth.maxBusinesses);
+  });
+
+  it("lists exactly Starter, Growth and Business with monthly and yearly prices, Growth highlighted", async () => {
+    const json = JSON.parse(JSON.stringify(await listPublicPlansJson()));
+    expect(json.map((p: { id: string }) => p.id)).toEqual(["starter", "growth", "business"]);
+    expect(json.map((p: { monthlyPriceInr: number }) => p.monthlyPriceInr)).toEqual([299, 699, 1499]);
+    expect(json.map((p: { yearlyPriceInr: number }) => p.yearlyPriceInr)).toEqual([2990, 6990, 14990]);
+    expect(json.map((p: { yearlyPrice: string }) => p.yearlyPrice)).toEqual(["₹2,990", "₹6,990", "₹14,990"]);
+    expect(json.filter((p: { highlight: boolean }) => p.highlight).map((p: { id: string }) => p.id)).toEqual(["growth"]);
+    expect(json.some((p: { id: string }) => (REMOVED_PLAN_IDS as readonly string[]).includes(p.id))).toBe(false);
   });
 });

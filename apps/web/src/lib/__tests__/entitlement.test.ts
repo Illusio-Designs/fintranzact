@@ -77,6 +77,61 @@ describe("handleEntitlementError", () => {
     expect(gooey.warning.mock.calls[0][1].action).toBeUndefined();
   });
 
+  describe("feature_not_in_plan", () => {
+    const featureErr = (name = "E-invoicing", feature = "eInvoicing") => ({
+      message: `${name} is available on the Growth plan and above.`,
+      data: {
+        code: "FORBIDDEN",
+        entitlement: {
+          reason: "feature_not_in_plan", code: "feature_not_in_plan", upgradePath: "/settings?tab=billing",
+          feature, featureName: name, requiredPlan: "Growth", currentPlan: "Starter",
+        },
+      },
+    });
+
+    it("shows the plan prompt (not a generic toast) with See plans to the billing page for an owner", () => {
+      const go = vi.fn();
+      registerBillingNavigator(go);
+      expect(handleEntitlementError(featureErr())).toBe(true);
+      const [title, opts] = gooey.warning.mock.calls[0];
+      expect(title).toBe("E-invoicing: not on your plan");
+      expect(opts.description).toBe("E-invoicing is available on the Growth plan and above.");
+      expect(opts.action.label).toBe("See plans");
+      opts.action.onClick();
+      expect(go).toHaveBeenCalled();
+      registerBillingNavigator(null);
+    });
+
+    it("a non-owner still gets See plans, pointing at the pricing page, and is told to ask the owner", () => {
+      setCanManageBilling(false);
+      const assign = vi.fn();
+      const original = window.location;
+      Object.defineProperty(window, "location", { value: { ...original, assign }, writable: true });
+      handleEntitlementError(featureErr());
+      const opts = gooey.warning.mock.calls[0][1];
+      expect(opts.description).toContain("Ask your organisation owner to upgrade");
+      opts.action.onClick();
+      expect(assign).toHaveBeenCalledWith("/pricing");
+      Object.defineProperty(window, "location", { value: original, writable: true });
+    });
+
+    it("two different features in a row are two toasts", () => {
+      handleEntitlementError(featureErr());
+      handleEntitlementError(featureErr("Bank reconciliation", "bankReconciliation"));
+      expect(gooey.warning).toHaveBeenCalledTimes(2);
+    });
+
+    it("a form's own toast with the same message stays quiet", () => {
+      handleEntitlementError(featureErr());
+      toast.error("Could not save", featureErr().message);
+      expect(gooey.error).not.toHaveBeenCalled();
+    });
+
+    it("is read with its feature fields", () => {
+      expect(getEntitlement(featureErr())).toMatchObject({ reason: "feature_not_in_plan", feature: "eInvoicing", featureName: "E-invoicing", requiredPlan: "Growth", currentPlan: "Starter" });
+    });
+  });
+
   it("suspended stays until closed", () => {
     handleEntitlementError(err("tenant_suspended", "Suspended."));
     expect(gooey.error.mock.calls[0][1].duration).toBe(Infinity);

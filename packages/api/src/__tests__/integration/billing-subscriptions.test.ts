@@ -23,7 +23,7 @@ import { getBillingState, recordRenewalFailure } from "../../lib/billing/service
 import { handleRazorpayEvent } from "../../http/razorpayWebhook.js";
 
 const NO_BUSINESS = "00000000-0000-4000-8000-000000000000";
-const PRO_PRICE_INR = 699;
+const GROWTH_PRICE_INR = 699;
 const BUSINESS_PRICE_INR = 1499;
 
 function caller(user: { id: string; email: string; name?: string | null }, tenantId: string) {
@@ -56,9 +56,9 @@ async function paymentsOf(tenantId: string) {
 }
 
 beforeAll(async () => {
-  // Pro and Business are "priced on request" by default; list them for sale.
+  // Growth and Business get a test price (the built-in ones would also do); yearly is left to derive as ten months.
   const db = getControlDb();
-  for (const [plan, price] of [["pro", PRO_PRICE_INR], ["business", BUSINESS_PRICE_INR]] as const) {
+  for (const [plan, price] of [["growth", GROWTH_PRICE_INR], ["business", BUSINESS_PRICE_INR]] as const) {
     const base = PLAN_DEFAULTS[plan];
     await db.insert(planSettings).values({
       plan,
@@ -84,11 +84,11 @@ afterAll(async () => {
 describe("buying a plan", () => {
   it("creates an active subscription with a period and a numbered GST invoice", async () => {
     const { owner, tenant } = await freshOwnerOrg("buy.plan@mehtatraders.in");
-    await caller(owner, tenant.id).billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+    await caller(owner, tenant.id).billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
 
     const sub = (await planSubOf(tenant.id))!;
     expect(sub.status).toBe("active");
-    expect(sub.plan).toBe("pro");
+    expect(sub.plan).toBe("growth");
     expect(sub.provider).toBe("demo");
     expect(sub.currentPeriodEnd!.getTime()).toBeGreaterThan(Date.now());
 
@@ -99,13 +99,13 @@ describe("buying a plan", () => {
     expect(payment!.totalPaise).toBe(82_482);
 
     const [row] = await getControlDb().select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenant.id));
-    expect(row!.plan).toBe("pro");
+    expect(row!.plan).toBe("growth");
   });
 
   it("the overview shows the subscription, payment and billing details", async () => {
     const { owner, tenant } = await freshOwnerOrg("overview@mehtatraders.in");
     const c = caller(owner, tenant.id);
-    await c.billing.demoCheckout({ plan: "pro", cycle: "yearly", method: "card" });
+    await c.billing.demoCheckout({ plan: "growth", cycle: "yearly", method: "card" });
     await c.billing.updateBillingDetails({
       name: "Mehta Traders LLP",
       gstin: "24AAAAA0000A1Z5",
@@ -114,8 +114,8 @@ describe("buying a plan", () => {
     });
 
     const overview = await c.billing.overview();
-    expect(overview.plan.id).toBe("pro");
-    expect(overview.planSubscription).toMatchObject({ plan: "pro", cycle: "yearly", status: "active" });
+    expect(overview.plan.id).toBe("growth");
+    expect(overview.planSubscription).toMatchObject({ plan: "growth", cycle: "yearly", status: "active" });
     expect(overview.readOnly).toBe(false);
     expect(overview.billingDetails.gstin).toBe("24AAAAA0000A1Z5");
     expect(overview.payments[0]).toMatchObject({ status: "captured", invoiceNumber: expect.stringMatching(/^FIN-\d{5}$/) });
@@ -130,12 +130,12 @@ describe("buying a plan", () => {
   it("subscribePlan buys the first plan (the Billing tab's path)", async () => {
     const { owner, tenant } = await freshOwnerOrg("subscribe.plan@mehtatraders.in");
     const c = caller(owner, tenant.id);
-    const res = await c.billing.subscribePlan({ plan: "pro", cycle: "yearly" });
+    const res = await c.billing.subscribePlan({ plan: "growth", cycle: "yearly" });
     expect(res.status).toBe("active");
 
-    expect((await planSubOf(tenant.id))!).toMatchObject({ plan: "pro", cycle: "yearly", status: "active" });
+    expect((await planSubOf(tenant.id))!).toMatchObject({ plan: "growth", cycle: "yearly", status: "active" });
     const [row] = await getControlDb().select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenant.id));
-    expect(row!.plan).toBe("pro");
+    expect(row!.plan).toBe("growth");
 
     await expect(c.billing.subscribePlan({ plan: "business", cycle: "monthly" }))
       .rejects.toMatchObject({ code: "CONFLICT" });
@@ -144,7 +144,7 @@ describe("buying a plan", () => {
   it("a second plan purchase is refused while one is live", async () => {
     const { owner, tenant } = await freshOwnerOrg("double.buy@mehtatraders.in");
     const c = caller(owner, tenant.id);
-    await c.billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+    await c.billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
     await expect(c.billing.demoCheckout({ plan: "business", cycle: "monthly", method: "upi" }))
       .rejects.toMatchObject({ code: "CONFLICT" });
   });
@@ -173,7 +173,7 @@ describe("plan changes", () => {
   it("an upgrade applies now, credits unused time, and switches the tenant plan", async () => {
     const { owner, tenant } = await freshOwnerOrg("upgrade@mehtatraders.in");
     const c = caller(owner, tenant.id);
-    await c.billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+    await c.billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
 
     const res = await c.billing.changePlan({ plan: "business", cycle: "monthly" });
     expect(res.applied).toBe("now");
@@ -186,7 +186,7 @@ describe("plan changes", () => {
     const credit = payments.find((p) => p.status === "credit")!;
     // The whole period is still ahead, so (almost) the full month comes back.
     expect(credit.basePaise).toBeLessThan(0);
-    expect(-credit.basePaise).toBeGreaterThan(PRO_PRICE_INR * 100 * 0.99);
+    expect(-credit.basePaise).toBeGreaterThan(GROWTH_PRICE_INR * 100 * 0.99);
     // First Business charge = base minus the credit.
     const firstCharge = payments.find((p) => p.status === "captured" && p.description.includes("Business"))!;
     expect(firstCharge.basePaise).toBe(BUSINESS_PRICE_INR * 100 - -credit.basePaise);
@@ -200,9 +200,9 @@ describe("plan changes", () => {
     const c = caller(owner, tenant.id);
     await c.billing.demoCheckout({ plan: "business", cycle: "monthly", method: "upi" });
 
-    const res = await c.billing.changePlan({ plan: "pro", cycle: "monthly" });
+    const res = await c.billing.changePlan({ plan: "growth", cycle: "monthly" });
     expect(res.applied).toBe("at_period_end");
-    expect((await planSubOf(tenant.id))!.scheduledPlan).toBe("pro");
+    expect((await planSubOf(tenant.id))!.scheduledPlan).toBe("growth");
 
     // Wind the period back so it has run out, then read the state.
     const old = (await planSubOf(tenant.id))!;
@@ -212,17 +212,17 @@ describe("plan changes", () => {
       .where(eq(billingSubscriptions.id, old.id));
 
     const state = await getBillingState(tenant.id);
-    expect(state.planSubscription!.plan).toBe("pro");
+    expect(state.planSubscription!.plan).toBe("growth");
     expect(state.planSubscription!.status).toBe("active");
 
     const [row] = await getControlDb().select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenant.id));
-    expect(row!.plan).toBe("pro");
+    expect(row!.plan).toBe("growth");
   });
 
   it("cancelling runs the subscription out at the period end", async () => {
     const { owner, tenant } = await freshOwnerOrg("cancel@mehtatraders.in");
     const c = caller(owner, tenant.id);
-    await c.billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+    await c.billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
 
     const sub = (await planSubOf(tenant.id))!;
     await c.billing.cancelSubscription({ subscriptionId: sub.id });
@@ -246,7 +246,7 @@ describe("failed renewals and the grace period", () => {
   it("past_due inside grace, halted (read-only) after it — and the failed charge takes no invoice number", async () => {
     const { owner, tenant } = await freshOwnerOrg("grace@mehtatraders.in");
     const c = caller(owner, tenant.id);
-    await c.billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+    await c.billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
 
     const sub = (await planSubOf(tenant.id))!;
     await recordRenewalFailure(sub, "Card declined");
@@ -281,12 +281,12 @@ describe("razorpay webhook handler", () => {
       .values({
         tenantId: tenant.id,
         kind: "plan",
-        plan: "pro",
+        plan: "growth",
         cycle: "monthly",
         status: "created",
         provider: "razorpay",
         providerSubscriptionId: "sub_RZPTEST000001",
-        basePaise: PRO_PRICE_INR * 100,
+        basePaise: GROWTH_PRICE_INR * 100,
       })
       .returning();
 

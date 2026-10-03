@@ -56,6 +56,8 @@ export interface TextOpts {
   lineGap?: number;
   /** Single line: clip to the width instead of wrapping (used for labels only). */
   oneLine?: boolean;
+  /** Makes the text a link to this URL. */
+  link?: string;
 }
 
 /** Draw text and return its height. Wraps within `w`; never truncates. */
@@ -72,7 +74,7 @@ export function text(doc: Doc, s: string, x: number, y: number, o: TextOpts): nu
     height: o.oneLine ? (o.size ?? 8) * 1.4 : undefined,
     ellipsis: o.oneLine ? true : undefined,
   };
-  doc.text(s, x, y, opts);
+  doc.text(s, x, y, o.link ? { ...opts, link: o.link } : opts);
   return o.oneLine ? (o.size ?? 8) * 1.36 : doc.heightOfString(s, opts);
 }
 

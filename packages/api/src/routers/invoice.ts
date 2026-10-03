@@ -29,6 +29,7 @@ import { documentListOrder, documentSortSchema } from "../lib/document-list-orde
 import { documentFilterConditions, documentFilterSchema } from "../lib/document-list-filters.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPError } from "../lib/irp-client.js";
+import { hasFeature } from "../lib/feature-gate.js";
 import { createIRPClient, useSandboxProvider } from "../lib/gov-provider.js";
 import { recordGovUsage } from "../lib/gov-usage.js";
 import { assertBillTdsInput, syncBillTds } from "../lib/tds-service.js";
@@ -634,6 +635,9 @@ export const invoiceRouter = router({
       // Non-blocking: check e-invoice config + party GSTIN
       setTimeout(async () => {
         try {
+          // The plan's e-invoicing flag: a plan without it never auto-submits, even with a saved config.
+          if (!(await hasFeature(tenantId, "eInvoicing"))) return;
+
           const [config] = await db
             .select()
             .from(eInvoiceConfigs)

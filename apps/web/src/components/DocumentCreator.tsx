@@ -19,6 +19,7 @@ import { useLevelPricing } from "@/components/pricing/useLevelPricing";
 import { Select } from "@/components/ui/Select";
 import { useDeliveryMethods } from "@/lib/delivery-methods";
 import { BatchInFields, BatchOutSelect, batchInPayload } from "@/components/inventory/BatchFields";
+import { useFeature } from "@/hooks/useFeature";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -204,6 +205,9 @@ export function DocumentCreator({
   initialPartyId,
 }: DocumentCreatorProps) {
   const invoiceType = fixedInvoiceType[documentType] ?? requestedInvoiceType;
+  // Batch entry needs the plan's batches-and-expiry feature. Without it no batch fields are sent
+  // (the server picks the earliest-expiry batch itself) and the picker explains why it is off.
+  const batchFeature = useFeature("batchesExpiry");
   // Free goods ("10 + 1") on any goods document; rejections only on a GRN.
   const allowsFree = (freeQuantityDocumentTypes as readonly string[]).includes(documentType);
   const isGrn = documentType === "goods_receipt_note";
@@ -861,11 +865,13 @@ export function DocumentCreator({
         discountPercent: li.discountPercent,
         selectedUnit: li.selectedUnit || undefined,
         conversionFactor: li.conversionFactor || undefined,
-        ...(direction === 1 || (direction === 0 && li.batchId)
-          ? batchInPayload(li)
-          : li.batchId
-            ? { batchId: li.batchId, ...(li.allowExpired ? { allowExpired: true } : {}) }
-            : {}),
+        ...(!batchFeature.allowed
+          ? {}
+          : direction === 1 || (direction === 0 && li.batchId)
+            ? batchInPayload(li)
+            : li.batchId
+              ? { batchId: li.batchId, ...(li.allowExpired ? { allowExpired: true } : {}) }
+              : {}),
       };
     });
 
@@ -1385,7 +1391,11 @@ export function DocumentCreator({
                     first) on the way out. Only for items that track batches. */}
                 {li.itemId && direction !== 0 && (li.trackBatches || li.batchId) && (
                   <div className="rounded-lg border border-border-light bg-surface-0 px-3 py-2">
-                    {direction === 1 ? (
+                    {!batchFeature.allowed ? (
+                      <p role="status" className="text-xs text-text-secondary" data-testid="batch-plan-note">
+                        {batchFeature.message} Batches are picked for you, earliest expiry first.
+                      </p>
+                    ) : direction === 1 ? (
                       <BatchInFields
                         itemId={li.itemId}
                         trackExpiry={!!li.trackExpiry}

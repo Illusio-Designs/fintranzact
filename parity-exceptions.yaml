@@ -242,6 +242,11 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.extendTrial
+      - platform.grantTrial
+      - platform.endTrial
+      - platform.saveTrialSettings
+      - platform.trialSettings
       - platform.resetTwoFactor
       - platform.securityEvents
       - platform.plans
@@ -464,6 +469,25 @@ exceptions:
 
   cli:
     not-applicable:
+      # --- GST return status ---
+      # Web panel only; the filing steps themselves are not in the CLI / MCP.
+      - gstReturns.filingStatus
+      # GST filing wizard (web + mobile): an interactive, step-by-step flow that needs a person to type two OTPs
+      # (GST portal sign-in, EVC) and confirm irreversible steps; deliberately not offered to scripts or agents.
+      - gstReturns.requestOtp
+      - gstReturns.verifyOtp
+      - gstReturns.filingAttempt
+      - gstReturns.saveGstr1
+      - gstReturns.proceedGstr1
+      - gstReturns.fetchGstr1Summary
+      - gstReturns.pollReturnStatus
+      - gstReturns.requestEvcOtp
+      - gstReturns.fileGstr1
+      - gstReturns.saveGstr3b
+      - gstReturns.checkLedgerGstr3b
+      - gstReturns.postOffsetGstr3b
+      - gstReturns.fetchGstr3bDetails
+      - gstReturns.fileGstr3b
       # --- TDS ---
       # Not in the CLI / MCP yet; the web screens and the API cover it.
       - tds.sections
@@ -632,6 +656,11 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.extendTrial
+      - platform.grantTrial
+      - platform.endTrial
+      - platform.saveTrialSettings
+      - platform.trialSettings
       - platform.resetTwoFactor
       - platform.securityEvents
       - platform.plans
@@ -765,6 +794,25 @@ exceptions:
 
   mcp:
     not-applicable:
+      # --- GST return status ---
+      # Web panel only; the filing steps themselves are not in the CLI / MCP.
+      - gstReturns.filingStatus
+      # GST filing wizard (web + mobile): an interactive, step-by-step flow that needs a person to type two OTPs
+      # (GST portal sign-in, EVC) and confirm irreversible steps; deliberately not offered to scripts or agents.
+      - gstReturns.requestOtp
+      - gstReturns.verifyOtp
+      - gstReturns.filingAttempt
+      - gstReturns.saveGstr1
+      - gstReturns.proceedGstr1
+      - gstReturns.fetchGstr1Summary
+      - gstReturns.pollReturnStatus
+      - gstReturns.requestEvcOtp
+      - gstReturns.fileGstr1
+      - gstReturns.saveGstr3b
+      - gstReturns.checkLedgerGstr3b
+      - gstReturns.postOffsetGstr3b
+      - gstReturns.fetchGstr3bDetails
+      - gstReturns.fileGstr3b
       # --- TDS ---
       # Not in the CLI / MCP yet; the web screens and the API cover it.
       - tds.sections
@@ -941,6 +989,11 @@ exceptions:
       - platform.tenant
       - platform.setPlan
       - platform.setTrial
+      - platform.extendTrial
+      - platform.grantTrial
+      - platform.endTrial
+      - platform.saveTrialSettings
+      - platform.trialSettings
       - platform.resetTwoFactor
       - platform.securityEvents
       - platform.plans

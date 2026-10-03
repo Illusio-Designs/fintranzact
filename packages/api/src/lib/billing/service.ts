@@ -103,7 +103,7 @@ export async function recordPayment(opts: {
   const gstPaise = gstOnPaise(opts.basePaise);
   const numbered = opts.status === "captured" || opts.status === "credit" || opts.status === "due";
   const [tenant] = await db
-    .select({ name: tenants.name, billingName: tenants.billingName, billingGstin: tenants.billingGstin, billingAddress: tenants.billingAddress })
+    .select({ name: tenants.name, billingName: tenants.billingName, billingGstin: tenants.billingGstin, billingAddress: tenants.billingAddress, billingState: tenants.billingState })
     .from(tenants)
     .where(eq(tenants.id, opts.tenantId))
     .limit(1);
@@ -128,6 +128,8 @@ export async function recordPayment(opts: {
       billingName: tenant?.billingName ?? tenant?.name ?? null,
       billingGstin: tenant?.billingGstin ?? null,
       billingAddress: tenant?.billingAddress ?? null,
+      // Frozen with the invoice: a later change of the organisation's state never rewrites it.
+      billingState: tenant?.billingState ?? null,
       failureReason: opts.failureReason ?? null,
     })
     .returning({ id: billingPayments.id, invoiceSeq: billingPayments.invoiceSeq });
@@ -243,6 +245,7 @@ export async function startCheckout(opts: {
   let itemKey: string;
   let itemName: string;
   let monthlyPriceInr: number;
+  let yearlyPriceInr: number | null = null;
 
   if (opts.kind === "plan") {
     const plan = (await getPlanCatalog()).find((p) => p.id === opts.plan);
@@ -252,6 +255,7 @@ export async function startCheckout(opts: {
     itemKey = `plan:${plan.id}`;
     itemName = plan.name;
     monthlyPriceInr = plan.monthlyPriceInr;
+    yearlyPriceInr = plan.yearlyPriceInr;
   } else {
     const addon = addonById(opts.addon ?? "");
     if (!addon) throw new TRPCError({ code: "BAD_REQUEST", message: "Unknown add-on." });
@@ -315,7 +319,7 @@ export async function startCheckout(opts: {
     haltedPlanSubs = existing;
   }
 
-  const amount = cycleAmount(monthlyPriceInr, opts.cycle);
+  const amount = cycleAmount(monthlyPriceInr, opts.cycle, yearlyPriceInr);
   const gateway = getGateway();
   const created = await gateway.createSubscription({
     itemKey,

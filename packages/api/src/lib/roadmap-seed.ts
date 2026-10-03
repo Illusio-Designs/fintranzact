@@ -2238,6 +2238,83 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-03-plans-p1-p5",
+    updates: [
+      {
+        // Built with unit and integration tests (real Postgres): the three paid
+        // plans, the migration of old ids with Forever Free organisations
+        // grandfathered, monthly and yearly prices, the admin Plans editor, the
+        // pricing page and sign-up picker without a free plan, and server and
+        // client enforcement of every flag that has a feature behind it
+        // (packages/shared/src/feature-gates.ts). Kept in progress with the
+        // Business line unticked: "approvals" is on the plan but no approval
+        // workflow exists yet. Not run on a device or against live Razorpay.
+        title: "P1. Plans & pricing: paid plans only",
+        status: "in_progress",
+        done: [
+          "Grandfather existing Forever Free organisations (decided: keep unlimited)",
+          "New plan ids: starter, growth, business (enum + migration)",
+          "Migrate tenants and plan_settings from forever_free/free/pro/business/enterprise",
+          "Starter limits and features (1 business, 3 users, no PDF branding)",
+          "Growth limits and features (3 businesses, 10 users, e-invoicing, warehouses, batches, bank rec, store, API, export)",
+          "Monthly and yearly prices (2 months free) in plan settings",
+          "All prices/limits editable in admin Plans",
+          "Remove free plan from pricing page and sign-up plan picker",
+          "Mark Growth as highlighted",
+          "Update plan-limit tests and docs",
+        ],
+      },
+      {
+        // The pricing page reads the admin plan catalogue; toggle, add-ons,
+        // trial call to action, FAQ and GST note are all on /pricing. Not yet
+        // looked at in a browser against the deployed site.
+        title: "P5. Pricing page update",
+        status: "in_progress",
+        done: [
+          "Plan cards from the admin plan catalogue",
+          "Monthly/yearly toggle",
+          "Add-ons section with prices",
+          "Trial call to action",
+          "FAQ (trial end, GST, cancel, add-ons)",
+          "GST note",
+          "Remove free-plan wording across the site and help centre",
+        ],
+      },
+    ],
+  },
+  {
+    key: "2026-10-03-p2-trial",
+    updates: [
+      {
+        // Built with unit and integration tests (real Postgres): trial fields
+        // and settings, start at sign-up (14 days, 30 for a partner code), the
+        // Business-level access during the trial, the countdown banner (web and
+        // mobile), the 7 / 2 / 0 days-left reminders (email; in-app through the
+        // banner and the bell), read-only at the end with exports still open,
+        // email and GSTIN claims, and the admin controls. Kept in progress, with
+        // two lines left unticked on purpose: (1) the add-on caps (AI 50 questions,
+        // Payroll 10 employees) are in the entitlements payload but nothing can
+        // enforce them until the AI assistant and Payroll exist; (2) the phone
+        // check is not wired because sign-up does not collect a phone number.
+        // Not run on a device, in a browser against the real API, or with a live
+        // mail provider when this was written.
+        title: "P2. Full Access Trial",
+        status: "in_progress",
+        done: [
+          "Trial length 14 days (decided), editable in admin",
+          "30-day trial for partner referral sign-ups (decided)",
+          "Trial fields on organisations (start, end, source)",
+          "Start trial on sign-up; trial length setting in admin",
+          "Countdown banner",
+          "Reminders day 7 / 12 / 14 (email + in-app)",
+          "Read-only mode at expiry (view, search, download, export only)",
+          "Admin: extend trial or grant custom trial",
+          "Partner referral trial length",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

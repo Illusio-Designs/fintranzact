@@ -17,6 +17,7 @@ This folder contains **internal architecture documents, audit reports, and desig
 - [`architecture/analytics-design.md`](architecture/analytics-design.md) — Analytics and reporting design (dashboard widgets, reports router, data model); mostly built, with an "As built" note on what was not
 
 - [`ENTITLEMENTS.md`](ENTITLEMENTS.md) — Server-side plan/trial/billing enforcement: access states, tRPC gate and READ_ONLY_EXEMPT, REST endpoint policy table, error shapes, how to add a mutation/endpoint/add-on/limit
+- [`TRIAL.md`](TRIAL.md) — Full Access Trial operations: settings, one-trial-per-business claims, the reminder job, admin actions (extend, custom trial, end now), how to run and debug it
 - [`ACCOUNTANT-ACCESS.md`](ACCOUNTANT-ACCESS.md) — Accountant roles (bookkeeping, read-only auditor, filing-only CA), their grants, the mutation backstop and its allowlist, how to add a filing procedure, enum migration note
 - [`TWO-FACTOR.md`](TWO-FACTOR.md) — Two-factor authentication: tables, enrolment procedures, error codes, lockout, replay guards and key handling (`ENCRYPTION_KEY`, backup codes independent of it)
 
@@ -191,7 +192,7 @@ Automated invoice generation from recurring templates. Templates define a party,
 
 **Frequencies**: weekly, biweekly, monthly, quarterly, half_yearly, yearly, custom (N days).
 
-**Plan limits**: Free plan allows 5 successful runs/month/business. Exceeded runs are recorded as `skipped_limit`.
+**Plan limits**: none. No plan caps how many invoices recurring templates generate (historical runs may carry the old `skipped_limit` status).
 
 **Suggestions engine**: Analyzes last 2 months of invoices, detects median interval + coefficient of variation for top 20 parties. Returns suggested frequency, median amount, and invoice count.
 

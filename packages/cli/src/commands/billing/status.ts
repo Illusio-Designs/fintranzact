@@ -26,6 +26,7 @@ export async function billingStatusCommand(opts: StatusOpts): Promise<void> {
     if (s.graceUntil) lines.push(`Grace until: ${new Date(s.graceUntil).toLocaleDateString()}`);
     if (s.addons?.length) lines.push(`Add-ons:     ${s.addons.join(", ")}`);
     if (s.message) lines.push("", s.message);
+    if (s.trialMessage) lines.push(s.trialMessage);
     if (s.readOnly || s.state === "trialing") lines.push("", `Choose a plan (organisation owner): ${url}`);
     process.stdout.write(lines.join("\n") + "\n");
   } catch (e) {

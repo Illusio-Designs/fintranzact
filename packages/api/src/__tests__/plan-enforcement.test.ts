@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { ADDON_FEATURES, ADDON_IDS, PLAN_IDS, PLAN_LIMITS } from "@fintranzact/shared";
-import { storeAvailable, recurringRunAllowed, apiKeyUsable, auditWindowStart } from "../lib/plan-limits.js";
+import { storeAvailable, apiKeyUsable, auditWindowStart } from "../lib/plan-limits.js";
 import { tickTenant, type TenantTickDeps } from "../lib/recurring-invoice-scheduler.js";
 import { nextRunDateAfter } from "../lib/recurring-invoice-generator.js";
 
@@ -19,16 +19,6 @@ describe("storeAvailable", () => {
     expect(storeAvailable({ ...ok, readOnly: true, reason: "trial_ended" })).toBe(false));
   it("refuses a suspended organisation", () =>
     expect(storeAvailable({ ...ok, readOnly: false, reason: "tenant_suspended" })).toBe(false));
-});
-
-describe("recurringRunAllowed", () => {
-  it("allows below the limit and refuses at it", () => {
-    expect(recurringRunAllowed(4, 5)).toBe(true);
-    expect(recurringRunAllowed(5, 5)).toBe(false);
-    expect(recurringRunAllowed(9, 5)).toBe(false);
-  });
-  it("is unlimited for Infinity", () => expect(recurringRunAllowed(10_000, Infinity)).toBe(true));
-  it("refuses everything for a limit of 0", () => expect(recurringRunAllowed(0, 0)).toBe(false));
 });
 
 describe("apiKeyUsable", () => {
@@ -52,8 +42,8 @@ describe("auditWindowStart", () => {
 });
 
 describe("PDF branding defaults", () => {
-  it("match the old `plan !== free` rule for every plan", () => {
-    for (const id of PLAN_IDS) expect(!PLAN_LIMITS[id].pdfBranding, id).toBe(id !== "free");
+  it("carry the Powered by Fintranzact line by default on all three plans", () => {
+    for (const id of PLAN_IDS) expect(PLAN_LIMITS[id].pdfBranding, id).toBe(true);
   });
 });
 
@@ -69,7 +59,6 @@ describe("tickTenant", () => {
     const db = {} as never;
     return {
       readOnly: async () => readOnly,
-      runsPerMonth: async () => 5,
       getDb: async () => db,
       process: vi.fn(async () => {}),
       skip: vi.fn(async () => {}),
@@ -81,10 +70,10 @@ describe("tickTenant", () => {
     expect(d.skip).toHaveBeenCalledTimes(1);
     expect(d.process).not.toHaveBeenCalled();
   });
-  it("processes a writable organisation with its plan allowance", async () => {
+  it("processes a writable organisation", async () => {
     const d = deps(false);
     expect(await tickTenant("t1", d)).toBe("processed");
-    expect(d.process).toHaveBeenCalledWith(expect.anything(), 5);
+    expect(d.process).toHaveBeenCalledWith(expect.anything());
     expect(d.skip).not.toHaveBeenCalled();
   });
 });

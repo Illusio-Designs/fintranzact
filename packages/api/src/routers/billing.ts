@@ -8,15 +8,19 @@ import {
   ADDON_IDS,
   BILLING_UPGRADE_PATH,
   BILLING_CYCLES,
-  PLAN_IDS,
+  planIdSchema,
+  effectiveYearlyPriceInr,
+  isStateCode,
   SUBSCRIPTION_STATUS_LABELS,
   cycleAmount,
   entitlementMessage,
   planCheckoutAmount,
+  TRIAL_ALREADY_USED_MESSAGE,
   type SubscriptionStatus,
 } from "@fintranzact/shared";
 import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
 import { getEntitlements } from "../lib/entitlements.js";
+import { featureCatalogInfo } from "../lib/feature-gate.js";
 import { PLAN_MANAGER_ROLES } from "../lib/plan-manager.js";
 import { getPlanCatalog } from "../lib/plan-catalog.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
@@ -78,7 +82,7 @@ export const billingRouter = router({
    */
   demoCheckout: protectedProcedure
     .input(z.object({
-      plan: z.enum(PLAN_IDS),
+      plan: planIdSchema,
       cycle: z.enum(BILLING_CYCLES),
       method: z.enum(["upi", "card", "netbanking"]),
     }))
@@ -104,7 +108,7 @@ export const billingRouter = router({
    * already has a plan subscription changes it with changePlan instead.
    */
   subscribePlan: protectedProcedure
-    .input(z.object({ plan: z.enum(PLAN_IDS), cycle: z.enum(BILLING_CYCLES) }))
+    .input(z.object({ plan: planIdSchema, cycle: z.enum(BILLING_CYCLES) }))
     .mutation(async ({ input, ctx }) => {
       if (!razorpayConfigured() && !demoPaymentsEnabled()) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Online payments are not available yet. Contact us to upgrade." });
@@ -188,6 +192,7 @@ export const billingRouter = router({
       .from(tenantMembers)
       .where(and(eq(tenantMembers.tenantId, ctx.tenantId), eq(tenantMembers.userId, ctx.user.id)))
       .limit(1);
+    const featureInfo = await featureCatalogInfo();
     return {
       state: ent.state,
       readOnly: ent.readOnly,
@@ -195,8 +200,19 @@ export const billingRouter = router({
       message: ent.reason ? entitlementMessage(ent.reason) : null,
       trialEndsAt: ent.trialEndsAt,
       trialDaysLeft: ent.trialDaysLeft,
+      /** The Full Access Trial: active, window, source, add-on caps (additive). */
+      trial: ent.trial,
+      /** Why there is no trial, when there is none because one was already used. */
+      trialMessage: ent.trial.source === "none" && ent.readOnly ? TRIAL_ALREADY_USED_MESSAGE : null,
+      effectivePlan: ent.effectivePlan,
       graceUntil: ent.graceUntil,
       addons: ent.addons,
+      // The plan's feature flags in force now (trial = Business-level, grandfathered = all), and
+      // for each flag the cheapest plan that has it in the stored plan settings (for badges and prompts).
+      plan: ent.plan,
+      features: ent.features,
+      featureRequiredPlans: featureInfo.requiredPlans,
+      topPlanName: featureInfo.topPlanName,
       upgradePath: BILLING_UPGRADE_PATH,
       canManageBilling: !!membership && PLAN_MANAGER_ROLES.includes(membership.role),
     };
@@ -214,6 +230,7 @@ export const billingRouter = router({
         billingName: tenants.billingName,
         billingGstin: tenants.billingGstin,
         billingAddress: tenants.billingAddress,
+        billingState: tenants.billingState,
         billingEmail: tenants.billingEmail,
       })
       .from(tenants)
@@ -276,14 +293,17 @@ export const billingRouter = router({
           monthlyPriceInr: p.monthlyPriceInr!,
           features: p.features,
           highlight: !!p.highlight,
+          yearlyPriceInr: effectiveYearlyPriceInr(p),
           monthly: planCheckoutAmount(p.monthlyPriceInr!, "monthly"),
-          yearly: planCheckoutAmount(p.monthlyPriceInr!, "yearly"),
+          yearly: planCheckoutAmount(p.monthlyPriceInr!, "yearly", p.yearlyPriceInr),
         })),
       billingDetails: {
         name: tenant.billingName ?? tenant.name,
         gstin: tenant.billingGstin,
         address: tenant.billingAddress,
         email: tenant.billingEmail,
+        /** GST state code, or null. When a GSTIN is set the GSTIN's state decides the tax (see billingPlaceOfSupply). */
+        state: tenant.billingState,
       },
       usage: {
         invoicesThisMonth,
@@ -310,6 +330,8 @@ export const billingRouter = router({
       gstin: z.string().trim().toUpperCase().regex(/^[0-9]{2}[A-Z0-9]{13}$/, "Enter a valid 15-character GSTIN").nullable(),
       address: z.string().trim().max(500).nullable(),
       email: z.string().trim().email().max(254).nullable(),
+      /** GST state code (e.g. "24"), from the shared list; null clears it. Omitted = unchanged. */
+      state: z.string().trim().nullable().optional().refine((v) => v == null || v === "" || isStateCode(v), "Choose a state or UT from the list"),
     }))
     .mutation(async ({ input, ctx }) => {
       const tenantId = await requirePlanManagerTenant(ctx);
@@ -320,6 +342,7 @@ export const billingRouter = router({
           billingGstin: input.gstin,
           billingAddress: input.address,
           billingEmail: input.email,
+          ...(input.state === undefined ? {} : { billingState: input.state || null }),
           updatedAt: new Date(),
         })
         .where(eq(tenants.id, tenantId));
@@ -328,7 +351,7 @@ export const billingRouter = router({
 
   /** Upgrade now (prorated) or schedule a downgrade for the period end. */
   changePlan: protectedProcedure
-    .input(z.object({ plan: z.enum(PLAN_IDS), cycle: z.enum(BILLING_CYCLES) }))
+    .input(z.object({ plan: planIdSchema, cycle: z.enum(BILLING_CYCLES) }))
     .mutation(async ({ input, ctx }) => {
       if (!razorpayConfigured() && !demoPaymentsEnabled()) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Online payments are not available yet. Contact us to upgrade." });

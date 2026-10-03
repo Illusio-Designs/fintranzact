@@ -185,9 +185,18 @@
 | gstr2b.summary | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ |
 | gstr2b.upload | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstr2b.uploads | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ |
+| gstReturns.checkLedgerGstr3b | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
+| gstReturns.fetchGstr1Summary | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
+| gstReturns.fetchGstr3bDetails | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstReturns.fileGstr1 | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstReturns.fileGstr3b | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
+| gstReturns.filingAttempt | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ |
+| gstReturns.filingStatus | query | authorized | read:GstReport | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ |
+| gstReturns.pollReturnStatus | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
+| gstReturns.postOffsetGstr3b | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
+| gstReturns.proceedGstr1 | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstReturns.pull2b | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
+| gstReturns.requestEvcOtp | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstReturns.requestOtp | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstReturns.saveGstr1 | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | gstReturns.saveGstr3b | mutation | authorized | create:GstReport | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
@@ -310,6 +319,9 @@
 | platform.billingSummary | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.closeGovUsageMonth | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.deletePayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.endTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.extendTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.grantTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.me | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | platform.overview | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.partner | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -325,12 +337,14 @@
 | platform.roadmapUpdate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.sandboxQuota | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.saveTrialSettings | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.securityEvents | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.setTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.subscriptions | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenant | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.tenants | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.trialSettings | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.updatePartner | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.updatePayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | pos.catalog | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -497,7 +511,7 @@
 | tenant.setPinned | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.setSecurityPolicy | mutation | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | tenant.updateMemberRole | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| tenant.updatePlan | mutation | protected | — (+ plans are changed by the platform team only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| tenant.updatePlan | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | warehouse.accessList | query | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | warehouse.accessSet | mutation | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | warehouse.inventorySettingsGet | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

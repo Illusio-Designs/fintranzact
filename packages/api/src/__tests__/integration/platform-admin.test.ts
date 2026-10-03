@@ -12,7 +12,7 @@ import { createTestCaller, createUnauthenticatedCaller } from "../helpers/create
 import { platformAdminEmails, seedPlatformAdmin } from "../../lib/platform-admin.js";
 import { getLimits } from "../../lib/plan-limits.js";
 import { listPublicPlans } from "../../lib/public-plans.js";
-import { PLAN_DEFAULTS, limitsToStored, type PlanSettings } from "@fintranzact/shared";
+import { PLAN_DEFAULTS, REMOVED_PLAN_IDS, limitsToStored, type PlanSettings } from "@fintranzact/shared";
 
 const ADMIN_EMAIL = "rishi.platform@fintranzact.com";
 
@@ -138,116 +138,143 @@ describe("plan setup", () => {
   const planOf = async () =>
     (await getControlDb().select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenant.id)))[0]?.plan;
 
-  it("lets the platform admin put an organisation on a paid plan", async () => {
+  it("lets the platform admin put an organisation on a plan", async () => {
     expect(await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "business" }))
       .toEqual({ id: tenant.id, plan: "business" });
     expect(await planOf()).toBe("business");
   });
 
   it("refuses plan changes from anyone else", async () => {
-    await expect(callerFor(owner).platform.setPlan({ tenantId: tenant.id, plan: "enterprise" }))
+    await expect(callerFor(owner).platform.setPlan({ tenantId: tenant.id, plan: "business" }))
       .rejects.toThrow(/Platform admin access only/);
   });
 
-  it("does not let an owner upgrade themselves to a paid plan", async () => {
-    await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "free" });
-    await expect(callerFor(owner).tenant.updatePlan({ plan: "pro" })).rejects.toThrow(/set up by the Fintranzact team/);
-    expect(await planOf()).toBe("free");
+  it("refuses a removed plan id, with a message that says so", async () => {
+    for (const plan of REMOVED_PLAN_IDS) {
+      await expect(callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: plan as never }))
+        .rejects.toThrow(/plan has been removed\. Choose Starter, Growth or Business/);
+    }
   });
 
-  it("still lets an owner choose a free plan, or keep the paid plan they were given", async () => {
-    await callerFor(owner).tenant.updatePlan({ plan: "forever_free" });
-    expect(await planOf()).toBe("forever_free");
-    await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "pro" });
-    await expect(callerFor(owner).tenant.updatePlan({ plan: "pro" })).resolves.toEqual({ plan: "pro" });
+  it("lets an owner switch the plan they are trying, and keep the plan an admin gave them", async () => {
+    await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "starter" });
+    await callerFor(owner).tenant.updatePlan({ plan: "growth" });
+    expect(await planOf()).toBe("growth");
+    await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "business" });
+    await expect(callerFor(owner).tenant.updatePlan({ plan: "business" })).resolves.toEqual({ plan: "business" });
   });
 
   it("reports an unknown organisation", async () => {
-    await expect(callerFor(admin).platform.setPlan({ tenantId: "00000000-0000-4000-8000-000000000000", plan: "pro" }))
+    await expect(callerFor(admin).platform.setPlan({ tenantId: "00000000-0000-4000-8000-000000000000", plan: "growth" }))
       .rejects.toThrow(/Organisation not found/);
   });
 });
 
 describe("editing plans", () => {
-  const proSettings = (): PlanSettings => ({
-    name: "Pro",
+  const growthSettings = (): PlanSettings => ({
+    name: "Growth",
     tagline: "For growing teams",
-    monthlyPriceInr: 1499,
+    monthlyPriceInr: 799,
+    yearlyPriceInr: 7_999,
     features: ["Priority support", "10 businesses"],
     highlight: true,
     visible: true,
-    limits: { ...limitsToStored(PLAN_DEFAULTS.pro.limits), maxBusinesses: 10, maxApiKeys: null },
+    limits: { ...limitsToStored(PLAN_DEFAULTS.growth.limits), maxBusinesses: 10, maxApiKeys: null, eInvoicing: false },
   });
 
   afterEach(async () => {
-    for (const plan of ["pro", "forever_free", "business"] as const) {
+    for (const plan of ["starter", "growth", "business"] as const) {
       await callerFor(admin).platform.resetPlan({ plan });
     }
   });
 
-  it("lists every plan with its limits and how many organisations use it", async () => {
+  it("lists the three plans with prices, limits and how many organisations use them", async () => {
     const plans = await callerFor(admin).platform.plans();
-    expect(plans.map((p) => p.id)).toEqual(["forever_free", "free", "pro", "business", "enterprise"]);
-    const pro = plans.find((p) => p.id === "pro")!;
-    expect(pro).toMatchObject({ edited: false, visible: true, limits: { maxBusinesses: 5 } });
-    expect(plans.find((p) => p.id === "forever_free")!.limits.maxBusinesses).toBeNull();
+    expect(plans.map((p) => p.id)).toEqual(["starter", "growth", "business"]);
+    const growth = plans.find((p) => p.id === "growth")!;
+    expect(growth).toMatchObject({
+      edited: false,
+      visible: true,
+      highlight: true,
+      monthlyPriceInr: 699,
+      yearlyPriceInr: 6_990,
+      effectiveYearlyPriceInr: 6_990,
+      limits: { maxBusinesses: 3, maxTeamMembers: 10, eInvoicing: true },
+    });
+    expect(plans.find((p) => p.id === "starter")!).toMatchObject({ monthlyPriceInr: 299, yearlyPriceInr: 2_990, limits: { maxBusinesses: 1, maxTeamMembers: 3 } });
+    expect(plans.find((p) => p.id === "business")!.limits.maxBusinesses).toBeNull();
+    for (const p of plans) expect(p.grandfatheredCount).toBeGreaterThanOrEqual(0);
   });
 
-  it("applies a saved plan to the pricing page and to the limits the API enforces", async () => {
-    await callerFor(admin).platform.savePlan({ plan: "pro", settings: proSettings() });
+  it("applies a saved plan, yearly price and feature flags to the pricing page and to the limits the API enforces", async () => {
+    const saved = await callerFor(admin).platform.savePlan({ plan: "growth", settings: growthSettings() });
+    expect(saved.warnings).toEqual([]);
+    expect(saved).toMatchObject({ yearlyPriceInr: 7_999, effectiveYearlyPriceInr: 7_999 });
 
-    const pro = (await listPublicPlans()).find((p) => p.id === "pro")!;
-    expect(pro).toMatchObject({ name: "Pro", monthlyPriceInr: 1499, price: "₹1,499", highlight: true });
-    expect(pro.features).toEqual(["Priority support", "10 businesses"]);
+    const growth = (await listPublicPlans()).find((p) => p.id === "growth")!;
+    expect(growth).toMatchObject({ name: "Growth", monthlyPriceInr: 799, yearlyPriceInr: 7_999, price: "₹799", yearlyPrice: "₹7,999", highlight: true });
+    expect(growth.features).toEqual(["Priority support", "10 businesses"]);
 
-    const limits = await getLimits("pro");
+    const limits = await getLimits("growth");
     expect(limits.maxBusinesses).toBe(10);
     expect(limits.maxApiKeys).toBe(Infinity);
-    expect(limits.maxTeamMembers).toBe(PLAN_DEFAULTS.pro.limits.maxTeamMembers);
+    expect(limits.eInvoicing).toBe(false);
+    expect(limits.maxTeamMembers).toBe(PLAN_DEFAULTS.growth.limits.maxTeamMembers);
+  });
+
+  it("derives the yearly price (ten months) when none is set", async () => {
+    const saved = await callerFor(admin).platform.savePlan({ plan: "growth", settings: { ...growthSettings(), yearlyPriceInr: null } });
+    expect(saved).toMatchObject({ yearlyPriceInr: null, effectiveYearlyPriceInr: 7_990 });
+  });
+
+  it("accepts a yearly price above 12 months of the monthly price, with a warning", async () => {
+    const saved = await callerFor(admin).platform.savePlan({ plan: "growth", settings: { ...growthSettings(), yearlyPriceInr: 9_999 } });
+    expect(saved.warnings).toHaveLength(1);
+    expect(saved.warnings[0]).toMatch(/more than 12 months/);
+    expect(saved.yearlyPriceInr).toBe(9_999);
   });
 
   it("hides a plan from the pricing page without touching organisations on it", async () => {
     await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "business" });
     await callerFor(admin).platform.savePlan({
       plan: "business",
-      settings: { ...proSettings(), name: "Business", visible: false, limits: limitsToStored(PLAN_DEFAULTS.business.limits) },
+      settings: { ...growthSettings(), name: "Business", visible: false, limits: limitsToStored(PLAN_DEFAULTS.business.limits) },
     });
     expect((await listPublicPlans()).map((p) => p.id)).not.toContain("business");
     const detail = await callerFor(admin).platform.tenant({ id: tenant.id });
     expect(detail.plan).toBe("business");
+    expect(detail.accessGrandfathered).toBe(false);
   });
 
   it("goes back to the built-in plan on reset", async () => {
-    await callerFor(admin).platform.savePlan({ plan: "pro", settings: proSettings() });
-    await callerFor(admin).platform.resetPlan({ plan: "pro" });
-    expect((await getLimits("pro")).maxBusinesses).toBe(PLAN_DEFAULTS.pro.limits.maxBusinesses);
-    const pro = (await callerFor(admin).platform.plans()).find((p) => p.id === "pro")!;
-    expect(pro.edited).toBe(false);
+    await callerFor(admin).platform.savePlan({ plan: "growth", settings: growthSettings() });
+    await callerFor(admin).platform.resetPlan({ plan: "growth" });
+    expect((await getLimits("growth")).maxBusinesses).toBe(PLAN_DEFAULTS.growth.limits.maxBusinesses);
+    const growth = (await callerFor(admin).platform.plans()).find((p) => p.id === "growth")!;
+    expect(growth.edited).toBe(false);
+    expect(growth.monthlyPriceInr).toBe(699);
   });
 
-  it("lets owners pick a plan themselves only while it is free and offered", async () => {
-    await callerFor(admin).platform.setPlan({ tenantId: tenant.id, plan: "free" });
-    await callerFor(admin).platform.savePlan({
-      plan: "forever_free",
-      settings: { ...proSettings(), name: "Forever Free", monthlyPriceInr: 99, limits: limitsToStored(PLAN_DEFAULTS.forever_free.limits) },
-    });
-    await expect(callerFor(owner).tenant.updatePlan({ plan: "forever_free" })).rejects.toThrow(/set up by the Fintranzact team/);
-
-    await callerFor(admin).platform.resetPlan({ plan: "forever_free" });
-    await expect(callerFor(owner).tenant.updatePlan({ plan: "forever_free" })).resolves.toEqual({ plan: "forever_free" });
-  });
-
-  it("rejects invalid settings and refuses non-admins", async () => {
+  it("rejects invalid settings (negative prices, bad limits) and refuses non-admins", async () => {
     await expect(
-      callerFor(admin).platform.savePlan({ plan: "pro", settings: { ...proSettings(), name: "" } }),
+      callerFor(admin).platform.savePlan({ plan: "growth", settings: { ...growthSettings(), name: "" } }),
+    ).rejects.toThrow();
+    await expect(
+      callerFor(admin).platform.savePlan({ plan: "growth", settings: { ...growthSettings(), monthlyPriceInr: -1 } }),
+    ).rejects.toThrow();
+    await expect(
+      callerFor(admin).platform.savePlan({ plan: "growth", settings: { ...growthSettings(), yearlyPriceInr: -1 } }),
     ).rejects.toThrow();
     await expect(
       callerFor(admin).platform.savePlan({
-        plan: "pro",
-        settings: { ...proSettings(), limits: { ...proSettings().limits, maxBusinesses: -1 } },
+        plan: "growth",
+        settings: { ...growthSettings(), limits: { ...growthSettings().limits, maxBusinesses: -1 } },
       }),
     ).rejects.toThrow();
-    await expect(callerFor(owner).platform.savePlan({ plan: "pro", settings: proSettings() })).rejects.toThrow(
+    await expect(
+      callerFor(admin).platform.savePlan({ plan: "free" as never, settings: growthSettings() }),
+    ).rejects.toThrow(/plan has been removed/);
+    await expect(callerFor(owner).platform.savePlan({ plan: "growth", settings: growthSettings() })).rejects.toThrow(
       /Platform admin access only/,
     );
     await expect(callerFor(owner).platform.plans()).rejects.toThrow(/Platform admin access only/);

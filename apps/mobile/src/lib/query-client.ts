@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import { useAuthStore } from "../stores/auth";
 import { handleEntitlementError } from "./entitlement";
 import { handleTwoFactorError } from "./two-factor-enforcement";
+import { isPortalSessionError } from "@fintranzact/shared";
 
 /** Entitlement refusals get one prompt, and billing.status is refreshed so the banner is current. */
 function handleEntitlement(error: unknown) {
@@ -40,6 +41,8 @@ export const queryClient = new QueryClient({
           httpStatus: trpcError?.data?.httpStatus,
         });
       }
+      // A GST portal session that ended is not the app's sign-in (the filing screen asks for a new OTP).
+      if (isPortalSessionError(error)) return;
       if (trpcError?.data?.code === "UNAUTHORIZED") {
         SecureStore.setItemAsync("sessionExpired", "1");
         useAuthStore.getState().logout();

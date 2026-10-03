@@ -1,19 +1,19 @@
 /**
  * J1 — Sign-up & onboarding, as a new customer does it in the browser.
  *
- *   A. Password sign-up: /register → plan selection: the paid Business plan
- *      → the demo checkout (test mode, paid with the test card) → the
- *      "Set up your business" wizard with a GSTIN (pincode fills city/state,
- *      GSTIN fills PAN and the state code) → dashboard. Then sign out, a wrong
- *      password is refused, and the right one lands the owner on the dashboard.
- *   B. Password sign-up on the free plan (dark theme): /register → plan
- *      selection (Forever Free) → onboarding (owner without a business lands
- *      there) → an unregistered business. Then sign out and log in again with
- *      the password, straight into the dashboard.
+ *   A. Pricing page (yearly switch shows "2 months free") → the Growth card
+ *      ("Start 14-day free trial") → /register?plan=growth → password sign-up
+ *      → straight to the "Set up your business" wizard (the plan is chosen) with a GSTIN (pincode
+ *      fills city/state, GSTIN fills PAN and the state code) → dashboard. Then
+ *      sign out, a wrong password is refused, and the right one lands the owner
+ *      on the dashboard. The database shows plan growth, a trial ending in 14 days.
+ *   B. Password sign-up with no plan chosen (dark theme): /register → plan
+ *      picker (Growth is the default; switch to Starter) → onboarding (owner
+ *      without a business lands there) → an unregistered business. Then sign out
+ *      and log in again with the password, straight into the dashboard.
  *
+ * There is no free plan: the trial needs no card, so nothing is paid in this journey.
  * Turnstile is stubbed at the network layer; nothing external is called.
- * The checkout is the demo one (no gateway, no money): Business is given a
- * listed price for the journey, since by default it is priced on request.
  */
 import type { Page } from "@playwright/test";
 import {
@@ -25,60 +25,19 @@ import {
   signOut,
   uid,
 } from "../../helpers/journey";
-import {
-  businessesCreatedBy,
-  membershipsOf,
-  offerBusinessPlanAt,
-  userByEmail,
-  withdrawPlanPrice,
-} from "../../helpers/db";
+import { businessesCreatedBy, membershipsOf, userByEmail } from "../../helpers/db";
 
 const PASSWORD = "Journey@1234";
 const DASHBOARD_HEADING = /Good (morning|afternoon|evening)/;
-/** Business at ₹2,499 a month: + 18% GST (₹449.82) = ₹2,948.82. */
-const BUSINESS_PRICE_INR = 2499;
-const BUSINESS_TOTAL = "₹2,948.82";
+const TRIAL_DAYS = 14;
 
+/** Choose a plan card on the plan picker and start the trial. */
 async function choosePlan(page: Page, planName: RegExp) {
   await expect(page).toHaveURL(/\/auth\/plan-selection/, { timeout: 15_000 });
   await expect(page.getByRole("heading", { name: "Select the plan that fits your business" })).toBeVisible();
   await expectNoHorizontalScroll(page, "plan selection");
   await page.getByRole("button", { name: planName }).first().click();
-  await page.getByRole("button", { name: "Create your company" }).click();
-}
-
-/** Pick the paid Business plan and pay for it with the test card in the demo checkout. */
-async function payForBusinessPlan(page: Page) {
-  await expect(page).toHaveURL(/\/auth\/plan-selection/, { timeout: 15_000 });
-  await expect(page.getByRole("heading", { name: "Select the plan that fits your business" })).toBeVisible();
-  await expectNoHorizontalScroll(page, "plan selection");
-  await page.getByRole("button", { name: /Business.*₹2,499/ }).first().click();
-  await page.getByRole("button", { name: "Continue to payment" }).click();
-
-  const checkout = page.getByRole("dialog", { name: "Pay for Business" });
-  await expect(checkout).toBeVisible();
-  await expect(checkout.getByText("Test mode — no money is taken")).toBeVisible();
-  await expect(checkout.getByTestId("checkout-total")).toHaveText(BUSINESS_TOTAL);
-  await expectNoHorizontalScroll(page, "demo checkout");
-
-  await checkout.getByRole("tab", { name: "Card" }).click();
-  const pay = checkout.getByRole("button", { name: `Pay ${BUSINESS_TOTAL}` });
-  await checkout.getByLabel("Card number").fill("4111111111111112");
-  await checkout.getByLabel("Card number").blur();
-  await expect(checkout.getByText("Enter a valid card number")).toBeVisible();
-  await checkout.getByLabel("Card number").fill("4111111111111111");
-  await expect(checkout.getByLabel("Card number")).toHaveValue("4111 1111 1111 1111");
-  await checkout.getByLabel("Expiry (MM/YY)").fill("1230");
-  await checkout.getByLabel("CVV").fill("123");
-  await expect(pay).toBeDisabled(); // no name on the card yet
-  await checkout.getByLabel("Name on card").fill("J1 Owner");
-  await expectNoHorizontalScroll(page, "demo checkout: card");
-  await pay.click();
-  await expect(checkout.getByRole("button", { name: "Processing…" })).toBeDisabled();
-
-  await expect(checkout.getByText("Payment successful")).toBeVisible({ timeout: 15_000 });
-  await expect(checkout.getByTestId("payment-id")).toHaveText(/^pay_demo_[\w-]{14}$/);
-  await checkout.getByRole("button", { name: "Create your company" }).click();
+  await page.getByRole("button", { name: `Start ${TRIAL_DAYS}-day free trial` }).click();
 }
 
 /** The wizard's current step title (the big heading above the fields). */
@@ -166,20 +125,7 @@ async function expectDashboard(page: Page, businessName: string) {
 }
 
 test.describe("J1 sign-up & onboarding", () => {
-  test.beforeEach(async ({ page }) => {
-    // Business is priced on request by default; give it a price to pay.
-    await offerBusinessPlanAt(BUSINESS_PRICE_INR);
-    // The API caches the plan catalogue for up to 30 seconds.
-    await expect
-      .poll(async () => (await page.request.get(`${API_URL}/api/trpc/plan.list`)).text(), { timeout: 45_000, intervals: [1_000] })
-      .toContain(`"monthlyPriceInr":${BUSINESS_PRICE_INR}`);
-  });
-
-  test.afterEach(async () => {
-    await withdrawPlanPrice("business");
-  });
-
-  test("password sign-up → paid plan (demo checkout) → business with GSTIN → dashboard; logout; wrong and right password", async ({
+  test("pricing page → Growth → sign-up → trial on Growth → business with GSTIN → dashboard; logout; wrong and right password", async ({
     page,
     guard,
   }) => {
@@ -189,8 +135,25 @@ test.describe("J1 sign-up & onboarding", () => {
     const bizName = `J1 Traders ${id}`;
     const gstin = "27AAPFU0939F1ZV";
 
+    // ── Pricing page: three paid plans, no free plan ────────────
+    await page.goto("/pricing");
+    await expect(page.getByRole("heading", { name: /Simple pricing/ })).toBeVisible();
+    for (const name of ["Starter", "Growth", "Business"]) {
+      await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    }
+    await expect(page.getByText(/Forever Free/i)).toHaveCount(0);
+    await page.getByRole("button", { name: /Yearly/ }).first().click();
+    await expect(page.getByText("2 months free").first()).toBeVisible();
+    // Add-ons with prices, the GST note and the trial call to action.
+    await expect(page.getByRole("heading", { name: "Extras you can add to any plan" })).toBeVisible();
+    for (const addon of ["AI Assistant", "AI Plus", "Payroll", "Store Pro"]) await expect(page.getByRole("heading", { name: addon, exact: true })).toBeVisible();
+    await expect(page.getByText("₹3,990").first()).toBeVisible(); // AI Assistant yearly: ten months of ₹399
+    await expect(page.getByText(/before 18% GST/).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: `Start your ${TRIAL_DAYS}-day Full Access Trial — no card needed` }).first()).toBeVisible();
+    await page.getByRole("link", { name: `Start ${TRIAL_DAYS}-day free trial` }).nth(1).click();
+    await expect(page).toHaveURL(/\/register\?plan=growth/);
+
     // ── Register ────────────────────────────────────────────────
-    await page.goto("/register");
     await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
     await expectTheme(page, "light");
     await expectNoHorizontalScroll(page, "register");
@@ -199,17 +162,22 @@ test.describe("J1 sign-up & onboarding", () => {
     await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await expect(page.getByText("Password strength: Strong")).toBeVisible();
     await page.getByLabel("Retype password").fill(PASSWORD);
-    await page.locator("form").getByRole("button", { name: "Create free account" }).click();
+    await page.locator("form").getByRole("button", { name: "Start free trial" }).click();
 
-    // ── Plan: Business, paid in the demo checkout ───────────────
-    await expect(page).toHaveURL(/\/auth\/plan-selection/, { timeout: 15_000 });
+    // ── A plan chosen on the pricing page skips the plan picker; the trial runs, no payment ─
+    await expect(page).toHaveURL(/\/onboarding/, { timeout: 15_000 });
     const fresh = await userByEmail(email);
     const [freshOrg] = await membershipsOf(fresh!.id);
-    expect(freshOrg, "a new organisation has not chosen a plan").toMatchObject({ plan: "forever_free", plan_selected_at: null });
-    await payForBusinessPlan(page);
+    expect(freshOrg, "the plan from the pricing page, confirmed, with the trial running").toMatchObject({
+      plan: "growth",
+      plan_selected_at: expect.any(Date),
+      access_grandfathered: false,
+    });
+    const trialDays = (freshOrg.trial_ends_at!.getTime() - Date.now()) / 86_400_000;
+    expect(trialDays).toBeGreaterThan(TRIAL_DAYS - 0.1);
+    expect(trialDays).toBeLessThanOrEqual(TRIAL_DAYS);
 
-    // ── Owner without a business lands on onboarding ────────────
-    await expect(page).toHaveURL(/\/onboarding/, { timeout: 15_000 });
+    // ── Owner without a business sets one up ────────────────────
     await completeBusinessWizard(page, {
       name: bizName,
       phone: "9876543210",
@@ -231,7 +199,7 @@ test.describe("J1 sign-up & onboarding", () => {
     expect(user!.has_password).toBe(true);
     const orgs = await membershipsOf(user!.id);
     expect(orgs).toHaveLength(1);
-    expect(orgs[0]).toMatchObject({ role: "owner", plan: "business" });
+    expect(orgs[0]).toMatchObject({ role: "owner", plan: "growth" });
     expect(orgs[0].plan_selected_at, "plan choice recorded").toBeInstanceOf(Date);
     const [biz] = await businessesCreatedBy(user!.id);
     expect(biz).toMatchObject({
@@ -269,10 +237,10 @@ test.describe("J1 sign-up & onboarding", () => {
   });
 });
 
-test.describe("J1 sign-up on the free plan (dark theme)", () => {
+test.describe("J1 sign-up with no plan chosen (dark theme)", () => {
   test.use({ theme: "dark" });
 
-  test("password sign-up → plan (Forever Free) → onboarding (unregistered business) → dashboard; sign out and log in", async ({
+  test("password sign-up → plan picker (Starter) → onboarding (unregistered business) → dashboard; sign out and log in", async ({
     page,
   }) => {
     const id = uid();
@@ -289,10 +257,19 @@ test.describe("J1 sign-up on the free plan (dark theme)", () => {
     await page.getByLabel("Email address").fill(email);
     await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await page.getByLabel("Retype password").fill(PASSWORD);
-    await page.locator("form").getByRole("button", { name: "Create free account" }).click();
+    await page.locator("form").getByRole("button", { name: "Start free trial" }).click();
 
-    // A new organisation's owner chooses a plan first, however they signed up.
-    await choosePlan(page, /Forever Free/);
+    // No plan named: the owner confirms one on the plan picker (Growth is preselected).
+    await expect(page).toHaveURL(/\/auth\/plan-selection/, { timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /^Most popular Growth/ })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: /^Yearly/ }).click();
+    await expect(page.getByText("2 months free").first()).toBeVisible();
+    await expect(page.getByText("₹6,990").first()).toBeVisible();
+    await expect(page.getByText("+ 18% GST").first()).toBeVisible();
+    const signedUp = await userByEmail(email);
+    const [defaultOrg] = await membershipsOf(signedUp!.id);
+    expect(defaultOrg, "no plan named: Growth, trial running, plan not confirmed yet").toMatchObject({ plan: "growth", plan_selected_at: null });
+    await choosePlan(page, /Starter/);
     await expect(page).toHaveURL(/\/onboarding/, { timeout: 15_000 });
     await expectTheme(page, "dark");
 
@@ -322,7 +299,7 @@ test.describe("J1 sign-up on the free plan (dark theme)", () => {
       state_code: "29",
     });
     const orgs = await membershipsOf(user!.id);
-    expect(orgs).toEqual([expect.objectContaining({ role: "owner", plan: "forever_free", plan_selected_at: expect.any(Date) })]);
+    expect(orgs).toEqual([expect.objectContaining({ role: "owner", plan: "starter", plan_selected_at: expect.any(Date), trial_ends_at: expect.any(Date) })]);
 
     // ── Sign out, then log in with the password ─────────────────
     await signOut(page);

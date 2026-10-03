@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { invalidateEntitlements } from "../lib/entitlements-cache.js";
 import { TRPCError } from "@trpc/server";
-import { controlDb, getTenantDb, tenants, tenantMembers, userTenantPrefs, invitations, users, sessions, securityEvents, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
+import { controlDb, getTenantDb, billingSubscriptions, tenants, tenantMembers, userTenantPrefs, invitations, users, sessions, securityEvents, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
 import { eq, and, gt, isNull, desc, sql, inArray, like } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { createHash } from "node:crypto";
@@ -11,9 +11,11 @@ import { invalidateTwoFactorGateMember, invalidateTwoFactorGateTenant } from "..
 import { getGateMembership, getTwoFactorRequirementForCaller } from "../lib/two-factor-gate.js";
 import { setSecurityPolicy, type PolicyDeps } from "../lib/two-factor-policy.js";
 import { recordSecurityEvent } from "../lib/security-events.js";
-import { TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS, ACCESS_EVENT_TYPES, caRoleDescription, memberRoleLabel, isCaRole } from "@fintranzact/shared";
+import { planIdSchema, TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS, ACCESS_EVENT_TYPES, caRoleDescription, memberRoleLabel, isCaRole } from "@fintranzact/shared";
 import { emailService } from "../lib/email.js";
-import { isPaidPlan, isSelfServePlan } from "../lib/plan-catalog.js";
+import { getCatalogPlan } from "../lib/plan-catalog.js";
+import { newOrganisationPlanFields } from "../lib/signup-plan.js";
+import { decideNewOrgTrial, finishNewOrgTrial } from "../lib/trial.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
 import { effectiveOwnerPlan, enforceTeamMemberLimit, countCaSlots, enforceOrgCreationLimit, assertOwnedOrgsWritable, getLimits } from "../lib/plan-limits.js";
 import { checkInviteRules, checkRoleChangeRules, countsTowardTeamLimit, normalizeInviteEmail } from "../lib/invite-rules.js";
@@ -139,35 +141,54 @@ const drizzlePolicyDeps: PolicyDeps = {
 };
 
 export const tenantRouter = router({
+  /**
+   * The owner switches the plan their organisation is trying. There is no free
+   * plan and no payment here: this only applies to an organisation with no
+   * live plan subscription (a trial). Once a plan is bought, plans change from
+   * Settings -> Billing (billing.changePlan). A grandfathered organisation
+   * (former Forever Free) has permanent full access and nothing to choose.
+   * Removed plan ids are refused with a message that says so.
+   */
   updatePlan: protectedProcedure
-    .input(z.object({
-      plan: z.enum(["forever_free", "free", "pro", "business", "enterprise"]),
-    }))
+    .input(z.object({ plan: planIdSchema }))
     .mutation(async ({ input, ctx }) => {
       const tenantId = await requirePlanManagerTenant(ctx);
 
-      const [current] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+      const [current] = await controlDb
+        .select({ plan: tenants.plan, accessGrandfathered: tenants.accessGrandfathered })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1);
       if (!current) {
         throw new TRPCError({ code: "NOT_FOUND", message: "No organization selected to update." });
       }
       // Keeping the current plan changes nothing, but still records that the
-      // owner has made their choice (new sign-ups start on Forever Free).
+      // owner has confirmed their choice.
       if (current.plan === input.plan) {
         await controlDb.update(tenants)
           .set({ planSelectedAt: new Date(), updatedAt: new Date() })
           .where(eq(tenants.id, tenantId));
         return { plan: current.plan };
       }
-
-      // Owners can pick a free (₹0) plan that is on offer themselves; paid
-      // plans are set up by a platform admin (platform.setPlan).
-      if (!(await isSelfServePlan(input.plan))) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Paid plans are set up by the Fintranzact team. Contact us to upgrade." });
+      if (current.accessGrandfathered) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Your organisation has permanent full access. There is no plan to choose." });
       }
-      // A paid plan was set up by a platform admin; choosing a free plan here
-      // must never switch it off.
-      if (await isPaidPlan(current.plan)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Your plan is managed by the Fintranzact team. Contact us to change it." });
+      const offered = await getCatalogPlan(input.plan);
+      if (!offered || !offered.visible) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "That plan is not on offer." });
+      }
+      // A bought plan changes through billing (proration, the gateway subscription).
+      const [live] = await controlDb
+        .select({ id: billingSubscriptions.id })
+        .from(billingSubscriptions)
+        .where(and(
+          eq(billingSubscriptions.tenantId, tenantId),
+          eq(billingSubscriptions.kind, "plan"),
+          inArray(billingSubscriptions.status, ["active", "past_due", "halted"]),
+        ))
+        .limit(1);
+      if (live) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Your plan is already subscribed. Change it from Settings → Billing." });
       }
 
       await controlDb.update(tenants)
@@ -202,6 +223,8 @@ export const tenantRouter = router({
       let tenantId: string;
       try {
         tenantId = await controlDb.transaction(async (tx) => {
+          // Full Access Trial, unless one was already used for this email (lib/trial.ts).
+          const trial = await decideNewOrgTrial(tx, { email: ctx.user.email });
           const [tenant] = await tx.insert(tenants).values({
             name: tenantName,
             slug,
@@ -210,9 +233,10 @@ export const tenantRouter = router({
             dbPort: dbConfig.dbPort,
             dbUser: dbConfig.dbUser,
             dbPassword: dbConfig.dbPassword,
-            plan: "forever_free",
-            planSelectedAt: null,
+            // Growth with the trial (lib/signup-plan.ts); the owner confirms the plan next.
+            ...newOrganisationPlanFields(null, new Date(), trial),
           }).returning({ id: tenants.id });
+          await finishNewOrgTrial(tx, tenant.id, trial);
 
           await tx.insert(tenantMembers).values({
             tenantId: tenant.id,
@@ -240,12 +264,17 @@ export const tenantRouter = router({
       const tenantName = `${displayName}'s Organization`;
       const slug = generateSlug(tenantName);
 
-      const [tenant] = await controlDb.insert(tenants).values({
-        name: tenantName,
-        slug,
-        plan: "forever_free",
-        planSelectedAt: null,
-      }).returning({ id: tenants.id });
+      const tenant = await controlDb.transaction(async (tx) => {
+        const trial = await decideNewOrgTrial(tx, { email: ctx.user.email });
+        const [row] = await tx.insert(tenants).values({
+          name: tenantName,
+          slug,
+          // Growth with the trial (lib/signup-plan.ts); the owner confirms the plan next.
+          ...newOrganisationPlanFields(null, new Date(), trial),
+        }).returning({ id: tenants.id });
+        await finishNewOrgTrial(tx, row.id, trial);
+        return row;
+      });
 
       await controlDb.insert(tenantMembers).values({
         tenantId: tenant.id,

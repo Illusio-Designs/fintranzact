@@ -15,6 +15,8 @@ import { invalidateSessionCache, getSessionIdFromRequest, revokeAllUserSessions 
 import { verifyTurnstile } from "../lib/turnstile.js";
 import { getClientKind } from "../lib/client-headers.js";
 import { enforceSessionLimit } from "../lib/plan-limits.js";
+import { newOrganisationPlanFields, resolveSignupPlan } from "../lib/signup-plan.js";
+import { decideNewOrgTrial, finishNewOrgTrial } from "../lib/trial.js";
 import { createFixedWindowLimiter } from "../lib/fixed-window-limiter.js";
 import { createTwoFactorDeps, createTwoFactorLoginDeps, drizzleActivityStore } from "../lib/two-factor-store.js";
 import { ownSecurityActivity } from "../lib/security-activity.js";
@@ -212,20 +214,27 @@ async function createTenantForUser(
   displayName: string,
   parentTx?: ControlTx,
   referralCode: string | null = null,
+  requestedPlan: string | null = null,
+  ownerEmail: string | null = null,
 ): Promise<string> {
   const run = async (tx: ControlTx) => {
     const tenantName = `${displayName.trim() || "My Organization"}'s Organization`;
     const slug = generateSlug(tenantName);
 
+    const partnerId = await partnerForReferralCode(tx, referralCode);
+    // Full Access Trial: 14 days (30 for a partner referral), or none when one
+    // was already used for this email (lib/trial.ts). The claim is written
+    // below, in this same transaction.
+    const trial = await decideNewOrgTrial(tx, { email: ownerEmail, partner: !!partnerId });
     const [tenant] = await tx.insert(tenants).values({
       name: tenantName,
       slug,
-      plan: "forever_free",
-      // Self sign-up: the owner still has to choose a plan.
-      planSelectedAt: null,
+      // The chosen plan (Growth when none) with the trial; see lib/signup-plan.ts.
+      ...newOrganisationPlanFields(requestedPlan, new Date(), trial),
       referralCode: normalizeReferralCode(referralCode),
-      partnerId: await partnerForReferralCode(tx, referralCode),
+      partnerId,
     }).returning({ id: tenants.id });
+    await finishNewOrgTrial(tx, tenant.id, trial);
 
     await tx.insert(tenantMembers).values({
       tenantId: tenant.id,
@@ -336,7 +345,11 @@ async function writeNewTenantRows(
   userId: string,
   provisioned: ProvisionedTenant,
   referralCode: string | null = null,
+  requestedPlan: string | null = null,
+  ownerEmail: string | null = null,
 ): Promise<string> {
+  const partnerId = await partnerForReferralCode(tx, referralCode);
+  const trial = await decideNewOrgTrial(tx, { email: ownerEmail, partner: !!partnerId });
   const [tenant] = await tx.insert(tenants).values({
     name: provisioned.tenantName,
     slug: provisioned.slug,
@@ -345,13 +358,14 @@ async function writeNewTenantRows(
     dbPort: provisioned.dbConfig.dbPort,
     dbUser: provisioned.dbConfig.dbUser,
     dbPassword: provisioned.dbConfig.dbPassword,
-    plan: "forever_free",
-    planSelectedAt: null,
+    // The chosen plan (Growth when none) with the trial; see lib/signup-plan.ts.
+    ...newOrganisationPlanFields(requestedPlan, new Date(), trial),
     referralCode: normalizeReferralCode(referralCode),
     // A partner's code links the organisation to that partner (referrals,
     // badge and commission). Any other code is kept as typed.
-    partnerId: await partnerForReferralCode(tx, referralCode),
+    partnerId,
   }).returning({ id: tenants.id });
+  await finishNewOrgTrial(tx, tenant.id, trial);
   await tx.insert(tenantMembers).values({
     tenantId: tenant.id,
     userId,
@@ -414,6 +428,9 @@ export const authRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Verification failed. Please refresh and try again." });
       }
     }
+
+    // Refuse a removed plan id before anything is created (no free plan exists).
+    resolveSignupPlan(input.plan);
 
     // Emails are stored lowercase; older rows may not be, so match case-insensitively.
     const email = input.email.trim().toLowerCase();
@@ -498,10 +515,10 @@ export const authRouter = router({
                 message: "Sign-up state changed — please try again.",
               });
             }
-            await writeNewTenantRows(tx, user.id, provisioned, input.referralCode?.trim() || null);
+            await writeNewTenantRows(tx, user.id, provisioned, input.referralCode?.trim() || null, input.plan ?? null, email);
             markUsed();
           } else {
-            await createTenantForUser(user.id, displayName, tx, input.referralCode?.trim() || null);
+            await createTenantForUser(user.id, displayName, tx, input.referralCode?.trim() || null, input.plan ?? null, email);
           }
 
           const sessionId = nanoid(64);

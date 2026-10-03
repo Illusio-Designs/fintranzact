@@ -1,20 +1,21 @@
 /**
  * Plan limits configuration.
  *
- * Free tier is generous enough to get hooked (unlimited invoices, parties, payments)
- * but gates features that matter at scale (team size, multi-business, integrations).
+ * Three paid plans (Starter, Growth, Business; see @fintranzact/shared plans.ts). Every plan
+ * has unlimited invoices, parties and payments; the plans differ in businesses, users, API and more.
  *
- * Self-hosted defaults to "free" plan — same limits apply including PDF branding.
+ * A self-hosted install uses the same plans and limits.
  */
 
 import { eq, and, gt, gte, isNull, count, sql, inArray, notInArray } from "drizzle-orm";
 import { controlDb, tenants, tenantMembers, invitations } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 import { businesses, recurringInvoiceRuns } from "@fintranzact/db";
-import { PLAN_LIMITS, CA_ROLES, type PlanLimits } from "@fintranzact/shared";
+import { CA_ROLES, type PlanLimits } from "@fintranzact/shared";
 import { getPlanLimits } from "./plan-catalog.js";
 import { getEntitlements, assertWritable } from "./entitlements.js";
 import { limitError } from "./entitlement-error.js";
+import { apiAccessMessage, featureRefusal } from "./feature-gate.js";
 
 // ── Plan limit definitions ────────────────────────────────────────────────────
 // Defined once in @fintranzact/shared so the pricing page shows exactly the
@@ -29,9 +30,6 @@ export function getLimits(plan: string): Promise<PlanLimits> {
   return getPlanLimits(plan);
 }
 
-/** Backwards-compat export used by recurring invoice scheduler. */
-export const RECURRING_RUNS_PER_MONTH_FREE = PLAN_LIMITS.free.recurringRunsPerMonth;
-
 // ── Enforcement helpers ───────────────────────────────────────────────────────
 
 /** The limits in force for an organisation: one source, shared with the read-only/add-on checks. */
@@ -40,26 +38,15 @@ async function getTenantLimits(tenantId: string): Promise<PlanLimits> {
 }
 
 /**
- * Recurring-invoice runs a tenant may make per month, per business. Hosted
- * (multi-tenant) deployments use the organization's plan; a self-hosted
- * single-tenant install keeps the original free-plan allowance.
- */
-export async function recurringRunLimit(tenantId: string | null): Promise<number> {
-  if (!tenantId || process.env.MULTI_TENANT !== "true") return RECURRING_RUNS_PER_MONTH_FREE;
-  return (await getTenantLimits(tenantId)).recurringRunsPerMonth;
-}
-
-/**
  * A user's effective plan is the best plan across the orgs they own, or null
  * when they own none. It starts from the plans actually owned (not an assumed
- * default), so owning only legacy "free" orgs keeps the free limits.
- * forever_free outranks free because it is the unlimited successor plan.
+ * default). A grandfathered organisation sits on Business, the top plan.
  */
 export function effectiveOwnerPlan(ownedOrgs: Array<{ plan: string | null }>): string | null {
-  const planRank: Record<string, number> = { free: 0, forever_free: 1, pro: 2, business: 3, enterprise: 4 };
+  const planRank: Record<string, number> = { starter: 0, growth: 1, business: 2 };
   let bestPlan: string | null = null;
   for (const org of ownedOrgs) {
-    const plan = org.plan ?? "free";
+    const plan = org.plan ?? "starter";
     if (bestPlan === null || (planRank[plan] ?? 0) > (planRank[bestPlan] ?? 0)) {
       bestPlan = plan;
     }
@@ -102,7 +89,7 @@ export async function enforceOrgCreationLimit(userId: string): Promise<void> {
  * suspended: otherwise a lapsed owner could start a fresh trial in a new
  * organisation instead of paying. The refusal carries that organisation's
  * entitlement reason. Users who own none, or only organisations in good
- * standing (including forever_free and legacy free), are unaffected.
+ * standing (including grandfathered organisations), are unaffected.
  */
 export async function assertOwnedOrgsWritable(userId: string): Promise<void> {
   const owned = await controlDb.select({ tenantId: tenantMembers.tenantId })
@@ -114,6 +101,25 @@ export async function assertOwnedOrgsWritable(userId: string): Promise<void> {
 }
 
 /**
+ * Businesses an organisation has. A hosted organisation has its own database,
+ * so every business in it is its own. A single-database install keeps every
+ * organisation's businesses in one table, so only those created by the
+ * organisation's members count: otherwise one organisation's businesses would
+ * use up another's plan limit.
+ */
+export async function countOrganisationBusinesses(tenantId: string, tenantDb: TenantDatabase): Promise<number> {
+  if (process.env.MULTI_TENANT === "true") {
+    const [{ count: n }] = await tenantDb.select({ count: count() }).from(businesses);
+    return n;
+  }
+  const [{ count: n }] = await tenantDb
+    .select({ count: count() })
+    .from(businesses)
+    .where(sql`${businesses.createdByUserId} IN (SELECT ${tenantMembers.userId} FROM ${tenantMembers} WHERE ${tenantMembers.tenantId} = ${tenantId})`);
+  return n;
+}
+
+/**
  * Enforce business creation limit.
  * Counts existing businesses in the tenant DB and compares against the plan limit.
  */
@@ -121,9 +127,7 @@ export async function enforceBusinessLimit(tenantId: string, tenantDb: TenantDat
   const limits = await getTenantLimits(tenantId);
   if (limits.maxBusinesses === Infinity) return;
 
-  const [{ count: bizCount }] = await tenantDb
-    .select({ count: count() })
-    .from(businesses);
+  const bizCount = await countOrganisationBusinesses(tenantId, tenantDb);
 
   if (bizCount >= limits.maxBusinesses) {
     throw limitError(
@@ -185,9 +189,8 @@ export async function countCaSlots(tenantId: string): Promise<{ memberCaCount: n
 export async function enforceApiKeyLimit(tenantId: string): Promise<void> {
   const limits = await getTenantLimits(tenantId);
   if (limits.maxApiKeys === 0) {
-    throw limitError(
-      "API keys are available on paid plans. Upgrade to Pro to use the CLI and MCP server.",
-    );
+    // API access is the plan's maxApiKeys: the wording names the cheapest plan that has it, from the stored settings.
+    throw limitError(`${await apiAccessMessage()} Upgrade to use the CLI and MCP server.`);
   }
   if (limits.maxApiKeys === Infinity) return;
 
@@ -229,7 +232,7 @@ export async function enforceSessionLimit(userId: string, parentTx?: ControlTxLi
     .where(eq(tenantMembers.userId, userId))
     .limit(1);
 
-  const limits = membership ? await getTenantLimits(membership.tenantId) : await getLimits("free");
+  const limits = membership ? await getTenantLimits(membership.tenantId) : await getLimits("starter");
   if (limits.maxConcurrentSessions === Infinity) return;
 
   const activeSessions = await db
@@ -250,9 +253,6 @@ export async function enforceSessionLimit(userId: string, parentTx?: ControlTxLi
   }
 }
 
-/** The message for a plan without data export. */
-export const DATA_EXPORT_DENIED_MESSAGE = "Data export is available on paid plans. Upgrade to export your data.";
-
 /**
  * Enforce data export access. This checks the plan's `dataExport` flag only:
  * a read-only organisation (trial over, payment failed) can still export when
@@ -261,9 +261,10 @@ export const DATA_EXPORT_DENIED_MESSAGE = "Data export is available on paid plan
  * and GET /api/export/:tenantId.
  */
 export async function enforceDataExport(tenantId: string): Promise<void> {
-  const limits = await getTenantLimits(tenantId);
-  if (!limits.dataExport) {
-    throw limitError(DATA_EXPORT_DENIED_MESSAGE);
+  const ent = await getEntitlements(tenantId);
+  if (!ent.limits.dataExport) {
+    // feature_not_in_plan: "Data export is available on the Growth plan and above."
+    throw await featureRefusal("dataExport", ent.plan);
   }
 }
 
@@ -280,17 +281,7 @@ export async function storeServesTenant(tenantId: string): Promise<boolean> {
   return storeAvailable(await getEntitlements(tenantId));
 }
 
-/**
- * Whether a recurring run may happen now. `runsThisMonth` counts successful
- * runs this month for the business; the limit is the plan's
- * recurringRunsPerMonth (Infinity = unlimited). Shared by the scheduler and
- * recurringInvoice.runNow so both count the same way.
- */
-export function recurringRunAllowed(runsThisMonth: number, limit: number): boolean {
-  return !Number.isFinite(limit) || runsThisMonth < limit;
-}
-
-/** Successful recurring runs this calendar month for a business: the one counter the limit uses. */
+/** Successful recurring runs this calendar month for a business (shown as usage; nothing is capped). */
 export async function countRecurringRunsThisMonth(
   db: TenantDatabase,
   businessId: string,
@@ -310,29 +301,11 @@ export async function countRecurringRunsThisMonth(
   return n;
 }
 
-/** Refuse a manual recurring run once the plan's monthly allowance is used. */
-export async function enforceRecurringRunLimit(
-  tenantId: string | null,
-  db: TenantDatabase,
-  businessId: string,
-): Promise<void> {
-  // The organisation's own plan (a real tenant row exists in hosted AND
-  // self-hosted mode here), not the scheduler's self-hosted free allowance.
-  const limit = tenantId ? await getTenantLimits(tenantId).then((l) => l.recurringRunsPerMonth) : RECURRING_RUNS_PER_MONTH_FREE;
-  if (!Number.isFinite(limit)) return;
-  const used = await countRecurringRunsThisMonth(db, businessId);
-  if (!recurringRunAllowed(used, limit)) {
-    throw limitError(
-      `Your plan allows ${limit} recurring invoice run${limit === 1 ? "" : "s"} a month per business, and this month's are used. Upgrade for more.`,
-    );
-  }
-}
-
 /**
  * Whether a PDF is printed WITHOUT the "Powered by Fintranzact" footer. The
  * plan's `pdfBranding` limit decides (so a platform admin's edit in
- * plan_settings takes effect). Defaults match the old `plan !== "free"` rule:
- * only the legacy free plan is branded. The PDF data field is still called
+ * plan_settings takes effect). All three built-in plans show the small line
+ * (pdfBranding true); a plan can later switch it off. The PDF data field is still called
  * isPaidPlan for historical reasons.
  */
 export async function pdfBrandingHidden(plan: string): Promise<boolean> {
@@ -343,7 +316,7 @@ export async function pdfBrandingHidden(plan: string): Promise<boolean> {
  * Whether an API key may authenticate. Existing keys keep working after a
  * downgrade, with two exceptions: a suspended organisation is shut (the same
  * as for a signed-in user), and a plan with no API keys at all
- * (maxApiKeys === 0, e.g. legacy free) stops honouring keys it once issued.
+ * (maxApiKeys === 0, e.g. Starter) stops honouring keys it once issued.
  * Writes by a key in a read-only organisation are refused by the entitlement
  * gate like any other caller's (a key sets ctx.tenantId, so it passes through
  * the same tenant-scoped bases). Keys beyond a reduced maxApiKeys above zero
@@ -364,12 +337,10 @@ export function auditWindowStart(retentionDays: number | null, now: Date = new D
   return new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
 }
 
-/** Message for a plan without the online store. Staff-facing only: buyers never see it. */
-export const ONLINE_STORE_DENIED_MESSAGE = "The online store is available on paid plans. Upgrade to turn it on.";
-
-/** Refuse enabling or configuring the online store on a plan without it. */
+/** Refuse enabling or configuring the online store on a plan without it. Staff-facing only: buyers never see it. */
 export async function enforceOnlineStore(tenantId: string): Promise<void> {
-  if (!(await getTenantLimits(tenantId)).onlineStore) {
-    throw limitError(ONLINE_STORE_DENIED_MESSAGE);
+  const ent = await getEntitlements(tenantId);
+  if (!ent.limits.onlineStore) {
+    throw await featureRefusal("onlineStore", ent.plan);
   }
 }

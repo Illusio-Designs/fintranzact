@@ -68,7 +68,7 @@ async function setState(state: State, tenant: { id: string } = world.tenantA) {
     await db.insert(billingSubscriptions).values({
       tenantId: tenant.id,
       kind: "plan",
-      plan: "pro",
+      plan: "growth",
       cycle: "monthly",
       status: "halted",
       provider: "razorpay",

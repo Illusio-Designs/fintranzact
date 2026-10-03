@@ -28,7 +28,7 @@ import type { Manifest } from "@fintranzact/shared/selfExport";
 import { verifyExportToken } from "../lib/exportToken.js";
 import { logger } from "../lib/logger.js";
 import { getEntitlements } from "../lib/entitlements.js";
-import { DATA_EXPORT_DENIED_MESSAGE } from "../lib/plan-limits.js";
+import { featureRefusalBody } from "../lib/feature-gate.js";
 import { APP_VERSION, SCHEMA_CHECKSUM } from "../lib/exportManifest.js";
 
 // ── Snake → camel column map ──────────────────────────────────────────────────
@@ -175,8 +175,9 @@ export function registerExportRoute(app: Hono): void {
 
     // The plan's dataExport flag applies here too (the token may predate a
     // downgrade). Read-only organisations still export when the flag is on.
-    if (!(await getEntitlements(tenantId)).limits.dataExport) {
-      return c.json({ error: DATA_EXPORT_DENIED_MESSAGE }, 403);
+    const ent = await getEntitlements(tenantId);
+    if (!ent.limits.dataExport) {
+      return c.json(await featureRefusalBody("dataExport", ent.plan), 403);
     }
 
     const tenantSlug = tenant.slug;

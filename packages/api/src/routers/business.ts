@@ -1,4 +1,5 @@
-import { eq, and, sql, desc, gte, lte, inArray, count, getTableColumns } from "drizzle-orm";
+import { claimGstinForTenant } from "../lib/trial-claims.js";
+import { eq, and, sql, desc, gte, lte, inArray, ne, count, getTableColumns } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { ensureDefaultWarehouse } from "../lib/inventory-service.js";
@@ -26,7 +27,7 @@ import { router, tenantProcedure, viewerProcedure, adminProcedure, type TenantDa
 import { requireCan, caRoleMutationAllowed, caRoleRefusalMessage, mapDbRole } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { validateLogoDataUrl } from "../lib/validate-logo.js";
-import { enforceBusinessLimit, enforceDataExport, getLimits, auditWindowStart } from "../lib/plan-limits.js";
+import { countOrganisationBusinesses, enforceBusinessLimit, enforceDataExport, getLimits, auditWindowStart } from "../lib/plan-limits.js";
 import { getEntitlements } from "../lib/entitlements.js";
 import { seedChartOfAccounts } from "../lib/coa-seed.js";
 import {
@@ -383,9 +384,9 @@ export const businessRouter = router({
   // Check if more businesses can be created in this tenant (plan limit).
   canCreate: tenantProcedure.query(async ({ ctx }) => {
     const [row] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
-    const limits = await getLimits(row?.plan ?? "free");
+    const limits = await getLimits(row?.plan ?? "starter");
     if (limits.maxBusinesses === Infinity) return true;
-    const [{ count: bizCount }] = await ctx.db.select({ count: count() }).from(businesses);
+    const bizCount = await countOrganisationBusinesses(ctx.tenantId, ctx.db);
     return bizCount < limits.maxBusinesses;
   }),
 
@@ -508,6 +509,10 @@ export const businessRouter = router({
       return biz;
     });
 
+    // One trial per business: the first organisation to save a GSTIN claims it
+    // (lib/trial-claims.ts). Never fails the save.
+    if (input.gstin) await claimGstinForTenant(ctx.tenantId!, input.gstin);
+
     logAudit(ctx.db, {
       businessId: biz.id,
       userId: ctx.user.id,
@@ -574,6 +579,8 @@ export const businessRouter = router({
         eWayBillUsername,
         eWayBillPassword,
       });
+
+      if (input.data.gstin) await claimGstinForTenant(ctx.tenantId!, input.data.gstin);
 
       logAudit(ctx.db, {
         businessId: biz.id,
@@ -900,7 +907,8 @@ export const businessRouter = router({
       requireCan(ctx.ability, "read", "Report");
       const offset = (input.page - 1) * input.limit;
 
-      const conditions = [eq(auditLog.businessId, ctx.businessId)];
+      // gst_return_attempt rows are the GST filing state journal (lib/gst-return-flow.ts), not user activity.
+      const conditions = [eq(auditLog.businessId, ctx.businessId), ne(auditLog.entityType, "gst_return_attempt")];
       // The plan's auditRetentionDays is a visible window: older entries stay stored but are hidden.
       const windowStart = auditWindowStart((await getEntitlements(ctx.tenantId)).limits.auditRetentionDays);
       if (windowStart) conditions.push(gte(auditLog.createdAt, windowStart));

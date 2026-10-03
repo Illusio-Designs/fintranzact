@@ -8,8 +8,12 @@ export type { LineItemInput, LineItemResult, InvoiceTotalsInput, InvoiceTotals, 
 export { calculateGatewayCharge } from "./gateway.js";
 export type { GatewayChargeConfig, GatewayChargeRate, GatewayChargeResult } from "./gateway.js";
 export * from "./plans.js";
+export * from "./feature-gates.js";
+export * from "./plan-migration.js";
+export * from "./indian-states.js";
 export * from "./billing.js";
 export * from "./entitlements.js";
+export * from "./trial.js";
 export * from "./partners.js";
 export * from "./gst-uqc.js";
 export * from "./roadmap.js";
@@ -25,3 +29,4 @@ export * from "./access-log.js";
 export * from "./client-switcher.js";
 export * from "./gstin.js";
 export * from "./gstin-fill.js";
+export * from "./gst-filing-wizard.js";

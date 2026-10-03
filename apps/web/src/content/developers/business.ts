@@ -430,7 +430,7 @@ resp = httpx.get(
       gotchas: [
         "Requires `Report:read` permission (viewer role or above).",
         "User names are resolved from the control database \u2014 if a user has been deleted, the name shows as 'Unknown user'.",
-        "Accountant (CA) actions are recorded with `metadata.role` (`auditor` / `ca_filing`). Filing actions: `gstReturns.requestOtp`, `verifyOtp`, `saveGstr1`, `fileGstr1`, `saveGstr3b`, `fileGstr3b`, `pull2b` (entity `gst_return`; metadata `period`, `referenceId`; never OTPs or credentials), `gstr2b.upload` / `gstr2b.linkInvoice` / `gstr2b.ignoreRecord` (entities `gstr2b_upload`, `gstr2b_record`) and `period.lockGstMonth`. Who was invited, accepted, changed, removed and what a CA downloaded is in `tenant.accessLog`.",
+        "Accountant (CA) actions are recorded with `metadata.role` (`auditor` / `ca_filing`). Filing actions: `gstReturns.requestOtp`, `verifyOtp`, `saveGstr1`, `proceedGstr1`, `fetchGstr1Summary`, `requestEvcOtp`, `fileGstr1`, `saveGstr3b`, `checkLedgerGstr3b`, `postOffsetGstr3b`, `fetchGstr3bDetails`, `fileGstr3b`, `pull2b` (entity `gst_return`; metadata `period`, `referenceId`, `nil`; never OTPs, tokens or checksums), `gstr2b.upload` / `gstr2b.linkInvoice` / `gstr2b.ignoreRecord` (entities `gstr2b_upload`, `gstr2b_record`) and `period.lockGstMonth`. Who was invited, accepted, changed, removed and what a CA downloaded is in `tenant.accessLog`.",
         "The audit trail only records actions performed through the API \u2014 direct database changes are not tracked.",
       ],
     },
@@ -479,7 +479,7 @@ with open("invoices.csv", "w") as f:
       },
       gotchas: [
         "Requires `admin` role and `Business:manage` permission.",
-        "Subject to plan-level data export limits \u2014 may return FORBIDDEN on the free plan.",
+        "Subject to plan-level data export limits \u2014 may return FORBIDDEN on a plan without data export (Starter).",
         "Large businesses may produce significant response sizes. Consider streaming for production use.",
       ],
       relatedEndpoints: ["business-audit-trail"],

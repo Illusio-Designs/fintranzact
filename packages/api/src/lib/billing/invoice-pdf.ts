@@ -4,15 +4,17 @@
  * Rendered on demand from a captured billing_payments row — the row IS the
  * invoice register (number, amounts, frozen customer details); this file only
  * draws it. Tax split: a customer GSTIN from the seller's own state gets
- * CGST + SGST, anything else (other states, no GSTIN) gets IGST. Seller
- * GSTIN / state come from env so they can be set when registration lands.
+ * CGST + SGST, other states get IGST; a customer without a GSTIN is taxed by
+ * its billing state (same rule), and by IGST when that is unknown too (see
+ * billingPlaceOfSupply in @fintranzact/shared). Seller GSTIN / state come
+ * from env so they can be set when registration lands.
  * Rates and the SAC code are to be verified with the CA before go-live.
  */
 
 import PDFDocument from "pdfkit";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { PLAN_GST_RATE_PERCENT } from "@fintranzact/shared";
+import { PLAN_GST_RATE_PERCENT, billingPlaceOfSupply, stateByCode } from "@fintranzact/shared";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONT_REGULAR = resolve(__dirname, "../../../fonts/NotoSans-Regular.ttf");
@@ -49,6 +51,8 @@ export interface BillingInvoiceData {
     name: string;
     gstin: string | null;
     address: string | null;
+    /** GST state code frozen with the payment (null = not given). */
+    state?: string | null;
   };
   isCreditNote: boolean;
 }
@@ -59,9 +63,17 @@ const fmtPaise = (paise: number) =>
 const fmtDate = (d: Date) =>
   new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(d);
 
-/** CGST+SGST when the customer's GSTIN is in the seller's state, IGST otherwise. */
-export function gstSplit(customerGstin: string | null, gstPaise: number): Array<{ label: string; paise: number }> {
-  const intraState = !!customerGstin && customerGstin.slice(0, 2) === BILLING_SELLER.stateCode();
+/**
+ * CGST+SGST when the place of supply is the seller's state, IGST otherwise.
+ * The customer's GSTIN decides when it has a valid one; else its billing
+ * state; with neither (or an invalid GSTIN and no state) it is IGST.
+ */
+export function gstSplit(
+  customer: { gstin?: string | null; state?: string | null },
+  gstPaise: number,
+  sellerStateCode: string = BILLING_SELLER.stateCode(),
+): Array<{ label: string; paise: number }> {
+  const intraState = billingPlaceOfSupply(customer, sellerStateCode).intraState;
   if (!intraState) return [{ label: `IGST (${PLAN_GST_RATE_PERCENT}%)`, paise: gstPaise }];
   const half = Math.floor(gstPaise / 2);
   return [
@@ -112,6 +124,11 @@ export function generateBillingInvoicePDF(data: BillingInvoiceData): Promise<Buf
     doc.font("NotoSans").fontSize(9).fillColor(muted);
     if (data.customer.address) doc.text(data.customer.address, margin, doc.y + 2, { width: contentW * 0.6 });
     doc.text(`GSTIN: ${data.customer.gstin ?? "Unregistered"}`, margin, doc.y + 2);
+    const supply = billingPlaceOfSupply(data.customer, BILLING_SELLER.stateCode());
+    const supplyState = stateByCode(supply.stateCode);
+    const supplyText = supplyState ? `${supplyState.name} (${supplyState.code})` : null;
+    if (supplyText) doc.text(`State: ${supplyText}`, margin, doc.y + 2);
+    doc.text(`Place of supply: ${supplyText ?? "Not specified (taxed as IGST)"}`, margin, doc.y + 2);
     y = doc.y + 20;
 
     // ── Line table ──
@@ -146,7 +163,7 @@ export function generateBillingInvoicePDF(data: BillingInvoiceData): Promise<Buf
       y += bold ? 20 : 16;
     };
     totalRow("Taxable value", fmtPaise(data.basePaise));
-    for (const part of gstSplit(data.customer.gstin, data.gstPaise)) totalRow(part.label, fmtPaise(part.paise));
+    for (const part of gstSplit(data.customer, data.gstPaise)) totalRow(part.label, fmtPaise(part.paise));
     doc.moveTo(totalsX, y).lineTo(pageW - margin, y).strokeColor(border).stroke();
     y += 8;
     totalRow(data.isCreditNote ? "Total credit" : "Total", fmtPaise(data.totalPaise), true);

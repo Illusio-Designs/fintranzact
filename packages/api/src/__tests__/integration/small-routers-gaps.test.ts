@@ -119,9 +119,9 @@ describe("with a test world", () => {
       expect(row).toBeDefined();
     });
 
-    it("enforces the plan's key count (pro allows 3)", async () => {
-      const tenant = await createTenant({ plan: "pro", slug: "pro-keys" });
-      const user = await createUser({ email: "pro.keys@example.in" });
+    it("enforces the plan's key count (growth allows 3)", async () => {
+      const tenant = await createTenant({ plan: "growth", slug: "growth-keys" });
+      const user = await createUser({ email: "growth.keys@example.in" });
       await addMember(tenant.id, user.id, "owner");
       const c = createTestCaller({ userId: user.id, email: user.email, name: null, tenantId: tenant.id, businessId: world.business1.id });
       for (let i = 0; i < 3; i++) await c.apiKey.create({ name: `Pro key ${i}` });

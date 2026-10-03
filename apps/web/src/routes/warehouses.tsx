@@ -5,6 +5,8 @@ import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FeatureNotice } from "@/components/billing/FeatureNotice";
+import { useFeature } from "@/hooks/useFeature";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
@@ -182,17 +184,20 @@ function WarehousesPage() {
   // The last page emptied out (or rows per page grew): step back.
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
+  const feature = useFeature("multiWarehouse");
+
   return (
     <div>
       <PageHeader
         title="Warehouses"
         description="Where your stock is kept, and how much each place holds"
         actions={
-          <button className="btn-primary" onClick={() => setOpen(true)}>
+          <button className="btn-primary" onClick={() => setOpen(true)} {...feature.lockedProps}>
             + Add warehouse
           </button>
         }
       />
+      <FeatureNotice flag="multiWarehouse">Your default warehouse and the stock in the ones you already have stay as they are.</FeatureNotice>
 
       {/* Warehouse cards */}
       {isLoading ? (

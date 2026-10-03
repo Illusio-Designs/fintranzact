@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./api-base";
 export const ewayBillEndpoints: EndpointGroup = {
   id: "eway-bill",
   title: "E-Way Bills",
-  description: "Generate and manage e-way bills for goods movement above Rs. 50,000. Auto-generate from invoice data, update vehicle details for transhipment, extend validity, and monitor expiring bills.",
+  description: "Generate and manage e-way bills for goods movement above Rs. 50,000. Auto-generate from invoice data, update vehicle details for transhipment, extend validity, and monitor expiring bills. Plan feature: e-way bills. Generating, extending, cancelling and updating the vehicle are refused with `feature_not_in_plan` when the plan does not include it; existing e-way bills stay readable.",
   endpoints: [
     {
       id: "eway-generate",

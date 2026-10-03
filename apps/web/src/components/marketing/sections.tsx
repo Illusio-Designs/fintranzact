@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Add01Icon, CheckmarkCircle02Icon, MinusSignIcon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/Icon";
-import { usePlans } from "@/lib/plans";
+import { planPriceDisplay, usePlans } from "@/lib/plans";
+import { CycleToggle } from "@/components/pricing/CycleToggle";
+import { PLAN_GST_RATE_PERCENT, TRIAL_DAYS, type BillingCycle } from "@fintranzact/shared";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,69 +18,105 @@ const NAVY = "bg-[#0f1b3d]";
 export const EYEBROW = "text-[13px] font-bold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-300";
 export const HEADING = "font-display font-extrabold tracking-[-0.025em] text-[#0f1b3d] dark:text-white";
 
-/** The three plan cards; the highlighted plan is shown as a navy card. */
-export function PricingCards({ className }: { className?: string }) {
+/**
+ * The three plan cards; the highlighted plan is shown as a navy card. Prices
+ * are before GST, with a monthly / yearly switch (yearly is two months free).
+ * Everything shown comes from the plan settings, so admin edits appear here.
+ */
+export function PricingCards({
+  className,
+  cycle: controlledCycle,
+  onCycleChange,
+}: {
+  className?: string;
+  /** Controlled billing period, when a page shows other prices (add-ons) that follow the same switch. */
+  cycle?: BillingCycle;
+  onCycleChange?: (cycle: BillingCycle) => void;
+}) {
   const { plans } = usePlans();
+  const [ownCycle, setOwnCycle] = useState<BillingCycle>("monthly");
+  const cycle = controlledCycle ?? ownCycle;
+  const setCycle = onCycleChange ?? setOwnCycle;
+  const cta = `Start ${TRIAL_DAYS}-day free trial`;
   return (
-    <div className={cn("grid items-stretch gap-6 md:grid-cols-3", className)}>
-      {plans.map((plan) =>
-        plan.highlight ? (
-          <div
-            key={plan.id}
-            className={cn(
-              NAVY,
-              "relative flex flex-col rounded-[22px] p-8 text-white shadow-[0_30px_60px_-30px_rgba(15,27,61,.6)] ring-1 ring-transparent dark:bg-[#16213f] dark:ring-[#2a3a63]",
-            )}
-          >
-            <span className="absolute -top-3 left-8 rounded-full bg-brand-600 px-3 py-1 text-xs font-extrabold text-white">
-              Most popular
-            </span>
-            <p className="text-lg font-bold">{plan.name}</p>
-            <p className="mt-1 text-sm text-[#9fb0d6]">{plan.tagline}</p>
-            <p className="mt-6">
-              <span className="font-display text-5xl font-extrabold">{plan.price}</span>
-              <span className="text-[15px] text-[#9fb0d6]">{plan.monthlyPriceInr === 0 ? " / forever" : plan.monthlyPriceInr === null ? "" : " / month"}</span>
-            </p>
-            <ul className="mt-6 flex-1 space-y-3 text-[15px] text-[#dbe4f5]">
-              {plan.features.map((f) => (
-                <li key={f} className="flex gap-2.5">
-                  <Icon icon={CheckmarkCircle02Icon} size={20} className="text-[#a9bde6]" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <Link
-              to="/register"
-              className="mt-7 flex h-[52px] items-center justify-center rounded-xl bg-white text-base font-bold text-brand-900 transition hover:bg-brand-50"
+    <div className={className}>
+      <div className="mb-10 flex justify-center">
+        <CycleToggle value={cycle} onChange={setCycle} />
+      </div>
+      <div className="grid items-stretch gap-6 md:grid-cols-3">
+        {plans.map((plan) => {
+          const price = planPriceDisplay(plan, cycle);
+          return plan.highlight ? (
+            <div
+              key={plan.id}
+              className={cn(
+                NAVY,
+                "relative flex flex-col rounded-[22px] p-8 text-white shadow-[0_30px_60px_-30px_rgba(15,27,61,.6)] ring-1 ring-transparent dark:bg-[#16213f] dark:ring-[#2a3a63]",
+              )}
             >
-              Start free
-            </Link>
-          </div>
-        ) : (
-          <div key={plan.id} className="flex flex-col rounded-[22px] border border-border-light bg-surface-0 p-8">
-            <p className="text-lg font-bold text-text-primary">{plan.name}</p>
-            <p className="mt-1 text-sm text-text-tertiary">{plan.tagline}</p>
-            <p className="mt-6 font-display text-[40px] font-extrabold text-[#0f1b3d] dark:text-white">{plan.price}</p>
-            <p className="mt-1 text-[13px] text-text-tertiary">
-              {plan.monthlyPriceInr === null ? "Priced to your team size" : plan.monthlyPriceInr === 0 ? "Free forever" : "per month"}
-            </p>
-            <ul className="mt-5 flex-1 space-y-3 text-[15px] text-text-secondary">
-              {plan.features.map((f) => (
-                <li key={f} className="flex gap-2.5">
-                  <Icon icon={CheckmarkCircle02Icon} size={20} className="text-brand-600 dark:text-brand-300" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <Link
-              to="/contact"
-              className="mt-7 flex h-[52px] items-center justify-center rounded-xl border border-[#cfd8ea] text-base font-bold text-[#0f1b3d] transition hover:border-brand-300 dark:border-white/15 dark:text-white"
-            >
-              Talk to us
-            </Link>
-          </div>
-        ),
-      )}
+              <span className="absolute -top-3 left-8 rounded-full bg-brand-600 px-3 py-1 text-xs font-extrabold text-white">
+                Most popular
+              </span>
+              <p className="text-lg font-bold">{plan.name}</p>
+              <p className="mt-1 text-sm text-[#9fb0d6]">{plan.tagline}</p>
+              <p className="mt-6">
+                <span className="font-display text-5xl font-extrabold">{price.amount}</span>
+                <span className="text-[15px] text-[#9fb0d6]"> {price.unit}</span>
+              </p>
+              <p className="mt-1 text-[13px] text-[#9fb0d6]">
+                {price.gst}
+                {price.saving ? <span className="ml-1 font-bold text-emerald-300">· {price.saving}</span> : null}
+              </p>
+              <ul className="mt-6 flex-1 space-y-3 text-[15px] text-[#dbe4f5]">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex gap-2.5">
+                    <Icon icon={CheckmarkCircle02Icon} size={20} className="text-[#a9bde6]" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/register"
+                search={{ plan: plan.id }}
+                className="mt-7 flex h-[52px] items-center justify-center rounded-xl bg-white text-base font-bold text-brand-900 transition hover:bg-brand-50"
+              >
+                {cta}
+              </Link>
+            </div>
+          ) : (
+            <div key={plan.id} className="flex flex-col rounded-[22px] border border-border-light bg-surface-0 p-8">
+              <p className="text-lg font-bold text-text-primary">{plan.name}</p>
+              <p className="mt-1 text-sm text-text-tertiary">{plan.tagline}</p>
+              <p className="mt-6 font-display text-[40px] font-extrabold text-[#0f1b3d] dark:text-white">
+                {price.amount}
+                {price.unit ? <span className="text-[15px] font-medium text-text-tertiary"> {price.unit}</span> : null}
+              </p>
+              <p className="mt-1 text-[13px] text-text-tertiary">
+                {price.gst || "Priced to your team size"}
+                {price.saving ? <span className="ml-1 font-bold text-emerald-600">· {price.saving}</span> : null}
+              </p>
+              <ul className="mt-5 flex-1 space-y-3 text-[15px] text-text-secondary">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex gap-2.5">
+                    <Icon icon={CheckmarkCircle02Icon} size={20} className="text-brand-600 dark:text-brand-300" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/register"
+                search={{ plan: plan.id }}
+                className="mt-7 flex h-[52px] items-center justify-center rounded-xl border border-[#cfd8ea] text-base font-bold text-[#0f1b3d] transition hover:border-brand-300 dark:border-white/15 dark:text-white"
+              >
+                {cta}
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-6 text-center text-sm text-text-tertiary">
+        Prices are before {PLAN_GST_RATE_PERCENT}% GST. {TRIAL_DAYS}-day free trial, no card needed.
+      </p>
     </div>
   );
 }

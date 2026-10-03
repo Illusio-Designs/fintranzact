@@ -1,54 +1,20 @@
 import type { EndpointGroup } from "./types";
 import { API_BASE_URL } from "./api-base";
+import { PLANS, PLAN_LIMITS, formatPlanPrice, formatYearlyPlanPrice, limitsToStored } from "@fintranzact/shared";
 
-const planExample = [
-  {
-    id: "forever_free",
-    name: "Forever Free",
-    tagline: "Unlimited for life",
-    monthlyPriceInr: 0,
-    features: [
-      "Unlimited invoices, parties, and payments",
-      "Unlimited businesses and team members",
-      "Unlimited API access",
-      "No branding or paywall",
-    ],
-    highlight: true,
-    price: "₹0",
-    limits: {
-      maxOwnedOrgs: null,
-      maxBusinesses: null,
-      maxTeamMembers: null,
-      maxConcurrentSessions: null,
-      maxApiKeys: null,
-      recurringRunsPerMonth: null,
-      auditRetentionDays: null,
-      dataExport: true,
-      onlineStore: true,
-      pdfBranding: false,
-    },
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    tagline: "Best for growing teams",
-    monthlyPriceInr: null,
-    features: ["Advanced automation and workflows", "Priority support", "Expanded collaboration"],
-    price: "Custom",
-    limits: {
-      maxOwnedOrgs: 3,
-      maxBusinesses: 5,
-      maxTeamMembers: 15,
-      maxConcurrentSessions: 10,
-      maxApiKeys: 3,
-      recurringRunsPerMonth: null,
-      auditRetentionDays: 365,
-      dataExport: true,
-      onlineStore: true,
-      pdfBranding: false,
-    },
-  },
-];
+// Built from the shared defaults so the example is always what a fresh server returns.
+const planExample = PLANS.map((plan) => ({
+  id: plan.id,
+  name: plan.name,
+  tagline: plan.tagline,
+  monthlyPriceInr: plan.monthlyPriceInr,
+  yearlyPriceInr: plan.yearlyPriceInr,
+  features: plan.features,
+  highlight: !!plan.highlight,
+  price: formatPlanPrice(plan),
+  yearlyPrice: formatYearlyPlanPrice(plan),
+  limits: limitsToStored(PLAN_LIMITS[plan.id]),
+}));
 
 export const systemEndpoints: EndpointGroup = {
   id: "plans-system",
@@ -60,18 +26,18 @@ export const systemEndpoints: EndpointGroup = {
       method: "query",
       path: "plan.list",
       title: "List Plans",
-      description: "The plans offered to new sign-ups, in display order, each with its display price and the limits the API enforces for it. Legacy plans that are no longer offered (such as `free`) and custom plans (`enterprise`) are not listed.",
+      description: "The plans offered to new sign-ups, in display order, each with its display price and the limits the API enforces for it. There are three paid plans (`starter`, `growth`, `business`) and no free plan; a plan the platform team has hidden is not listed.",
       auth: "public",
       input: [],
       output: {
-        description: "Array of plans. `monthlyPriceInr` is 0 for free and `null` for priced-on-request plans (shown as `price: \"Custom\"`). Over tRPC (superjson) unlimited numeric limits arrive as `Infinity`; the REST endpoint sends `null` instead. `pdfBranding: true` means PDFs show \"Powered by Fintranzact\"; `auditRetentionDays: null` is unlimited.",
+        description: "Array of plans. Prices are in whole rupees, before 18% GST: `monthlyPriceInr` and `yearlyPriceInr` (a year is normally ten months, two months free; `price` and `yearlyPrice` are the formatted strings). `null` means priced on request (shown as \"Custom\"). `highlight` marks the most popular plan. Besides the numeric limits, `limits` carries one boolean per feature (`eInvoicing`, `multiWarehouse`, `manufacturing`, ...); only `dataExport`, `onlineStore`, `pdfBranding` and `maxApiKeys` are enforced today, the rest describe the plan. Over tRPC (superjson) unlimited numeric limits arrive as `Infinity`; the REST endpoint sends `null` instead. `pdfBranding: true` (the default on all three plans, editable per plan) means PDFs show a small \"Powered by Fintranzact\" line; `auditRetentionDays: null` is unlimited.",
         example: planExample,
       },
       codeExamples: {
         curl: `curl "${API_BASE_URL}/api/trpc/plan.list"`,
         javascript: `const plans = await trpc.plan.list.query();
-const pro = plans.find((p) => p.id === "pro");
-console.log(pro?.limits.maxBusinesses); // 5 (Infinity when unlimited)`,
+const growth = plans.find((p) => p.id === "growth");
+console.log(growth?.limits.maxBusinesses); // 3 (Infinity when unlimited)`,
       },
       gotchas: [
         "Public — no session or business header needed.",

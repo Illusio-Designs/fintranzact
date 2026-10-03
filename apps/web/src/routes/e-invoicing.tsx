@@ -8,6 +8,8 @@ import { badgeColor, badgeColorFallback } from "@/lib/badge-colors";
 import { Badge } from "@/components/ui/Badge";
 import { toast } from "@/hooks/useToast";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FeatureNotice } from "@/components/billing/FeatureNotice";
+import { useFeature } from "@/hooks/useFeature";
 import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { InputField } from "@/components/ui/FormField";
@@ -62,6 +64,7 @@ function statusLabel(status: string | null | undefined): string {
 // ── Dashboard tab ─────────────────────────────────────────────
 
 function DashboardTab() {
+  const feature = useFeature("eInvoicing");
   const [tab, setTab] = useState("");
   const [search] = usePageSearch("Search invoice # or party…");
   const [page, setPage] = useState(1);
@@ -155,7 +158,8 @@ function DashboardTab() {
           hasFailed ? (
             <button
               onClick={() => bulkRetryMutation.mutate()}
-              disabled={bulkRetryMutation.isPending}
+              {...feature.lockedProps}
+              disabled={bulkRetryMutation.isPending || !feature.allowed}
               className="btn-secondary text-sm flex items-center gap-1.5"
             >
               {bulkRetryMutation.isPending && <Spinner size="sm" />}
@@ -338,6 +342,7 @@ const EMPTY_CONFIG: ConfigForm = {
 };
 
 function SettingsTab() {
+  const feature = useFeature("eInvoicing");
   const [form, setForm] = useState<ConfigForm>(EMPTY_CONFIG);
   const [loaded, setLoaded] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -523,7 +528,8 @@ function SettingsTab() {
         <div className="flex items-center gap-3 pt-1">
           <button
             onClick={handleSave}
-            disabled={saveMutation.isPending}
+            {...feature.lockedProps}
+            disabled={saveMutation.isPending || !feature.allowed}
             className="btn-primary flex items-center gap-1.5"
           >
             {saveMutation.isPending && <Spinner size="sm" />}
@@ -531,7 +537,8 @@ function SettingsTab() {
           </button>
           <button
             onClick={() => { setTestResult(null); testMutation.mutate(); }}
-            disabled={testMutation.isPending}
+            {...feature.lockedProps}
+            disabled={testMutation.isPending || !feature.allowed}
             className="btn-secondary flex items-center gap-1.5"
           >
             {testMutation.isPending && <Spinner size="sm" />}
@@ -574,6 +581,7 @@ export function EInvoicingPage() {
         title="E-Invoicing"
         description="Submit invoices to NIC IRP and manage IRN lifecycle"
       />
+      <FeatureNotice flag="eInvoicing">IRNs already generated stay on their invoices.</FeatureNotice>
 
       <div className="mb-5">
         <PillTabs

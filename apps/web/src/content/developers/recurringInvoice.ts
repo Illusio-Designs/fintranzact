@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./api-base";
 export const recurringInvoiceEndpoints: EndpointGroup = {
   id: "recurring",
   title: "Recurring Invoices",
-  description: "Create recurring invoice templates that auto-generate invoices on schedule. Supports daily, weekly, monthly, and yearly frequencies. In-process scheduler with 60s tick. Plan limit: 5 runs/month on free tier.",
+  description: "Create recurring invoice templates that auto-generate invoices on schedule. Supports daily, weekly, monthly, and yearly frequencies. In-process scheduler with 60s tick. Plan feature: recurring invoices. Creating, editing, resuming and running templates is refused with `feature_not_in_plan` when the plan does not include it, and no invoices are generated from existing templates; pausing and deleting a template always work.",
   endpoints: [
     {
       id: "recurring-list",
@@ -236,7 +236,6 @@ template = resp.json()["result"]["data"]["json"]`,
         "When `frequency` is `custom`, `customIntervalDays` is required (1-365).",
         "Line items are stored as JSONB on the template — item IDs are not referenced, only names and prices.",
         "Monetary values in line items must be strings (e.g. '35000.00', not 35000).",
-        "Free tier limit: 5 successful recurring invoice runs per month. The template is created regardless, but execution may be blocked.",
         "An audit log entry is created for every template creation.",
       ],
     },
@@ -477,7 +476,7 @@ print("Generated:", result["invoiceNumber"])`,
       gotchas: [
         "Returns NOT_FOUND if the template doesn't belong to the current business.",
         "Returns BAD_REQUEST if the template status is `completed` or `expired`.",
-        "This counts against the monthly plan limit for recurring invoice runs (5/month on free tier).",
+        "Runs are not capped by any plan; they only count towards the usage figure in `planUsage`.",
         "The generated invoice uses atomic invoice number generation — no duplicates.",
       ],
       relatedEndpoints: ["recurring-execution-history"],
@@ -558,7 +557,7 @@ result = resp.json()["result"]["data"]["json"]`,
       method: "query",
       path: "recurringInvoice.planUsage",
       title: "Plan Usage",
-      description: "Check the current month's recurring invoice usage against plan limits. Returns the number of successful runs this month and the total number of templates. Useful for displaying a usage meter in the UI.",
+      description: "Check the current month's recurring invoice usage. Returns the number of successful runs this month and the total number of templates. Useful for displaying a usage meter in the UI.",
       auth: "business",
       requiredRole: "viewer",
       input: [],
@@ -574,7 +573,7 @@ result = resp.json()["result"]["data"]["json"]`,
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
   -H "x-business-id: YOUR_BUSINESS_ID"`,
         javascript: `const usage = await trpc.recurringInvoice.planUsage.query();
-console.log(\`\${usage.runsThisMonth}/5 runs used this month\`);
+console.log(\`\${usage.runsThisMonth} runs this month\`);
 console.log(\`\${usage.totalTemplates} templates configured\`);`,
         python: `import httpx
 
@@ -586,12 +585,12 @@ resp = httpx.get(
     },
 )
 usage = resp.json()["result"]["data"]["json"]
-print(f"{usage['runsThisMonth']}/5 runs this month")`,
+print(f"{usage['runsThisMonth']} runs this month")`,
       },
       gotchas: [
-        "Only counts successful runs — failed runs don't count against the limit.",
+        "Only counts successful runs.",
         "'This month' starts at midnight on the 1st (server timezone).",
-        "Free tier limit is 5 runs/month. Pro and above have higher or unlimited limits.",
+        "No plan caps recurring runs: `limit` is always `null` (it stays in the response for older clients).",
       ],
     },
     {
