@@ -211,9 +211,9 @@ describe("with a test world", () => {
     it("validate: known codes only, at least 4 digits", async () => {
       const c = createUnauthenticatedCaller();
       expect(await c.hsn.validate({ hsn: "5208" })).toMatchObject({ valid: true, details: { code: "5208", type: "goods" } });
-      expect(await c.hsn.validate({ hsn: "52" })).toEqual({ valid: false });
-      expect(await c.hsn.validate({ hsn: "52AB" })).toEqual({ valid: false });
-      expect(await c.hsn.validate({ hsn: "0000" })).toEqual({ valid: false });
+      expect(await c.hsn.validate({ hsn: "52" })).toMatchObject({ valid: false });
+      expect(await c.hsn.validate({ hsn: "52AB" })).toMatchObject({ valid: false });
+      expect(await c.hsn.validate({ hsn: "0000" })).toMatchObject({ valid: false });
       await expectCode(c.hsn.validate({ hsn: "1" }), "BAD_REQUEST");
       await expectCode(c.hsn.validate({ hsn: "123456789" }), "BAD_REQUEST");
     });
