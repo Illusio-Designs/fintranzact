@@ -479,7 +479,7 @@ with open("invoices.csv", "w") as f:
       },
       gotchas: [
         "Requires `admin` role and `Business:manage` permission.",
-        "Subject to plan-level data export limits \u2014 may return FORBIDDEN on the free plan.",
+        "Subject to plan-level data export limits \u2014 may return FORBIDDEN on a plan without data export (Starter).",
         "Large businesses may produce significant response sizes. Consider streaming for production use.",
       ],
       relatedEndpoints: ["business-audit-trail"],

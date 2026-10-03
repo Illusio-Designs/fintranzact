@@ -506,7 +506,7 @@
 | tenant.setPinned | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | tenant.setSecurityPolicy | mutation | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | tenant.updateMemberRole | mutation | tenant | — (+ tenant owner/admin only) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| tenant.updatePlan | mutation | protected | — (+ plans are changed by the platform team only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| tenant.updatePlan | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | warehouse.accessList | query | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | warehouse.accessSet | mutation | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | warehouse.inventorySettingsGet | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

@@ -8,12 +8,12 @@
  *   - the entitlement cache follows every billing change on this server
  *   - platform.setTrial sets, clears and audits a trial; an expired trial is
  *     read-only, a live subscription beats it
- *   - never-subscribed organisations (fixtures, forever_free) stay writable
+ *   - never-subscribed organisations (fixtures) stay writable; grandfathered ones are never read-only
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { and, desc, eq } from "drizzle-orm";
-import { billingEvents, billingSubscriptions, planSettings } from "@fintranzact/db";
+import { billingEvents, billingSubscriptions, planSettings, tenants } from "@fintranzact/db";
 import { limitsToStored, PLAN_DEFAULTS } from "@fintranzact/shared";
 import { getControlDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createUser, createTenant, addMember, type TestUser, type TestTenant } from "../helpers/fixtures.js";
@@ -49,11 +49,11 @@ async function planSubsOf(tenantId: string) {
     .orderBy(desc(billingSubscriptions.createdAt));
 }
 
-/** Buy Pro (demo), fail a renewal, run grace out: the organisation is halted. */
+/** Buy Growth (demo), fail a renewal, run grace out: the organisation is halted. */
 async function haltedOrg(email: string) {
   const { owner, tenant } = await freshOwnerOrg(email);
   const c = caller(owner, tenant.id);
-  await c.billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+  await c.billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
   const [sub] = await planSubsOf(tenant.id);
   await recordRenewalFailure(sub!, "Card declined");
   await getControlDb()
@@ -73,7 +73,7 @@ beforeAll(async () => {
   admin = await createUser({ email: ADMIN_EMAIL, name: "Rishi" });
 
   const db = getControlDb();
-  for (const [plan, price] of [["pro", 699], ["business", 1499]] as const) {
+  for (const [plan, price] of [["growth", 699], ["business", 1499]] as const) {
     const base = PLAN_DEFAULTS[plan];
     await db.insert(planSettings).values({
       plan, name: base.name, tagline: base.tagline, monthlyPriceInr: price, features: base.features,
@@ -92,12 +92,23 @@ afterAll(async () => {
 });
 
 describe("never-subscribed organisations", () => {
-  it("stay writable on forever_free and on a fixture's business plan", async () => {
-    for (const plan of ["forever_free", "business"] as const) {
+  it("stay writable on any plan fixture with no trial and no subscription", async () => {
+    for (const plan of ["starter", "growth", "business"] as const) {
       const tenant = await createTenant({ plan });
-      expect(await getEntitlements(tenant.id)).toMatchObject({ state: "free", readOnly: false, plan });
+      expect(await getEntitlements(tenant.id)).toMatchObject({ state: "free", readOnly: false, plan, accessGrandfathered: false });
       await expect(assertWritable(tenant.id)).resolves.toBeTruthy();
     }
+  });
+
+  it("a grandfathered organisation is never read-only, trial over or not, and keeps Business limits", async () => {
+    const tenant = await createTenant({ plan: "business", accessGrandfathered: true, trialEndsAt: new Date(Date.now() - 90 * 86_400_000) });
+    const ent = await getEntitlements(tenant.id);
+    expect(ent).toMatchObject({ state: "grandfathered", readOnly: false, reason: null, accessGrandfathered: true, plan: "business" });
+    expect(ent.limits.maxBusinesses).toBe(Infinity);
+    await expect(assertWritable(tenant.id)).resolves.toBeTruthy();
+    // The flag is read fresh, not cached: clearing it takes effect at once.
+    await getControlDb().update(tenants).set({ accessGrandfathered: false }).where(eq(tenants.id, tenant.id));
+    expect(await getEntitlements(tenant.id)).toMatchObject({ state: "trial_expired", readOnly: true });
   });
 });
 
@@ -139,7 +150,7 @@ describe("a halted organisation", () => {
     const { tenant, c, halted } = await haltedOrg("halted.change@mehtatraders.in");
     expect((await getEntitlements(tenant.id)).readOnly).toBe(true);
 
-    const result = await c.billing.changePlan({ plan: "pro", cycle: "monthly" });
+    const result = await c.billing.changePlan({ plan: "growth", cycle: "monthly" });
     expect(result.applied).toBe("now");
 
     const subs = await planSubsOf(tenant.id);
@@ -153,7 +164,7 @@ describe("a halted organisation", () => {
   it("is still refused a second plan while the subscription is live (changePlan is the path)", async () => {
     const { owner, tenant } = await freshOwnerOrg("live.conflict@mehtatraders.in");
     const c = caller(owner, tenant.id);
-    await c.billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+    await c.billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
     await expect(c.billing.demoCheckout({ plan: "business", cycle: "monthly", method: "upi" })).rejects.toThrow(/already has a plan subscription/);
   });
 
@@ -170,7 +181,7 @@ describe("a halted organisation", () => {
 
   it("does not revive a retired subscription on a late charge", async () => {
     const { owner, tenant, halted } = await haltedOrg("halted.retired@mehtatraders.in");
-    await caller(owner, tenant.id).billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+    await caller(owner, tenant.id).billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
     const retired = (await planSubsOf(tenant.id)).find((s) => s.id === halted.id)!;
     expect(retired.status).toBe("cancelled");
 
@@ -184,7 +195,7 @@ describe("a halted organisation", () => {
 describe("entitlement cache", () => {
   it("follows halt, end and renewal on this server without waiting for the 30s window", async () => {
     const { owner, tenant } = await freshOwnerOrg("cache.follow@mehtatraders.in");
-    await caller(owner, tenant.id).billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+    await caller(owner, tenant.id).billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
     const [sub] = await planSubsOf(tenant.id);
 
     expect((await getEntitlements(tenant.id)).state).toBe("active");
@@ -203,8 +214,8 @@ describe("entitlement cache", () => {
     const { tenant } = await freshOwnerOrg("cache.setplan@mehtatraders.in");
     const c = caller(admin, tenant.id);
     // The fixture's default plan is whatever createTenant uses; change to two others and watch the cache follow.
-    await c.platform.setPlan({ tenantId: tenant.id, plan: "pro" });
-    expect((await getEntitlements(tenant.id)).plan).toBe("pro");
+    await c.platform.setPlan({ tenantId: tenant.id, plan: "growth" });
+    expect((await getEntitlements(tenant.id)).plan).toBe("growth");
     await c.platform.setPlan({ tenantId: tenant.id, plan: "business" });
     expect((await getEntitlements(tenant.id)).plan).toBe("business");
   });
@@ -237,7 +248,7 @@ describe("platform.setTrial", () => {
     const { owner, tenant } = await freshOwnerOrg("trial.beaten@mehtatraders.in");
     await caller(admin, tenant.id).platform.setTrial({ tenantId: tenant.id, endsAt: new Date(Date.now() - DAY) });
     expect((await getEntitlements(tenant.id)).readOnly).toBe(true);
-    await caller(owner, tenant.id).billing.demoCheckout({ plan: "pro", cycle: "monthly", method: "upi" });
+    await caller(owner, tenant.id).billing.demoCheckout({ plan: "growth", cycle: "monthly", method: "upi" });
     expect(await getEntitlements(tenant.id)).toMatchObject({ state: "active", readOnly: false });
   });
 

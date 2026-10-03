@@ -63,6 +63,8 @@ interface SharedDocument {
   payment: { upiId: string; payUrl: string | null; qrDataUrl: string } | null;
   bank: { accountName: string | null; accountNumber: string; ifsc: string | null; bankName: string | null } | null;
   poweredBy: boolean;
+  /** Sign-up link for "Made with Fintranzact" (the referring partner's code), or null for the plain site. */
+  poweredByUrl?: string | null;
 }
 
 type LoadState = { kind: "loading" } | { kind: "gone" } | { kind: "error" } | { kind: "ready"; data: SharedDocument };
@@ -337,7 +339,7 @@ function SharedDocumentView({ token, data }: { token: string; data: SharedDocume
 
         {data.poweredBy && (
           <a
-            href="/"
+            href={data.poweredByUrl || "/"}
             className="flex items-center justify-center gap-2 py-3 text-xs text-text-tertiary hover:text-text-secondary"
           >
             <Logo className="w-4 h-4" />

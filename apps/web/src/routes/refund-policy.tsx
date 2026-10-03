@@ -24,7 +24,7 @@ function RefundPolicyPage() {
       <p>
         Fintranzact is operated by {LEGAL_ENTITY_NAME} ("we", "us"), which
         sells Fintranzact's paid plans and handles cancellations and refunds
-        under this policy. The Forever Free plan costs nothing, so no payment
+        under this policy. The 14-day free trial costs nothing, so no payment
         or refund applies to it. This policy covers paid plans.
       </p>
 
@@ -32,7 +32,7 @@ function RefundPolicyPage() {
       <p>
         You can cancel a paid plan at any time by contacting us. Your plan
         stays active until the end of the current billing period, after which
-        your organization moves to the free plan. Your data is not deleted.
+        your organization becomes read-only until you choose a plan again. Your data is not deleted.
       </p>
 
       <h2>Refunds</h2>

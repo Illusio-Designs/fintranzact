@@ -1799,7 +1799,7 @@ STEP 5: List active targets only
 ```
 describe("apiKey.create + list + revoke")
 
-PRE-CONDITIONS: Tenant has plan = "pro"
+PRE-CONDITIONS: Tenant has plan = "growth"
 
 STEP 1: Create API key
   INPUT: { name: "CLI Access" }
@@ -1816,8 +1816,8 @@ STEP 2: Create API key with expiration
   ASSERT:
     - expiresAt set to provided value
 
-STEP 3: Create API key on free plan
-  PRE-CONDITIONS: Tenant plan = "free"
+STEP 3: Create API key on Starter (no API access)
+  PRE-CONDITIONS: Tenant plan = "starter"
   INPUT: { name: "Test" }
   ASSERT:
     - Throws FORBIDDEN "API keys are available on paid plans"
@@ -2576,8 +2576,8 @@ STEP 13: item_quantity target requires itemId
   ASSERT:
     - Throws BAD_REQUEST "itemId is required for item_quantity target type"
 
-STEP 14: API keys blocked on free plan
-  PRE-CONDITIONS: Tenant plan = "free"
+STEP 14: API keys blocked on Starter
+  PRE-CONDITIONS: Tenant plan = "starter"
   ACTION: apiKey.create({ name: "test" })
   ASSERT:
     - Throws FORBIDDEN "API keys are available on paid plans"

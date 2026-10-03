@@ -615,7 +615,7 @@ describe("tenant.inviteMember — duplicate guard", () => {
 describe("tenant.inviteMember — plan limit counting", () => {
   it("accepted invitations do not count against the team member limit", async () => {
     // Create a fresh tenant on the free plan (maxTeamMembers=3)
-    const limitTenant = await createTenant({ name: "Limit Test Org", plan: "free" });
+    const limitTenant = await createTenant({ name: "Limit Test Org", plan: "starter" });
     const limitAdmin = await createUser({ email: `limit.admin.${randomUUID().slice(0, 8)}@test.in`, name: "Limit Admin" });
     await addMember(limitTenant.id, limitAdmin.id, "owner");
     const limitSession = await createSession(limitAdmin.id, limitTenant.id);
@@ -663,7 +663,7 @@ describe("tenant.inviteMember — plan limit counting", () => {
   it("REGRESSION: accepted-but-unexpired invite does not double-count with the member row", async () => {
     // This is the exact bug: person accepts invite, now they're counted as
     // BOTH a member AND a pending invite (because acceptedAt wasn't checked).
-    const regTenant = await createTenant({ name: "Regression Limit Org", plan: "free" });
+    const regTenant = await createTenant({ name: "Regression Limit Org", plan: "starter" });
     const regAdmin = await createUser({ email: `reg.admin.${randomUUID().slice(0, 8)}@test.in`, name: "Reg Admin" });
     await addMember(regTenant.id, regAdmin.id, "owner");
     const regSession = await createSession(regAdmin.id, regTenant.id);
@@ -959,7 +959,7 @@ describe("register — skip auto-tenant for invited users", () => {
     const caller = callerNoTenant(limitSession.id, limitUser);
 
     // Manually create a free-plan tenant owned by this user
-    const freeTenant = await createTenant({ name: "Limit Test Org", plan: "free" });
+    const freeTenant = await createTenant({ name: "Limit Test Org", plan: "starter" });
     await addMember(freeTenant.id, limitUser.id, "owner");
 
     // canCreateOrg should now be false (owns 1, free limit = 1)

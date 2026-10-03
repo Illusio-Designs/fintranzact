@@ -277,7 +277,7 @@ const hasBusinessAccess = t.middleware(async ({ ctx, next }) => {
 // procedure to its base by middleware prefix). Reads pass; writes are refused
 // by default while the organisation is read-only unless allowlisted. All the
 // logic is the pure gateDecision in lib/entitlement-exempt.ts. Organisations
-// that never had a subscription (forever_free, legacy, fixtures) are never
+// that never had a subscription (fixtures, admin-created organisations) are never
 // read-only, so this never refuses them.
 const entitlementGate = t.middleware(async ({ ctx, type, path, next }) => {
   if (!ctx.tenantId) return next();

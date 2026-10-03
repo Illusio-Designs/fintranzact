@@ -721,12 +721,12 @@ export const SOLUTIONS: Solution[] = [
     group: "size",
     name: "Freelancers & small shops",
     icon: Store01Icon,
-    summary: "Free GST invoicing and simple books for one-person businesses.",
-    title: "Free GST invoicing for freelancers and small shops",
+    summary: "GST invoicing and simple books for one-person businesses.",
+    title: "GST invoicing for freelancers and small shops",
     subtitle:
-      "Create professional GST invoices in seconds, share them on WhatsApp, get paid by UPI and keep simple books, on the free plan.",
+      "Create professional GST invoices in seconds, share them on WhatsApp, get paid by UPI and keep simple books, with a 14-day free trial.",
     description:
-      "Free GST invoicing for freelancers and small shops: professional invoices, shareable links with UPI QR, payments, expenses and GST return summaries.",
+      "GST invoicing for freelancers and small shops: professional invoices, shareable links with UPI QR, payments, expenses and GST return summaries.",
     pains: [
       {
         pain: "Invoices in Word or Excel look unprofessional and have tax mistakes.",
@@ -738,7 +738,7 @@ export const SOLUTIONS: Solution[] = [
       },
       {
         pain: "You cannot afford accounting software yet.",
-        answer: "The Forever Free plan has no invoice limit, no time limit and no Fintranzact branding on your documents.",
+        answer: "Start with a 14-day free trial, then pick a plan from the pricing page (prices are before GST). There is no invoice limit.",
       },
       {
         pain: "Filing season means scrambling for numbers.",
@@ -747,15 +747,15 @@ export const SOLUTIONS: Solution[] = [
     ],
     features: ["gstInvoices", "quotations", "shareLinks", "payments", "expenses", "gstReturns", "devices"],
     workflow: [
-      { title: "Sign up free", body: "Create an account with your email or phone number and add your business details." },
+      { title: "Start your free trial", body: "Create an account with your email or phone number and add your business details." },
       { title: "Send your first invoice", body: "Add a customer, pick items or services and share the invoice." },
       { title: "Get paid", body: "Record payments as they arrive and follow up on what is outstanding." },
       { title: "File", body: "Use the GST summaries yourself or invite your accountant." },
     ],
     faqs: [
       {
-        q: "Is it really free?",
-        a: "Yes. The Forever Free plan has no time limit, no invoice cap and no Fintranzact branding on your documents.",
+        q: "Is there a free trial?",
+        a: "Yes. Every new organization gets a 14-day free trial, with no card needed. After that, pick a plan from the pricing page (prices are before GST); there is no invoice cap.",
       },
       {
         q: "I am not GST registered. Can I still use it?",
@@ -806,7 +806,7 @@ export const SOLUTIONS: Solution[] = [
     faqs: [
       {
         q: "How many team members can I add?",
-        a: "The Forever Free plan includes unlimited team members. See the pricing page for paid plans.",
+        a: "Starter includes 3 users, Growth 10 and Business has no limit. See the pricing page for the plans.",
       },
       {
         q: "Can I see what my team changed?",
@@ -857,7 +857,7 @@ export const SOLUTIONS: Solution[] = [
     faqs: [
       {
         q: "How many businesses can I add?",
-        a: "The Forever Free plan allows unlimited businesses. The Pro plan allows up to five per organization.",
+        a: "Starter allows one business, Growth up to three and Business has no limit.",
       },
       {
         q: "Is there a consolidated report across all GSTINs?",

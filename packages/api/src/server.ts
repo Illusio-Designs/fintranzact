@@ -33,7 +33,8 @@ import { startTdsReminderScheduler, stopTdsReminderScheduler } from "./lib/tds-r
 import { startHsnRefreshScheduler, stopHsnRefreshScheduler } from "./lib/hsn-refresh.js";
 import { seedPlatformAdmin } from "./lib/platform-admin.js";
 import { logger } from "./lib/logger.js";
-import { pdfBrandingHidden, storeServesTenant } from "./lib/plan-limits.js";
+import { storeServesTenant } from "./lib/plan-limits.js";
+import { resolvePdfBranding, type PdfBranding } from "./lib/pdf-branding.js";
 import { resolveDocumentWarehouseId, syncDocumentStock } from "./lib/inventory-service.js";
 import { resolveLineBatches } from "./lib/batches.js";
 import { lineBatchDetails } from "./lib/batch-display.js";
@@ -457,7 +458,7 @@ async function buildInvoicePdfData(
   businessId: string,
   invoiceId: string,
   origin: string,
-  plan: string,
+  branding: PdfBranding,
 ) {
   // Fetch invoice with party and business
   const [invoice] = await db.select().from(invoices)
@@ -586,7 +587,8 @@ async function buildInvoicePdfData(
     businessStateCode: biz.stateCode || undefined,
     partyStateCode: party.stateCode || undefined,
     lineItemHsn: lineItems.map(li => li.itemId ? (hsnMap.get(li.itemId) || "") : ""),
-    isPaidPlan: await pdfBrandingHidden(plan),
+    isPaidPlan: branding.hidden,
+    brandingUrl: branding.url,
     status: invoice.status,
     // Logo bytes are carried into the PDF worker. Buffers survive
     // structuredClone across worker threads as Uint8Array, and PDFKit
@@ -662,7 +664,7 @@ async function liveEwayBill(db: Awaited<ReturnType<typeof getTenantDb>>, busines
  * Returns the tenant DB to read from, or the error response to send.
  */
 async function authorizePdfRequest(c: Context): Promise<
-  | { ok: true; db: Awaited<ReturnType<typeof getTenantDb>>; businessId: string; plan: string }
+  | { ok: true; db: Awaited<ReturnType<typeof getTenantDb>>; businessId: string; branding: PdfBranding }
   | { ok: false; response: Response }
 > {
   const fail = (body: { error: string }, status: 400 | 401 | 403) => ({ ok: false as const, response: c.json(body, status) });
@@ -683,7 +685,7 @@ async function authorizePdfRequest(c: Context): Promise<
   const db = await getTenantDb(sessionRow.tenantId);
   const access = await verifyBusinessAccess(db, businessId, sessionRow.tenantId, sessionRow.userId);
   if (!access.ok) return fail({ error: access.error }, 403);
-  return { ok: true, db, businessId, plan: tenant.plan };
+  return { ok: true, db, businessId, branding: await resolvePdfBranding(sessionRow.tenantId, tenant.plan, new URL(c.req.url).origin) };
 }
 
 /** Print options from the query: copies=original,duplicate,triplicate and width=58|80. */
@@ -710,9 +712,9 @@ app.get("/api/invoices/:id/pdf", async (c) => {
   // Session, active organisation, and a business the caller belongs to.
   const auth = await authorizePdfRequest(c);
   if (!auth.ok) return auth.response;
-  const { db, businessId, plan } = auth;
+  const { db, businessId, branding } = auth;
 
-  const built = await buildInvoicePdfData(db, businessId, invoiceId, new URL(c.req.url).origin, plan);
+  const built = await buildInvoicePdfData(db, businessId, invoiceId, new URL(c.req.url).origin, branding);
   if (!built) return c.json({ error: "Invoice not found" }, 404);
   const { pdfData, invoice } = built;
   pdfData.print = printOptionsFromQuery(c, pdfData.print);
@@ -743,7 +745,7 @@ async function loadSharedDocument(c: Context) {
   const link = await resolveShareToken(token);
   if (!link) return null;
   const db = await getTenantDb(link.tenantId);
-  const built = await buildInvoicePdfData(db, link.businessId, link.documentId, new URL(c.req.url).origin, link.tenantPlan);
+  const built = await buildInvoicePdfData(db, link.businessId, link.documentId, new URL(c.req.url).origin, await resolvePdfBranding(link.tenantId, link.tenantPlan, new URL(c.req.url).origin));
   // A deleted document is gone for the customer too.
   if (!built || built.invoice.deletedAt) return null;
   // Credit notes and returns against it reduce what is still owed.
@@ -825,6 +827,8 @@ app.get("/api/share/:token", async (c) => {
       ? { accountName: d.bankAccountName ?? null, accountNumber: d.bankAccountNumber, ifsc: d.bankIfsc ?? null, bankName: d.bankName ?? null }
       : null,
     poweredBy: !d.isPaidPlan,
+    // Where the "Made with Fintranzact" link goes (sign-up with the referring partner's code, else the site).
+    poweredByUrl: d.isPaidPlan ? null : d.brandingUrl ?? null,
   }, 200, SHARE_HEADERS);
 });
 
@@ -857,7 +861,7 @@ app.get("/api/invoice-templates/preview", async (c) => {
   }
   const auth = await authorizePdfRequest(c);
   if (!auth.ok) return auth.response;
-  const { db, businessId, plan } = auth;
+  const { db, businessId, branding } = auth;
   const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
   if (!biz) return c.json({ error: "Business not found" }, 404);
 
@@ -889,7 +893,8 @@ app.get("/api/invoice-templates/preview", async (c) => {
     signatureBuffer: biz.signatureData ?? undefined,
     ...(bank ? { bankName: bank.bankName || undefined, bankAccountNumber: bank.accountNumber || undefined, bankIfsc: bank.ifsc || undefined, bankAccountName: bank.accountName || undefined } : {}),
     upiId: upi?.accountNumber || undefined,
-    isPaidPlan: await pdfBrandingHidden(plan),
+    isPaidPlan: branding.hidden,
+    brandingUrl: branding.url,
     print: { template, thermalWidth: c.req.query("width") === "58" ? 58 : c.req.query("width") === "80" ? 80 : biz.thermalWidth === 58 ? 58 : 80 },
   });
   if (sample.upiId) {
@@ -914,7 +919,7 @@ app.get("/api/eway-bills/:id/pdf", async (c) => {
   }
   const auth = await authorizePdfRequest(c);
   if (!auth.ok) return auth.response;
-  const { db, businessId, plan } = auth;
+  const { db, businessId, branding } = auth;
   const id = c.req.param("id");
   if (!z.string().uuid().safeParse(id).success) return c.json({ error: "E-way bill not found" }, 404);
   const [ewb] = await db.select().from(ewayBills)
@@ -973,7 +978,8 @@ app.get("/api/eway-bills/:id/pdf", async (c) => {
     partB: vehicles.length
       ? vehicles.map((v) => ({ mode: ewb.transportMode ?? undefined, vehicle: v.vehicleNumber, from: v.fromPlace ?? undefined, enteredDate: v.updatedAt.toISOString(), enteredBy }))
       : [{ mode: ewb.transportMode ?? undefined, vehicle: ewb.vehicleNumber ?? "", from: place(biz!.city, biz!.state) || undefined, enteredDate: ewb.ewbDate?.toISOString(), enteredBy }],
-    isPaidPlan: await pdfBrandingHidden(plan),
+    isPaidPlan: branding.hidden,
+    brandingUrl: branding.url,
   };
   const genDate = ewb.ewbDate ? formatIstDate(ewb.ewbDate, "/") : "";
   data.qrDataUrl = await QRCode.toDataURL(`${ewb.ewbNumber}/${biz!.gstin ?? ""}/${genDate}`, { width: 220, margin: 1 });

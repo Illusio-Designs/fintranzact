@@ -34,7 +34,7 @@ export const apiKeyRouter = router({
 
   /**
    * Create a new API key.
-   * Blocked on free plan tenants.
+   * Blocked on plans without API access (Starter: maxApiKeys 0).
    * Returns the raw key exactly once — it is never stored or returned again.
    */
   create: protectedProcedure.input(createApiKeySchema).mutation(async ({ ctx, input }) => {

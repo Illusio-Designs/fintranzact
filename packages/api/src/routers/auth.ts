@@ -15,6 +15,7 @@ import { invalidateSessionCache, getSessionIdFromRequest, revokeAllUserSessions 
 import { verifyTurnstile } from "../lib/turnstile.js";
 import { getClientKind } from "../lib/client-headers.js";
 import { enforceSessionLimit } from "../lib/plan-limits.js";
+import { newOrganisationPlanFields, resolveSignupPlan } from "../lib/signup-plan.js";
 import { createFixedWindowLimiter } from "../lib/fixed-window-limiter.js";
 import { createTwoFactorDeps, createTwoFactorLoginDeps, drizzleActivityStore } from "../lib/two-factor-store.js";
 import { ownSecurityActivity } from "../lib/security-activity.js";
@@ -212,6 +213,7 @@ async function createTenantForUser(
   displayName: string,
   parentTx?: ControlTx,
   referralCode: string | null = null,
+  requestedPlan: string | null = null,
 ): Promise<string> {
   const run = async (tx: ControlTx) => {
     const tenantName = `${displayName.trim() || "My Organization"}'s Organization`;
@@ -220,9 +222,8 @@ async function createTenantForUser(
     const [tenant] = await tx.insert(tenants).values({
       name: tenantName,
       slug,
-      plan: "forever_free",
-      // Self sign-up: the owner still has to choose a plan.
-      planSelectedAt: null,
+      // The chosen plan (Growth when none) with a trial running; see lib/signup-plan.ts.
+      ...newOrganisationPlanFields(requestedPlan),
       referralCode: normalizeReferralCode(referralCode),
       partnerId: await partnerForReferralCode(tx, referralCode),
     }).returning({ id: tenants.id });
@@ -336,6 +337,7 @@ async function writeNewTenantRows(
   userId: string,
   provisioned: ProvisionedTenant,
   referralCode: string | null = null,
+  requestedPlan: string | null = null,
 ): Promise<string> {
   const [tenant] = await tx.insert(tenants).values({
     name: provisioned.tenantName,
@@ -345,8 +347,8 @@ async function writeNewTenantRows(
     dbPort: provisioned.dbConfig.dbPort,
     dbUser: provisioned.dbConfig.dbUser,
     dbPassword: provisioned.dbConfig.dbPassword,
-    plan: "forever_free",
-    planSelectedAt: null,
+    // The chosen plan (Growth when none) with a trial running; see lib/signup-plan.ts.
+    ...newOrganisationPlanFields(requestedPlan),
     referralCode: normalizeReferralCode(referralCode),
     // A partner's code links the organisation to that partner (referrals,
     // badge and commission). Any other code is kept as typed.
@@ -414,6 +416,9 @@ export const authRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Verification failed. Please refresh and try again." });
       }
     }
+
+    // Refuse a removed plan id before anything is created (no free plan exists).
+    resolveSignupPlan(input.plan);
 
     // Emails are stored lowercase; older rows may not be, so match case-insensitively.
     const email = input.email.trim().toLowerCase();
@@ -498,10 +503,10 @@ export const authRouter = router({
                 message: "Sign-up state changed — please try again.",
               });
             }
-            await writeNewTenantRows(tx, user.id, provisioned, input.referralCode?.trim() || null);
+            await writeNewTenantRows(tx, user.id, provisioned, input.referralCode?.trim() || null, input.plan ?? null);
             markUsed();
           } else {
-            await createTenantForUser(user.id, displayName, tx, input.referralCode?.trim() || null);
+            await createTenantForUser(user.id, displayName, tx, input.referralCode?.trim() || null, input.plan ?? null);
           }
 
           const sessionId = nanoid(64);

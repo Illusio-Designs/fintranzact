@@ -7,7 +7,7 @@
  *   being reviewed → a platform admin approves it in /platform (another
  *   browser) → the portal shows the referral code and the sign-up link
  *   (/register?ref=FTZ-…) → a new business owner opens that link in a fresh
- *   browser, the code is already filled in, signs up and picks Forever Free →
+ *   browser, the code is already filled in, signs up and starts a trial on the default plan (Growth) →
  *   the partner's portal (and the admin's panel) list the new organisation.
  *   The portal is also checked in the dark theme.
  *
@@ -91,7 +91,7 @@ test.describe("J14 partner", () => {
     await page.getByLabel("Email address").fill(email);
     await page.getByLabel("Password", { exact: true }).fill("Partner@12345");
     await page.getByLabel("Retype password").fill("Partner@12345");
-    await page.locator("form").getByRole("button", { name: "Create free account" }).click();
+    await page.locator("form").getByRole("button", { name: "Start free trial" }).click();
     // A partner with no business of their own is taken to their portal.
     await expect(page).toHaveURL(/\/partner-portal/, { timeout: 20_000 });
     await expect(page.getByText("Your application is being reviewed")).toBeVisible();
@@ -140,14 +140,14 @@ test.describe("J14 partner", () => {
     await signup.getByPlaceholder("Min 8 characters").fill("Referred@12345");
     await signup.getByPlaceholder("Retype password").fill("Referred@12345");
     await expectNoHorizontalScroll(signup, "register with referral");
-    await signup.locator("form").getByRole("button", { name: "Create free account" }).click();
+    await signup.locator("form").getByRole("button", { name: "Start free trial" }).click();
     await expect(signup.getByRole("heading", { name: "Select the plan that fits your business" })).toBeVisible({ timeout: 20_000 });
-    await signup.getByRole("button", { name: "Create your company" }).click();
+    await signup.getByRole("button", { name: "Start 14-day free trial" }).click();
     await expect(signup).not.toHaveURL(/plan-selection/, { timeout: 20_000 });
     const owner = await userByEmail(ownerEmail);
     const [membership] = await membershipsOf(owner!.id);
-    expect(membership).toMatchObject({ role: "owner", plan: "forever_free" });
-    expect(await tenantsReferredBy(approved!.id)).toEqual([{ id: membership.tenant_id, name: membership.tenant_name, plan: "forever_free" }]);
+    expect(membership).toMatchObject({ role: "owner", plan: "growth" });
+    expect(await tenantsReferredBy(approved!.id)).toEqual([{ id: membership.tenant_id, name: membership.tenant_name, plan: "growth" }]);
     await newcomer.close();
 
     // ── The portal lists the referral ───────────────────────────

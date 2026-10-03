@@ -467,7 +467,7 @@ describe("target.list", () => {
 describe("apiKey — plan check", () => {
   it("apiKey.create is blocked for free-plan tenants — gap: paid feature guard", async () => {
     // Create an explicitly free-plan tenant for this test
-    const freeTenant = await createTenant({ name: "Free Plan Org", plan: "free" as any });
+    const freeTenant = await createTenant({ name: "Free Plan Org", plan: "starter" });
     await addMember(freeTenant.id, world.ramesh.id, "owner");
 
     const caller = createTestCaller({

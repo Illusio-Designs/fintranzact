@@ -4,7 +4,7 @@
  * with invoice downloads. Changing or buying runs through billing.* — demo
  * checkout until Razorpay keys are configured, the Razorpay popup after.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { apiUrl } from "@/lib/api-url";
 import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
@@ -12,6 +12,7 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
 import { DemoCheckout } from "@/components/billing/DemoCheckout";
 import { GovUsageSection } from "@/components/settings/GovUsageSection";
+import { BillingDetailsForm } from "@/components/settings/BillingDetailsForm";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, CheckmarkCircle02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import type { BillingCycle, PlanId } from "@fintranzact/shared";
@@ -454,87 +455,4 @@ async function downloadInvoice(paymentId: string, invoiceNumber: string) {
   } catch {
     toast.error("Could not download the invoice", "Try again in a moment.");
   }
-}
-
-function BillingDetailsForm({
-  initial,
-  onSaved,
-}: {
-  initial: { name: string; gstin: string | null; address: string | null; email: string | null };
-  onSaved: () => void;
-}) {
-  const [form, setForm] = useState({
-    name: initial.name,
-    gstin: initial.gstin ?? "",
-    address: initial.address ?? "",
-    email: initial.email ?? "",
-  });
-  useEffect(() => {
-    setForm({ name: initial.name, gstin: initial.gstin ?? "", address: initial.address ?? "", email: initial.email ?? "" });
-  }, [initial.name, initial.gstin, initial.address, initial.email]);
-
-  const dirty = useMemo(
-    () =>
-      form.name !== initial.name ||
-      form.gstin !== (initial.gstin ?? "") ||
-      form.address !== (initial.address ?? "") ||
-      form.email !== (initial.email ?? ""),
-    [form, initial],
-  );
-
-  const save = trpc.billing.updateBillingDetails.useMutation({
-    onSuccess: () => {
-      toast.success("Billing details saved", "They appear on your next invoices.");
-      onSaved();
-    },
-    onError: (e) => toast.error("Could not save", e.message),
-  });
-
-  return (
-    <section className="card p-5">
-      <h3 className="text-sm font-semibold text-text-primary">Billing details</h3>
-      <p className="mt-1 text-xs text-text-tertiary">Printed on the GST invoices we issue for your subscription. Add your GSTIN to claim the input credit.</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-text-secondary">Billed to (name)</span>
-          <input className="input w-full" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-text-secondary">GSTIN (optional)</span>
-          <input
-            className="input w-full uppercase"
-            value={form.gstin}
-            maxLength={15}
-            placeholder="22AAAAA0000A1Z5"
-            onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
-          />
-        </label>
-        <label className="block sm:col-span-2">
-          <span className="mb-1 block text-xs font-medium text-text-secondary">Address (optional)</span>
-          <input className="input w-full" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-text-secondary">Billing email (optional)</span>
-          <input className="input w-full" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        </label>
-      </div>
-      <div className="mt-4">
-        <button
-          type="button"
-          className="btn-primary text-sm"
-          disabled={!dirty || save.isPending || !form.name.trim()}
-          onClick={() =>
-            save.mutate({
-              name: form.name.trim(),
-              gstin: form.gstin.trim() || null,
-              address: form.address.trim() || null,
-              email: form.email.trim() || null,
-            })
-          }
-        >
-          {save.isPending ? "Saving…" : "Save details"}
-        </button>
-      </div>
-    </section>
-  );
 }

@@ -191,7 +191,7 @@ Automated invoice generation from recurring templates. Templates define a party,
 
 **Frequencies**: weekly, biweekly, monthly, quarterly, half_yearly, yearly, custom (N days).
 
-**Plan limits**: Free plan allows 5 successful runs/month/business. Exceeded runs are recorded as `skipped_limit`.
+**Plan limits**: none. No plan caps how many invoices recurring templates generate (historical runs may carry the old `skipped_limit` status).
 
 **Suggestions engine**: Analyzes last 2 months of invoices, detects median interval + coefficient of variation for top 20 parties. Returns suggested frequency, median amount, and invoice count.
 

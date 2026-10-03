@@ -15,9 +15,10 @@ What an organisation (tenant) may do right now is decided on the server, in one 
 | `trialing` | no live subscription and `trial_ends_at` in the future | yes |
 | `ended` | no live subscription but one existed before | read-only (`read_only_subscription_ended`) |
 | `trial_expired` | no live subscription, trial over | read-only (`read_only_trial_expired`) |
-| `free` | never subscribed and no trial (self sign-up forever_free, legacy, fixtures) | yes |
+| `grandfathered` | `tenants.access_grandfathered` (the former Forever Free organisations, migrated to Business) | yes, always: no trial, no payment, never read-only (suspended is still blocked) |
+| `free` | no billing state at all: never subscribed and no trial (admin-created organisations, test fixtures) | yes |
 
-A live subscription always beats an expired trial. Read-only means reads, search, PDF downloads and exports still work; creating and editing is refused with the "Choose a plan" message. Add-ons are all off while read-only or suspended; AI Plus also grants AI Assistant.
+A grandfathered organisation (`accessGrandfathered`) is checked right after the suspended test and beats everything below it, a halted subscription included; the flag is read fresh with the organisation row, like the plan. It is never set for a new organisation and never offered. A live subscription always beats an expired trial. Read-only means reads, search, PDF downloads and exports still work; creating and editing is refused with the "Choose a plan" message. Add-ons are all off while read-only or suspended; AI Plus also grants AI Assistant.
 
 `getEntitlements(tenantId)` (`lib/entitlements.ts`) loads the snapshot (cached, `invalidateEntitlements` on every billing change, lazy past-due to halted transition) and adds the plan limits. `assertWritable(tenantId)` throws the entitlement error for read-only/suspended; `requireAddon(tenantId, addon)` for add-on features.
 
@@ -57,6 +58,12 @@ Every route in `server.ts` and `http/*.ts` has an explicit decision in `REST_ENT
 
 Notes: `POST /api/items/labels` generates a label PDF, so it is a download and stays allowed. `GET /api/billing/invoices/:paymentId/pdf` is owner-gated and stays available so a halted owner can fetch Finvera invoices.
 
+## The "Powered by Fintranzact" PDF line
+
+The plan's `pdfBranding` limit decides (`pdfBrandingHidden` in `lib/plan-limits.ts`): `true`, the default on all three plans, prints a small "Powered by Fintranzact" line on the last page of invoices and the other invoice-template documents, thermal receipts and e-way bill prints; the public share page shows a matching "Made with Fintranzact" link. An admin can switch it off per plan (Plans console), and an edited value survives the plan migration.
+
+Where the line links is decided by `lib/pdf-branding.ts`: an organisation referred by an **approved** partner (`tenants.partner_id`) links to `<APP_URL>/register?ref=<their referral code>`, the same parameter the partner portal's link uses; everyone else links to the plain `APP_URL`. A partner who is pending or rejected, or has no code, gives the plain link. The URL carries the referral code only (no organisation, user, document or tracking data), and no partner name or contact is printed. With no `APP_URL` and no request origin the line is plain text. The link is passed into the PDF data as `brandingUrl` next to `isPaidPlan` (true = line hidden).
+
 ## How to add things
 
 - New tRPC mutation: nothing to do; it is gated. Run `pnpm --filter @fintranzact/api test entitlement-exempt` (with `-u` for snapshot files) and review `mutation-gate.md`. Allowlist only if it must work read-only.
@@ -67,7 +74,7 @@ Notes: `POST /api/items/labels` generates a label PDF, so it is a download and s
 
 ## Not built yet
 
-- Trial start flows (P2): the `trial_ends_at` field and its enforcement exist, but nothing sets it on sign-up yet.
+- The rest of the trial (P2). Sign-up (`auth.register`, `tenant.create`) now sets the chosen plan (Growth when none) and `trial_ends_at` = now + 14 days (`TRIAL_DAYS`, `lib/signup-plan.ts`), so `deriveAccess` grants full access and then read-only. Not built: Business-level access and add-on caps during the trial, countdown banner, reminders, one trial per business, admin-editable length.
 - AI assistant, payroll and Store Pro features: the add-ons can be bought and are enforced as flags (`ADDON_FEATURES[...].implemented` is false), but the features behind them do not exist.
 
 ## Tests

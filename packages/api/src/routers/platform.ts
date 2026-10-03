@@ -2,10 +2,10 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, asc, count, desc, eq, gte, ilike, inArray, max, or, sql } from "drizzle-orm";
 import { controlDb, getTenantDb, securityEvents, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts, roadmapItems, billingSubscriptions, billingPayments } from "@fintranzact/db";
-import { ensureReferralCode, getPartnerStats } from "../lib/partner-program.js";
+import { ensureReferralCode, getPartnerStats, payingTenantIds } from "../lib/partner-program.js";
 import { emailService } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
-import { RESET_VERIFICATION_METHODS, SECURITY_EVENT_TYPES, PLAN_DEFAULTS, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema } from "@fintranzact/shared";
+import { RESET_VERIFICATION_METHODS, SECURITY_EVENT_TYPES, PLAN_DEFAULTS, planIdSchema, planSettingsWarnings, effectiveYearlyPriceInr, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema } from "@fintranzact/shared";
 import {
   roadmapStatuses,
   roadmapListSchema,
@@ -50,15 +50,17 @@ const platformAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 
 const OWNER_ROLES = ["owner", "superadmin"] as const;
 
-export const PLAN_IDS = ["forever_free", "free", "pro", "business", "enterprise"] as const;
-
 /** Numbers as the admin console edits them: Infinity is sent as null. */
-function planForAdmin(plan: Awaited<ReturnType<typeof getPlanCatalog>>[number], orgCount: number) {
+function planForAdmin(plan: Awaited<ReturnType<typeof getPlanCatalog>>[number], orgCount: number, grandfatheredCount = 0) {
   return {
     id: plan.id,
     name: plan.name,
     tagline: plan.tagline,
     monthlyPriceInr: plan.monthlyPriceInr,
+    /** What was set; null means "ten months of the monthly price". */
+    yearlyPriceInr: plan.yearlyPriceInr,
+    /** What a yearly subscriber is charged (before GST). */
+    effectiveYearlyPriceInr: effectiveYearlyPriceInr(plan),
     features: plan.features,
     highlight: !!plan.highlight,
     visible: plan.visible,
@@ -66,6 +68,8 @@ function planForAdmin(plan: Awaited<ReturnType<typeof getPlanCatalog>>[number], 
     edited: plan.edited,
     updatedAt: plan.updatedAt,
     orgCount,
+    /** Of orgCount, the organisations with permanent full access (former Forever Free). */
+    grandfatheredCount,
   };
 }
 
@@ -122,6 +126,7 @@ export const platformRouter = router({
             name: tenants.name,
             slug: tenants.slug,
             plan: tenants.plan,
+            accessGrandfathered: tenants.accessGrandfathered,
             status: tenants.status,
             createdAt: tenants.createdAt,
             memberCount: sql<number>`(SELECT COUNT(*)::int FROM tenant_members tm WHERE tm.tenant_id = "tenants"."id")`,
@@ -164,6 +169,7 @@ export const platformRouter = router({
           name: tenants.name,
           slug: tenants.slug,
           plan: tenants.plan,
+          accessGrandfathered: tenants.accessGrandfathered,
           status: tenants.status,
           partnerId: tenants.partnerId,
           createdAt: tenants.createdAt,
@@ -227,7 +233,7 @@ export const platformRouter = router({
 
   /** Put an organisation on a plan. Paid plans are set up here, not by owners. */
   setPlan: platformAdminProcedure
-    .input(z.object({ tenantId: z.string().uuid(), plan: z.enum(PLAN_IDS) }))
+    .input(z.object({ tenantId: z.string().uuid(), plan: planIdSchema }))
     .mutation(async ({ input }) => {
       const [row] = await controlDb
         .update(tenants)
@@ -350,23 +356,26 @@ export const platformRouter = router({
 
   /** Every plan as it is now, with how many organisations are on it. */
   plans: platformAdminProcedure.query(async () => {
-    const [catalog, counts] = await Promise.all([
+    const [catalog, counts, grandfathered] = await Promise.all([
       getPlanCatalog(),
       controlDb.select({ plan: tenants.plan, n: count() }).from(tenants).groupBy(tenants.plan),
+      controlDb.select({ plan: tenants.plan, n: count() }).from(tenants).where(eq(tenants.accessGrandfathered, true)).groupBy(tenants.plan),
     ]);
     const countOf = new Map(counts.map((c) => [c.plan, c.n]));
-    return catalog.map((plan) => planForAdmin(plan, countOf.get(plan.id) ?? 0));
+    const grandfatheredOf = new Map(grandfathered.map((c) => [c.plan, c.n]));
+    return catalog.map((plan) => planForAdmin(plan, countOf.get(plan.id) ?? 0, grandfatheredOf.get(plan.id) ?? 0));
   }),
 
   /** Change a plan's name, price, features, visibility or limits. */
   savePlan: platformAdminProcedure
-    .input(z.object({ plan: z.enum(PLAN_IDS), settings: planSettingsSchema }))
+    .input(z.object({ plan: planIdSchema, settings: planSettingsSchema }))
     .mutation(async ({ input, ctx }) => {
       const { settings } = input;
       const values = {
         name: settings.name,
         tagline: settings.tagline,
         monthlyPriceInr: settings.monthlyPriceInr,
+        yearlyPriceInr: settings.yearlyPriceInr,
         features: settings.features,
         highlight: settings.highlight,
         visible: settings.visible,
@@ -380,12 +389,14 @@ export const platformRouter = router({
         .onConflictDoUpdate({ target: planSettings.plan, set: values });
       invalidatePlanCatalog();
       const plan = (await getPlanCatalog()).find((p) => p.id === input.plan)!;
-      return planForAdmin(plan, 0);
+      // Prices are validated by the schema (whole rupees, never negative). A
+      // yearly price above 12 months of the monthly one is allowed but flagged.
+      return { ...planForAdmin(plan, 0), warnings: planSettingsWarnings(settings) };
     }),
 
   /** Undo every edit to a plan and go back to its built-in definition. */
   resetPlan: platformAdminProcedure
-    .input(z.object({ plan: z.enum(PLAN_IDS) }))
+    .input(z.object({ plan: planIdSchema }))
     .mutation(async ({ input }) => {
       await controlDb.delete(planSettings).where(eq(planSettings.plan, input.plan));
       invalidatePlanCatalog();
@@ -674,7 +685,7 @@ export const platformRouter = router({
       const [stats, referred, payouts, catalog] = await Promise.all([
         getPartnerStats([partner]),
         controlDb
-          .select({ id: tenants.id, name: tenants.name, plan: tenants.plan, status: tenants.status, createdAt: tenants.createdAt })
+          .select({ id: tenants.id, name: tenants.name, plan: tenants.plan, accessGrandfathered: tenants.accessGrandfathered, status: tenants.status, createdAt: tenants.createdAt })
           .from(tenants)
           .where(eq(tenants.partnerId, partner.id))
           .orderBy(desc(tenants.createdAt)),
@@ -682,6 +693,7 @@ export const platformRouter = router({
         getPlanCatalog(),
       ]);
       const plans = new Map(catalog.map((p) => [p.id, p]));
+      const paying = await payingTenantIds(referred.map((t) => t.id));
       const st = stats.get(partner.id)!;
       return {
         ...partner,
@@ -692,7 +704,8 @@ export const platformRouter = router({
           ...t,
           createdAt: t.createdAt.toISOString(),
           planName: plans.get(t.plan)?.name ?? t.plan,
-          monthlyPriceInr: plans.get(t.plan)?.monthlyPriceInr ?? 0,
+          // A trial or grandfathered organisation pays nothing, whatever its plan.
+          monthlyPriceInr: t.accessGrandfathered || !paying.has(t.id) ? 0 : (plans.get(t.plan)?.monthlyPriceInr ?? 0),
         })),
         payouts: payouts.map((p) => ({
           ...p,

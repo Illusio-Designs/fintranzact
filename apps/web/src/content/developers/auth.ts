@@ -20,6 +20,7 @@ export const authEndpoints: EndpointGroup = {
         { name: "password", type: "string", required: true, description: "Password (8–128 chars)" },
         { name: "confirmPassword", type: "string", required: true, description: "Must match `password`" },
         { name: "referralCode", type: "string", required: false, description: "Optional referral code (max 50 chars, or empty string)" },
+        { name: "plan", type: "enum", required: false, description: "The plan chosen at sign-up: `starter`, `growth` or `business`. Growth when left out (or not recognised). The removed plan ids (`free`, `pro`, `enterprise` and the earlier unlimited test plan) are refused with BAD_REQUEST before anything is created.", enumValues: ["starter", "growth", "business"] },
         { name: "turnstileToken", type: "string", required: false, description: "Cloudflare Turnstile token. Required when the server has `TURNSTILE_SECRET_KEY` set, except for desktop clients." },
       ],
       output: {
@@ -56,6 +57,8 @@ data = resp.json()["result"]["data"]["json"]
 session_token = data["sessionToken"]`,
       },
       gotchas: [
+        "A new organization starts a 14-day free trial on the chosen plan (`tenants.trial_ends_at` is now + 14 days): full access until it ends, then read-only until a plan is bought. There is no free plan.",
+        "Returns BAD_REQUEST \"The free plan has been removed. Choose Starter, Growth or Business.\" when `plan` is a removed plan id.",
         "Returns CONFLICT (409) if the email is already registered.",
         "Returns BAD_REQUEST \"Turnstile verification required\" when Turnstile is enabled and no token is sent, and FORBIDDEN when the token fails verification.",
         "Password is hashed with Argon2id (memoryCost=65536, timeCost=3, parallelism=4) — never stored in plaintext.",

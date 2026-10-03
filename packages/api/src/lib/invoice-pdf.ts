@@ -106,6 +106,8 @@ export interface InvoicePDFData {
 
   // Freemium branding
   isPaidPlan?: boolean; // true = no branding, false/undefined = show "Powered by Fintranzact"
+  /** Where the "Powered by Fintranzact" line links: sign-up with the referring partner's code, else the site. Nothing else goes in it. */
+  brandingUrl?: string;
 
   // Payment status for diagonal stamp badge
   status?: string; // invoice status for stamp badge (paid, partial, overdue, cancelled, draft)
@@ -940,7 +942,7 @@ function generateA4Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
       margin, footerY + 4, { width: contentW, align: "center" });
   if (!data.isPaidPlan) {
     doc.fontSize(5.5).font("NotoSans").fillColor("#b0b0b8")
-      .text("Powered by Fintranzact", margin, footerY + 16, { width: contentW, align: "center" });
+      .text("Powered by Fintranzact", margin, footerY + 16, { width: contentW, align: "center", ...(data.brandingUrl ? { link: data.brandingUrl } : {}) });
   }
 }
 
@@ -1401,7 +1403,7 @@ function generateA5Invoice(doc: InstanceType<typeof PDFDocument>, data: InvoiceP
       { width: contentW, align: "center" });
   if (!data.isPaidPlan) {
     doc.fontSize(5.5).font("NotoSans").fillColor("#b0b0b8")
-      .text("Powered by Fintranzact", margin, footerY + 14, { width: contentW, align: "center" });
+      .text("Powered by Fintranzact", margin, footerY + 14, { width: contentW, align: "center", ...(data.brandingUrl ? { link: data.brandingUrl } : {}) });
   }
 }
 

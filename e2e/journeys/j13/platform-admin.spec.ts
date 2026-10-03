@@ -48,8 +48,8 @@ test.describe("J13 platform admin", () => {
     browser,
     guard,
   }) => {
-    // Shared state a failed earlier run may have left: Pro edited.
-    await db()`delete from plan_settings where plan = 'pro'`;
+    // Shared state a failed earlier run may have left: Growth edited.
+    await db()`delete from plan_settings where plan = 'growth'`;
 
     // An organisation to look after (signed up through the API: J1 owns sign-up).
     const ownerContext = await newJourneyContext(browser, guard);
@@ -96,7 +96,8 @@ test.describe("J13 platform admin", () => {
     await page.getByRole("searchbox", { name: "Search organisations" }).fill(owner.email);
     const orgRow = listRow(page, owner.email);
     await expect(orgRow).toHaveCount(1);
-    await expect(orgRow).toContainText("Forever free");
+    await expect(orgRow).toContainText("Business");
+    await expect(orgRow).not.toContainText("Grandfathered");
     await expectNoHorizontalScroll(page, "organisations");
     await orgRow.getByRole("button").first().click();
     const org = dialog(page, `${owner.name}'s Organization`);
@@ -106,53 +107,65 @@ test.describe("J13 platform admin", () => {
     await expect(org).toContainText(owner.businessName);
     await expect(org).toContainText("GSTIN 27AAPFU0939F1ZV");
     await org.getByRole("combobox", { name: "Plan" }).click();
-    await page.getByRole("option", { name: "Pro", exact: true }).click();
+    await page.getByRole("option", { name: "Growth", exact: true }).click();
     await org.getByRole("button", { name: "Save plan" }).click();
     await expect(toast(page, "Plan updated")).toBeVisible();
-    await expect.poll(() => tenantPlan(owner.tenantId)).toBe("pro");
+    await expect.poll(() => tenantPlan(owner.tenantId)).toBe("growth");
     await org.getByRole("button", { name: "Close", exact: true }).click();
-    await expect(orgRow).toContainText("Pro");
+    await expect(orgRow).toContainText("Growth");
 
-    // ── Plans: edit Pro, see it on the pricing page, reset it ───
+    // ── Plans: edit Growth, see it on the pricing page, reset it ─
     await adminSection(page, "Plans");
-    await page.getByRole("button", { name: "Edit plan Pro" }).click();
-    const editor = dialog(page, "Edit Pro");
+    await expect(page.locator("main").getByText(/^(Starter|Growth|Business)$/)).toHaveCount(3);
+    await page.getByRole("button", { name: "Edit plan Growth" }).click();
+    const editor = dialog(page, "Edit Growth");
     await editor.getByLabel("Tagline").fill("For growing teams — J13 offer");
-    await editor.getByRole("checkbox", { name: /Price on request/ }).uncheck();
     await editor.getByLabel("Monthly price (₹)").fill("1999");
+    // Yearly blank means ten months of the monthly price, shown as a hint.
+    await editor.getByLabel("Yearly price (₹)").fill("");
+    await expect(editor.getByText(/₹19,990 a year, 2 months free/)).toBeVisible();
+    // A yearly price above 12 months is flagged, not refused.
+    await editor.getByLabel("Yearly price (₹)").fill("30000");
+    await expect(editor.getByRole("status")).toContainText("more than 12 months");
+    await editor.getByLabel("Yearly price (₹)").fill("19999");
+    // Feature flags: the ones the API does not enforce yet say so.
+    await expect(editor.getByText("Shown on the plan; not enforced yet").first()).toBeVisible();
+    await editor.getByRole("checkbox", { name: /^e-invoicing/ }).uncheck();
     await editor.getByLabel("Team members", { exact: true }).fill("25");
     await expectNoHorizontalScroll(page, "plan editor");
     await editor.getByRole("button", { name: "Save plan" }).click();
     await expect(toast(page, "Plan saved")).toBeVisible();
     await expect(editor).toBeHidden();
-    expect(await planOverride("pro")).toMatchObject({
-      name: "Pro",
+    expect(await planOverride("growth")).toMatchObject({
+      name: "Growth",
       tagline: "For growing teams — J13 offer",
       monthly_price_inr: 1999,
-      limits: expect.objectContaining({ maxTeamMembers: 25 }),
+      yearly_price_inr: 19999,
+      limits: expect.objectContaining({ maxTeamMembers: 25, eInvoicing: false }),
     });
-    const proCard = page.locator("div.rounded-2xl").filter({ has: page.getByRole("button", { name: "Edit plan Pro" }) });
+    const proCard = page.locator("div.rounded-2xl").filter({ has: page.getByRole("button", { name: "Edit plan Growth" }) });
     await expect(proCard).toContainText("₹1,999");
     await expect(proCard).toContainText("Edited");
     await expect(proCard).toContainText("Team members25");
+    await expect(proCard).toContainText("₹19,999 /year");
 
     // The public pricing page reads the same catalogue.
     const visitor = await newJourneyContext(browser, guard, { viewport: page.viewportSize()!, hasTouch: isPhone(page) });
     const pricing = await visitor.newPage();
     await pricing.goto("/pricing");
-    await expect(pricing.getByRole("columnheader", { name: /^Pro/ })).toContainText("₹1,999");
+    await expect(pricing.getByRole("columnheader", { name: /^Growth/ })).toContainText("₹1,999");
     await expect(pricing.getByText("For growing teams — J13 offer").first()).toBeVisible();
     await expectNoHorizontalScroll(pricing, "pricing (edited plan)");
 
-    await page.getByRole("button", { name: "Edit plan Pro" }).click();
+    await page.getByRole("button", { name: "Edit plan Growth" }).click();
     await editor.getByRole("button", { name: "Reset to original" }).click();
-    await dialog(page, "Reset Pro?").getByRole("button", { name: "Reset plan" }).click();
+    await dialog(page, "Reset Growth?").getByRole("button", { name: "Reset plan" }).click();
     await expect(toast(page, "Plan reset")).toBeVisible();
-    await expect(proCard).toContainText("Custom");
+    await expect(proCard).toContainText("₹699");
     await expect(proCard).not.toContainText("Edited");
-    expect(await planOverride("pro")).toBeUndefined();
+    expect(await planOverride("growth")).toBeUndefined();
     await pricing.reload();
-    await expect(pricing.getByRole("columnheader", { name: /^Pro/ })).toContainText("Custom");
+    await expect(pricing.getByRole("columnheader", { name: /^Growth/ })).toContainText("₹699");
     await expect(pricing.getByText("For growing teams — J13 offer")).toHaveCount(0);
     await visitor.close();
 

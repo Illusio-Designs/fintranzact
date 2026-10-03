@@ -6,17 +6,11 @@ import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn, formatCurrency } from "@/lib/utils";
 import { PAGE_TITLE_CLASS } from "@/components/ui/PageHeader";
-import { SUBSCRIPTION_STATUSES, SUBSCRIPTION_STATUS_LABELS, addonById, type SubscriptionStatus } from "@fintranzact/shared";
+import { PLAN_NAMES, SUBSCRIPTION_STATUSES, SUBSCRIPTION_STATUS_LABELS, addonById, type SubscriptionStatus } from "@fintranzact/shared";
 
 const PAGE_SIZE = 25;
 
-const PLAN_LABELS: Record<string, string> = {
-  forever_free: "Forever free",
-  free: "Free",
-  pro: "Pro",
-  business: "Business",
-  enterprise: "Enterprise",
-};
+const PLAN_LABELS: Record<string, string> = PLAN_NAMES;
 
 const STATUS_STYLES: Record<SubscriptionStatus, string> = {
   created: "bg-surface-2 text-text-secondary",

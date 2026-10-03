@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const h = vi.hoisted(() => ({
-  tenant: { plan: "pro", status: "active", trialEndsAt: null } as { plan: string; status: string; trialEndsAt: Date | null } | null,
+  tenant: { plan: "growth", status: "active", trialEndsAt: null, accessGrandfathered: false } as { plan: string; status: string; trialEndsAt: Date | null; accessGrandfathered: boolean } | null,
   subs: [] as Array<Record<string, unknown>>,
   loads: 0, // organisation-row reads (every call)
   wheres: 0, // all where() calls: row reads + subscription loads
@@ -31,7 +31,7 @@ vi.mock("@fintranzact/db", async () => {
 
 vi.mock("../lib/plan-catalog.js", async () => {
   const { PLAN_DEFAULTS } = await vi.importActual<typeof import("@fintranzact/shared")>("@fintranzact/shared");
-  return { getPlanLimits: async (plan: string) => (PLAN_DEFAULTS[plan as keyof typeof PLAN_DEFAULTS] ?? PLAN_DEFAULTS.free).limits };
+  return { getPlanLimits: async (plan: string) => (PLAN_DEFAULTS[plan as keyof typeof PLAN_DEFAULTS] ?? PLAN_DEFAULTS.starter).limits };
 });
 
 vi.mock("../lib/billing/service.js", () => ({ applyLazyTransitions: h.lazy }));
@@ -51,7 +51,7 @@ const planSub = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   clearEntitlementsCache();
-  h.tenant = { plan: "pro", status: "active", trialEndsAt: null };
+  h.tenant = { plan: "growth", status: "active", trialEndsAt: null, accessGrandfathered: false };
   h.subs = [];
   h.loads = 0;
   h.wheres = 0;
@@ -76,9 +76,30 @@ describe("getEntitlements", () => {
     await expect(assertWritable("t1")).resolves.toBeTruthy();
   });
 
-  it("an unknown organisation falls back to the legacy free defaults and stays writable", async () => {
+  it("a grandfathered organisation has permanent full access: never trial-expired, never read-only, even with a halted subscription", async () => {
+    h.tenant = { plan: "business", status: "active", trialEndsAt: new Date(Date.now() - 400 * DAY), accessGrandfathered: true };
+    expect(await getEntitlements("t1")).toMatchObject({ state: "grandfathered", readOnly: false, reason: null, accessGrandfathered: true, plan: "business" });
+    h.subs = [planSub({ status: "halted" })];
+    invalidateEntitlements("t1");
+    expect(await getEntitlements("t1")).toMatchObject({ state: "grandfathered", readOnly: false, reason: null });
+    await expect(assertWritable("t1")).resolves.toBeTruthy();
+  });
+
+  it("the grandfathered flag is read fresh like the plan: clearing it makes the expired trial bite at once", async () => {
+    h.tenant = { plan: "business", status: "active", trialEndsAt: new Date(Date.now() - DAY), accessGrandfathered: true };
+    expect((await getEntitlements("t1")).readOnly).toBe(false);
+    h.tenant!.accessGrandfathered = false;
+    expect(await getEntitlements("t1")).toMatchObject({ state: "trial_expired", readOnly: true });
+  });
+
+  it("a suspended grandfathered organisation is still blocked", async () => {
+    h.tenant = { plan: "business", status: "suspended", trialEndsAt: null, accessGrandfathered: true };
+    expect(await getEntitlements("t1")).toMatchObject({ readOnly: true, reason: "tenant_suspended" });
+  });
+
+  it("an unknown organisation falls back to the Starter defaults and stays writable", async () => {
     h.tenant = null;
-    expect(await getEntitlements("ghost")).toMatchObject({ plan: "free", readOnly: false });
+    expect(await getEntitlements("ghost")).toMatchObject({ plan: "starter", readOnly: false });
   });
 
   it("reads add-ons from active add-on subscriptions", async () => {
@@ -100,10 +121,10 @@ describe("getEntitlements", () => {
   });
 
   it("shows a plan, status or trial change at once, with no invalidation (the organisation row is never cached)", async () => {
-    h.tenant!.plan = "free";
-    expect((await getEntitlements("t1")).limits.maxBusinesses).toBe(PLAN_DEFAULTS.free.limits.maxBusinesses);
-    h.tenant!.plan = "forever_free"; // changed behind the cache's back (another process, a direct edit, a request in flight)
-    expect((await getEntitlements("t1")).limits).toEqual(PLAN_DEFAULTS.forever_free.limits);
+    h.tenant!.plan = "starter";
+    expect((await getEntitlements("t1")).limits.maxBusinesses).toBe(PLAN_DEFAULTS.starter.limits.maxBusinesses);
+    h.tenant!.plan = "business"; // changed behind the cache's back (another process, a direct edit, a request in flight)
+    expect((await getEntitlements("t1")).limits).toEqual(PLAN_DEFAULTS.business.limits);
     h.tenant!.status = "suspended";
     expect(await getEntitlements("t1")).toMatchObject({ readOnly: true, reason: "tenant_suspended" });
   });

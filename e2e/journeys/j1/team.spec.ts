@@ -133,7 +133,7 @@ async function acceptInvite(
   await page.getByLabel("Email address").fill(who.email);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByLabel("Retype password").fill(PASSWORD);
-  await page.locator("form").getByRole("button", { name: "Create free account" }).click();
+  await page.locator("form").getByRole("button", { name: "Start free trial" }).click();
 
   await expect(page.getByRole("heading", { name: `You've joined ${tenantName}!` })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(`as ${ROLE_LABEL[role]}`)).toBeVisible();

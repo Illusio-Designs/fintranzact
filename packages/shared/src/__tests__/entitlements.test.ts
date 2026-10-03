@@ -7,7 +7,7 @@ const at = (ms: number) => new Date(now.getTime() + ms);
 
 function input(over: Partial<AccessInput> = {}): AccessInput {
   return {
-    plan: "pro",
+    plan: "growth",
     tenantStatus: "active",
     trialEndsAt: null,
     planSubscription: null,
@@ -24,11 +24,39 @@ const sub = (status: "active" | "past_due" | "halted" | "cancelled" | "created",
 });
 
 describe("deriveAccess", () => {
-  it("never-subscribed, no trial organisations stay writable (forever_free, fixtures, admin-set plans)", () => {
-    for (const plan of ["forever_free", "free", "business", "enterprise"]) {
+  it("never-subscribed, no trial organisations stay writable (fixtures, admin-created organisations)", () => {
+    for (const plan of ["starter", "growth", "business"]) {
       const a = deriveAccess(input({ plan }));
       expect(a).toMatchObject({ state: "free", readOnly: false, reason: null, trialDaysLeft: null });
     }
+  });
+
+  describe("grandfathered organisations (former Forever Free)", () => {
+    it("have permanent full access whatever the billing state", () => {
+      const states = [
+        input({}),
+        input({ trialEndsAt: at(-30 * day) }), // trial long over
+        input({ trialEndsAt: at(-1) , everHadPlanSubscription: true }),
+        input({ planSubscription: sub("halted"), everHadPlanSubscription: true }),
+        input({ planSubscription: sub("past_due", at(-day)), everHadPlanSubscription: true }),
+      ];
+      for (const s of states) {
+        const a = deriveAccess({ ...s, plan: "business", accessGrandfathered: true });
+        expect(a).toMatchObject({ state: "grandfathered", readOnly: false, reason: null, trialDaysLeft: null });
+      }
+    });
+
+    it("can still buy add-ons, but a suspended organisation is blocked even if grandfathered", () => {
+      const a = deriveAccess(input({ accessGrandfathered: true, addons: [{ addon: "payroll", status: "active" }] }));
+      expect(a.addons.payroll).toBe(true);
+      const s = deriveAccess(input({ accessGrandfathered: true, tenantStatus: "suspended" }));
+      expect(s).toMatchObject({ state: "suspended", readOnly: true, reason: "tenant_suspended" });
+    });
+
+    it("are not read-only when the flag is false or missing (trial over still bites)", () => {
+      expect(deriveAccess(input({ trialEndsAt: at(-day) })).readOnly).toBe(true);
+      expect(deriveAccess(input({ trialEndsAt: at(-day), accessGrandfathered: false })).readOnly).toBe(true);
+    });
   });
 
   it("suspended and deleted organisations are blocked and have no add-ons", () => {

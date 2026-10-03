@@ -240,7 +240,7 @@ function ContactPage() {
 
       <CtaBand
         title="Prefer to try it yourself?"
-        body="Create a free account and send your first GST invoice in minutes."
+        body="Start a free trial and send your first GST invoice in minutes."
       />
     </MarketingLayout>
   );

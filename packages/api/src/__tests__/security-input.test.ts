@@ -37,20 +37,19 @@ import { PLAN_DEFAULTS } from "@fintranzact/shared";
 // ─────────────────────────────────────────────────────────────────────────────
 // SECURITY — ILIKE wildcard injection (Finding #7) — FIXED
 // ─────────────────────────────────────────────────────────────────────────────
-describe("plan limits — forever free is truly unlimited", () => {
-  it("gives the forever free plan unlimited access by default", () => {
-    const limits = PLAN_DEFAULTS.forever_free.limits;
+describe("plan limits — Business is truly unlimited", () => {
+  it("gives the Business plan unlimited access by default", () => {
+    const limits = PLAN_DEFAULTS.business.limits;
 
     expect(limits.maxOwnedOrgs).toBe(Infinity);
     expect(limits.maxBusinesses).toBe(Infinity);
     expect(limits.maxTeamMembers).toBe(Infinity);
     expect(limits.maxConcurrentSessions).toBe(Infinity);
     expect(limits.maxApiKeys).toBe(Infinity);
-    expect(limits.recurringRunsPerMonth).toBe(Infinity);
     expect(limits.auditRetentionDays).toBeNull();
     expect(limits.dataExport).toBe(true);
     expect(limits.onlineStore).toBe(true);
-    expect(limits.pdfBranding).toBe(false);
+    expect(limits.pdfBranding).toBe(true);
   });
 });
 

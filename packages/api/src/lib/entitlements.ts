@@ -37,6 +37,8 @@ export { invalidateEntitlements, clearEntitlementsCache } from "./entitlements-c
 
 export interface Entitlements extends Access {
   plan: string;
+  /** Permanent full access (a former Forever Free organisation): never trial-expired or read-only. */
+  accessGrandfathered: boolean;
   tenantStatus: string;
   limits: PlanLimits;
 }
@@ -105,13 +107,25 @@ async function loadSnapshot(tenantId: string): Promise<Snapshot> {
  * when the change landed) must show at once. A tenant that no longer exists
  * behaves like the legacy default so callers that only read limits keep working.
  */
-async function loadTenant(tenantId: string): Promise<{ plan: string; tenantStatus: string; trialEndsAt: Date | null }> {
+async function loadTenant(
+  tenantId: string,
+): Promise<{ plan: string; tenantStatus: string; trialEndsAt: Date | null; accessGrandfathered: boolean }> {
   const [tenant] = await controlDb
-    .select({ plan: tenants.plan, status: tenants.status, trialEndsAt: tenants.trialEndsAt })
+    .select({
+      plan: tenants.plan,
+      status: tenants.status,
+      trialEndsAt: tenants.trialEndsAt,
+      accessGrandfathered: tenants.accessGrandfathered,
+    })
     .from(tenants)
     .where(eq(tenants.id, tenantId))
     .limit(1);
-  return { plan: tenant?.plan ?? "free", tenantStatus: tenant?.status ?? "active", trialEndsAt: tenant?.trialEndsAt ?? null };
+  return {
+    plan: tenant?.plan ?? "starter",
+    tenantStatus: tenant?.status ?? "active",
+    trialEndsAt: tenant?.trialEndsAt ?? null,
+    accessGrandfathered: tenant?.accessGrandfathered ?? false,
+  };
 }
 
 /** What the organisation may do right now: access state, add-ons and plan limits. */
@@ -126,12 +140,13 @@ export async function getEntitlements(tenantId: string, now: Date = new Date()):
     plan: tenant.plan,
     tenantStatus: tenant.tenantStatus,
     trialEndsAt: tenant.trialEndsAt,
+    accessGrandfathered: tenant.accessGrandfathered,
     planSubscription: snap.planSubscription,
     everHadPlanSubscription: snap.everHadPlanSubscription,
     addons: snap.addons,
     now,
   });
-  return { ...access, plan: tenant.plan, tenantStatus: tenant.tenantStatus, limits: await getPlanLimits(tenant.plan) };
+  return { ...access, plan: tenant.plan, accessGrandfathered: tenant.accessGrandfathered, tenantStatus: tenant.tenantStatus, limits: await getPlanLimits(tenant.plan) };
 }
 
 /**

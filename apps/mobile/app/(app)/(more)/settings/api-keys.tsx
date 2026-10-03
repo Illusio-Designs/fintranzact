@@ -196,7 +196,7 @@ export default function ApiKeysScreen() {
         }
       >
         {isFree ? (
-          /* Free plan paywall */
+          /* Plan without API access (Starter) paywall */
           <Card>
             <View style={styles.paywallCard}>
               <View style={styles.paywallIconWrapper}>
