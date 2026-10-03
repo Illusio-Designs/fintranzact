@@ -2,29 +2,39 @@
  * sandbox/gst-returns.ts — GSTR-1 / GSTR-3B filing and GSTR-2B download through
  * Sandbox.co.in.
  *
+ * OFFICIAL RECIPES (owner-supplied Sandbox documentation) now define:
+ *   GSTR-1        session -> save -> proceed (new-proceed?is_nil=N) -> summary
+ *                 (sec_sum + chksum) -> EVC OTP -> file (newSumFlag)
+ *   Nil GSTR-1    session -> proceed (is_nil=Y) -> EVC OTP -> file (isnil "Y")
+ *   GSTR-3B       session -> get -> save -> ledger balances -> offset-liability
+ *                 -> get (tx_pmt) -> EVC OTP -> file
+ *   Nil GSTR-3B   session -> EVC OTP -> file (isNil "Y")
+ *   Every taxpayer call sends authorization: <taxpayer token>, x-api-key,
+ *   x-api-version 1.0.0 and Content-Type: application/json. The taxpayer token
+ *   is valid 6 hours.
+ *   After save / proceed / offset the GST Return Status endpoint is polled
+ *   (see gst-return-flow.ts for the schedule).
+ *
  * SESSION MODEL
- *   GST return APIs need a taxpayer session, not just the deployment's API
- *   token. The taxpayer's GST-portal username + GSTIN request an OTP (sent by
- *   the GST portal to the registered mobile); the OTP is exchanged for a
- *   session token valid ~6 h. The token is cached in memory only (never
- *   persisted) and keyed by GSTIN. A restart simply means "ask for an OTP again".
+ *   The recipe's "Generate Taxpayer Session" is not documented to us. Until it
+ *   is, the taxpayer's GST-portal username + GSTIN request an OTP (sent by the
+ *   GST portal to the registered mobile); the OTP is exchanged for a session
+ *   token. The token is cached in memory only (never persisted, never logged),
+ *   keyed by GSTIN, with a 10-minute safety margin inside the 6 h lifetime.
  *
- *   Filing itself needs a second OTP: the EVC OTP, sent to the authorised
- *   signatory's registered mobile, plus the signatory's PAN.
- *
- * !! VERIFY AGAINST test-api.sandbox.co.in BEFORE GO-LIVE !!
- *   The endpoint paths and the request/response shapes below were written from
- *   memory of Sandbox.co.in's "GST Returns" API; the docs site could not be
- *   reached when this was written. All paths live in GST_RETURNS_PATHS, and
- *   response handling is concentrated in `unwrap()` / `sessionFrom()`, so
- *   corrections stay in this one file.
+ * STILL UNVERIFIED (marked VERIFY below)
+ *   - GST Return Status URL, query and response shape (RETURN_STATUS_PATH).
+ *   - Generate Taxpayer Session endpoint details (requestOtp / verifyOtp paths).
+ *   - Whether `fp` is MMYYYY (the save example mixes URL 2023/12 with fp 112023).
+ *   - Error body shapes; whether `reference_id` is the exact response key.
+ *   - Inner shapes of the 3B sections, pdcash, pditc and the ledger response.
+ *   - GSTR-2B path (no recipe yet).
  *
  *   NOT MAPPED (left out rather than guessed, see mapper below):
- *     GSTR-1: doc_issue (document series summary), exp (exports), at/txpd
- *             (advances), b2cl is mapped but ecom/supeco are not.
- *     GSTR-3B: 3.2 inter-state to unregistered/composition/UIN, ITC split by
- *              import / RCM / ISD, ITC reversal and ineligible ITC, interest
- *              and late fee, tax payment (cash vs credit ledger).
+ *     GSTR-1: exp, expa, at/ata, txpd/txpda, doc_issue, b2ba/b2cla/cdnra/cdnura/b2csa
+ *             are sent as empty (the app holds no data for them).
+ *     GSTR-3B: inward_sup, 3.2 inter_sup, ITC split by import / RCM / ISD, ITC
+ *              reversal and ineligible ITC, interest and late fee.
  */
 
 import { logger } from "../logger.js";
@@ -35,9 +45,16 @@ import {
 } from "../gst-reports.js";
 import { SandboxClient, SandboxError } from "./client.js";
 
-// ── Endpoint paths (VERIFY against test-api.sandbox.co.in before go-live) ──
+// ── Endpoint paths ──
 
 const GSTR_BASE = "/gst/compliance/tax-payer";
+
+/** Sent on every taxpayer call (official recipe). */
+export const GST_API_VERSION = "1.0.0";
+
+/** Nil-return body flags, copied literally from their recipes. NOTE THE CASING. */
+export const GSTR1_NIL_FLAG = { key: "isnil", value: "Y" } as const;
+export const GSTR3B_NIL_FLAG = { key: "isNil", value: "Y" } as const;
 
 /** "MMYYYY" -> { month: "MM", year: "YYYY" } path segments. */
 function seg(period: string): { year: string; month: string } {
@@ -45,36 +62,63 @@ function seg(period: string): { year: string; month: string } {
 }
 
 export const GST_RETURNS_PATHS = {
-  /** POST body { username, gstin } -> OTP to registered mobile. VERIFY. */
+  /** POST body { username, gstin } -> OTP to registered mobile. VERIFY (Generate Taxpayer Session recipe not seen). */
   requestOtp: () => `${GSTR_BASE}/otp`,
-  /** POST ?otp=… body { username, gstin } -> session token. VERIFY. */
+  /** POST ?otp=… body { username, gstin } -> session token. VERIFY (same). */
   verifyOtp: () => `${GSTR_BASE}/otp/verify`,
-  /** PUT one GSTR-1 section (b2b, b2cs, …). VERIFY. */
-  gstr1Save: (period: string, section: string) => {
+  /** POST save GSTR-1 (all sections in one body). */
+  gstr1Save: (period: string) => {
     const { year, month } = seg(period);
-    return `${GSTR_BASE}/gstrs/gstr-1/${year}/${month}/${section}`;
+    return `${GSTR_BASE}/gstrs/gstr-1/${year}/${month}`;
   },
-  /** GET GSTR-1 summary. VERIFY. */
+  /** POST ?is_nil=N|Y body { gstin, ret_period } -> reference_id. */
+  gstr1Proceed: (period: string) => {
+    const { year, month } = seg(period);
+    return `${GSTR_BASE}/gstrs/gstr-1/${year}/${month}/new-proceed`;
+  },
+  /** GET ?summary_type=long -> data incl. sec_sum + chksum. */
   gstr1Summary: (period: string) => {
     const { year, month } = seg(period);
-    return `${GSTR_BASE}/gstrs/gstr-1/${year}/${month}/summary`;
+    return `${GSTR_BASE}/gstrs/gstr-1/${year}/${month}`;
   },
-  /** POST file with EVC. VERIFY. */
+  /** POST ?pan=&otp= body { ret_period, newSumFlag, sec_sum, gstin, chksum } (nil: { ret_period, gstin, isnil }). */
   gstr1File: (period: string) => {
     const { year, month } = seg(period);
     return `${GSTR_BASE}/gstrs/gstr-1/${year}/${month}/file`;
   },
-  /** PUT GSTR-3B draft. VERIFY. */
-  gstr3bSave: (period: string) => {
+  /** POST ?gstr=gstr-1|gstr-3b body { pan } -> OTP to the registered mobile / email. */
+  evcOtp: () => `${GSTR_BASE}/evc/otp`,
+  /**
+   * GST Return Status (docs: api-reference/gst/compliance/endpoints/taxpayer/
+   * common/gst_return_status). The exact URL was NOT given to us. VERIFY.
+   * Assumed: GET with ?reference_id=. Everything about it lives here and in
+   * interpretReturnStatus().
+   */
+  returnStatus: (period: string) => {
+    const { year, month } = seg(period);
+    return `${GSTR_BASE}/gstrs/${year}/${month}/status`; // VERIFY
+  },
+  /** GET existing details / POST save GSTR-3B. */
+  gstr3b: (period: string) => {
     const { year, month } = seg(period);
     return `${GSTR_BASE}/gstrs/gstr-3b/${year}/${month}`;
   },
-  /** POST file with EVC. VERIFY. */
+  /** GET cash / ITC / liability ledger balances. */
+  ledgerBalance: (period: string) => {
+    const { year, month } = seg(period);
+    return `${GSTR_BASE}/ledgers/bal/${year}/${month}`;
+  },
+  /** POST body { pdcash, pditc } -> reference_id. */
+  gstr3bOffset: (period: string) => {
+    const { year, month } = seg(period);
+    return `${GSTR_BASE}/gstrs/gstr-3b/${year}/${month}/offset-liability`;
+  },
+  /** POST ?pan=&otp=. */
   gstr3bFile: (period: string) => {
     const { year, month } = seg(period);
     return `${GSTR_BASE}/gstrs/gstr-3b/${year}/${month}/file`;
   },
-  /** GET auto-drafted GSTR-2B. VERIFY. */
+  /** GET auto-drafted GSTR-2B. VERIFY (no recipe yet). */
   gstr2b: (period: string) => {
     const { year, month } = seg(period);
     return `${GSTR_BASE}/gstrs/gstr-2b/${year}/${month}`;
@@ -177,17 +221,38 @@ export interface GstReturnsConfig {
 export interface GstReturnsOptions {
   now?: () => number;
   sessions?: Map<string, Session>;
+  /**
+   * Called at most once per request when the taxpayer token was rejected
+   * (401/403) mid-flow, to create a fresh session. Without it the session is
+   * dropped and the caller must sign in again; flow state is persisted, so the
+   * flow resumes from the same step afterwards.
+   */
+  reauth?: () => Promise<void>;
 }
 
 export interface FilingResult {
   /** Acknowledgement / reference number from the portal, when returned. */
   referenceId: string | null;
-  raw: unknown;
 }
+
+export type ReturnPhase = "processing" | "processed" | "errors";
+export interface ReturnStatus {
+  phase: ReturnPhase;
+  /** Portal validation messages when phase is "errors". */
+  errors: string[];
+}
+
+export interface Gstr1Summary {
+  secSum: unknown[];
+  chksum: string;
+}
+
+const TAXPAYER_HEADERS = { "x-api-version": GST_API_VERSION } as const;
 
 export class SandboxGstReturnsClient {
   private readonly now: () => number;
   private readonly sessions: Map<string, Session>;
+  private readonly reauth?: () => Promise<void>;
 
   constructor(
     private readonly sandbox: SandboxClient,
@@ -196,6 +261,7 @@ export class SandboxGstReturnsClient {
   ) {
     this.now = opts.now ?? Date.now;
     this.sessions = opts.sessions ?? sharedSessions;
+    this.reauth = opts.reauth;
   }
 
   get hasSession(): boolean {
@@ -208,6 +274,7 @@ export class SandboxGstReturnsClient {
     try {
       const res = await this.sandbox.request<GstnData>("POST", GST_RETURNS_PATHS.requestOtp(), {
         body: { username: this.config.username, gstin: this.config.gstin },
+        headers: TAXPAYER_HEADERS,
       });
       unwrap(res.data, "OTP request", res.transaction_id);
     } catch (err) {
@@ -215,12 +282,13 @@ export class SandboxGstReturnsClient {
     }
   }
 
-  /** Exchange the OTP for a taxpayer session (kept in memory for ~6 h). */
+  /** Exchange the OTP for a taxpayer session (kept in memory, valid 6 h). */
   async verifyOtp(otp: string): Promise<void> {
     try {
       const res = await this.sandbox.request<GstnData>("POST", GST_RETURNS_PATHS.verifyOtp(), {
         query: { otp },
         body: { username: this.config.username, gstin: this.config.gstin },
+        headers: TAXPAYER_HEADERS,
       });
       const d = unwrap(res.data, "OTP verification", res.transaction_id);
       if (!d.access_token) {
@@ -252,54 +320,153 @@ export class SandboxGstReturnsClient {
     method: "GET" | "POST" | "PUT",
     path: string,
     opts: { body?: unknown; query?: Record<string, string> } = {},
+    reauthed = false,
   ): Promise<T> {
     try {
-      const res = await this.sandbox.request<T>(method, path, { ...opts, authToken: this.token() });
+      const res = await this.sandbox.request<T>(method, path, { ...opts, headers: TAXPAYER_HEADERS, authToken: this.token() });
       return unwrap(res.data as GstnData, what, res.transaction_id) as T;
     } catch (err) {
       const e = toError(err, what);
-      if (isSessionError(e)) this.clearSession();
+      if (isSessionError(e)) {
+        this.clearSession();
+        if (this.reauth && !reauthed) {
+          await this.reauth();
+          return this.call<T>(what, method, path, opts, true);
+        }
+      }
       throw e;
     }
   }
 
-  // ── GSTR-1 ─────────────────────────────────────────────────
+  // ── Shared: status polling and EVC OTP ──────────────────────
 
-  /** Save one GSTR-1 section (e.g. "b2b") for a period "MMYYYY". */
-  async saveGstr1Section(period: string, section: string, payload: unknown): Promise<void> {
+  /** One GST Return Status check for a save / proceed / offset `reference_id`. VERIFY the endpoint. */
+  async getReturnStatus(period: string, referenceId: string): Promise<ReturnStatus> {
     assertPeriod(period);
-    await this.call(`GSTR-1 ${section} save`, "PUT", GST_RETURNS_PATHS.gstr1Save(period, section), {
-      body: { gstin: this.config.gstin, fp: period, [section]: payload },
+    const d = await this.call("return status", "GET", GST_RETURNS_PATHS.returnStatus(period), {
+      query: { reference_id: referenceId },
+    });
+    return interpretReturnStatus(d);
+  }
+
+  /** Send the EVC OTP to the registered mobile/email of the PAN tied to the registration. */
+  async requestEvcOtp(gstr: "gstr-1" | "gstr-3b", pan: string): Promise<void> {
+    assertPan(pan);
+    await this.call("EVC OTP request", "POST", GST_RETURNS_PATHS.evcOtp(), {
+      query: { gstr },
+      body: { pan },
     });
   }
 
-  async getGstr1Summary(period: string): Promise<unknown> {
+  // ── GSTR-1 ─────────────────────────────────────────────────
+
+  /** Step 2: save all sections; returns the reference_id to poll. */
+  async saveGstr1(period: string, body: Gstr1SaveBody): Promise<string> {
     assertPeriod(period);
-    const d = await this.call("GSTR-1 summary", "GET", GST_RETURNS_PATHS.gstr1Summary(period));
-    return d.data ?? d;
+    const d = await this.call("GSTR-1 save", "POST", GST_RETURNS_PATHS.gstr1Save(period), { body });
+    return requireReference(d, "GSTR-1 save");
   }
 
-  async fileGstr1(period: string, evcOtp: string, pan: string): Promise<FilingResult> {
+  /** Step 3 (and nil step 2): initialise / validate; returns the reference_id to poll. */
+  async proceedGstr1(period: string, nil: boolean): Promise<string> {
     assertPeriod(period);
+    const d = await this.call("GSTR-1 proceed", "POST", GST_RETURNS_PATHS.gstr1Proceed(period), {
+      query: { is_nil: nil ? "Y" : "N" },
+      body: { gstin: this.config.gstin, ret_period: period },
+    });
+    return requireReference(d, "GSTR-1 proceed");
+  }
+
+  /** Step 4: the detailed summary; extracts sec_sum and chksum (never logged). */
+  async getGstr1Summary(period: string): Promise<Gstr1Summary> {
+    assertPeriod(period);
+    const d = await this.call("GSTR-1 summary", "GET", GST_RETURNS_PATHS.gstr1Summary(period), {
+      query: { summary_type: "long" },
+    });
+    const secSum = findKey(d, "sec_sum");
+    const chksum = findKey(d, "chksum");
+    if (!Array.isArray(secSum) || typeof chksum !== "string" || !chksum) {
+      throw new GstReturnsError("GST portal summary did not include sec_sum and chksum", "no_summary", false);
+    }
+    return { secSum, chksum };
+  }
+
+  /** Step 6. */
+  async fileGstr1(period: string, evcOtp: string, pan: string, summary: Gstr1Summary): Promise<FilingResult> {
+    assertPeriod(period);
+    assertPan(pan);
     const d = await this.call("GSTR-1 filing", "POST", GST_RETURNS_PATHS.gstr1File(period), {
-      query: { otp: evcOtp, pan },
-      body: { gstin: this.config.gstin, fp: period },
+      query: { pan, otp: evcOtp },
+      body: {
+        ret_period: period,
+        newSumFlag: true,
+        sec_sum: summary.secSum,
+        gstin: this.config.gstin,
+        chksum: summary.chksum,
+      },
+    });
+    return filingResult(d);
+  }
+
+  /** Nil GSTR-1: no sec_sum, chksum or newSumFlag. */
+  async fileNilGstr1(period: string, evcOtp: string, pan: string): Promise<FilingResult> {
+    assertPeriod(period);
+    assertPan(pan);
+    const d = await this.call("nil GSTR-1 filing", "POST", GST_RETURNS_PATHS.gstr1File(period), {
+      query: { pan, otp: evcOtp },
+      body: { ret_period: period, gstin: this.config.gstin, [GSTR1_NIL_FLAG.key]: GSTR1_NIL_FLAG.value },
     });
     return filingResult(d);
   }
 
   // ── GSTR-3B ────────────────────────────────────────────────
 
-  async saveGstr3b(period: string, payload: unknown): Promise<void> {
+  /** Steps 2 and 6: the 3B data the portal currently holds (after offset it includes tx_pmt). */
+  async getGstr3b(period: string): Promise<Record<string, unknown>> {
     assertPeriod(period);
-    await this.call("GSTR-3B save", "PUT", GST_RETURNS_PATHS.gstr3bSave(period), { body: payload });
+    const d = await this.call("GSTR-3B details", "GET", GST_RETURNS_PATHS.gstr3b(period));
+    return (d.data && typeof d.data === "object" ? d.data : d) as Record<string, unknown>;
   }
 
-  async fileGstr3b(period: string, evcOtp: string, pan: string): Promise<FilingResult> {
+  /** Step 3: save; returns the reference_id to poll. */
+  async saveGstr3b(period: string, payload: unknown): Promise<string> {
     assertPeriod(period);
+    const d = await this.call("GSTR-3B save", "POST", GST_RETURNS_PATHS.gstr3b(period), { body: payload });
+    return requireReference(d, "GSTR-3B save");
+  }
+
+  /** Step 4. */
+  async getLedgerBalances(period: string): Promise<unknown> {
+    assertPeriod(period);
+    const d = await this.call("ledger balance", "GET", GST_RETURNS_PATHS.ledgerBalance(period));
+    return d.data ?? d;
+  }
+
+  /** Step 5: post the confirmed cash / ITC split; returns the reference_id to poll. */
+  async offsetGstr3bLiability(period: string, body: { pdcash: unknown[]; pditc: unknown }): Promise<string> {
+    assertPeriod(period);
+    const d = await this.call("GSTR-3B offset liability", "POST", GST_RETURNS_PATHS.gstr3bOffset(period), { body });
+    return requireReference(d, "GSTR-3B offset liability");
+  }
+
+  /** Step 8: `data` is the complete 3B data including tx_pmt (from step 6). */
+  async fileGstr3b(period: string, evcOtp: string, pan: string, data: Record<string, unknown>): Promise<FilingResult> {
+    assertPeriod(period);
+    assertPan(pan);
     const d = await this.call("GSTR-3B filing", "POST", GST_RETURNS_PATHS.gstr3bFile(period), {
-      query: { otp: evcOtp, pan },
-      body: { gstin: this.config.gstin, ret_period: period },
+      query: { pan, otp: evcOtp },
+      body: { ret_period: period, gstin: this.config.gstin, ...data },
+    });
+    return filingResult(d);
+  }
+
+  /** Nil GSTR-3B: body is only ret_period, gstin and isNil (capital N). */
+  async fileNilGstr3b(period: string, evcOtp: string, pan: string): Promise<FilingResult> {
+    assertPeriod(period);
+    assertPan(pan);
+    const d = await this.call("nil GSTR-3B filing", "POST", GST_RETURNS_PATHS.gstr3bFile(period), {
+      query: { pan, otp: evcOtp },
+      body: { ret_period: period, gstin: this.config.gstin, [GSTR3B_NIL_FLAG.key]: GSTR3B_NIL_FLAG.value },
     });
     return filingResult(d);
   }
@@ -315,6 +482,12 @@ export class SandboxGstReturnsClient {
   }
 }
 
+export const PAN_RE = /^[A-Z]{5}\d{4}[A-Z]$/;
+
+export function assertPan(pan: string): void {
+  if (!PAN_RE.test(pan)) throw new GstReturnsError("Enter a valid PAN (5 letters, 4 digits, 1 letter)", "bad_pan");
+}
+
 function assertPeriod(period: string): void {
   const m = /^(\d{2})(\d{4})$/.exec(period);
   if (!m || Number(m[1]) < 1 || Number(m[1]) > 12) {
@@ -322,10 +495,108 @@ function assertPeriod(period: string): void {
   }
 }
 
+/** Depth-first search for `key` in the response envelope (data / data.data / …). */
+function findKey(v: unknown, key: string, depth = 0): unknown {
+  if (!v || typeof v !== "object" || depth > 5) return undefined;
+  const o = v as Record<string, unknown>;
+  if (key in o) return o[key];
+  for (const child of Object.values(o)) {
+    const found = findKey(child, key, depth + 1);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+function findAllKeys(v: unknown, key: string, depth = 0, out: unknown[] = []): unknown[] {
+  if (!v || typeof v !== "object" || depth > 5) return out;
+  for (const [k, child] of Object.entries(v as Record<string, unknown>)) {
+    if (k === key) out.push(child);
+    else findAllKeys(child, key, depth + 1, out);
+  }
+  return out;
+}
+
+/** `reference_id` (VERIFY the exact key) from the response envelope. */
+function requireReference(d: GstnData, what: string): string {
+  const ref = findKey(d, "reference_id");
+  if (ref == null || ref === "") {
+    throw new GstReturnsError(`GST ${what} returned no reference_id`, "no_reference");
+  }
+  return String(ref);
+}
+
 function filingResult(d: GstnData): FilingResult {
-  const inner = (d.data && typeof d.data === "object" ? d.data : d) as Record<string, unknown>;
-  const ref = inner.reference_id ?? inner.ack_num ?? inner.arn ?? null;
-  return { referenceId: ref == null ? null : String(ref), raw: d };
+  const ref = findKey(d, "reference_id") ?? findKey(d, "ack_num") ?? findKey(d, "arn") ?? null;
+  return { referenceId: ref == null ? null : String(ref) };
+}
+
+/**
+ * Interpret a GST Return Status response. VERIFY: the response shape is not
+ * documented to us. Assumes the GSTN codes P (processed), PE / ER (errors),
+ * IP (in progress); anything unrecognised counts as still processing, which
+ * the bounded poll turns into a time-out rather than a wrong "ready".
+ */
+export function interpretReturnStatus(d: unknown): ReturnStatus {
+  // status_cd "1" / "0" is the gateway's call-level success flag, not the return's processing status.
+  const codes = findAllKeys(d, "status_cd").map((v) => String(v)).filter((v) => v !== "1" && v !== "0");
+  const raw = findKey(d, "processing_status") ?? findKey(d, "return_status") ?? codes[0];
+  const text = String(raw ?? "").trim().toUpperCase();
+  const errors = collectErrorMessages(d);
+  if (text === "PE" || text === "ER" || text === "ERROR" || text === "FAILED") {
+    return { phase: "errors", errors: errors.length ? errors : ["The GST portal reported errors; check the portal for details."] };
+  }
+  if (text === "P" || text === "PROCESSED" || text === "COMPLETED" || text === "SUCCESS") {
+    return errors.length ? { phase: "errors", errors } : { phase: "processed", errors: [] };
+  }
+  return { phase: "processing", errors: [] };
+}
+
+/** Portal validation messages found under `error*` keys of a response (error_msg / error_message / message). */
+export function collectErrorMessages(v: unknown, out: string[] = [], inError = false, depth = 0): string[] {
+  if (!v || typeof v !== "object" || depth > 8 || out.length >= 20) return out;
+  for (const [k, child] of Object.entries(v as Record<string, unknown>)) {
+    const errCtx = inError || /^error/i.test(k);
+    if (typeof child === "string" && errCtx && /^(error_msg|error_message|message|msg)$/i.test(k)) {
+      out.push(child.slice(0, 300));
+    } else if (child && typeof child === "object") {
+      collectErrorMessages(child, out, errCtx, depth + 1);
+    }
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+// ── GSTR-1 save body ─────────────────────────────────────────
+
+export interface Gstr1SaveBody {
+  fp: string;
+  gstin: string;
+  gt: number;
+  cur_gt: number;
+  [section: string]: unknown;
+}
+
+const GSTR1_ARRAY_SECTIONS = ["b2b", "b2ba", "b2cl", "b2cla", "cdnr", "cdnra", "b2cs", "b2csa", "exp", "expa", "txpd", "txpda", "at", "ata", "cdnur", "cdnura"] as const;
+
+/**
+ * Full save body per the recipe: fp, gstin, gt, cur_gt and every section key.
+ * Sections the app has no data for are sent empty (arrays; hsn / nil /
+ * doc_issue as objects with empty lists, shapes VERIFY). `fp` is the return
+ * period MMYYYY; the recipe's example mixes URL 2023/12 with fp 112023 (VERIFY).
+ */
+export function gstr1SaveBody(
+  report: GSTR1Report,
+  gstin: string,
+  period: string,
+  turnover: { gt: number; curGt: number },
+): Gstr1SaveBody {
+  const mapped = gstr1ToSections(report, gstin, period) as Record<string, unknown>;
+  const body: Gstr1SaveBody = { fp: period, gstin, gt: turnover.gt, cur_gt: turnover.curGt };
+  for (const s of GSTR1_ARRAY_SECTIONS) body[s] = mapped[s] ?? [];
+  body.hsn = mapped.hsn ?? { data: [] };
+  body.nil = mapped.nil ?? { inv: [] };
+  body.doc_issue = { doc_det: [] };
+  return body;
 }
 
 // ── Mappers: app report -> GSTN JSON ─────────────────────────

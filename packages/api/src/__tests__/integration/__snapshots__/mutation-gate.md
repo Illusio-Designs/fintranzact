@@ -5,7 +5,7 @@ ungated-exempt = public/protected base AND allowlisted (auth, billing, platform 
 inline-guarded = public/protected base, but the router calls assertWritable itself (INLINE_WRITE_GUARDED);
 ungated = public/protected base with no check at all: must be empty of business-data writes.
 
-mutations: 266 (gated 208, exempt 7, ungated-exempt 48, inline-guarded 3, ungated 0)
+mutations: 273 (gated 215, exempt 7, ungated-exempt 48, inline-guarded 3, ungated 0)
 
 | procedure | base | status |
 |---|---|---|
@@ -111,9 +111,16 @@ mutations: 266 (gated 208, exempt 7, ungated-exempt 48, inline-guarded 3, ungate
 | gstr2b.ignoreRecord | authorized | gated |
 | gstr2b.linkInvoice | authorized | gated |
 | gstr2b.upload | authorized | gated |
+| gstReturns.checkLedgerGstr3b | authorized | gated |
+| gstReturns.fetchGstr1Summary | authorized | gated |
+| gstReturns.fetchGstr3bDetails | authorized | gated |
 | gstReturns.fileGstr1 | authorized | gated |
 | gstReturns.fileGstr3b | authorized | gated |
+| gstReturns.pollReturnStatus | authorized | gated |
+| gstReturns.postOffsetGstr3b | authorized | gated |
+| gstReturns.proceedGstr1 | authorized | gated |
 | gstReturns.pull2b | authorized | gated |
+| gstReturns.requestEvcOtp | authorized | gated |
 | gstReturns.requestOtp | authorized | gated |
 | gstReturns.saveGstr1 | authorized | gated |
 | gstReturns.saveGstr3b | authorized | gated |

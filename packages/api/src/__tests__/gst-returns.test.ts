@@ -6,6 +6,10 @@ import {
   GST_RETURNS_PATHS,
   clearGstSessionsForTests,
   gstr1ToSections,
+  gstr1SaveBody,
+  interpretReturnStatus,
+  GSTR1_NIL_FLAG,
+  GSTR3B_NIL_FLAG,
   gstr3bToGstn,
   toGstnPeriod,
 } from "../lib/sandbox/gst-returns.js";
@@ -82,52 +86,214 @@ describe("OTP session", () => {
   });
 });
 
-describe("filing", () => {
-  async function sessioned(routes: Record<string, (i: RequestInit, u: string) => Response>) {
+type Call = { url: string; init: RequestInit };
+const hdr = (c: Call) => c.init.headers as Record<string, string>;
+const body = (c: Call) => JSON.parse(c.init.body as string);
+const ok = (data: unknown) => json({ code: 200, data: { status_cd: "1", ...(data as object) } });
+
+describe("official GSTR-1 flow (exact requests)", () => {
+  const BASE = `${SANDBOX_TEST_URL}/gst/compliance/tax-payer`;
+  async function session(routes: Record<string, (i: RequestInit, u: string) => Response>, opts = {}) {
     const g = gateway({ [GST_RETURNS_PATHS.verifyOtp()]: verifyRoute, ...routes });
-    const c = mk(g.fn);
+    const c = new SandboxGstReturnsClient(new SandboxClient(CFG, g.fn), ME, opts);
     await c.verifyOtp("123456");
     return { c, calls: g.calls };
   }
 
-  it("files GSTR-1 with the EVC OTP and PAN", async () => {
-    const { c, calls } = await sessioned({
-      "/gstr-1/2026/08/file": () => json({ code: 200, data: { status_cd: "1", data: { reference_id: "ARN-77" } } }),
+  it("save -> proceed -> status -> summary -> EVC OTP -> file, with the recipe's URLs, queries, headers and bodies", async () => {
+    const SEC = [{ sec_nm: "B2B", ttl_rec: 1 }];
+    const { c, calls } = await session({
+      "/gstr-1/2026/08/new-proceed": () => ok({ data: { reference_id: "REF-PROCEED" } }),
+      "/gstr-1/2026/08/file": () => ok({ data: { reference_id: "ARN-1" } }),
+      "/gstr-1/2026/08": (init) =>
+        init.method === "POST"
+          ? ok({ data: { reference_id: "REF-SAVE" } })
+          : ok({ data: { data: { sec_sum: SEC, chksum: "abc123" } } }),
+      "/gstrs/2026/08/status": () => ok({ data: { status_cd: "P" } }),
+      "/evc/otp": () => ok({}),
     });
-    const out = await c.fileGstr1("082026", "654321", "ABCDE1234F");
-    expect(out.referenceId).toBe("ARN-77");
-    const url = calls.at(-1)!.url;
-    expect(url).toContain("otp=654321");
-    expect(url).toContain("pan=ABCDE1234F");
+    const full = { fp: "082026", gstin: ME.gstin, gt: 5000, cur_gt: 900, b2b: [] };
+
+    expect(await c.saveGstr1("082026", full as never)).toBe("REF-SAVE");
+    let call = calls.at(-1)!;
+    expect(call.init.method).toBe("POST");
+    expect(call.url).toBe(`${BASE}/gstrs/gstr-1/2026/08`);
+    expect(body(call)).toMatchObject({ fp: "082026", gstin: ME.gstin, gt: 5000, cur_gt: 900 });
+    expect(hdr(call)).toMatchObject({ authorization: "sess-1", "x-api-key": "key_test_abc", "x-api-version": "1.0.0", "content-type": "application/json" });
+
+    expect(await c.getReturnStatus("082026", "REF-SAVE")).toEqual({ phase: "processed", errors: [] });
+    call = calls.at(-1)!;
+    expect(call.init.method).toBe("GET");
+    expect(call.url).toContain("reference_id=REF-SAVE");
+
+    expect(await c.proceedGstr1("082026", false)).toBe("REF-PROCEED");
+    call = calls.at(-1)!;
+    expect(call.init.method).toBe("POST");
+    expect(call.url).toBe(`${BASE}/gstrs/gstr-1/2026/08/new-proceed?is_nil=N`);
+    expect(body(call)).toEqual({ gstin: ME.gstin, ret_period: "082026" });
+
+    const sum = await c.getGstr1Summary("082026");
+    call = calls.at(-1)!;
+    expect(call.init.method).toBe("GET");
+    expect(call.url).toBe(`${BASE}/gstrs/gstr-1/2026/08?summary_type=long`);
+    expect(sum).toEqual({ secSum: SEC, chksum: "abc123" });
+
+    await c.requestEvcOtp("gstr-1", "ABCDE1234F");
+    call = calls.at(-1)!;
+    expect(call.init.method).toBe("POST");
+    expect(call.url).toBe(`${BASE}/evc/otp?gstr=gstr-1`);
+    expect(body(call)).toEqual({ pan: "ABCDE1234F" });
+
+    const out = await c.fileGstr1("082026", "654321", "ABCDE1234F", sum);
+    call = calls.at(-1)!;
+    expect(call.init.method).toBe("POST");
+    const u = new URL(call.url);
+    expect(u.pathname).toBe("/gst/compliance/tax-payer/gstrs/gstr-1/2026/08/file");
+    expect(u.searchParams.get("pan")).toBe("ABCDE1234F");
+    expect(u.searchParams.get("otp")).toBe("654321");
+    expect(body(call)).toEqual({ ret_period: "082026", newSumFlag: true, sec_sum: SEC, gstin: ME.gstin, chksum: "abc123" });
+    expect(out.referenceId).toBe("ARN-1");
   });
 
-  it("saves a GSTR-1 section and GSTR-3B", async () => {
-    const { c, calls } = await sessioned({
-      "/gstr-1/2026/08/b2b": () => json({ code: 200, data: { status_cd: "1" } }),
-      "/gstr-3b/2026/08": () => json({ code: 200, data: { status_cd: "1" } }),
+  it("nil GSTR-1: proceed is_nil=Y, file body carries isnil 'Y' and none of sec_sum / chksum / newSumFlag", async () => {
+    const { c, calls } = await session({
+      "/new-proceed": () => ok({ data: { reference_id: "R" } }),
+      "/file": () => ok({ data: { reference_id: "ARN-N" } }),
     });
-    await c.saveGstr1Section("082026", "b2b", [{ ctin: "x" }]);
-    expect(calls.at(-1)!.init.method).toBe("PUT");
-    expect(JSON.parse(calls.at(-1)!.init.body as string)).toMatchObject({ fp: "082026", b2b: [{ ctin: "x" }] });
-    await c.saveGstr3b("082026", { a: 1 });
-    expect(calls.at(-1)!.url).toContain("/gstr-3b/2026/08");
+    await c.proceedGstr1("122023", true);
+    expect(calls.at(-1)!.url).toBe(`${SANDBOX_TEST_URL}/gst/compliance/tax-payer/gstrs/gstr-1/2023/12/new-proceed?is_nil=Y`);
+    await c.fileNilGstr1("122023", "111111", "ABCDE1234F");
+    expect(body(calls.at(-1)!)).toEqual({ ret_period: "122023", gstin: ME.gstin, isnil: "Y" });
   });
 
-  it("maps a gateway 500 to a retryable error and a 401 to no_session", async () => {
-    const s500 = await sessioned({ "/gstr-1/2026/08/file": () => json({ message: "boom" }, 500) });
-    const e1 = await s500.c.fileGstr1("082026", "1234", "ABCDE1234F").catch((e) => e);
+  it("nil flag casing: GSTR-1 is 'isnil', GSTR-3B is 'isNil' (never swapped)", () => {
+    expect(GSTR1_NIL_FLAG).toEqual({ key: "isnil", value: "Y" });
+    expect(GSTR3B_NIL_FLAG).toEqual({ key: "isNil", value: "Y" });
+  });
+
+  it("the save body has fp, gstin, gt, cur_gt and every section key", () => {
+    const b = gstr1SaveBody({ b2b: [], b2cLarge: [], b2cSmall: [], hsn: [], creditNotes: [], debitNotes: [] } as unknown as GSTR1Report, ME.gstin, "082026", { gt: 1, curGt: 2 });
+    expect(Object.keys(b).sort()).toEqual(
+      ["at", "ata", "b2b", "b2ba", "b2cl", "b2cla", "b2cs", "b2csa", "cdnr", "cdnra", "cdnur", "cdnura", "cur_gt", "doc_issue", "exp", "expa", "fp", "gstin", "gt", "hsn", "nil", "txpd", "txpda"].sort(),
+    );
+    expect(b).toMatchObject({ fp: "082026", gt: 1, cur_gt: 2, hsn: { data: [] } });
+  });
+
+  it("a summary without sec_sum / chksum is refused", async () => {
+    const { c } = await session({ "/gstr-1/2026/08": () => ok({ data: { data: {} } }) });
+    await expect(c.getGstr1Summary("082026")).rejects.toMatchObject({ code: "no_summary" });
+  });
+
+  it("a save response without reference_id is refused", async () => {
+    const { c } = await session({ "/gstr-1/2026/08": () => ok({ data: {} }) });
+    await expect(c.saveGstr1("082026", {} as never)).rejects.toMatchObject({ code: "no_reference" });
+  });
+
+  it("status: errors carry the portal messages; unknown codes keep processing", async () => {
+    expect(interpretReturnStatus({ data: { status_cd: "PE", error_report: { b2b: [{ error_cd: "RET1", error_msg: "Bad GSTIN" }] } } })).toEqual({ phase: "errors", errors: ["Bad GSTIN"] });
+    expect(interpretReturnStatus({ data: { status_cd: "IP" } }).phase).toBe("processing");
+    expect(interpretReturnStatus({ data: { status_cd: "ZZ" } }).phase).toBe("processing");
+  });
+
+  it("PAN is validated before any call", async () => {
+    const { c, calls } = await session({});
+    const n = calls.length;
+    await expect(c.requestEvcOtp("gstr-1", "abc")).rejects.toMatchObject({ code: "bad_pan" });
+    await expect(c.fileNilGstr1("082026", "1", "ABCDE12345")).rejects.toMatchObject({ code: "bad_pan" });
+    expect(calls.length).toBe(n);
+  });
+
+  it("an expired token mid-flow: re-authenticates once and retries; a second 401 surfaces", async () => {
+    let n = 0;
+    const sessions = new Map();
+    const g = gateway({
+      [GST_RETURNS_PATHS.verifyOtp()]: verifyRoute,
+      "/gstr-1/2026/08/new-proceed": () => (++n === 1 || n < 0 ? json({ message: "expired" }, 401) : ok({ data: { reference_id: "R2" } })),
+    });
+    let reauths = 0;
+    const c = new SandboxGstReturnsClient(new SandboxClient(CFG, g.fn), ME, {
+      sessions,
+      reauth: async () => {
+        reauths++;
+        await c.verifyOtp("999999");
+      },
+    });
+    await c.verifyOtp("123456");
+    expect(await c.proceedGstr1("082026", false)).toBe("R2");
+    expect(reauths).toBe(1);
+
+    n = -5; // always 401 from now on
+    await expect(c.proceedGstr1("082026", false)).rejects.toMatchObject({ code: "no_session" });
+    expect(reauths).toBe(2);
+    expect(c.hasSession).toBe(false);
+  });
+
+  it("without a reauth hook a 401 drops the session", async () => {
+    const { c } = await session({ "/new-proceed": () => json({ message: "expired" }, 401) });
+    await expect(c.proceedGstr1("082026", false)).rejects.toMatchObject({ code: "no_session" });
+    expect(c.hasSession).toBe(false);
+  });
+
+  it("maps a gateway 500 to a retryable error and a wrong OTP (400) to a non-retryable one", async () => {
+    const s500 = await session({ "/gstr-1/2026/08/file": () => json({ message: "boom" }, 500) });
+    const e1 = await s500.c.fileNilGstr1("082026", "1234", "ABCDE1234F").catch((e) => e);
     expect(e1).toBeInstanceOf(GstReturnsError);
     expect(e1.retryable).toBe(true);
-
-    const s401 = await sessioned({ "/gstr-3b/2026/08/file": () => json({ message: "expired" }, 401) });
-    const e2 = await s401.c.fileGstr3b("082026", "1234", "ABCDE1234F").catch((e) => e);
-    expect(e2.code).toBe("no_session");
-    expect(s401.c.hasSession).toBe(false);
+    const s400 = await session({ "/gstr-1/2026/08/file": () => json({ code: 400, message: "Invalid OTP" }, 400) });
+    const e2 = await s400.c.fileNilGstr1("082026", "1234", "ABCDE1234F").catch((e) => e);
+    expect(e2.retryable).toBe(false);
+    expect(e2.message).toContain("Invalid OTP");
   });
 
   it("rejects a malformed period before calling out", async () => {
-    const { c } = await sessioned({});
-    await expect(c.fileGstr1("2026-08", "1", "x")).rejects.toMatchObject({ code: "bad_period" });
+    const { c } = await session({});
+    await expect(c.proceedGstr1("2026-08", false)).rejects.toMatchObject({ code: "bad_period" });
+  });
+});
+
+describe("official GSTR-3B flow (exact requests)", () => {
+  const BASE = `${SANDBOX_TEST_URL}/gst/compliance/tax-payer`;
+  it("get -> save -> ledger -> offset -> get (tx_pmt) -> EVC OTP -> file, and nil 3B", async () => {
+    const g = gateway({
+      [GST_RETURNS_PATHS.verifyOtp()]: verifyRoute,
+      "/gstr-3b/2026/08/offset-liability": () => ok({ data: { reference_id: "OFF-1" } }),
+      "/gstr-3b/2026/08/file": () => ok({ data: { reference_id: "ARN-3B" } }),
+      "/gstr-3b/2026/08": (init) => (init.method === "POST" ? ok({ data: { reference_id: "SAVE-3B" } }) : ok({ data: { sup_details: { a: 1 }, tx_pmt: { b: 2 } } })),
+      "/ledgers/bal/2026/08": () => ok({ data: { cash_bal: {}, itc_bal: {} } }),
+      "/evc/otp": () => ok({}),
+    });
+    const c = new SandboxGstReturnsClient(new SandboxClient(CFG, g.fn), ME);
+    await c.verifyOtp("123456");
+    const calls = g.calls;
+
+    expect(await c.getGstr3b("082026")).toMatchObject({ tx_pmt: { b: 2 } });
+    expect(calls.at(-1)!.url).toBe(`${BASE}/gstrs/gstr-3b/2026/08`);
+    expect(calls.at(-1)!.init.method).toBe("GET");
+
+    expect(await c.saveGstr3b("082026", { ret_period: "082026" })).toBe("SAVE-3B");
+    expect(calls.at(-1)!.init.method).toBe("POST");
+    expect(calls.at(-1)!.url).toBe(`${BASE}/gstrs/gstr-3b/2026/08`);
+
+    await c.getLedgerBalances("082026");
+    expect(calls.at(-1)!.url).toBe(`${BASE}/ledgers/bal/2026/08`);
+    expect(calls.at(-1)!.init.method).toBe("GET");
+
+    expect(await c.offsetGstr3bLiability("082026", { pdcash: [1], pditc: { x: 1 } })).toBe("OFF-1");
+    expect(calls.at(-1)!.url).toBe(`${BASE}/gstrs/gstr-3b/2026/08/offset-liability`);
+    expect(body(calls.at(-1)!)).toEqual({ pdcash: [1], pditc: { x: 1 } });
+
+    await c.requestEvcOtp("gstr-3b", "ABCDE1234F");
+    expect(calls.at(-1)!.url).toBe(`${BASE}/evc/otp?gstr=gstr-3b`);
+
+    await c.fileGstr3b("082026", "424242", "ABCDE1234F", { sup_details: { a: 1 }, tx_pmt: { b: 2 } });
+    const f = calls.at(-1)!;
+    const u = new URL(f.url);
+    expect(u.pathname).toBe("/gst/compliance/tax-payer/gstrs/gstr-3b/2026/08/file");
+    expect(u.search).toBe("?pan=ABCDE1234F&otp=424242");
+    expect(body(f)).toEqual({ ret_period: "082026", gstin: ME.gstin, sup_details: { a: 1 }, tx_pmt: { b: 2 } });
+
+    await c.fileNilGstr3b("082026", "424242", "ABCDE1234F");
+    expect(body(calls.at(-1)!)).toEqual({ ret_period: "082026", gstin: ME.gstin, isNil: "Y" });
   });
 });
 
