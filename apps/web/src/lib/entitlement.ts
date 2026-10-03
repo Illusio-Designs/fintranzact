@@ -12,6 +12,11 @@ export type { EntitlementInfo, EntitlementPrompt } from "@fintranzact/shared";
 /** Reads `error.data.entitlement` from a tRPC client error; null for every other error. */
 export const getEntitlement = entitlementFromError;
 
+/** The public pricing page: anyone (an owner or not) may look at the plans. */
+export function goToPricing() {
+  if (typeof window !== "undefined") window.location.assign("/pricing");
+}
+
 // ── shared state between the cache-level handler, the banner and the toast ──
 
 let canManageBilling: boolean | null = null;

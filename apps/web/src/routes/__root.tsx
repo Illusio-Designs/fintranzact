@@ -82,6 +82,9 @@ import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { BillingBanner } from "@/components/BillingBanner";
 import { TwoFactorBanner } from "@/components/TwoFactorBanner";
 import { useTwoFactorRequirement } from "@/hooks/useTwoFactorRequirement";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import { featureAccess, type PlanFlagKey } from "@fintranzact/shared";
+import { PlanBadge } from "@/components/billing/PlanBadge";
 import { shouldRedirectToTwoFactorSetup, setupSearch } from "@/lib/two-factor-enforcement";
 import { LandingPage } from "@/components/LandingPage";
 import { AUTH_PUBLIC_PATHS, isMarketingPath, isSharePath } from "@/lib/public-paths";
@@ -167,6 +170,7 @@ const navSections = [
       },
       {
         to: "/bank-reconciliation",
+        feature: "bankReconciliation" as PlanFlagKey,
         label: "Bank Reconciliation",
         icon: CheckListIcon,
         resource: "BankReconciliation",
@@ -193,6 +197,7 @@ const navSections = [
       },
       {
         to: "/warehouses",
+        feature: "multiWarehouse" as PlanFlagKey,
         label: "Warehouses",
         icon: Building03Icon,
         resource: "Item",
@@ -207,6 +212,7 @@ const navSections = [
       },
       {
         to: "/stock-transfers",
+        feature: "multiWarehouse" as PlanFlagKey,
         label: "Stock Transfers",
         icon: ArrowDataTransferHorizontalIcon,
         resource: "Item",
@@ -230,6 +236,7 @@ const navSections = [
       },
       {
         to: "/bill-of-materials",
+        feature: "manufacturing" as PlanFlagKey,
         label: "Bill of Materials",
         icon: HierarchySquare01Icon,
         resource: "Item",
@@ -237,6 +244,7 @@ const navSections = [
       },
       {
         to: "/manufacturing",
+        feature: "manufacturing" as PlanFlagKey,
         label: "Manufacturing",
         icon: Factory01Icon,
         resource: "Item",
@@ -354,6 +362,7 @@ const navSections = [
       },
       {
         to: "/automated-invoices",
+        feature: "recurringInvoices" as PlanFlagKey,
         label: "Recurring Invoices",
         icon: FileSyncIcon,
         resource: "RecurringInvoice",
@@ -581,6 +590,8 @@ function RootLayout() {
   });
 
   const { requirement: twoFactorRequirement } = useTwoFactorRequirement();
+  // The plan's features, for the "Growth" badge on nav items the plan lacks (a mirror; the server enforces).
+  const { status: planStatus } = useEntitlements();
   const twoFactorBlocked = !!session?.tenantId && twoFactorRequirement.blocked;
   const twoFactorSetupPath = twoFactorRequirement.setupPath;
 
@@ -1625,6 +1636,13 @@ function RootLayout() {
                           <span className={cn("truncate", navCollapsed && "md:hidden")}>
                             {item.label}
                           </span>
+                          {(() => {
+                            // A feature the plan lacks stays in the menu with its plan name, so it can be discovered.
+                            const lock = "feature" in item && item.feature ? featureAccess(planStatus, item.feature as PlanFlagKey) : null;
+                            return lock?.badge ? (
+                              <PlanBadge plan={lock.badge} feature={lock.featureName} className={cn("ml-auto text-[#7f90b5]", navCollapsed && "md:hidden")} />
+                            ) : null;
+                          })()}
                         </Link>
                       </Tooltip>
                     ))}

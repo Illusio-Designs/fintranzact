@@ -4,6 +4,7 @@ import {
   getEntitlement,
   getCanManageBilling,
   goToBilling,
+  goToPricing,
   markEntitlementHandled,
 } from "@/lib/entitlement";
 
@@ -23,7 +24,7 @@ export function handleEntitlementError(error: unknown): boolean {
   markEntitlementHandled(serverMessage);
 
   const prompt = describeEntitlement(info, serverMessage, getCanManageBilling());
-  const key = `${info.reason}|${serverMessage}`;
+  const key = `${info.reason}|${info.feature ?? ""}|${serverMessage}`;
   const now = Date.now();
   if (lastShown.key === key && now - lastShown.at < 3000) return true;
   lastShown = { key, at: now };
@@ -34,7 +35,7 @@ export function handleEntitlementError(error: unknown): boolean {
     variant: prompt.blocking ? "error" : "warning",
     bypassEntitlementDedupe: true,
     duration: prompt.blocking ? Infinity : 10000,
-    action: prompt.actionLabel ? { label: prompt.actionLabel, onClick: goToBilling } : undefined,
+    action: prompt.actionLabel ? { label: prompt.actionLabel, onClick: prompt.actionTarget === "pricing" ? goToPricing : goToBilling } : undefined,
   });
   return true;
 }

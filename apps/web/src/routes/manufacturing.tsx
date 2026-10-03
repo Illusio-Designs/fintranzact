@@ -7,6 +7,8 @@ import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
 import { formatCurrency, formatDate, todayISODate, toISOString, cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FeatureNotice } from "@/components/billing/FeatureNotice";
+import { useFeature } from "@/hooks/useFeature";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
@@ -61,13 +63,16 @@ function ManufacturingPage() {
     setFormOpen(true);
   };
 
+  const feature = useFeature("manufacturing");
+
   return (
     <div>
       <PageHeader
         title="Manufacturing"
         description="Record production: components come out of stock, the finished item goes in, costed from what went into it."
-        actions={<button className="btn-primary" onClick={openForm}>+ Manufacture</button>}
+        actions={<button className="btn-primary" onClick={openForm} {...feature.lockedProps}>+ Manufacture</button>}
       />
+      <FeatureNotice flag="manufacturing">Your past production runs stay readable.</FeatureNotice>
 
       <ListCard
         loading={!data}
@@ -79,7 +84,7 @@ function ManufacturingPage() {
             <EmptyState
               title="Nothing manufactured yet"
               description="Each production run is kept here as a manufacturing journal, newest first."
-              action={<button className="btn-primary" onClick={openForm}>Manufacture</button>}
+              action={<button className="btn-primary" onClick={openForm} {...feature.lockedProps}>Manufacture</button>}
             />
           ) : undefined
         }

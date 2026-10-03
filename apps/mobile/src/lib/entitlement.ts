@@ -6,7 +6,7 @@
  */
 import { Alert, Linking } from "react-native";
 import { describeEntitlement, entitlementFromError } from "@fintranzact/shared";
-import { getBillingUrl } from "./api-url";
+import { getBillingUrl, getPricingUrl } from "./api-url";
 
 let canManageBilling: boolean | null = null;
 
@@ -20,6 +20,12 @@ export function getCanManageBilling() {
 export function openBilling() {
   Linking.openURL(getBillingUrl()).catch(() => {
     Alert.alert("Could not open the browser", `Open ${getBillingUrl()} to manage your plan.`);
+  });
+}
+
+export function openPricing() {
+  Linking.openURL(getPricingUrl()).catch(() => {
+    Alert.alert("Could not open the browser", `Open ${getPricingUrl()} to see the plans.`);
   });
 }
 
@@ -51,14 +57,14 @@ export function handleEntitlementError(error: unknown): boolean {
   const serverMessage = (error as { message?: string }).message ?? "";
   handled.set(serverMessage, Date.now());
 
-  const key = `${info.reason}|${serverMessage}`;
+  const key = `${info.reason}|${info.feature ?? ""}|${serverMessage}`;
   const now = Date.now();
   if (lastShown.key === key && now - lastShown.at < 3000) return true;
   lastShown = { key, at: now };
 
   const prompt = describeEntitlement(info, serverMessage, canManageBilling);
   const buttons = prompt.actionLabel
-    ? [{ text: "Not now", style: "cancel" as const }, { text: prompt.actionLabel, onPress: openBilling }]
+    ? [{ text: "Not now", style: "cancel" as const }, { text: prompt.actionLabel, onPress: prompt.actionTarget === "pricing" ? openPricing : openBilling }]
     : [{ text: "OK" }];
   Alert.alert(prompt.title, prompt.description, buttons, { cancelable: !prompt.blocking });
   return true;

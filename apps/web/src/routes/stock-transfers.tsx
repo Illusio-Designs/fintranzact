@@ -6,6 +6,8 @@ import { invalidateStockViews } from "@/lib/stock-cache";
 import { toast } from "@/hooks/useToast";
 import { formatDate, todayISODate, toISOString } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FeatureNotice } from "@/components/billing/FeatureNotice";
+import { useFeature } from "@/hooks/useFeature";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -69,17 +71,20 @@ function StockTransfersPage() {
   // The last page emptied out (or rows per page grew): step back.
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
+  const feature = useFeature("multiWarehouse");
+
   return (
     <div>
       <PageHeader
         title="Stock Transfers"
         description="Move stock between your warehouses. Every transfer is kept in this journal."
         actions={
-          <button className="btn-primary" onClick={() => setOpen(true)}>
+          <button className="btn-primary" onClick={() => setOpen(true)} {...feature.lockedProps}>
             + New transfer
           </button>
         }
       />
+      <FeatureNotice flag="multiWarehouse">Past transfers stay in this journal.</FeatureNotice>
 
       <ListCard
         pagination={{ page, totalPages, onPageChange: setPage, total, pageSize, onPageSizeChange: setPageSize }}
@@ -92,7 +97,7 @@ function StockTransfersPage() {
               title="No transfers yet"
               description="Transfers between warehouses show up here, newest first."
               action={
-                <button className="btn-primary" onClick={() => setOpen(true)}>
+                <button className="btn-primary" onClick={() => setOpen(true)} {...feature.lockedProps}>
                   Make a transfer
                 </button>
               }

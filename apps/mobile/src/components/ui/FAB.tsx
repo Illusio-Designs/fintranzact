@@ -13,18 +13,22 @@ interface Props {
   label?: string;
   /** Screen-reader label when there is no visible text. */
   accessibilityLabel?: string;
+  /** Not available (for example the plan lacks the feature): shown dimmed and not pressable, never hidden. */
+  disabled?: boolean;
 }
 
-export function FAB({ onPress, icon = "add", style, label, accessibilityLabel }: Props) {
+export function FAB({ onPress, icon = "add", style, label, accessibilityLabel, disabled }: Props) {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const colors = useColors();
 
   return (
     <TouchableOpacity
-      style={[styles.fab, label ? styles.extended : null, { bottom: 24 + insets.bottom }, style]}
+      style={[styles.fab, label ? styles.extended : null, { bottom: 24 + insets.bottom }, disabled ? { opacity: 0.4 } : null, style]}
       accessibilityRole="button"
       accessibilityLabel={label ?? accessibilityLabel ?? "Add"}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
       onPress={() => { haptic.medium(); onPress(); }}
       activeOpacity={0.8}
     >
