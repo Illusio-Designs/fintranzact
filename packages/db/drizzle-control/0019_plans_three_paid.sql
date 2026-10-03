@@ -83,7 +83,7 @@ BEGIN
       '["Advanced automation and workflows","Priority support","Expanded collaboration"]'::jsonb,
       '["Up to 5 businesses and 15 team members","e-Invoicing and e-way bills","Multiple warehouses, batches and expiry","Bank reconciliation","Online store and API access","Data export, no Fintranzact branding on documents"]'::jsonb),
     ('business', 'business', 'Business', 'Scale without limits', 1499, 14990,
-      '["Unlimited businesses and users","Everything in Growth","Manufacturing and bill of materials","Approvals","Full audit history","Priority support and onboarding help"]'::jsonb,
+      '["Unlimited businesses and users","Everything in Growth","Manufacturing and bill of materials","Full audit history","Priority support and onboarding help"]'::jsonb,
       '{"maxOwnedOrgs":null,"maxBusinesses":null,"maxTeamMembers":null,"maxConcurrentSessions":null,"maxApiKeys":null,"auditRetentionDays":null,"dataExport":true,"onlineStore":true,"pdfBranding":true,"gstReports":true,"eWayBills":true,"recurringInvoices":true,"pos":true,"eInvoicing":true,"multiWarehouse":true,"batchesExpiry":true,"bankReconciliation":true,"manufacturing":true,"approvals":true,"prioritySupport":true,"onboardingHelp":true}'::jsonb,
       '{"maxOwnedOrgs":null,"maxBusinesses":null,"maxTeamMembers":null,"maxConcurrentSessions":null,"maxApiKeys":null,"recurringRunsPerMonth":null,"auditRetentionDays":null,"dataExport":true,"onlineStore":true,"pdfBranding":false}'::jsonb,
       '["Multi-tenant controls","Premium reporting","Dedicated onboarding"]'::jsonb,

@@ -1418,7 +1418,8 @@ No free plan. Three paid plans; prices are ex-18% GST, yearly = 2 months free, a
 
 ### Business — ₹1,499/month (₹14,999/year)
 - Unlimited businesses and users
-- Everything in Growth, plus manufacturing / BOM, approvals, full audit history, priority support, onboarding help
+- Everything in Growth, plus manufacturing / BOM, full audit history, priority support, onboarding help
+- Approvals are left out for now (owner decision, 3 Oct 2026): no approval workflow exists yet. They return with the "Approval workflows" item
 
 ### Changes
 - Remove the free plan from the pricing page and the sign-up plan picker
@@ -1433,7 +1434,7 @@ No free plan. Three paid plans; prices are ex-18% GST, yearly = 2 months free, a
       "Migrate tenants and plan_settings from forever_free/free/pro/business/enterprise",
       "Starter limits and features (1 business, 3 users, no PDF branding)",
       "Growth limits and features (3 businesses, 10 users, e-invoicing, warehouses, batches, bank rec, store, API, export)",
-      "Business limits and features (unlimited, manufacturing, approvals, audit history, priority support)",
+      "Business limits and features (unlimited, manufacturing, audit history, priority support)",
       "Monthly and yearly prices (2 months free) in plan settings",
       "All prices/limits editable in admin Plans",
       "Remove free plan from pricing page and sign-up plan picker",
@@ -2239,6 +2240,28 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
     ],
   },
   {
+    key: "2026-10-03-ticks-after-merge",
+    updates: [
+      {
+        // The enforcement integration tests (28 Postgres tests for the plan matrix,
+        // trial, grandfathered, read-only and downgrade cases) and the full suite
+        // are green in CI on main, so the tests line is ticked.
+        title: "P4. Plan & add-on access enforcement",
+        status: "in_progress",
+        done: ["Tests for each plan, add-on and read-only case"],
+      },
+      {
+        // The GSTR-1 and GSTR-3B filing wizards (web and mobile) are built on the
+        // official Sandbox recipes and tested against mocked Sandbox responses.
+        // Left unticked: GSTR-2B pull (no recipe yet), the quote, the test account
+        // and keys, and the test run / go-live, none of which have happened.
+        title: "Connect e-invoice, e-way bill and GST returns through Sandbox.co.in",
+        status: "in_progress",
+        done: ["GSTR-1 save and file with EVC OTP", "GSTR-3B prepare and file"],
+      },
+    ],
+  },
+  {
     key: "2026-10-03-plans-p1-p5",
     updates: [
       {
@@ -2247,9 +2270,10 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
         // grandfathered, monthly and yearly prices, the admin Plans editor, the
         // pricing page and sign-up picker without a free plan, and server and
         // client enforcement of every flag that has a feature behind it
-        // (packages/shared/src/feature-gates.ts). Kept in progress with the
-        // Business line unticked: "approvals" is on the plan but no approval
-        // workflow exists yet. Not run on a device or against live Razorpay.
+        // (packages/shared/src/feature-gates.ts). Approvals were taken off the
+        // Business plan copy (owner decision, 3 Oct 2026) until an approval
+        // workflow exists, so the Business line is ticked. Kept in progress: not
+        // run on a device or against live Razorpay.
         title: "P1. Plans & pricing: paid plans only",
         status: "in_progress",
         done: [
@@ -2258,6 +2282,7 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
           "Migrate tenants and plan_settings from forever_free/free/pro/business/enterprise",
           "Starter limits and features (1 business, 3 users, no PDF branding)",
           "Growth limits and features (3 businesses, 10 users, e-invoicing, warehouses, batches, bank rec, store, API, export)",
+          "Business limits and features (unlimited, manufacturing, audit history, priority support)",
           "Monthly and yearly prices (2 months free) in plan settings",
           "All prices/limits editable in admin Plans",
           "Remove free plan from pricing page and sign-up plan picker",
