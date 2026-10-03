@@ -251,8 +251,8 @@ test.describe("J9 GST filing", () => {
     await openPage(page, "GST Returns");
     const tabs = page.getByTestId("gst-report-tabs");
     await tabs.getByRole("button", { name: "GSTR-1", exact: true }).click();
-    await choose(page, page.getByRole("combobox", { name: "Month" }), p.monthName);
-    await choose(page, page.getByRole("combobox", { name: "Year" }), String(p.year));
+    await choose(page, page.getByRole("combobox", { name: "Month", exact: true }), p.monthName);
+    await choose(page, page.getByRole("combobox", { name: "Year", exact: true }), String(p.year));
     const g1 = GST_MONTH.gstr1;
     await expect(statCard(page, "Invoice Count")).toHaveText(String(g1.invoiceCount));
     await expect(statCard(page, "Taxable Value")).toHaveText(inr(g1.taxable));
