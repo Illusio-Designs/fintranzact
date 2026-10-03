@@ -26,6 +26,7 @@ import { escapeLike } from "../lib/escape-like.js";
 import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPError, type IRPGstinDetails } from "../lib/irp-client.js";
 import { createIRPClient } from "../lib/gov-provider.js";
+import { FUNDING_CUSTOMER_MESSAGE, isFundingFailure } from "../lib/sandbox/funding.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
 import { createFixedWindowLimiter } from "../lib/fixed-window-limiter.js";
 import { checkPartyGstin, resolveGstin } from "../lib/gstin-lookup.js";
@@ -343,6 +344,9 @@ export const partyRouter = router({
           verifiedAt: new Date().toISOString(),
         };
       } catch (err) {
+        if (isFundingFailure(err)) {
+          throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: FUNDING_CUSTOMER_MESSAGE, cause: err });
+        }
         if (err instanceof IRPError) {
           throw new TRPCError({
             code: err.isRetryable ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST",

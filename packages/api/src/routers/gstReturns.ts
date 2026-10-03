@@ -16,6 +16,7 @@ import { router, adminProcedure, type TenantDatabase } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { useSandboxProvider } from "../lib/gov-provider.js";
 import { getSandboxClient } from "../lib/sandbox/client.js";
+import { FUNDING_CUSTOMER_MESSAGE, isFundingFailure } from "../lib/sandbox/funding.js";
 import {
   SandboxGstReturnsClient,
   GstReturnsError,
@@ -72,8 +73,12 @@ async function assertNotFiled(db: TenantDatabase, businessId: string, period: st
   }
 }
 
-function toTrpc(err: unknown): never {
+export function toTrpc(err: unknown): never {
   if (err instanceof TRPCError) throw err;
+  if (isFundingFailure(err)) {
+    // Our Sandbox wallet is empty: friendly text only; the raw message stays in `cause`.
+    throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: FUNDING_CUSTOMER_MESSAGE, cause: err });
+  }
   if (err instanceof GstReturnsError) {
     throw new TRPCError({
       code: err.code === "no_session" ? "UNAUTHORIZED" : err.retryable ? "SERVICE_UNAVAILABLE" : "BAD_REQUEST",

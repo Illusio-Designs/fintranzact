@@ -19,9 +19,38 @@ E-invoice, e-way bill, GSTIN lookup, TDS/TCS and GST returns go through Sandbox.
 
 `sandbox_call_counters` counts every successful (2xx) gateway call across the deployment per IST month. With `SANDBOX_MONTHLY_QUOTA` set, an alert is logged and stored as a billing event (`sandbox.quota`) at 80% and 100%. If Sandbox rejects a call for wallet or quota reasons (HTTP 402 or matching message), `sandbox.wallet_or_quota_blocked` is raised at most hourly. Metering never blocks filing.
 
+### When our wallet is empty
+
+Sandbox is prepaid. When our wallet is empty or the plan quota is spent, `client.ts` raises `SandboxFundingError` (a `SandboxError` subclass, retryable) instead of passing Sandbox's raw message on. Its `message` and `customerMessage` are: "The government filing service is temporarily unavailable. Please try again in a little while. Our team has been notified." The raw message and status stay in `rawMessage`, `cause` and the logs only.
+
+- Detection: `isWalletOrQuotaError` in `lib/sandbox/funding.ts` (HTTP 402, or a message matching wallet / insufficient balance / quota exceeded / limit exceeded).
+- Adapters wrap it as their own error type (`IRPError` with code `RETRYABLE`, `EWBApiError`, `GstReturnsError`, `TdsApiError`) with the friendly message, the funding flag (`isFundingFailure`) and the original in `cause`. An invoice whose e-invoice call hit this stays `pending` rather than `failed`.
+- Routers (`gstReturns`, `eInvoice`, `party.gstinLookup`) answer `SERVICE_UNAVAILABLE`. The tRPC `errorFormatter` in `trpc.ts` is a backstop for anything that escapes unmapped (e-way bill, IRN cancel): any error with a funding failure in its `cause` chain is sent as 503 `SERVICE_UNAVAILABLE` with the friendly text. Web, mobile, CLI and MCP show the tRPC message, so they need no change.
+- HSN and GSTIN lookups keep falling back to the bundled list as for any outage; PAN verification shows its usual "unavailable" reason.
+- The hourly platform alert `sandbox.wallet_or_quota_blocked` still fires once an hour, with the raw message in `payload.rawMessage` and the text "Top up the Sandbox wallet at console.sandbox.co.in".
+
+## Test-environment smoke run
+
+`pnpm sandbox:smoke` checks the endpoint paths and field names we wrote from memory against the Sandbox TEST environment. It only reads: no e-invoice or e-way bill generation, no GST save / proceed / file, no cancels.
+
+Run it:
+
+1. Put the test keys in `.env` at the repo root (or export them in your shell): `SANDBOX_API_KEY=key_test_...`, `SANDBOX_API_SECRET=...`. Optional: `SANDBOX_BASE_URL`. Keys are never read from arguments.
+2. `pnpm sandbox:smoke`. Options: `--list` (check ids), `--only=auth-token,hsn-goods`, `--no-file`.
+3. It refuses to run with a `key_live_` key unless you pass `--allow-live`, and then runs read-only checks only. It also refuses a `key_test_` key pointed at the live host.
+4. It needs no database or running API.
+
+What it checks (each reports PASS, PASS-WITH-DIFFERENCES or FAIL, the HTTP status, the response keys actually present, assumed fields that are missing and unexpected top-level keys): API token (`POST /authenticate`, token shape and expiry), HSN goods `5208` and SAC `998313` (`GET /gst/hsn-sac/{code}`), PAN and TAN verify with fake values (a rejection is fine; the point is the status and body shape), GSTIN search for the five documented sample GSTINs (`POST /gst/compliance/public/gstin/search`) and Track GST Returns (`POST /gst/compliance/public/gstrs/track`: success, GSTR-1 filter, `RET13510`, `RTN_22`, 422). GSTIN search and track use a local raw-fetch helper until their typed adapter lands; new adapters register a check in `lib/sandbox/smoke-checks.ts` (`registerCheck`).
+
+What to send back: the Markdown report printed to the terminal. A sanitised copy is also saved to `scripts/.sandbox-smoke-report.json` (git-ignored; tokens, keys, secrets and JWT-looking values are removed and long lists cut to 3 items). **Never paste your keys, your `.env` or the shell environment.** The report shows only `key_test_` plus a mask.
+
+The report ends with a manual checklist for the state-changing flows (e-invoice generate and cancel, e-way bill generate, update vehicle, extend and cancel, GSTR-1 and GSTR-3B including nil returns, EVC OTP). Prepare a test GSTIN and the portal API user from the test-data page at https://developer.sandbox.co.in, and see the customer setup guide `apps/web/src/content/help/gst/setup-e-invoicing-and-eway-bills.mdx` for where the portal login is entered.
+
 CA checklist for TDS/TCS rules: [`TDS-CA-VERIFICATION.md`](TDS-CA-VERIFICATION.md).
 
 ## Verify with Sandbox before go-live
+
+Run the smoke script first (see "Test-environment smoke run" below): it tests most of the assumed paths and field names below in one go.
 
 - Which APIs are charged to the wallet (outside the plan) and the per-call price.
 - Behaviour past the monthly plan quota: blocked, throttled, or overage-billed.

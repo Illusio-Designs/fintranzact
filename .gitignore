@@ -6,6 +6,9 @@ dist/
 .env.prod
 *.log
 
+# Sandbox smoke run output (sanitised, but local-only)
+scripts/.sandbox-smoke-report.json
+
 # Database (keep migration files — they're deployment artifacts)
 # packages/db/drizzle/ — NOT ignored, migrations must be committed
 

@@ -12,6 +12,7 @@ import { getEntitlements } from "./lib/entitlements.js";
 import { gateDecision } from "./lib/entitlement-exempt.js";
 import { recordOrgOpened } from "./lib/access-events.js";
 import { requireTenantMembership } from "./lib/tenant-membership.js";
+import { FUNDING_CUSTOMER_MESSAGE, isFundingFailure } from "./lib/sandbox/funding.js";
 import { checkTwoFactorGate } from "./lib/two-factor-gate.js";
 import { twoFactorDataOf, twoFactorRequiredError } from "./lib/two-factor-error.js";
 
@@ -54,6 +55,15 @@ const t = initTRPC.context<Context>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
     // Never expose internal error details (DB errors, stack traces) to clients
+    // Our Sandbox wallet / quota ran out: backstop for any procedure that let the error escape
+    // unmapped (e-way bill, IRN cancel, ...). Customers get one friendly message and a 503-class code.
+    if (isFundingFailure(error)) {
+      return {
+        ...shape,
+        message: FUNDING_CUSTOMER_MESSAGE,
+        data: { ...shape.data, code: "SERVICE_UNAVAILABLE", httpStatus: 503, zodError: null },
+      };
+    }
     const isInternal = error.code === "INTERNAL_SERVER_ERROR";
     const zodMessage = error.code === "BAD_REQUEST" ? friendlyZodMessage(error.cause) : null;
     const entitlement = entitlementDataOf(error);

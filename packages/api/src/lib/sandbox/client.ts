@@ -22,7 +22,9 @@
 
 import { createHash } from "node:crypto";
 import { logger } from "../logger.js";
-import { noteSandboxFundingFailure, trackSandboxCall } from "../gov-usage.js";
+import { FUNDING_CUSTOMER_MESSAGE, isWalletOrQuotaError } from "./funding.js";
+
+export { FUNDING_CUSTOMER_MESSAGE, isWalletOrQuotaError };
 
 export const SANDBOX_TEST_URL = "https://test-api.sandbox.co.in";
 export const SANDBOX_LIVE_URL = "https://api.sandbox.co.in";
@@ -60,8 +62,9 @@ export class SandboxError extends Error {
     public readonly transactionId?: string,
     /** Raw response body for audit/debug — never shown to end users unredacted. */
     public readonly body?: unknown,
+    cause?: unknown,
   ) {
-    super(message);
+    super(message, cause === undefined ? undefined : { cause });
     this.name = "SandboxError";
   }
 
@@ -72,6 +75,34 @@ export class SandboxError extends Error {
       this.httpStatus === 429 ||
       (this.httpStatus !== undefined && this.httpStatus >= 500)
     );
+  }
+}
+
+/**
+ * Our own Sandbox wallet is empty or the plan quota is spent (HTTP 402 or a
+ * matching message). `message` and `customerMessage` are the friendly text that
+ * may reach customers; Sandbox's raw wording lives only in `rawMessage` and
+ * `cause` (logs / audit), never in anything a response is built from.
+ */
+export class SandboxFundingError extends SandboxError {
+  readonly isFunding = true as const;
+  readonly customerMessage = FUNDING_CUSTOMER_MESSAGE;
+
+  constructor(
+    /** Sandbox's own wording. Logs only. */
+    readonly rawMessage: string,
+    code: string,
+    httpStatus?: number,
+    transactionId?: string,
+    body?: unknown,
+  ) {
+    super(FUNDING_CUSTOMER_MESSAGE, code, httpStatus, transactionId, body, new Error(rawMessage));
+    this.name = "SandboxFundingError";
+  }
+
+  /** Topping up resolves it, so callers should queue / retry later rather than mark it permanently failed. */
+  override get isRetryable(): boolean {
+    return true;
   }
 }
 
@@ -112,7 +143,29 @@ export interface SandboxRequestOptions {
   authToken?: string;
   /** Per-call timeout; defaults to the client's configured timeout. */
   timeoutMs?: number;
+  /** Observe the HTTP status of the response, success or failure. Used by the smoke script; unused in production. */
+  onResponse?: (status: number) => void;
 }
+
+/** Usage metering hooks. The production meter writes to the control DB; tests and the smoke script pass none. */
+export interface SandboxMeter {
+  /** A gateway call was rejected. Raises the (hourly) wallet / quota alert when it is a funding failure. */
+  onFailure(httpStatus: number | undefined, message: string): void | Promise<void>;
+  /** A 2xx call (not /authenticate) completed; counts against the monthly plan. */
+  onSuccess(): void | Promise<void>;
+}
+
+/** Meter backed by gov-usage.ts. Loaded lazily so importing this client never needs a database. */
+export const dbSandboxMeter: SandboxMeter = {
+  async onFailure(httpStatus, message) {
+    const { noteSandboxFundingFailure } = await import("../gov-usage.js");
+    await noteSandboxFundingFailure(httpStatus, message);
+  },
+  async onSuccess() {
+    const { trackSandboxCall } = await import("../gov-usage.js");
+    await trackSandboxCall();
+  },
+};
 
 export interface SandboxEnvelope<T> {
   code: number;
@@ -131,9 +184,16 @@ export class SandboxClient {
     private readonly config: SandboxConfig,
     private readonly fetchImpl: typeof fetch = (...args) => fetch(...args),
     private readonly now: () => number = Date.now,
-    /** Count calls and raise quota/wallet alerts. Off in unit tests that mock fetch. */
-    private readonly meter: boolean = false,
-  ) {}
+    /**
+     * Count calls and raise quota/wallet alerts. `true` = the DB-backed meter,
+     * an object = an injected one (smoke script, tests), `false` = off.
+     */
+    meter: boolean | SandboxMeter = false,
+  ) {
+    this.meter = meter === true ? dbSandboxMeter : meter === false ? null : meter;
+  }
+
+  private readonly meter: SandboxMeter | null;
 
   get isLive(): boolean {
     return this.config.baseUrl === SANDBOX_LIVE_URL;
@@ -313,11 +373,28 @@ export class SandboxClient {
       }
     }
 
+    opts.onResponse?.(res.status);
+
     if (!res.ok) {
       const obj = (json && typeof json === "object" ? json : {}) as Record<string, unknown>;
       const message = typeof obj.message === "string" ? obj.message : `Sandbox returned HTTP ${res.status}`;
       logger.warn({ path, status: res.status, tx: obj.transaction_id }, "Sandbox request failed");
-      if (this.meter) void noteSandboxFundingFailure(res.status, message);
+      if (this.meter) {
+        void Promise.resolve(this.meter.onFailure(res.status, message)).catch((err) =>
+          logger.error({ err }, "Sandbox meter failed"),
+        );
+      }
+      if (isWalletOrQuotaError(res.status, message)) {
+        // Raw wording stays in the log line and `cause`; the thrown message is the customer-safe one.
+        logger.error({ path, status: res.status, tx: obj.transaction_id, rawMessage: message }, "Sandbox wallet or quota exhausted");
+        throw new SandboxFundingError(
+          message,
+          String(obj.code ?? res.status),
+          res.status,
+          typeof obj.transaction_id === "string" ? obj.transaction_id : undefined,
+          json,
+        );
+      }
       throw new SandboxError(
         message,
         String(obj.code ?? res.status),
@@ -327,7 +404,9 @@ export class SandboxClient {
       );
     }
     // Only 2xx calls count against Sandbox's monthly plan.
-    if (this.meter && path !== "/authenticate") void trackSandboxCall();
+    if (this.meter && path !== "/authenticate") {
+      void Promise.resolve(this.meter.onSuccess()).catch((err) => logger.error({ err }, "Sandbox meter failed"));
+    }
     return json as SandboxEnvelope<T>;
   }
 }

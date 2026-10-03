@@ -20,6 +20,7 @@
     "test:mobile": "pnpm --filter @fintranzact/mobile test",
     "test:e2e": "pnpm exec playwright test --config e2e/playwright.config.ts",
     "test:e2e:ui": "pnpm exec playwright test --config e2e/playwright.config.ts --ui",
+    "sandbox:smoke": "npx tsx scripts/sandbox-smoke.ts",
     "data:audit": "pnpm --filter @fintranzact/api data:audit",
     "preflight": "pnpm lint && pnpm typecheck && pnpm build && pnpm test:api",
     "release": "bash scripts/release.sh",

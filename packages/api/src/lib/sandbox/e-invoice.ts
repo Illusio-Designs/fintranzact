@@ -11,7 +11,8 @@
  */
 
 import { IRPError, type IRPGenerateIRNResponse, type IRPGstinDetails, type IRPInvoiceJson } from "../irp-client.js";
-import { SandboxClient, SandboxError, type PortalCredentials } from "./client.js";
+import { SandboxClient, SandboxError, SandboxFundingError, type PortalCredentials } from "./client.js";
+import { fundingFrom } from "./funding.js";
 
 const BASE = "/gst/compliance/e-invoice/tax-payer";
 
@@ -40,6 +41,10 @@ export function parseIrpDateTime(s: string | null | undefined): Date {
 /** Wrap gateway/network failures as IRPError (retryable -> "RETRYABLE"). */
 function toIRPError(err: unknown): IRPError {
   if (err instanceof IRPError) return err;
+  if (err instanceof SandboxFundingError) {
+    // Customer-safe message; Sandbox's raw wording stays in `cause`. RETRYABLE keeps the invoice pending.
+    return fundingFrom(new IRPError(err.customerMessage, "RETRYABLE", err.httpStatus), err);
+  }
   if (err instanceof SandboxError) {
     return new IRPError(err.message, err.isRetryable ? "RETRYABLE" : err.code, err.httpStatus);
   }
