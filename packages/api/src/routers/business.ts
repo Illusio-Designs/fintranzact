@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, gte, lte, inArray, count, getTableColumns } from "drizzle-orm";
+import { eq, and, sql, desc, gte, lte, inArray, ne, count, getTableColumns } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { ensureDefaultWarehouse } from "../lib/inventory-service.js";
@@ -900,7 +900,8 @@ export const businessRouter = router({
       requireCan(ctx.ability, "read", "Report");
       const offset = (input.page - 1) * input.limit;
 
-      const conditions = [eq(auditLog.businessId, ctx.businessId)];
+      // gst_return_attempt rows are the GST filing state journal (lib/gst-return-flow.ts), not user activity.
+      const conditions = [eq(auditLog.businessId, ctx.businessId), ne(auditLog.entityType, "gst_return_attempt")];
       // The plan's auditRetentionDays is a visible window: older entries stay stored but are hidden.
       const windowStart = auditWindowStart((await getEntitlements(ctx.tenantId)).limits.auditRetentionDays);
       if (windowStart) conditions.push(gte(auditLog.createdAt, windowStart));
