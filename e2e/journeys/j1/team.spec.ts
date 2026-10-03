@@ -48,7 +48,7 @@ const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
   seller_manager: "Sales Manager",
   seller: "Seller",
-  accountant: "Accountant",
+  accountant: "Accountant (bookkeeping)",
 };
 
 /** Sidebar sections each role must (and must not) see. */
@@ -318,9 +318,9 @@ test.describe("J2 team", () => {
     // ── Owner changes the seller to accountant ──────────────────
     const sellerRow = page.getByRole("row").filter({ hasText: members.seller.email });
     await sellerRow.getByRole("combobox").click();
-    await page.getByRole("option", { name: "Accountant", exact: true }).click();
+    await page.getByRole("option", { name: "Accountant (bookkeeping)", exact: true }).click();
     await expect(toast(page, "Role updated")).toBeVisible();
-    await expect(sellerRow.getByRole("combobox")).toContainText("Accountant");
+    await expect(sellerRow.getByRole("combobox")).toContainText("Accountant (bookkeeping)");
     expect(await tenantMembers(owner.tenantId)).toContainEqual(
       expect.objectContaining({ email: members.seller.email, role: "accountant" }),
     );
