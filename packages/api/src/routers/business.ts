@@ -23,7 +23,7 @@ import {
 } from "@fintranzact/db";
 import { createBusinessSchema, updateBusinessSchema, updateSequenceNumberSchema, uploadBusinessLogoSchema, uploadBusinessSignatureSchema } from "@fintranzact/shared";
 import { router, tenantProcedure, viewerProcedure, adminProcedure, type TenantDatabase } from "../trpc.js";
-import { requireCan } from "../lib/permissions.js";
+import { requireCan, caRoleMutationAllowed, caRoleRefusalMessage, mapDbRole } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { validateLogoDataUrl } from "../lib/validate-logo.js";
 import { enforceBusinessLimit, enforceDataExport, getLimits, auditWindowStart } from "../lib/plan-limits.js";
@@ -784,6 +784,19 @@ export const businessRouter = router({
       // tenantProcedure does not check the business; the id comes from the
       // input, so apply the same rule as getById.
       await requireBusinessAccess(ctx, input.id);
+
+      // It creates a record, and this base has no CASL check, so the accountant
+      // access roles (auditor, ca_filing) are refused here the same way
+      // withPermissions refuses their mutations on the CASL base.
+      const [member] = await controlDb
+        .select({ role: tenantMembers.role })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, ctx.tenantId), eq(tenantMembers.userId, ctx.user.id)))
+        .limit(1);
+      const caRole = member ? mapDbRole(member.role) : "";
+      if (!caRoleMutationAllowed(caRole, "business.ensureWalkInParty")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: caRoleRefusalMessage(caRole) });
+      }
 
       const [existing] = await ctx.db
         .select({ id: parties.id })

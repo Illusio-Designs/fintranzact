@@ -236,7 +236,7 @@ function GstMonthsSection() {
       title="GST months marked as filed"
       description="Once a month's GST returns are filed, lock it so its invoices, payments and input tax credit stay as filed."
     >
-      {status.canLock && (
+      {status.canMarkGstFiled && (
         <form
           className="flex flex-wrap items-end gap-3 mb-4"
           onSubmit={(e) => {

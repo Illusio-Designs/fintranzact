@@ -619,6 +619,11 @@ exceptions:
       - tenant.current
       # Plan choice is part of web signup; scripts must not change billing plans.
       - tenant.updatePlan
+      # The switcher's pins and leaving a client are in-app choices; an API key is
+      # already bound to one organisation, so scripts have nothing to switch or leave.
+      # (They can list organisations: `tenant clients` / list_clients.)
+      - tenant.setPinned
+      - tenant.leave
       # Platform admin (operators only, set by PLATFORM_ADMIN_EMAIL) is a
       # web page at /platform; it has no place in the CLI.
       - platform.me
@@ -923,6 +928,11 @@ exceptions:
       - tenant.current
       # Plan choice is part of web signup; agents must not change billing plans.
       - tenant.updatePlan
+      # The switcher's pins and leaving a client are in-app choices; an API key is
+      # already bound to one organisation, so agents have nothing to switch or leave.
+      # (They can list organisations: `tenant clients` / list_clients.)
+      - tenant.setPinned
+      - tenant.leave
       # Platform admin (operators only, set by PLATFORM_ADMIN_EMAIL) is a
       # web page at /platform; it has no place in the MCP tools.
       - platform.me

@@ -31,7 +31,7 @@ import { genProcedureInput } from "./sweep-input.js";
 
 export const CANARY = "ZZCANARYB";
 
-export const SWEEP_ROLES = ["owner", "admin", "seller_manager", "seller", "accountant"] as const;
+export const SWEEP_ROLES = ["owner", "admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"] as const;
 export type SweepRole = (typeof SWEEP_ROLES)[number];
 
 export type Caller = ReturnType<typeof createTestCaller>;
@@ -101,6 +101,8 @@ export async function buildSweepWorld(): Promise<SweepWorld> {
     seller: await mk("seller", `seller.a.${stamp}@sweep.in`),
     viewer: await mk("viewer", `viewer.a.${stamp}@sweep.in`),
     accountant: await mk("accountant", `accountant.a.${stamp}@sweep.in`),
+    auditor: await mk("auditor", `auditor.a.${stamp}@sweep.in`),
+    ca_filing: await mk("ca_filing", `cafiling.a.${stamp}@sweep.in`),
   };
   const ownerB = await createUser({ email: `owner.b.${stamp}@sweep.in`, name: `Owner ${CANARY}` });
   await addMember(tenantB.id, ownerB.id, "owner");
@@ -215,6 +217,8 @@ export const INPUT_OVERRIDES: Record<string, (ids: Record<string, string>) => un
     amount: "100.00",
     interest: "0",
   }),
+  // Leaving the sweep's organisation would remove the sweep user from it for every later call: use one nobody belongs to (NOT_FOUND, not FORBIDDEN).
+  "tenant.leave": () => ({ tenantId: randomUUID() }),
   "auth.register": () => ({
     username: "sweeper",
     email: `sweep.${randomUUID().slice(0, 8)}@example.in`,

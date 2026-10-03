@@ -645,7 +645,7 @@ export class FintranzactClient {
         return c.query<unknown[]>("tenant.members");
       },
       inviteMember(email: string, role: string) {
-        return c.mutate<{ token: string; expiresAt: Date }>("tenant.inviteMember", { email, role });
+        return c.mutate<{ token: string; inviteUrl: string; role: string; expiresAt: Date }>("tenant.inviteMember", { email, role });
       },
       removeMember(userId: string) {
         return c.mutate<{ success: boolean }>("tenant.removeMember", { userId });
@@ -655,6 +655,12 @@ export class FintranzactClient {
       },
       pendingInvitations() {
         return c.query<unknown[]>("tenant.pendingInvitations");
+      },
+      listClients(input?: { search?: string; scope?: "all" | "mine" | "clients"; cursor?: string; limit?: number }) {
+        return c.query<{ items: Array<Record<string, unknown>>; nextCursor: string | null; total: number }>("tenant.listClients", input);
+      },
+      accessLog(input?: { cursor?: string; limit?: number; type?: string | string[] }) {
+        return c.query<{ items: Array<Record<string, unknown>>; nextCursor: string | null }>("tenant.accessLog", input);
       },
       revokeInvitation(invitationId: string) {
         return c.mutate<{ success: boolean }>("tenant.revokeInvitation", { invitationId });

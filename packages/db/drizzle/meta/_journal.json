@@ -365,6 +365,27 @@
       "when": 1790963275011,
       "tag": "0051_two_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1790968288575,
+      "tag": "0052_accountant_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1790972029605,
+      "tag": "0053_user_tenant_prefs",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790973092646,
+      "tag": "0054_invitation_credit_partner",
+      "breakpoints": true
     }
   ]
 }

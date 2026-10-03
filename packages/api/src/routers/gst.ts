@@ -11,6 +11,7 @@ import { loadCmp08Quarter, loadCompositionSetting } from "../lib/cmp08.js";
 import { Gstr4NotApplicableError, loadGstr4 } from "../lib/gstr4.js";
 import { gstr4ToPortalJson } from "../lib/gstr4-json.js";
 import { requireCan } from "../lib/permissions.js";
+import { recordCaExport } from "../lib/access-events.js";
 import { generateGSTR1, generateGSTR3B, gstr1ToCSV, gstr1ToPortalJson } from "../lib/gst-reports.js";
 import { generateGSTR9, gstr9ToPortalJson } from "../lib/gstr9-generator.js";
 
@@ -63,6 +64,7 @@ export const gstRouter = router({
     .query(async ({ input, ctx }) => {
       requireCan(ctx.ability, "read", "Report");
       const report = await generateGSTR1(ctx.businessId, input.year, input.month, ctx.db);
+      await recordCaExport(ctx, "gst.gstr1CSV");
       return { csv: gstr1ToCSV(report), filename: `GSTR1_${report.period.replace(" ", "_")}.csv` };
     }),
 
@@ -91,6 +93,7 @@ export const gstRouter = router({
         : `${input.year - 1}-${String(input.year).slice(2)}`;
 
       const portalJson = gstr1ToPortalJson(report, biz?.gstin ?? "", fy, fp);
+      await recordCaExport(ctx, "gst.gstr1Json");
       return {
         json: portalJson,
         filename: `GSTR1_${report.period.replace(" ", "_")}_portal.json`,
@@ -120,6 +123,7 @@ export const gstRouter = router({
       const report = await generateGSTR9(ctx.businessId, input.financialYear, ctx.db);
       const portalJson = gstr9ToPortalJson(report);
       const fyLabel = report.financialYear.replace("-", "_");
+      await recordCaExport(ctx, "gst.gstr9Json");
       return {
         json: portalJson,
         filename: `GSTR9_FY${fyLabel}_portal.json`,
@@ -225,6 +229,7 @@ export const gstRouter = router({
         const r = await loadGstr4(ctx.db, ctx.businessId, input.financialYear, input.cmp08Paid, input.filedOn);
         const [biz] = await ctx.db.select({ gstin: businesses.gstin }).from(businesses)
           .where(eq(businesses.id, ctx.businessId)).limit(1);
+        await recordCaExport(ctx, "gst.gstr4Json");
         return {
           filename: `GSTR4_FY${input.financialYear.replace("-", "_")}_portal.json`,
           json: gstr4ToPortalJson(r, { gstin: biz?.gstin ?? "", fy: input.financialYear }),

@@ -43,7 +43,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "What roles and permissions are there?",
     answer:
-      "Six roles, from most to least access: `superadmin`, `owner`, `admin` (full business access), `seller_manager` (invoices, parties and items, with limited delete), `seller` (create invoices and payments only) and `accountant` (payments, expenses, bank, reports and GST). Roles are given per organisation with `tenant.inviteMember`, and each endpoint lists the minimum role it needs.",
+      "Eight roles, from most to least access: `superadmin`, `owner`, `admin` (full business access), `seller_manager` (invoices, parties and items, with limited delete), `seller` (create invoices and payments only), `accountant` (bookkeeping: payments, expenses, bank, reports and GST), `ca_filing` (read-only on every book and report, plus preparing and filing GST returns) and `auditor` (read-only on every book and report). Roles are given per organisation with `tenant.inviteMember`, and each endpoint lists the minimum role it needs.",
     relatedGroups: ["tenant"],
     personas: ["developer", "ca-accountant", "business-owner"],
   },
@@ -156,7 +156,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "How do I give my CA access?",
     answer:
-      "Invite your CA with `tenant.inviteMember` and the `accountant` role. They get the money side (payments, expenses, bank accounts, reports and GST) and read-only access to invoices, parties and items, using their own login. Remove access at any time with `tenant.removeMember`.",
+      "As the organization owner, invite your CA with `tenant.inviteMember` and the `auditor` role (read-only: views everything and downloads reports) or `ca_filing` (the same, plus preparing and filing GST returns). They get their own login and an accountant-specific email; admins cannot invite a CA. A CA does not count towards your plan's team-member limit (up to 3 per organization). Remove access at any time with `tenant.removeMember`; their activity is logged. Use the bookkeeping `accountant` role if they should also keep your books (payments, expenses, bank).",
     relatedGroups: ["tenant"],
     personas: ["business-owner"],
   },

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import { isCaRole, memberRoleLabel } from "@fintranzact/shared";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -18,6 +19,18 @@ import { SecurityTab } from "./SecurityTab";
 // ── Action label map ──────────────────────────────────────────────────────────
 
 const ACTION_LABELS: Record<string, string> = {
+  "gstReturns.requestOtp": "GST portal OTP requested",
+  "gstReturns.verifyOtp": "GST portal login verified",
+  "gstReturns.saveGstr1": "GSTR-1 saved to the GST portal",
+  "gstReturns.fileGstr1": "GSTR-1 filed",
+  "gstReturns.saveGstr3b": "GSTR-3B saved to the GST portal",
+  "gstReturns.fileGstr3b": "GSTR-3B filed",
+  "gstReturns.pull2b": "GSTR-2B downloaded from the GST portal",
+  "gstr2b.upload": "GSTR-2B uploaded",
+  "gstr2b.linkInvoice": "GSTR-2B entry linked to a purchase",
+  "gstr2b.ignoreRecord": "GSTR-2B entry ignored",
+  "period.lockGstMonth": "GST month marked as filed",
+  "period.unlockGstMonth": "GST month reopened",
   "invoice.create": "Invoice created",
   "invoice.update": "Invoice updated",
   "invoice.updateStatus": "Invoice status changed",
@@ -446,7 +459,11 @@ function ActivityLogContent() {
                 (meta.name as string) ||
                 (meta.accountName as string) ||
                 (meta.sourceName ? `${meta.sourceName} → ${meta.targetName}` : null) ||
+                (meta.period as string) ||
+                (meta.returnPeriod as string) ||
                 null;
+              // Accountants (CA) are shown with their access level.
+              const actorRole = isCaRole(meta.role as string) ? memberRoleLabel(meta.role as string) : null;
 
               return (
                 <div key={entry.id} className="px-6 py-3 flex items-start justify-between gap-4 text-sm">
@@ -458,7 +475,7 @@ function ActivityLogContent() {
                       )}
                     </div>
                     <span className="text-xs text-text-tertiary mt-0.5 block">
-                      by {entry.userName ?? "Unknown"}
+                      by {entry.userName ?? "Unknown"}{actorRole ? ` · ${actorRole}` : ""}
                     </span>
                   </div>
                   <span className="text-xs text-text-tertiary whitespace-nowrap shrink-0">

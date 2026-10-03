@@ -17,6 +17,9 @@ import { trpc } from "../../../../src/lib/trpc";
 import { makeStyles } from "../../../../src/lib/makeStyles";
 import { useColors } from "../../../../src/contexts/ThemeContext";
 import { QueryError, Skeleton, Card } from "../../../../src/components/ui";
+import { CA_ACCESS_NOTE, caRoleDescription, isCaRole } from "@fintranzact/shared";
+import { accessLogRows, caLastOpened } from "../../../../src/lib/access-log";
+import { CA_INVITE_CHOICES, STAFF_INVITE_ROLES, canChangeMemberRole, canManageCa, changeRoleOptions } from "../../../../src/lib/team-roles";
 
 const ROLE_LABELS: Record<string, string> = {
   owner: "Owner",
@@ -24,17 +27,12 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   seller_manager: "Seller Manager",
   seller: "Seller",
-  accountant: "Accountant",
+  accountant: "Accountant (bookkeeping)",
+  auditor: "Accountant (read-only)",
+  ca_filing: "Accountant (filing)",
   member: "Member",
   viewer: "Viewer",
 };
-
-const INVITE_ROLES: Array<{ key: string; label: string }> = [
-  { key: "admin", label: "Admin" },
-  { key: "seller_manager", label: "Seller Manager" },
-  { key: "seller", label: "Seller" },
-  { key: "accountant", label: "Accountant" },
-];
 
 function RoleBadge({ role }: { role: string }) {
   const badgeStyles = useBadgeStyles();
@@ -46,6 +44,8 @@ function RoleBadge({ role }: { role: string }) {
     seller_manager: colors.warning,
     seller: colors.success,
     accountant: colors.amber,
+    auditor: colors.info,
+    ca_filing: colors.info,
     member: colors.textMuted,
     viewer: colors.textMuted,
   }), [colors]);
@@ -54,12 +54,18 @@ function RoleBadge({ role }: { role: string }) {
   return (
     <View style={[badgeStyles.badge, { backgroundColor: color + "20", borderColor: color + "40" }]}>
       <Text style={[badgeStyles.text, { color }]}>{label}</Text>
+      {isCaRole(role) && (
+        <Text testID="ca-badge" style={[badgeStyles.caTag, { color, borderColor: color + "60" }]}>CA</Text>
+      )}
     </View>
   );
 }
 
 const useBadgeStyles = makeStyles((_colors) => ({
   badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -68,6 +74,14 @@ const useBadgeStyles = makeStyles((_colors) => ({
   text: {
     fontSize: 11,
     fontWeight: "700",
+  },
+  caTag: {
+    fontSize: 9,
+    fontWeight: "800",
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 3,
+    overflow: "hidden",
   },
 }));
 
@@ -78,6 +92,9 @@ export default function TeamScreen() {
   const colors = useColors();
   const router = useRouter();
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showCaModal, setShowCaModal] = useState(false);
+  const [caEmail, setCaEmail] = useState("");
+  const [caRole, setCaRole] = useState("auditor");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("seller");
   const [changeRoleTarget, setChangeRoleTarget] = useState<ChangeRoleTarget>(null);
@@ -94,17 +111,28 @@ export default function TeamScreen() {
   const { data: me } = trpc.auth.me.useQuery(undefined);
   const myRole = me?.role ?? "";
   const canManage = ["owner", "superadmin", "admin"].includes(myRole);
+  // Only the owner brings in a CA or changes a CA's access.
+  const canInviteCa = canManageCa(myRole);
+
+  // The access log (latest 25) is for owners and admins; the API refuses everyone else.
+  const { data: accessLog } = trpc.tenant.accessLog.useQuery({ limit: 25 }, { enabled: canManage });
+  const logRows = useMemo(() => accessLogRows(accessLog?.items ?? [], me?.user?.id), [accessLog, me?.user?.id]);
 
   const inviteMutation = trpc.tenant.inviteMember.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       utils.tenant.members.invalidate();
       utils.tenant.pendingInvitations.invalidate();
       setShowInviteModal(false);
+      setShowCaModal(false);
       setInviteEmail("");
       setInviteRole("seller");
+      setCaEmail("");
+      setCaRole("auditor");
       Alert.alert(
         "Invitation sent",
-        "We've sent an invitation email. The invite will appear as pending until accepted."
+        isCaRole(data.role)
+          ? "We emailed them. The invite will appear as pending until accepted. You can remove their access at any time."
+          : "We've sent an invitation email. The invite will appear as pending until accepted."
       );
     },
     onError: (err) => {
@@ -195,6 +223,14 @@ export default function TeamScreen() {
     });
   };
 
+  const handleInviteCa = () => {
+    if (!caEmail.trim()) {
+      Alert.alert("Validation", "Email is required.");
+      return;
+    }
+    inviteMutation.mutate({ email: caEmail.trim().toLowerCase(), role: caRole as any });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -263,7 +299,7 @@ export default function TeamScreen() {
                       {m.userEmail}
                     </Text>
                     <View style={styles.memberRoleRow}>
-                      {canManage && !isOwner && !isMe ? (
+                      {canManage && !isOwner && !isMe && canChangeMemberRole(myRole, m.role) ? (
                         <TouchableOpacity
                           onPress={() => handleOpenRoleModal(m.userId, m.role, displayName)}
                           activeOpacity={0.7}
@@ -276,6 +312,9 @@ export default function TeamScreen() {
                         <RoleBadge role={m.role} />
                       )}
                     </View>
+                    {canManage && caLastOpened(m, isCaRole) ? (
+                      <Text testID="last-opened" style={styles.accessText}>{caLastOpened(m, isCaRole)}</Text>
+                    ) : null}
                   </View>
                   {canManage && !isOwner && !isMe && (
                     <TouchableOpacity
@@ -325,6 +364,9 @@ export default function TeamScreen() {
                       <View style={styles.memberRoleRow}>
                         <RoleBadge role={inv.role} />
                       </View>
+                      {caRoleDescription(inv.role) ? (
+                        <Text style={styles.accessText}>{caRoleDescription(inv.role)}</Text>
+                      ) : null}
                     </View>
                     {canManage && (
                       <TouchableOpacity
@@ -358,6 +400,38 @@ export default function TeamScreen() {
               })}
             </View>
           </View>
+        )}
+
+        {canManage && (
+          <View style={styles.pendingSection} testID="access-log">
+            <Text style={styles.sectionLabel}>Access log</Text>
+            <View style={styles.membersList}>
+              {logRows.length === 0 ? (
+                <Text style={styles.emptyText}>Nothing here yet.</Text>
+              ) : (
+                logRows.map((r, idx) => (
+                  <View key={r.id} style={[styles.memberRow, idx !== logRows.length - 1 && styles.memberRowBorder]}>
+                    <Ionicons name={r.icon as never} size={18} color={r.attention ? colors.danger : colors.textMuted} />
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberEmail}>{r.text}</Text>
+                      <Text style={styles.accessText}>{r.when}</Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </View>
+        )}
+
+        {canInviteCa && (
+          <TouchableOpacity
+            style={styles.inviteCaBtn}
+            onPress={() => setShowCaModal(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="briefcase-outline" size={20} color={colors.onBrand} />
+            <Text style={styles.inviteCaBtnText}>Invite my CA</Text>
+          </TouchableOpacity>
         )}
 
         {canManage && (
@@ -400,7 +474,7 @@ export default function TeamScreen() {
             ) : null}
 
             <View style={styles.roleGrid}>
-              {INVITE_ROLES.map((r) => (
+              {changeRoleOptions(myRole).map((r) => (
                 <TouchableOpacity
                   key={r.key}
                   style={[styles.rolePill, pendingRole === r.key && styles.rolePillActive]}
@@ -466,7 +540,7 @@ export default function TeamScreen() {
 
             <Text style={styles.fieldLabel}>Role</Text>
             <View style={styles.roleGrid}>
-              {INVITE_ROLES.map((r) => (
+              {STAFF_INVITE_ROLES.map((r) => (
                 <TouchableOpacity
                   key={r.key}
                   style={[styles.rolePill, inviteRole === r.key && styles.rolePillActive]}
@@ -483,6 +557,73 @@ export default function TeamScreen() {
             <TouchableOpacity
               style={[styles.inviteSubmitBtn, inviteMutation.isPending && { opacity: 0.6 }]}
               onPress={handleInvite}
+              disabled={inviteMutation.isPending}
+              activeOpacity={0.8}
+            >
+              {inviteMutation.isPending ? (
+                <ActivityIndicator color={colors.onBrand} size="small" />
+              ) : (
+                <Text style={styles.inviteSubmitBtnText}>Send Invitation</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Invite my CA Modal */}
+      <Modal
+        visible={showCaModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCaModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Invite your CA</Text>
+              <TouchableOpacity onPress={() => setShowCaModal(false)} style={styles.modalClose}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.fieldLabel}>Your CA's email address</Text>
+            <TextInput
+              style={styles.input}
+              value={caEmail}
+              onChangeText={setCaEmail}
+              placeholder="ca@firm.in"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <Text style={styles.fieldLabel}>What can they do?</Text>
+            {CA_INVITE_CHOICES.map((c) => (
+              <TouchableOpacity
+                key={c.key}
+                style={[styles.accessCard, caRole === c.key && styles.accessCardActive]}
+                onPress={() => setCaRole(c.key)}
+                activeOpacity={0.7}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: caRole === c.key }}
+              >
+                <Ionicons
+                  name={caRole === c.key ? "radio-button-on" : "radio-button-off"}
+                  size={20}
+                  color={caRole === c.key ? colors.brand : colors.textMuted}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.accessTitle}>{c.title}</Text>
+                  <Text style={styles.accessText}>{c.description}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+            <Text style={[styles.accessText, { marginBottom: 16 }]}>{CA_ACCESS_NOTE}</Text>
+
+            <TouchableOpacity
+              style={[styles.inviteSubmitBtn, inviteMutation.isPending && { opacity: 0.6 }]}
+              onPress={handleInviteCa}
               disabled={inviteMutation.isPending}
               activeOpacity={0.8}
             >
@@ -628,6 +769,45 @@ const useStyles = makeStyles((colors) => ({
     color: colors.brand,
     fontSize: 15,
     fontWeight: "600",
+  },
+  inviteCaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 16,
+    paddingVertical: 14,
+    backgroundColor: colors.brand,
+    borderRadius: 14,
+  },
+  inviteCaBtnText: {
+    color: colors.onBrand,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  accessCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  accessCardActive: {
+    borderColor: colors.brand,
+  },
+  accessTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  accessText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   roleChangeSubtitle: {
     fontSize: 13,

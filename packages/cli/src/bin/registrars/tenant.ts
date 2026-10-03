@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { ROLE_HELP } from "../../commands/tenant/roles.js";
 
 export function registerTenantCommands(program: Command): void {
   // ── tenant ────────────────────────────────────────────────────────────────
@@ -26,9 +27,10 @@ export function registerTenantCommands(program: Command): void {
 
   tenant
     .command("invite <email>")
-    .description("Invite a user to the tenant")
-    .option("--role <role>", "Role: admin, seller_manager, seller, accountant (default: seller)")
+    .description("Invite a user to the tenant (to invite your CA use --role auditor or ca_filing; owner only)")
+    .option("--role <role>", "Role: admin, seller_manager, seller, accountant, auditor, ca_filing (default: seller)")
     .option("--json", "JSON output")
+    .addHelpText("after", `\n${ROLE_HELP}\n`)
     .action(async (email, opts) => {
       const { tenantInviteCommand } = await import("../../commands/tenant/invite.js");
       await tenantInviteCommand(email, { role: opts.role, json: opts.json });
@@ -46,8 +48,9 @@ export function registerTenantCommands(program: Command): void {
 
   tenant
     .command("update-role <userId> <role>")
-    .description("Update a member's role (admin, seller_manager, seller, accountant)")
+    .description("Update a member's role (admin, seller_manager, seller, accountant, auditor, ca_filing)")
     .option("--json", "JSON output")
+    .addHelpText("after", `\n${ROLE_HELP}\n`)
     .action(async (userId, role, opts) => {
       const { tenantUpdateRoleCommand } = await import("../../commands/tenant/update-role.js");
       await tenantUpdateRoleCommand(userId, role, { json: opts.json });
@@ -60,6 +63,31 @@ export function registerTenantCommands(program: Command): void {
     .action(async (opts) => {
       const { listInvitationsCommand } = await import("../../commands/tenant/invitations.js");
       await listInvitationsCommand(opts);
+    });
+
+  tenant
+    .command("clients")
+    .description("Your organisations (own firm and clients), pinned and recent first")
+    .option("--search <text>", "Only organisations whose name contains this")
+    .option("--scope <scope>", "all, mine (own firm) or clients")
+    .option("--limit <n>", "How many (max 100, default 30)")
+    .option("--cursor <cursor>", "Continue from a previous page")
+    .option("--json", "JSON output")
+    .action(async (opts) => {
+      const { clientsCommand } = await import("../../commands/tenant/clients.js");
+      await clientsCommand(opts);
+    });
+
+  tenant
+    .command("access-log")
+    .description("Who was invited, accepted, changed, removed, opened the books or downloaded a file (owners and admins)")
+    .option("--filter <name>", "all, invites, roles, removals, opened or downloads")
+    .option("--limit <n>", "How many events (max 100, default 25)")
+    .option("--cursor <cursor>", "Continue from a previous page")
+    .option("--json", "JSON output")
+    .action(async (opts) => {
+      const { accessLogCommand } = await import("../../commands/tenant/access-log.js");
+      await accessLogCommand(opts);
     });
 
   tenant

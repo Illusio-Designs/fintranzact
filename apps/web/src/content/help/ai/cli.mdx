@@ -938,10 +938,18 @@ fintranzact tenant members --json
 Invite a new member by email:
 
 ```bash
-fintranzact tenant invite --email colleague@example.com --role member
+fintranzact tenant invite colleague@example.com --role seller
 ```
 
-Available roles: `owner`, `admin`, `member`.
+Staff roles: `admin`, `seller_manager`, `seller`, `accountant` (bookkeeping).
+
+To invite your CA, use `--role auditor` (read-only: views everything and downloads reports) or `--role ca_filing` (as read-only, plus prepares and files GST returns):
+
+```bash
+fintranzact tenant invite ca@firm.in --role ca_filing
+```
+
+Only the organization owner can invite a CA role (admins are refused). An organization can have at most 3 CAs including pending invitations, and they don't count towards the plan's team-member limit. The CA is emailed, can be removed at any time with `fintranzact tenant remove`, and their activity is logged. Run `fintranzact tenant invite --help` for the role list.
 
 #### `fintranzact tenant remove`
 
@@ -967,6 +975,28 @@ List pending invitations for the current tenant.
 fintranzact tenant invitations
 fintranzact tenant invitations --json
 ```
+
+#### `fintranzact tenant clients`
+
+Your organisations (own firm and the clients you have accountant access to), pinned and most recently opened first.
+
+```bash
+fintranzact tenant clients
+fintranzact tenant clients --search acme --scope clients
+fintranzact tenant clients --cursor <cursor>   # next page
+```
+
+#### `fintranzact tenant access-log`
+
+Who was invited, accepted, changed, removed, opened the books or downloaded a file (owners and admins only).
+
+```bash
+fintranzact tenant access-log
+fintranzact tenant access-log --filter downloads --limit 50
+fintranzact tenant access-log --cursor <cursor>   # next page
+```
+
+Filters: `invites`, `roles`, `removals`, `opened`, `downloads`.
 
 #### `fintranzact tenant revoke-invitation`
 

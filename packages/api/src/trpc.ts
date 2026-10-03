@@ -4,12 +4,14 @@ import type { Context } from "./context.js";
 import { getTenantDb, type TenantDatabase, controlDb, businesses, businessMembers, tenantMembers } from "@fintranzact/db";
 import { backfillLegacyBusinessMembers } from "./lib/business-membership.js";
 import { eq, and } from "drizzle-orm";
-import { defineAbilityFor, mapDbRole, type AppAbility } from "./lib/permissions.js";
+import { defineAbilityFor, mapDbRole, caRoleMutationAllowed, CA_READ_ONLY_MESSAGE, CA_FILING_ONLY_MESSAGE, type AppAbility } from "./lib/permissions.js";
 import { getMaintenanceStatus } from "./lib/maintenance-cache.js";
 import { isFirstPartyRequestedWith } from "./lib/client-headers.js";
 import { entitlementDataOf, entitlementError } from "./lib/entitlement-error.js";
 import { getEntitlements } from "./lib/entitlements.js";
 import { gateDecision } from "./lib/entitlement-exempt.js";
+import { recordOrgOpened } from "./lib/access-events.js";
+import { requireTenantMembership } from "./lib/tenant-membership.js";
 import { checkTwoFactorGate } from "./lib/two-factor-gate.js";
 import { twoFactorDataOf, twoFactorRequiredError } from "./lib/two-factor-error.js";
 
@@ -147,6 +149,13 @@ const isAuthenticated = t.middleware(({ ctx, next }) => {
 const hasTenantAccess = t.middleware(async ({ ctx, next }) => {
   if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
   if (!ctx.tenantId) throw new TRPCError({ code: "BAD_REQUEST", message: "No organization selected" });
+
+  // The caller must still be a member of the organisation, on EVERY request:
+  // a session's tenantId can be stale (60s cache, other instances) and an API
+  // key carries its tenant forever. Positive answers are cached 15s per
+  // process (lib/tenant-membership.ts). Platform admins do not use the tenant
+  // bases, so they are not affected.
+  await requireTenantMembership(ctx.tenantId, ctx.user.id);
 
   const db = await getTenantDb(ctx.tenantId);
 
@@ -294,7 +303,7 @@ export const businessProcedure = baseProcedure.use(isAuthenticated).use(hasTenan
 // Tenant membership proves the user belongs to the tenant;
 // business_members determines what they can do inside the selected business.
 function withPermissions() {
-  return t.middleware(async ({ ctx, next }) => {
+  return t.middleware(async ({ ctx, type, path, next }) => {
     const user = ctx.user as NonNullable<Context["user"]>;
     const tenantId = ctx.tenantId as string;
     const businessId = ctx.businessId as string;
@@ -331,10 +340,28 @@ function withPermissions() {
       .from(tenantMembers)
       .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, user.id)))
       .limit(1);
+    // hasTenantAccess already refuses a user with no tenant_members row, so the
+    // "member" fallback (-> seller) is unreachable for real requests; it stays
+    // only as a defence for a row removed between the two reads.
     const tenantRole = mapDbRole(tenantMembership?.role ?? "member");
     const permissionRole = businessMembership.role === "admin"
       ? (tenantRole === "superadmin" ? "superadmin" : "admin")
       : tenantRole;
+
+    // Mutation backstop for the accountant access roles: they may only call the
+    // allowlisted filing mutations, whatever a procedure's own CASL check says
+    // (some mutations are gated only by a read check, e.g. share.create).
+    if (type === "mutation" && !caRoleMutationAllowed(permissionRole, path)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: permissionRole === "auditor" ? CA_READ_ONLY_MESSAGE : CA_FILING_ONLY_MESSAGE,
+      });
+    }
+
+    // A CA working in the books is logged for the owner as "opened this
+    // organisation": once an hour per person and organisation (in-process
+    // throttle, CA roles only; lib/access-events.ts). Never throws.
+    await recordOrgOpened({ user, tenantId, role: permissionRole, ipAddress: ctx.ipAddress, req: ctx.req });
 
     const ability = defineAbilityFor({
       userId: user.id,

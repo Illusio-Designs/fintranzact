@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useState, useMemo } from "react";
+import { isCaRole, memberRoleLabel } from "@fintranzact/shared";
 import { trpc } from "../../../../src/lib/trpc";
 import { useAuthStore } from "../../../../src/stores/auth";
 import { useBusinessStore } from "../../../../src/stores/business";
@@ -26,6 +27,18 @@ type SessionFilter = "active" | "old";
 type TimeFilter = "week" | "month" | "all";
 
 const ACTION_LABELS: Record<string, string> = {
+  "gstReturns.requestOtp": "GST portal OTP requested",
+  "gstReturns.verifyOtp": "GST portal login verified",
+  "gstReturns.saveGstr1": "GSTR-1 saved to the GST portal",
+  "gstReturns.fileGstr1": "GSTR-1 filed",
+  "gstReturns.saveGstr3b": "GSTR-3B saved to the GST portal",
+  "gstReturns.fileGstr3b": "GSTR-3B filed",
+  "gstReturns.pull2b": "GSTR-2B downloaded from the GST portal",
+  "gstr2b.upload": "GSTR-2B uploaded",
+  "gstr2b.linkInvoice": "GSTR-2B entry linked to a purchase",
+  "gstr2b.ignoreRecord": "GSTR-2B entry ignored",
+  "period.lockGstMonth": "GST month marked as filed",
+  "period.unlockGstMonth": "GST month reopened",
   "invoice.create": "Invoice created",
   "invoice.update": "Invoice updated",
   "invoice.updateStatus": "Status changed",
@@ -406,7 +419,12 @@ function ActivityTab() {
                 (meta.sourceName
                   ? `${meta.sourceName} \u2192 ${meta.targetName}`
                   : null) ||
+                (meta.period as string) ||
+                (meta.returnPeriod as string) ||
                 null;
+              const actorRole = isCaRole(meta.role as string)
+                ? memberRoleLabel(meta.role as string)
+                : null;
 
               return (
                 <View
@@ -421,7 +439,8 @@ function ActivityTab() {
                       ) : null}
                     </Text>
                     <Text style={s.activityMeta}>
-                      by {entry.userName} &middot;{" "}
+                      by {entry.userName}
+                      {actorRole ? ` \u00b7 ${actorRole}` : ""} &middot;{" "}
                       {relativeTime(entry.createdAt)}
                     </Text>
                   </View>

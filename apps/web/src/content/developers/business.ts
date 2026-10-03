@@ -430,6 +430,7 @@ resp = httpx.get(
       gotchas: [
         "Requires `Report:read` permission (viewer role or above).",
         "User names are resolved from the control database \u2014 if a user has been deleted, the name shows as 'Unknown user'.",
+        "Accountant (CA) actions are recorded with `metadata.role` (`auditor` / `ca_filing`). Filing actions: `gstReturns.requestOtp`, `verifyOtp`, `saveGstr1`, `fileGstr1`, `saveGstr3b`, `fileGstr3b`, `pull2b` (entity `gst_return`; metadata `period`, `referenceId`; never OTPs or credentials), `gstr2b.upload` / `gstr2b.linkInvoice` / `gstr2b.ignoreRecord` (entities `gstr2b_upload`, `gstr2b_record`) and `period.lockGstMonth`. Who was invited, accepted, changed, removed and what a CA downloaded is in `tenant.accessLog`.",
         "The audit trail only records actions performed through the API \u2014 direct database changes are not tracked.",
       ],
     },
@@ -925,6 +926,7 @@ resp = httpx.post(
 walk_in_id = resp.json()["result"]["data"]["json"]["id"]`,
       },
       gotchas: [
+        "Refused (FORBIDDEN) for the accountant read-only and filing roles (`auditor`, `ca_filing`): it creates a record.",
         "Any authenticated member of the organization can call this — there is no admin, CASL or business-membership check, and the business ID is not verified to exist.",
         "The match is on an exact `name = \"Walk-in Customer\"` and `type = \"customer\"`. Renaming that party makes the next call create a new one.",
         "There is no lock, so two simultaneous first calls can create two walk-in parties; merge them with `party.merge`.",

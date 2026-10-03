@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { invalidateEntitlements } from "../lib/entitlements-cache.js";
 import { TRPCError } from "@trpc/server";
-import { controlDb, getTenantDb, tenants, tenantMembers, invitations, users, sessions, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
-import { eq, and, gt, isNull, desc } from "drizzle-orm";
+import { controlDb, getTenantDb, tenants, tenantMembers, userTenantPrefs, invitations, users, sessions, securityEvents, provisionTenantDatabase, cleanupTenantDatabase } from "@fintranzact/db";
+import { eq, and, gt, isNull, desc, sql, inArray, like } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { createHash } from "node:crypto";
 import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
@@ -11,11 +11,21 @@ import { invalidateTwoFactorGateMember, invalidateTwoFactorGateTenant } from "..
 import { getGateMembership, getTwoFactorRequirementForCaller } from "../lib/two-factor-gate.js";
 import { setSecurityPolicy, type PolicyDeps } from "../lib/two-factor-policy.js";
 import { recordSecurityEvent } from "../lib/security-events.js";
-import { TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS } from "@fintranzact/shared";
+import { TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS, ACCESS_EVENT_TYPES, caRoleDescription, memberRoleLabel, isCaRole } from "@fintranzact/shared";
 import { emailService } from "../lib/email.js";
 import { isPaidPlan, isSelfServePlan } from "../lib/plan-catalog.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
-import { effectiveOwnerPlan, enforceTeamMemberLimit, enforceOrgCreationLimit, assertOwnedOrgsWritable, getLimits } from "../lib/plan-limits.js";
+import { effectiveOwnerPlan, enforceTeamMemberLimit, countCaSlots, enforceOrgCreationLimit, assertOwnedOrgsWritable, getLimits } from "../lib/plan-limits.js";
+import { checkInviteRules, checkRoleChangeRules, countsTowardTeamLimit, normalizeInviteEmail } from "../lib/invite-rules.js";
+import { removeTenantMember } from "../lib/member-removal.js";
+import { removalStore } from "../lib/member-removal-store.js";
+import { invalidateTenantMembership } from "../lib/tenant-membership.js";
+import { logger } from "../lib/logger.js";
+import { recordAccessEvent, recordOrgOpened } from "../lib/access-events.js";
+import { canViewAccessLog, clampAccessLimit, decodeAccessCursor, pageAccessRows, accessUserIds, toAccessLogItem } from "../lib/access-log.js";
+import { CLIENT_SCOPES, orderAndPageClients, lastOpenedCutoff, decidePin, MAX_PINNED_TENANTS, type ClientRow } from "../lib/client-switcher.js";
+import { findCaPartnersByEmails, findCaPartnerByEmail, decideCreditPartner, attributePartnerOnAccept } from "../lib/partner-ca.js";
+import { partnerCaStore } from "../lib/partner-ca-store.js";
 import { backfillLegacyBusinessMembers, grantTenantBusinessesToMember } from "../lib/business-membership.js";
 
 /** A member who joins through an invitation can open the organisation's businesses. */
@@ -24,6 +34,55 @@ async function openTenantBusinessesFor(tenantId: string, userId: string, role: s
   // Legacy businesses (no members yet) first get the whole team, as on first use.
   await backfillLegacyBusinessMembers(db, tenantId);
   await grantTenantBusinessesToMember(db, tenantId, userId, role);
+}
+
+/** Case-insensitive e-mail match (rows written before invites were lowercased may be mixed case). */
+function emailIs(column: typeof users.email | typeof invitations.email, normalized: string) {
+  return sql`lower(${column}) = ${normalized}`;
+}
+
+/** What an invitation shows the invitee: the role's label and, for an accountant role, what it can do. */
+function roleInfo(role: string) {
+  return { roleLabel: memberRoleLabel(role), accessDescription: caRoleDescription(role) };
+}
+
+/** Who/where for an access event raised by a signed-in request. */
+function accessWho(ctx: { user: { id: string }; ipAddress?: string | null; req: Request }, tenantId: string) {
+  return { actorId: ctx.user.id, tenantId, ip: ctx.ipAddress ?? null, userAgent: ctx.req.headers.get("user-agent") };
+}
+
+/**
+ * After a NEW membership from an invitation: honour the owner's opt-in to credit
+ * the CA (an approved accountant partner) as the organisation's partner. Never
+ * fails the accept; records `access.partner_attributed` only when it credited.
+ */
+async function creditPartnerAfterAccept(
+  ctx: { user: { id: string }; ipAddress?: string | null; req: Request },
+  invitation: { tenantId: string; role: string; email: string; creditPartner: boolean | null },
+): Promise<void> {
+  if (invitation.creditPartner !== true) return;
+  try {
+    const [u] = await controlDb.select({ email: users.email, emailVerified: users.emailVerified })
+      .from(users).where(eq(users.id, ctx.user.id)).limit(1);
+    if (!u) return;
+    const partner = await attributePartnerOnAccept(partnerCaStore, {
+      tenantId: invitation.tenantId,
+      role: invitation.role,
+      creditPartner: invitation.creditPartner,
+      email: u.email,
+      emailVerified: u.emailVerified,
+    });
+    if (partner) {
+      await recordAccessEvent({
+        kind: "partner_attributed",
+        ...accessWho(ctx, invitation.tenantId),
+        role: invitation.role,
+        partnerName: partner.companyName,
+      });
+    }
+  } catch (err) {
+    logger.error({ err, tenantId: invitation.tenantId }, "Could not credit the CA partner on accept");
+  }
 }
 
 function hashInvitationToken(token: string): string {
@@ -236,6 +295,91 @@ export const tenantRouter = router({
     return memberships.map((m) => ({ ...m, planSelectedAt: m.planSelectedAt?.toISOString() ?? null }));
   }),
 
+  // The client switcher's list: the caller's organisations, pinned first, then
+  // most recently opened, then by name; searchable, scoped ("mine" = their own
+  // firm, "clients" = everything else) and paged. One join, ordered and paged in
+  // memory (lib/client-switcher.ts). Needs no selected organisation. Only active
+  // organisations are listed, as in tenant.list.
+  listClients: protectedProcedure
+    .input(z.object({
+      search: z.string().max(100).optional(),
+      scope: z.enum(CLIENT_SCOPES).optional(),
+      cursor: z.string().max(500).optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    }).optional())
+    .query(async ({ input, ctx }) => {
+      const rows: ClientRow[] = await controlDb.select({
+        tenantId: tenantMembers.tenantId,
+        name: tenants.name,
+        slug: tenants.slug,
+        role: tenantMembers.role,
+        plan: tenants.plan,
+        pinnedAt: userTenantPrefs.pinnedAt,
+        lastOpenedAt: userTenantPrefs.lastOpenedAt,
+      })
+        .from(tenantMembers)
+        .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+        .leftJoin(userTenantPrefs, and(
+          eq(userTenantPrefs.tenantId, tenantMembers.tenantId),
+          eq(userTenantPrefs.userId, tenantMembers.userId),
+        ))
+        .where(and(eq(tenantMembers.userId, ctx.user.id), eq(tenants.status, "active")));
+      return orderAndPageClients(rows, input ?? {});
+    }),
+
+  // Pin or unpin an organisation in the caller's own switcher (at most 20 pinned).
+  setPinned: protectedProcedure
+    .input(z.object({ tenantId: z.string().uuid(), pinned: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const [membership] = await controlDb.select({ id: tenantMembers.id })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, input.tenantId), eq(tenantMembers.userId, ctx.user.id)))
+        .limit(1);
+      if (!membership) throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this organization" });
+
+      const [current] = await controlDb.select({ pinnedAt: userTenantPrefs.pinnedAt })
+        .from(userTenantPrefs)
+        .where(and(eq(userTenantPrefs.userId, ctx.user.id), eq(userTenantPrefs.tenantId, input.tenantId)))
+        .limit(1);
+      // Only pins of organisations the person still belongs to count towards the limit.
+      const [{ count }] = await controlDb.select({ count: sql<number>`count(*)::int` })
+        .from(userTenantPrefs)
+        .innerJoin(tenantMembers, and(eq(tenantMembers.tenantId, userTenantPrefs.tenantId), eq(tenantMembers.userId, userTenantPrefs.userId)))
+        .where(and(eq(userTenantPrefs.userId, ctx.user.id), sql`${userTenantPrefs.pinnedAt} is not null`));
+      const decision = decidePin({ pinned: input.pinned, alreadyPinned: !!current?.pinnedAt, pinnedCount: count ?? 0 });
+      if (decision === "limit") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `You can pin up to ${MAX_PINNED_TENANTS} organisations. Unpin one first.` });
+      }
+      if (decision === "ok") {
+        const pinnedAt = input.pinned ? new Date() : null;
+        await controlDb.insert(userTenantPrefs)
+          .values({ userId: ctx.user.id, tenantId: input.tenantId, pinnedAt })
+          .onConflictDoUpdate({ target: [userTenantPrefs.userId, userTenantPrefs.tenantId], set: { pinnedAt } });
+      }
+      return { success: true, pinned: input.pinned };
+    }),
+
+  // Leave an organisation you do not own (a CA ending a client relationship).
+  // Same cleanup as being removed (business access, API keys, invitations,
+  // sessions); logs `access.left` and tells the owners. Owners cannot leave.
+  leave: protectedProcedure
+    .input(z.object({ tenantId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const [membership] = await controlDb.select({ role: tenantMembers.role })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, input.tenantId), eq(tenantMembers.userId, ctx.user.id)))
+        .limit(1);
+      const result = await removeTenantMember({
+        tenantId: input.tenantId,
+        actor: { id: ctx.user.id, role: membership?.role ?? null },
+        targetUserId: ctx.user.id,
+        self: true,
+        ip: ctx.ipAddress,
+        userAgent: ctx.req.headers.get("user-agent"),
+      }, removalStore);
+      return { success: result.success };
+    }),
+
   // Pending invitations for the authenticated user's email.
   // Used by the NoOrgScreen to show "You've been invited to [Org]".
   myInvitations: protectedProcedure.query(async ({ ctx }) => {
@@ -243,15 +387,17 @@ export const tenantRouter = router({
       id: invitations.id,
       tenantName: tenants.name,
       role: invitations.role,
+      invitedByName: users.name,
     })
       .from(invitations)
       .innerJoin(tenants, eq(tenants.id, invitations.tenantId))
+      .leftJoin(users, eq(users.id, invitations.invitedBy))
       .where(and(
-        eq(invitations.email, ctx.user.email.toLowerCase()),
+        emailIs(invitations.email, normalizeInviteEmail(ctx.user.email)),
         isNull(invitations.acceptedAt),
         gt(invitations.expiresAt, new Date()),
       ));
-    return pending;
+    return pending.map((p) => ({ ...p, ...roleInfo(p.role) }));
   }),
 
   // Accept invitation by ID (for users who see their pending invites in-app,
@@ -264,7 +410,7 @@ export const tenantRouter = router({
         .from(invitations)
         .where(and(
           eq(invitations.id, input.invitationId),
-          eq(invitations.email, ctx.user.email.toLowerCase()),
+          emailIs(invitations.email, normalizeInviteEmail(ctx.user.email)),
           isNull(invitations.acceptedAt),
           gt(invitations.expiresAt, new Date()),
         ))
@@ -302,6 +448,8 @@ export const tenantRouter = router({
           .where(eq(invitations.id, invitation.id));
       });
       await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
+      await recordAccessEvent({ kind: "accepted", ...accessWho(ctx, invitation.tenantId), role: invitation.role });
+      await creditPartnerAfterAccept(ctx, invitation);
 
       const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
       return { tenantId: invitation.tenantId, tenantName };
@@ -312,7 +460,7 @@ export const tenantRouter = router({
     .input(z.object({ tenantId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       // Verify user is a member of this tenant
-      const [membership] = await controlDb.select({ id: tenantMembers.id })
+      const [membership] = await controlDb.select({ id: tenantMembers.id, role: tenantMembers.role })
         .from(tenantMembers)
         .where(and(
           eq(tenantMembers.tenantId, input.tenantId),
@@ -335,6 +483,26 @@ export const tenantRouter = router({
 
       // Invalidate cached session so the next request picks up the new tenant
       invalidateSessionCache(sessionId);
+
+      // Remember when this person last opened the organisation (for "Recent" in
+      // the switcher). At most one write per 5 minutes, the guard is in the
+      // upsert itself; never fails the selection.
+      try {
+        const now = new Date();
+        await controlDb.insert(userTenantPrefs)
+          .values({ userId: ctx.user.id, tenantId: input.tenantId, lastOpenedAt: now })
+          .onConflictDoUpdate({
+            target: [userTenantPrefs.userId, userTenantPrefs.tenantId],
+            set: { lastOpenedAt: now },
+            setWhere: sql`${userTenantPrefs.lastOpenedAt} is null or ${userTenantPrefs.lastOpenedAt} < ${lastOpenedCutoff(now).toISOString()}::timestamptz`,
+          });
+      } catch (err) {
+        logger.warn({ err }, "tenant.select: could not record last opened");
+      }
+
+      // A CA opening a client's books is logged for the owner (CA roles only,
+      // at most once an hour per person and organisation).
+      await recordOrgOpened({ ...ctx, tenantId: input.tenantId }, membership.role);
 
       return { success: true };
     }),
@@ -389,7 +557,34 @@ export const tenantRouter = router({
       .from(tenantMembers)
       .innerJoin(users, eq(users.id, tenantMembers.userId))
       .where(eq(tenantMembers.tenantId, ctx.tenantId));
-    return rows.map(({ twoFactorEnabled, ...member }) => ({ ...member, twoFactorEnabled: showTwoFactor ? twoFactorEnabled : undefined }));
+    // When each CA last opened the books (owners and admins only; null for non-CA members).
+    const showOpened = !!caller && canViewAccessLog(caller.role);
+    const caIds = showOpened ? rows.filter((r) => isCaRole(r.role)).map((r) => r.userId) : [];
+    const opened = new Map<string, Date>();
+    if (caIds.length > 0) {
+      const latest = await controlDb.select({
+        userId: securityEvents.userId,
+        at: sql<Date>`max(${securityEvents.createdAt})`.mapWith(securityEvents.createdAt),
+      })
+        .from(securityEvents)
+        .where(and(
+          eq(securityEvents.tenantId, ctx.tenantId),
+          eq(securityEvents.type, "access.org_opened"),
+          inArray(securityEvents.userId, caIds),
+        ))
+        .groupBy(securityEvents.userId);
+      for (const l of latest) if (l.userId && l.at) opened.set(l.userId, l.at);
+    }
+    // "Registered CA partner" badge: owners/admins only, CA members only, one batched lookup.
+    const partnerByEmail = showOpened
+      ? await findCaPartnersByEmails(partnerCaStore, rows.filter((r) => isCaRole(r.role)).map((r) => r.userEmail))
+      : new Map();
+    return rows.map(({ twoFactorEnabled, ...member }) => ({
+      ...member,
+      caPartner: (isCaRole(member.role) ? partnerByEmail.get(normalizeInviteEmail(member.userEmail)) : null) ?? null,
+      twoFactorEnabled: showTwoFactor ? twoFactorEnabled : undefined,
+      lastOpenedAt: showOpened && isCaRole(member.role) ? (opened.get(member.userId) ?? null) : null,
+    }));
   }),
 
   // Require two-factor authentication for the organisation (owner only, like
@@ -413,11 +608,15 @@ export const tenantRouter = router({
   // Invite a member
   inviteMember: tenantProcedure
     .input(z.object({
-      email: z.string().email(),
-      role: z.enum(["admin", "seller_manager", "seller", "accountant"]).default("seller"),
+      // Trimmed and lowercased once, so every lookup and comparison below (and
+      // the invitee's own list) sees the same address however it was typed.
+      email: z.string().trim().toLowerCase().email(),
+      role: z.enum(["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"]).default("seller"),
+      // CA roles only (ignored otherwise): "This CA referred me to Fintranzact, credit them as my partner". Default off.
+      creditPartner: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      // Check caller has permission (owner/superadmin or admin)
+      // Check caller has permission (owner/superadmin or admin; CA roles: owner/superadmin only)
       const [callerMembership] = await controlDb.select({ role: tenantMembers.role })
         .from(tenantMembers)
         .where(and(
@@ -426,16 +625,30 @@ export const tenantRouter = router({
         ))
         .limit(1);
 
-      if (!callerMembership || !["owner", "superadmin", "admin"].includes(callerMembership.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only owners and admins can invite members" });
-      }
+      const caSlots = isCaRole(input.role) ? await countCaSlots(ctx.tenantId) : { memberCaCount: 0, pendingCaCount: 0 };
+      const rules = checkInviteRules({
+        inviterRole: callerMembership?.role,
+        targetRole: input.role,
+        ...caSlots,
+      });
+      if (!rules.ok) throw new TRPCError({ code: rules.code, message: rules.message });
 
-      // Enforce team member limit before proceeding
-      await enforceTeamMemberLimit(ctx.tenantId);
+      // Opt-in partner credit: only for a CA role, only for an approved CA partner's e-mail.
+      const credit = decideCreditPartner({
+        role: input.role,
+        creditPartner: input.creditPartner,
+        partnerMatch: input.creditPartner && isCaRole(input.role)
+          ? await findCaPartnerByEmail(partnerCaStore, input.email, { allowUnregistered: true })
+          : null,
+      });
+      if (!credit.ok) throw new TRPCError({ code: "BAD_REQUEST", message: credit.message });
+
+      // Enforce team member limit before proceeding (accountant roles are outside it)
+      if (countsTowardTeamLimit(input.role)) await enforceTeamMemberLimit(ctx.tenantId);
 
       // Check if already a member
       const [existingUser] = await controlDb.select({ id: users.id })
-        .from(users).where(eq(users.email, input.email)).limit(1);
+        .from(users).where(emailIs(users.email, input.email)).limit(1);
 
       if (existingUser) {
         const [existingMember] = await controlDb.select({ id: tenantMembers.id })
@@ -456,7 +669,7 @@ export const tenantRouter = router({
         .from(invitations)
         .where(and(
           eq(invitations.tenantId, ctx.tenantId),
-          eq(invitations.email, input.email),
+          emailIs(invitations.email, input.email),
           isNull(invitations.acceptedAt),
           gt(invitations.expiresAt, new Date()),
         ))
@@ -477,6 +690,7 @@ export const tenantRouter = router({
         token: tokenHash, // Store hash, never the raw token
         invitedBy: ctx.user.id,
         expiresAt,
+        creditPartner: credit.creditPartner,
       });
 
       // Fire-and-forget invitation email — failure doesn't block invite creation
@@ -498,12 +712,21 @@ export const tenantRouter = router({
         inviteUrl,
         tenant?.name ?? "Organization",
         inviter?.name ?? null,
+        input.role,
       ).catch((err) => {
         console.error("[invite] Failed to send invitation email:", err);
       });
 
+      await recordAccessEvent({
+        kind: "invited",
+        ...accessWho(ctx, ctx.tenantId),
+        role: input.role,
+        email: input.email,
+        inviteeUserId: existingUser?.id ?? null,
+      });
+
       // Return the raw token — this is what gets sent via email
-      return { token: rawToken, expiresAt };
+      return { token: rawToken, inviteUrl, role: input.role, expiresAt };
     }),
 
   // Accept an invitation
@@ -520,6 +743,7 @@ export const tenantRouter = router({
         role: invitations.role,
         tenantId: invitations.tenantId,
         acceptedAt: invitations.acceptedAt,
+        invitedBy: invitations.invitedBy,
       })
         .from(invitations)
         .where(and(
@@ -535,9 +759,15 @@ export const tenantRouter = router({
         .where(eq(tenants.id, invitation.tenantId))
         .limit(1);
 
+      const [inviter] = invitation.invitedBy
+        ? await controlDb.select({ name: users.name }).from(users).where(eq(users.id, invitation.invitedBy)).limit(1)
+        : [];
+
       return {
         tenantName: tenant?.name ?? "Organization",
         role: invitation.role,
+        invitedByName: inviter?.name ?? null,
+        ...roleInfo(invitation.role),
       };
     }),
 
@@ -560,7 +790,7 @@ export const tenantRouter = router({
       // Verify the invitation email matches the authenticated user
       const [currentUser] = await controlDb.select({ email: users.email })
         .from(users).where(eq(users.id, ctx.user.id)).limit(1);
-      if (!currentUser || currentUser.email.toLowerCase() !== invitation.email.toLowerCase()) {
+      if (!currentUser || normalizeInviteEmail(currentUser.email) !== normalizeInviteEmail(invitation.email)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "This invitation was sent to a different email address" });
       }
 
@@ -579,17 +809,14 @@ export const tenantRouter = router({
           const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
           return { tenantId: invitation.tenantId, tenantName };
         }
-        // Accepted but not a member (removed after accepting) — re-add them
-        await controlDb.insert(tenantMembers).values({
-          tenantId: invitation.tenantId,
-          userId: ctx.user.id,
-          role: invitation.role,
-          invitedBy: invitation.invitedBy ?? undefined,
-          acceptedAt: new Date(),
+        // Accepted but not a member: the person was removed (removal deletes
+        // the accepted invitation, so this is a leftover from before that, or a
+        // retry). An old link must never re-add someone the organisation
+        // removed: they need a NEW invitation.
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This invitation has already been used. Ask the organisation for a new invitation.",
         });
-        await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
-        const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
-        return { tenantId: invitation.tenantId, tenantName };
       }
 
       // Check if already a member (e.g. double-click)
@@ -623,6 +850,8 @@ export const tenantRouter = router({
           .where(eq(invitations.id, invitation.id));
       });
       await openTenantBusinessesFor(invitation.tenantId, ctx.user.id, invitation.role);
+      await recordAccessEvent({ kind: "accepted", ...accessWho(ctx, invitation.tenantId), role: invitation.role });
+      await creditPartnerAfterAccept(ctx, invitation);
 
       const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
       return { tenantId: invitation.tenantId, tenantName };
@@ -654,7 +883,16 @@ export const tenantRouter = router({
       ))
       .orderBy(desc(invitations.createdAt));
 
-    return pending;
+    const partnerByEmail = await findCaPartnersByEmails(
+      partnerCaStore,
+      pending.filter((p) => isCaRole(p.role)).map((p) => p.email),
+      { allowUnregistered: true },
+    );
+    return pending.map((p) => ({
+      ...p,
+      ...roleInfo(p.role),
+      caPartner: (isCaRole(p.role) ? partnerByEmail.get(normalizeInviteEmail(p.email)) : null) ?? null,
+    }));
   }),
 
   // Revoke a pending invitation
@@ -674,17 +912,23 @@ export const tenantRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Only owners and admins can revoke invitations" });
       }
 
-      await controlDb.delete(invitations)
+      const revoked = await controlDb.delete(invitations)
         .where(and(
           eq(invitations.id, input.invitationId),
           eq(invitations.tenantId, ctx.tenantId),
           isNull(invitations.acceptedAt),
-        ));
+        ))
+        .returning({ email: invitations.email, role: invitations.role });
+
+      for (const inv of revoked) {
+        await recordAccessEvent({ kind: "invite_revoked", ...accessWho(ctx, ctx.tenantId), role: inv.role, email: inv.email });
+      }
 
       return { success: true };
     }),
 
-  // Remove a member
+  // Remove a member: revokes business grants, API keys, old invite links and
+  // sessions, logs `access.removed` and e-mails the person (lib/member-removal.ts).
   removeMember: tenantProcedure
     .input(z.object({ userId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
@@ -696,63 +940,22 @@ export const tenantRouter = router({
         ))
         .limit(1);
 
-      if (!callerMembership || !["owner", "superadmin", "admin"].includes(callerMembership.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only owners and admins can remove members" });
-      }
+      const result = await removeTenantMember({
+        tenantId: ctx.tenantId,
+        actor: { id: ctx.user.id, role: callerMembership?.role ?? null },
+        targetUserId: input.userId,
+        ip: ctx.ipAddress,
+        userAgent: ctx.req.headers.get("user-agent"),
+      }, removalStore);
 
-      if (input.userId === ctx.user.id) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot remove yourself" });
-      }
-
-      // Prevent removing a superadmin/owner
-      const [targetMembership] = await controlDb.select({ role: tenantMembers.role })
-        .from(tenantMembers)
-        .where(and(
-          eq(tenantMembers.tenantId, ctx.tenantId),
-          eq(tenantMembers.userId, input.userId),
-        ))
-        .limit(1);
-
-      if (targetMembership && ["owner", "superadmin"].includes(targetMembership.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Cannot remove a superadmin" });
-      }
-
-      await controlDb.delete(tenantMembers)
-        .where(and(
-          eq(tenantMembers.tenantId, ctx.tenantId),
-          eq(tenantMembers.userId, input.userId),
-        ));
-      invalidateTwoFactorGateMember(ctx.tenantId, input.userId);
-
-      // Revoke the removed user's access immediately: clear the tenantId from
-      // their sessions so the next request can't piggyback on the cached session.
-      const affectedSessions = await controlDb.select({ id: sessions.id })
-        .from(sessions)
-        .where(and(
-          eq(sessions.userId, input.userId),
-          eq(sessions.tenantId, ctx.tenantId),
-        ));
-
-      if (affectedSessions.length > 0) {
-        await controlDb.update(sessions)
-          .set({ tenantId: null })
-          .where(and(
-            eq(sessions.userId, input.userId),
-            eq(sessions.tenantId, ctx.tenantId),
-          ));
-        for (const s of affectedSessions) {
-          invalidateSessionCache(s.id);
-        }
-      }
-
-      return { success: true };
+      return { success: result.success };
     }),
 
   // Update member role
   updateMemberRole: tenantProcedure
     .input(z.object({
       userId: z.string().uuid(),
-      role: z.enum(["admin", "seller_manager", "seller", "accountant"]),
+      role: z.enum(["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"]),
     }))
     .mutation(async ({ input, ctx }) => {
       const [callerMembership] = await controlDb.select({ role: tenantMembers.role })
@@ -780,6 +983,16 @@ export const tenantRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Cannot change the role of a superadmin" });
       }
 
+      // Accountant (CA) roles: owner/superadmin only, to or from one; capped per organisation.
+      const caSlots = isCaRole(input.role) ? await countCaSlots(ctx.tenantId) : { memberCaCount: 0, pendingCaCount: 0 };
+      const rules = checkRoleChangeRules({
+        actorRole: callerMembership.role,
+        currentRole: targetMembership?.role,
+        newRole: input.role,
+        ...caSlots,
+      });
+      if (!rules.ok) throw new TRPCError({ code: rules.code, message: rules.message });
+
       await controlDb.update(tenantMembers)
         .set({ role: input.role })
         .where(and(
@@ -787,8 +1000,76 @@ export const tenantRouter = router({
           eq(tenantMembers.userId, input.userId),
         ));
       invalidateTwoFactorGateMember(ctx.tenantId, input.userId);
+      invalidateTenantMembership(ctx.tenantId, input.userId);
+
+      if (targetMembership && targetMembership.role !== input.role) {
+        const [target] = await controlDb.select({ email: users.email }).from(users).where(eq(users.id, input.userId)).limit(1);
+        await recordAccessEvent({
+          kind: "role_changed",
+          ...accessWho(ctx, ctx.tenantId),
+          targetUserId: input.userId,
+          from: targetMembership.role,
+          to: input.role,
+          email: target?.email ?? "",
+        });
+      }
 
       return { success: true };
+    }),
+
+  // The access log: who was invited, who accepted, role changes, removals, when
+  // a CA opened the books and what they downloaded. Owners and admins only.
+  // Reads the control security_events table, so the plan's audit retention
+  // window does not apply. Keyset paging on (createdAt ms, id).
+  accessLog: tenantProcedure
+    .input(z.object({
+      cursor: z.string().max(80).optional(),
+      limit: z.number().int().optional(),
+      type: z.union([z.enum(ACCESS_EVENT_TYPES), z.array(z.enum(ACCESS_EVENT_TYPES)).min(1).max(ACCESS_EVENT_TYPES.length)]).optional(),
+    }).optional())
+    .query(async ({ input, ctx }) => {
+      const [caller] = await controlDb.select({ role: tenantMembers.role })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, ctx.tenantId), eq(tenantMembers.userId, ctx.user.id)))
+        .limit(1);
+      if (!caller || !canViewAccessLog(caller.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only owners and admins can see the access log" });
+      }
+
+      const limit = clampAccessLimit(input?.limit);
+      const cursor = decodeAccessCursor(input?.cursor);
+      if (input?.cursor && !cursor) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid cursor" });
+
+      const types = input?.type === undefined ? null : Array.isArray(input.type) ? input.type : [input.type];
+      // Millisecond precision on both sides of the keyset so a row is never skipped or repeated.
+      const ms = sql`date_trunc('milliseconds', ${securityEvents.createdAt})`;
+      const conds = [
+        eq(securityEvents.tenantId, ctx.tenantId),
+        types ? inArray(securityEvents.type, types) : like(securityEvents.type, "access.%"),
+      ];
+      if (cursor) {
+        conds.push(sql`(${ms}, ${securityEvents.id}) < (${new Date(cursor.ms).toISOString()}::timestamptz, ${cursor.id}::uuid)`);
+      }
+      const fetched = await controlDb.select({
+        id: securityEvents.id,
+        userId: securityEvents.userId,
+        actorUserId: securityEvents.actorUserId,
+        type: securityEvents.type,
+        metadata: securityEvents.metadata,
+        createdAt: securityEvents.createdAt,
+      })
+        .from(securityEvents)
+        .where(and(...conds))
+        .orderBy(desc(ms), desc(securityEvents.id))
+        .limit(limit + 1);
+
+      const { rows, nextCursor } = pageAccessRows(fetched, limit);
+      const ids = accessUserIds(rows);
+      const people = ids.length > 0
+        ? await controlDb.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray(users.id, ids))
+        : [];
+      const byId = new Map(people.map((u) => [u.id, u]));
+      return { items: rows.map((r) => toAccessLogItem(r, byId)), nextCursor };
     }),
 });
 

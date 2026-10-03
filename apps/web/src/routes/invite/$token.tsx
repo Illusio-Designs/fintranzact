@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { formatRole } from "@/lib/roles";
+import { isCaRole } from "@fintranzact/shared";
+import { InviteSummary, type InviteSummaryInfo } from "@/components/invite/InviteSummary";
 import { Logo } from "@/components/ui/Logo";
 import { Icon } from "@/components/ui/Icon";
 import { Cancel01Icon, Tick02Icon, Loading03Icon } from "@hugeicons/core-free-icons";
@@ -26,10 +27,16 @@ function InviteAcceptPage() {
   const createOrgMutation = trpc.tenant.create.useMutation();
 
   // Peek at invite to show org name in the choice screen
-  const { data: inviteInfo } = trpc.tenant.peekInvitation.useQuery(
+  const { data: peeked } = trpc.tenant.peekInvitation.useQuery(
     { token },
     { enabled: !accepted && !error },
   );
+  // The invitation is used up once accepted (a later peek returns nothing), so keep what we saw.
+  const [inviteInfo, setInviteInfo] = useState<InviteSummaryInfo | null>(null);
+  useEffect(() => {
+    if (peeked) setInviteInfo(peeked);
+  }, [peeked]);
+  const isCa = isCaRole(inviteInfo?.role);
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -128,6 +135,7 @@ function InviteAcceptPage() {
             <p className="text-sm text-text-tertiary mb-6 text-center">
               You're all set. Jump right in.
             </p>
+            {inviteInfo && isCa && <InviteSummary info={inviteInfo} />}
 
             <div className="space-y-3">
               <button
@@ -143,7 +151,7 @@ function InviteAcceptPage() {
                     Continue with {accepted.tenantName}
                   </p>
                   {inviteInfo && (
-                    <p className="text-xs text-text-tertiary">as {formatRole(inviteInfo.role)}</p>
+                    <p className="text-xs text-text-tertiary">as {inviteInfo.roleLabel}</p>
                   )}
                 </div>
               </button>
@@ -160,7 +168,11 @@ function InviteAcceptPage() {
                     disabled={isActing}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-border-light hover:border-border-medium hover:bg-surface-1 transition-colors text-sm font-medium text-text-secondary"
                   >
-                    {createOrgMutation.isPending ? "Creating…" : "I also want my own organization"}
+                    {createOrgMutation.isPending
+                      ? "Creating…"
+                      : isCa
+                        ? "Create your own firm to manage all your clients in one place"
+                        : "I also want my own organization"}
                   </button>
                 </>
               )}
@@ -175,9 +187,10 @@ function InviteAcceptPage() {
             <h1 className="text-lg font-semibold text-text-primary mb-1">
               Accepting your invitation…
             </h1>
-            <p className="text-sm text-text-tertiary">
+            <p className="text-sm text-text-tertiary mb-5">
               Just a moment
             </p>
+            {inviteInfo && <InviteSummary info={inviteInfo} />}
           </div>
         )}
       </div>

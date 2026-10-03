@@ -167,6 +167,16 @@ function defineAbilityFor(role: string): SimpleAbility {
       can("read", "RecurringInvoice");
       break;
 
+    case "auditor":
+    case "ca_filing":
+      // Read-only accountant; ca_filing may also prepare and file GST returns.
+      for (const r of [
+        "Invoice", "Payment", "Party", "Item", "Expense", "BankAccount", "BankTransaction",
+        "Report", "GstReport", "Business", "Store", "RecurringInvoice",
+      ] as Resource[]) can("read", r);
+      if (role === "ca_filing") can("create", "GstReport");
+      break;
+
     default:
       // Unknown role gets nothing
       break;
@@ -302,6 +312,24 @@ const NAV_CONTRACT: Record<string, { visible: NavItem[]; hidden: NavItem[] }> = 
     ],
     hidden: ["Settings"],
   },
+  auditor: {
+    visible: [
+      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Purchase Returns", "Credit Notes",
+      "Delivery Challans", "Proforma Invoices", "Store Orders", "Recurring Invoices",
+      "Parties", "Items", "Payments", "Cash & Bank", "Expenses", "Shipments",
+      "GST Returns", "Reports",
+    ],
+    hidden: ["Settings"],
+  },
+  ca_filing: {
+    visible: [
+      "Dashboard", "Invoices", "Quotations", "Sales Returns", "Purchase Returns", "Credit Notes",
+      "Delivery Challans", "Proforma Invoices", "Store Orders", "Recurring Invoices",
+      "Parties", "Items", "Payments", "Cash & Bank", "Expenses", "Shipments",
+      "GST Returns", "Reports",
+    ],
+    hidden: ["Settings"],
+  },
 };
 
 // ─── Action Button Contract Data ─────────────────────────────────────────────
@@ -322,6 +350,8 @@ const ACTION_CONTRACTS: ActionContract[] = [
   { role: "seller_manager",  page: "invoices", resource: "Invoice", canCreate: true,  canEdit: true,  canDelete: true  },
   { role: "seller",          page: "invoices", resource: "Invoice", canCreate: true,  canEdit: true,  canDelete: false },
   { role: "accountant",      page: "invoices", resource: "Invoice", canCreate: false, canEdit: false, canDelete: false },
+  { role: "auditor",        page: "invoices", resource: "Invoice", canCreate: false, canEdit: false, canDelete: false },
+  { role: "ca_filing",      page: "invoices", resource: "Invoice", canCreate: false, canEdit: false, canDelete: false },
 
   // Parties
   { role: "superadmin",      page: "parties", resource: "Party", canCreate: true,  canEdit: true,  canDelete: true  },
@@ -329,6 +359,8 @@ const ACTION_CONTRACTS: ActionContract[] = [
   { role: "seller_manager",  page: "parties", resource: "Party", canCreate: true,  canEdit: true,  canDelete: false },
   { role: "seller",          page: "parties", resource: "Party", canCreate: true,  canEdit: false,  canDelete: false },
   { role: "accountant",      page: "parties", resource: "Party", canCreate: false, canEdit: false, canDelete: false },
+  { role: "auditor",        page: "parties", resource: "Party", canCreate: false, canEdit: false, canDelete: false },
+  { role: "ca_filing",      page: "parties", resource: "Party", canCreate: false, canEdit: false, canDelete: false },
 
   // Items
   { role: "superadmin",      page: "items", resource: "Item", canCreate: true,  canEdit: true,  canDelete: true  },
@@ -336,6 +368,8 @@ const ACTION_CONTRACTS: ActionContract[] = [
   { role: "seller_manager",  page: "items", resource: "Item", canCreate: true,  canEdit: true,  canDelete: false },
   { role: "seller",          page: "items", resource: "Item", canCreate: false, canEdit: false, canDelete: false },
   { role: "accountant",      page: "items", resource: "Item", canCreate: false, canEdit: false, canDelete: false },
+  { role: "auditor",        page: "items", resource: "Item", canCreate: false, canEdit: false, canDelete: false },
+  { role: "ca_filing",      page: "items", resource: "Item", canCreate: false, canEdit: false, canDelete: false },
 
   // Payments
   { role: "superadmin",      page: "payments", resource: "Payment", canCreate: true,  canEdit: true,  canDelete: true  },
@@ -343,6 +377,8 @@ const ACTION_CONTRACTS: ActionContract[] = [
   { role: "seller_manager",  page: "payments", resource: "Payment", canCreate: true,  canEdit: true,  canDelete: false },
   { role: "seller",          page: "payments", resource: "Payment", canCreate: true,  canEdit: true,  canDelete: false },
   { role: "accountant",      page: "payments", resource: "Payment", canCreate: true,  canEdit: true,  canDelete: false },
+  { role: "auditor",        page: "payments", resource: "Payment", canCreate: false, canEdit: false, canDelete: false },
+  { role: "ca_filing",      page: "payments", resource: "Payment", canCreate: false, canEdit: false, canDelete: false },
 
   // Expenses
   { role: "superadmin",      page: "expenses", resource: "Expense", canCreate: true,  canEdit: true,  canDelete: true  },
@@ -350,6 +386,8 @@ const ACTION_CONTRACTS: ActionContract[] = [
   { role: "seller_manager",  page: "expenses", resource: "Expense", canCreate: false, canEdit: false, canDelete: false },
   { role: "seller",          page: "expenses", resource: "Expense", canCreate: false, canEdit: false, canDelete: false },
   { role: "accountant",      page: "expenses", resource: "Expense", canCreate: true,  canEdit: true,  canDelete: true  },
+  { role: "auditor",        page: "expenses", resource: "Expense", canCreate: false, canEdit: false, canDelete: false  },
+  { role: "ca_filing",      page: "expenses", resource: "Expense", canCreate: false, canEdit: false, canDelete: false  },
 
   // Bank Accounts
   { role: "superadmin",      page: "cash-and-bank", resource: "BankAccount", canCreate: true,  canEdit: true,  canDelete: true  },
@@ -357,6 +395,8 @@ const ACTION_CONTRACTS: ActionContract[] = [
   { role: "seller_manager",  page: "cash-and-bank", resource: "BankAccount", canCreate: false, canEdit: false, canDelete: false },
   { role: "seller",          page: "cash-and-bank", resource: "BankAccount", canCreate: false, canEdit: false, canDelete: false },
   { role: "accountant",      page: "cash-and-bank", resource: "BankAccount", canCreate: true,  canEdit: true,  canDelete: true  },
+  { role: "auditor",        page: "cash-and-bank", resource: "BankAccount", canCreate: false, canEdit: false, canDelete: false  },
+  { role: "ca_filing",      page: "cash-and-bank", resource: "BankAccount", canCreate: false, canEdit: false, canDelete: false  },
 
   // Recurring / Recurring Invoices
   { role: "superadmin",      page: "automated-invoices", resource: "RecurringInvoice", canCreate: true,  canEdit: true,  canDelete: true  },
@@ -364,6 +404,8 @@ const ACTION_CONTRACTS: ActionContract[] = [
   { role: "seller_manager",  page: "automated-invoices", resource: "RecurringInvoice", canCreate: true,  canEdit: true,  canDelete: true  },
   { role: "seller",          page: "automated-invoices", resource: "RecurringInvoice", canCreate: false, canEdit: false, canDelete: false },
   { role: "accountant",      page: "automated-invoices", resource: "RecurringInvoice", canCreate: false, canEdit: false, canDelete: false },
+  { role: "auditor",        page: "automated-invoices", resource: "RecurringInvoice", canCreate: false, canEdit: false, canDelete: false },
+  { role: "ca_filing",      page: "automated-invoices", resource: "RecurringInvoice", canCreate: false, canEdit: false, canDelete: false },
 
   // Store
   { role: "superadmin",      page: "store-orders", resource: "Store", canCreate: true,  canEdit: true,  canDelete: true  },
@@ -371,6 +413,17 @@ const ACTION_CONTRACTS: ActionContract[] = [
   { role: "seller_manager",  page: "store-orders", resource: "Store", canCreate: true,  canEdit: true,  canDelete: false },
   { role: "seller",          page: "store-orders", resource: "Store", canCreate: false, canEdit: false, canDelete: false },
   { role: "accountant",      page: "store-orders", resource: "Store", canCreate: false, canEdit: false, canDelete: false },
+  { role: "auditor",        page: "store-orders", resource: "Store", canCreate: false, canEdit: false, canDelete: false },
+  { role: "ca_filing",      page: "store-orders", resource: "Store", canCreate: false, canEdit: false, canDelete: false },
+
+  // GST returns: ca_filing prepares and files (create), auditor only reads
+  { role: "superadmin",      page: "gst-returns", resource: "GstReport", canCreate: true,  canEdit: true,  canDelete: true  },
+  { role: "admin",           page: "gst-returns", resource: "GstReport", canCreate: true,  canEdit: true,  canDelete: true  },
+  { role: "seller_manager",  page: "gst-returns", resource: "GstReport", canCreate: false, canEdit: false, canDelete: false },
+  { role: "seller",          page: "gst-returns", resource: "GstReport", canCreate: false, canEdit: false, canDelete: false },
+  { role: "accountant",      page: "gst-returns", resource: "GstReport", canCreate: false, canEdit: false, canDelete: false },
+  { role: "auditor",         page: "gst-returns", resource: "GstReport", canCreate: false, canEdit: false, canDelete: false },
+  { role: "ca_filing",       page: "gst-returns", resource: "GstReport", canCreate: true,  canEdit: false, canDelete: false },
 ];
 
 // ─── Test Suite ──────────────────────────────────────────────────────────────
@@ -787,9 +840,9 @@ describe("Role-Based Access Control — Permission Contract", () => {
       }
     });
 
-    it("action contracts cover all five roles for each page", () => {
+    it("action contracts cover every role for each page", () => {
       const pages = [...new Set(ACTION_CONTRACTS.map((c) => c.page))];
-      const expectedRoles = ["superadmin", "admin", "seller_manager", "seller", "accountant"];
+      const expectedRoles = ["superadmin", "admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"];
 
       for (const page of pages) {
         const pageContracts = ACTION_CONTRACTS.filter((c) => c.page === page);

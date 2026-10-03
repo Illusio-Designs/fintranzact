@@ -106,6 +106,27 @@
       "when": 1790963300000,
       "tag": "0014_two_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791049700000,
+      "tag": "0015_accountant_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791136100000,
+      "tag": "0016_user_tenant_prefs",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791222500000,
+      "tag": "0017_invitation_credit_partner",
+      "breakpoints": true
     }
   ]
 }

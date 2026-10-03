@@ -39,6 +39,12 @@ vi.mock("../lib/maintenance-cache.js", () => ({
   invalidateMaintenanceCache: vi.fn(),
 }));
 
+// hasTenantAccess checks tenant membership (a DB read) before anything else;
+// membership itself is covered by tenant-membership.test.ts.
+vi.mock("../lib/tenant-membership.js", () => ({
+  requireTenantMembership: vi.fn(async () => undefined),
+}));
+
 // `hasTenantAccess` calls getTenantDb(tenantId) BEFORE the maintenance check.
 // Returning a bare object is fine — no queries run against it in these tests.
 vi.mock("@fintranzact/db", async () => {

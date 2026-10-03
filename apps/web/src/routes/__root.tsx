@@ -24,7 +24,6 @@ import { Icon } from "@/components/ui/Icon";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { usePageSearchSlot } from "@/lib/page-search";
 import {
-  Add01Icon,
   Alert02Icon,
   BankIcon,
   CreditCardIcon,
@@ -76,6 +75,8 @@ import {
 import { getRegisteredHotkeys } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
+import { shouldAutoSelectTenant as shouldAutoSelectTenantFn } from "@/lib/tenant-auto-select";
+import { ClientSwitcher } from "@/components/tenant/ClientSwitcher";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { BillingBanner } from "@/components/BillingBanner";
@@ -530,89 +531,7 @@ function NoOrgScreen() {
   );
 }
 
-// ── TenantPicker ───────────────────────────────────────────────
-
-type TenantMembership = {
-  tenantId: string;
-  tenantName: string;
-  tenantSlug: string;
-  role: string;
-};
-
-function TenantPicker({
-  tenants,
-  onSelect,
-  onCreateNew,
-  onClose,
-}: {
-  tenants: TenantMembership[];
-  onSelect: (tenantId: string) => void;
-  onCreateNew?: () => void;
-  onClose?: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-xl bg-surface-0 border border-border-light shadow-modal p-6 animate-scale-in"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-base font-semibold text-text-primary mb-1">
-          Select Organization
-        </h2>
-        <p className="text-xs text-text-tertiary mb-5">
-          Choose which organization to work in
-        </p>
-        <div className="space-y-2">
-          {tenants.map((t) => (
-            <button
-              key={t.tenantId}
-              onClick={() => onSelect(t.tenantId)}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-border-light hover:border-brand-400 hover:bg-brand-600/5 transition-colors text-left group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-brand-100 flex items-center justify-center text-brand-700 text-sm font-semibold shrink-0">
-                  {t.tenantName.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-sm font-medium text-text-primary group-hover:text-brand-700 transition-colors">
-                  {t.tenantName}
-                </span>
-              </div>
-              <span
-                className={cn(
-                  "text-2xs font-medium px-2 py-0.5 rounded",
-                  t.role === "owner"
-                    ? "bg-brand-50 text-brand-700"
-                    : t.role === "admin"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-surface-2 text-text-secondary",
-                )}
-              >
-                {formatRole(t.role)}
-              </span>
-            </button>
-          ))}
-
-          {onCreateNew && (
-            <button
-              onClick={onCreateNew}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-dashed border-border-medium hover:border-brand-400 hover:bg-brand-600/5 transition-colors text-left group"
-            >
-              <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center text-text-secondary group-hover:text-brand-600 shrink-0">
-                <Icon icon={Add01Icon} size={16} />
-              </div>
-              <span className="text-sm font-medium text-text-secondary group-hover:text-brand-700 transition-colors">
-                Create new organization
-              </span>
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// ── Organisation switcher: components/tenant/ClientSwitcher.tsx ─
 
 // ── RootLayout ─────────────────────────────────────────────────
 
@@ -759,6 +678,22 @@ function RootLayout() {
       queryClient.invalidateQueries();
     },
   });
+
+  // After leaving a client: if it was the open organisation, the server has
+  // already cleared it from the session, so drop the business choice and let
+  // the session refresh show the picker again.
+  const handleLeftClient = (leftTenantId: string) => {
+    if (leftTenantId === session?.tenantId) {
+      setShowTenantPicker(false);
+      sessionStorage.removeItem("selectedBusinessId");
+      setBusinessId(null);
+      setCurrentBusinessId(null);
+      // An earlier selection must not block auto-selecting the one organisation left.
+      selectTenantMutation.reset();
+      queryClient.invalidateQueries();
+    }
+    void utils.auth.me.invalidate();
+  };
 
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: async () => {
@@ -1231,13 +1166,13 @@ function RootLayout() {
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select single tenant
-  const shouldAutoSelectTenant = !!(
-    session?.user &&
-    !session?.tenantId &&
-    tenantList?.length === 1 &&
-    !selectTenantMutation.isPending &&
-    !selectTenantMutation.isSuccess
-  );
+  const shouldAutoSelectTenant = shouldAutoSelectTenantFn({
+    signedIn: !!session?.user,
+    selectedTenantId: session?.tenantId,
+    tenantCount: tenantList?.length,
+    selectPending: selectTenantMutation.isPending,
+    selectSucceeded: selectTenantMutation.isSuccess,
+  });
   useEffect(() => {
     if (shouldAutoSelectTenant && tenantList) {
       selectTenantMutation.mutate({ tenantId: tenantList[0].tenantId });
@@ -1315,8 +1250,8 @@ function RootLayout() {
 
     // Multiple tenants — show picker
     return (
-      <TenantPicker
-        tenants={tenantList}
+      <ClientSwitcher
+        onLeft={handleLeftClient}
         onSelect={(tenantId) => selectTenantMutation.mutate({ tenantId })}
         onCreateNew={
           canCreateOrg
@@ -1385,8 +1320,9 @@ function RootLayout() {
         signingOut={logoutMutation.isPending}
         tenantPicker={
           showTenantPicker ? (
-            <TenantPicker
-              tenants={tenantList ?? []}
+            <ClientSwitcher
+              currentTenantId={session.tenantId}
+              onLeft={handleLeftClient}
               onSelect={(tenantId) => {
                 setShowTenantPicker(false);
                 selectTenantMutation.mutate({ tenantId });
@@ -1938,8 +1874,9 @@ function RootLayout() {
 
         {/* Tenant picker overlay — shown when user clicks the tenant name */}
         {showTenantPicker && (
-          <TenantPicker
-            tenants={tenantList ?? []}
+          <ClientSwitcher
+            currentTenantId={session.tenantId}
+            onLeft={handleLeftClient}
             onSelect={(tenantId) => {
               setShowTenantPicker(false);
               selectTenantMutation.mutate({ tenantId });

@@ -47,6 +47,9 @@ describe("policy helpers", () => {
     expect(policyCoversRole("off", "owner")).toBe(false);
     expect(policyCoversRole("admins", "admin")).toBe(true);
     expect(policyCoversRole("admins", "seller")).toBe(false);
+    expect(policyCoversRole("admins", "auditor")).toBe(true);
+    expect(policyCoversRole("admins", "ca_filing")).toBe(true);
+    expect(policyCoversRole("admins", "accountant")).toBe(false);
     expect(policyCoversRole("all", "accountant")).toBe(true);
     expect(policyCoversRole("all", undefined)).toBe(true);
     expect(policyCoversRole("admins", undefined)).toBe(false);

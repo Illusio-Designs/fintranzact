@@ -26,6 +26,7 @@ import {
 import { generateGSTR1, generateGSTR3B } from "../lib/gst-reports.js";
 import { loadPeriodLockState, formatReturnPeriod } from "../lib/period-lock.js";
 import { recordGovUsage } from "../lib/gov-usage.js";
+import { withAudit } from "../lib/audit.js";
 import { importGstr2b } from "./gstr2b.js";
 
 const periodInput = z.object({
@@ -95,21 +96,21 @@ export const gstReturnsRouter = router({
   /** Ask the GST portal to send an OTP to the registered mobile. */
   requestOtp: adminProcedure
     .input(z.object({ username: z.string().trim().min(1).max(100) }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(withAudit(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "GstReport");
       const { client } = await returnsClient(ctx.db, ctx.businessId, input.username);
       await guarded(() => client.requestOtp());
       return { sent: true };
-    }),
+    }, () => ({ action: "gstReturns.requestOtp", entityType: "gst_return" }))),
 
-  verifyOtp: adminProcedure.input(otpInput).mutation(async ({ input, ctx }) => {
+  verifyOtp: adminProcedure.input(otpInput).mutation(withAudit(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "GstReport");
     const { client } = await returnsClient(ctx.db, ctx.businessId, input.username);
     await guarded(() => client.verifyOtp(input.otp));
     return { verified: true };
-  }),
+  }, () => ({ action: "gstReturns.verifyOtp", entityType: "gst_return" }))),
 
-  saveGstr1: adminProcedure.input(periodInput).mutation(async ({ input, ctx }) => {
+  saveGstr1: adminProcedure.input(periodInput).mutation(withAudit(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "GstReport");
     await assertNotFiled(ctx.db, ctx.businessId, ym(input));
     const { gstin, client } = await returnsClient(ctx.db, ctx.businessId);
@@ -122,9 +123,9 @@ export const gstReturnsRouter = router({
       }
     });
     return { saved: Object.keys(sections) };
-  }),
+  }, (_r, input) => ({ action: "gstReturns.saveGstr1", entityType: "gst_return", metadata: { period: ym(input) } }))),
 
-  fileGstr1: adminProcedure.input(filingInput).mutation(async ({ input, ctx }) => {
+  fileGstr1: adminProcedure.input(filingInput).mutation(withAudit(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "GstReport");
     await assertNotFiled(ctx.db, ctx.businessId, ym(input));
     const { gstin, client } = await returnsClient(ctx.db, ctx.businessId);
@@ -134,9 +135,9 @@ export const gstReturnsRouter = router({
       await recordGovUsage({ tenantId: ctx.tenantId, businessId: ctx.businessId, gstin, kind: "gstr1_filed", reference: fp });
     }
     return { filed: true, period: fp, referenceId: res.referenceId };
-  }),
+  }, (r) => ({ action: "gstReturns.fileGstr1", entityType: "gst_return", metadata: { period: r.period, referenceId: r.referenceId } }))),
 
-  saveGstr3b: adminProcedure.input(periodInput).mutation(async ({ input, ctx }) => {
+  saveGstr3b: adminProcedure.input(periodInput).mutation(withAudit(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "GstReport");
     await assertNotFiled(ctx.db, ctx.businessId, ym(input));
     const { gstin, client } = await returnsClient(ctx.db, ctx.businessId);
@@ -144,9 +145,9 @@ export const gstReturnsRouter = router({
     const fp = gstnPeriod(input);
     await guarded(() => client.saveGstr3b(fp, gstr3bToGstn(report, gstin, fp)));
     return { saved: true };
-  }),
+  }, (_r, input) => ({ action: "gstReturns.saveGstr3b", entityType: "gst_return", metadata: { period: ym(input) } }))),
 
-  fileGstr3b: adminProcedure.input(filingInput).mutation(async ({ input, ctx }) => {
+  fileGstr3b: adminProcedure.input(filingInput).mutation(withAudit(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "GstReport");
     await assertNotFiled(ctx.db, ctx.businessId, ym(input));
     const { gstin, client } = await returnsClient(ctx.db, ctx.businessId);
@@ -156,10 +157,10 @@ export const gstReturnsRouter = router({
       await recordGovUsage({ tenantId: ctx.tenantId, businessId: ctx.businessId, gstin, kind: "gstr3b_filed", reference: fp });
     }
     return { filed: true, period: fp, referenceId: res.referenceId };
-  }),
+  }, (r) => ({ action: "gstReturns.fileGstr3b", entityType: "gst_return", metadata: { period: r.period, referenceId: r.referenceId } }))),
 
   /** Download GSTR-2B from the portal and run it through the existing import + reconciliation. */
-  pull2b: adminProcedure.input(periodInput).mutation(async ({ input, ctx }) => {
+  pull2b: adminProcedure.input(periodInput).mutation(withAudit(async ({ input, ctx }) => {
     requireCan(ctx.ability, "create", "GstReport");
     const { client } = await returnsClient(ctx.db, ctx.businessId);
     const fp = gstnPeriod(input);
@@ -175,5 +176,5 @@ export const gstReturnsRouter = router({
     } catch (err) {
       return toTrpc(err);
     }
-  }),
+  }, (_r, input) => ({ action: "gstReturns.pull2b", entityType: "gst_return", metadata: { period: ym(input) } }))),
 });

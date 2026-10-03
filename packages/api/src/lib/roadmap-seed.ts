@@ -2166,6 +2166,32 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-02-ca-access",
+    updates: [
+      {
+        // All six lines are built in code with unit tests (faked data layer):
+        // owner-only "Invite my CA" with two access levels, the read-only
+        // (auditor) and filing-only (ca_filing) roles with a mutation backstop,
+        // the client switcher with pins, recents and leaving a client, removal
+        // that revokes keys and grants plus the access log, and the partner link
+        // (badge, "Clients you manage", opt-in referral credit, no automatic
+        // commission). Kept in progress, not done: the integration tests (real
+        // Postgres) and the web, mobile and CLI screens had not been run on a
+        // database or a device when this was written.
+        title: "Accountant (CA) access across clients",
+        status: "in_progress",
+        done: [
+          "Invite my CA flow",
+          "Read-only accountant role",
+          "Filing-only accountant role (returns, reports, exports)",
+          "Client switcher for accountants with many organisations",
+          "Remove access and audit log",
+          "Link with the partner programme (CA partners)",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

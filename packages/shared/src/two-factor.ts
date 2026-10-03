@@ -18,8 +18,8 @@ export const MAX_CHALLENGE_ATTEMPTS = 5;
 export const LOCKOUT_FAILURE_THRESHOLD = 5;
 export const BACKUP_CODE_COUNT = 10;
 
-/** Roles an "admins" policy applies to. */
-export const TWO_FACTOR_ADMIN_ROLES = ["owner", "superadmin", "admin"] as const;
+/** Roles an "admins" policy applies to. Accountant roles are included: they see every number and may file returns. */
+export const TWO_FACTOR_ADMIN_ROLES = ["owner", "superadmin", "admin", "auditor", "ca_filing"] as const;
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -50,6 +50,15 @@ export const SECURITY_EVENT_TYPES = [
   "2fa.device_revoked",
   "2fa.reset_by_admin",
   "2fa.policy_changed",
+  "access.removed",
+  "access.left",
+  "access.invited",
+  "access.invite_revoked",
+  "access.accepted",
+  "access.role_changed",
+  "access.org_opened",
+  "access.export",
+  "access.partner_attributed",
 ] as const;
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 
@@ -66,6 +75,15 @@ export const SECURITY_EVENT_LABELS: Record<SecurityEventType, string> = {
   "2fa.device_revoked": "Trusted device removed",
   "2fa.reset_by_admin": "Two-factor reset by a platform administrator",
   "2fa.policy_changed": "Organisation two-factor policy changed",
+  "access.removed": "Member removed from the organisation",
+  "access.left": "Accountant left the organisation",
+  "access.invited": "Member invited",
+  "access.invite_revoked": "Invitation withdrawn",
+  "access.accepted": "Invitation accepted",
+  "access.role_changed": "Member's access level changed",
+  "access.org_opened": "Accountant opened the organisation",
+  "access.export": "Accountant downloaded a report or export",
+  "access.partner_attributed": "Accountant credited as the organisation's Fintranzact partner",
 };
 
 // ── Platform-admin reset: identity verification ─────────────────────────────

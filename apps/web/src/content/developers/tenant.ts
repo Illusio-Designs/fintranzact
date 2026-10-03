@@ -128,6 +128,130 @@ for org in orgs:
       ],
     },
     {
+      id: "tenant-list-clients",
+      method: "query",
+      path: "tenant.listClients",
+      title: "List Clients (Switcher)",
+      description: "The organization switcher's list: every active organization the caller belongs to (their own firm and the clients they have accountant access to), pinned first, then most recently opened, then by name. Searchable, scoped and paged. Needs no selected organization. Use tenant.list when you only need the plain memberships.",
+      auth: "protected",
+      input: [
+        { name: "search", type: "string", required: false, description: "Case-insensitive part of the organization name. Matched literally: % and _ are ordinary characters." },
+        { name: "scope", type: "enum", required: false, description: "all (default), mine (organizations you own) or clients (everything else)", enumValues: ["all", "mine", "clients"] },
+        { name: "cursor", type: "string", required: false, description: "nextCursor from the previous page" },
+        { name: "limit", type: "number", required: false, description: "Items per page (default 30, max 100)" },
+      ],
+      output: {
+        description: "A page of organizations, the cursor for the next page (null on the last page), the number of matches, and whole-list counts that ignore search and scope.",
+        example: {
+          items: [
+            {
+              tenantId: "01957a2b-3c4d-7e8f-9012-abcdef012345",
+              name: "Acme Traders",
+              slug: "acme-traders-abc123",
+              role: "auditor",
+              roleLabel: "Accountant (read-only)",
+              isOwnFirm: false,
+              isClient: true,
+              isCa: true,
+              plan: "business",
+              pinned: true,
+              lastOpenedAt: "2026-10-01T10:00:00.000Z",
+            },
+          ],
+          nextCursor: null,
+          total: 1,
+          counts: { all: 3, mine: 1, clients: 2, pinned: 1 },
+        },
+      },
+      codeExamples: {
+        curl: `curl -G "${API_BASE_URL}/api/trpc/tenant.listClients" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  --data-urlencode 'input={"json":{"search":"acme","scope":"clients"}}'`,
+        javascript: `const page = await trpc.tenant.listClients.query({ search: "acme", limit: 30 });
+for (const c of page.items) console.log(c.pinned ? "*" : " ", c.name, c.roleLabel);
+if (page.nextCursor) await trpc.tenant.listClients.query({ cursor: page.nextCursor });`,
+        python: `import httpx, json
+
+resp = httpx.get(
+    "${API_BASE_URL}/api/trpc/tenant.listClients",
+    params={"input": json.dumps({"json": {"scope": "clients"}})},
+    headers={"Authorization": f"Bearer {session_token}"},
+)
+page = resp.json()["result"]["data"]["json"]`,
+      },
+      gotchas: [
+        "Order is pinned first, then lastOpenedAt descending (never opened last), then name, then id. Paging is a keyset on that order: a cursor stays correct if something is pinned or opened between pages.",
+        "Ordering, search and paging are done in memory over one indexed query (an accountant has at most a few hundred organizations).",
+        "Only active organizations are listed, as in tenant.list.",
+        "pinned and lastOpenedAt belong to the caller only. lastOpenedAt is refreshed by tenant.select, at most every 5 minutes.",
+        "isOwnFirm is true for owner/superadmin; isClient is its opposite; isCa is true for the accountant roles (auditor, ca_filing).",
+      ],
+      relatedEndpoints: ["tenant-list", "tenant-select", "tenant-set-pinned", "tenant-leave"],
+    },
+    {
+      id: "tenant-set-pinned",
+      method: "mutation",
+      path: "tenant.setPinned",
+      title: "Pin an Organization",
+      description: "Pin or unpin an organization in the caller's own switcher. Pins are private to the caller.",
+      auth: "protected",
+      input: [
+        { name: "tenantId", type: "string (uuid)", required: true, description: "An organization the caller is a member of" },
+        { name: "pinned", type: "boolean", required: true, description: "true to pin, false to unpin" },
+      ],
+      output: { description: "The new state.", example: { success: true, pinned: true } },
+      codeExamples: {
+        curl: `curl -X POST "${API_BASE_URL}/api/trpc/tenant.setPinned" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"json":{"tenantId":"ORG_UUID","pinned":true}}'`,
+        javascript: `await trpc.tenant.setPinned.mutate({ tenantId, pinned: true });`,
+        python: `httpx.post(
+    "${API_BASE_URL}/api/trpc/tenant.setPinned",
+    json={"json": {"tenantId": tenant_id, "pinned": True}},
+    headers={"Authorization": f"Bearer {session_token}"},
+)`,
+      },
+      gotchas: [
+        "FORBIDDEN unless the caller is a member of the organization.",
+        "At most 20 pinned organizations: pinning a 21st is a BAD_REQUEST. Pinning something already pinned, or unpinning something not pinned, changes nothing.",
+        "Allowed in read-only and suspended states (it only changes the caller's own preferences).",
+      ],
+      relatedEndpoints: ["tenant-list-clients"],
+    },
+    {
+      id: "tenant-leave",
+      method: "mutation",
+      path: "tenant.leave",
+      title: "Leave an Organization",
+      description: "The caller ends their own membership of an organization they do not own (an accountant leaving a client). Same cleanup as being removed: the person's business access, their API keys for the organization, their invitation rows and the organization on their sessions. Records an access.left event and emails the organization's owners.",
+      auth: "protected",
+      input: [
+        { name: "tenantId", type: "string (uuid)", required: true, description: "The organization to leave" },
+      ],
+      output: { description: "Confirmation.", example: { success: true } },
+      codeExamples: {
+        curl: `curl -X POST "${API_BASE_URL}/api/trpc/tenant.leave" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"json":{"tenantId":"ORG_UUID"}}'`,
+        javascript: `await trpc.tenant.leave.mutate({ tenantId });`,
+        python: `httpx.post(
+    "${API_BASE_URL}/api/trpc/tenant.leave",
+    json={"json": {"tenantId": tenant_id}},
+    headers={"Authorization": f"Bearer {session_token}"},
+)`,
+      },
+      gotchas: [
+        "Owners and superadmins cannot leave (FORBIDDEN): transfer ownership or delete the organization instead. NOT_FOUND if the caller is not a member.",
+        "Takes effect immediately: the caller's sessions lose the organization (they must choose another), and their API keys for it are deleted.",
+        "Logged as access.left (not access.removed), with metadata.removedBy set to the caller. The owners get an email 'X left your organisation'; a failed email does not undo the leave.",
+        "To come back, an owner or admin must invite the person again.",
+        "tenant.removeMember still refuses removing yourself; leaving is this procedure.",
+      ],
+      relatedEndpoints: ["tenant-remove-member", "tenant-access-log", "tenant-list-clients"],
+    },
+    {
       id: "tenant-my-invitations",
       method: "query",
       path: "tenant.myInvitations",
@@ -136,12 +260,15 @@ for org in orgs:
       auth: "protected",
       input: [],
       output: {
-        description: "Array of pending invitations with organization name and assigned role.",
+        description: "Array of pending invitations with organization name, assigned role, who invited the user, the role's display label and (for accountant roles) what that access allows.",
         example: [
           {
             id: "01957a2b-9999-aaaa-bbbb-ccccddddeeee",
             tenantName: "Gupta Trading Co.",
-            role: "seller",
+            role: "ca_filing",
+            invitedByName: "Rohit Gupta",
+            roleLabel: "Accountant (filing)",
+            accessDescription: "Can view everything, prepare and file GST returns, and download reports. Cannot create or edit sales, purchases, payments or other records.",
           },
         ],
       },
@@ -162,7 +289,8 @@ resp = httpx.get(
 invites = resp.json()["result"]["data"]["json"]`,
       },
       gotchas: [
-        "Matches invitations by the user's email (case-insensitive).",
+        "Matches invitations by the user's email (case-insensitive, whatever case the inviter typed).",
+        "`accessDescription` is `null` for non-accountant roles; `invitedByName` is `null` if the inviter has no name.",
         "Expired invitations (older than 7 days) are automatically excluded.",
         "To accept an invitation from this list, use `tenant.acceptById` with the invitation ID.",
       ],
@@ -247,6 +375,8 @@ httpx.post(
         "Returns FORBIDDEN if the user is not a member of the target organization.",
         "The session cache is invalidated immediately — no stale data on the next request.",
         "After switching, all `tenantProcedure` and `businessProcedure` calls operate under the new organization.",
+        "The selection belongs to the session, not to a browser tab: two tabs on one session share it. Send `x-business-id` per request to pick a business; there is no per-request organization.",
+        "Records when the caller last opened the organization (shown as Recent in the switcher), at most once every 5 minutes. A failure to record it never fails the selection.",
       ],
     },
     {
@@ -303,7 +433,7 @@ org = resp.json()["result"]["data"]["json"]`,
       method: "query",
       path: "tenant.members",
       title: "List Members",
-      description: "List all members of the currently selected organization. Returns user details (name, email) along with their role and membership dates. Useful for the team management page.",
+      description: "List all members of the currently selected organization. Returns user details (name, email) along with their role and membership dates. Useful for the team management page. For owners and admins, a CA member (`auditor` / `ca_filing`) whose e-mail belongs to an approved accountant partner with a verified account also carries `caPartner: { id, companyName }` (the \"Registered CA partner\" badge); `caPartner` is `null` for everyone else.",
       auth: "protected",
       input: [],
       output: {
@@ -318,6 +448,8 @@ org = resp.json()["result"]["data"]["json"]`,
             userName: "Rahul Sharma",
             userEmail: "rahul@guptaenterprises.in",
             twoFactorEnabled: true,
+            lastOpenedAt: null,
+            caPartner: null,
           },
           {
             id: "membership-uuid-2",
@@ -394,16 +526,19 @@ resp = httpx.post(
       method: "mutation",
       path: "tenant.inviteMember",
       title: "Invite Member",
-      description: "Send an invitation to join the current organization. The invitation is emailed to the specified address with a unique, one-time token. Only owners and admins can invite members. Enforces team member limits based on the organization's plan.",
+      description: "Send an invitation to join the current organization. The invitation is emailed to the specified address with a unique, one-time token. Owners and admins can invite staff roles; only the owner (or superadmin) can invite an accountant (CA) role (`auditor` or `ca_filing`). Enforces team member limits based on the organization's plan, except for CA roles, which are outside that limit but capped at 3 per organization.",
       auth: "protected",
       input: [
-        { name: "email", type: "string (email)", required: true, description: "Email address to invite" },
-        { name: "role", type: "enum", required: false, description: "Role to assign when invitation is accepted", default: "seller", enumValues: ["admin", "seller_manager", "seller", "accountant"] },
+        { name: "email", type: "string (email)", required: true, description: "Email address to invite. Trimmed and lowercased before it is stored or compared." },
+        { name: "role", type: "enum", required: false, description: "Role to assign when invitation is accepted. `auditor` (Accountant, read-only) and `ca_filing` (Accountant, filing) are owner-only.", default: "seller", enumValues: ["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"] },
+        { name: "creditPartner", type: "boolean", required: false, description: "CA roles only (ignored for other roles). The owner's opt-in: \"This CA referred me to Fintranzact, credit them as my partner\". Refused (BAD_REQUEST) unless the e-mail belongs to an approved accountant partner. When the CA accepts and the organisation has no partner yet, the organisation is credited to that partner (`tenants.partnerId`) and `access.partner_attributed` is logged. Default off: accepting a CA invite never credits anyone on its own.", default: "false" },
       ],
       output: {
-        description: "The raw invitation token (for the email link) and expiration date.",
+        description: "The raw invitation token, the ready-made invite link, the role invited and the expiration date.",
         example: {
           token: "abc123def456ghi789jkl012mno345pq",
+          inviteUrl: "https://app.fintranzact.com/invite/abc123def456ghi789jkl012mno345pq",
+          role: "seller",
           expiresAt: "2026-04-15T05:30:00.000Z",
         },
       },
@@ -434,7 +569,10 @@ print("Token:", data["token"])`,
         "Invitations expire after 7 days. The token is a 32-character nanoid with ~192 bits of entropy.",
         "The token is hashed (SHA-256) before storage — only the raw token sent via email can be used to accept.",
         "If RESEND_API_KEY is not configured, the invitation email is skipped (but the invitation is still created).",
-        "Enforces team member plan limits before creating the invitation.",
+        "Enforces team member plan limits before creating the invitation. Accountant (CA) roles do not count towards the limit, as members or as pending invitations.",
+        "Inviting `auditor` or `ca_filing` as an admin returns FORBIDDEN (\"Only the owner can invite an accountant (CA)\"). More than 3 CAs (members plus pending CA invitations) returns CONFLICT.",
+        "Accountant roles get an accountant-specific email (\"X has invited you as their accountant on Fintranzact\") that states the access level, that access can be removed at any time and that activity is logged.",
+        "The invited email is stored lowercase, and duplicate and already-a-member checks are case-insensitive, so `Anita.Shah@Firm.IN` and `anita.shah@firm.in` are the same invitee.",
       ],
       relatedEndpoints: ["tenant-accept-invitation", "tenant-pending-invitations", "tenant-revoke-invitation"],
     },
@@ -449,10 +587,13 @@ print("Token:", data["token"])`,
         { name: "token", type: "string", required: true, description: "The raw invitation token from the email link (1-128 chars)" },
       ],
       output: {
-        description: "Organization name and role, or null if the token is invalid/expired/already accepted.",
+        description: "Organization name, role, who invited, the role label and (accountant roles) the access description, or null if the token is invalid/expired/already accepted.",
         example: {
           tenantName: "Gupta Trading Co.",
-          role: "seller",
+          role: "auditor",
+          invitedByName: "Rohit Gupta",
+          roleLabel: "Accountant (read-only)",
+          accessDescription: "Can view everything and download reports. Cannot change anything.",
         },
       },
       codeExamples: {
@@ -476,7 +617,7 @@ preview = resp.json()["result"]["data"]["json"]`,
       gotchas: [
         "This is a public endpoint — no authentication required.",
         "Returns `null` (not an error) if the token is invalid, expired, or already accepted.",
-        "Security: the response deliberately omits the invitee email to prevent PII leakage.",
+        "Security: the response deliberately omits the invitee email to prevent PII leakage. It does include the inviter's display name, the role label and, for CA roles, `accessDescription` (otherwise `null`).",
         "The token has ~192 bits of entropy (nanoid(32)), making brute-force infeasible.",
       ],
       relatedEndpoints: ["tenant-accept-invitation"],
@@ -531,7 +672,7 @@ data = resp.json()["result"]["data"]["json"]`,
       method: "query",
       path: "tenant.pendingInvitations",
       title: "List Pending Invitations",
-      description: "List all pending (not yet accepted) invitations for the current organization. Shows the invitee email, assigned role, and who sent the invitation. Only includes unexpired invitations. Used in the team management UI to show outstanding invites.",
+      description: "List all pending (not yet accepted) invitations for the current organization. Shows the invitee email, assigned role, and who sent the invitation. Only includes unexpired invitations. A pending CA invitation to an approved accountant partner carries `caPartner: { id, companyName }` (otherwise `null`). Used in the team management UI to show outstanding invites.",
       auth: "protected",
       input: [],
       output: {
@@ -544,6 +685,7 @@ data = resp.json()["result"]["data"]["json"]`,
             createdAt: "2026-04-08T10:30:00.000Z",
             expiresAt: "2026-04-15T10:30:00.000Z",
             invitedByName: "Rahul Sharma",
+            caPartner: null,
           },
         ],
       },
@@ -563,8 +705,61 @@ pending = resp.json()["result"]["data"]["json"]`,
       gotchas: [
         "Uses `tenantProcedure` — requires a selected organization in the session.",
         "Only shows unexpired, unaccepted invitations. Expired invitations are filtered out automatically.",
+        "Each row also carries `roleLabel` (e.g. \"Accountant (filing)\") and `accessDescription` (what an accountant CA role can do, `null` for other roles).",
       ],
       relatedEndpoints: ["tenant-invite-member", "tenant-revoke-invitation"],
+    },
+    {
+      id: "tenant-access-log",
+      method: "query",
+      path: "tenant.accessLog",
+      title: "Access Log",
+      description: "The organization's access log, newest first: who was invited, who accepted, role changes, removals, when an accountant (CA) opened the books and which reports they downloaded. Only owners, superadmins and admins can read it. It is kept without a time limit (it is not subject to the plan's audit retention). What a CA changed or filed is in business.auditTrail.",
+      auth: "protected",
+      input: [
+        { name: "cursor", type: "string", required: false, description: "nextCursor from the previous page (\"<createdAt ms>_<id>\"). Keyset paging: no events are skipped or repeated, even with equal timestamps." },
+        { name: "limit", type: "number", required: false, description: "Events per page (default 25, max 100)" },
+        { name: "type", type: "enum | enum[]", required: false, description: "Only these event types", enumValues: ["access.invited", "access.invite_revoked", "access.accepted", "access.role_changed", "access.removed", "access.left", "access.org_opened", "access.export", "access.partner_attributed"] },
+      ],
+      output: {
+        description: "A page of events and the cursor for the next page (null on the last page). actor and subject are null when the user no longer exists. metadata holds only role, from, to, email and procedure.",
+        example: {
+          items: [
+            {
+              id: "event-uuid",
+              type: "access.export",
+              label: "Accountant downloaded a report or export",
+              createdAt: "2026-10-01T10:00:00.000Z",
+              actor: { id: "user-uuid", name: "Anita Shah", email: "anita@cafirm.in" },
+              subject: { id: "user-uuid", name: "Anita Shah", email: "anita@cafirm.in" },
+              metadata: { procedure: "gst.gstr1Json", role: "ca_filing" },
+            },
+          ],
+          nextCursor: null,
+        },
+      },
+      codeExamples: {
+        curl: `curl -G "${API_BASE_URL}/api/trpc/tenant.accessLog" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \\
+  --data-urlencode 'input={"json":{"limit":25,"type":["access.export"]}}'`,
+        javascript: `const { items, nextCursor } = await trpc.tenant.accessLog.query({ limit: 25 });
+for (const e of items) console.log(e.createdAt, e.label, e.actor?.name);`,
+        python: `import httpx, json
+
+resp = httpx.get(
+    "${API_BASE_URL}/api/trpc/tenant.accessLog",
+    params={"input": json.dumps({"json": {"limit": 25}})},
+    headers={"Authorization": f"Bearer {session_token}"},
+)
+page = resp.json()["result"]["data"]["json"]`,
+      },
+      gotchas: [
+        "Uses `tenantProcedure`, and an inline gate: FORBIDDEN unless the caller is owner, superadmin or admin.",
+        "Event types: invited, invite_revoked, accepted, role_changed, removed, org_opened (CA roles only, at most once an hour per person and organization), export (CA roles only: GSTR-1/9/4 JSON, GSTR-1 CSV, party ledger CSV, Tally CSV/XML, TDS certificate).",
+        "Reads are not logged. Downloads by non-CA roles are not logged.",
+        "`tenant.members` also returns `lastOpenedAt` per CA member (owners and admins only; null otherwise).",
+      ],
+      relatedEndpoints: ["tenant-members", "tenant-invite-member", "tenant-remove-member", "business-audit-trail"],
     },
     {
       id: "tenant-revoke-invitation",
@@ -607,7 +802,7 @@ httpx.post(
       method: "mutation",
       path: "tenant.removeMember",
       title: "Remove Member",
-      description: "Remove a member from the current organization. Deletes their membership and immediately invalidates any active sessions associated with the removed user and this organization. The removed user will be logged out of this org on their next API call. Cannot remove yourself or a superadmin/owner.",
+      description: "Remove a member from the current organization, in one flow: deletes their membership, all their business access in this organization, their API keys for this organization and any invitation rows for their email (accepted ones deleted, pending ones expired, so an old invite link cannot re-add them), clears the organization from their sessions, records an access.removed security event and emails them a notice. Cannot remove yourself or a superadmin/owner.",
       auth: "protected",
       input: [
         { name: "userId", type: "string (UUID)", required: true, description: "The user ID of the member to remove" },
@@ -638,6 +833,11 @@ httpx.post(
         "Returns BAD_REQUEST if you try to remove yourself — use a different admin to remove your account.",
         "Returns FORBIDDEN if you try to remove an owner or superadmin.",
         "The removed user's sessions for this organization are immediately cleared (tenantId set to null) and the session cache is invalidated.",
+        "Every tenant-scoped request re-checks that the caller is still a member (a positive answer is cached for 15 seconds per server process). A removed user's API key or stale session gets FORBIDDEN \"You no longer have access to this organisation\"; across several server instances this can take up to 15 seconds.",
+        "Only this organization is affected: the user's account, other organizations and their API keys for them are untouched.",
+        "Removing someone who is not a member succeeds and does nothing visible (no event, no email); leftover keys and grants for this organization are still swept, so a retry is always safe.",
+        "To let them back in, send a new invitation. An old accepted invite link is refused (NOT_FOUND).",
+        "The notice email is best effort and never fails the removal.",
       ],
       relatedEndpoints: ["tenant-members", "tenant-update-member-role"],
     },
@@ -650,7 +850,7 @@ httpx.post(
       auth: "protected",
       input: [
         { name: "userId", type: "string (UUID)", required: true, description: "The user ID whose role to change" },
-        { name: "role", type: "enum", required: true, description: "The new role to assign", enumValues: ["admin", "seller_manager", "seller", "accountant"] },
+        { name: "role", type: "enum", required: true, description: "The new role to assign", enumValues: ["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"] },
       ],
       output: {
         description: "Success confirmation.",
@@ -676,7 +876,8 @@ httpx.post(
       gotchas: [
         "Only owners, superadmins, and admins can change roles. Returns FORBIDDEN otherwise.",
         "Cannot change the role of an owner or superadmin — these are immutable.",
-        "Available roles: `admin` (full access), `seller_manager` (manage sellers), `seller` (create invoices), `accountant` (financial access).",
+        "Moving a member to or from an accountant (CA) role (`auditor`, `ca_filing`) is owner-only (admins get FORBIDDEN), and a new CA is refused with CONFLICT when the organization already has 3 CAs including pending invitations.",
+        "Available roles: `admin` (full access), `seller_manager` (manage sellers), `seller` (create invoices), `accountant` (bookkeeping: payments, expenses, bank), `auditor` (read-only access to every book and report), `ca_filing` (read-only plus preparing and filing GST returns).",
       ],
       relatedEndpoints: ["tenant-members", "tenant-remove-member"],
     },

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, pgEnum, pgSequence, index, uniqueIndex, boolean, jsonb, integer, numeric, bigint, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum, pgSequence, index, primaryKey, uniqueIndex, boolean, jsonb, integer, numeric, bigint, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 // ── Enums ──────────────────────────────────────────────────────
@@ -15,6 +15,8 @@ export const memberRoleEnum = pgEnum("member_role", [
   "owner", "admin", "member", "viewer",
   // New CASL-based roles (require ALTER TYPE migration in production)
   "superadmin", "seller_manager", "seller", "accountant",
+  // Accountant access (read-only / filing-only); see docs/ACCOUNTANT-ACCESS.md
+  "auditor", "ca_filing",
 ]);
 
 // ── Tenants ────────────────────────────────────────────────────
@@ -151,6 +153,19 @@ export const tenantMembers = pgTable("tenant_members", {
   index("tenant_members_user_idx").on(t.userId),
 ]);
 
+// ── Per-user organisation preferences (client switcher) ───────
+
+/** What one person pinned and last opened in the organisation switcher. Control DB only. */
+export const userTenantPrefs = pgTable("user_tenant_prefs", {
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pinnedAt: timestamp("pinned_at", { withTimezone: true }),
+  lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }),
+}, (t) => [
+  primaryKey({ columns: [t.userId, t.tenantId] }),
+  index("user_tenant_prefs_tenant_idx").on(t.tenantId),
+]);
+
 // ── Invitations ────────────────────────────────────────────────
 
 export const invitations = pgTable("invitations", {
@@ -162,6 +177,8 @@ export const invitations = pgTable("invitations", {
   invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  /** CA invites only: the owner asked to credit the CA, a partner, as the organisation's referrer on accept (opt-in, default none). */
+  creditPartner: boolean("credit_partner"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   uniqueIndex("invitations_token_idx").on(t.token),

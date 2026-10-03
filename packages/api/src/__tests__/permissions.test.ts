@@ -339,6 +339,8 @@ describe("mapDbRole — maps legacy DB enum values to permission role strings", 
     ["seller_manager", "seller_manager"],
     ["seller",         "seller"],
     ["accountant",     "accountant"],
+    ["auditor",        "auditor"],
+    ["ca_filing",      "ca_filing"],
   ] as [string, string][])("passes through current role '%s' unchanged", (dbRole, expected) => {
     expect(mapDbRole(dbRole)).toBe(expected);
   });

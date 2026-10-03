@@ -790,6 +790,12 @@ export class FintranzactClient {
       pendingInvitations() {
         return c.query<any>("tenant.pendingInvitations");
       },
+      accessLog(input?: { cursor?: string; limit?: number; type?: string | string[] }) {
+        return c.query<any>("tenant.accessLog", input);
+      },
+      listClients(input?: { search?: string; scope?: "all" | "mine" | "clients"; cursor?: string; limit?: number }) {
+        return c.query<any>("tenant.listClients", input);
+      },
       revokeInvitation(input: { invitationId: string }) {
         return c.mutate<any>("tenant.revokeInvitation", input);
       },

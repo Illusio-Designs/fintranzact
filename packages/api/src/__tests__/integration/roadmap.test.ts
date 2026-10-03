@@ -59,8 +59,8 @@ describe("starting roadmap", () => {
     expect(new Set(list.data.map((i) => i.title))).toEqual(new Set(ROADMAP_SEED.map((s) => s.title)));
     // Items built since the roadmap was written arrive already moved.
     expect(list.counts.done).toBe(2);
-    expect(list.counts.in_progress).toBe(11); // + two-factor authentication (2026-10-02-2fa)
-    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 13);
+    expect(list.counts.in_progress).toBe(12); // + two-factor authentication (2026-10-02-2fa), CA access (2026-10-02-ca-access)
+    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 14);
     expect(list.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
     expect(list.categories).toEqual(expect.arrayContaining(["Payroll", "Inventory", "GST", "Mobile", "Platform", "Accounting", "Banking"]));
     for (const item of list.data) {
@@ -134,7 +134,7 @@ describe("starting roadmap", () => {
     const before = await adminCaller().platform.roadmapList({ launchStage: "before_launch" });
     expect(before.data).toHaveLength(18);
     expect(before.data.every((i) => i.launchStage === "before_launch")).toBe(true);
-    expect(before.counts.planned).toBe(8);
+    expect(before.counts.planned).toBe(7); // 8 before the CA access item (2026-10-02-ca-access) moved to in_progress
     expect(before.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
   });
 

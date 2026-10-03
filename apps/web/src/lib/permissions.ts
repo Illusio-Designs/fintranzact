@@ -6,6 +6,13 @@
  */
 import { trpc } from "@/lib/trpc";
 
+const ACCOUNTANT_READ = [
+  "Invoice", "Payment", "Party", "Item", "Expense",
+  "BankAccount", "BankTransaction", "BankReconciliation", "Account",
+  "Report", "GstReport", "ITC", "Tds", "EInvoice", "EWayBill",
+  "Business", "Store", "RecurringInvoice",
+].map((r) => `${r}:read`);
+
 export const ROLE_ABILITIES: Record<string, Set<string>> = {
   owner: new Set(["*"]),
   admin: new Set(["*"]),
@@ -51,6 +58,10 @@ export const ROLE_ABILITIES: Record<string, Set<string>> = {
     "EInvoice:read",
     "EWayBill:read",
   ]),
+  // Accountant access roles (docs/ACCOUNTANT-ACCESS.md): read everything, change nothing.
+  auditor: new Set(ACCOUNTANT_READ),
+  // Filing accountant: the same reads, plus preparing and filing GST returns.
+  ca_filing: new Set([...ACCOUNTANT_READ, "GstReport:create"]),
 };
 
 export function canAccess(

@@ -70,6 +70,35 @@ export const partnerEndpoints: EndpointGroup = {
       },
       relatedEndpoints: ["partner-submit-application"],
     },
+    {
+      id: "partner-portal",
+      method: "query",
+      path: "partner.portal",
+      title: "Partner Portal",
+      description: "The signed-in partner's own portal: application status, or (when approved) referral code, badge, referrals and payouts. The partner is found by the signed-in user's verified e-mail. For partners of type `accountant` it also returns `managedClients`: the organisations where this login holds a CA role (`auditor` / `ca_filing`), latest 100, each with the organisation name, access level, when access began, when the partner last opened it and the plan. No financial data. `managedClients` is `null` for other partner types, and `managedClientsMore` says whether more than 100 exist. Accepting a CA invitation never credits the partner as a referral by itself; that needs the owner's opt-in on `tenant.inviteMember` (`creditPartner`).",
+      auth: "protected",
+      input: [],
+      output: {
+        description: "`kind` is `none`, `application` or `partner`; the `partner` shape is shown (abridged).",
+        example: {
+          kind: "partner",
+          companyName: "Shah & Co",
+          partnerType: "accountant",
+          referralCode: "FTZ-K7M2QX",
+          managedClients: [
+            { tenantId: "5b1e…", name: "Sharma Traders", role: "auditor", roleLabel: "Accountant (read-only)", since: "2026-03-01T00:00:00.000Z", lastOpenedAt: "2026-09-30T09:12:00.000Z", planName: "Pro" },
+          ],
+          managedClientsMore: false,
+        },
+      },
+      codeExamples: {
+        curl: `curl "${API_BASE_URL}/api/trpc/partner.portal" \\
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"`,
+        javascript: `const portal = await trpc.partner.portal.query();
+if (portal.kind === "partner") console.log(portal.managedClients);`,
+      },
+      relatedEndpoints: ["partner-directory"],
+    },
   ],
 };
 

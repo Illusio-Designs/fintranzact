@@ -33,7 +33,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
 import { ZodError } from "zod";
-import { defineAbilityFor, type Action, type Resource } from "../../lib/permissions.js";
+import { defineAbilityFor, caRoleMutationAllowed, type Action, type Resource } from "../../lib/permissions.js";
 import {
   buildSweepWorld,
   seedBusiness,
@@ -72,6 +72,8 @@ const CASL_ROLE: Record<Column, string> = {
   seller_manager: "seller_manager",
   seller: "seller",
   accountant: "accountant",
+  auditor: "auditor",
+  ca_filing: "ca_filing",
 };
 
 const ALL: Column[] = [...SWEEP_ROLES];
@@ -87,6 +89,8 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   "tenant.revokeInvitation": { allow: ADMINS, why: "tenant owner/admin only" },
   "tenant.removeMember": { allow: ADMINS, why: "tenant owner/admin only" },
   "tenant.updateMemberRole": { allow: ADMINS, why: "tenant owner/admin only" },
+  // The access log (control security_events) is for owners and admins; inline tenant-role gate, FORBIDDEN otherwise.
+  "tenant.accessLog": { allow: ADMINS, why: "tenant owner/admin only" },
   "tenant.updatePlan": { allow: [], why: "plans are changed by the platform team only" },
   "billing.demoCheckout": { allow: ["owner"], why: "org owner only" },
   "billing.subscribePlan": { allow: ["owner"], why: "org owner only" },
@@ -109,6 +113,8 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   "business.uploadSignature": { allow: ADMINS, why: "requireTenantAdmin" },
   "business.deleteSignature": { allow: ADMINS, why: "requireTenantAdmin" },
   "business.deleteLogo": { allow: ADMINS, why: "requireTenantAdmin" },
+  // Creates a record on the tenant base (no CASL check): refused for the CA roles by an inline caRoleMutationAllowed check.
+  "business.ensureWalkInParty": { allow: ["owner", "admin", "seller_manager", "seller", "accountant"], why: "not for accountant (read-only/filing) roles" },
   "business.setPosEnabled": { allow: ADMINS, why: "requireTenantAdmin" },
   "business.updateSequenceNumber": { allow: ADMINS, why: "requireTenantAdmin" },
   // Stock movements: non-admins also need a per-warehouse grant, which the
@@ -125,6 +131,8 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   "period.unlockBooks": { allow: ["owner"], why: "only the owner unlocks a period" },
   "period.unlockGstMonth": { allow: ["owner"], why: "only the owner unlocks a period" },
   "period.reopenYear": { allow: ["owner"], why: "only the owner reopens a year" },
+  // create:PeriodLock OR create:GstReport (canMarkGstFiled), so the filing accountant may mark a return filed.
+  "period.lockGstMonth": { allow: ["owner", "admin", "accountant", "ca_filing"], why: "PeriodLock or GstReport create" },
 };
 // Platform console: only platform admins (env-configured), never org roles.
 for (const p of listProcedures()) {
@@ -218,6 +226,12 @@ function expectedFor(row: Row): Record<Column, Outcome> {
     if (gate) {
       out[role] = gate.allow.includes(role) ? "allow" : "deny";
     } else if (row.proc.base === "authorized") {
+      // The accountant-access backstop (trpc.ts) refuses mutations outside the
+      // filing allowlist whatever the procedure's own CASL check says.
+      if (row.proc.type === "mutation" && !caRoleMutationAllowed(CASL_ROLE[role], row.proc.path)) {
+        out[role] = "deny";
+        continue;
+      }
       const ability = defineAbilityFor({ userId: "x", role: CASL_ROLE[role] });
       const denied = row.checks.some((c) => {
         const [action, resource] = c.split(":") as [Action, Resource];
@@ -243,6 +257,8 @@ describe("role sweep over every tRPC procedure", () => {
       const results = {} as Record<Column, CallResult>;
       results.accountant = await callAs(world.usersA.viewer, proc);
       const nativeAccountant = await callAs(world.usersA.accountant, proc);
+      results.auditor = await callAs(world.usersA.auditor, proc);
+      results.ca_filing = await callAs(world.usersA.ca_filing, proc);
       results.seller = await callAs(world.usersA.seller, proc);
       results.seller_manager = await callAs(world.usersA.seller_manager, proc);
       results.admin = await callAs(world.usersA.admin, proc);
@@ -298,8 +314,8 @@ describe("role sweep over every tRPC procedure", () => {
       "",
       "✓ = allowed (anything but FORBIDDEN), ✗ = FORBIDDEN. `CASL` lists the requireCan checks the procedure makes.",
       "",
-      "| procedure | type | base | CASL | owner | admin | seller_manager | seller | accountant |",
-      "|---|---|---|---|---|---|---|---|---|",
+      "| procedure | type | base | CASL | owner | admin | seller_manager | seller | accountant | auditor | ca_filing |",
+      "|---|---|---|---|---|---|---|---|---|---|---|",
       ...[...rows]
         .sort((a, b) => a.proc.path.localeCompare(b.proc.path))
         .map((r) => `| ${r.proc.path} | ${r.proc.type} | ${r.proc.base} | ${r.checks.join(", ") || "—"}${NON_CASL_GATES[r.proc.path] ? ` (+ ${NON_CASL_GATES[r.proc.path]!.why})` : ""} | ${ALL.map((role) => mark(r.results[role].outcome)).join(" | ")} |`),

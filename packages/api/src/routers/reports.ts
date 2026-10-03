@@ -36,6 +36,7 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
+import { recordCaExport } from "../lib/access-events.js";
 import { outstandingConditions, outstandingOnRow } from "../lib/outstanding.js";
 import { generateTallyXml } from "../lib/tally-xml-export.js";
 import { valueStock, type ValuationMethod } from "../lib/stock-valuation.js";
@@ -2335,6 +2336,7 @@ export const reportsRouter = router({
       const fromSlice = input.fromDate.slice(0, 10);
       const toSlice = input.toDate.slice(0, 10);
 
+      await recordCaExport(ctx, "reports.tallyExport");
       return {
         xml,
         filename: `tally-export-${fromSlice}-to-${toSlice}.xml`,

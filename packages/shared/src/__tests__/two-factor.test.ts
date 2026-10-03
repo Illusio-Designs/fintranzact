@@ -36,7 +36,7 @@ describe("constants", () => {
   });
   it("labels every security event type", () => {
     for (const t of SECURITY_EVENT_TYPES) expect(SECURITY_EVENT_LABELS[t]).toBeTruthy();
-    expect(SECURITY_EVENT_TYPES).toHaveLength(12);
+    expect(SECURITY_EVENT_TYPES).toHaveLength(21);
   });
 });
 
@@ -59,8 +59,8 @@ describe("twoFactorRequiredForMember", () => {
       required: false, blocked: false, graceEndsAt: null,
     });
   });
-  it("admins policy covers owner/superadmin/admin only", () => {
-    for (const role of ["owner", "superadmin", "admin"]) {
+  it("admins policy covers owner/superadmin/admin and the accountant access roles only", () => {
+    for (const role of ["owner", "superadmin", "admin", "auditor", "ca_filing"]) {
       expect(twoFactorRequiredForMember({ ...base, policy: "admins", role }).required).toBe(true);
     }
     for (const role of ["member", "viewer", "seller", "seller_manager", "accountant"]) {
