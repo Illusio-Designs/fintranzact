@@ -9,6 +9,7 @@ import { ensureAccessToken } from "./desktop-session";
 import { handleEntitlementError } from "@/lib/entitlement-handler";
 import { handleTwoFactorError } from "@/lib/two-factor-handler";
 import { isAuthPublicPath, isMarketingPath, isSharePath } from "@/lib/public-paths";
+import { isPortalSessionError } from "@fintranzact/shared";
 
 // The explicit `as any` cast avoids TS2742 "inferred type cannot be named" error caused
 // by tRPC's internal .d.mts paths resolving through hoisted node_modules.
@@ -148,6 +149,9 @@ let isRedirectingToLogin = false;
 function handleAuthError(error: unknown) {
   if (isRedirectingToLogin) return;
   const trpcError = error as { data?: { code?: string } };
+  // The GST portal's own taxpayer session ending (6 hours) is reported the same way, but it is
+  // not the app's sign-in: the filing wizard asks for a new portal OTP instead of logging out.
+  if (isPortalSessionError(error)) return;
   if (trpcError?.data?.code === "UNAUTHORIZED") {
     // Public pages work signed out; a stray 401 there must not bounce the
     // visitor to the login screen.
