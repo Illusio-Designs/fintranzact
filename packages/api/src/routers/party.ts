@@ -13,6 +13,7 @@ import {
   type PartyGstType,
   type GstinStatus,
   mergePartyShippingAddresses,
+  partyFieldsFromGstinProfile,
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
@@ -26,6 +27,8 @@ import { buildBusinessDateFilter } from "../lib/business-date.js";
 import { IRPError, type IRPGstinDetails } from "../lib/irp-client.js";
 import { createIRPClient } from "../lib/gov-provider.js";
 import { resolveIRPConfig } from "../lib/irp-config.js";
+import { createFixedWindowLimiter } from "../lib/fixed-window-limiter.js";
+import { checkPartyGstin, resolveGstin } from "../lib/gstin-lookup.js";
 import { billDocument, reducesBalance, reducingDocument } from "../lib/order-fulfilment.js";
 
 const IRP_TAXPAYER_TYPES: Record<string, PartyGstType> = {
@@ -71,6 +74,15 @@ function partyFieldsFromIrp(d: IRPGstinDetails, gstin: string) {
   };
 }
 
+
+/** GSTIN searches spend Sandbox quota: 20 a minute per user. */
+export const GSTIN_LOOKUP_LIMIT = 20;
+const gstinLookupLimiter = createFixedWindowLimiter({ limit: GSTIN_LOOKUP_LIMIT, windowMs: 60_000 });
+
+/** Tests only: start every case with a fresh window. */
+export function resetGstinLookupRateLimit() {
+  gstinLookupLimiter.clear();
+}
 
 export const partyRouter = router({
   list: viewerProcedure
@@ -237,14 +249,69 @@ export const partyRouter = router({
     }),
 
   /**
-   * Fetch a taxpayer's registered details (legal/trade name, address, state,
-   * type, status) for a GSTIN, via the business's e-invoice (IRP) credentials.
-   * Returns { available: false } when e-invoicing isn't set up.
+   * Search a GSTIN and fetch its registered details (legal/trade name, address,
+   * state, type, status) to pre-fill the party form.
+   *
+   * 1. Sandbox's public "Search GSTIN" (platform API token; no taxpayer login),
+   *    when Sandbox is the provider and its keys are set.
+   * 2. Otherwise, or when Sandbox is unreachable, the business's e-invoice
+   *    (IRP) login, when e-invoicing is set up.
+   * 3. Otherwise `{ available: false }` with what the GSTIN itself implies
+   *    (PAN, state, constitution).
+   *
+   * Always returns `valid`, `source`, `sandboxStatus`, `profile` and
+   * `warnings` next to the legacy fields. Never fails because Sandbox is down.
+   * Authenticated, business-scoped and limited to 20 searches a minute per
+   * user, because each one may spend Sandbox quota.
    */
   lookupGstin: memberProcedure
-    .input(z.object({ gstin: z.string().trim().toUpperCase().regex(GSTIN_REGEX, "Invalid GSTIN") }))
+    .input(z.object({
+      gstin: z.string().trim().toUpperCase().regex(GSTIN_REGEX, "Invalid GSTIN"),
+      /** Skip our 6-hour cache and ask again (the "Refresh" action). */
+      refresh: z.boolean().optional(),
+    }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "create", "Party");
+      if (!gstinLookupLimiter.hit(ctx.user.id)) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many GST searches. Please wait a minute and try again." });
+      }
+      const derived = {
+        gstin: input.gstin,
+        pan: panFromGstin(input.gstin),
+        stateCode: stateCodeFromGstin(input.gstin),
+        constitution: constitutionFromPan(panFromGstin(input.gstin)),
+      };
+      const resolution = await resolveGstin(input.gstin, { fresh: input.refresh === true, acceptCache: input.refresh !== true });
+      const common = {
+        valid: resolution.valid,
+        sandboxStatus: resolution.sandboxStatus,
+        warnings: resolution.warnings,
+        checkedAt: resolution.checkedAt,
+      };
+
+      if (resolution.sandboxStatus === "ok" && resolution.profile) {
+        return {
+          available: true as const,
+          ...common,
+          source: "sandbox" as const,
+          profile: resolution.profile,
+          details: partyFieldsFromGstinProfile(resolution.profile),
+          verifiedAt: resolution.checkedAt ?? new Date().toISOString(),
+        };
+      }
+
+      // A definite answer from Sandbox: no record, or a pattern the portal refuses.
+      if (resolution.sandboxStatus === "not_found" || resolution.sandboxStatus === "invalid") {
+        return {
+          available: false as const,
+          ...common,
+          source: "sandbox" as const,
+          profile: null,
+          reason: resolution.warnings[0] ?? "No GST record was found for this GSTIN.",
+          derived,
+        };
+      }
+
       const [rawConfig] = await ctx.db
         .select()
         .from(eInvoiceConfigs)
@@ -254,20 +321,27 @@ export const partyRouter = router({
       if (!rawConfig || !rawConfig.isEnabled) {
         return {
           available: false as const,
-          reason: "GSTIN lookup uses your e-invoice (IRP) login. Set up e-invoicing in Settings → Compliance to fetch details automatically.",
-          derived: {
-            gstin: input.gstin,
-            pan: panFromGstin(input.gstin),
-            stateCode: stateCodeFromGstin(input.gstin),
-            constitution: constitutionFromPan(panFromGstin(input.gstin)),
-          },
+          ...common,
+          source: "local" as const,
+          profile: null,
+          reason: resolution.sandboxStatus === "unavailable"
+            ? "Could not reach the GST portal right now; you can still save the party and check the GSTIN later."
+            : "GSTIN lookup uses your e-invoice (IRP) login. Set up e-invoicing in Settings → Compliance to fetch details automatically.",
+          derived,
         };
       }
 
       try {
         const client = createIRPClient(resolveIRPConfig(rawConfig), ctx.db);
         const details = await client.getGstinDetails(input.gstin);
-        return { available: true as const, details: partyFieldsFromIrp(details, input.gstin), verifiedAt: new Date().toISOString() };
+        return {
+          available: true as const,
+          ...common,
+          source: "irp" as const,
+          profile: null,
+          details: partyFieldsFromIrp(details, input.gstin),
+          verifiedAt: new Date().toISOString(),
+        };
       } catch (err) {
         if (err instanceof IRPError) {
           throw new TRPCError({
@@ -307,7 +381,10 @@ export const partyRouter = router({
       ipAddress: ctx.ipAddress,
     });
 
-    return party;
+    // Advisory Sandbox check after the commit, so a slow or down Sandbox can
+    // never hold the save or fail it (2.5 s cap, never throws).
+    const gstinCheck = await checkPartyGstin(party);
+    return { ...party, gstinCheck };
   }),
 
   update: memberProcedure
@@ -331,6 +408,12 @@ export const partyRouter = router({
       const derivedPan = rest.pan === undefined ? panFromGstin(rest.gstin) : null;
       const derivedState = rest.stateCode === undefined ? stateCodeFromGstin(rest.gstin) : null;
       const gstinChanged = rest.gstin !== undefined && rest.gstinStatus === undefined;
+      let previousGstin: string | null = null;
+      if (rest.gstin) {
+        const [prev] = await ctx.db.select({ gstin: parties.gstin }).from(parties)
+          .where(and(eq(parties.id, input.id), eq(parties.businessId, ctx.businessId))).limit(1);
+        previousGstin = prev?.gstin ?? null;
+      }
       const [party] = await ctx.db.update(parties)
         .set({
           ...rest,
@@ -357,7 +440,9 @@ export const partyRouter = router({
         ipAddress: ctx.ipAddress,
       });
 
-      return party;
+      // Advisory Sandbox check for a new or changed GSTIN, after the commit.
+      const gstinCheck = rest.gstin && rest.gstin !== previousGstin ? await checkPartyGstin(party) : null;
+      return { ...party, gstinCheck };
     }),
 
   delete: adminProcedure

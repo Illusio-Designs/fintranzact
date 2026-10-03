@@ -48,6 +48,29 @@ Tap **Parties** in the bottom tab bar, then tap the floating **+** button. A ful
 | Contact Person DOB | Date of birth of the contact person (useful for sending birthday greetings) |
 | Bank Account Number / IFSC / Bank Name | Supplier's bank details, useful for making payments |
 
+## Search GST when adding a party
+
+Type or paste the party's 15-character GSTIN and Fintranzact looks it up on the GST portal for you, so you do not have to key in the legal name, address and registration details by hand.
+
+<ForDesktop>
+The search runs by itself a moment after a valid GSTIN is entered, or when you leave the GSTIN field. You can also press **Search GST** beside the field at any time.
+</ForDesktop>
+
+<ForMobile>
+The search runs when you leave the GSTIN field. You can also tap **Search GST** under it at any time.
+</ForMobile>
+
+What happens next:
+
+- **Empty fields are filled in.** Legal name, trade name, billing address, city, state, pincode, GST type (registered, composition, SEZ and so on) and business type are taken from the GST record. The party name is filled with the trade name when you have not typed one.
+- **Nothing you typed is overwritten.** If a field already holds a different value, Fintranzact lists the two side by side under **Use these details?** and only replaces the ones you tick. Choose **Keep mine** to leave everything as it is.
+- **The status is shown.** A green **Active** badge, a red **Cancelled** badge, or an amber badge for any other status (for example Suspended), together with the registration date and whether the party is enabled for e-invoicing. A cancelled or suspended GSTIN also gets a warning, because you cannot claim input tax credit on it and should check with the party before raising GST invoices.
+- **Other places of business** the party has registered are listed. Press **Use as shipping address** to add one to the party's shipping addresses.
+
+If the GST portal cannot be reached you will see "Could not reach the GST portal; you can still save." Nothing is blocked: save the party and search again later. If GST search has not been set up on your Fintranzact server, only the PAN and state that the GSTIN itself contains are filled in, and no error is shown.
+
+When you save a party with a new GSTIN, Fintranzact also checks it against the GST portal in the background and may show a note, for example when the GSTIN is cancelled or when the name on the party does not look like the registered name. These notes are advice only and never stop you from saving.
+
 ## Party types
 
 A party is either a **customer** or a **supplier**, but the same entity can be both. For example, if you sell goods to a company and also buy raw materials from them, create two separate party records — one as a customer and one as a supplier. This keeps the ledgers clean.
@@ -143,7 +166,7 @@ Create two separate party records — one with type "Customer" and one with type
 Yes. See [Import Data](/help/getting-started/import-data) for CSV import instructions. Duplicate names (case-insensitive) are skipped automatically.
 
 **Does Fintranzact validate GSTIN format?**
-Yes. Fintranzact validates the 15-character GSTIN format using a regex pattern (2-digit state code, PAN structure, entity code, and check character position). However, it does not validate the checksum digit. Enter the GSTIN exactly as it appears on the party's registration certificate.
+Yes. Fintranzact validates the 15-character GSTIN format using a regex pattern (2-digit state code, PAN structure, entity code, and check character position). However, it does not refuse a GSTIN for a wrong checksum digit when you save. **Search GST** checks the GSTIN against the GST portal where that is set up, and warns you about a mistyped, unknown or cancelled GSTIN. Enter the GSTIN exactly as it appears on the party's registration certificate.
 
 **What is the difference between billing address and shipping address?**
 The billing address is the legal registered address printed on the invoice. The shipping address is where goods are physically delivered. If both are the same, you only need to fill in the billing address.
